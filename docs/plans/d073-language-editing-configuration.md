@@ -110,11 +110,12 @@ yet; D074 and D075 call the evaluators.
 - ✅ Contract: `LanguageComments`, `BracketPair`, `LanguageIndentation`, the
   optional `LanguageDefinition` fields, `languages.get`, and `InvalidPattern`
   in `src/host/js/knot.d.ts`.
-- ✅ JavaScript validation fills bracket defaults (`autoClose` true, `newline`
-  `open !== close`, `notIn` empty) before the definition crosses, so native
-  types have no defaults and `get` returns them filled; absent top-level
-  editing fields stay absent. Comment and bracket tokens must be nonempty
-  without surrounding whitespace, which catches a token written as `"// "`.
+- ✅ JavaScript validation checks shapes only. Native compilation resolves
+  bracket defaults (`autoClose` true, `newline` `open !== close`, `notIn`
+  empty) into the compiled configuration, so the rule has one owner beside
+  its evaluators, and `get` returns editing fields exactly as registered.
+  Comment and bracket tokens must be nonempty without surrounding
+  whitespace, which catches a token written as `"// "`.
 - ✅ Native: `src/app/languages/editing.rs` holds `EditingDefinition` (serde)
   and the compiled `EditingConfiguration`; patterns compile before queries,
   so an invalid pattern rejects without query compilation. The registration

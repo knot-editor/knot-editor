@@ -61,14 +61,11 @@ const expected = {
   id: "edited", name: "Edited", grammar: "python", fileExtensions: [], fileNames: [],
   interpreters: [], queries: { highlights: "", injections: "" },
   comments: { line: ["#"], block: ['"""', '"""'] },
-  brackets: [
-    { open: "(", close: ")", autoClose: true, newline: true, notIn: [] },
-    { open: "'", close: "'", autoClose: true, newline: false, notIn: ["string"] },
-  ],
+  brackets: [{ open: "(", close: ")" }, { open: "'", close: "'", notIn: ["string"] }],
   autoCloseBefore: ";)",
   indentation: { increase: ":\\s*$" },
 };
-if (JSON.stringify(edited) !== JSON.stringify(expected) || !Object.isFrozen(edited.brackets[0])) {
+if (JSON.stringify(edited) !== JSON.stringify(expected) || !Object.isFrozen(edited.brackets[1].notIn)) {
   throw new Error(JSON.stringify(edited));
 }
 // A derived language spreads the definition and replaces one key.

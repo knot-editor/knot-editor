@@ -247,8 +247,7 @@ declare module "knot" {
     associate(id: string, patterns: LanguagePatterns): Promise<Disposable>;
     /** The registration that defines `id`, queries and editing data
      * included, so a derived language spreads it and changes a key. Pattern
-     * lists, injections, and bracket defaults are present; absent editing
-     * fields stay absent. */
+     * lists and injections are present; editing fields are as registered. */
     get(id: string): Promise<LanguageDefinition | null>;
     /** The language each registered ID resolves to, sorted by ID. */
     list(): Promise<readonly LanguageInfo[]>;

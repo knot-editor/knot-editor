@@ -565,20 +565,12 @@ function languageInfo(definition: Knot.LanguageDefinition): Knot.LanguageInfo {
   };
 }
 
-// Fills the defaults native validation fills, as `languages.get` returns them.
+// Fills pattern lists and injections, as `languages.get` returns them.
 function registeredLanguage(definition: Knot.LanguageDefinition): Knot.LanguageDefinition {
-  const brackets = definition.brackets?.map((pair) => ({
-    open: pair.open,
-    close: pair.close,
-    autoClose: pair.autoClose ?? true,
-    newline: pair.newline ?? pair.open !== pair.close,
-    notIn: pair.notIn ?? [],
-  }));
   return {
     ...definition,
     ...languageInfo(definition),
     queries: { highlights: definition.queries.highlights, injections: definition.queries.injections ?? "" },
-    ...(brackets === undefined ? {} : { brackets }),
   };
 }
 

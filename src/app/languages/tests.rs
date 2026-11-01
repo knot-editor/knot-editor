@@ -1,7 +1,9 @@
 use gpui::{AppContext, TestAppContext};
 
 use super::{
-    editing::{BracketPair, CommentTokens, IndentationPattern, IndentationPatterns},
+    editing::{
+        Bracket, BracketPair, CommentTokens, IndentationPattern, IndentationPatterns, SyntaxFamily,
+    },
     *,
 };
 use crate::app::{
@@ -135,13 +137,22 @@ fn edited(id: &str, name: &str, line_comment: &str) -> LanguageDefinition {
             line: vec![line_comment.into()],
             block: Some(("/*".into(), "*/".into())),
         }),
-        brackets: Some(vec![BracketPair {
-            open: "{".into(),
-            close: "}".into(),
-            auto_close: true,
-            newline: true,
-            not_in: Vec::new(),
-        }]),
+        brackets: Some(vec![
+            BracketPair {
+                open: "{".into(),
+                close: "}".into(),
+                auto_close: None,
+                newline: None,
+                not_in: None,
+            },
+            BracketPair {
+                open: "'".into(),
+                close: "'".into(),
+                auto_close: Some(false),
+                newline: None,
+                not_in: Some(vec![SyntaxFamily::String]),
+            },
+        ]),
         auto_close_before: Some(";)".into()),
         indentation: Some(IndentationPatterns {
             increase: Some("^\\s*where$".into()),
@@ -172,7 +183,26 @@ fn editing_configuration_follows_the_defining_registration() {
     let editing = registry.editing("rust").unwrap();
     assert_eq!(editing.line_comments, ["#"]);
     assert_eq!(editing.block_comment, Some(("/*".into(), "*/".into())));
-    assert_eq!(editing.brackets[0].close, "}");
+    // Compiling resolves bracket defaults; quotes open no middle line.
+    assert_eq!(
+        editing.brackets,
+        [
+            Bracket {
+                open: "{".into(),
+                close: "}".into(),
+                auto_close: true,
+                newline: true,
+                not_in: Vec::new(),
+            },
+            Bracket {
+                open: "'".into(),
+                close: "'".into(),
+                auto_close: false,
+                newline: false,
+                not_in: vec![SyntaxFamily::String],
+            },
+        ]
+    );
     assert_eq!(editing.auto_close_before, ";)");
     assert!(
         editing

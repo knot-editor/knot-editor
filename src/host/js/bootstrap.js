@@ -877,28 +877,26 @@ function editingToken(value, message) {
   }
   return value;
 }
-function optionalBoolean(value, fallback, message) {
-  if (value === undefined) return fallback;
-  if (typeof value !== "boolean") throw new TypeError(message);
-  return value;
-}
 function bracketPair(value) {
   record(value, "brackets must be objects");
-  const open = editingToken(value.open, "bracket open must be text");
-  const close = editingToken(value.close, "bracket close must be text");
-  const notIn = value.notIn === undefined ? [] : arrayItems(value.notIn, (family) => {
-    if (family !== "string" && family !== "comment") {
-      throw new TypeError('bracket notIn entries must be "string" or "comment"');
-    }
-    return family;
-  });
-  return {
-    open,
-    close,
-    autoClose: optionalBoolean(value.autoClose, true, "bracket autoClose must be a boolean"),
-    newline: optionalBoolean(value.newline, open !== close, "bracket newline must be a boolean"),
-    notIn,
+  const pair = {
+    open: editingToken(value.open, "bracket open must be text"),
+    close: editingToken(value.close, "bracket close must be text"),
   };
+  for (const key of ["autoClose", "newline"]) {
+    if (value[key] === undefined) continue;
+    if (typeof value[key] !== "boolean") throw new TypeError(`bracket ${key} must be a boolean`);
+    pair[key] = value[key];
+  }
+  if (value.notIn !== undefined) {
+    pair.notIn = arrayItems(value.notIn, (family) => {
+      if (family !== "string" && family !== "comment") {
+        throw new TypeError('bracket notIn entries must be "string" or "comment"');
+      }
+      return family;
+    });
+  }
+  return pair;
 }
 // Absent fields stay absent, so languages.get returns them as registered.
 function languageEditing(value) {
