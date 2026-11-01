@@ -1,6 +1,6 @@
 # D134 — Tree-sitter indentation
 
-Status: 🚧 checkpoint 3 awaiting review. Item of the
+Status: 🚧 checkpoint 3 approved; checkpoint 4 in progress. Item of the
 [daily-driver plan](daily-driver.md); split from D066 in the
 [roadmap](../roadmap.md).
 
@@ -174,30 +174,14 @@ of its whitespace, and unclosed brackets inside a parse error indent the
 lines after them (see Design). The Rust `indents.jsonc` carries `enter`
 cases checked with the caret.
 
-### 3. Outdent while typing — 🚧 awaiting review
+### 3. Outdent while typing — ✅ approved
 
-Deliverables:
-
-- ✅ Typing at the start of a line's content reindents it when the typed
-  text completes an `@indent.end`, `@indent.branch`, or `@indent.dedent`
-  node reaching the caret, only to a shallower indentation, joined to the
-  typing undo group, which keeps growing at its shifted position.
-- ✅ `type` cases in the Rust `indents.jsonc` (`}`, `)`, `]`, closing a
-  `match` arm block, the function's own brace) and negative cases where
-  typing must not change indentation (ordinary text, a closer after other
-  text, typing after a placed brace, inside a string, a line that would
-  indent further).
-
-Validation: the runner's `type` cases; an editor test that IME composition
-and typing in the middle of a line never reindent.
-
-Review gate: typing behavior approved before the remaining languages adopt
-queries.
-
-**Implementation context:** the typing path is `replace_text_in_range` in
-`src/app/editor/input.rs`, which reaches `replace_text_with_grouping` with
-`EditGroupKind::Typing`; reuse checkpoint 2's request so the trigger runs on
-the reparsed tree.
+Typing at the start of a line's content outdents it when the typed text
+completes an `@indent.end`, `@indent.branch`, or `@indent.dedent` node
+reaching the caret (`SyntaxState::closes_line`), only to a shallower
+indentation and within the typing undo group. Composition and paste never
+reindent. The Rust `indents.jsonc` carries `type` cases, including negative
+ones.
 
 ### 4. Bundled language queries
 
