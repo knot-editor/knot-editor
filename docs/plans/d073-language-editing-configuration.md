@@ -1,6 +1,7 @@
 # D073 — Language editing configuration
 
-Status: 🚧 checkpoints 1–3 approved; checkpoint 4 next. Item of the
+Status: 🚧 checkpoints 1–3 approved; checkpoint 4 implemented, awaiting the
+final review. Item of the
 [daily-driver plan](daily-driver.md); D074 (editing commands) and D075
 (bracket matching and auto-closing) consume it.
 
@@ -119,14 +120,15 @@ language with comment tokens has no cases. Bracket behavior cases come with
 D075 as a sibling case file; TypeScript case modules are D133.
 `testLanguagePackage` checks token shapes.
 
-### 4. Documentation
+### 4. Documentation — ✅ implemented, final review pending
 
-- Deliverables: the language registration section of the extension guide
+- ✅ Deliverables: the language registration section of the extension guide
   shows editing data and deriving a language with `languages.get`; the
   semantic UI reference notes that the registry owns editing configuration
   and the comment evaluator for native editing code; a decision records data
   in the registration, Zed's merged bracket list, and indentation left to
-  D066's queries. Remove this plan and mark D073 ✅ in the daily-driver plan.
+  D066's queries. D073 is marked ✅ in the daily-driver plan; this plan is
+  removed after the final review.
 - **Implementation context:** `docs/extension-api.md` (Register a
   language), `docs/architecture/semantic-ui.md` (Syntax highlighting and
   languages), `docs/decisions.md` (a new Language editing configuration
