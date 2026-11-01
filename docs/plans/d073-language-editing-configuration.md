@@ -106,7 +106,7 @@ Completed: `EditingConfiguration::toggle_comments(lines)` in
 commenting, uncommenting, wrapping, and unwrapping share one shape.
 Indentation was removed from D073 in favor of D066's `indents` queries.
 
-### 3. Bundled language data with per-language behavior tests — ✅ implemented, review pending
+### 3. Bundled language data with per-package tests — ✅ implemented, review pending
 
 Scope decisions, following Zed's language configs except where noted:
 
@@ -120,18 +120,16 @@ Scope decisions, following Zed's language configs except where noted:
 - TypeScript lists only `//`, as VS Code and Zed do, so toggling a `///`
   triple-slash directive leaves `/ <reference …>`.
 
-
 - ✅ Deliverables: comments, brackets, and `autoCloseBefore` for Rust, the four
   ECMAScript languages, Python, TOML, and Markdown.
 - Validation:
-  - ✅ A product test (`src/app/product/tests/language_editing.rs`) starts the bundled language packages, asserts the
-    startup report has no failures, and runs table-driven comment cases
-    through the evaluator on each language's registered configuration. Every
-    language's table is a full suite, not a sample: each comment token in
-    both directions, mixed and indented selections, and each language's
-    bracket pairs and flags. For example, Rust toggling on a `///` line
-    strips `///`; TypeScript commenting a block indented at mixed levels puts
-    `//` at the shallowest column; Markdown commenting wraps in `<!-- -->`.
+  - ✅ Each package's `test/editing.test.ts` asserts its registered editing
+    data beside the languages it describes, with the reason for each
+    non-obvious choice. Toggle behavior stays covered by the evaluator's
+    generic unit tests in `src/app/languages/editing/tests.rs`: running it
+    per language from a package would need a second evaluator in the fake
+    host, and the bundled data's native decoding is covered by product tests
+    that require every bundled package to load.
   - ✅ Shared package tests check token shapes: nonempty tokens, and every
     language in scope declares comments.
 - **Implementation context:**
@@ -141,10 +139,7 @@ Scope decisions, following Zed's language configs except where noted:
   - `scripts/extensions/testing/languages.ts`: extend
     `testLanguagePackage` with the shape checks, applied only to packages
     in scope.
-  - New `src/app/product/tests/language_editing.rs`, registered beside
-    `src/app/product/tests/languages.rs`; reuse the product test harness
-    that starts bundled packages, as `startup.rs` reads `startup_report`.
-- Review gate: review the case tables per language; add cases where review
+- Review gate: review each package's editing data and tests; add cases where review
   finds a gap.
 
 ### 4. Documentation
