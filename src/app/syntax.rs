@@ -353,6 +353,25 @@ impl SyntaxState {
         self.indent_row(text, &indent::Lines::new(lines, size), row)
     }
 
+    /// Whether typing up to byte `caret` of `row` completed a closing or
+    /// branching node at the start of the row's content, by the indent query
+    /// of the deepest layer there.
+    pub(crate) fn closes_line(
+        &self,
+        text: &TextSnapshot,
+        lines: &dyn indent::LineSource,
+        row: usize,
+        caret: usize,
+    ) -> bool {
+        let line = lines.line(row);
+        let layer = self.layer_at(lines.line_start(row) + indent::leading_whitespace(&line));
+        let (Some(query), Some(tree)) = (layer.language.indents.as_ref(), layer.tree.as_ref())
+        else {
+            return false;
+        };
+        indent::closes(tree, query, text, &indent::Lines::new(lines, 1), row, caret)
+    }
+
     /// The rows of `rows` whose indentation changes, with their new columns
     /// at `size` columns per level and per tab stop. Each row is indented as
     /// though the rows before it already were; a row whose layer has no

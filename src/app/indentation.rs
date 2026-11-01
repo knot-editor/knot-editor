@@ -57,7 +57,7 @@ pub(crate) struct IndentUnit {
 impl IndentUnit {
     /// The columns `text` occupies from the start of a line, with tabs
     /// advancing to the next tab stop.
-    fn width(&self, text: &str) -> usize {
+    pub(crate) fn width(&self, text: &str) -> usize {
         text.chars().fold(0, |width, character| {
             if character == '\t' {
                 width + self.size - width % self.size

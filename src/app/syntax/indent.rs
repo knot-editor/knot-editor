@@ -625,6 +625,43 @@ pub(super) fn evaluate(
     LineIndent::Columns(indent.max(0) as usize)
 }
 
+/// Whether typing up to byte `caret` of `row` completed a node that starts
+/// at the row's first non-blank byte and closes or branches an indented
+/// node: an `@indent.end`, `@indent.branch`, or `@indent.dedent` capture
+/// reaching the caret, such as a typed `}` or `else`.
+pub(super) fn closes(
+    tree: &Tree,
+    query: &IndentQuery,
+    text: &TextSnapshot,
+    lines: &Lines,
+    row: usize,
+    caret: usize,
+) -> bool {
+    let line = lines.source.line(row);
+    let first = leading_whitespace(&line);
+    if first >= caret {
+        return false;
+    }
+    let root = tree.root_node();
+    let captures = Captures::find(query, root, text, row..row + 1);
+    let start = Point::new(row, first);
+    let mut node = node_at(root, row, first);
+    while node.start_position() == start {
+        if node.end_position() >= Point::new(row, caret)
+            && [Capture::End, Capture::Branch, Capture::Dedent]
+                .into_iter()
+                .any(|kind| captures.has(node, kind))
+        {
+            return true;
+        }
+        match node.parent() {
+            Some(parent) => node = parent,
+            None => break,
+        }
+    }
+    false
+}
+
 /// The rows of `rows` whose indentation changes, with their new columns,
 /// each row seeing the indentation given to the rows before it. `indent`
 /// evaluates a row, or returns `None` when its layer has no indent query.

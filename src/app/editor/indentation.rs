@@ -12,6 +12,9 @@ use crate::app::syntax::indent::LineIndent;
 pub(super) struct PendingIndent {
     revision: u64,
     line: usize,
+    /// For typing, the caret column the typed text reached: the line only
+    /// outdents, and only when the typing completed a closing node.
+    typed: Option<usize>,
 }
 
 impl EditorView {
@@ -76,14 +79,27 @@ impl EditorView {
         self.pending_indent = Some(PendingIndent {
             revision: self.model.read(cx).revision(),
             line: self.cursor_line,
+            typed: None,
         });
         self.apply_pending_indent(cx);
     }
 
-    /// Indent the line a line break left for the indent query, once the tree
-    /// is a parse of the text the break produced, as part of the break's undo
-    /// step. A later edit drops the request, leaving the indentation the
-    /// break kept.
+    /// After typing, outdent the caret's line when the typed text completed
+    /// a node that closes or branches an indented one at the start of the
+    /// line's content, such as `}` or `else`.
+    pub(super) fn outdent_typed_line(&mut self, cx: &mut Context<Self>) {
+        self.pending_indent = Some(PendingIndent {
+            revision: self.model.read(cx).revision(),
+            line: self.cursor_line,
+            typed: Some(self.cursor_col),
+        });
+        self.apply_pending_indent(cx);
+    }
+
+    /// Indent the line a line break or typing left for the indent query,
+    /// once the tree is a parse of the text the edit produced, as part of the
+    /// edit's undo step. A later edit drops the request, leaving the
+    /// indentation as it was.
     pub(super) fn apply_pending_indent(&mut self, cx: &mut Context<Self>) {
         let Some(pending) = &self.pending_indent else {
             return;
@@ -96,8 +112,11 @@ impl EditorView {
         if !model.syntax_is_current() {
             return;
         }
-        let line = pending.line;
+        let (line, typed) = (pending.line, pending.typed);
         self.pending_indent = None;
+        if typed.is_some_and(|col| !model.closes_line(line, col)) {
+            return;
+        }
         let unit = self.indent_unit(model, cx);
         let Some(LineIndent::Columns(columns)) = model.line_indent(line, unit.size) else {
             return;
@@ -105,7 +124,7 @@ impl EditorView {
         let text = line_text(model, line);
         let current = leading_whitespace(&text);
         let indent = unit.whitespace(columns);
-        if indent == current {
+        if indent == current || (typed.is_some() && columns >= unit.width(current)) {
             return;
         }
         let start = to_flat_byte(model, line, 0);

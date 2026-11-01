@@ -844,6 +844,15 @@ impl BufferModel {
             .line_indent(&self.buffer.snapshot(), self, row, size)
     }
 
+    /// Whether typing up to byte `col` of `row` completed a node that closes
+    /// or branches an indented one at the start of the row's content, such
+    /// as a typed `}`. `false` without syntax or an indent query.
+    pub(crate) fn closes_line(&self, row: usize, col: usize) -> bool {
+        self.syntax
+            .as_ref()
+            .is_some_and(|syntax| syntax.closes_line(&self.buffer.snapshot(), self, row, col))
+    }
+
     fn commit_batch(
         &mut self,
         edits: Vec<crate::host::protocol::TextEdit>,

@@ -251,6 +251,9 @@ impl EntityInputHandler for EditorView {
         };
         let range = self.bytes_for_utf16(range, cx);
         self.replace_text_with_grouping(range, text, Some(grouping), window, cx);
+        if grouping == EditGroupKind::Typing && !text.contains(['\n', '\r']) {
+            self.outdent_typed_line(cx);
+        }
     }
 
     /// Replace text at the given range (or current selection / marked range

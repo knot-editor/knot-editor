@@ -1,6 +1,6 @@
 # D134 — Tree-sitter indentation
 
-Status: 🚧 checkpoint 2 approved; checkpoint 3 in progress. Item of the
+Status: 🚧 checkpoint 3 awaiting review. Item of the
 [daily-driver plan](daily-driver.md); split from D066 in the
 [roadmap](../roadmap.md).
 
@@ -100,7 +100,9 @@ As in Zed, typing reindents the caret's line only when the typed text
 completes a node that starts at the line's first non-blank byte and is
 captured by `@indent.end`, `@indent.branch`, or `@indent.dedent` (`}`,
 `)`, `else`, `elif`, `except`), and only when the result is shallower than
-the current indentation. It never indents a line further while typing.
+the current indentation. It never indents a line further while typing. The
+node must reach the caret, so typing after a closer someone placed, as in
+`} else {`, leaves it where it is. IME composition never reindents.
 
 ### Blank lines
 
@@ -172,15 +174,19 @@ of its whitespace, and unclosed brackets inside a parse error indent the
 lines after them (see Design). The Rust `indents.jsonc` carries `enter`
 cases checked with the caret.
 
-### 3. Outdent while typing
+### 3. Outdent while typing — 🚧 awaiting review
 
 Deliverables:
 
-- Typing at the start of a line's content reindents it when the typed text
-  completes an `@indent.end`, `@indent.branch`, or `@indent.dedent` node,
-  only to a shallower indentation, joined to the typing undo group.
-- `type` cases in the Rust `indents.jsonc` (`}`, `)`, `]`, closing a `match`
-  arm block) and negative cases where typing must not change indentation.
+- ✅ Typing at the start of a line's content reindents it when the typed
+  text completes an `@indent.end`, `@indent.branch`, or `@indent.dedent`
+  node reaching the caret, only to a shallower indentation, joined to the
+  typing undo group, which keeps growing at its shifted position.
+- ✅ `type` cases in the Rust `indents.jsonc` (`}`, `)`, `]`, closing a
+  `match` arm block, the function's own brace) and negative cases where
+  typing must not change indentation (ordinary text, a closer after other
+  text, typing after a placed brace, inside a string, a line that would
+  indent further).
 
 Validation: the runner's `type` cases; an editor test that IME composition
 and typing in the middle of a line never reindent.

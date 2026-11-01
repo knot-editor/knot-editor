@@ -133,7 +133,9 @@ impl EditHistory {
 
     /// Apply `edits`, ascending and disjoint, as part of the last undo step,
     /// which then ends at `after_state` with its view after at `view_after`.
-    /// `false`, applying nothing, when there is no step to extend.
+    /// A typing group the edits precede keeps growing at its shifted
+    /// position; one they touch ends. `false`, applying nothing, when there
+    /// is no step to extend.
     pub(crate) fn amend<'a>(
         &mut self,
         buffer: &mut TextBuffer,
@@ -145,8 +147,20 @@ impl EditHistory {
             return false;
         };
         self.redo.clear();
-        entry.group = None;
-        for (range, text) in edits.rev() {
+        let edits: Vec<_> = edits.collect();
+        if let Some(group) = &mut entry.group {
+            if edits.iter().all(|(range, _)| range.end <= group.start) {
+                let shift = |offset: usize| {
+                    edits.iter().fold(offset, |offset, (range, text)| {
+                        offset + text.len() - range.len()
+                    })
+                };
+                (group.start, group.end) = (shift(group.start), shift(group.end));
+            } else {
+                entry.group = None;
+            }
+        }
+        for (range, text) in edits.into_iter().rev() {
             entry.transaction.replace(buffer, range, text);
         }
         entry.after_state = after_state;

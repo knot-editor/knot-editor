@@ -441,3 +441,42 @@ fn enter_on_a_whitespace_only_line_clears_it(cx: &mut TestAppContext) {
         );
     }
 }
+
+#[gpui::test]
+fn a_typed_closer_outdents_within_the_typing_undo_step(cx: &mut TestAppContext) {
+    let text = "fn a() {\n    if x {\n        b();\n        \n}";
+    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            place(view, (3, 8), cx);
+            view.replace_text_in_range(None, "}", window, cx);
+            assert_eq!(
+                view.text(cx),
+                "fn a() {\n    if x {\n        b();\n    }\n}"
+            );
+            assert_eq!(selection(view), (3, 5, 3, 5));
+            // Typing goes on in the same step.
+            view.replace_text_in_range(None, " ", window, cx);
+            view.execute_editing_command("editor.undo", window, cx);
+            assert_eq!(view.text(cx), text);
+            assert_eq!(selection(view), (3, 8, 3, 8));
+        });
+    });
+}
+
+#[gpui::test]
+fn composition_never_outdents(cx: &mut TestAppContext) {
+    let text = "fn a() {\n    if x {\n        b();\n        \n}";
+    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            place(view, (3, 8), cx);
+            view.replace_and_mark_text_in_range(None, "}", None, window, cx);
+            view.replace_text_in_range(None, "}", window, cx);
+            assert_eq!(
+                view.text(cx),
+                "fn a() {\n    if x {\n        b();\n        }\n}"
+            );
+        });
+    });
+}

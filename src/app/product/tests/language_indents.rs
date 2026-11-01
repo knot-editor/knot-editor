@@ -4,14 +4,17 @@
 //! Lines join with `\n`, and `‸` marks the caret: one marker places it, two
 //! select from the first to the second. A `reindent` case reindents the
 //! marked lines, or every line without a marker, and expects `after`. An
-//! `enter` case presses Enter at the marked selection and expects `after`
-//! with the caret where its marker is.
+//! `enter` case presses Enter at the marked selection, and a `type` case
+//! types `text` there one character at a time, each expecting `after` with
+//! the caret where its marker is.
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
 use super::language_editing::start_bundled_packages;
 use super::*;
+use gpui::EntityInputHandler;
+
 use crate::app::editor::{EditorView, EditorViewState};
 
 const CARET: char = '‸';
@@ -24,6 +27,23 @@ struct IndentCases {
     reindent: Vec<IndentCase>,
     #[serde(default)]
     enter: Vec<IndentCase>,
+    #[serde(default, rename = "type")]
+    typing: Vec<TypeCase>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TypeCase {
+    name: String,
+    before: Vec<String>,
+    text: String,
+    after: Vec<String>,
+}
+
+/// What a case does at its selection.
+enum Action<'a> {
+    Command(&'a str),
+    Type(&'a str),
 }
 
 #[derive(Deserialize)]
@@ -84,7 +104,7 @@ fn run(
     language: &str,
     text: &str,
     selection: Option<(usize, usize)>,
-    command: &str,
+    action: Action,
 ) -> (String, usize) {
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text(text);
@@ -105,7 +125,16 @@ fn run(
                 },
                 cx,
             );
-            view.execute_editing_command(command, window, cx);
+            match action {
+                Action::Command(command) => {
+                    view.execute_editing_command(command, window, cx);
+                }
+                Action::Type(text) => {
+                    for character in text.chars() {
+                        view.replace_text_in_range(None, &character.to_string(), window, cx);
+                    }
+                }
+            }
         })
     });
     cx.run_until_parked();
@@ -126,7 +155,26 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
             for case in &cases.reindent {
                 let (before, selection) = unmark(&case.before);
                 let expected = case.after.join("\n");
-                let (actual, _) = run(cx, id, &before, selection, "editor.reindent-lines");
+                let (actual, _) = run(
+                    cx,
+                    id,
+                    &before,
+                    selection,
+                    Action::Command("editor.reindent-lines"),
+                );
+                if actual != expected {
+                    failures.push(format!(
+                        "{id}: {}\n  expected:\n{expected}\n  actual:\n{actual}",
+                        case.name
+                    ));
+                }
+            }
+            for case in &cases.typing {
+                let (before, selection) = unmark(&case.before);
+                assert!(selection.is_some(), "{id}: {} marks no caret", case.name);
+                let expected = case.after.join("\n");
+                let (text, caret) = run(cx, id, &before, selection, Action::Type(&case.text));
+                let actual = mark(&text, caret);
                 if actual != expected {
                     failures.push(format!(
                         "{id}: {}\n  expected:\n{expected}\n  actual:\n{actual}",
@@ -138,7 +186,13 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
                 let (before, selection) = unmark(&case.before);
                 assert!(selection.is_some(), "{id}: {} marks no caret", case.name);
                 let expected = case.after.join("\n");
-                let (text, caret) = run(cx, id, &before, selection, "editor.insert-newline");
+                let (text, caret) = run(
+                    cx,
+                    id,
+                    &before,
+                    selection,
+                    Action::Command("editor.insert-newline"),
+                );
                 let actual = mark(&text, caret);
                 if actual != expected {
                     failures.push(format!(

@@ -2,9 +2,72 @@
 // Lines join with "\n" and "‸" marks the caret: one marker places it, two
 // select between them. A reindent case reindents the marked lines, or every
 // line without a marker, and expects `after`. An enter case presses Enter at
-// the marked selection and expects `after` with the caret at its marker.
+// the marked selection, and a type case types `text` there one character
+// at a time, each expecting `after` with the caret at its marker.
 {
   "languages": ["rust"],
+  "type": [
+    {
+      "name": "a closing brace outdents its line",
+      "before": ["fn f() {", "    if x {", "        a();", "        ‸", "}"],
+      "text": "}",
+      "after": ["fn f() {", "    if x {", "        a();", "    }‸", "}"]
+    },
+    {
+      "name": "a closing brace closes a match arm block",
+      "before": ["fn f(x: u8) {", "    match x {", "        0 => {", "            a();", "            ‸", "    }", "}"],
+      "text": "}",
+      "after": ["fn f(x: u8) {", "    match x {", "        0 => {", "            a();", "        }‸", "    }", "}"]
+    },
+    {
+      "name": "closing parentheses and brackets outdent",
+      "before": ["fn f() {", "    call(", "        a,", "        ‸", "}"],
+      "text": ");",
+      "after": ["fn f() {", "    call(", "        a,", "    );‸", "}"]
+    },
+    {
+      "name": "a closing bracket outdents",
+      "before": ["fn f() {", "    let v = [", "        1,", "        ‸", "}"],
+      "text": "];",
+      "after": ["fn f() {", "    let v = [", "        1,", "    ];‸", "}"]
+    },
+    {
+      "name": "the function's own closing brace goes to column 0",
+      "before": ["fn f() {", "    a();", "    ‸"],
+      "text": "}",
+      "after": ["fn f() {", "    a();", "}‸"]
+    },
+    {
+      "name": "typing never indents a line further",
+      "before": ["fn f() {", "    if x {", "        a();", "‸"],
+      "text": "}",
+      "after": ["fn f() {", "    if x {", "        a();", "}‸"]
+    },
+    {
+      "name": "ordinary text does not move its line",
+      "before": ["fn f() {", "        ‸", "}"],
+      "text": "a();",
+      "after": ["fn f() {", "        a();‸", "}"]
+    },
+    {
+      "name": "a closer after other text does not move its line",
+      "before": ["fn f() {", "    if x {", "        a(); ‸", "}"],
+      "text": "}",
+      "after": ["fn f() {", "    if x {", "        a(); }‸", "}"]
+    },
+    {
+      "name": "typing after a closing brace leaves a placed brace alone",
+      "before": ["fn f() {", "    if x {", "        a();", "        }‸", "}"],
+      "text": " else {",
+      "after": ["fn f() {", "    if x {", "        a();", "        } else {‸", "}"]
+    },
+    {
+      "name": "inside a string nothing moves",
+      "before": ["fn f() {", "    let s = \"", "        ‸", "    \";", "}"],
+      "text": "}",
+      "after": ["fn f() {", "    let s = \"", "        }‸", "    \";", "}"]
+    }
+  ],
   "enter": [
     { "name": "after an unclosed opening brace", "before": ["fn main() {‸"], "after": ["fn main() {", "    ‸"] },
     {
