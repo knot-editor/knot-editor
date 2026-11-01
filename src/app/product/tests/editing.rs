@@ -441,23 +441,18 @@ fn editing_keybindings_use_semantic_commands(cx: &mut TestAppContext) {
     cx.simulate_input(window_handle, "<");
     cx.simulate_keystrokes(window_handle, "shift-home secondary-c");
     cx.run_until_parked();
-    cx.update(|cx| {
-        assert_eq!(
-            cx.read_from_clipboard().unwrap().text().unwrap(),
-            ">    tail<"
-        )
-    });
+    cx.update(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), ">tail<"));
     cx.simulate_keystrokes(window_handle, "secondary-a secondary-c");
     cx.run_until_parked();
     cx.update(|cx| {
         assert_eq!(
             cx.read_from_clipboard().unwrap().text().unwrap(),
-            "    café👩‍💻\n>    tail<"
+            "    café👩‍💻\n    >tail<"
         )
     });
     cx.simulate_keystrokes(window_handle, "secondary-x secondary-v");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(model.read(cx).text(), "    café👩‍💻\n>    tail<"));
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "    café👩‍💻\n    >tail<"));
 }
 
 #[gpui::test]

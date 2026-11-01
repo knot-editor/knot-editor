@@ -91,6 +91,22 @@ impl EditorView {
                 self.outdent_lines(cx);
                 return true;
             }
+            commands::COPY_LINES_UP_COMMAND | commands::COPY_LINES_DOWN_COMMAND => {
+                self.copy_lines(command == commands::COPY_LINES_DOWN_COMMAND, cx);
+                return true;
+            }
+            commands::MOVE_LINES_UP_COMMAND | commands::MOVE_LINES_DOWN_COMMAND => {
+                self.move_lines(command == commands::MOVE_LINES_DOWN_COMMAND, cx);
+                return true;
+            }
+            commands::DELETE_LINES_COMMAND => {
+                self.delete_lines(cx);
+                return true;
+            }
+            commands::JOIN_LINES_COMMAND => {
+                self.join_lines(cx);
+                return true;
+            }
             commands::TOGGLE_LINE_COMMENT_COMMAND => {
                 self.toggle_line_comment(cx);
                 return true;
@@ -182,6 +198,13 @@ impl EditorView {
             "right" if self.cursor_line < last => (self.cursor_line + 1, 0),
             "right" => (last, line_end(model, last)),
             "line-start" => (self.cursor_line, 0),
+            "smart-home" => {
+                let first = leading_whitespace(&line_text(model, self.cursor_line)).len();
+                (
+                    self.cursor_line,
+                    if self.cursor_col == first { 0 } else { first },
+                )
+            }
             "line-end" => (self.cursor_line, line_end(model, self.cursor_line)),
             "document-start" => (0, 0),
             "document-end" => (last, line_end(model, last)),

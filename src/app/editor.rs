@@ -12,6 +12,7 @@ mod editing;
 mod indentation;
 mod input;
 mod layout;
+mod lines;
 pub(super) mod native_commands;
 mod paint;
 mod text;

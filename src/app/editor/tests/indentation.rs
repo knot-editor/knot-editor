@@ -3,75 +3,8 @@
 
 use gpui::{AppContext, TestAppContext};
 
-use super::{BufferModel, EditorView};
-use crate::app::settings::{ApplicationSettings, EDITOR_INSERT_SPACES, SettingsScope};
-
-type Position = (usize, usize);
-
-/// Run `command` over `text` with the selection from `anchor` to `caret`,
-/// check the text and selection it leaves, then check that undo restores the
-/// original and redo the result.
-fn check(
-    cx: &mut TestAppContext,
-    insert_spaces: bool,
-    (text, anchor, caret): (&str, Position, Position),
-    command: &str,
-    (expected, expected_anchor, expected_caret): (&str, Position, Position),
-) {
-    cx.update(|cx| {
-        let mut settings = ApplicationSettings::default();
-        settings
-            .0
-            .set(
-                EDITOR_INSERT_SPACES,
-                insert_spaces.into(),
-                SettingsScope::default(),
-            )
-            .unwrap();
-        cx.set_global(settings);
-    });
-    let model = cx.new(|_| BufferModel::from_text(text));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    let selection = |view: &EditorView| {
-        let caret = (view.cursor_line, view.cursor_col);
-        let anchor = if view.has_selection {
-            (view.anchor_line, view.anchor_col)
-        } else {
-            caret
-        };
-        (anchor, caret)
-    };
-    cx.update(|window, cx| {
-        editor.update(cx, |view, cx| {
-            (view.anchor_line, view.anchor_col) = anchor;
-            (view.cursor_line, view.cursor_col) = caret;
-            view.has_selection = anchor != caret;
-            view.sync_view_position(cx);
-            let context = format!("{command} on {text:?} from {anchor:?} to {caret:?}");
-
-            assert!(view.execute_editing_command(command, window, cx));
-            assert_eq!(view.text(cx), expected, "{context}");
-            assert_eq!(
-                selection(view),
-                (expected_anchor, expected_caret),
-                "{context}"
-            );
-
-            view.execute_editing_command("editor.undo", window, cx);
-            assert_eq!(view.text(cx), text, "undo of {context}");
-            if expected != text {
-                assert_eq!(selection(view), (anchor, caret), "undo of {context}");
-                view.execute_editing_command("editor.redo", window, cx);
-                assert_eq!(view.text(cx), expected, "redo of {context}");
-                assert_eq!(
-                    selection(view),
-                    (expected_anchor, expected_caret),
-                    "redo of {context}"
-                );
-            }
-        })
-    });
-}
+use super::{BufferModel, EditorView, check};
+use crate::app::settings::ApplicationSettings;
 
 const NEWLINE: &str = "editor.insert-newline";
 const TAB: &str = "editor.insert-tab";

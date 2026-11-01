@@ -1,6 +1,6 @@
 # D074 — Editing commands
 
-Status: 🚧 in progress: checkpoints 1 and 2 approved; checkpoint 3 is next. Item of the
+Status: 🚧 in progress: checkpoint 3 awaits its review gate. Item of the
 [daily-driver plan](daily-driver.md); builds on D073's
 [language editing configuration](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
@@ -111,7 +111,7 @@ package's `test/comments.jsonc`. Linux binds ctrl-shift-a through a
 Linux-only preset table. Checkpoint 5 moves these rules into the semantic
 UI and editor views references and decisions.
 
-### 3. Line commands and Smart Home
+### 3. Line commands and Smart Home — ✅ implemented, awaiting review
 
 - Deliverables: copy lines up and down, delete lines, move lines up and
   down, join lines, and Smart Home with its select variant, with bindings.
@@ -122,6 +122,20 @@ UI and editor views references and decisions.
   `native_commands.rs`, using checkpoint 1's batch commit; the Smart Home
   arm replaces `line-start` for the bound keys only.
 - Review gate: daily use of the line commands.
+- Notes:
+  - ✅ Commands live in `src/app/editor/lines.rs`. Move lines deletes the
+    neighbouring line and reinserts it on the other side rather than
+    replacing the whole span, so contributions on the moved lines keep their
+    anchors. Copies and moved neighbours take the buffer's line ending.
+  - ✅ Delete lines keeps the caret's byte column, snapped to a character
+    boundary, on the line that takes the deleted lines' place; deleting
+    through the last line removes the previous line's terminator.
+  - ✅ Join lines also drops the previous line's trailing whitespace and
+    leaves the caret at the join point; a selection joins every line it
+    touches.
+  - ✅ Smart Home is `editor.move-smart-home` and `editor.select-smart-home`;
+    home, shift-home, ⌘←, and ⇧⌘← bind them, and ctrl-a keeps
+    `editor.move-line-start`.
 
 ### 4. Unit drag
 

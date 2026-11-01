@@ -182,6 +182,9 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
         ("ctrl-d", DELETE_FORWARD_COMMAND),
         ("ctrl-h", DELETE_BACKWARD_COMMAND),
         ("ctrl-k", DELETE_TO_LINE_END_COMMAND),
+        ("ctrl-j", JOIN_LINES_COMMAND),
+        ("cmd-left", MOVE_SMART_HOME_COMMAND),
+        ("shift-cmd-left", SELECT_SMART_HOME_COMMAND),
     ] {
         assert_eq!(
             resolved(&registry, key, Some("editor")).as_deref(),
@@ -230,6 +233,29 @@ fn every_platform_binds_the_editing_commands_in_the_editor_only() {
             (format!("{secondary}-]"), INDENT_LINES_COMMAND),
             (format!("{secondary}-["), OUTDENT_LINES_COMMAND),
             (format!("{secondary}-/"), TOGGLE_LINE_COMMENT_COMMAND),
+            ("home".to_owned(), MOVE_SMART_HOME_COMMAND),
+            ("shift-home".to_owned(), SELECT_SMART_HOME_COMMAND),
+            ("alt-up".to_owned(), MOVE_LINES_UP_COMMAND),
+            ("alt-down".to_owned(), MOVE_LINES_DOWN_COMMAND),
+            (format!("{secondary}-shift-k"), DELETE_LINES_COMMAND),
+            (
+                if platform == Platform::Linux {
+                    "ctrl-shift-alt-up"
+                } else {
+                    "shift-alt-up"
+                }
+                .to_owned(),
+                COPY_LINES_UP_COMMAND,
+            ),
+            (
+                if platform == Platform::Linux {
+                    "ctrl-shift-alt-down"
+                } else {
+                    "shift-alt-down"
+                }
+                .to_owned(),
+                COPY_LINES_DOWN_COMMAND,
+            ),
             (
                 if platform == Platform::Linux {
                     "ctrl-shift-a"

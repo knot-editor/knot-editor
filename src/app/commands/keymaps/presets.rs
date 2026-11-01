@@ -326,8 +326,8 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("shift-up", SELECT_UP_COMMAND, Some("editor")),
     ("down", MOVE_DOWN_COMMAND, Some("editor")),
     ("shift-down", SELECT_DOWN_COMMAND, Some("editor")),
-    ("home", MOVE_LINE_START_COMMAND, Some("editor")),
-    ("shift-home", SELECT_LINE_START_COMMAND, Some("editor")),
+    ("home", MOVE_SMART_HOME_COMMAND, Some("editor")),
+    ("shift-home", SELECT_SMART_HOME_COMMAND, Some("editor")),
     ("end", MOVE_LINE_END_COMMAND, Some("editor")),
     ("shift-end", SELECT_LINE_END_COMMAND, Some("editor")),
     ("pageup", MOVE_PAGE_UP_COMMAND, Some("editor")),
@@ -340,6 +340,9 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("secondary-]", INDENT_LINES_COMMAND, Some("editor")),
     ("secondary-[", OUTDENT_LINES_COMMAND, Some("editor")),
     ("secondary-/", TOGGLE_LINE_COMMENT_COMMAND, Some("editor")),
+    ("alt-up", MOVE_LINES_UP_COMMAND, Some("editor")),
+    ("alt-down", MOVE_LINES_DOWN_COMMAND, Some("editor")),
+    ("secondary-shift-k", DELETE_LINES_COMMAND, Some("editor")),
     ("backspace", DELETE_BACKWARD_COMMAND, Some("editor")),
     ("delete", DELETE_FORWARD_COMMAND, Some("editor")),
     ("ctrl-space", SHOW_COMPLETIONS_COMMAND, Some("editor")),
@@ -399,8 +402,8 @@ const MACOS_BINDINGS: &[PresetEntry] = &[
     ("shift-alt-left", SELECT_WORD_LEFT_COMMAND, Some("editor")),
     ("alt-right", MOVE_WORD_RIGHT_COMMAND, Some("editor")),
     ("shift-alt-right", SELECT_WORD_RIGHT_COMMAND, Some("editor")),
-    ("cmd-left", MOVE_LINE_START_COMMAND, Some("editor")),
-    ("shift-cmd-left", SELECT_LINE_START_COMMAND, Some("editor")),
+    ("cmd-left", MOVE_SMART_HOME_COMMAND, Some("editor")),
+    ("shift-cmd-left", SELECT_SMART_HOME_COMMAND, Some("editor")),
     ("cmd-right", MOVE_LINE_END_COMMAND, Some("editor")),
     ("shift-cmd-right", SELECT_LINE_END_COMMAND, Some("editor")),
     ("cmd-up", MOVE_DOCUMENT_START_COMMAND, Some("editor")),
@@ -425,6 +428,9 @@ const MACOS_BINDINGS: &[PresetEntry] = &[
     ("ctrl-h", DELETE_BACKWARD_COMMAND, Some("editor")),
     ("ctrl-k", DELETE_TO_LINE_END_COMMAND, Some("editor")),
     ("shift-alt-a", TOGGLE_BLOCK_COMMENT_COMMAND, Some("editor")),
+    ("shift-alt-up", COPY_LINES_UP_COMMAND, Some("editor")),
+    ("shift-alt-down", COPY_LINES_DOWN_COMMAND, Some("editor")),
+    ("ctrl-j", JOIN_LINES_COMMAND, Some("editor")),
     // macOS reports cmd-shift-] as cmd-}.
     ("cmd-}", NEXT_TAB_COMMAND, None),
     ("cmd-{", PREVIOUS_TAB_COMMAND, None),
@@ -477,12 +483,22 @@ const PC_BINDINGS: &[PresetEntry] = &[
 ];
 
 /// Windows keys where VS Code's Linux defaults differ.
-const WINDOWS_BINDINGS: &[PresetEntry] =
-    &[("shift-alt-a", TOGGLE_BLOCK_COMMENT_COMMAND, Some("editor"))];
+const WINDOWS_BINDINGS: &[PresetEntry] = &[
+    ("shift-alt-a", TOGGLE_BLOCK_COMMENT_COMMAND, Some("editor")),
+    ("shift-alt-up", COPY_LINES_UP_COMMAND, Some("editor")),
+    ("shift-alt-down", COPY_LINES_DOWN_COMMAND, Some("editor")),
+];
 
 /// VS Code's Linux keys for the commands in `WINDOWS_BINDINGS`.
-const LINUX_BINDINGS: &[PresetEntry] =
-    &[("ctrl-shift-a", TOGGLE_BLOCK_COMMENT_COMMAND, Some("editor"))];
+const LINUX_BINDINGS: &[PresetEntry] = &[
+    ("ctrl-shift-a", TOGGLE_BLOCK_COMMENT_COMMAND, Some("editor")),
+    ("ctrl-shift-alt-up", COPY_LINES_UP_COMMAND, Some("editor")),
+    (
+        "ctrl-shift-alt-down",
+        COPY_LINES_DOWN_COMMAND,
+        Some("editor"),
+    ),
+];
 
 const PC_TERMINAL_BINDINGS: &[PresetEntry] = &[
     ("ctrl-shift-c", COPY_COMMAND, Some("terminal")),
