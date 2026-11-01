@@ -45,6 +45,7 @@ use tree_sitter::{
 
 use crate::core::buffer::{BufferEdit, TextPoint, TextSnapshot};
 
+use super::languages::editing::EditingConfiguration;
 use super::theme::Highlight;
 
 /// How long a commit may spend reparsing on the foreground before the parse
@@ -87,6 +88,8 @@ pub(crate) struct SyntaxLanguage {
     injection_language: Option<u32>,
     /// Indexed by injection pattern index.
     injection_patterns: Vec<InjectionPattern>,
+    /// The editing data of the registration this language compiled from.
+    editing: Arc<EditingConfiguration>,
 }
 
 struct InjectionPattern {
@@ -170,7 +173,20 @@ impl SyntaxLanguage {
             injection_language: injections.capture_index_for_name("injection.language"),
             injections,
             injection_patterns,
+            editing: Default::default(),
         })
+    }
+
+    /// This language with a registration's editing data.
+    pub(crate) fn with_editing(self, editing: EditingConfiguration) -> Self {
+        Self {
+            editing: Arc::new(editing),
+            ..self
+        }
+    }
+
+    pub(crate) fn editing(&self) -> &Arc<EditingConfiguration> {
+        &self.editing
     }
 
     /// Whether the injection query can hand regions to other languages, so
@@ -288,6 +304,20 @@ impl SyntaxState {
     /// The buffer's own language.
     pub(crate) fn language(&self) -> &Arc<SyntaxLanguage> {
         &self.root.language
+    }
+
+    /// The language of the deepest layer that parses the text at `offset`,
+    /// such as a code fence's language inside Markdown.
+    pub(crate) fn language_at(&self, offset: usize) -> &Arc<SyntaxLanguage> {
+        let mut layer = &self.root;
+        while let Some(injection) = layer
+            .injections
+            .iter()
+            .find(|injection| injection.parses(offset))
+        {
+            layer = injection;
+        }
+        &layer.language
     }
 
     /// Whether the tree lags the text and no background parse is running,
@@ -437,6 +467,15 @@ impl Layer {
             tree: None,
             injections: Vec::new(),
         }
+    }
+
+    /// Whether this layer's parsed ranges contain `offset`.
+    fn parses(&self, offset: usize) -> bool {
+        self.tree.as_ref().is_some_and(|tree| {
+            tree.included_ranges()
+                .iter()
+                .any(|range| range.start_byte <= offset && offset < range.end_byte)
+        })
     }
 
     /// Apply a committed edit to this layer's tree and to the injections that

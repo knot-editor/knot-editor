@@ -117,7 +117,6 @@ pub(crate) struct CommentEdit {
     pub(crate) text: String,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 impl EditingConfiguration {
     /// The edits that toggle comments on `lines`; none when every line is
     /// blank or the language has no comment tokens. Blank lines are left
@@ -176,32 +175,16 @@ impl EditingConfiguration {
         let unwrapped: Option<Vec<_>> = filled
             .iter()
             .map(|&(row, line)| {
-                let start = indent(line);
-                let end = line.trim_end().len();
-                let body = &line[start..end];
-                if body.len() < open.len() + close.len()
-                    || !body.starts_with(open.as_str())
-                    || !body.ends_with(close.as_str())
-                {
-                    return None;
-                }
-                let mut inner = start + open.len();
-                let mut outer = end - close.len();
-                if inner < outer && line[inner..].starts_with(' ') {
-                    inner += 1;
-                }
-                if inner < outer && line[..outer].ends_with(' ') {
-                    outer -= 1;
-                }
+                let (open, close) = unwrap_block(line, open, close)?;
                 Some([
                     CommentEdit {
                         line: row,
-                        range: start..inner,
+                        range: open,
                         text: String::new(),
                     },
                     CommentEdit {
                         line: row,
-                        range: outer..end,
+                        range: close,
                         text: String::new(),
                     },
                 ])
@@ -229,6 +212,49 @@ impl EditingConfiguration {
                 .collect(),
         }
     }
+
+    /// The edits, relative to `text`, that toggle a block comment around it,
+    /// ignoring surrounding whitespace: unwrap it when it starts and ends with
+    /// the delimiters, else wrap it. Whitespace alone becomes an empty
+    /// comment with two spaces inside. None when the language has no block
+    /// comment.
+    pub(crate) fn toggle_block_comment(&self, text: &str) -> Vec<(Range<usize>, String)> {
+        let Some((open, close)) = &self.block_comment else {
+            return Vec::new();
+        };
+        let start = indent(text);
+        let end = text.trim_end().len();
+        if start >= end {
+            return vec![(0..0, format!("{open}  {close}"))];
+        }
+        match unwrap_block(text, open, close) {
+            Some((open, close)) => vec![(open, String::new()), (close, String::new())],
+            None => vec![
+                (start..start, format!("{open} ")),
+                (end..end, format!(" {close}")),
+            ],
+        }
+    }
+}
+
+/// The ranges of `open` and `close`, each with one space inside, when
+/// `text` without surrounding whitespace starts and ends with them.
+fn unwrap_block(text: &str, open: &str, close: &str) -> Option<(Range<usize>, Range<usize>)> {
+    let start = indent(text);
+    let end = text.trim_end().len();
+    let body = &text[start..end];
+    if body.len() < open.len() + close.len() || !body.starts_with(open) || !body.ends_with(close) {
+        return None;
+    }
+    let mut inner = start + open.len();
+    let mut outer = end - close.len();
+    if inner < outer && text[inner..].starts_with(' ') {
+        inner += 1;
+    }
+    if inner < outer && text[..outer].ends_with(' ') {
+        outer -= 1;
+    }
+    Some((start..inner, outer..end))
 }
 
 /// The byte width of a line's leading whitespace.

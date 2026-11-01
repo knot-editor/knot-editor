@@ -1,6 +1,6 @@
 //! Runs the comment toggling cases each bundled language package keeps in
-//! `test/comments.jsonc` through the native toggle, on the configuration the
-//! package registers.
+//! `test/comments.jsonc` through the native line and block toggles, on the
+//! configuration the package registers.
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -14,6 +14,8 @@ use crate::app::languages::editing::EditingConfiguration;
 struct CommentCases {
     languages: Vec<String>,
     cases: Vec<CommentCase>,
+    #[serde(default)]
+    block: Vec<BlockCase>,
 }
 
 /// Toggling comments on `before` gives `after`.
@@ -23,6 +25,15 @@ struct CommentCase {
     name: String,
     before: Vec<String>,
     after: Vec<String>,
+}
+
+/// Toggling a block comment around the selected text `before` gives `after`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BlockCase {
+    name: String,
+    before: String,
+    after: String,
 }
 
 /// Every bundled package's case file.
@@ -81,6 +92,15 @@ fn toggle(configuration: &EditingConfiguration, lines: &[String]) -> Vec<String>
     result
 }
 
+/// Toggle a block comment around `text` and apply the edits.
+fn toggle_block(configuration: &EditingConfiguration, text: &str) -> String {
+    let mut result = text.to_owned();
+    for (range, text) in configuration.toggle_block_comment(text).into_iter().rev() {
+        result.replace_range(range, &text);
+    }
+    result
+}
+
 #[gpui::test]
 fn bundled_comment_cases_toggle_on_their_registered_languages(cx: &mut TestAppContext) {
     start_bundled_packages(cx);
@@ -103,6 +123,18 @@ fn bundled_comment_cases_toggle_on_their_registered_languages(cx: &mut TestAppCo
                         case.name, case.before, case.after, actual
                     ));
                 }
+            }
+            for case in &cases.block {
+                let actual = toggle_block(&configuration, &case.before);
+                if actual != case.after {
+                    failures.push(format!(
+                        "{id}: {}\n  before: {:?}\n  expected: {:?}\n  actual: {:?}",
+                        case.name, case.before, case.after, actual
+                    ));
+                }
+            }
+            if configuration.block_comment.is_some() && cases.block.is_empty() {
+                failures.push(format!("{id}: no block comment cases"));
             }
             tested.push(id.clone());
         }

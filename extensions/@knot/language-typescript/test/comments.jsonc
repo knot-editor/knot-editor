@@ -1,6 +1,7 @@
 // Comment toggling cases, run through the native toggle on the registered
 // configuration of each listed language. Each case toggles comments on
-// `before` and expects `after`.
+// `before` and expects `after`; each block case toggles a block comment
+// around the selected text `before` and expects `after`.
 {
   "languages": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
   "cases": [
@@ -34,5 +35,10 @@
       "before": ["/// <reference types=\"node\" />"],
       "after": ["/ <reference types=\"node\" />"]
     }
+  ],
+  "block": [
+    { "name": "wrapping adds /* and */ with spaces", "before": "a + b", "after": "/* a + b */" },
+    { "name": "unwrapping removes the delimiters and one space each", "before": "/* a + b */", "after": "a + b" },
+    { "name": "a JSDoc comment unwraps to its body", "before": "/** Docs. */", "after": "* Docs." }
   ]
 }

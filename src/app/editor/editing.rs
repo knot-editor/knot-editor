@@ -91,6 +91,14 @@ impl EditorView {
                 self.outdent_lines(cx);
                 return true;
             }
+            commands::TOGGLE_LINE_COMMENT_COMMAND => {
+                self.toggle_line_comment(cx);
+                return true;
+            }
+            commands::TOGGLE_BLOCK_COMMENT_COMMAND => {
+                self.toggle_block_comment(cx);
+                return true;
+            }
             _ => {}
         }
         if matches!(

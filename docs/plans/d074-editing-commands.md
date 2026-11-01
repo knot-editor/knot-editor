@@ -1,6 +1,6 @@
 # D074 — Editing commands
 
-Status: 🚧 in progress: checkpoint 1 approved; checkpoint 2 is next. Item of the
+Status: 🚧 in progress: checkpoint 2 awaits its review gate. Item of the
 [daily-driver plan](daily-driver.md); builds on D073's
 [language editing configuration](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
@@ -98,7 +98,7 @@ resource detect. Shift-Tab binds `editor.outdent-lines`; Enter copies the
 indentation before the caret. Checkpoint 5 moves these rules into the
 editor views reference and decisions.
 
-### 2. Comment toggling
+### 2. Comment toggling — ✅ implemented, awaiting review
 
 - Deliverables: Toggle line comment and Toggle block comment, reading the
   language at the selection start, with their bindings; the block toggle's
@@ -117,6 +117,20 @@ editor views reference and decisions.
   - `src/app/product/tests/language_editing.rs` reads the block cases.
 - Review gate: toggle comments in Rust, TypeScript, Python, TOML, and a
   Markdown file with code fences.
+- Notes:
+  - ✅ `SyntaxLanguage` carries its registration's editing configuration,
+    which replaces the registry's separate editing table, and
+    `SyntaxState::language_at` descends to the deepest layer whose parsed
+    ranges contain the offset. A buffer without syntax has no tokens.
+  - ✅ `markdown_inline` registers Markdown's block comment too: it is the
+    deepest layer inside every paragraph, so without it toggling in prose
+    did nothing.
+  - ✅ Block toggle also unwraps when the delimiters, each with at most one
+    space, sit just outside the selection, as VS Code does, so a second
+    toggle undoes a wrap that left the inner text selected. Wrapping skips
+    the selection's surrounding whitespace.
+  - ✅ Bindings: ⌘/ and ctrl-/; ⇧⌥A on macOS and Windows and ctrl-shift-a on
+    Linux, through new Windows- and Linux-only preset tables.
 
 ### 3. Line commands and Smart Home
 

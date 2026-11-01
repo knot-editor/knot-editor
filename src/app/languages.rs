@@ -24,7 +24,7 @@ use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
 pub(crate) mod editing;
 
-use editing::{EditingConfiguration, EditingDefinition};
+use editing::EditingDefinition;
 
 use super::{
     documents::ApplicationDocuments,
@@ -68,16 +68,15 @@ impl LanguageDefinition {
     /// of registering a language, and needs no application state, so callers
     /// run it off the foreground.
     pub(crate) fn compile(self) -> Result<CompiledLanguage, SyntaxLanguageError> {
-        let editing = self.editing.resolve();
         let syntax = SyntaxLanguage::new(
             &self.info.grammar,
             &self.queries.highlights,
             &self.queries.injections,
-        )?;
+        )?
+        .with_editing(self.editing.resolve());
         Ok(CompiledLanguage {
             definition: self,
             syntax: Arc::new(syntax),
-            editing: Arc::new(editing),
         })
     }
 }
@@ -86,7 +85,6 @@ impl LanguageDefinition {
 pub(crate) struct CompiledLanguage {
     definition: LanguageDefinition,
     syntax: Arc<SyntaxLanguage>,
-    editing: Arc<EditingConfiguration>,
 }
 
 /// File patterns claimed for a language without defining it.
@@ -111,7 +109,6 @@ struct Registration {
 #[derive(Default)]
 struct LanguageTable {
     languages: HashMap<String, Arc<SyntaxLanguage>>,
-    editing: HashMap<String, Arc<EditingConfiguration>>,
     /// Lowercase file extension to language ID.
     extensions: HashMap<String, String>,
 }
@@ -235,12 +232,9 @@ impl LanguageRegistry {
 
     fn rebuild(&mut self) {
         let mut languages = HashMap::new();
-        let mut editing = HashMap::new();
         for registration in self.effective() {
             let language = registration.language.as_ref().expect("effective languages");
-            let id = registration.info.id.clone();
-            languages.insert(id.clone(), Arc::clone(&language.syntax));
-            editing.insert(id, Arc::clone(&language.editing));
+            languages.insert(registration.info.id.clone(), Arc::clone(&language.syntax));
         }
         let mut extensions = HashMap::new();
         for registration in &self.registrations {
@@ -250,7 +244,6 @@ impl LanguageRegistry {
         }
         self.table = Arc::new(LanguageTable {
             languages,
-            editing,
             extensions,
         });
     }
@@ -278,9 +271,10 @@ impl LanguageRegistry {
     }
 
     /// The editing configuration of the registration that defines `id`.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn editing(&self, id: &str) -> Option<Arc<EditingConfiguration>> {
-        self.table.editing.get(id).cloned()
+    #[cfg(test)]
+    pub(crate) fn editing(&self, id: &str) -> Option<Arc<editing::EditingConfiguration>> {
+        self.resolve(id)
+            .map(|language| Arc::clone(language.editing()))
     }
 
     /// Resolves injected language names against the registrations as they
@@ -437,10 +431,12 @@ pub(crate) fn effective_language(model: &BufferModel, cx: &App) -> String {
         .to_owned()
 }
 
-/// The editing configuration of a registered language ID, which an injected
-/// layer resolves by its own language's ID.
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn editing_configuration(id: &str, cx: &App) -> Option<Arc<EditingConfiguration>> {
+/// The editing configuration of a registered language ID.
+#[cfg(test)]
+pub(crate) fn editing_configuration(
+    id: &str,
+    cx: &App,
+) -> Option<Arc<editing::EditingConfiguration>> {
     cx.try_global::<ApplicationLanguages>()
         .and_then(|languages| languages.registry.editing(id))
 }

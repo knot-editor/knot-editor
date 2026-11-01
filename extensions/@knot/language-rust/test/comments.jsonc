@@ -1,6 +1,7 @@
 // Comment toggling cases, run through the native toggle on the registered
 // configuration of each listed language. Each case toggles comments on
-// `before` and expects `after`.
+// `before` and expects `after`; each block case toggles a block comment
+// around the selected text `before` and expects `after`.
 {
   "languages": ["rust"],
   "cases": [
@@ -33,5 +34,12 @@
     },
     { "name": "a block comment line is commented with //", "before": ["/* a */"], "after": ["// /* a */"] },
     { "name": "blank lines alone change nothing", "before": ["", "  ", ""], "after": ["", "  ", ""] }
+  ],
+  "block": [
+    { "name": "wrapping adds /* and */ with spaces", "before": "a + b", "after": "/* a + b */" },
+    { "name": "unwrapping removes the delimiters and one space each", "before": "/* a + b */", "after": "a + b" },
+    { "name": "a selection across lines is wrapped once", "before": "let a = 1;\nlet b = 2;", "after": "/* let a = 1;\nlet b = 2; */" },
+    { "name": "surrounding whitespace stays outside", "before": "  x\n", "after": "  /* x */\n" },
+    { "name": "nothing selected inserts an empty comment", "before": "", "after": "/*  */" }
   ]
 }

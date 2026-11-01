@@ -33,5 +33,8 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     name: "Markdown Inline",
     grammar: "markdown_inline",
     queries: { highlights: markdownInline.highlights, injections: injections.markdownInline },
+    // Comments toggle with the language at the cursor, which inside a
+    // paragraph is this one.
+    comments: { block: ["<!--", "-->"] },
   },
 ];

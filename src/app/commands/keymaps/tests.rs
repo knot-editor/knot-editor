@@ -229,6 +229,16 @@ fn every_platform_binds_the_editing_commands_in_the_editor_only() {
             ("shift-tab".to_owned(), OUTDENT_LINES_COMMAND),
             (format!("{secondary}-]"), INDENT_LINES_COMMAND),
             (format!("{secondary}-["), OUTDENT_LINES_COMMAND),
+            (format!("{secondary}-/"), TOGGLE_LINE_COMMENT_COMMAND),
+            (
+                if platform == Platform::Linux {
+                    "ctrl-shift-a"
+                } else {
+                    "shift-alt-a"
+                }
+                .to_owned(),
+                TOGGLE_BLOCK_COMMENT_COMMAND,
+            ),
         ] {
             assert_eq!(
                 resolved(&registry, &key, Some("editor")).as_deref(),

@@ -6,6 +6,7 @@
 //! A view keeps no copy of the text: it reads the lines it needs from the model
 //! and converts positions through the model's line index.
 
+mod comments;
 mod completion;
 mod editing;
 mod indentation;

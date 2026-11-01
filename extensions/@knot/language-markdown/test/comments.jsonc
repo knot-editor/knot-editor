@@ -1,9 +1,10 @@
 // Comment toggling cases, run through the native toggle on the registered
 // configuration of each listed language. Each case toggles comments on
-// `before` and expects `after`. Markdown has only a block comment, so each
-// line is wrapped and unwrapped.
+// `before` and expects `after`; each block case toggles a block comment
+// around the selected text `before` and expects `after`. Markdown has only a
+// block comment, so toggling line comments wraps and unwraps each line.
 {
-  "languages": ["markdown"],
+  "languages": ["markdown", "markdown_inline"],
   "cases": [
     { "name": "commenting wraps a line in <!-- -->", "before": ["Some text"], "after": ["<!-- Some text -->"] },
     { "name": "uncommenting unwraps a line", "before": ["<!-- Some text -->"], "after": ["Some text"] },
@@ -27,5 +28,10 @@
       "before": ["<!-- a -->", "b"],
       "after": ["<!-- <!-- a --> -->", "<!-- b -->"]
     }
+  ],
+  "block": [
+    { "name": "wrapping adds <!-- and -->", "before": "Some text", "after": "<!-- Some text -->" },
+    { "name": "unwrapping restores the text", "before": "<!-- Some text -->", "after": "Some text" },
+    { "name": "paragraphs across lines are wrapped once", "before": "One\n\nTwo", "after": "<!-- One\n\nTwo -->" }
   ]
 }

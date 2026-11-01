@@ -91,3 +91,37 @@ fn nothing_to_toggle_without_tokens_or_text() {
     );
     assert!(c_like().toggle_comments(&["", "  "]).is_empty());
 }
+
+#[test]
+fn block_toggle_wraps_and_unwraps_inside_surrounding_whitespace() {
+    let rust = c_like();
+    let block = |text: &str, edits: &[(Range<usize>, &str)]| {
+        assert_eq!(
+            rust.toggle_block_comment(text),
+            edits
+                .iter()
+                .map(|(range, text)| (range.clone(), text.to_string()))
+                .collect::<Vec<_>>(),
+            "{text:?}"
+        );
+    };
+    block("a + b", &[(0..0, "/* "), (5..5, " */")]);
+    block("  a\nb\n", &[(2..2, "/* "), (5..5, " */")]);
+    block("/* a + b */", &[(0..3, ""), (8..11, "")]);
+    block(" /*a*/ ", &[(1..3, ""), (4..6, "")]);
+    block("/**/", &[(0..2, ""), (2..4, "")]);
+    block("", &[(0..0, "/*  */")]);
+    block("  ", &[(0..0, "/*  */")]);
+    // A comment only at one end is wrapped again.
+    block("/* a", &[(0..0, "/* "), (4..4, " */")]);
+
+    assert_eq!(
+        markdown().toggle_block_comment("<!-- x -->"),
+        [(0..5, String::new()), (6..10, String::new())]
+    );
+    let python = EditingConfiguration {
+        line_comments: vec!["#".into()],
+        ..Default::default()
+    };
+    assert!(python.toggle_block_comment("a").is_empty());
+}

@@ -264,13 +264,15 @@ type PresetEntry = (&'static str, &'static str, Option<&'static str>);
 /// ctrl-shift-v instead. Named keys such as tab and pageup, and ctrl-`, stay
 /// global because shells do not use them.
 pub(crate) fn knot_preset(platform: Platform) -> Vec<PresetBinding> {
-    let (secondary, platform_entries) = match platform {
-        Platform::MacOs => ("cmd-", MACOS_BINDINGS),
-        Platform::Windows | Platform::Linux => ("ctrl-", PC_BINDINGS),
+    let (secondary, platform_entries, os_entries) = match platform {
+        Platform::MacOs => ("cmd-", MACOS_BINDINGS, &[][..]),
+        Platform::Windows => ("ctrl-", PC_BINDINGS, WINDOWS_BINDINGS),
+        Platform::Linux => ("ctrl-", PC_BINDINGS, LINUX_BINDINGS),
     };
     let mut preset = SHARED_BINDINGS
         .iter()
         .chain(platform_entries)
+        .chain(os_entries)
         .map(|&(key, command, view)| {
             PresetBinding::new(key.replace("secondary-", secondary), Some(command), view)
         })
@@ -337,6 +339,7 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("shift-tab", OUTDENT_LINES_COMMAND, Some("editor")),
     ("secondary-]", INDENT_LINES_COMMAND, Some("editor")),
     ("secondary-[", OUTDENT_LINES_COMMAND, Some("editor")),
+    ("secondary-/", TOGGLE_LINE_COMMENT_COMMAND, Some("editor")),
     ("backspace", DELETE_BACKWARD_COMMAND, Some("editor")),
     ("delete", DELETE_FORWARD_COMMAND, Some("editor")),
     ("ctrl-space", SHOW_COMPLETIONS_COMMAND, Some("editor")),
@@ -421,6 +424,7 @@ const MACOS_BINDINGS: &[PresetEntry] = &[
     ("ctrl-d", DELETE_FORWARD_COMMAND, Some("editor")),
     ("ctrl-h", DELETE_BACKWARD_COMMAND, Some("editor")),
     ("ctrl-k", DELETE_TO_LINE_END_COMMAND, Some("editor")),
+    ("shift-alt-a", TOGGLE_BLOCK_COMMENT_COMMAND, Some("editor")),
     // macOS reports cmd-shift-] as cmd-}.
     ("cmd-}", NEXT_TAB_COMMAND, None),
     ("cmd-{", PREVIOUS_TAB_COMMAND, None),
@@ -471,6 +475,14 @@ const PC_BINDINGS: &[PresetEntry] = &[
     ("alt-8", GO_TO_TAB_8_COMMAND, None),
     ("alt-9", GO_TO_LAST_TAB_COMMAND, None),
 ];
+
+/// Windows keys where VS Code's Linux defaults differ.
+const WINDOWS_BINDINGS: &[PresetEntry] =
+    &[("shift-alt-a", TOGGLE_BLOCK_COMMENT_COMMAND, Some("editor"))];
+
+/// VS Code's Linux keys for the commands in `WINDOWS_BINDINGS`.
+const LINUX_BINDINGS: &[PresetEntry] =
+    &[("ctrl-shift-a", TOGGLE_BLOCK_COMMENT_COMMAND, Some("editor"))];
 
 const PC_TERMINAL_BINDINGS: &[PresetEntry] = &[
     ("ctrl-shift-c", COPY_COMMAND, Some("terminal")),

@@ -94,7 +94,11 @@ impl EditorView {
     /// Commit edits to whole lines, keeping the selection on the same text. A
     /// selection that starts at a line start keeps starting there, so it
     /// still covers the lines' new indentation.
-    fn commit_line_edits(&mut self, edits: Vec<(Range<usize>, String)>, cx: &mut Context<Self>) {
+    pub(super) fn commit_line_edits(
+        &mut self,
+        edits: Vec<(Range<usize>, String)>,
+        cx: &mut Context<Self>,
+    ) {
         let state = self.history_view_state(self.model.read(cx));
         let start = state.anchor.min(state.caret);
         let start_stays = self
@@ -107,7 +111,7 @@ impl EditorView {
 
     /// The lines a line command acts on: those the selection touches, except
     /// a last line it reaches only at column 0, or else the caret's line.
-    fn selected_lines(&self) -> Range<usize> {
+    pub(super) fn selected_lines(&self) -> Range<usize> {
         match self.selection_range() {
             Some((start, end)) if end.0 > start.0 && end.1 == 0 => start.0..end.0,
             Some((start, end)) => start.0..end.0 + 1,

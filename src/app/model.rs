@@ -24,6 +24,7 @@ use crate::{
 use super::{
     history::{EditGrouping, EditHistory, HistoryViewChange, HistoryViewState},
     indentation::{self, IndentStyle},
+    languages::editing::EditingConfiguration,
     syntax::{FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState},
     theme::{Highlight, color},
 };
@@ -520,6 +521,14 @@ impl BufferModel {
         let lines = self.line_count().min(indentation::DETECTION_LINES);
         let text = self.buffer.read_range(0..self.line_range(lines - 1).end);
         self.indent_style = indentation::detect(text.lines());
+    }
+
+    /// The editing data of the language at `offset`: the deepest syntax
+    /// layer's, so a code fence uses its own language's comment tokens.
+    pub(crate) fn editing_at(&self, offset: usize) -> Option<Arc<EditingConfiguration>> {
+        self.syntax
+            .as_ref()
+            .map(|syntax| Arc::clone(syntax.language_at(offset).editing()))
     }
 
     /// The language the current syntax state parses, if any.

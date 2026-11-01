@@ -1416,4 +1416,5 @@ fn the_caret_blinks_while_focused_and_shows_again_after_typing(cx: &mut TestAppC
     assert!(!blinking(cx));
 }
 
+mod comments;
 mod indentation;
