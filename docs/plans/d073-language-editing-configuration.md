@@ -1,6 +1,6 @@
 # D073 — Language editing configuration
 
-Status: 🚧 checkpoint 2 implemented, awaiting review. Item of the
+Status: 🚧 checkpoints 1–2 approved; checkpoint 3 next. Item of the
 [daily-driver plan](daily-driver.md); D074 (editing commands) and D075
 (bracket matching and auto-closing) consume it.
 
@@ -98,16 +98,12 @@ nonempty without surrounding whitespace. Open for D074: a syntax layer holds
 no language ID, so resolving an injected layer's configuration needs a
 layer-to-ID mapping.
 
-### 2. Comment evaluator — ✅ implemented, ⏳ review gate
+### 2. Comment evaluator — ✅ approved
 
-- ✅ `EditingConfiguration::toggle_comments(lines)` in
-  `src/app/languages/editing.rs`, tested in
-  `src/app/languages/editing/tests.rs`. It returns byte-range replacements
-  per line, so commenting, uncommenting, wrapping, and unwrapping share one
-  shape; blank lines are untouched.
-- ✅ Indentation removed from D073 (contract fields, `InvalidPattern`, the
-  `regex` dependency, and its evaluators) in favor of D066.
-- Review gate: the comment rules match what D074 needs.
+Completed: `EditingConfiguration::toggle_comments(lines)` in
+`src/app/languages/editing.rs` returns byte-range replacements per line, so
+commenting, uncommenting, wrapping, and unwrapping share one shape.
+Indentation was removed from D073 in favor of D066's `indents` queries.
 
 ### 3. Bundled language data with per-language behavior tests
 
