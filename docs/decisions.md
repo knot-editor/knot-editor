@@ -149,6 +149,44 @@ type checking but need Node, `build.rs`, or V8 to load them for Rust (D133).
 References: [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages)
 and [extension guide](extension-api.md#register-a-language).
 
+## Editing commands
+
+Editing commands follow VS Code's behavior and default bindings, because
+they are the conventions most editor users already have in their fingers:
+Enter keeps the indentation before the caret, Tab indents a selection across
+lines and Shift-Tab always outdents, a selection ending at column 0 leaves
+that line out, line comments toggle with ⌘/, block comments with ⇧⌥A
+(ctrl-shift-a on Linux), lines move with ⌥↑/⌥↓ and copy with ⇧⌥↑/⇧⌥↓,
+and Home goes to the first non-blank character before column 0. macOS keeps
+ctrl-a at column 0, as every Cocoa text field does. A second block toggle
+unwraps when the delimiters sit just outside the selection, as in VS Code,
+so toggling twice is a no-op even though wrapping leaves the inner text
+selected.
+
+Each command is one model batch that records the view's selection before
+and after, the native grouping D111 will let extensions open across
+batches. Move Lines deletes the neighbouring line and reinserts it on the
+other side rather than replacing the span, so anchored contributions on the
+moved lines survive.
+
+Tabs or spaces are detected once, when a document enters from a resource,
+from its first 10,000 lines: a style wins when it indents at least twice as
+many lines as the other, so a mixed file falls back to `editor.insertSpaces`
+instead of guessing. One-space indents are alignment and ` *` lines are
+block-comment continuations, so neither counts. The size always comes from
+`editor.tabSize`; detecting it, and EditorConfig, are D090.
+
+Words split at VS Code's default separators rather than at Unicode word
+boundaries alone. UAX #29 is designed for prose and keeps `some.thing`,
+`a:b`, and `don't` as one word, which made double-click select both sides
+of a member access. Splitting Unicode segments at separators keeps
+ideographs and emoji as separate units, and one definition serves
+double-click, word drags, and word movement. Language-specific word
+characters, such as `-` in CSS, are D131.
+
+References: [editor views](architecture/workbench-and-lifecycle.md#editor-views)
+and [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages).
+
 ## Themes
 
 Themes are extension contributions registered like languages: the latest

@@ -43,8 +43,13 @@ document-wide UTF-16 offsets, through the buffer's line index, so editing cost
 does not grow with document size. A test guards that editing, navigation, IME,
 scrolling, and painting never read the whole document.
 
-Movement and deletion respect grapheme boundaries; word navigation uses Unicode
-word boundaries and vertical movement retains a shaped x coordinate. Text,
+Movement and deletion respect grapheme boundaries and vertical movement
+retains a shaped x coordinate. Words are Unicode word segments split at VS
+Code's default word separators, so each run of separators such as `.` or `::`
+is its own unit; word movement stops at the edges of words and separator runs,
+and double-click selects one. Dragging after a double- or triple-click keeps
+the clicked word or line selected and extends by that unit in either
+direction. Text,
 selection, caret, hit testing, and IME bounds share one shaping projection and
 horizontal offset. The caret never sits inside a `\r\n` terminator, and
 inserted newlines from typing, paste, and IME take the buffer's line ending.
@@ -57,6 +62,20 @@ text frame's view ID. Views observe the settings store and repaint on any
 change. A view's own edit
 refreshes its derived state synchronously before resolving the resulting caret.
 Other views update through their persistent positions.
+
+Editing commands such as Enter, indent and outdent, comment toggling, and the
+line commands compute every edit first and commit them as one batch that
+records the view's selection before and after, so each command is one undo
+step that restores the selection it started from. Commands that act on lines
+take every line the selection touches, except a last line it reaches only at
+column 0. The indentation unit is a tab or `editor.tabSize` spaces: a document
+entering the collection from a resource detects tabs or spaces from its
+leading lines, and a document without a clear style, or without a resource,
+follows `editor.insertSpaces`. Enter copies the indentation before the caret,
+and Backspace in leading spaces deletes back to the previous tab stop. Comment
+toggling reads the editing data of the language at the selection start,
+including an injected one such as a Markdown code fence's
+([semantic UI](semantic-ui.md#syntax-highlighting-and-languages)).
 
 Restorable view state is the anchor and caret as byte offsets, the start of the
 top visible line as a byte offset, and horizontal scroll in pixels. Applying it

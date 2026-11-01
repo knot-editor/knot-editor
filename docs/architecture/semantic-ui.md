@@ -118,15 +118,19 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   package awaits its registrations in `start()`, so restored documents paint
   highlighted from their first frame.
 - A registration's editing data, its comment tokens and bracket pairs, is
-  resolved with its defaults at registration, and the registry exposes it by
-  language ID, so native editing code reads it without calling JavaScript.
-  A syntax layer holds no language ID yet, so editing inside an injection
-  needs a layer-to-ID mapping (D074). The comment toggle is a plain
-  function over lines and that configuration, with no buffer or view.
+  resolved with its defaults at registration and travels with its compiled
+  syntax language, so native editing code reads it without calling
+  JavaScript. Editing commands take the data of the deepest syntax layer at
+  the selection start, so a code fence or an injected `<script>` uses its own
+  language's comments with no lookup by ID. Markdown's inline language, the
+  layer inside every paragraph, therefore registers Markdown's block comment
+  too. A buffer without syntax has no editing data. The line and block
+  comment toggles are plain functions over text and that configuration, with
+  no buffer or view.
   Indentation is not language data: it waits for D134's `indents` queries.
-  Each bundled language package keeps comment toggling cases in
-  `test/comments.jsonc`, which a product test runs through the native toggle
-  on the registered configuration.
+  Each bundled language package keeps line and block comment toggling cases
+  in `test/comments.jsonc`, which a product test runs through the native
+  toggles on the registered configuration.
 - The native Set Language Mode command offers the registered languages, or Auto
   Detect, in the window's transient picker. Contributed text frames take a
   fixed language at registration.

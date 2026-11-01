@@ -1,6 +1,6 @@
 # D074 — Editing commands
 
-Status: 🚧 in progress: checkpoints 1–4 approved; checkpoint 5 is next. Item of the
+Status: 🚧 in progress: checkpoint 5 awaits the final review of D074. Item of the
 [daily-driver plan](daily-driver.md); builds on D073's
 [language editing configuration](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
@@ -134,7 +134,7 @@ drags, and word movement share that definition; per-language word
 characters stay with D131. Checkpoint 5 moves these rules into the editor
 views reference and decisions.
 
-### 5. Documentation
+### 5. Documentation — ✅ implemented, awaiting final review
 
 - Deliverables: the editor views section of the workbench reference
   describes indentation detection, the commands' undo step, and
@@ -145,3 +145,10 @@ views reference and decisions.
   `docs/architecture/workbench-and-lifecycle.md#editor-views`,
   `docs/decisions.md`, `docs/plans/daily-driver.md`.
 - Review gate: final review of D074.
+- Notes:
+  - ✅ The editor views reference describes words, unit drag, the commands'
+    undo step, lines at column 0, indentation, and language-at-cursor
+    comments; the semantic UI reference describes editing data travelling
+    with syntax languages; decisions gain an "Editing commands" section.
+  - After approval, a separate commit removes this plan and marks D074 ✅ in
+    the daily-driver plan.
