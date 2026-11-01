@@ -168,11 +168,13 @@ to be rebuilt later:
   - Double-click selects a word, triple-click selects a line, and dragging
     after either extends by that unit.
   - Each command is one undo step.
+  - 🚧 [Plan](d074-editing-commands.md)
 
 - **D134 — Tree-sitter indentation** (depends on D073, D074; split from D066)
   - Language registration gains an optional `indents` query using
     nvim-treesitter's indent captures, as Zed, Helix, and Neovim indent.
-  - Enter indents the new line from the query, and a Reindent command
+  - Enter indents the new line from the query, and Enter between a
+    `newline` bracket pair opens an indented middle line. A Reindent command
     reindents the selected lines. Languages without a query keep D074's
     behavior.
   - The bundled language packages ship queries adapted from
