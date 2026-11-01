@@ -71,11 +71,27 @@ take every line the selection touches, except a last line it reaches only at
 column 0. The indentation unit is a tab or `editor.tabSize` spaces: a document
 entering the collection from a resource detects tabs or spaces from its
 leading lines, and a document without a clear style, or without a resource,
-follows `editor.insertSpaces`. Enter copies the indentation before the caret,
-and Backspace in leading spaces deletes back to the previous tab stop. Comment
+follows `editor.insertSpaces`. Backspace in leading spaces deletes back to
+the previous tab stop. Comment
 toggling reads the editing data of the language at the selection start,
 including an injected one such as a Markdown code fence's
 ([semantic UI](semantic-ui.md#syntax-highlighting-and-languages)).
+
+Enter commits the line break with the indentation before the caret, then the
+view keeps a request to indent the new line from the language's indent query
+([semantic UI](semantic-ui.md#syntax-highlighting-and-languages)). The request
+applies once the syntax tree is a parse of the text at the same revision,
+right after the commit when the foreground parse finishes within its budget,
+otherwise when a background parse does, and any later commit drops it. The
+correction joins Enter's undo step through the model's amend of the last
+history entry. Between a bracket pair whose `newline` flag is set, Enter opens
+a middle line, indented from the query or one unit deeper, with the closer
+below at the opening line's indentation; on a line holding only whitespace,
+Enter clears it. Typing that completes a closing or branching capture at the
+start of a line's content, such as `}` or Python's `else:`, outdents the line
+the same way within the typing group, never indenting it further; composition
+and paste never reindent. Reindent Lines applies the query to the selected
+lines as one step.
 
 Restorable view state is the anchor and caret as byte offsets, the start of the
 top visible line as a byte offset, and horizontal scroll in pixels. Applying it

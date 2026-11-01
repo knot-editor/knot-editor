@@ -130,9 +130,9 @@ derived language spreads `languages.get`, as a derived theme spreads
 language-scoped setting. Following Zed, one bracket list serves matching,
 auto-closing, and surrounding, with per-pair flags instead of VS Code's three
 parallel lists; a line comment list lets uncommenting strip the longest token,
-so a Rust doc comment never leaves `/ foo`. Indentation is left out: Zed,
-Helix, and Neovim indent from tree-sitter `indents` queries, which D134 adds,
-so regex patterns or bracket heuristics written now would be replaced.
+so a Rust doc comment never leaves `/ foo`. Indentation is not editing
+data: it comes from tree-sitter `indents` queries, as in Zed, Helix, and
+Neovim, rather than regex patterns or bracket heuristics.
 
 The bundled data departs from Zed where text-based matching would mislead:
 no `<` pair in Rust or ECMAScript, where comparisons and arrows would
@@ -149,11 +149,51 @@ type checking but need Node, `build.rs`, or V8 to load them for Rust (D133).
 References: [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages)
 and [extension guide](extension-api.md#register-a-language).
 
+## Indentation
+
+Indent queries use nvim-treesitter's captures and the semantics of its
+indent module, evaluated natively, so its queries adapt with light edits and
+painting never waits on JavaScript. Knot departs where the module mishandles
+ordinary code. Lines inside a string keep their indentation, since it is
+content, and lines inside an `@indent.auto` node move with its first line
+rather than copying the previous one, so a block comment's ` *` lines stay
+aligned. Inside a parse error, an opening bracket the error leaves unclosed
+indents the lines after it: a block typed before its closer is an ERROR in
+every grammar, often swallowing the enclosing block's closer too, and
+upstream queries otherwise rely on auto-closing. `indent.after_end` limits
+a dedent to the lines after its node, so Python goes back one level after
+`return`, as VS Code does, instead of upstream's column 0 below a nested
+block, while a multi-line `return foo(` keeps its continuation lines. Rust
+arguments indent one level, as rustfmt lays them out, since upstream's Rust
+query has no alignment. Markdown has no query: its text belongs to the
+injected inline layer, and a layer without a query keeps its lines, while a
+code fence indents as its language.
+
+Following Zed and Neovim, Enter commits first and indents from the reparsed
+tree, which a typed `}` or `else` must already be in and which gives
+Python's scanner a real newline; Helix's indenting from the tree before the
+edit cannot see the typed text. The correction joins the edit's undo step
+and is dropped if another commit lands first, so a parse that overruns its
+foreground budget leaves the kept indentation rather than racing typing.
+Typing only ever outdents, as in Zed and VS Code, and only when the
+capture's match reaches the caret, so a brace someone placed stays when they
+type ` else {` after it, and Python's `else` waits for its colon.
+
+Each package keeps Enter, typing, and reindent cases as JSONC run through an
+editor view, like its comment cases, because indentation crosses the
+editor's commit and parse path. Reindenting pasted text and an
+`editor.autoIndent` setting are D135 and D136.
+
+References: [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages),
+[editor views](architecture/workbench-and-lifecycle.md#editor-views), and
+[extension guide](extension-api.md#register-a-language).
+
 ## Editing commands
 
 Editing commands follow VS Code's behavior and default bindings, because
 they are the conventions most editor users already have in their fingers:
-Enter keeps the indentation before the caret, Tab indents a selection across
+Enter keeps the indentation before the caret where a language has no indent
+query (see [Indentation](#indentation)), Tab indents a selection across
 lines and Shift-Tab always outdents, a selection ending at column 0 leaves
 that line out, line comments toggle with ⌘/, block comments with ⇧⌥A
 (ctrl-shift-a on Linux), lines move with ⌥↑/⌥↓ and copy with ⇧⌥↑/⇧⌥↓,

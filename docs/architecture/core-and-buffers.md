@@ -149,6 +149,11 @@ BufferEdit log ---> AnchoredRangeStore::stabilize
   a short elapsed-time boundary. Cursor or selection movement, focus transfer,
   paste, other explicit commands, and a change of editor or edit kind end the
   current group. A forward edit after undo clears redo.
+- An adjustment that belongs to the edit before it, such as the indentation
+  a line break receives once the tree covers it, amends the last history
+  entry rather than adding one. The amend is still a public commit with its
+  own revision; a typing group it precedes keeps growing at its shifted
+  position.
 - An editor-originated history entry records byte-offset caret and selection
   snapshots for that view. Undo restores the group's initial snapshot and redo
   its final snapshot in the originating view, even when replay is invoked from

@@ -81,7 +81,7 @@ host, clipped to its included ranges.
 Grammars are compiled in and named by stable native grammar IDs. Language
 definitions are contributed data: extensions and personal config register an
 LSP language ID, the grammar it parses with, the file names, extensions, and
-shebang interpreters it claims, and its highlight and injection queries, through
+shebang interpreters it claims, and its highlight, injection, and indent queries, through
 the same `languages` API the bundled `@knot/language-*` packages use. An
 association claims patterns for an ID without defining the language, so
 personal config redirects detection without replacing a package's language.
@@ -127,10 +127,22 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   too. A buffer without syntax has no editing data. The line and block
   comment toggles are plain functions over text and that configuration, with
   no buffer or view.
-  Indentation is not language data: it waits for D134's `indents` queries.
   Each bundled language package keeps line and block comment toggling cases
   in `test/comments.jsonc`, which a product test runs through the native
   toggles on the registered configuration.
+- An optional `indents` query compiles with the others and drives native
+  indentation. The evaluator follows nvim-treesitter's indent module over the
+  tree of the deepest layer at a line's first non-blank byte, so a code fence
+  indents as its language, and a layer without a query leaves its lines
+  alone rather than falling back to its host's. It returns columns, or that
+  a line keeps its indentation (inside an `@indent.ignore` node, such as a
+  string) or moves with an earlier line (inside an `@indent.auto` node, such
+  as a block comment). Within one reindent each line sees the indentation
+  given to the lines above it. Inside a parse error, each opening bracket of
+  the language's bracket pairs that the error leaves unclosed before the line
+  indents it one level, at most once per row. Packages keep Enter, typing,
+  and reindent cases in `test/indents.jsonc`, which a product test runs
+  through an editor view; a language with an indent query must have cases.
 - The native Set Language Mode command offers the registered languages, or Auto
   Detect, in the window's transient picker. Contributed text frames take a
   fixed language at registration.

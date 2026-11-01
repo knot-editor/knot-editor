@@ -261,8 +261,42 @@ await languages.register({
 
 `autoClose` defaults to true and `newline`, whether Enter between the pair
 opens an indented middle line, to true unless open equals close. `notIn`
-suppresses auto-closing inside strings or comments. To change one value of a
-registered language, spread `languages.get`, which returns the full
+suppresses auto-closing inside strings or comments.
+
+An optional `queries.indents` drives indentation: Enter indents the new line
+from it, typing a closer such as `}` at the start of a line outdents the
+line, and Reindent Lines recomputes the selected lines. It uses
+[nvim-treesitter's indent captures](https://github.com/nvim-treesitter/nvim-treesitter/blob/main/CONTRIBUTING.md#indents)
+(`@indent.begin`, `end`, `branch`, `dedent`, `align`, `ignore`, `auto`,
+`zero`) and their properties, so its queries adapt with light edits:
+
+```js
+queries: {
+  highlights: "",
+  indents: `
+(block) @indent.begin
+"}" @indent.branch
+(block "}" @indent.end)
+(string_literal) @indent.ignore
+(block_comment) @indent.auto`,
+},
+```
+
+Lines inside an `@indent.ignore` node keep their indentation, because it is
+content; lines inside an `@indent.auto` node move with its first line, so a
+block comment's ` *` lines stay aligned. Knot adds `(#set! indent.after_end)`,
+which limits an `@indent.dedent` to the lines after its node, as after
+Python's `return`, and the node predicates `has-parent?`, `not-has-parent?`,
+`kind-eq?`, and `not-kind-eq?`; rewrite `lua-match?` to `match?`, since any
+other predicate fails to compile. Typing reindents a line when a closing
+capture's match reaches the caret, so a pattern can capture a following
+token, such as the colon after Python's `else`, as `@_end`. Inside a parse
+error, an opening bracket from `brackets` that the error leaves unclosed
+indents the lines after it, so a block typed before its closer indents
+without help from the query. A language without an indents query keeps the
+previous line's indentation.
+
+To change one value of a registered language, spread `languages.get`, which returns the full
 definition, and register the result from `post-init`:
 
 ```js
