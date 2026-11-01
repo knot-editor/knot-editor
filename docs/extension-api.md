@@ -238,6 +238,38 @@ from their first frame. The latest registration of an ID or file pattern
 wins, so personal config replaces a package's language from `post-init`. The
 bundled `@knot/language-*` packages, one per language, are complete examples.
 
+A registration also carries the data native editing commands read: comment
+tokens, bracket pairs, and the characters before which pairs auto-close.
+Tokens omit the trailing space. Commenting inserts the first line token and a
+space; uncommenting strips the longest line token that matches, so Rust lists
+its doc-comment tokens too. A language with only a block comment wraps each
+line. One `brackets` list serves matching, auto-closing, and surrounding; a
+pair whose open equals its close, such as quotes, never takes part in matching:
+
+```js
+await languages.register({
+  id: "rust", name: "Rust", grammar: "rust", fileExtensions: ["rs"],
+  queries: { highlights: "" },
+  comments: { line: ["//", "///", "//!"], block: ["/*", "*/"] },
+  brackets: [
+    { open: "{", close: "}" },
+    { open: '"', close: '"', notIn: ["string", "comment"] },
+  ],
+  autoCloseBefore: ";:.,=}])>",
+});
+```
+
+`autoClose` defaults to true and `newline`, whether Enter between the pair
+opens an indented middle line, to true unless open equals close. `notIn`
+suppresses auto-closing inside strings or comments. To change one value of a
+registered language, spread `languages.get`, which returns the full
+definition, and register the result from `post-init`:
+
+```js
+const rust = await languages.get("rust");
+await languages.register({ ...rust, comments: { ...rust.comments, line: ["//"] } });
+```
+
 To send files to a language without replacing its registration, associate
 patterns with its ID. The claim competes with registrations' claims, so the
 latest one wins and disposing it reveals the previous one:

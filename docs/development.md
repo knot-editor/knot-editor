@@ -50,6 +50,8 @@ It does not use a global `tsc`. Runtime contracts still require Rust/V8 tests.
 Files under a package's `test/fixtures` are test inputs and are not compiled;
 The bundled language packages keep highlight fixtures there, checked by a Rust test that
 highlights them with the bundled queries (see `src/app/extensions/host/highlight_tests.rs`).
+A language package's `test/comments.jsonc` lists comment toggling cases, which
+`src/app/product/tests/language_editing.rs` runs through the native toggle.
 
 ## Website
 

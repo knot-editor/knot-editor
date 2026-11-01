@@ -141,12 +141,17 @@ to be rebuilt later:
 
 ## Phase 3 — Editing
 
-- **D073 — Language editing configuration**
-  - Language registration gains line and block comment tokens, bracket pairs,
-    and auto-closing pairs. The bundled language packages supply them.
-    Indentation is left to D066's tree-sitter `indents` queries.
-  - Data only. D074 and D075 consume it.
-  - 🚧 [Plan](d073-language-editing-configuration.md)
+- ✅ **D073 — Language editing configuration**
+  - Language registrations carry comment tokens, bracket pairs with
+    auto-closing flags, and `autoCloseBefore`; `languages.get` returns the
+    full definition to derive from. The registry resolves the data for
+    native code beside a pure comment toggle, and the Rust, ECMAScript,
+    Python, TOML, and Markdown packages supply it with per-package toggling
+    cases. Indentation is left to D066's `indents` queries. D074 and D075
+    consume it
+    ([semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
+    [decisions](../decisions.md#language-editing-configuration),
+    [extension guide](../extension-api.md#register-a-language)).
 
 - **D074 — Editing commands** (depends on D073)
   - Enter keeps the current line's indentation; language-aware adjustment

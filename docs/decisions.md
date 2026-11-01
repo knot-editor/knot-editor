@@ -120,6 +120,35 @@ explicit languages, so restores detect again. Set Language Mode is native.
 References: [core and buffers](architecture/core-and-buffers.md#syntax-state)
 and [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
+## Language editing configuration
+
+Comment tokens and bracket pairs describe a language as its grammar does, so
+they are optional fields of the language registration rather than settings:
+they replace with the language under the latest-registration rule, and a
+derived language spreads `languages.get`, as a derived theme spreads
+`themes.get`. Whether a feature such as auto-closing is enabled stays a
+language-scoped setting. Following Zed, one bracket list serves matching,
+auto-closing, and surrounding, with per-pair flags instead of VS Code's three
+parallel lists; a line comment list lets uncommenting strip the longest token,
+so a Rust doc comment never leaves `/ foo`. Indentation is left out: Zed,
+Helix, and Neovim indent from tree-sitter `indents` queries, which D066 adds,
+so regex patterns or bracket heuristics written now would be replaced.
+
+The bundled data departs from Zed where text-based matching would mislead:
+no `<` pair in Rust or ECMAScript, where comparisons and arrows would
+mismatch, and no `'` in Rust because of lifetimes. Quotes never auto-close in
+comments, so an apostrophe stays single, and Markdown quotes only surround.
+
+Each package keeps its comment toggling cases as JSONC beside its sources,
+run by a generic Rust product test through the native toggle on the
+registered configuration, so a package's data and the behavior it produces
+are reviewed together. A package test against the in-memory host could only
+restate the data, since toggling is native. TypeScript case modules would add
+type checking but need Node, `build.rs`, or V8 to load them for Rust (D133).
+
+References: [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages)
+and [extension guide](extension-api.md#register-a-language).
+
 ## Themes
 
 Themes are extension contributions registered like languages: the latest
