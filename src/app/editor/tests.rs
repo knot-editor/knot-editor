@@ -1574,3 +1574,61 @@ fn dragging_after_a_double_or_triple_click_extends_by_words_or_lines(cx: &mut Te
         })
     });
 }
+
+#[test]
+fn words_split_at_vs_code_separators_and_keep_unicode_segments() {
+    fn segments(text: &str) -> Vec<&str> {
+        super::word_segments(text)
+            .into_iter()
+            .map(|(start, end, _)| &text[start..end])
+            .collect()
+    }
+    assert_eq!(segments("some.thing"), ["some", ".", "thing"]);
+    assert_eq!(segments("foo::bar()"), ["foo", "::", "bar", "()"]);
+    assert_eq!(
+        segments("don't 3.14"),
+        ["don", "'", "t", " ", "3", ".", "14"]
+    );
+    assert_eq!(
+        segments("snake_case  x-y"),
+        ["snake_case", "  ", "x", "-", "y"]
+    );
+    assert_eq!(segments("日本語 👩‍💻é"), ["日", "本", "語", " ", "👩‍💻", "é"]);
+    assert!(segments("").is_empty());
+}
+
+#[gpui::test]
+fn double_click_and_word_movement_stop_at_separators(cx: &mut TestAppContext) {
+    let model = cx.new(|_| BufferModel::from_text("a.some_thing(x)  end"));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            let [inside, paren] = [5, 12].map(|col| {
+                view.cursor_col = col;
+                point(
+                    view.text_bounds().origin.x + view.caret_x(view.model.read(cx), window, cx),
+                    view.bounds.origin.y + px(5.),
+                )
+            });
+            press(view, inside, 2, window, cx);
+            assert_eq!(selection(view), ((0, 2), (0, 12)));
+            press(view, paren, 2, window, cx);
+            assert_eq!(selection(view), ((0, 12), (0, 13)));
+
+            view.execute_editing_command("editor.move-document-start", window, cx);
+            let mut stops = Vec::new();
+            for _ in 0..7 {
+                view.execute_editing_command("editor.move-word-right", window, cx);
+                stops.push(view.cursor_col);
+            }
+            assert_eq!(stops, [1, 2, 12, 13, 14, 15, 20]);
+            let mut stops = Vec::new();
+            for _ in 0..7 {
+                view.execute_editing_command("editor.move-word-left", window, cx);
+                stops.push(view.cursor_col);
+            }
+            assert_eq!(stops, [17, 14, 13, 12, 2, 1, 0]);
+        })
+    });
+}

@@ -68,8 +68,57 @@ pub(super) fn next_boundary(model: &BufferModel, line: usize, col: usize) -> usi
         .unwrap_or(text.len())
 }
 
-/// The nearest Unicode word end after `caret`, or word start before it. Words
-/// never span lines, so the scan reads lines outward from the caret's line.
+/// VS Code's default word separators: each run of them is a unit of its own,
+/// so `some.thing` is two words around a `.`.
+const WORD_SEPARATORS: &str = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum WordClass {
+    Whitespace,
+    Separator,
+    Word,
+}
+
+fn word_class(character: char) -> WordClass {
+    if character.is_whitespace() {
+        WordClass::Whitespace
+    } else if WORD_SEPARATORS.contains(character) {
+        WordClass::Separator
+    } else {
+        WordClass::Word
+    }
+}
+
+/// The units double-click selects and word movement stops at, as
+/// `(start, end, class)` byte ranges covering `text`: Unicode word segments
+/// split wherever the character class changes, with runs of separators and
+/// of whitespace merged. Word characters keep Unicode segmentation, so
+/// ideographs and emoji stay separate units.
+pub(super) fn word_segments(text: &str) -> Vec<(usize, usize, WordClass)> {
+    let mut segments: Vec<(usize, usize, WordClass)> = Vec::new();
+    for (start, segment) in text.split_word_bound_indices() {
+        for (offset, character) in segment.char_indices() {
+            let class = word_class(character);
+            let at = start + offset;
+            let end = at + character.len_utf8();
+            match segments.last_mut() {
+                Some(last)
+                    if last.1 == at
+                        && last.2 == class
+                        && (class != WordClass::Word || offset > 0) =>
+                {
+                    last.1 = end
+                }
+                _ => segments.push((at, end, class)),
+            }
+        }
+    }
+    segments
+}
+
+/// The nearest word or separator-run end after `caret`, or start before it,
+/// skipping whitespace. Words never span lines, so the scan reads lines
+/// outward from the caret's line.
 pub(super) fn word_boundary(
     model: &BufferModel,
     line: usize,
@@ -79,8 +128,10 @@ pub(super) fn word_boundary(
     let words = |line: usize| {
         let range = model.line_range(line);
         let text = model.read(range.clone());
-        text.unicode_word_indices()
-            .map(|(i, word)| (range.start + i, range.start + i + word.len()))
+        word_segments(&text)
+            .into_iter()
+            .filter(|(_, _, class)| *class != WordClass::Whitespace)
+            .map(|(start, end, _)| (range.start + start, range.start + end))
             .collect::<Vec<_>>()
     };
     if forward {

@@ -137,6 +137,14 @@ these rules into the editor views reference and decisions.
     extends to the far edge of the unit under the pointer, in either
     direction; character drags are the same rule with an empty unit.
     Shift-click still extends by characters.
+  - ✅ Review feedback: Unicode word segmentation kept `some.thing` and
+    `a:b` as one word. Words now follow VS Code's default word separators
+    (`text::word_segments`): each run of separators is its own unit,
+    splitting the Unicode segments, while word characters keep Unicode
+    segmentation for ideographs and emoji. Double-click, word drags, and
+    word movement share the definition; movement stops at word and
+    separator-run edges and skips whitespace. Per-language word characters
+    stay with D131.
 
 ### 5. Documentation
 

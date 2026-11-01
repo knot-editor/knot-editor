@@ -365,7 +365,8 @@ impl EntityInputHandler for EditorView {
 }
 
 /// The `unit` containing the caret position `(line, col)`, as start and end
-/// positions: the position itself, the word segment at it, or the whole line
+/// positions: the position itself, the word segment at it (see
+/// [`word_segments`]), or the whole line
 /// with its terminator.
 fn unit_range(
     model: &BufferModel,
@@ -377,11 +378,11 @@ fn unit_range(
         SelectionUnit::Character => ((line, col), (line, col)),
         SelectionUnit::Word => {
             let text = line_text(model, line);
-            let (start, segment) = text
-                .split_word_bound_indices()
-                .find(|(start, segment)| col < start + segment.len())
-                .unwrap_or((text.len(), ""));
-            ((line, start), (line, start + segment.len()))
+            let (start, end) = word_segments(&text)
+                .into_iter()
+                .find(|(_, end, _)| col < *end)
+                .map_or((text.len(), text.len()), |(start, end, _)| (start, end));
+            ((line, start), (line, end))
         }
         SelectionUnit::Line if line + 1 < model.line_count() => ((line, 0), (line + 1, 0)),
         SelectionUnit::Line => ((line, 0), (line, line_end(model, line))),
