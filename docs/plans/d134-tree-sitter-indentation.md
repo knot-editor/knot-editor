@@ -1,6 +1,6 @@
 # D134 — Tree-sitter indentation
 
-Status: 🚧 checkpoint 2 awaiting review. Item of the
+Status: 🚧 checkpoint 2 approved; checkpoint 3 in progress. Item of the
 [daily-driver plan](daily-driver.md); split from D066 in the
 [roadmap](../roadmap.md).
 
@@ -159,44 +159,18 @@ start, as in nvim. Packages keep cases in `test/indents.jsonc`, run by
 `src/app/product/tests/language_indents.rs`; a language with an indent
 query must have cases.
 
-### 2. Enter from the query, brackets, and blank lines — 🚧 awaiting review
+### 2. Enter from the query, brackets, and blank lines — ✅ approved
 
-Deliverables:
-
-- ✅ Auto-indent requests after Enter: immediate when the foreground parse
-  finished, otherwise applied when a background parse makes the tree
-  current at the same revision, joined to Enter's undo step through
-  `BufferModel::amend_last_edit_from_view`. Any later commit drops the
-  request.
-- ✅ Enter between a `newline` bracket pair, for every language with
-  bracket data; whitespace between the caret and the pair goes.
-- ✅ Enter on a whitespace-only line clears it.
-- ✅ `enter` cases in the Rust `indents.jsonc`, including Enter inside
-  strings and comments, after a closing bracket, between `{}`, `()`, and
-  `[]`, and in unclosed blocks and calls.
-- ✅ The unclosed-bracket rule for parse errors (see Design), which the
-  unclosed cases needed.
-
-Validation: the runner's `enter` cases; editor tests for the bracket
-middle line in a language without an indent query, the blank-line clearing,
-one undo step restoring the selection, and a request applied after a
-background parse and dropped after an intervening edit.
-
-Review gate: Enter is approved in daily Rust editing before typing triggers
-reindentation.
-
-**Implementation context:**
-
-- `insert_newline` in `src/app/editor/indentation.rs`; bracket data from
-  `editing_configuration` / `BufferModel` (`src/app/model.rs:531` resolves
-  the editing configuration at an offset), `Bracket::newline` in
-  `src/app/languages/editing.rs`.
-- Parse completion: the foreground parse and `finish_background_parse` in
-  `src/app/syntax.rs`, and where the model drives them (`src/app/model.rs`);
-  the request is view state keyed by revision, like other revalidated
-  asynchronous results.
-- Undo joining: `break_history_group`, `replace_text_with_grouping`, and
-  `commit_edits` in the editor, and the grouping in `src/app/history.rs`.
+Enter commits the break with the kept indentation, then
+`EditorView::apply_pending_indent` corrects the new line once the tree is
+current at the same revision, immediately or after a background parse, and
+joins the change to Enter's undo step through
+`BufferModel::amend_last_edit_from_view`; any later commit drops the
+request. Enter between a `newline` bracket pair opens an indented middle
+line in every language with bracket data, a whitespace-only line keeps none
+of its whitespace, and unclosed brackets inside a parse error indent the
+lines after them (see Design). The Rust `indents.jsonc` carries `enter`
+cases checked with the caret.
 
 ### 3. Outdent while typing
 
