@@ -19,6 +19,7 @@ pub(crate) use extensions::host::handlers as declared_host;
 mod extensions;
 mod filesystem;
 mod history;
+mod indentation;
 mod languages;
 pub mod model;
 mod open;

@@ -1,5 +1,6 @@
-//! Language registration, detection, and explicit languages through the
-//! public extension API and the native Open and Save As paths.
+//! Language registration, language and indentation detection, and explicit
+//! languages through the public extension API and the native Open and Save As
+//! paths.
 use super::*;
 use crate::app::workbench::ExtensionView;
 use crate::host::lifecycle::ExtensionKey;
@@ -253,4 +254,29 @@ fn set_language_mode_picks_an_explicit_language_or_returns_to_detection(cx: &mut
     pick("Auto Detect", cx);
     assert_eq!(language(&model, cx), (None, false));
     assert!(!model.read_with(cx, |model, _| model.language_is_explicit()));
+}
+
+#[gpui::test]
+fn opened_documents_detect_their_indentation_and_untitled_ones_do_not(cx: &mut TestAppContext) {
+    let files = tempfile::tempdir().unwrap();
+    let source = files.path().join("main.c");
+    std::fs::write(&source, "int main() {\n\tif (1) {\n\t\treturn 0;\n\t}\n}\n").unwrap();
+    let documents = install_globals(cx);
+    cx.set_global(ApplicationOpenDialog(Arc::new(FixedOpenDialog(
+        OpenDialogOutcome::Selected(source),
+    ))));
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let untitled = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, untitled.clone(), cx);
+
+    let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    let opened = active_model(&shell, cx);
+    cx.read(|cx| {
+        assert_eq!(
+            opened.read(cx).indent_style(),
+            Some(crate::app::indentation::IndentStyle::Tabs)
+        );
+        assert_eq!(untitled.read(cx).indent_style(), None);
+    });
 }

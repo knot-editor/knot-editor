@@ -23,6 +23,9 @@ use crate::host::protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Columns per tab stop in editor views.
 pub(crate) const EDITOR_TAB_SIZE: &str = "editor.tabSize";
+/// Whether indenting inserts spaces rather than a tab, unless the document's
+/// own indentation shows otherwise.
+pub(crate) const EDITOR_INSERT_SPACES: &str = "editor.insertSpaces";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
 pub(crate) const THEME_MODE: &str = "theme.mode";
 /// The theme name used in dark mode.
@@ -168,6 +171,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Integer,
             default: 4.into(),
             description: "Columns per tab stop in editor views".into(),
+        },
+        SettingDefinition {
+            key: EDITOR_INSERT_SPACES.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Indent with spaces rather than tabs in documents whose indentation is not detected from their text".into(),
         },
         text(
             THEME_MODE,
@@ -335,45 +344,39 @@ pub(crate) fn remove_lifecycle(
 
 /// Columns per tab stop for an editor in `context`, within a sane range.
 pub(crate) fn editor_tab_size(context: &SettingsScope, cx: &App) -> usize {
-    let size = match cx.try_global::<ApplicationSettings>() {
-        Some(settings) => settings
-            .0
-            .get(EDITOR_TAB_SIZE, context)
-            .and_then(Value::as_i64),
-        None => SettingsStore::default()
-            .get(EDITOR_TAB_SIZE, context)
-            .and_then(Value::as_i64),
-    };
-    size.expect("editor.tabSize is a native integer setting")
+    resolve(EDITOR_TAB_SIZE, context, cx, Value::as_i64)
+        .expect("editor.tabSize is a native integer setting")
         .clamp(1, 32) as usize
+}
+
+/// Whether an editor in `context` indents with spaces by default.
+pub(crate) fn editor_insert_spaces(context: &SettingsScope, cx: &App) -> bool {
+    resolve(EDITOR_INSERT_SPACES, context, cx, Value::as_bool)
+        .expect("editor.insertSpaces is a native boolean setting")
+}
+
+fn resolve<T>(
+    key: &str,
+    context: &SettingsScope,
+    cx: &App,
+    read: impl Fn(&Value) -> Option<T>,
+) -> Option<T> {
+    match cx.try_global::<ApplicationSettings>() {
+        Some(settings) => settings.0.get(key, context).and_then(read),
+        None => SettingsStore::default().get(key, context).and_then(read),
+    }
 }
 
 /// The value of a native boolean setting, unscoped.
 pub(crate) fn boolean(key: &str, cx: &App) -> bool {
-    let read = |store: &SettingsStore| {
-        store
-            .get(key, &SettingsScope::default())
-            .and_then(Value::as_bool)
-    };
-    match cx.try_global::<ApplicationSettings>() {
-        Some(settings) => read(&settings.0),
-        None => read(&SettingsStore::default()),
-    }
-    .expect("a native boolean setting")
+    resolve(key, &SettingsScope::default(), cx, Value::as_bool).expect("a native boolean setting")
 }
 
 /// The value of a native text setting, unscoped.
 pub(crate) fn text(key: &str, cx: &App) -> String {
-    let read = |store: &SettingsStore| {
-        store
-            .get(key, &SettingsScope::default())
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-    };
-    match cx.try_global::<ApplicationSettings>() {
-        Some(settings) => read(&settings.0),
-        None => read(&SettingsStore::default()),
-    }
+    resolve(key, &SettingsScope::default(), cx, |value| {
+        value.as_str().map(str::to_owned)
+    })
     .expect("a native text setting")
 }
 

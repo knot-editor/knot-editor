@@ -214,6 +214,36 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
     }
 }
 
+#[test]
+fn every_platform_binds_the_editing_commands_in_the_editor_only() {
+    for platform in PLATFORMS {
+        let registry = preset_registry(platform);
+        let secondary = if platform == Platform::MacOs {
+            "cmd"
+        } else {
+            "ctrl"
+        };
+        for (key, command_name) in [
+            ("enter".to_owned(), INSERT_NEWLINE_COMMAND),
+            ("tab".to_owned(), INSERT_TAB_COMMAND),
+            ("shift-tab".to_owned(), OUTDENT_LINES_COMMAND),
+            (format!("{secondary}-]"), INDENT_LINES_COMMAND),
+            (format!("{secondary}-["), OUTDENT_LINES_COMMAND),
+        ] {
+            assert_eq!(
+                resolved(&registry, &key, Some("editor")).as_deref(),
+                Some(command_name),
+                "{platform:?}: {key}"
+            );
+            assert_eq!(
+                resolved(&registry, &key, Some("terminal")),
+                None,
+                "{platform:?}: {key} in a terminal"
+            );
+        }
+    }
+}
+
 fn command(name: &str) -> Command {
     Command {
         name: name.into(),

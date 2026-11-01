@@ -644,7 +644,7 @@ fn personal_global_binding_overrides_editor_default_in_every_window(cx: &mut Tes
     cx.run_until_parked();
     cx.read(|cx| {
         for (_, model) in &windows {
-            assert_eq!(model.read(cx).text(), "\t");
+            assert_eq!(model.read(cx).text(), "    ");
         }
     });
 }

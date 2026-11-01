@@ -431,7 +431,7 @@ fn editing_keybindings_use_semantic_commands(cx: &mut TestAppContext) {
     });
     cx.simulate_keystrokes(window_handle, "shift-up backspace tab");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(model.read(cx).text(), "\t"));
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "    "));
     cx.simulate_input(window_handle, "café👩‍💻");
     cx.simulate_keystrokes(window_handle, "enter");
     cx.simulate_input(window_handle, "tail");
@@ -441,18 +441,23 @@ fn editing_keybindings_use_semantic_commands(cx: &mut TestAppContext) {
     cx.simulate_input(window_handle, "<");
     cx.simulate_keystrokes(window_handle, "shift-home secondary-c");
     cx.run_until_parked();
-    cx.update(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), ">tail<"));
+    cx.update(|cx| {
+        assert_eq!(
+            cx.read_from_clipboard().unwrap().text().unwrap(),
+            ">    tail<"
+        )
+    });
     cx.simulate_keystrokes(window_handle, "secondary-a secondary-c");
     cx.run_until_parked();
     cx.update(|cx| {
         assert_eq!(
             cx.read_from_clipboard().unwrap().text().unwrap(),
-            "\tcafé👩‍💻\n>tail<"
+            "    café👩‍💻\n>    tail<"
         )
     });
     cx.simulate_keystrokes(window_handle, "secondary-x secondary-v");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(model.read(cx).text(), "\tcafé👩‍💻\n>tail<"));
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "    café👩‍💻\n>    tail<"));
 }
 
 #[gpui::test]

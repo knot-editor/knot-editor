@@ -364,6 +364,9 @@ impl DocumentCollection {
             .checked_add(1)
             .expect("document identity space exhausted");
         super::languages::detect_document(&model, state.resource_uri(), cx);
+        if state.resource_uri().is_some() {
+            model.update(cx, |model, _| model.detect_indent_style());
+        }
         let observed_model = model.clone();
         self.documents.push(Document {
             id,

@@ -251,6 +251,10 @@ declare module "knot" {
     /** Columns per tab stop in editor views. Native default 4; editors use
      * at least 1 and at most 32. */
     "editor.tabSize": number;
+    /** Whether indenting inserts spaces rather than a tab. A document whose
+     * own indentation is detected from its text when it opens follows that
+     * instead. Native default true. */
+    "editor.insertSpaces": boolean;
     /** Which theme applies: theme.dark's, theme.light's, or the one matching
      * the system appearance. Native default "dark"; other text means "dark". */
     "theme.mode": "dark" | "light" | "system";

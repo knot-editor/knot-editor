@@ -1,6 +1,6 @@
 # D074 — Editing commands
 
-Status: 🚧 proposed, awaiting review. Item of the
+Status: 🚧 in progress: checkpoint 1 awaits its review gate. Item of the
 [daily-driver plan](daily-driver.md); builds on D073's
 [language editing configuration](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
@@ -86,7 +86,7 @@ one undo step that restores the selection it started from.
 
 ## Checkpoints
 
-### 1. Batch commits and indentation
+### 1. Batch commits and indentation — ✅ implemented, awaiting review
 
 - Deliverables: the batch commit with view state; `editor.insertSpaces` and
   per-document detection; Enter, Tab, Shift-Tab, indent and outdent lines,
@@ -111,6 +111,18 @@ one undo step that restores the selection it started from.
     in `src/app/editor/native_commands.rs`.
   - `src/app/commands/keymaps/presets.rs` and its tests.
 - Review gate: try indentation in tab- and space-indented files.
+- Notes:
+  - ✅ `BufferModel::apply_edits_from_view` commits a command's edits as one
+    undo step; `EditorView::commit_edits` and `map_offset` are the shared
+    path for every later line command.
+  - ✅ `editor.insertSpaces` and detection (`src/app/indentation.rs`): a
+    style must indent at least twice as many lines as the other; one-space
+    alignment and ` *` continuations do not count. Detection reads the first
+    10,000 lines when a document with a resource enters the collection.
+  - ✅ Shift-Tab binds `editor.outdent-lines` rather than a separate
+    command, since it always outdents the selected lines.
+  - ✅ Enter copies the indentation before the caret, so Enter inside
+    leading whitespace splits it as VS Code does.
 
 ### 2. Comment toggling
 

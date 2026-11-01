@@ -40,15 +40,30 @@ impl EditorView {
         )
     }
 
+    /// The settings context of this view's kind and its buffer's language.
+    fn settings_scope(&self, model: &BufferModel, cx: &App) -> SettingsScope {
+        SettingsScope {
+            language: Some(languages::effective_language(model, cx)),
+            view: Some(self.view_kind.to_string()),
+        }
+    }
+
     /// Columns per tab stop for this view's kind and its buffer's language.
     pub(crate) fn tab_size(&self, model: &BufferModel, cx: &App) -> usize {
-        settings::editor_tab_size(
-            &SettingsScope {
-                language: Some(languages::effective_language(model, cx)),
-                view: Some(self.view_kind.to_string()),
+        settings::editor_tab_size(&self.settings_scope(model, cx), cx)
+    }
+
+    /// One indentation level: the buffer's detected style, else the
+    /// `editor.insertSpaces` setting, with the view's tab size.
+    pub(super) fn indent_unit(&self, model: &BufferModel, cx: &App) -> IndentUnit {
+        let scope = self.settings_scope(model, cx);
+        IndentUnit {
+            tabs: match model.indent_style() {
+                Some(style) => style == IndentStyle::Tabs,
+                None => !settings::editor_insert_spaces(&scope, cx),
             },
-            cx,
-        )
+            size: settings::editor_tab_size(&scope, cx),
+        }
     }
 
     /// Query the syntax highlights of `lines` at once, so painting and the

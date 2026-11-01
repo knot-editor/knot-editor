@@ -1415,3 +1415,5 @@ fn the_caret_blinks_while_focused_and_shows_again_after_typing(cx: &mut TestAppC
     cx.run_until_parked();
     assert!(!blinking(cx));
 }
+
+mod indentation;

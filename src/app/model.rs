@@ -23,6 +23,7 @@ use crate::{
 
 use super::{
     history::{EditGrouping, EditHistory, HistoryViewChange, HistoryViewState},
+    indentation::{self, IndentStyle},
     syntax::{FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState},
     theme::{Highlight, color},
 };
@@ -129,6 +130,9 @@ pub struct BufferModel {
     language: Option<String>,
     /// Whether `language` was chosen rather than detected.
     language_explicit: bool,
+    /// The indentation style detected from the text, which overrides the
+    /// `editor.insertSpaces` setting.
+    indent_style: Option<IndentStyle>,
     /// Derived syntax tree, kept current with every commit.
     syntax: Option<SyntaxState>,
     /// Starts a background parse after any notify that leaves the tree
@@ -207,6 +211,7 @@ impl BufferModel {
             history_view_restore: None,
             language: None,
             language_explicit: false,
+            indent_style: None,
             syntax: None,
             syntax_driver: None,
             syntax_budget: FOREGROUND_BUDGET,
@@ -506,6 +511,17 @@ impl BufferModel {
         self.language_explicit = explicit;
     }
 
+    pub(crate) fn indent_style(&self) -> Option<IndentStyle> {
+        self.indent_style
+    }
+
+    /// Detect the indentation style from the leading lines of the text.
+    pub(crate) fn detect_indent_style(&mut self) {
+        let lines = self.line_count().min(indentation::DETECTION_LINES);
+        let text = self.buffer.read_range(0..self.line_range(lines - 1).end);
+        self.indent_style = indentation::detect(text.lines());
+    }
+
     /// The language the current syntax state parses, if any.
     pub(crate) fn syntax_language(&self) -> Option<&Arc<SyntaxLanguage>> {
         self.syntax.as_ref().map(SyntaxState::language)
@@ -683,7 +699,6 @@ impl BufferModel {
             return Err(BufferAccessError::RevisionConflict);
         }
 
-        let mut validated = Vec::with_capacity(edits.len());
         let mut previous: Option<Range<usize>> = None;
         let mut changed = false;
         for edit in edits {
@@ -696,21 +711,65 @@ impl BufferModel {
             if self.buffer.read_range(range.clone()) != edit.text {
                 changed = true;
             }
-            previous = Some(range.clone());
-            validated.push((range, edit.text.as_str()));
+            previous = Some(range);
         }
 
         if !changed {
             return Ok(false);
         }
+        self.commit_batch(edits.to_vec(), None);
+        Ok(true)
+    }
+
+    /// Commit an editor command's edits as one undo step whose undo and redo
+    /// restore `view`. Ranges are ascending, disjoint, on character
+    /// boundaries, and in pre-commit coordinates.
+    pub(crate) fn apply_edits_from_view(
+        &mut self,
+        edits: Vec<(Range<usize>, String)>,
+        view: HistoryViewChange,
+    ) -> Result<bool, BufferAccessError> {
+        assert!(self.open, "cannot edit a closed buffer");
+        if self.access_policy == BufferAccessPolicy::ReadOnly {
+            return Err(BufferAccessError::ReadOnly);
+        }
+        let edits = edits
+            .into_iter()
+            .filter(|(range, text)| self.buffer.read_range(range.clone()) != *text)
+            .map(|(range, text)| crate::host::protocol::TextEdit {
+                range: ByteRange {
+                    start_byte_offset: range.start,
+                    end_byte_offset: range.end,
+                },
+                text,
+            })
+            .collect::<Vec<_>>();
+        if edits.is_empty() {
+            return Ok(false);
+        }
+        self.commit_batch(edits, Some(view));
+        Ok(true)
+    }
+
+    fn commit_batch(
+        &mut self,
+        edits: Vec<crate::host::protocol::TextEdit>,
+        view: Option<HistoryViewChange>,
+    ) {
         let before_state = self.content_state;
         let after_state = self.allocate_content_state();
         let seq = self.buffer.edit_seq();
         self.history.apply_batch(
             &mut self.buffer,
-            validated.into_iter(),
+            edits.iter().map(|edit| {
+                (
+                    edit.range.start_byte_offset..edit.range.end_byte_offset,
+                    edit.text.as_str(),
+                )
+            }),
             before_state,
             after_state,
+            view,
         );
         self.content_state = after_state;
         self.observe_committed_edits(seq);
@@ -719,9 +778,8 @@ impl BufferModel {
         self.pending_changes.push_back(CommittedBufferChange {
             before_revision,
             revision: self.revision,
-            edits: edits.to_vec(),
+            edits,
         });
-        Ok(true)
     }
 
     /// Apply one editor-visible local replacement as one public commit.

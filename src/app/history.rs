@@ -114,6 +114,7 @@ impl EditHistory {
         edits: impl DoubleEndedIterator<Item = (Range<usize>, &'a str)>,
         before_state: u64,
         after_state: u64,
+        view: Option<HistoryViewChange>,
     ) {
         self.redo.clear();
         self.break_group();
@@ -126,7 +127,7 @@ impl EditHistory {
             group: None,
             before_state,
             after_state,
-            view: None,
+            view,
         });
     }
 

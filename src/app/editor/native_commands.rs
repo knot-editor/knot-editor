@@ -37,6 +37,8 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 #[command("editor.select-document-end", title = "Select to document end", palette = false, id = SELECT_DOCUMENT_END_COMMAND, participant = Editor)]
 #[command("editor.insert-newline", title = "Insert Newline", palette = false, id = INSERT_NEWLINE_COMMAND, participant = Editor)]
 #[command("editor.insert-tab", title = "Insert Tab", palette = false, id = INSERT_TAB_COMMAND, participant = Editor)]
+#[command("editor.indent-lines", title = "Indent Lines", description = "Indent the selected lines by one level.", id = INDENT_LINES_COMMAND, participant = Editor)]
+#[command("editor.outdent-lines", title = "Outdent Lines", description = "Outdent the selected lines by one level.", id = OUTDENT_LINES_COMMAND, participant = Editor)]
 #[command("editor.delete-backward", title = "Delete Backward", palette = false, id = DELETE_BACKWARD_COMMAND, participant = Editor)]
 #[command("editor.delete-forward", title = "Delete Forward", palette = false, id = DELETE_FORWARD_COMMAND, participant = Editor)]
 #[command("editor.delete-to-line-end", title = "Delete to Line End", palette = false, id = DELETE_TO_LINE_END_COMMAND, participant = Editor)]

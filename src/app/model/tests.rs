@@ -888,3 +888,62 @@ fn closing_or_clearing_syntax_releases_it(cx: &mut gpui::TestAppContext) {
         assert_eq!(model.syntax_generation(), None);
     });
 }
+
+#[test]
+fn a_view_batch_is_one_undo_step_that_restores_its_selection() {
+    let mut model = BufferModel::from_text("one\ntwo\nthree");
+    let view = |anchor, caret| HistoryViewState {
+        context: 7,
+        anchor,
+        caret,
+    };
+    assert!(
+        model
+            .apply_edits_from_view(
+                vec![
+                    (0..0, "  ".into()),
+                    (4..4, "  ".into()),
+                    (8..8, "  ".into())
+                ],
+                HistoryViewChange {
+                    before: view(0, 9),
+                    after: view(0, 15),
+                },
+            )
+            .unwrap()
+    );
+    assert_eq!(model.text(), "  one\n  two\n  three");
+    assert_eq!(
+        model.take_pending_change().map(|change| change.edits.len()),
+        Some(3)
+    );
+
+    assert!(model.undo().unwrap());
+    assert_eq!(model.text(), "one\ntwo\nthree");
+    assert_eq!(model.history_view_restore().unwrap().state, view(0, 9));
+    assert!(model.redo().unwrap());
+    assert_eq!(model.text(), "  one\n  two\n  three");
+    assert_eq!(model.history_view_restore().unwrap().state, view(0, 15));
+
+    let unchanged = model
+        .apply_edits_from_view(
+            vec![(0..2, "  ".into())],
+            HistoryViewChange {
+                before: view(0, 0),
+                after: view(0, 0),
+            },
+        )
+        .unwrap();
+    assert!(!unchanged);
+}
+
+#[test]
+fn indentation_is_detected_from_the_leading_lines() {
+    let mut model = BufferModel::from_text("a\r\n\tb\r\n\tc");
+    assert_eq!(model.indent_style(), None);
+    model.detect_indent_style();
+    assert_eq!(model.indent_style(), Some(IndentStyle::Tabs));
+    let mut model = BufferModel::from_text("");
+    model.detect_indent_style();
+    assert_eq!(model.indent_style(), None);
+}

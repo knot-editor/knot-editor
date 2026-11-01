@@ -8,6 +8,7 @@
 
 mod completion;
 mod editing;
+mod indentation;
 mod input;
 mod layout;
 pub(super) mod native_commands;
@@ -38,6 +39,7 @@ use super::{
     CompletionAccept, CompletionDismiss, CompletionNext, CompletionPrevious, EDITOR_KEY_CONTEXT,
     completion::{CompletionController, CompletionProviderRegistration, CompletionSurface},
     history::{EditGroupKind, EditGrouping, HistoryViewChange, HistoryViewState},
+    indentation::{IndentStyle, IndentUnit, leading_whitespace},
     languages,
     model::{BufferModel, ContributionSource, ResolvedEditorContribution},
     settings::{self, ApplicationSettings, SettingsScope},
@@ -691,6 +693,51 @@ impl EditorView {
         self.refresh(model, None);
     }
 
+    /// Commit a command's `edits`, ascending and disjoint in pre-commit
+    /// coordinates, as one undo step whose undo restores the current
+    /// selection, then select from `anchor` to `caret` in the new text.
+    fn commit_edits(
+        &mut self,
+        edits: Vec<(Range<usize>, String)>,
+        anchor: usize,
+        caret: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if edits.is_empty() || !self.model.read(cx).is_editable() {
+            return;
+        }
+        self.break_history_group(cx);
+        self.dismiss_completion();
+        let view = HistoryViewChange {
+            before: self.history_view_state(self.model.read(cx)),
+            after: HistoryViewState {
+                context: self.history_context,
+                anchor,
+                caret,
+            },
+        };
+        let model = self.model.clone();
+        let changed = model.update(cx, |model, cx| {
+            let changed = model.apply_edits_from_view(edits, view).unwrap_or(false);
+            if changed {
+                cx.notify();
+            }
+            changed
+        });
+        if !changed {
+            return;
+        }
+        let model = model.read(cx);
+        self.text_changed(model);
+        self.refresh(model, None);
+        (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
+        (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
+        self.has_selection = anchor != caret;
+        self.marked_range_utf16 = None;
+        self.preferred_x = None;
+        self.finish_position_change(cx);
+    }
+
     /// The byte range replaced by input that names no range: the marked text
     /// if there is one, otherwise the selection, otherwise the caret.
     fn implicit_replacement_range(&self, model: &BufferModel) -> Range<usize> {
@@ -747,6 +794,26 @@ impl EditorView {
         let model = self.model.read(cx);
         range.map(|range| model.offset_of_utf16(range.start)..model.offset_of_utf16(range.end))
     }
+}
+
+/// Where `offset` lands after `edits`, ascending and disjoint in pre-commit
+/// coordinates. An offset inside a replaced range moves to its start, and an
+/// insertion at the offset moves it past the inserted text unless
+/// `before_insertions`.
+fn map_offset(edits: &[(Range<usize>, String)], offset: usize, before_insertions: bool) -> usize {
+    let mut mapped = offset;
+    for (range, text) in edits {
+        if range.start > offset
+            || (range.start == offset && (before_insertions || !range.is_empty()))
+        {
+            break;
+        }
+        if offset < range.end {
+            return mapped - (offset - range.start);
+        }
+        mapped = mapped + text.len() - range.len();
+    }
+    mapped
 }
 
 fn project_contributions(

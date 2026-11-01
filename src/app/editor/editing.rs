@@ -74,23 +74,24 @@ impl EditorView {
             self.finish_position_change(cx);
             return true;
         }
-        if matches!(
-            command,
-            commands::INSERT_NEWLINE_COMMAND | commands::INSERT_TAB_COMMAND
-        ) {
-            self.break_history_group(cx);
-            self.replace_text_with_grouping(
-                None,
-                if command.ends_with("newline") {
-                    "\n"
-                } else {
-                    "\t"
-                },
-                None,
-                window,
-                cx,
-            );
-            return true;
+        match command {
+            commands::INSERT_NEWLINE_COMMAND => {
+                self.insert_newline(window, cx);
+                return true;
+            }
+            commands::INSERT_TAB_COMMAND => {
+                self.insert_tab(window, cx);
+                return true;
+            }
+            commands::INDENT_LINES_COMMAND => {
+                self.indent_lines(cx);
+                return true;
+            }
+            commands::OUTDENT_LINES_COMMAND => {
+                self.outdent_lines(cx);
+                return true;
+            }
+            _ => {}
         }
         if matches!(
             command,
@@ -100,7 +101,11 @@ impl EditorView {
                 self.replace_text_with_grouping(None, "", None, window, cx);
             } else {
                 let backward = command.ends_with("backward");
-                let range = self.grapheme_deletion_range(self.model.read(cx), backward);
+                let model = self.model.read(cx);
+                let range = backward
+                    .then(|| self.tab_stop_deletion_range(model, cx))
+                    .flatten()
+                    .unwrap_or_else(|| self.grapheme_deletion_range(model, backward));
                 if !range.is_empty() {
                     self.replace_text_with_grouping(
                         Some(range),
