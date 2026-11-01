@@ -43,42 +43,34 @@ impl EditorView {
             return;
         }
         self.suppress_drag_selection = false;
-        self.drag_anchor = Some(if ev.modifiers.shift {
-            if self.has_selection {
-                (self.anchor_line, self.anchor_col)
-            } else {
-                (self.cursor_line, self.cursor_col)
-            }
-        } else {
-            (line, col)
-        });
         self.preferred_x = None;
-        if ev.click_count >= 2 && !ev.modifiers.shift {
-            let model = self.model.read(cx);
-            let (start, end) = if ev.click_count >= 3 {
-                (
-                    (line, 0),
-                    if line + 1 < self.line_count {
-                        (line + 1, 0)
-                    } else {
-                        (line, line_end(model, line))
-                    },
-                )
-            } else {
-                let text = line_text(model, line);
-                let (start, segment) = text
-                    .split_word_bound_indices()
-                    .find(|(start, segment)| col < start + segment.len())
-                    .unwrap_or((text.len(), ""));
-                ((line, start), (line, start + segment.len()))
-            };
+        let unit = match ev.click_count {
+            _ if ev.modifiers.shift => SelectionUnit::Character,
+            0 | 1 => SelectionUnit::Character,
+            2 => SelectionUnit::Word,
+            _ => SelectionUnit::Line,
+        };
+        if unit != SelectionUnit::Character {
+            let (start, end) = unit_range(self.model.read(cx), unit, line, col);
+            self.drag_anchor = Some(DragAnchor { unit, start, end });
             (self.anchor_line, self.anchor_col) = start;
-            self.drag_anchor = Some(start);
             (self.cursor_line, self.cursor_col) = end;
             self.has_selection = start != end;
             self.finish_position_change(cx);
             return;
         }
+        let anchor = if !ev.modifiers.shift {
+            (line, col)
+        } else if self.has_selection {
+            (self.anchor_line, self.anchor_col)
+        } else {
+            (self.cursor_line, self.cursor_col)
+        };
+        self.drag_anchor = Some(DragAnchor {
+            unit,
+            start: anchor,
+            end: anchor,
+        });
         if ev.modifiers.shift {
             if !self.has_selection {
                 self.anchor_line = self.cursor_line;
@@ -97,9 +89,8 @@ impl EditorView {
     }
 
     /// Mouse-move while the left button is held extends the selection from
-    /// the anchor (the position where the drag began) to the cursor's new
-    /// position under the pointer. The first move event of a drag seeds the
-    /// anchor from the pre-drag caret. `MouseMoveEvent::dragging()` is true
+    /// the anchor (the position, word, or line where the drag began) to the
+    /// position, word, or line under the pointer. `MouseMoveEvent::dragging()` is true
     /// when the platform reports the left button as currently pressed, so we
     /// don't need a separate mouse-up handler to know we're still dragging.
     /// Window-level pointer listeners keep the gesture active outside the pane.
@@ -120,10 +111,18 @@ impl EditorView {
         let Some(anchor) = self.drag_anchor else {
             return;
         };
-        let (line, col) = self.hit_test(self.model.read(cx), ev.position, window, cx);
-        (self.anchor_line, self.anchor_col) = anchor;
-        self.cursor_line = line;
-        self.cursor_col = col;
+        let model = self.model.read(cx);
+        let (line, col) = self.hit_test(model, ev.position, window, cx);
+        // Extending by units keeps the clicked unit selected and reaches the
+        // far edge of the unit under the pointer.
+        let (hovered_start, hovered_end) = unit_range(model, anchor.unit, line, col);
+        let (fixed, moving) = if hovered_start < anchor.start {
+            (anchor.end, hovered_start)
+        } else {
+            (anchor.start, hovered_end.max(anchor.end))
+        };
+        (self.anchor_line, self.anchor_col) = fixed;
+        (self.cursor_line, self.cursor_col) = moving;
         self.preferred_x = None;
         self.has_selection =
             self.cursor_line != self.anchor_line || self.cursor_col != self.anchor_col;
@@ -362,5 +361,29 @@ impl EntityInputHandler for EditorView {
         let model = self.model.read(cx);
         let (line, col) = self.hit_test(model, point, window, cx);
         Some(to_flat_utf16(model, line, col))
+    }
+}
+
+/// The `unit` containing the caret position `(line, col)`, as start and end
+/// positions: the position itself, the word segment at it, or the whole line
+/// with its terminator.
+fn unit_range(
+    model: &BufferModel,
+    unit: SelectionUnit,
+    line: usize,
+    col: usize,
+) -> ((usize, usize), (usize, usize)) {
+    match unit {
+        SelectionUnit::Character => ((line, col), (line, col)),
+        SelectionUnit::Word => {
+            let text = line_text(model, line);
+            let (start, segment) = text
+                .split_word_bound_indices()
+                .find(|(start, segment)| col < start + segment.len())
+                .unwrap_or((text.len(), ""));
+            ((line, start), (line, start + segment.len()))
+        }
+        SelectionUnit::Line if line + 1 < model.line_count() => ((line, 0), (line + 1, 0)),
+        SelectionUnit::Line => ((line, 0), (line, line_end(model, line))),
     }
 }

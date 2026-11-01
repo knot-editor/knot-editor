@@ -1486,3 +1486,91 @@ pub(super) fn check(
 mod comments;
 mod indentation;
 mod lines;
+
+fn press(
+    view: &mut EditorView,
+    at: gpui::Point<gpui::Pixels>,
+    clicks: usize,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<EditorView>,
+) {
+    view.on_mouse_down(
+        &MouseDownEvent {
+            position: at,
+            modifiers: Modifiers::default(),
+            button: MouseButton::Left,
+            click_count: clicks,
+            first_mouse: false,
+        },
+        window,
+        cx,
+    );
+}
+
+fn drag(
+    view: &mut EditorView,
+    to: gpui::Point<gpui::Pixels>,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<EditorView>,
+) {
+    view.on_mouse_move(
+        &MouseMoveEvent {
+            position: to,
+            modifiers: Modifiers::default(),
+            pressed_button: Some(MouseButton::Left),
+        },
+        window,
+        cx,
+    );
+}
+
+fn selection(view: &EditorView) -> (Position, Position) {
+    (
+        (view.anchor_line, view.anchor_col),
+        (view.cursor_line, view.cursor_col),
+    )
+}
+
+#[gpui::test]
+fn dragging_after_a_double_or_triple_click_extends_by_words_or_lines(cx: &mut TestAppContext) {
+    let model = cx.new(|_| BufferModel::from_text("alpha beta gamma\nsecond line\nthird"));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            let [beta, gamma, alpha, inside, second, third, first] =
+                [(0, 7), (0, 13), (0, 2), (0, 8), (1, 3), (2, 1), (0, 4)].map(|(line, col)| {
+                    view.cursor_line = line;
+                    view.cursor_col = col;
+                    point(
+                        view.text_bounds().origin.x + view.caret_x(view.model.read(cx), window, cx),
+                        view.bounds.origin.y + px(5. + LINE_HEIGHT * line as f32),
+                    )
+                });
+
+            // Words: forward to the end of the hovered word, back to the start
+            // of one before, keeping "beta" selected.
+            press(view, beta, 2, window, cx);
+            assert_eq!(selection(view), ((0, 6), (0, 10)));
+            drag(view, gamma, window, cx);
+            assert_eq!(selection(view), ((0, 6), (0, 16)));
+            drag(view, alpha, window, cx);
+            assert_eq!(selection(view), ((0, 10), (0, 0)));
+            drag(view, inside, window, cx);
+            assert_eq!(selection(view), ((0, 6), (0, 10)));
+
+            // Lines: whole lines in both directions from the clicked one.
+            press(view, second, 3, window, cx);
+            assert_eq!(selection(view), ((1, 0), (2, 0)));
+            drag(view, third, window, cx);
+            assert_eq!(selection(view), ((1, 0), (2, 5)));
+            drag(view, first, window, cx);
+            assert_eq!(selection(view), ((2, 0), (0, 0)));
+
+            // A single click drags by characters again.
+            press(view, beta, 1, window, cx);
+            drag(view, gamma, window, cx);
+            assert_eq!(selection(view), ((0, 7), (0, 13)));
+        })
+    });
+}

@@ -116,6 +116,24 @@ pub(crate) struct EditorContributionAction {
     pub focus: WeakFocusHandle,
 }
 
+/// The units a drag selects: characters after a click, words after a
+/// double-click, lines after a triple-click.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectionUnit {
+    Character,
+    Word,
+    Line,
+}
+
+/// The unit a drag started on: a caret position for characters, or the
+/// clicked word or line, which stays selected whichever way the drag goes.
+#[derive(Clone, Copy, Debug)]
+struct DragAnchor {
+    unit: SelectionUnit,
+    start: (usize, usize),
+    end: (usize, usize),
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct EditorRenderingOptions {
     pub show_gutter_markers: bool,
@@ -171,7 +189,9 @@ pub struct EditorView {
     /// Shaped x position retained across vertical movement, including short lines.
     preferred_x: Option<Pixels>,
     scroll_x: f32,
-    drag_anchor: Option<(usize, usize)>,
+    /// What a drag with the left button held extends from, from mouse-down
+    /// to mouse-up.
+    drag_anchor: Option<DragAnchor>,
     reveal_caret: bool,
     preserve_scroll_on_layout: bool,
     /// Last measured editor pane height in pixels; written by the element

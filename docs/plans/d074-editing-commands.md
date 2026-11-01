@@ -1,6 +1,6 @@
 # D074 — Editing commands
 
-Status: 🚧 in progress: checkpoints 1–3 approved; checkpoint 4 is next. Item of the
+Status: 🚧 in progress: checkpoint 4 awaits its review gate. Item of the
 [daily-driver plan](daily-driver.md); builds on D073's
 [language editing configuration](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
@@ -122,7 +122,7 @@ whitespace and leaves the caret at the join. Smart Home binds home,
 shift-home, ⌘←, and ⇧⌘←, while ctrl-a keeps column 0. Checkpoint 5 moves
 these rules into the editor views reference and decisions.
 
-### 4. Unit drag
+### 4. Unit drag — ✅ implemented, awaiting review
 
 - Deliverables: dragging after a double- or triple-click extends by words
   or lines.
@@ -131,6 +131,12 @@ these rules into the editor views reference and decisions.
 - **Implementation context:** `src/app/editor/input.rs`, `on_mouse_down`
   and `on_mouse_move`; the drag keeps its unit next to `drag_anchor`.
 - Review gate: try word and line drags.
+- Notes:
+  - ✅ `drag_anchor` became a `DragAnchor` holding the unit and the clicked
+    unit's range. A drag keeps the clicked word or line selected and
+    extends to the far edge of the unit under the pointer, in either
+    direction; character drags are the same rule with an empty unit.
+    Shift-click still extends by characters.
 
 ### 5. Documentation
 
