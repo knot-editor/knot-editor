@@ -2,7 +2,7 @@
 
 Status: 🚧 approved, not started. Promotes D007, D008, D010, D031, D034, D053,
 D060, D064, D068, and D089 from the [roadmap](../roadmap.md) and adds
-D069–D088, D120–D123, and D127.
+D069–D088, D120–D123, D127, and D134.
 
 ## Goal
 
@@ -44,8 +44,9 @@ to be rebuilt later:
   matcher and one picker presentation.
 - **Language editing configuration before editing commands and brackets.**
   Toggle comment and auto-closing read per-language data from the same
-  registration; language-aware indentation comes from D066's `indents`
-  queries.
+  registration. Language-aware indentation (D134) follows the editing
+  commands directly, so Enter indents after an opening bracket before the
+  rest of the editing phase lands.
 - **The keymap preset mechanism before new commands; extra presets last.**
   New commands bind into a single Knot preset as they land. The VS Code, Zed,
   IntelliJ, and Sublime presets are filled in once the command set is stable.
@@ -147,7 +148,7 @@ to be rebuilt later:
     full definition to derive from. The registry resolves the data for
     native code beside a pure comment toggle, and the Rust, ECMAScript,
     Python, TOML, and Markdown packages supply it with per-package toggling
-    cases. Indentation is left to D066's `indents` queries. D074 and D075
+    cases. Indentation is left to D134's `indents` queries. D074 and D075
     consume it
     ([semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
     [decisions](../decisions.md#language-editing-configuration),
@@ -155,7 +156,7 @@ to be rebuilt later:
 
 - **D074 — Editing commands** (depends on D073)
   - Enter keeps the current line's indentation; language-aware adjustment
-    comes with D066's `indents` queries.
+    comes with D134's `indents` queries.
   - Tab and Shift-Tab indent and outdent a multi-line selection.
   - Toggle line comment (⌘/) and block comment.
     Inside an injection, such as a fenced code block, they use the injected
@@ -167,6 +168,16 @@ to be rebuilt later:
   - Double-click selects a word, triple-click selects a line, and dragging
     after either extends by that unit.
   - Each command is one undo step.
+
+- **D134 — Tree-sitter indentation** (depends on D073, D074; split from D066)
+  - Language registration gains an optional `indents` query using
+    nvim-treesitter's indent captures, as Zed, Helix, and Neovim indent.
+  - Enter indents the new line from the query, and a Reindent command
+    reindents the selected lines. Languages without a query keep D074's
+    behavior.
+  - The bundled language packages ship queries adapted from
+    nvim-treesitter, with per-package cases run through the native
+    evaluator like `test/comments.jsonc`.
 
 - **D075 — Bracket matching and auto-closing** (depends on D073, D064)
   - Highlight the bracket matching the one at the cursor, and add a jump to

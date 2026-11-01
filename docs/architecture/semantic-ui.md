@@ -123,7 +123,7 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   A syntax layer holds no language ID yet, so editing inside an injection
   needs a layer-to-ID mapping (D074). The comment toggle is a plain
   function over lines and that configuration, with no buffer or view.
-  Indentation is not language data: it waits for D066's `indents` queries.
+  Indentation is not language data: it waits for D134's `indents` queries.
   Each bundled language package keeps comment toggling cases in
   `test/comments.jsonc`, which a product test runs through the native toggle
   on the registered configuration.

@@ -131,7 +131,7 @@ language-scoped setting. Following Zed, one bracket list serves matching,
 auto-closing, and surrounding, with per-pair flags instead of VS Code's three
 parallel lists; a line comment list lets uncommenting strip the longest token,
 so a Rust doc comment never leaves `/ foo`. Indentation is left out: Zed,
-Helix, and Neovim indent from tree-sitter `indents` queries, which D066 adds,
+Helix, and Neovim indent from tree-sitter `indents` queries, which D134 adds,
 so regex patterns or bracket heuristics written now would be replaced.
 
 The bundled data departs from Zed where text-based matching would mislead:

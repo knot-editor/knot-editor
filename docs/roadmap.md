@@ -51,7 +51,7 @@ removes demo surfaces and adds workbench and editing commands, a richer
 palette, themes, Find, navigation, file watching, and bundled explorer,
 project-selector, and search extensions, keymap presets, and extension
 entitlements. It promotes D007, D008, D010, D031, D034, D053, D060, D064, D068,
-and D089 and adds D069–D088, D120–D123, and D127.
+and D089 and adds D069–D088, D120–D123, D127, and D134.
 
 The [package manager](plans/package-manager.md) initiative is selected: extension
 installation becomes an inspectable application-owned lifecycle with a lockfile,
@@ -73,7 +73,7 @@ complete list for that item.
   - D080 → D109 → D112, D113, D027
   - D078 → D112 → D058
   - D074 → D111 → D012, D058
-  - D068, D073 → D066 → D058
+  - D073, D074 → D134 → D066; D068 → D066 → D058
   - D073, D074, D075 → D130; D074 → D131; D073 → D132
   - D064, D068 → D114 → D058
   - D092 → multi-selection editing in D109, D001, D067
@@ -131,19 +131,17 @@ complete list for that item.
     styles, and the daily-driver items D068, D072, and D077.
 
 - **D066 — Syntax-tree editing features and public syntax-tree API**
-  - Deferred: D002 uses tree-sitter trees only for highlighting. Folding,
-    indentation, structural selection expansion, text objects, and
-    tree-based motions are not built, and extensions cannot query the tree.
-  - Reconsider: Daily editing needs folding or language-aware indentation,
-    or D058 is selected. Then add per-language `folds`, `indents`, and
-    `textobjects` queries to language registration and expose node queries
-    through the extension API without exposing tree-sitter objects.
-    Auto-indent on Enter and reindenting a line read the `indents` queries,
-    as in Zed, Helix, and Neovim; D073 deliberately carries no indentation
-    data, and D074's Enter only keeps the current indentation until this
-    lands.
-  - Order: after D073, which adds editing data to the same language
-    registration, and D068, whose gutter lanes hold folds; before D058.
+  - Deferred: D002 uses tree-sitter trees for highlighting, and D134 adds
+    `indents` queries. Folding, structural selection expansion, text
+    objects, and tree-based motions are not built, and extensions cannot
+    query the tree.
+  - Reconsider: Daily editing needs folding, or D058 is selected. Then add
+    per-language `folds` and `textobjects` queries to language registration
+    beside D134's `indents`, and expose node queries through the extension
+    API without exposing tree-sitter objects.
+  - Order: after D134, which adds the first editing query to the same
+    language registration, and D068, whose gutter lanes hold folds; before
+    D058.
 
 - **D132 — Editing data for the remaining bundled languages**
   - Deferred: D073 supplies comment and bracket data only for
