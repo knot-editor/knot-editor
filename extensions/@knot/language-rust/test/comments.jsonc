@@ -1,0 +1,37 @@
+// Comment toggling cases, run through the native toggle on the registered
+// configuration of each listed language. Each case toggles comments on
+// `before` and expects `after`.
+{
+  "languages": ["rust"],
+  "cases": [
+    { "name": "commenting a line inserts // and a space", "before": ["fn main() {}"], "after": ["// fn main() {}"] },
+    { "name": "uncommenting removes // and one space", "before": ["// fn main() {}"], "after": ["fn main() {}"] },
+    {
+      "name": "commenting goes at the shallowest indentation and skips blank lines",
+      "before": ["    let a = 1;", "  let b = 2;", "", "      c();"],
+      "after": ["  //   let a = 1;", "  // let b = 2;", "", "  //     c();"]
+    },
+    {
+      "name": "uncommenting keeps the indentation under the token",
+      "before": ["  //   let a = 1;", "  // let b = 2;", "", "  //     c();"],
+      "after": ["    let a = 1;", "  let b = 2;", "", "      c();"]
+    },
+    { "name": "tab indentation", "before": ["\tx();", "\t\ty();"], "after": ["\t// x();", "\t// \ty();"] },
+    { "name": "uncommenting a doc comment strips ///, not just //", "before": ["/// Docs."], "after": ["Docs."] },
+    { "name": "uncommenting an inner doc comment strips //!", "before": ["//! Crate docs."], "after": ["Crate docs."] },
+    { "name": "a token without a space is stripped alone", "before": ["//x"], "after": ["x"] },
+    { "name": "a bare token leaves an empty line", "before": ["//"], "after": [""] },
+    {
+      "name": "lines with different comment tokens all uncomment",
+      "before": ["  // a", "  /// b", "", "  //! c"],
+      "after": ["  a", "  b", "", "  c"]
+    },
+    {
+      "name": "a mix of commented and plain lines comments every line",
+      "before": ["// a", "b"],
+      "after": ["// // a", "// b"]
+    },
+    { "name": "a block comment line is commented with //", "before": ["/* a */"], "after": ["// /* a */"] },
+    { "name": "blank lines alone change nothing", "before": ["", "  ", ""], "after": ["", "  ", ""] }
+  ]
+}

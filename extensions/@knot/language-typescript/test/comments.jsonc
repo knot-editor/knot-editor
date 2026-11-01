@@ -1,0 +1,38 @@
+// Comment toggling cases, run through the native toggle on the registered
+// configuration of each listed language. Each case toggles comments on
+// `before` and expects `after`.
+{
+  "languages": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+  "cases": [
+    { "name": "commenting a line inserts // and a space", "before": ["const a = 1;"], "after": ["// const a = 1;"] },
+    { "name": "uncommenting removes // and one space", "before": ["// const a = 1;"], "after": ["const a = 1;"] },
+    {
+      "name": "commenting goes at the shallowest indentation",
+      "before": ["    if (a) {", "  b();", "        c();"],
+      "after": ["  //   if (a) {", "  // b();", "  //       c();"]
+    },
+    {
+      "name": "uncommenting keeps the indentation under the token",
+      "before": ["  //   if (a) {", "  // b();", "  //       c();"],
+      "after": ["    if (a) {", "  b();", "        c();"]
+    },
+    { "name": "a token without a space is stripped alone", "before": ["//x"], "after": ["x"] },
+    { "name": "blank lines are left alone", "before": ["  // a", "", "  //b"], "after": ["  a", "", "  b"] },
+    {
+      "name": "a mix of commented and plain lines comments every line",
+      "before": ["// a", "b"],
+      "after": ["// // a", "// b"]
+    },
+    { "name": "a JSDoc line is commented with //", "before": ["/** Docs. */"], "after": ["// /** Docs. */"] },
+    // JSX children would need `{/* */}`, which takes syntax-scoped
+    // configuration; until then JSX lines comment with //.
+    { "name": "a JSX line is commented with //", "before": ["<div>{a}</div>"], "after": ["// <div>{a}</div>"] },
+    // Only // is a token, as in VS Code and Zed, so a triple-slash
+    // directive keeps one slash.
+    {
+      "name": "uncommenting a triple-slash directive strips //",
+      "before": ["/// <reference types=\"node\" />"],
+      "after": ["/ <reference types=\"node\" />"]
+    }
+  ]
+}

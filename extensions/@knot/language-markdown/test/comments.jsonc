@@ -1,0 +1,31 @@
+// Comment toggling cases, run through the native toggle on the registered
+// configuration of each listed language. Each case toggles comments on
+// `before` and expects `after`. Markdown has only a block comment, so each
+// line is wrapped and unwrapped.
+{
+  "languages": ["markdown"],
+  "cases": [
+    { "name": "commenting wraps a line in <!-- -->", "before": ["Some text"], "after": ["<!-- Some text -->"] },
+    { "name": "uncommenting unwraps a line", "before": ["<!-- Some text -->"], "after": ["Some text"] },
+    {
+      "name": "commenting wraps each line at the shallowest indentation",
+      "before": ["  - item", "- other"],
+      "after": ["<!--   - item -->", "<!-- - other -->"]
+    },
+    {
+      "name": "uncommenting restores each line",
+      "before": ["<!--   - item -->", "<!-- - other -->"],
+      "after": ["  - item", "- other"]
+    },
+    { "name": "blank lines are left alone", "before": ["  a", "", "    b"], "after": ["  <!-- a -->", "", "  <!--   b -->"] },
+    { "name": "delimiters without spaces unwrap", "before": ["<!--a-->"], "after": ["a"] },
+    { "name": "an empty comment unwraps to an empty line", "before": ["<!-- -->"], "after": [""] },
+    { "name": "the wrap goes before trailing whitespace", "before": ["# Title  "], "after": ["<!-- # Title -->  "] },
+    { "name": "unwrapping keeps surrounding whitespace", "before": ["  <!-- a -->  "], "after": ["  a  "] },
+    {
+      "name": "a mix of wrapped and plain lines wraps every line",
+      "before": ["<!-- a -->", "b"],
+      "after": ["<!-- <!-- a --> -->", "<!-- b -->"]
+    }
+  ]
+}

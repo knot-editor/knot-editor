@@ -123,13 +123,15 @@ Scope decisions, following Zed's language configs except where noted:
 - ✅ Deliverables: comments, brackets, and `autoCloseBefore` for Rust, the four
   ECMAScript languages, Python, TOML, and Markdown.
 - Validation:
-  - ✅ Each package's `test/editing.test.ts` asserts its registered editing
-    data beside the languages it describes, with the reason for each
-    non-obvious choice. Toggle behavior stays covered by the evaluator's
-    generic unit tests in `src/app/languages/editing/tests.rs`: running it
-    per language from a package would need a second evaluator in the fake
-    host, and the bundled data's native decoding is covered by product tests
-    that require every bundled package to load.
+  - ✅ Each package keeps its comment toggling cases in
+    `test/comments.jsonc`: the languages they apply to and, per case, the
+    lines before and after toggling. A generic product test
+    (`src/app/product/tests/language_editing.rs`) starts the bundled
+    packages, requires every one to load, runs each case through the
+    native toggle on the listed languages' registered configuration, and
+    fails if a language that declares comment tokens has no cases.
+    TypeScript case modules are D133. Bracket behavior cases come with
+    D075's auto-closing, as a sibling case file.
   - ✅ Shared package tests check token shapes: nonempty tokens, and every
     language in scope declares comments.
 - **Implementation context:**
@@ -139,7 +141,7 @@ Scope decisions, following Zed's language configs except where noted:
   - `scripts/extensions/testing/languages.ts`: extend
     `testLanguagePackage` with the shape checks, applied only to packages
     in scope.
-- Review gate: review each package's editing data and tests; add cases where review
+- Review gate: review each package's `test/comments.jsonc` cases; add cases where review
   finds a gap.
 
 ### 4. Documentation

@@ -1,0 +1,25 @@
+// Comment toggling cases, run through the native toggle on the registered
+// configuration of each listed language. Each case toggles comments on
+// `before` and expects `after`.
+{
+  "languages": ["python"],
+  "cases": [
+    { "name": "commenting a line inserts # and a space", "before": ["x = 1"], "after": ["# x = 1"] },
+    { "name": "uncommenting removes # and one space", "before": ["# x = 1"], "after": ["x = 1"] },
+    {
+      "name": "commenting a block keeps its indentation after the token",
+      "before": ["def f():", "    return 1", "", "  # odd"],
+      "after": ["# def f():", "#     return 1", "", "#   # odd"]
+    },
+    {
+      "name": "uncommenting restores the block",
+      "before": ["# def f():", "#     return 1", "", "#   # odd"],
+      "after": ["def f():", "    return 1", "", "  # odd"]
+    },
+    { "name": "a token without a space is stripped alone", "before": ["#x"], "after": ["x"] },
+    { "name": "indented comments uncomment in place", "before": ["    # a", "", "    #b"], "after": ["    a", "", "    b"] },
+    // Docstrings are strings, so Python has no block comment.
+    { "name": "a docstring is commented with #", "before": ["\"\"\"Docs.\"\"\""], "after": ["# \"\"\"Docs.\"\"\""] },
+    { "name": "other languages' tokens are not comments", "before": ["// a"], "after": ["# // a"] }
+  ]
+}

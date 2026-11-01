@@ -1,0 +1,26 @@
+// Comment toggling cases, run through the native toggle on the registered
+// configuration of each listed language. Each case toggles comments on
+// `before` and expects `after`.
+{
+  "languages": ["toml"],
+  "cases": [
+    {
+      "name": "commenting a table inserts # and a space",
+      "before": ["[package]", "name = \"knot\""],
+      "after": ["# [package]", "# name = \"knot\""]
+    },
+    {
+      "name": "uncommenting removes # and one space",
+      "before": ["# [package]", "# name = \"knot\""],
+      "after": ["[package]", "name = \"knot\""]
+    },
+    { "name": "commenting goes at the shallowest indentation", "before": ["  a = 1", "    b = 2"], "after": ["  # a = 1", "  #   b = 2"] },
+    { "name": "a token without a space is stripped alone", "before": ["#x"], "after": ["x"] },
+    { "name": "blank lines are left alone", "before": ["  # a", "", "  #b"], "after": ["  a", "", "  b"] },
+    {
+      "name": "a mix of commented and plain lines comments every line",
+      "before": ["# a", "b = 1"],
+      "after": ["# # a", "# b = 1"]
+    }
+  ]
+}
