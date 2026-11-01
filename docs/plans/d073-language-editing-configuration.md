@@ -1,6 +1,6 @@
 # D073 — Language editing configuration
 
-Status: 🚧 checkpoint 1 implemented, awaiting review. Item of the
+Status: 🚧 checkpoint 1 approved; checkpoint 2 next. Item of the
 [daily-driver plan](daily-driver.md); D074 (editing commands) and D075
 (bracket matching and auto-closing) consume it.
 
@@ -105,64 +105,16 @@ yet; D074 and D075 call the evaluators.
 
 ## Checkpoints
 
-### 1. Contract and native storage — ✅ implemented, ⏳ review gate
+### 1. Contract and native storage — ✅ approved
 
-- ✅ Contract: `LanguageComments`, `BracketPair`, `LanguageIndentation`, the
-  optional `LanguageDefinition` fields, `languages.get`, and `InvalidPattern`
-  in `src/host/js/knot.d.ts`.
-- ✅ JavaScript validation checks shapes only. Native compilation resolves
-  bracket defaults (`autoClose` true, `newline` `open !== close`, `notIn`
-  empty) into the compiled configuration, so the rule has one owner beside
-  its evaluators, and `get` returns editing fields exactly as registered.
-  Comment and bracket tokens must be nonempty without surrounding
-  whitespace, which catches a token written as `"// "`.
-- ✅ Native: `src/app/languages/editing.rs` holds `EditingDefinition` (serde)
-  and the compiled `EditingConfiguration`; patterns compile before queries,
-  so an invalid pattern rejects without query compilation. The registration
-  retains its full definition for `get`; `LanguageRegistry::editing` and
-  `languages::editing_configuration` resolve the defining registration's
-  configuration. `LanguageDefinition` now groups queries as `queries`,
-  matching the public shape it serializes to.
-- ✅ Tests: registry unit tests (latest registration, associations, unregister,
-  teardown, empty configuration, `InvalidPattern`), the product language test
-  (TypeErrors, `InvalidPattern` over the wire, `get` round trip and
-  derivation, the native accessor), the contract fixtures, and fake
-  `languages.get`.
-
-
-- Deliverables: the `LanguageDefinition` fields and `languages.get` in the
-  public declarations, JavaScript validation of field shapes, a native
-  editing configuration with compiled patterns retained per registration,
-  the `InvalidPattern` error, a registry accessor for a language ID's
-  effective configuration, and the fake host updated to store and return the
-  new fields.
-- Validation: registry unit tests for resolving configuration through
-  latest registration and teardown; a product test that registers a
-  language with editing data, reads it back through `languages.get`, and
-  rejects an invalid pattern with `InvalidPattern`; the extension contract
-  test covers the new types.
-- **Implementation context:**
-  - `src/host/js/knot.d.ts`: add the fields to `LanguageDefinition`, `get`
-    to `languages`, `InvalidPattern` to the host error union near
-    `InvalidQuery`, and document the field semantics there.
-  - `src/host/js/bootstrap.js` `registerLanguage`: validate the new fields
-    and pass them as one trailing JSON argument; add `getLanguage` and export
-    it from `src/host/js/knot.js`.
-  - `src/app/extensions/host/handlers.rs`: extend the `LanguageDefinition`
-    decoder with `reader.command_arguments(10)` decoded through serde,
-    mirroring `ThemeDefinition`'s decoder; add `InvalidPattern` to
-    `LanguageError`; add a `getLanguage` operation beside `listLanguages`.
-  - `src/app/languages.rs`: add the editing configuration to
-    `LanguageDefinition` and compile its patterns in `compile()`; retain the
-    source definition in `Registration` for `get`; add an accessor on
-    `LanguageRegistry` and an application-level function beside
-    `effective_language`. Add `regex` as a direct dependency (already in the
-    lockfile through tree-sitter).
-  - Tests: `src/app/languages/tests.rs`, `src/app/product/tests/languages.rs`,
-    `scripts/extensions/contract.test.ts`, and `scripts/extensions/testing/host.ts`
-    (`languageDefinitions` already stores whole definitions; add `get`).
-- Review gate: the contract shape and validation errors are agreed before
-  the evaluators are written.
+Completed: the editing fields, `languages.get`, and `InvalidPattern` are in
+`src/host/js/knot.d.ts`; `src/app/languages/editing.rs` holds the registered
+`EditingDefinition` and the compiled `EditingConfiguration`, whose
+compilation resolves bracket defaults, so `get` returns editing fields as
+registered and JavaScript validation checks shapes only. Comment and bracket
+tokens must be nonempty without surrounding whitespace. Open for D074: a
+syntax layer holds no language ID, so resolving an injected layer's
+configuration needs a layer-to-ID mapping.
 
 ### 2. Indentation and comment evaluators
 
