@@ -78,6 +78,10 @@ struct Properties {
     avoid_last_matching_next: bool,
     /// Columns after the open delimiter that aligned lines start at.
     increment: Option<usize>,
+    /// An `@indent.dedent` applies only to lines after the node ends, as
+    /// after Python's `return`, whose own continuation lines keep their
+    /// level. Knot's addition to nvim's properties.
+    after_end: bool,
 }
 
 /// A node predicate the query cursor does not evaluate.
@@ -158,6 +162,7 @@ impl IndentQuery {
                         "indent.avoid_last_matching_next" => {
                             properties.avoid_last_matching_next = true
                         }
+                        "indent.after_end" => properties.after_end = true,
                         "indent.increment" => {
                             properties.increment = value.and_then(|value| value.parse().ok())
                         }
@@ -330,10 +335,11 @@ fn width(text: &str, start: usize, size: usize) -> usize {
     }) - start
 }
 
-/// The indent captures of the nodes a query finds, by node identity.
+/// The indent captures of the nodes a query finds, by node identity, each
+/// with its pattern and where its match ends.
 struct Captures<'q> {
     query: &'q IndentQuery,
-    nodes: HashMap<usize, Vec<(Capture, usize)>>,
+    nodes: HashMap<usize, Vec<(Capture, usize, Point)>>,
 }
 
 impl<'q> Captures<'q> {
@@ -367,12 +373,18 @@ impl<'q> Captures<'q> {
             {
                 continue;
             }
+            let end = found
+                .captures()
+                .iter()
+                .map(|capture| capture.node.end_position())
+                .max()
+                .unwrap_or_default();
             for capture in found.captures() {
                 if let Some(kind) = self.query.captures[capture.index as usize] {
                     self.nodes
                         .entry(capture.node.id())
                         .or_default()
-                        .push((kind, pattern));
+                        .push((kind, pattern, end));
                 }
             }
         }
@@ -385,8 +397,17 @@ impl<'q> Captures<'q> {
             captures
                 .iter()
                 .rev()
-                .find(|(captured, _)| *captured == kind)
-                .map(|(_, pattern)| &query.properties[*pattern])
+                .find(|(captured, ..)| *captured == kind)
+                .map(|(_, pattern, _)| &query.properties[*pattern])
+        })
+    }
+
+    /// Whether a match capturing `node` as `kind` ends at or after `point`.
+    fn reaches(&self, node: Node, kind: Capture, point: Point) -> bool {
+        self.nodes.get(&node.id()).is_some_and(|captures| {
+            captures
+                .iter()
+                .any(|(captured, _, end)| *captured == kind && *end >= point)
         })
     }
 
@@ -533,7 +554,10 @@ pub(super) fn evaluate(
         let mut processed = false;
         if !processed_rows.contains(&start)
             && ((captures.has(node, Capture::Branch) && start == row)
-                || (captures.has(node, Capture::Dedent) && start != row))
+                || (captures
+                    .get(node, Capture::Dedent)
+                    .is_some_and(|dedent| !dedent.after_end || end < row)
+                    && start != row))
         {
             indent -= size;
             processed = true;
@@ -628,7 +652,8 @@ pub(super) fn evaluate(
 /// Whether typing up to byte `caret` of `row` completed a node that starts
 /// at the row's first non-blank byte and closes or branches an indented
 /// node: an `@indent.end`, `@indent.branch`, or `@indent.dedent` capture
-/// reaching the caret, such as a typed `}` or `else`.
+/// whose match reaches the caret, such as a typed `}`, or Python's `else`
+/// once a pattern capturing the `:` after it as `@_end` matches.
 pub(super) fn closes(
     tree: &Tree,
     query: &IndentQuery,
@@ -647,10 +672,9 @@ pub(super) fn closes(
     let start = Point::new(row, first);
     let mut node = node_at(root, row, first);
     while node.start_position() == start {
-        if node.end_position() >= Point::new(row, caret)
-            && [Capture::End, Capture::Branch, Capture::Dedent]
-                .into_iter()
-                .any(|kind| captures.has(node, kind))
+        if [Capture::End, Capture::Branch, Capture::Dedent]
+            .into_iter()
+            .any(|kind| captures.reaches(node, kind, Point::new(row, caret)))
         {
             return true;
         }

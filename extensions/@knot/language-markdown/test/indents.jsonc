@@ -1,0 +1,39 @@
+// Indentation cases, run through an editor view on each listed language.
+// Lines join with "\n" and "‸" marks the caret: one marker places it, two
+// select between them. A reindent case reindents the marked lines, or every
+// line without a marker, and expects `after`. An enter case presses Enter at
+// the marked selection, and a type case types `text` there one character
+// at a time, each expecting `after` with the caret at its marker.
+//
+// Markdown has no indent query: its text belongs to the inline layer, so
+// lines keep their indentation, while a code fence indents as its language.
+{
+  "languages": ["markdown"],
+  "enter": [
+    {
+      "name": "in a Rust code fence",
+      "before": ["# Title", "", "```rust", "fn main() {‸}", "```"],
+      "after": ["# Title", "", "```rust", "fn main() {", "    ‸", "}", "```"]
+    },
+    {
+      "name": "in a list item the indentation is kept",
+      "before": ["- item", "  continued‸"],
+      "after": ["- item", "  continued", "  ‸"]
+    }
+  ],
+  "type": [
+    {
+      "name": "a closing brace in a Rust code fence outdents",
+      "before": ["```rust", "fn main() {", "    a();", "    ‸", "```"],
+      "text": "}",
+      "after": ["```rust", "fn main() {", "    a();", "}‸", "```"]
+    }
+  ],
+  "reindent": [
+    {
+      "name": "a Rust code fence reindents as Rust and prose stays",
+      "before": ["Some  text", "  indented", "", "```rust", "fn main() {", "a();", "}", "```"],
+      "after": ["Some  text", "  indented", "", "```rust", "fn main() {", "    a();", "}", "```"]
+    }
+  ]
+}

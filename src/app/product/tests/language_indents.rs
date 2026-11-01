@@ -1,7 +1,8 @@
 //! Runs the indentation cases each bundled language package keeps in
 //! `test/indents.jsonc` through an editor view on the registered language.
 //!
-//! Lines join with `\n`, and `‸` marks the caret: one marker places it, two
+//! A file holds one group of cases with the languages they run on, or a list
+//! of such groups. Lines join with `\n`, and `‸` marks the caret: one marker places it, two
 //! select from the first to the second. A `reindent` case reindents the
 //! marked lines, or every line without a marker, and expects `after`. An
 //! `enter` case presses Enter at the marked selection, and a `type` case
@@ -66,10 +67,22 @@ fn case_files() -> Vec<PathBuf> {
     files
 }
 
-fn read_cases(path: &Path) -> IndentCases {
+/// A case file: one group of cases, or several for different languages.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum CaseFile {
+    One(IndentCases),
+    Groups(Vec<IndentCases>),
+}
+
+fn read_cases(path: &Path) -> Vec<IndentCases> {
     let text = std::fs::read_to_string(path).unwrap();
-    jsonc_parser::parse_to_serde_value(&text, &Default::default())
-        .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+    let file: CaseFile = jsonc_parser::parse_to_serde_value(&text, &Default::default())
+        .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    match file {
+        CaseFile::One(cases) => vec![cases],
+        CaseFile::Groups(groups) => groups,
+    }
 }
 
 /// `lines` joined, without markers, and the selection they mark.
@@ -148,8 +161,7 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
 
     let mut tested = Vec::new();
     let mut failures = Vec::new();
-    for path in case_files() {
-        let cases = read_cases(&path);
+    for cases in case_files().iter().flat_map(|path| read_cases(path)) {
         for id in &cases.languages {
             tested.push(id.clone());
             for case in &cases.reindent {
@@ -216,6 +228,6 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
             .filter(|id| !tested.contains(id))
             .collect()
     });
-    assert!(untested.is_empty(), "no indent cases for {untested:?}");
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+    assert!(untested.is_empty(), "no indent cases for {untested:?}");
 }

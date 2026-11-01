@@ -11,7 +11,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "toml",
     fileExtensions: ["toml"],
     fileNames: ["Cargo.lock", "Pipfile"],
-    queries: { highlights: toml.highlights },
+    queries: { highlights: toml.highlights, indents: toml.indents },
     comments: { line: ["#"] },
     brackets: [
       // Inline tables stay on one line.

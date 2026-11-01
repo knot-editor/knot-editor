@@ -207,3 +207,11 @@ export const highlights = String.raw`
       (function_type)
     ]))
 `;
+
+export const indents = String.raw`
+[
+  (enum_declaration)
+  (interface_declaration)
+  (object_type)
+] @indent.begin
+`;

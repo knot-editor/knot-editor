@@ -196,10 +196,12 @@ declare module "knot" {
     readonly grammar: string;
     /** Tree-sitter queries using nvim-treesitter capture names. Injections
      * name languages by ID, or by a registered file extension such as "py".
-     * Indents use nvim-treesitter's `@indent.*` captures and properties, and
-     * may add the `has-parent?`, `not-has-parent?`, `kind-eq?`, and
-     * `not-kind-eq?` node predicates; a language without one keeps the
-     * previous line's indentation. */
+     * Indents use nvim-treesitter's `@indent.*` captures and properties, plus
+     * `(#set! indent.after_end)`, which limits an `@indent.dedent` to lines
+     * after its node, and may add the `has-parent?`, `not-has-parent?`,
+     * `kind-eq?`, and `not-kind-eq?` node predicates. Typing reindents a line
+     * when a closing capture's match reaches the caret. A language without
+     * an indents query keeps the previous line's indentation. */
     readonly queries: Readonly<{ highlights: string; injections?: string; indents?: string }>;
     readonly comments?: LanguageComments;
     /** One list for matching, auto-closing, and surrounding. */

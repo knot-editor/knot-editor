@@ -1,0 +1,41 @@
+// Indentation cases, run through an editor view on each listed language.
+// Lines join with "\n" and "‸" marks the caret: one marker places it, two
+// select between them. A reindent case reindents the marked lines, or every
+// line without a marker, and expects `after`. An enter case presses Enter at
+// the marked selection, and a type case types `text` there one character
+// at a time, each expecting `after` with the caret at its marker.
+{
+  "languages": ["toml"],
+  "enter": [
+    {
+      "name": "between array brackets",
+      "before": ["deps = [‸]"],
+      "after": ["deps = [", "    ‸", "]"]
+    },
+    {
+      "name": "after an array element",
+      "before": ["deps = [", "    \"a\",‸", "]"],
+      "after": ["deps = [", "    \"a\",", "    ‸", "]"]
+    },
+    {
+      "name": "after a table header",
+      "before": ["[package]‸"],
+      "after": ["[package]", "‸"]
+    }
+  ],
+  "type": [
+    {
+      "name": "a closing bracket outdents",
+      "before": ["deps = [", "    \"a\",", "    ‸"],
+      "text": "]",
+      "after": ["deps = [", "    \"a\",", "]‸"]
+    }
+  ],
+  "reindent": [
+    {
+      "name": "multi-line arrays",
+      "before": ["[package]", "  name = \"a\"", "keywords = [", "\"x\",", "[", "1,", "],", "]"],
+      "after": ["[package]", "name = \"a\"", "keywords = [", "    \"x\",", "    [", "        1,", "    ],", "]"]
+    }
+  ]
+}

@@ -40,3 +40,17 @@ export const highlights = String.raw`
   "}"
 ] @punctuation.bracket
 `;
+
+// Only closing brackets branch, so a nested array opening on its own line
+// keeps its level.
+export const indents = String.raw`
+[
+  (array)
+  (inline_table)
+] @indent.begin
+
+[
+  "]"
+  "}"
+] @indent.branch
+`;

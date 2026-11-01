@@ -1,0 +1,157 @@
+// Indentation cases, run through an editor view on each listed language.
+// Lines join with "\n" and "‸" marks the caret: one marker places it, two
+// select between them. A reindent case reindents the marked lines, or every
+// line without a marker, and expects `after`. An enter case presses Enter at
+// the marked selection, and a type case types `text` there one character
+// at a time, each expecting `after` with the caret at its marker.
+{
+  "languages": ["python"],
+  "enter": [
+    { "name": "after a function header", "before": ["def f():‸"], "after": ["def f():", "    ‸"] },
+    {
+      "name": "after a nested block header",
+      "before": ["def f():", "    if x:‸"],
+      "after": ["def f():", "    if x:", "        ‸"]
+    },
+    {
+      "name": "after a statement in a block",
+      "before": ["def f():", "    a = 1‸"],
+      "after": ["def f():", "    a = 1", "    ‸"]
+    },
+    {
+      "name": "after a nested statement",
+      "before": ["def f():", "    for x in y:", "        g(x)‸"],
+      "after": ["def f():", "    for x in y:", "        g(x)", "        ‸"]
+    },
+    {
+      "name": "after return the line goes back a level",
+      "before": ["def f():", "    if x:", "        return 1‸"],
+      "after": ["def f():", "    if x:", "        return 1", "    ‸"]
+    },
+    {
+      "name": "after a top-level function's return",
+      "before": ["def f():", "    return 1‸"],
+      "after": ["def f():", "    return 1", "‸"]
+    },
+    {
+      "name": "after pass, raise, break, and continue",
+      "before": ["class A:", "    def f(self):", "        pass‸"],
+      "after": ["class A:", "    def f(self):", "        pass", "    ‸"]
+    },
+    {
+      "name": "after raise",
+      "before": ["def f():", "    if x:", "        raise E()‸"],
+      "after": ["def f():", "    if x:", "        raise E()", "    ‸"]
+    },
+    {
+      "name": "after break",
+      "before": ["for x in y:", "    if x:", "        break‸"],
+      "after": ["for x in y:", "    if x:", "        break", "    ‸"]
+    },
+    {
+      "name": "arguments align after an open parenthesis",
+      "before": ["result = call(first,‸"],
+      "after": ["result = call(first,", "              ‸"]
+    },
+    {
+      "name": "a hanging parenthesis indents one level",
+      "before": ["result = call(‸"],
+      "after": ["result = call(", "    ‸"]
+    },
+    {
+      "name": "a return's arguments keep their level",
+      "before": ["def f():", "    return call(‸"],
+      "after": ["def f():", "    return call(", "        ‸"]
+    },
+    {
+      "name": "between brackets",
+      "before": ["items = [‸]"],
+      "after": ["items = [", "    ‸", "]"]
+    },
+    {
+      "name": "inside a docstring the line's indentation is kept",
+      "before": ["def f():", "    \"\"\"Docs.‸", "    \"\"\""],
+      "after": ["def f():", "    \"\"\"Docs.", "    ‸", "    \"\"\""]
+    }
+  ],
+  "type": [
+    {
+      "name": "elif outdents to its nested if",
+      "before": ["def f():", "    if x:", "        a()", "        ‸"],
+      "text": "elif y:",
+      "after": ["def f():", "    if x:", "        a()", "    elif y:‸"]
+    },
+    {
+      "name": "else without its colon does not move yet",
+      "before": ["def f():", "    if x:", "        a()", "        ‸"],
+      "text": "else",
+      "after": ["def f():", "    if x:", "        a()", "        else‸"]
+    },
+    {
+      "name": "else outdents to its if",
+      "before": ["def f():", "    if x:", "        a()", "        ‸"],
+      "text": "else:",
+      "after": ["def f():", "    if x:", "        a()", "    else:‸"]
+    },
+    {
+      "name": "elif outdents to its if",
+      "before": ["if x:", "    a()", "    ‸"],
+      "text": "elif y:",
+      "after": ["if x:", "    a()", "elif y:‸"]
+    },
+    {
+      "name": "except and finally outdent to their try",
+      "before": ["def f():", "    try:", "        a()", "        ‸"],
+      "text": "except E:",
+      "after": ["def f():", "    try:", "        a()", "    except E:‸"]
+    },
+    {
+      "name": "finally outdents to its try",
+      "before": ["try:", "    a()", "except E:", "    b()", "    ‸"],
+      "text": "finally:",
+      "after": ["try:", "    a()", "except E:", "    b()", "finally:‸"]
+    },
+    {
+      "name": "a closing bracket outdents",
+      "before": ["items = [", "    1,", "    ‸"],
+      "text": "]",
+      "after": ["items = [", "    1,", "]‸"]
+    },
+    {
+      "name": "ordinary statements do not move",
+      "before": ["def f():", "    if x:", "        a()", "        ‸"],
+      "text": "b()",
+      "after": ["def f():", "    if x:", "        a()", "        b()‸"]
+    },
+    {
+      "name": "a variable named like a keyword does not move",
+      "before": ["def f():", "    if x:", "        a()", "        ‸"],
+      "text": "elsewhere = 1",
+      "after": ["def f():", "    if x:", "        a()", "        elsewhere = 1‸"]
+    }
+  ],
+  "reindent": [
+    {
+      // Python's indentation is its structure, so reindenting changes the
+      // indentation's size, never its shape.
+      "name": "two-space bodies become four",
+      "before": ["class A:", "  def f(self):", "    if x:", "      return 1", "    else:", "      return 2"],
+      "after": ["class A:", "    def f(self):", "        if x:", "            return 1", "        else:", "            return 2"]
+    },
+    {
+      "name": "aligned and hanging arguments",
+      "before": ["result = call(first,", "second)", "other = call(", "first,", ")"],
+      "after": ["result = call(first,", "              second)", "other = call(", "    first,", ")"]
+    },
+    {
+      "name": "lists and dictionaries",
+      "before": ["d = {", "\"a\": [", "1,", "],", "}"],
+      "after": ["d = {", "    \"a\": [", "        1,", "    ],", "}"]
+    },
+    {
+      "name": "lines inside a docstring keep their indentation",
+      "before": ["def f():", "  \"\"\"Docs.", "", "      More.", "  \"\"\"", "  return 1"],
+      "after": ["def f():", "    \"\"\"Docs.", "", "      More.", "  \"\"\"", "    return 1"]
+    }
+  ]
+}

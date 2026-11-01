@@ -1,0 +1,215 @@
+// Indentation cases, run through an editor view on each group's languages.
+// Lines join with "\n" and "‸" marks the caret: one marker places it, two
+// select between them. A reindent case reindents the marked lines, or every
+// line without a marker, and expects `after`. An enter case presses Enter at
+// the marked selection, and a type case types `text` there one character
+// at a time, each expecting `after` with the caret at its marker.
+[
+  {
+    "languages": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+    "enter": [
+      { "name": "after an unclosed function", "before": ["function f() {‸"], "after": ["function f() {", "    ‸"] },
+      {
+        "name": "between braces",
+        "before": ["function f() {‸}"],
+        "after": ["function f() {", "    ‸", "}"]
+      },
+      {
+        "name": "in an unclosed function body",
+        "before": ["function f() {", "    a();‸"],
+        "after": ["function f() {", "    a();", "    ‸"]
+      },
+      {
+        "name": "after an unclosed block inside a function",
+        "before": ["function f() {", "    if (x) {‸", "    b();", "}"],
+        "after": ["function f() {", "    if (x) {", "        ‸", "    b();", "}"]
+      },
+      {
+        "name": "after a statement",
+        "before": ["function f() {", "    const a = 1;‸", "}"],
+        "after": ["function f() {", "    const a = 1;", "    ‸", "}"]
+      },
+      {
+        "name": "after a closing brace",
+        "before": ["function f() {", "    if (x) {", "        y();", "    }‸", "}"],
+        "after": ["function f() {", "    if (x) {", "        y();", "    }", "    ‸", "}"]
+      },
+      {
+        "name": "inside an object literal",
+        "before": ["const o = {‸};"],
+        "after": ["const o = {", "    ‸", "};"]
+      },
+      {
+        "name": "between call parentheses",
+        "before": ["call(‸);"],
+        "after": ["call(", "    ‸", ");"]
+      },
+      {
+        "name": "after an arrow function's opening brace",
+        "before": ["items.forEach((item) => {‸});"],
+        "after": ["items.forEach((item) => {", "    ‸", "});"]
+      },
+      {
+        "name": "inside a template string the line's indentation is kept",
+        "before": ["const s = `", "  one‸", "`;"],
+        "after": ["const s = `", "  one", "  ‸", "`;"]
+      },
+      {
+        "name": "inside a block comment the line's indentation is kept",
+        "before": ["/**", " * Docs.‸", " */"],
+        "after": ["/**", " * Docs.", " ‸", " */"]
+      }
+    ],
+    "type": [
+      {
+        "name": "a closing brace outdents",
+        "before": ["function f() {", "    if (x) {", "        a();", "        ‸", "}"],
+        "text": "}",
+        "after": ["function f() {", "    if (x) {", "        a();", "    }‸", "}"]
+      },
+      {
+        "name": "closing a call outdents",
+        "before": ["call(", "    a,", "    ‸"],
+        "text": ");",
+        "after": ["call(", "    a,", ");‸"]
+      },
+      {
+        "name": "ordinary text does not move its line",
+        "before": ["function f() {", "        ‸", "}"],
+        "text": "a();",
+        "after": ["function f() {", "        a();‸", "}"]
+      }
+    ],
+    "reindent": [
+      {
+        "name": "functions, conditionals, and loops",
+        "before": [
+          "function f(a) {",
+          "if (a) {",
+          "for (const b of a) {",
+          "g(b);",
+          "}",
+          "} else {",
+          "h();",
+          "}",
+          "return a;",
+          "}"
+        ],
+        "after": [
+          "function f(a) {",
+          "    if (a) {",
+          "        for (const b of a) {",
+          "            g(b);",
+          "        }",
+          "    } else {",
+          "        h();",
+          "    }",
+          "    return a;",
+          "}"
+        ]
+      },
+      {
+        "name": "objects, arrays, and arguments",
+        "before": [
+          "const o = {",
+          "a: [",
+          "1,",
+          "2,",
+          "],",
+          "b: call(",
+          "x,",
+          "),",
+          "};"
+        ],
+        "after": [
+          "const o = {",
+          "    a: [",
+          "        1,",
+          "        2,",
+          "    ],",
+          "    b: call(",
+          "        x,",
+          "    ),",
+          "};"
+        ]
+      },
+      {
+        "name": "classes and methods",
+        "before": ["class A {", "m() {", "return 1;", "}", "}"],
+        "after": ["class A {", "    m() {", "        return 1;", "    }", "}"]
+      },
+      {
+        "name": "switch cases",
+        "before": ["switch (x) {", "case 1:", "a();", "break;", "default:", "b();", "}"],
+        "after": ["switch (x) {", "    case 1:", "        a();", "        break;", "    default:", "        b();", "}"]
+      },
+      {
+        "name": "arrow function callbacks",
+        "before": ["items.forEach((item) => {", "use(item);", "});"],
+        "after": ["items.forEach((item) => {", "    use(item);", "});"]
+      },
+      {
+        "name": "method chains indent one level",
+        "before": ["promise", ".then(a)", ".catch(b);"],
+        "after": ["promise", "    .then(a)", "    .catch(b);"]
+      },
+      {
+        "name": "imports",
+        "before": ["import {", "a,", "b,", "} from \"m\";"],
+        "after": ["import {", "    a,", "    b,", "} from \"m\";"]
+      },
+      {
+        "name": "lines inside a template string keep their indentation",
+        "before": ["function f() {", "const s = `", "  one", "two`;", "}"],
+        "after": ["function f() {", "    const s = `", "  one", "two`;", "}"]
+      },
+      {
+        "name": "a block comment moves with its first line",
+        "before": ["function f() {", "/**", " * Docs.", " */", "a();", "}"],
+        "after": ["function f() {", "    /**", "     * Docs.", "     */", "    a();", "}"]
+      }
+    ]
+  },
+  {
+    "languages": ["typescript", "typescriptreact"],
+    "reindent": [
+      {
+        "name": "interfaces, object types, and enums",
+        "before": ["interface A {", "a: number;", "b: {", "c: string;", "};", "}", "enum E {", "X,", "}"],
+        "after": ["interface A {", "    a: number;", "    b: {", "        c: string;", "    };", "}", "enum E {", "    X,", "}"]
+      }
+    ]
+  },
+  {
+    "languages": ["javascript", "javascriptreact", "typescriptreact"],
+    "reindent": [
+      {
+        "name": "JSX elements",
+        "before": [
+          "const e = (",
+          "<div>",
+          "<span>",
+          "{text}",
+          "</span>",
+          "<input",
+          "value={v}",
+          "/>",
+          "</div>",
+          ");"
+        ],
+        "after": [
+          "const e = (",
+          "    <div>",
+          "        <span>",
+          "            {text}",
+          "        </span>",
+          "        <input",
+          "            value={v}",
+          "        />",
+          "    </div>",
+          ");"
+        ]
+      }
+    ]
+  }
+]

@@ -2,7 +2,8 @@
 // claiming the file names, extensions, and shebang interpreters detection
 // matches. Languages that share a grammar family compose their highlight
 // queries the way nvim-treesitter's `; inherits:` does: the inherited query
-// comes first, so the more specific patterns after it win.
+// comes first, so the more specific patterns after it win. Indent queries
+// compose the same way.
 import type { LanguageDefinition } from "knot";
 import * as ecma from "./queries/ecma.js";
 import * as javascript from "./queries/javascript.js";
@@ -10,6 +11,7 @@ import * as jsx from "./queries/jsx.js";
 import * as typescript from "./queries/typescript.js";
 
 const javascriptHighlights = ecma.highlights + jsx.highlights + javascript.highlights;
+const javascriptIndents = ecma.indents + jsx.indents;
 
 // Editing data every ECMAScript language shares. JSX children comment with
 // `{/* */}`, which needs syntax-scoped configuration.
@@ -34,7 +36,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "javascript",
     fileExtensions: ["js", "mjs", "cjs"],
     interpreters: ["node"],
-    queries: { highlights: javascriptHighlights },
+    queries: { highlights: javascriptHighlights, indents: javascriptIndents },
     ...EDITING,
   },
   {
@@ -42,7 +44,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     name: "JavaScript JSX",
     grammar: "javascript",
     fileExtensions: ["jsx"],
-    queries: { highlights: javascriptHighlights },
+    queries: { highlights: javascriptHighlights, indents: javascriptIndents },
     ...EDITING,
   },
   {
@@ -51,7 +53,10 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "typescript",
     fileExtensions: ["ts", "mts", "cts"],
     interpreters: ["deno", "ts-node"],
-    queries: { highlights: ecma.highlights + typescript.highlights },
+    queries: {
+      highlights: ecma.highlights + typescript.highlights,
+      indents: ecma.indents + typescript.indents,
+    },
     ...EDITING,
   },
   {
@@ -59,7 +64,10 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     name: "TypeScript JSX",
     grammar: "tsx",
     fileExtensions: ["tsx"],
-    queries: { highlights: ecma.highlights + typescript.highlights + jsx.highlights },
+    queries: {
+      highlights: ecma.highlights + typescript.highlights + jsx.highlights,
+      indents: ecma.indents + typescript.indents + jsx.indents,
+    },
     ...EDITING,
   },
 ];

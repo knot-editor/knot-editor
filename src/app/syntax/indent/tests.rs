@@ -192,6 +192,23 @@ fn dedent_takes_back_the_level_of_a_node_starting_on_an_earlier_row() {
 }
 
 #[test]
+fn dedent_after_end_applies_only_to_lines_after_the_node() {
+    let indents = format!(
+        "{BLOCKS}(arguments) @indent.begin\n\")\" @indent.branch\n\
+         ((return_expression) @indent.dedent (#set! indent.after_end))"
+    );
+    // The line after a return goes back a level; the return's own
+    // continuation lines do not.
+    let text = "fn f() {\n    return 1\n\n}";
+    assert_eq!(line_indent(&indents, text, 2), Some(LineIndent::Columns(0)));
+    let text = "fn f() {\nreturn g(\na,\n);\n}";
+    assert_eq!(
+        reindent(&indents, text),
+        "fn f() {\n    return g(\n        a,\n    );\n}"
+    );
+}
+
+#[test]
 fn ignore_keeps_the_lines_inside_a_string() {
     let indents = &format!("{BLOCKS}(string_literal) @indent.ignore");
     let text = "fn a() {\nlet s = \"one\n  two\n three\";\n}";
