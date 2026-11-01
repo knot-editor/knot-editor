@@ -166,17 +166,19 @@ to be rebuilt later:
     [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
     [decisions](../decisions.md#editing-commands)).
 
-- **D134 — Tree-sitter indentation** (depends on D073, D074; split from D066)
-  - Language registration gains an optional `indents` query using
-    nvim-treesitter's indent captures, as Zed, Helix, and Neovim indent.
-  - Enter indents the new line from the query, and Enter between a
-    `newline` bracket pair opens an indented middle line. A Reindent command
-    reindents the selected lines. Languages without a query keep D074's
-    behavior.
-  - The bundled language packages ship queries adapted from
-    nvim-treesitter, with per-package cases run through the native
-    evaluator like `test/comments.jsonc`.
-  - 🚧 [Plan](d134-tree-sitter-indentation.md)
+- ✅ **D134 — Tree-sitter indentation**
+  - Language registrations take an optional `indents` query with
+    nvim-treesitter's captures, evaluated natively. Enter indents the new
+    line from it once the tree covers the edit, within Enter's undo step;
+    Enter between a bracket pair opens an indented middle line; typing a
+    closer such as `}` or Python's `else:` outdents its line; Reindent Lines
+    recomputes a selection. Unclosed brackets inside a parse error indent the
+    lines after them. Rust, ECMAScript, Python, and TOML ship queries with
+    `test/indents.jsonc` cases
+    ([semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
+    [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
+    [decisions](../decisions.md#indentation),
+    [extension guide](../extension-api.md#register-a-language)).
 
 - **D075 — Bracket matching and auto-closing** (depends on D073, D064)
   - Highlight the bracket matching the one at the cursor, and add a jump to
