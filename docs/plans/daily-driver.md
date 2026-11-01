@@ -154,21 +154,17 @@ to be rebuilt later:
     [decisions](../decisions.md#language-editing-configuration),
     [extension guide](../extension-api.md#register-a-language)).
 
-- **D074 — Editing commands** (depends on D073)
-  - Enter keeps the current line's indentation; language-aware adjustment
-    comes with D134's `indents` queries.
-  - Tab and Shift-Tab indent and outdent a multi-line selection.
-  - Toggle line comment (⌘/) and block comment.
-    Inside an injection, such as a fenced code block, they use the injected
-    language's editing data, which needs syntax layers to record their
-    language ID.
-  - Duplicate, delete, and move lines up/down.
-  - Join lines.
-  - Smart Home.
-  - Double-click selects a word, triple-click selects a line, and dragging
-    after either extends by that unit.
-  - Each command is one undo step.
-  - 🚧 [Plan](d074-editing-commands.md)
+- ✅ **D074 — Editing commands**
+  - Enter keeps the indentation before the caret; Tab, Shift-Tab, and
+    indent and outdent lines follow the document's detected tabs or spaces,
+    else `editor.insertSpaces`. Line and block comments toggle with the
+    language at the cursor, including inside injections. Lines copy, move,
+    delete, and join; Home is smart; words split at VS Code's separators,
+    and drags after a double- or triple-click extend by words or lines. Each
+    command is one undo step that restores its selection
+    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
+    [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
+    [decisions](../decisions.md#editing-commands)).
 
 - **D134 — Tree-sitter indentation** (depends on D073, D074; split from D066)
   - Language registration gains an optional `indents` query using
