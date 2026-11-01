@@ -329,6 +329,18 @@ complete list for that item.
     diagnostic text; before D022's language-server completion. Format on
     save builds on D115.
 
+- **D133 — TypeScript case modules for native behavior tests**
+  - Deferred: Language packages keep the cases that native code runs
+    against their registered data, such as comment toggling, as JSONC files
+    beside the package, which a generic Rust product test reads. TypeScript
+    modules would type-check the cases and share them in code, but the Rust
+    runner cannot read TypeScript without spawning Node at test time,
+    evaluating them in `build.rs`, or a test-only V8 loading path.
+  - Reconsider: More native features need per-package cases (auto-closing,
+    indentation, text objects) and untyped JSONC causes mistakes or repeated
+    cases. Then choose one of those loading paths and replace every JSONC
+    case file with TypeScript, so packages keep one format.
+
 - **D032 — Extension source maps**
   - Deferred: D018 can load built JavaScript and report generated source
     locations without mapping them back to authoring files.
