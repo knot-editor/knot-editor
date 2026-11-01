@@ -1,6 +1,6 @@
 # D073 — Language editing configuration
 
-Status: 🚧 checkpoint 1 approved; checkpoint 2 next. Item of the
+Status: 🚧 checkpoint 2 implemented, awaiting review. Item of the
 [daily-driver plan](daily-driver.md); D074 (editing commands) and D075
 (bracket matching and auto-closing) consume it.
 
@@ -116,7 +116,31 @@ tokens must be nonempty without surrounding whitespace. Open for D074: a
 syntax layer holds no language ID, so resolving an injected layer's
 configuration needs a layer-to-ID mapping.
 
-### 2. Indentation and comment evaluators
+### 2. Indentation and comment evaluators — ✅ implemented, ⏳ review gate
+
+- ✅ `EditingConfiguration::indentation_after(lines, row)` (a new empty line
+  after `row`), `indentation(lines, row)` (a line given its own text), and
+  `toggle_comments(lines)` in `src/app/languages/editing.rs`, tested in
+  `src/app/languages/editing/tests.rs`. Indentation returns a reference
+  line and a level change; comment toggling returns byte-range replacements
+  per line, so wrapping and unwrapping use the same shape.
+- Scope decisions for review:
+  - Only pairs with `newline` take part in indentation. Quotes already
+    default to `newline: false`, and a pair that is also an operator, such as
+    Rust's or TSX's `<`/`>`, sets it false so `a > b` is not a closer.
+  - Brackets and patterns read a line's code: string contents (between
+    quote pairs, with backslash escapes) and line and single-line block
+    comments are removed. A quote unclosed on its line counts as code, so a
+    Rust lifetime does not hide the rest of the line.
+  - A reference line that closes a bracket opened on an earlier line, as
+    the last line of a multi-line call does, hands its role to the line
+    holding that opener; its own trailing opener or `increase` match still
+    adds a level, so Python's `    b):` indents relative to `def f(`.
+  - `indentation` covers D074's mid-line Enter: D074 inserts the split
+    remainder as its own line and asks for its indentation, so `{|}` gives
+    `}` its opener's level; the middle line for a `newline` pair stays D074's.
+  - The opener search reads at most 500 lines up.
+
 
 - Deliverables: pure native functions for the indentation change of a new
   line after a given line, the outdent of a line from its own text, and the
