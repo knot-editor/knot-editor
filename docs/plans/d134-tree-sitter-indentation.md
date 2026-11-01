@@ -1,6 +1,6 @@
 # D134 — Tree-sitter indentation
 
-Status: 🚧 checkpoint 1 approved; checkpoint 2 next. Item of the
+Status: 🚧 checkpoint 2 awaiting review. Item of the
 [daily-driver plan](daily-driver.md); split from D066 in the
 [roadmap](../roadmap.md).
 
@@ -44,6 +44,14 @@ query keep D074's behavior.
   a moved delimiter. The editor turns columns into text with the document's
   `IndentUnit` (tabs or spaces, D074): tabs as far as they fit, then
   spaces.
+- Inside a parse error, each opening bracket of the language's bracket
+  pairs that the error leaves unclosed before the line indents it one
+  level, at most one per row, as the block it opens would. A block typed
+  before its closer is an ERROR node in every grammar: `fn main() {` alone,
+  or an `if x {` that swallows its function's closing brace, leaving the
+  function's `{` unclosed. Upstream queries patch individual cases with
+  `ERROR` patterns and otherwise rely on auto-closing; the rule covers
+  every language with bracket data.
 - The layer is the deepest one at the line's first non-blank byte, through
   `SyntaxState`, so a code fence in Markdown indents as its language. A layer
   whose language has no indent query falls back to keeping the indentation,
@@ -151,18 +159,23 @@ start, as in nvim. Packages keep cases in `test/indents.jsonc`, run by
 `src/app/product/tests/language_indents.rs`; a language with an indent
 query must have cases.
 
-### 2. Enter from the query, brackets, and blank lines
+### 2. Enter from the query, brackets, and blank lines — 🚧 awaiting review
 
 Deliverables:
 
-- Auto-indent requests after Enter: immediate when the foreground parse
-  finished, otherwise applied on background parse acceptance after
-  revalidation, joined to Enter's undo step.
-- Enter between a `newline` bracket pair, for every language with bracket
-  data.
-- Enter on a whitespace-only line clears it.
-- `enter` cases in the Rust `indents.jsonc`, including Enter inside strings
-  and comments, after a closing bracket, and between `{}`, `()`, and `[]`.
+- ✅ Auto-indent requests after Enter: immediate when the foreground parse
+  finished, otherwise applied when a background parse makes the tree
+  current at the same revision, joined to Enter's undo step through
+  `BufferModel::amend_last_edit_from_view`. Any later commit drops the
+  request.
+- ✅ Enter between a `newline` bracket pair, for every language with
+  bracket data; whitespace between the caret and the pair goes.
+- ✅ Enter on a whitespace-only line clears it.
+- ✅ `enter` cases in the Rust `indents.jsonc`, including Enter inside
+  strings and comments, after a closing bracket, between `{}`, `()`, and
+  `[]`, and in unclosed blocks and calls.
+- ✅ The unclosed-bracket rule for parse errors (see Design), which the
+  unclosed cases needed.
 
 Validation: the runner's `enter` cases; editor tests for the bracket
 middle line in a language without an indent query, the blank-line clearing,

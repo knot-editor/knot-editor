@@ -25,7 +25,10 @@ use super::{
     history::{EditGrouping, EditHistory, HistoryViewChange, HistoryViewState},
     indentation::{self, IndentStyle},
     languages::editing::EditingConfiguration,
-    syntax::{FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState, indent::LineSource},
+    syntax::{
+        FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState,
+        indent::{LineIndent, LineSource},
+    },
     theme::{Highlight, color},
 };
 
@@ -767,6 +770,78 @@ impl BufferModel {
         }
         self.commit_batch(edits, Some(view));
         Ok(true)
+    }
+
+    /// Apply `edits`, ascending and disjoint, as one public commit that joins
+    /// the last undo step, whose view then ends at `after`: an adjustment
+    /// that belongs to the edit before it, such as the indentation a line
+    /// break receives once the tree covers it.
+    pub(crate) fn amend_last_edit_from_view(
+        &mut self,
+        edits: Vec<(Range<usize>, String)>,
+        after: HistoryViewState,
+    ) -> Result<bool, BufferAccessError> {
+        assert!(self.open, "cannot edit a closed buffer");
+        if self.access_policy == BufferAccessPolicy::ReadOnly {
+            return Err(BufferAccessError::ReadOnly);
+        }
+        let edits: Vec<_> = edits
+            .into_iter()
+            .filter(|(range, text)| self.buffer.read_range(range.clone()) != *text)
+            .map(|(range, text)| crate::host::protocol::TextEdit {
+                range: ByteRange {
+                    start_byte_offset: range.start,
+                    end_byte_offset: range.end,
+                },
+                text,
+            })
+            .collect();
+        if edits.is_empty() {
+            return Ok(false);
+        }
+        let after_state = self.allocate_content_state();
+        let seq = self.buffer.edit_seq();
+        let ranges = || {
+            edits.iter().map(|edit| {
+                (
+                    edit.range.start_byte_offset..edit.range.end_byte_offset,
+                    edit.text.as_str(),
+                )
+            })
+        };
+        if !self
+            .history
+            .amend(&mut self.buffer, ranges(), after_state, Some(after))
+        {
+            let before_state = self.content_state;
+            self.history
+                .apply_batch(&mut self.buffer, ranges(), before_state, after_state, None);
+        }
+        self.content_state = after_state;
+        self.observe_committed_edits(seq);
+        let before_revision = self.revision;
+        self.advance_revision();
+        self.pending_changes.push_back(CommittedBufferChange {
+            before_revision,
+            revision: self.revision,
+            edits,
+        });
+        Ok(true)
+    }
+
+    /// Whether the syntax tree is a parse of the current text rather than an
+    /// edited parse of older text. `false` without syntax.
+    pub(crate) fn syntax_is_current(&self) -> bool {
+        self.syntax.as_ref().is_some_and(SyntaxState::is_current)
+    }
+
+    /// How `row` indents from the indent query of the language there, at
+    /// `size` columns per level and per tab stop. `None` without syntax or
+    /// an indent query.
+    pub(crate) fn line_indent(&self, row: usize, size: usize) -> Option<LineIndent> {
+        self.syntax
+            .as_ref()?
+            .line_indent(&self.buffer.snapshot(), self, row, size)
     }
 
     fn commit_batch(

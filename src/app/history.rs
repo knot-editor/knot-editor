@@ -131,6 +131,31 @@ impl EditHistory {
         });
     }
 
+    /// Apply `edits`, ascending and disjoint, as part of the last undo step,
+    /// which then ends at `after_state` with its view after at `view_after`.
+    /// `false`, applying nothing, when there is no step to extend.
+    pub(crate) fn amend<'a>(
+        &mut self,
+        buffer: &mut TextBuffer,
+        edits: impl DoubleEndedIterator<Item = (Range<usize>, &'a str)>,
+        after_state: u64,
+        view_after: Option<HistoryViewState>,
+    ) -> bool {
+        let Some(entry) = self.undo.last_mut() else {
+            return false;
+        };
+        self.redo.clear();
+        entry.group = None;
+        for (range, text) in edits.rev() {
+            entry.transaction.replace(buffer, range, text);
+        }
+        entry.after_state = after_state;
+        if let (Some(view), Some(after)) = (&mut entry.view, view_after) {
+            view.after = after;
+        }
+        true
+    }
+
     pub(crate) fn break_group(&mut self) {
         if let Some(entry) = self.undo.last_mut() {
             entry.group = None;

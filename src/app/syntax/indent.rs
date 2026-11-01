@@ -14,6 +14,11 @@
 //! `@indent.auto` node, such as a block comment, move with the node's first
 //! line, so their alignment under it survives.
 //!
+//! Inside a parse error, such as a block whose closing brace is not typed
+//! yet, each opening bracket of the language's bracket pairs that the error
+//! leaves unclosed before the line indents it one level, as the block it
+//! starts would, so typing a block before closing it indents its lines.
+//!
 //! Besides the predicates the query cursor evaluates, patterns may use
 //! `has-parent?`, `not-has-parent?`, `kind-eq?`, and `not-kind-eq?`, which
 //! compare node kinds and cannot be written as patterns.
@@ -24,6 +29,7 @@ use std::ops::Range;
 use tree_sitter::{Language, Node, Point, Query, QueryCursor, QueryMatch, QueryPredicateArg, Tree};
 
 use super::{StreamingIterator, SyntaxLanguageError, SyntaxQuery, clamp};
+use crate::app::languages::editing::Bracket;
 use crate::core::buffer::TextSnapshot;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -422,11 +428,37 @@ fn find_delimiter<'t>(node: Node<'t>, delimiter: &str, lines: &Lines) -> Option<
     Some((child, last))
 }
 
-/// How `row` indents in `tree`, whose `query` is its language's. An
-/// `injected` tree indents from the line where it starts.
+/// The rows of the opening brackets among `error`'s children that no later
+/// child before `end` closes, in order and without repeats.
+fn unclosed_rows(error: Node, brackets: &[Bracket], end: Point) -> Vec<usize> {
+    let mut open: Vec<(&str, usize)> = Vec::new();
+    let mut walk = error.walk();
+    for child in error.children(&mut walk) {
+        if child.start_position() > end {
+            break;
+        }
+        let kind = child.kind();
+        if let Some(bracket) = brackets
+            .iter()
+            .find(|bracket| bracket.open != bracket.close && bracket.open == kind)
+        {
+            open.push((&bracket.close, child.start_position().row));
+        } else if open.last().is_some_and(|(close, _)| *close == kind) {
+            open.pop();
+        }
+    }
+    let mut rows: Vec<usize> = open.into_iter().map(|(_, row)| row).collect();
+    rows.dedup();
+    rows
+}
+
+/// How `row` indents in `tree`, whose `query` is its language's and
+/// `brackets` its bracket pairs. An `injected` tree indents from the line
+/// where it starts.
 pub(super) fn evaluate(
     tree: &Tree,
     query: &IndentQuery,
+    brackets: &[Bracket],
     text: &TextSnapshot,
     lines: &Lines,
     row: usize,
@@ -570,6 +602,14 @@ pub(super) fn evaluate(
                 processed = true;
                 if absolute {
                     return LineIndent::Columns(indent.max(0) as usize);
+                }
+            }
+        }
+
+        if node.is_error() && !processed {
+            for open in unclosed_rows(node, brackets, Point::new(row, first)) {
+                if open < row && processed_rows.insert(open) {
+                    indent += size;
                 }
             }
         }

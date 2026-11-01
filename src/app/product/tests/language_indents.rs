@@ -3,7 +3,9 @@
 //!
 //! Lines join with `\n`, and `‸` marks the caret: one marker places it, two
 //! select from the first to the second. A `reindent` case reindents the
-//! marked lines, or every line without a marker, and expects `after`.
+//! marked lines, or every line without a marker, and expects `after`. An
+//! `enter` case presses Enter at the marked selection and expects `after`
+//! with the caret where its marker is.
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -20,6 +22,8 @@ struct IndentCases {
     languages: Vec<String>,
     #[serde(default)]
     reindent: Vec<IndentCase>,
+    #[serde(default)]
+    enter: Vec<IndentCase>,
 }
 
 #[derive(Deserialize)]
@@ -66,15 +70,22 @@ fn unmark(lines: &[String]) -> (String, Option<(usize, usize)>) {
     (text, selection)
 }
 
+/// `text` with `‸` at `caret`.
+fn mark(text: &str, caret: usize) -> String {
+    let mut marked = text.to_owned();
+    marked.insert(caret, CARET);
+    marked
+}
+
 /// Run `command` on `text` in `language` with the marked selection, or with
-/// everything selected, and return the resulting text.
+/// everything selected, and return the resulting text and caret.
 fn run(
     cx: &mut TestAppContext,
     language: &str,
     text: &str,
     selection: Option<(usize, usize)>,
     command: &str,
-) -> String {
+) -> (String, usize) {
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text(text);
         model.detect_indent_style();
@@ -97,7 +108,9 @@ fn run(
             view.execute_editing_command(command, window, cx);
         })
     });
-    model.read_with(cx, |model, _| model.text())
+    cx.run_until_parked();
+    let caret = cx.read(|cx| editor.read(cx).view_state(cx).caret);
+    (model.read_with(cx, |model, _| model.text()), caret)
 }
 
 #[gpui::test]
@@ -113,7 +126,20 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
             for case in &cases.reindent {
                 let (before, selection) = unmark(&case.before);
                 let expected = case.after.join("\n");
-                let actual = run(cx, id, &before, selection, "editor.reindent-lines");
+                let (actual, _) = run(cx, id, &before, selection, "editor.reindent-lines");
+                if actual != expected {
+                    failures.push(format!(
+                        "{id}: {}\n  expected:\n{expected}\n  actual:\n{actual}",
+                        case.name
+                    ));
+                }
+            }
+            for case in &cases.enter {
+                let (before, selection) = unmark(&case.before);
+                assert!(selection.is_some(), "{id}: {} marks no caret", case.name);
+                let expected = case.after.join("\n");
+                let (text, caret) = run(cx, id, &before, selection, "editor.insert-newline");
+                let actual = mark(&text, caret);
                 if actual != expected {
                     failures.push(format!(
                         "{id}: {}\n  expected:\n{expected}\n  actual:\n{actual}",

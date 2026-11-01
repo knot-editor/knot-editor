@@ -47,7 +47,6 @@ pub(crate) struct BracketPair {
 
 /// A bracket pair with its defaults resolved. A pair whose open equals its
 /// close, such as quotes, never takes part in matching.
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Bracket {
     pub(crate) open: String,

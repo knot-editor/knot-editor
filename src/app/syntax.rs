@@ -343,7 +343,6 @@ impl SyntaxState {
     /// How `row` of `text` indents, from the indent query of the deepest
     /// layer at its first non-blank byte, with `size` columns per level and
     /// per tab stop. `None` when that layer's language has no indent query.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn line_indent(
         &self,
         text: &TextSnapshot,
@@ -384,7 +383,16 @@ impl SyntaxState {
         let query = layer.language.indents.as_ref()?;
         let tree = layer.tree.as_ref()?;
         let injected = !std::ptr::eq(layer, &self.root);
-        Some(indent::evaluate(tree, query, text, lines, row, injected))
+        let brackets = &layer.language.editing.brackets;
+        Some(indent::evaluate(
+            tree, query, brackets, text, lines, row, injected,
+        ))
+    }
+
+    /// Whether the tree is a parse of the current text rather than an edited
+    /// parse of older text.
+    pub(crate) fn is_current(&self) -> bool {
+        self.current
     }
 
     /// Whether the tree lags the text and no background parse is running,

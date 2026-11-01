@@ -1,9 +1,118 @@
 // Indentation cases, run through an editor view on each listed language.
 // Lines join with "\n" and "‸" marks the caret: one marker places it, two
 // select between them. A reindent case reindents the marked lines, or every
-// line without a marker, and expects `after`.
+// line without a marker, and expects `after`. An enter case presses Enter at
+// the marked selection and expects `after` with the caret at its marker.
 {
   "languages": ["rust"],
+  "enter": [
+    { "name": "after an unclosed opening brace", "before": ["fn main() {‸"], "after": ["fn main() {", "    ‸"] },
+    {
+      "name": "in an unclosed function body",
+      "before": ["fn main() {", "    a();‸"],
+      "after": ["fn main() {", "    a();", "    ‸"]
+    },
+    {
+      "name": "after an unclosed block inside a function",
+      "before": ["fn f() {", "    let x = 1;", "    if x {‸", "    b();", "}"],
+      "after": ["fn f() {", "    let x = 1;", "    if x {", "        ‸", "    b();", "}"]
+    },
+    {
+      "name": "in an unclosed block inside a function",
+      "before": ["fn f() {", "    if x {", "        a();‸", "    b();", "}", "", "fn g() {}"],
+      "after": ["fn f() {", "    if x {", "        a();", "        ‸", "    b();", "}", "", "fn g() {}"]
+    },
+    {
+      "name": "after an unclosed parenthesis",
+      "before": ["fn f() {", "    call(a,‸", "}"],
+      "after": ["fn f() {", "    call(a,", "        ‸", "}"]
+    },
+    {
+      "name": "between braces opens a middle line",
+      "before": ["fn main() {‸}"],
+      "after": ["fn main() {", "    ‸", "}"]
+    },
+    {
+      "name": "between parentheses",
+      "before": ["fn f() {", "    call(‸);", "}"],
+      "after": ["fn f() {", "    call(", "        ‸", "    );", "}"]
+    },
+    {
+      "name": "between brackets",
+      "before": ["fn f() {", "    let v = [‸];", "}"],
+      "after": ["fn f() {", "    let v = [", "        ‸", "    ];", "}"]
+    },
+    {
+      "name": "whitespace between the pair goes",
+      "before": ["fn main() { ‸ }"],
+      "after": ["fn main() {", "    ‸", "}"]
+    },
+    {
+      "name": "after a statement",
+      "before": ["fn f() {", "    a();‸", "}"],
+      "after": ["fn f() {", "    a();", "    ‸", "}"]
+    },
+    {
+      "name": "after an over-indented statement",
+      "before": ["fn f() {", "          a();‸", "}"],
+      "after": ["fn f() {", "          a();", "    ‸", "}"]
+    },
+    {
+      "name": "after a closing brace",
+      "before": ["fn f() {", "    if x {", "        y();", "    }‸", "}"],
+      "after": ["fn f() {", "    if x {", "        y();", "    }", "    ‸", "}"]
+    },
+    {
+      "name": "after an opening brace with a trailing comment",
+      "before": ["fn f() { // body‸", "}"],
+      "after": ["fn f() { // body", "    ‸", "}"]
+    },
+    {
+      "name": "after a match opening brace",
+      "before": ["fn f(x: u8) {", "    match x {‸", "    }", "}"],
+      "after": ["fn f(x: u8) {", "    match x {", "        ‸", "    }", "}"]
+    },
+    {
+      "name": "moving arguments onto their own line",
+      "before": ["fn f() {", "    call(a, ‸b);", "}"],
+      "after": ["fn f() {", "    call(a, ", "        ‸b);", "}"]
+    },
+    {
+      "name": "moving parameters onto their own line",
+      "before": ["fn f(a: u32, ‸b: u32) {}"],
+      "after": ["fn f(a: u32, ", "    ‸b: u32) {}"]
+    },
+    {
+      "name": "a selection is replaced",
+      "before": ["fn f() {‸ a(); ‸}"],
+      "after": ["fn f() {", "    ‸", "}"]
+    },
+    {
+      "name": "a whitespace-only line keeps none of it",
+      "before": ["fn f() {", "    ‸", "}"],
+      "after": ["fn f() {", "", "    ‸", "}"]
+    },
+    {
+      "name": "inside a string the line's indentation is kept",
+      "before": ["fn f() {", "    let s = \"one‸two\";", "}"],
+      "after": ["fn f() {", "    let s = \"one", "    ‸two\";", "}"]
+    },
+    {
+      "name": "inside a block comment the line's indentation is kept",
+      "before": ["fn f() {", "    /*", "     * One.‸", "     */", "}"],
+      "after": ["fn f() {", "    /*", "     * One.", "     ‸", "     */", "}"]
+    },
+    {
+      "name": "after a line comment",
+      "before": ["fn f() {", "    // note‸", "}"],
+      "after": ["fn f() {", "    // note", "    ‸", "}"]
+    },
+    {
+      "name": "tab-indented files indent with tabs",
+      "before": ["fn f() {", "\tif x {‸", "\t}", "}"],
+      "after": ["fn f() {", "\tif x {", "\t\t‸", "\t}", "}"]
+    }
+  ],
   "reindent": [
     {
       "name": "nested blocks",

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::*;
+use crate::app::languages::editing::{BracketPair, EditingDefinition};
 use crate::app::syntax::{LanguageResolver, SyntaxLanguage, SyntaxState};
 use crate::core::buffer::TextBuffer;
 
@@ -50,13 +51,30 @@ impl LineSource for Source<'_> {
     }
 }
 
-/// Rust with `indents`, and Markdown injecting it.
+/// Rust with `indents` and its bracket pairs, and Markdown injecting it.
 fn resolver(indents: &str) -> LanguageResolver {
+    let pair = |open: &str, close: &str| BracketPair {
+        open: open.into(),
+        close: close.into(),
+        auto_close: None,
+        newline: None,
+        not_in: None,
+    };
+    let editing = EditingDefinition {
+        brackets: Some(vec![
+            pair("{", "}"),
+            pair("[", "]"),
+            pair("(", ")"),
+            pair("\"", "\""),
+        ]),
+        ..Default::default()
+    };
     let rust = Arc::new(
         SyntaxLanguage::new("rust", "", "")
             .unwrap()
             .with_indents(indents)
-            .unwrap(),
+            .unwrap()
+            .with_editing(editing.resolve()),
     );
     let markdown = Arc::new(SyntaxLanguage::new("markdown", "", MARKDOWN_INJECTIONS).unwrap());
     let by_name: HashMap<&str, Arc<SyntaxLanguage>> = [("rust", rust), ("markdown", markdown)]
@@ -352,5 +370,31 @@ fn an_injected_layer_indents_from_its_first_line_with_its_own_query() {
     assert_eq!(
         reindent_in("markdown", BLOCKS, text, 4),
         "- item\n\n  ```rust\n  fn a() {\n      b();\n  }\n  ```\n"
+    );
+}
+
+#[test]
+fn an_unclosed_bracket_in_a_parse_error_indents_the_lines_after_it() {
+    // `fn main() {` alone parses as an ERROR holding the brace.
+    assert_eq!(
+        line_indent(BLOCKS, "fn main() {\n", 1),
+        Some(LineIndent::Columns(4))
+    );
+    assert_eq!(
+        line_indent(BLOCKS, "fn main() {\n    a();\n", 2),
+        Some(LineIndent::Columns(4))
+    );
+    // An unclosed `if` takes the function's closing brace, leaving the
+    // function's opening brace unclosed in the error.
+    let text = "fn f() {\n    let x = 1;\n    if x {\n\n    b();\n}\n";
+    assert_eq!(line_indent(BLOCKS, text, 3), Some(LineIndent::Columns(8)));
+    assert_eq!(
+        reindent(BLOCKS, "fn f() {\nif x {\na();\n}\n"),
+        "fn f() {\n    if x {\n        a();\n    }\n"
+    );
+    // Closed brackets and quotes inside the error do not count.
+    assert_eq!(
+        line_indent(BLOCKS, "fn main() { let s = \"(\"; a[0];\n", 1),
+        Some(LineIndent::Columns(4))
     );
 }

@@ -1,22 +1,145 @@
-//! Indentation commands: Enter keeps the indentation, Tab inserts or indents,
+//! Indentation commands: Enter indents from the language's indent query or
+//! keeps the indentation, Tab inserts or indents,
 //! lines indent and outdent by one unit or reindent from the language's
 //! indent query, and Backspace in leading spaces deletes back to the previous
 //! tab stop.
 
 use super::*;
+use crate::app::syntax::indent::LineIndent;
+
+/// A line whose indentation waits for the indent query, valid while the
+/// buffer stays at `revision`.
+pub(super) struct PendingIndent {
+    revision: u64,
+    line: usize,
+}
 
 impl EditorView {
     /// Replace the selection with a line break followed by the indentation
-    /// before it on its line.
-    pub(super) fn insert_newline(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// before it on its line, then let the indent query correct the new
+    /// line once the tree covers the edit. Between a bracket pair that opens
+    /// lines, the break opens an indented middle line with the closer below
+    /// it. A line holding only whitespace keeps none of it.
+    pub(super) fn insert_newline(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let model = self.model.read(cx);
+        if !model.is_editable() {
+            return;
+        }
         let range = self.implicit_replacement_range(model);
-        let text = format!(
-            "\n{}",
-            leading_whitespace(&text_before_on_line(model, range.start))
-        );
+        let line_start = model.line_range(model.line_of_offset(range.start)).start;
+        let line_end = content_range(model, model.line_of_offset(range.end)).end;
+        let before = model.read(line_start..range.start);
+        let after = model.read(range.end..line_end);
+        let indent = leading_whitespace(&before).to_owned();
+        let ending = model.line_ending().to_owned();
+        let open = before.trim_end_matches([' ', '\t']);
+        let close = after.trim_start_matches([' ', '\t']);
+        let between_pair = model.editing_at(range.start).is_some_and(|editing| {
+            editing.brackets.iter().any(|bracket| {
+                bracket.newline
+                    && open.ends_with(&bracket.open)
+                    && close.starts_with(&bracket.close)
+            })
+        });
+        let (range, text, caret) = if before.trim().is_empty() && after.trim().is_empty() {
+            let text = format!("{ending}{indent}");
+            let caret = text.len();
+            (line_start..line_end, text, caret)
+        } else if between_pair {
+            let unit = self.indent_unit(model, cx);
+            let middle = indent.clone() + &unit.whitespace(unit.size);
+            let text = format!("{ending}{middle}{ending}{indent}");
+            let caret = ending.len() + middle.len();
+            let end = range.end + (after.len() - close.len());
+            (line_start + open.len()..end, text, caret)
+        } else {
+            let text = format!("{ending}{indent}");
+            let caret = text.len();
+            (range, text, caret)
+        };
+        let caret = range.start + caret;
         self.break_history_group(cx);
-        self.replace_text_with_grouping(Some(range), &text, None, window, cx);
+        let view = HistoryViewChange {
+            before: self.history_view_state(self.model.read(cx)),
+            after: HistoryViewState {
+                context: self.history_context,
+                anchor: caret,
+                caret,
+            },
+        };
+        self.preferred_x = None;
+        self.splice(range, &text, None, view, cx);
+        self.marked_range_utf16 = None;
+        (self.cursor_line, self.cursor_col) = flat_byte_to_position(self.model.read(cx), caret);
+        self.has_selection = false;
+        self.finish_position_change(cx);
+        self.pending_indent = Some(PendingIndent {
+            revision: self.model.read(cx).revision(),
+            line: self.cursor_line,
+        });
+        self.apply_pending_indent(cx);
+    }
+
+    /// Indent the line a line break left for the indent query, once the tree
+    /// is a parse of the text the break produced, as part of the break's undo
+    /// step. A later edit drops the request, leaving the indentation the
+    /// break kept.
+    pub(super) fn apply_pending_indent(&mut self, cx: &mut Context<Self>) {
+        let Some(pending) = &self.pending_indent else {
+            return;
+        };
+        let model = self.model.read(cx);
+        if model.revision() != pending.revision || model.syntax_language().is_none() {
+            self.pending_indent = None;
+            return;
+        }
+        if !model.syntax_is_current() {
+            return;
+        }
+        let line = pending.line;
+        self.pending_indent = None;
+        let unit = self.indent_unit(model, cx);
+        let Some(LineIndent::Columns(columns)) = model.line_indent(line, unit.size) else {
+            return;
+        };
+        let text = line_text(model, line);
+        let current = leading_whitespace(&text);
+        let indent = unit.whitespace(columns);
+        if indent == current {
+            return;
+        }
+        let start = to_flat_byte(model, line, 0);
+        let edits = vec![(start..start + current.len(), indent)];
+        let state = self.history_view_state(model);
+        let (anchor, caret) = (
+            map_offset(&edits, state.anchor, false),
+            map_offset(&edits, state.caret, false),
+        );
+        let after = HistoryViewState {
+            context: self.history_context,
+            anchor,
+            caret,
+        };
+        let changed = self.model.update(cx, |model, cx| {
+            let changed = model
+                .amend_last_edit_from_view(edits, after)
+                .unwrap_or(false);
+            if changed {
+                cx.notify();
+            }
+            changed
+        });
+        if !changed {
+            return;
+        }
+        let model = self.model.read(cx);
+        self.text_changed(model);
+        self.refresh(model, None);
+        (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
+        (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
+        self.has_selection = anchor != caret;
+        self.preferred_x = None;
+        self.finish_position_change(cx);
     }
 
     /// Indent the selected lines when the selection spans lines; otherwise

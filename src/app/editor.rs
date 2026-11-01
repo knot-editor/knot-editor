@@ -230,6 +230,9 @@ pub struct EditorView {
     completion_surface: Option<CompletionSurface>,
     completion_tasks: Vec<(CompletionProviderRegistrationId, Task<()>)>,
     next_completion_generation: u64,
+    /// A line Enter left for the indent query to indent, once the tree
+    /// covers the edit.
+    pending_indent: Option<indentation::PendingIndent>,
     #[cfg(test)]
     paint_count: u64,
     _model_subscription: Subscription,
@@ -443,6 +446,7 @@ impl EditorView {
                 this.apply_history_view_restore(model, restore.generation, &restore.state);
             }
             this.sync_view_position(cx);
+            this.apply_pending_indent(cx);
             cx.notify();
         });
         // Settings resolve during layout, so any change only needs a repaint.
@@ -494,6 +498,7 @@ impl EditorView {
             completion_surface: None,
             completion_tasks: Vec::new(),
             next_completion_generation: 1,
+            pending_indent: None,
             #[cfg(test)]
             paint_count: 0,
             _model_subscription: model_subscription,
