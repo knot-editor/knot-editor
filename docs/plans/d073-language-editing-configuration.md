@@ -1,7 +1,6 @@
 # D073 — Language editing configuration
 
-Status: 🚧 checkpoints 1–2 approved; checkpoint 3 implemented, awaiting
-review. Item of the
+Status: 🚧 checkpoints 1–3 approved; checkpoint 4 next. Item of the
 [daily-driver plan](daily-driver.md); D074 (editing commands) and D075
 (bracket matching and auto-closing) consume it.
 
@@ -106,43 +105,19 @@ Completed: `EditingConfiguration::toggle_comments(lines)` in
 commenting, uncommenting, wrapping, and unwrapping share one shape.
 Indentation was removed from D073 in favor of D066's `indents` queries.
 
-### 3. Bundled language data with per-package tests — ✅ implemented, review pending
+### 3. Bundled language data with per-package tests — ✅ approved
 
-Scope decisions, following Zed's language configs except where noted:
-
-- No `<`/`>` pair in Rust or ECMAScript: matching reads the bracket list, and
-  comparisons, shifts, and arrows would mismatch. Rust also has no `'` pair,
-  since lifetimes and labels outnumber character literals.
-- Quotes take `notIn: ["string", "comment"]` (template backticks only
-  `string`), so an apostrophe in a comment never auto-closes.
-- TOML inline tables `{}` and every Markdown pair have `newline: false`;
-  Markdown quotes only surround (`autoClose: false`) because of apostrophes.
-- TypeScript lists only `//`, as VS Code and Zed do, so toggling a `///`
-  triple-slash directive leaves `/ <reference …>`.
-
-- ✅ Deliverables: comments, brackets, and `autoCloseBefore` for Rust, the four
-  ECMAScript languages, Python, TOML, and Markdown.
-- Validation:
-  - ✅ Each package keeps its comment toggling cases in
-    `test/comments.jsonc`: the languages they apply to and, per case, the
-    lines before and after toggling. A generic product test
-    (`src/app/product/tests/language_editing.rs`) starts the bundled
-    packages, requires every one to load, runs each case through the
-    native toggle on the listed languages' registered configuration, and
-    fails if a language that declares comment tokens has no cases.
-    TypeScript case modules are D133. Bracket behavior cases come with
-    D075's auto-closing, as a sibling case file.
-  - ✅ Shared package tests check token shapes: nonempty tokens, and every
-    language in scope declares comments.
-- **Implementation context:**
-  - `extensions/@knot/language-{rust,typescript,python,toml,markdown}/src/languages.ts`:
-    add the fields; share the ECMAScript sets as constants within the
-    TypeScript package.
-  - `scripts/extensions/testing/languages.ts`: extend
-    `testLanguagePackage` with the shape checks, applied only to packages
-    in scope.
-- Review gate: review each package's `test/comments.jsonc` cases; add cases where review
-  finds a gap.
+Completed: Rust, the four ECMAScript languages (one shared set), Python,
+TOML, and Markdown register comments, brackets, and `autoCloseBefore` in
+their `src/languages.ts`, with the reason for each departure from Zed's
+configs beside the data: no `<` pair in Rust or ECMAScript and no `'` in
+Rust, quotes suppressed in strings and comments, and Markdown quotes that
+only surround. Each package keeps comment toggling cases in
+`test/comments.jsonc`, which `src/app/product/tests/language_editing.rs` runs
+through the native toggle on the registered configuration; it fails when a
+language with comment tokens has no cases. Bracket behavior cases come with
+D075 as a sibling case file; TypeScript case modules are D133.
+`testLanguagePackage` checks token shapes.
 
 ### 4. Documentation
 
