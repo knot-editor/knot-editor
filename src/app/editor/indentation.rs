@@ -1,6 +1,7 @@
 //! Indentation commands: Enter keeps the indentation, Tab inserts or indents,
-//! lines indent and outdent by one unit, and Backspace in leading spaces
-//! deletes back to the previous tab stop.
+//! lines indent and outdent by one unit or reindent from the language's
+//! indent query, and Backspace in leading spaces deletes back to the previous
+//! tab stop.
 
 use super::*;
 
@@ -73,6 +74,26 @@ impl EditorView {
                         String::new(),
                     )
                 })
+            })
+            .collect();
+        self.commit_line_edits(edits, cx);
+    }
+
+    /// Indent the selected lines from the indent query of the language at
+    /// each, leaving lines of a language without one as they are.
+    pub(super) fn reindent_lines(&mut self, cx: &mut Context<Self>) {
+        let model = self.model.read(cx);
+        let unit = self.indent_unit(model, cx);
+        let edits = model
+            .reindent(self.selected_lines(), unit.size)
+            .into_iter()
+            .map(|(line, columns)| {
+                let text = line_text(model, line);
+                let indent = leading_whitespace(&text).len();
+                (
+                    to_flat_byte(model, line, 0)..to_flat_byte(model, line, indent),
+                    unit.whitespace(columns),
+                )
             })
             .collect();
         self.commit_line_edits(edits, cx);

@@ -566,12 +566,16 @@ function languageInfo(definition: Knot.LanguageDefinition): Knot.LanguageInfo {
   };
 }
 
-// Fills pattern lists and injections, as `languages.get` returns them.
+// Fills pattern lists and optional queries, as `languages.get` returns them.
 function registeredLanguage(definition: Knot.LanguageDefinition): Knot.LanguageDefinition {
   return {
     ...definition,
     ...languageInfo(definition),
-    queries: { highlights: definition.queries.highlights, injections: definition.queries.injections ?? "" },
+    queries: {
+      highlights: definition.queries.highlights,
+      injections: definition.queries.injections ?? "",
+      indents: definition.queries.indents ?? "",
+    },
   };
 }
 

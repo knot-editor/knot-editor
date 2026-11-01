@@ -37,6 +37,7 @@ fn definition(id: &str, name: &str) -> LanguageDefinition {
         queries: LanguageQueries {
             highlights: "(identifier) @variable".into(),
             injections: String::new(),
+            indents: String::new(),
         },
         editing: EditingDefinition::default(),
     }
@@ -107,6 +108,16 @@ fn compile_errors_name_the_grammar_or_query() {
         Err(SyntaxLanguageError::InvalidQuery {
             query: SyntaxQuery::Injections,
             row: 0,
+            ..
+        })
+    ));
+    let mut invalid = definition("rust", "Rust");
+    invalid.queries.indents = "(block) @indent.begin\n(not_a_node) @indent.end".into();
+    assert!(matches!(
+        invalid.compile(),
+        Err(SyntaxLanguageError::InvalidQuery {
+            query: SyntaxQuery::Indents,
+            row: 1,
             ..
         })
     ));

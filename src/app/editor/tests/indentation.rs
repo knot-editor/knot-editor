@@ -4,13 +4,16 @@
 use gpui::{AppContext, TestAppContext};
 
 use super::{BufferModel, EditorView, check};
+use crate::app::languages::{self, LanguageDefinition, LanguageOwner, LanguageQueries};
 use crate::app::settings::ApplicationSettings;
+use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
 const NEWLINE: &str = "editor.insert-newline";
 const TAB: &str = "editor.insert-tab";
 const INDENT: &str = "editor.indent-lines";
 const OUTDENT: &str = "editor.outdent-lines";
 const BACKSPACE: &str = "editor.delete-backward";
+const REINDENT: &str = "editor.reindent-lines";
 
 #[gpui::test]
 fn enter_keeps_the_indentation_before_the_caret(cx: &mut TestAppContext) {
@@ -197,5 +200,78 @@ fn detected_indentation_overrides_the_setting(cx: &mut TestAppContext) {
             view.execute_editing_command(TAB, window, cx);
             assert_eq!(view.text(cx), "a\n\tb\n\tc");
         })
+    });
+}
+
+#[gpui::test]
+fn reindent_lines_is_one_step_that_keeps_the_selection_on_its_text(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        cx.set_global(ApplicationSettings::default());
+        let rust = LanguageDefinition {
+            info: LanguageInfo {
+                id: "rust".into(),
+                name: "Rust".into(),
+                grammar: "rust".into(),
+                file_extensions: Vec::new(),
+                file_names: Vec::new(),
+                interpreters: Vec::new(),
+            },
+            queries: LanguageQueries {
+                highlights: String::new(),
+                injections: String::new(),
+                indents: "(block) @indent.begin\n\"}\" @indent.branch".into(),
+            },
+            editing: Default::default(),
+        };
+        let owner = LanguageOwner {
+            extension: ExtensionId::new(1),
+            lifecycle: ExtensionLifecycleId::new(1),
+        };
+        languages::register(owner, rust.compile().unwrap(), cx);
+    });
+    let text = "fn a() {\nb();\n  c();\n}";
+    let model = cx.new(|_| BufferModel::from_text(text));
+    cx.update(|cx| languages::set_language(&model, "rust".into(), cx));
+    let plain = cx.new(|_| BufferModel::from_text(text));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    let plain = cx.new(|cx| EditorView::new(plain, cx));
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            (view.anchor_line, view.anchor_col) = (1, 1);
+            (view.cursor_line, view.cursor_col) = (2, 3);
+            view.has_selection = true;
+            view.sync_view_position(cx);
+            assert!(view.execute_editing_command(REINDENT, window, cx));
+            assert_eq!(view.text(cx), "fn a() {\n    b();\n    c();\n}");
+            assert_eq!(
+                (
+                    view.anchor_line,
+                    view.anchor_col,
+                    view.cursor_line,
+                    view.cursor_col
+                ),
+                (1, 5, 2, 5)
+            );
+
+            view.execute_editing_command("editor.undo", window, cx);
+            assert_eq!(view.text(cx), text);
+            assert_eq!(
+                (
+                    view.anchor_line,
+                    view.anchor_col,
+                    view.cursor_line,
+                    view.cursor_col
+                ),
+                (1, 1, 2, 3)
+            );
+        });
+        // Without a language, nothing changes.
+        plain.update(cx, |view, cx| {
+            view.has_selection = true;
+            (view.cursor_line, view.cursor_col) = (3, 1);
+            view.sync_view_position(cx);
+            assert!(view.execute_editing_command(REINDENT, window, cx));
+            assert_eq!(view.text(cx), text);
+        });
     });
 }

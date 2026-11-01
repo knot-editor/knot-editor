@@ -27,6 +27,7 @@ fn register(id: &str, injections: &str, comments: CommentTokens, cx: &mut gpui::
         queries: LanguageQueries {
             highlights: String::new(),
             injections: injections.into(),
+            indents: String::new(),
         },
         editing: EditingDefinition {
             comments: Some(comments),

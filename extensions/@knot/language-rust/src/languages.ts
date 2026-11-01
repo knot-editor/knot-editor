@@ -2,6 +2,7 @@
 // claiming the file names, extensions, and shebang interpreters detection
 // matches.
 import type { LanguageDefinition } from "knot";
+import * as indents from "./queries/indents.js";
 import * as injections from "./queries/injections.js";
 import * as rust from "./queries/rust.js";
 
@@ -11,7 +12,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     name: "Rust",
     grammar: "rust",
     fileExtensions: ["rs"],
-    queries: { highlights: rust.highlights, injections: injections.rust },
+    queries: { highlights: rust.highlights, injections: injections.rust, indents: indents.rust },
     comments: { line: ["//", "///", "//!"], block: ["/*", "*/"] },
     // No single quote: lifetimes and labels outnumber character literals.
     // No angle brackets: comparisons, shifts, and arrows would mismatch.

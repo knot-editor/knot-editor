@@ -1,6 +1,6 @@
 # D134 — Tree-sitter indentation
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 checkpoint 1 awaiting review. Item of the
 [daily-driver plan](daily-driver.md); split from D066 in the
 [roadmap](../roadmap.md).
 
@@ -31,15 +31,19 @@ query keep D074's behavior.
 - `@indent.align` follows nvim: when the open delimiter ends its line, the
   next line indents one level (hanging indent); otherwise lines align to the
   column after the delimiter, as PEP 8 Python continuation lines do.
-- Predicates the queries use that the Rust binding does not evaluate
-  (`has-parent?`, `not-has-parent?`, `kind-eq?`, `lua-match?`) are either
-  evaluated by the indent evaluator as general predicates or rewritten when
-  adapting, as highlights queries were normalized. The first checkpoint
-  decides per predicate; prefer rewriting when the pattern stays readable.
+- Predicates: the evaluator adds `has-parent?`, `not-has-parent?`,
+  `kind-eq?`, and `not-kind-eq?`, which compare node kinds and cannot be
+  written as patterns. `lua-match?` is rewritten to `match?` when adapting,
+  as highlights queries were, and any other unknown predicate fails to
+  compile, so a pattern never matches unconditionally.
 - The evaluator is native and pure: given a layer's tree, its language's
   compiled query, the line texts, and a line, it returns the line's
-  indentation as levels plus an optional alignment column. The editor turns
-  it into text with the document's `IndentUnit` (tabs or spaces, D074).
+  indentation in columns, as nvim does, or that the line keeps its
+  indentation or follows an earlier line. Within one reindent each line
+  sees the indentation given to the lines before it, so alignment follows
+  a moved delimiter. The editor turns columns into text with the document's
+  `IndentUnit` (tabs or spaces, D074): tabs as far as they fit, then
+  spaces.
 - The layer is the deepest one at the line's first non-blank byte, through
   `SyntaxState`, so a code fence in Markdown indents as its language. A layer
   whose language has no indent query falls back to keeping the indentation,
@@ -127,28 +131,40 @@ covered by focused unit tests against inline queries.
 
 - Per-predicate choice between native evaluation and rewriting the adapted
   queries, settled in checkpoint 1.
-- How `@indent.align` mixes tabs and spaces in a tab-indented document;
-  follow nvim (indent with the unit, then spaces to the column) unless it
+- How `@indent.align` mixes tabs and spaces in a tab-indented document:
+  checkpoint 1 follows nvim (tabs, then spaces to the column) unless it
   misbehaves in practice.
 
 ## Checkpoints
 
-### 1. Indent query, evaluator, and Reindent Lines (Rust)
+### 1. Indent query, evaluator, and Reindent Lines (Rust) — 🚧 awaiting review
 
 Deliverables:
 
-- `queries.indents` in the public declaration, bootstrap encoding, host
+- ✅ `queries.indents` in the public declaration, bootstrap encoding, host
   decoding, `LanguageQueries`, and `SyntaxLanguage`, with its own
-  `SyntaxQuery::Indents` compile error.
-- The native evaluator with every capture and property above, including
-  strings left untouched and block comments shifted as a unit.
-- `editor.reindent-lines`.
-- `@knot/language-rust` ships `indents` adapted from nvim-treesitter and
+  `SyntaxQuery::Indents` compile error; `languages.get` returns it.
+- ✅ The native evaluator (`src/app/syntax/indent.rs`) with every capture
+  and property above, including strings left untouched and block comments
+  shifted as a unit.
+- ✅ `editor.reindent-lines`. Blank lines among several selected lines stay
+  as they are; a single blank line is indented.
+- ✅ `@knot/language-rust` ships `indents` adapted from nvim-treesitter and
   `test/indents.jsonc` with reindent cases: nested blocks, `match` arms,
-  method chains, multi-line arguments (hanging and aligned), closing
-  brackets, multi-line strings and raw strings, block and doc comments, and
-  `where` clauses.
-- The generic `indents.jsonc` runner, with reindent cases only for now.
+  method chains, multi-line arguments, closing brackets, multi-line strings
+  and raw strings, block and doc comments, and `where` clauses. Upstream's
+  Rust query uses no `@indent.align`: arguments after an open parenthesis
+  indent one level, as rustfmt lays them out, rather than aligning. The
+  adaptation ignores raw strings instead of auto-indenting them and adds
+  `(block_comment) @indent.auto`.
+- ✅ The generic `indents.jsonc` runner
+  (`src/app/product/tests/language_indents.rs`), with reindent cases only
+  for now; a language that registers an indent query must have cases.
+- ✅ The package test helper checks that indent queries use only indent
+  captures and the evaluator's predicates.
+
+Notes: `@indent.zero` applies to the node at the line's first byte, which
+is the leaf token, as in nvim; a query names that token's node to use it.
 
 Validation: evaluator unit tests against inline queries for each capture
 and property; registration tests for the new query field and its compile

@@ -1,0 +1,169 @@
+// Indentation cases, run through an editor view on each listed language.
+// Lines join with "\n" and "‸" marks the caret: one marker places it, two
+// select between them. A reindent case reindents the marked lines, or every
+// line without a marker, and expects `after`.
+{
+  "languages": ["rust"],
+  "reindent": [
+    {
+      "name": "nested blocks",
+      "before": ["fn main() {", "let a = 1;", "if a > 0 {", "for i in 0..a {", "b(i);", "}", "}", "}"],
+      "after": ["fn main() {", "    let a = 1;", "    if a > 0 {", "        for i in 0..a {", "            b(i);", "        }", "    }", "}"]
+    },
+    {
+      "name": "over-indented lines come back",
+      "before": ["fn main() {", "            a();", "        }"],
+      "after": ["fn main() {", "    a();", "}"]
+    },
+    {
+      "name": "else and closing braces",
+      "before": ["fn f() {", "if a {", "b();", "} else if c {", "d();", "} else {", "e();", "}", "}"],
+      "after": ["fn f() {", "    if a {", "        b();", "    } else if c {", "        d();", "    } else {", "        e();", "    }", "}"]
+    },
+    {
+      "name": "match arms and arm blocks",
+      "before": ["fn f(x: u8) -> u8 {", "match x {", "0 => 1,", "1 => {", "let y = 2;", "y", "}", "_ => 3,", "}", "}"],
+      "after": ["fn f(x: u8) -> u8 {", "    match x {", "        0 => 1,", "        1 => {", "            let y = 2;", "            y", "        }", "        _ => 3,", "    }", "}"]
+    },
+    {
+      "name": "method chains indent one level",
+      "before": ["fn f() {", "let v = items", ".iter()", ".map(|x| x + 1)", ".collect::<Vec<_>>();", "}"],
+      "after": ["fn f() {", "    let v = items", "        .iter()", "        .map(|x| x + 1)", "        .collect::<Vec<_>>();", "}"]
+    },
+    {
+      "name": "hanging arguments and their closing parenthesis",
+      "before": ["fn f() {", "call(", "first,", "second,", ");", "}"],
+      "after": ["fn f() {", "    call(", "        first,", "        second,", "    );", "}"]
+    },
+    {
+      "name": "arguments after the open parenthesis indent one level",
+      "before": ["fn f() {", "call(first,", "second);", "}"],
+      "after": ["fn f() {", "    call(first,", "        second);", "}"]
+    },
+    {
+      "name": "multi-line parameters, arrays, and struct literals",
+      "before": [
+        "fn f(",
+        "a: u32,",
+        "b: u32,",
+        ") -> Point {",
+        "let v = [",
+        "1,",
+        "2,",
+        "];",
+        "Point {",
+        "x: a,",
+        "y: b,",
+        "}",
+        "}"
+      ],
+      "after": [
+        "fn f(",
+        "    a: u32,",
+        "    b: u32,",
+        ") -> Point {",
+        "    let v = [",
+        "        1,",
+        "        2,",
+        "    ];",
+        "    Point {",
+        "        x: a,",
+        "        y: b,",
+        "    }",
+        "}"
+      ]
+    },
+    {
+      "name": "struct, enum, impl, trait, and mod bodies",
+      "before": [
+        "mod m {",
+        "struct S {",
+        "a: u8,",
+        "}",
+        "enum E {",
+        "A,",
+        "B(u8),",
+        "}",
+        "trait T {",
+        "fn t(&self);",
+        "}",
+        "impl T for S {",
+        "fn t(&self) {}",
+        "}",
+        "}"
+      ],
+      "after": [
+        "mod m {",
+        "    struct S {",
+        "        a: u8,",
+        "    }",
+        "    enum E {",
+        "        A,",
+        "        B(u8),",
+        "    }",
+        "    trait T {",
+        "        fn t(&self);",
+        "    }",
+        "    impl T for S {",
+        "        fn t(&self) {}",
+        "    }",
+        "}"
+      ]
+    },
+    {
+      "name": "where clauses",
+      "before": ["impl<T> Show for Wrapper<T>", "where", "T: Display,", "{", "fn show(&self) {}", "}"],
+      "after": ["impl<T> Show for Wrapper<T>", "where", "    T: Display,", "{", "    fn show(&self) {}", "}"]
+    },
+    {
+      "name": "use lists",
+      "before": ["use std::{", "fmt,", "io,", "};"],
+      "after": ["use std::{", "    fmt,", "    io,", "};"]
+    },
+    {
+      "name": "lines inside a string keep their indentation",
+      "before": ["fn f() {", "let s = \"first", "  second", "third\";", "}"],
+      "after": ["fn f() {", "    let s = \"first", "  second", "third\";", "}"]
+    },
+    {
+      "name": "lines inside a raw string keep their indentation",
+      "before": ["fn f() {", "let s = r#\"", "    {", "  }", "\"#;", "}"],
+      "after": ["fn f() {", "    let s = r#\"", "    {", "  }", "\"#;", "}"]
+    },
+    {
+      "name": "a block comment moves with its first line",
+      "before": ["fn f() {", "/*", " * One.", " * Two.", " */", "a();", "}"],
+      "after": ["fn f() {", "    /*", "     * One.", "     * Two.", "     */", "    a();", "}"]
+    },
+    {
+      "name": "a doc block comment moves with its first line",
+      "before": ["mod m {", "        /**", "         * Docs.", "         */", "        fn f() {}", "}"],
+      "after": ["mod m {", "    /**", "     * Docs.", "     */", "    fn f() {}", "}"]
+    },
+    {
+      "name": "line and doc comments indent like code",
+      "before": ["fn f() {", "// note", "/// docs", "a(); // trailing", "}"],
+      "after": ["fn f() {", "    // note", "    /// docs", "    a(); // trailing", "}"]
+    },
+    {
+      "name": "only the marked lines change",
+      "before": ["fn f() {", "‸a();", "b();‸", "c();", "}"],
+      "after": ["fn f() {", "    a();", "    b();", "c();", "}"]
+    },
+    {
+      "name": "a caret reindents its own line",
+      "before": ["fn f() {", "a();", "b‸();", "}"],
+      "after": ["fn f() {", "a();", "    b();", "}"]
+    },
+    {
+      "name": "tab-indented files reindent with tabs",
+      "before": ["fn f() {", "\tif a {", "b();", "\t}", "}"],
+      "after": ["fn f() {", "\tif a {", "\t\tb();", "\t}", "}"]
+    },
+    {
+      "name": "blank lines among several stay as they are",
+      "before": ["fn f() {", "a();", "", "b();", "}"],
+      "after": ["fn f() {", "    a();", "", "    b();", "}"]
+    }
+  ]
+}

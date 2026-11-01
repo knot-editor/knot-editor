@@ -77,6 +77,16 @@ impl IndentUnit {
         }
     }
 
+    /// Leading whitespace spanning `columns`: as many tabs as fit and then
+    /// spaces, or only spaces.
+    pub(crate) fn whitespace(&self, columns: usize) -> String {
+        if self.tabs {
+            "\t".repeat(columns / self.size) + &" ".repeat(columns % self.size)
+        } else {
+            " ".repeat(columns)
+        }
+    }
+
     /// The column and text that indent `line` by one level. Spaces go after
     /// the existing indentation and round it up to the next tab stop.
     pub(crate) fn indent(&self, line: &str) -> (usize, String) {

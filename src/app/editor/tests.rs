@@ -288,6 +288,7 @@ fn tab_stops_follow_the_settings_for_each_open_view(cx: &mut TestAppContext) {
             queries: languages::LanguageQueries {
                 highlights: "(identifier) @variable".into(),
                 injections: String::new(),
+                indents: String::new(),
             },
             editing: Default::default(),
         };

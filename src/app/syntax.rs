@@ -1,8 +1,9 @@
-//! Native syntax highlighting: compiled-in grammars, per-buffer incremental
-//! parse state, and visible-range highlight queries.
+//! Native syntax highlighting and indentation: compiled-in grammars,
+//! per-buffer incremental parse state, visible-range highlight queries, and
+//! line indentation from `indents` queries.
 //!
-//! A `SyntaxLanguage` pairs a grammar with its compiled highlight and
-//! injection queries. A `SyntaxState` keeps a tree of parse layers per
+//! A `SyntaxLanguage` pairs a grammar with its compiled highlight,
+//! injection, and optional indent queries. A `SyntaxState` keeps a tree of parse layers per
 //! buffer: the buffer's own language at the root, and beneath it every region
 //! an injection query hands to another language, such as a Markdown code
 //! fence or an HTML `<script>` element, nested as deeply as the queries
@@ -28,6 +29,7 @@
 //! paints over the layer that hosts it.
 
 pub(crate) mod grammars;
+pub(crate) mod indent;
 
 use std::{
     ops::{ControlFlow, Range},
@@ -73,7 +75,7 @@ fn next_generation() -> u64 {
 /// same `Arc` for a name lets an injection found again reuse its tree.
 pub(crate) type LanguageResolver = Arc<dyn Fn(&str) -> Option<Arc<SyntaxLanguage>> + Send + Sync>;
 
-/// A grammar and the queries that highlight it.
+/// A grammar and the queries that highlight and indent it.
 pub(crate) struct SyntaxLanguage {
     grammar: Language,
     highlights: Query,
@@ -90,6 +92,8 @@ pub(crate) struct SyntaxLanguage {
     injection_patterns: Vec<InjectionPattern>,
     /// The editing data of the registration this language compiled from.
     editing: Arc<EditingConfiguration>,
+    /// `None` when the language registers no indent query.
+    indents: Option<indent::IndentQuery>,
 }
 
 struct InjectionPattern {
@@ -104,6 +108,7 @@ struct InjectionPattern {
 pub(crate) enum SyntaxQuery {
     Highlights,
     Injections,
+    Indents,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -174,6 +179,16 @@ impl SyntaxLanguage {
             injections,
             injection_patterns,
             editing: Default::default(),
+            indents: None,
+        })
+    }
+
+    /// This language with an indent query, compiled from `source`; an empty
+    /// query leaves it without one.
+    pub(crate) fn with_indents(self, source: &str) -> Result<Self, SyntaxLanguageError> {
+        Ok(Self {
+            indents: indent::IndentQuery::new(&self.grammar, source)?,
+            ..self
         })
     }
 
@@ -309,6 +324,11 @@ impl SyntaxState {
     /// The language of the deepest layer that parses the text at `offset`,
     /// such as a code fence's language inside Markdown.
     pub(crate) fn language_at(&self, offset: usize) -> &Arc<SyntaxLanguage> {
+        &self.layer_at(offset).language
+    }
+
+    /// The deepest layer that parses the text at `offset`.
+    fn layer_at(&self, offset: usize) -> &Layer {
         let mut layer = &self.root;
         while let Some(injection) = layer
             .injections
@@ -317,7 +337,54 @@ impl SyntaxState {
         {
             layer = injection;
         }
-        &layer.language
+        layer
+    }
+
+    /// How `row` of `text` indents, from the indent query of the deepest
+    /// layer at its first non-blank byte, with `size` columns per level and
+    /// per tab stop. `None` when that layer's language has no indent query.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn line_indent(
+        &self,
+        text: &TextSnapshot,
+        lines: &dyn indent::LineSource,
+        row: usize,
+        size: usize,
+    ) -> Option<indent::LineIndent> {
+        self.indent_row(text, &indent::Lines::new(lines, size), row)
+    }
+
+    /// The rows of `rows` whose indentation changes, with their new columns
+    /// at `size` columns per level and per tab stop. Each row is indented as
+    /// though the rows before it already were; a row whose layer has no
+    /// indent query, or that holds only whitespace among several rows, is
+    /// left as it is.
+    pub(crate) fn reindent(
+        &self,
+        text: &TextSnapshot,
+        lines: &dyn indent::LineSource,
+        rows: Range<usize>,
+        size: usize,
+    ) -> Vec<(usize, usize)> {
+        let mut indented = indent::Lines::new(lines, size);
+        indent::reindent(&mut indented, rows, |lines, row| {
+            self.indent_row(text, lines, row)
+        })
+    }
+
+    fn indent_row(
+        &self,
+        text: &TextSnapshot,
+        lines: &indent::Lines,
+        row: usize,
+    ) -> Option<indent::LineIndent> {
+        let line = lines.line(row);
+        let offset = lines.line_start(row) + indent::leading_whitespace(&line);
+        let layer = self.layer_at(offset);
+        let query = layer.language.indents.as_ref()?;
+        let tree = layer.tree.as_ref()?;
+        let injected = !std::ptr::eq(layer, &self.root);
+        Some(indent::evaluate(tree, query, text, lines, row, injected))
     }
 
     /// Whether the tree lags the text and no background parse is running,

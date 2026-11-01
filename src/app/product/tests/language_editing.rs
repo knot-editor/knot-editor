@@ -56,7 +56,7 @@ fn read_cases(path: &Path) -> CommentCases {
 
 /// Start every bundled package with an empty personal config and no
 /// installed packages, and require that each one loaded.
-fn start_bundled_packages(cx: &mut TestAppContext) {
+pub(super) fn start_bundled_packages(cx: &mut TestAppContext) {
     let config = tempfile::tempdir().unwrap();
     let extensions = tempfile::tempdir().unwrap();
     install_globals(cx);

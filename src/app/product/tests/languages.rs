@@ -27,6 +27,14 @@ if (invalid.code !== "InvalidQuery" || invalid.details.query !== "highlights"
     || invalid.details.row !== 1) {
   throw new Error(JSON.stringify(invalid.details));
 }
+const invalidIndents = await failure(() => languages.register({
+  id: "rust", name: "Rust", grammar: "rust",
+  queries: { highlights: "", indents: "(block) @indent.begin\n((block) @x (#lua-match? @x \"a\"))" },
+}));
+if (invalidIndents.code !== "InvalidQuery" || invalidIndents.details.query !== "indents"
+    || invalidIndents.details.row !== 1) {
+  throw new Error(JSON.stringify(invalidIndents.details));
+}
 const typeError = await failure(() => languages.register({
   id: "rust", name: "Rust", grammar: "rust", fileExtensions: [".rs"], queries: { highlights: "" },
 }));
@@ -43,7 +51,8 @@ for (const editing of [
   if (!(error instanceof TypeError)) throw error;
 }
 await languages.register({
-  id: "edited", name: "Edited", grammar: "python", queries: { highlights: "" },
+  id: "edited", name: "Edited", grammar: "python",
+  queries: { highlights: "", indents: "(block) @indent.begin" },
   comments: { line: ["#"], block: ['"""', '"""'] },
   brackets: [{ open: "(", close: ")" }, { open: "'", close: "'", notIn: ["string"] }],
   autoCloseBefore: ";)",
@@ -51,7 +60,7 @@ await languages.register({
 const edited = await languages.get("edited");
 const expected = {
   id: "edited", name: "Edited", grammar: "python", fileExtensions: [], fileNames: [],
-  interpreters: [], queries: { highlights: "", injections: "" },
+  interpreters: [], queries: { highlights: "", injections: "", indents: "(block) @indent.begin" },
   comments: { line: ["#"], block: ['"""', '"""'] },
   brackets: [{ open: "(", close: ")" }, { open: "'", close: "'", notIn: ["string"] }],
   autoCloseBefore: ";)",

@@ -195,8 +195,12 @@ declare module "knot" {
     readonly name: string;
     readonly grammar: string;
     /** Tree-sitter queries using nvim-treesitter capture names. Injections
-     * name languages by ID, or by a registered file extension such as "py". */
-    readonly queries: Readonly<{ highlights: string; injections?: string }>;
+     * name languages by ID, or by a registered file extension such as "py".
+     * Indents use nvim-treesitter's `@indent.*` captures and properties, and
+     * may add the `has-parent?`, `not-has-parent?`, `kind-eq?`, and
+     * `not-kind-eq?` node predicates; a language without one keeps the
+     * previous line's indentation. */
+    readonly queries: Readonly<{ highlights: string; injections?: string; indents?: string }>;
     readonly comments?: LanguageComments;
     /** One list for matching, auto-closing, and surrounding. */
     readonly brackets?: readonly BracketPair[];
@@ -219,8 +223,8 @@ declare module "knot" {
      * before resolution.
      * @throws TypeError for invalid fields, including empty comment or
      * bracket tokens and tokens with surrounding whitespace; HostError with
-     * UnknownGrammar, InvalidQuery (details: query "highlights" or
-     * "injections", message, and the 0-indexed row and column), or
+     * UnknownGrammar, InvalidQuery (details: query "highlights",
+     * "injections", or "indents", message, and the 0-indexed row and column), or
      * Cancelled. */
     register(definition: LanguageDefinition): Promise<Disposable>;
     /**
@@ -234,7 +238,7 @@ declare module "knot" {
     associate(id: string, patterns: LanguagePatterns): Promise<Disposable>;
     /** The registration that defines `id`, queries and editing data
      * included, so a derived language spreads it and changes a key. Pattern
-     * lists and injections are present; editing fields are as registered. */
+     * lists and every query are present; editing fields are as registered. */
     get(id: string): Promise<LanguageDefinition | null>;
     /** The language each registered ID resolves to, sorted by ID. */
     list(): Promise<readonly LanguageInfo[]>;

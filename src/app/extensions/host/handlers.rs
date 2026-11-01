@@ -2208,6 +2208,7 @@ impl LanguageError {
                 query: match query {
                     SyntaxQuery::Highlights => "highlights",
                     SyntaxQuery::Injections => "injections",
+                    SyntaxQuery::Indents => "indents",
                 }
                 .into(),
                 message,
@@ -2232,9 +2233,10 @@ impl HostArguments for LanguageDefinition {
             queries: LanguageQueries {
                 highlights: reader.text(8, "highlights query must be text")?,
                 injections: reader.text(9, "injections query must be text")?,
+                indents: reader.text(10, "indents query must be text")?,
             },
             editing: serde_json::from_value::<EditingDefinition>(setting_value(
-                reader.command_arguments(10)?,
+                reader.command_arguments(11)?,
             ))
             .map_err(|_| DecodeError::Type("invalid language editing data"))?,
         })

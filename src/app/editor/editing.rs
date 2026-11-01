@@ -91,6 +91,10 @@ impl EditorView {
                 self.outdent_lines(cx);
                 return true;
             }
+            commands::REINDENT_LINES_COMMAND => {
+                self.reindent_lines(cx);
+                return true;
+            }
             commands::COPY_LINES_UP_COMMAND | commands::COPY_LINES_DOWN_COMMAND => {
                 self.copy_lines(command == commands::COPY_LINES_DOWN_COMMAND, cx);
                 return true;

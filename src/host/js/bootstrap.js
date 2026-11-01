@@ -932,9 +932,12 @@ export async function registerLanguage(definition) {
   const injections = queries.injections === undefined
     ? ""
     : string(queries.injections, "injections query must be text");
+  const indents = queries.indents === undefined
+    ? ""
+    : string(queries.indents, "indents query must be text");
   const editing = languageEditing(value);
   const registration = await request("registerLanguage", id, name, grammar, fileExtensions,
-    fileNames, interpreters, highlights, injections, editing);
+    fileNames, interpreters, highlights, injections, indents, editing);
   const owned = ownership(() => {}, () => request("unregisterLanguage", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }

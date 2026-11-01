@@ -25,7 +25,7 @@ use super::{
     history::{EditGrouping, EditHistory, HistoryViewChange, HistoryViewState},
     indentation::{self, IndentStyle},
     languages::editing::EditingConfiguration,
-    syntax::{FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState},
+    syntax::{FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState, indent::LineSource},
     theme::{Highlight, color},
 };
 
@@ -529,6 +529,15 @@ impl BufferModel {
         self.syntax
             .as_ref()
             .map(|syntax| Arc::clone(syntax.language_at(offset).editing()))
+    }
+
+    /// The rows of `rows` whose indentation the language's indent query
+    /// changes, with their new columns at `size` columns per level and per
+    /// tab stop. Empty without a syntax state.
+    pub(crate) fn reindent(&self, rows: Range<usize>, size: usize) -> Vec<(usize, usize)> {
+        self.syntax.as_ref().map_or_else(Vec::new, |syntax| {
+            syntax.reindent(&self.buffer.snapshot(), self, rows, size)
+        })
     }
 
     /// The language the current syntax state parses, if any.
@@ -1232,3 +1241,17 @@ impl Default for BufferSubscriptionRegistry {
 
 #[cfg(test)]
 mod tests;
+
+impl LineSource for BufferModel {
+    fn line(&self, row: usize) -> String {
+        let mut line = self.buffer.read_range(self.line_range(row));
+        if line.ends_with('\r') && row + 1 < self.line_count() {
+            line.pop();
+        }
+        line
+    }
+
+    fn line_start(&self, row: usize) -> usize {
+        self.line_range(row).start
+    }
+}

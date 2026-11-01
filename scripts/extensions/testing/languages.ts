@@ -17,6 +17,14 @@ const SUPPORTED_PREDICATES = new Set([
 
 const INJECTION_CAPTURES = new Set(["injection.content", "injection.language"]);
 
+const INDENT_CAPTURES = new Set([
+  "indent.auto", "indent.begin", "indent.end", "indent.dedent",
+  "indent.branch", "indent.ignore", "indent.align", "indent.zero",
+]);
+
+/** Node predicates the indent evaluator adds to the engine's. */
+const INDENT_PREDICATES = new Set(["#has-parent?", "#not-has-parent?", "#kind-eq?", "#not-kind-eq?"]);
+
 /** A query's source without comments and string literals. */
 function code(query: string): string {
   return query.replace(/"(?:[^"\\]|\\.)*"|;[^\n]*/g, (token) => (token.startsWith('"') ? '""' : ""));
@@ -101,9 +109,21 @@ export function testLanguagePackage(
     }
   });
 
+  test("indent queries capture only indent names", () => {
+    for (const { id, kind, source } of queries(definitions)) {
+      if (kind !== "indents") continue;
+      const unknown = [...captures(source)].filter(
+        (name) => !name.startsWith("_") && !INDENT_CAPTURES.has(name),
+      );
+      assert.deepEqual(unknown, [], `${id} indents`);
+    }
+  });
+
   test("queries use only predicates the native engine evaluates", () => {
     for (const { id, kind, source } of queries(definitions)) {
-      const unsupported = [...predicates(source)].filter((name) => !SUPPORTED_PREDICATES.has(name));
+      const unsupported = [...predicates(source)].filter(
+        (name) => !SUPPORTED_PREDICATES.has(name) && !(kind === "indents" && INDENT_PREDICATES.has(name)),
+      );
       assert.deepEqual(unsupported, [], `${id} ${kind}`);
     }
   });

@@ -8,6 +8,7 @@ mod extension_restart;
 mod git_status;
 mod keybindings;
 mod language_editing;
+mod language_indents;
 mod languages;
 mod navigation;
 mod observation;
