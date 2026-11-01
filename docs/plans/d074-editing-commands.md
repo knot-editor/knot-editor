@@ -1,6 +1,6 @@
 # D074 — Editing commands
 
-Status: 🚧 in progress: checkpoint 1 awaits its review gate. Item of the
+Status: 🚧 in progress: checkpoint 1 approved; checkpoint 2 is next. Item of the
 [daily-driver plan](daily-driver.md); builds on D073's
 [language editing configuration](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
@@ -86,43 +86,17 @@ one undo step that restores the selection it started from.
 
 ## Checkpoints
 
-### 1. Batch commits and indentation — ✅ implemented, awaiting review
+### 1. Batch commits and indentation — ✅ approved
 
-- Deliverables: the batch commit with view state; `editor.insertSpaces` and
-  per-document detection; Enter, Tab, Shift-Tab, indent and outdent lines,
-  and Backspace to the previous tab stop, with their bindings.
-- Validation: model tests that a batch is one undo step and restores the
-  selection; detection unit tests (tabs, spaces, mixed, no indentation,
-  ` *` block-comment continuations not counting as space indentation);
-  editor view tests for each command in both styles, including selections
-  ending at column 0 and undo after each; keymap tables on all three
-  platforms.
-- **Implementation context:**
-  - `src/app/model.rs`: add a batch commit beside `apply_edits` that takes
-    a `HistoryViewChange` (`src/app/history.rs`), mirroring
-    `replace_from_view`.
-  - `src/app/settings.rs`: define `editor.insertSpaces` beside
-    `EDITOR_TAB_SIZE` and a resolver like `editor_tab_size`.
-  - Detection runs where `src/app/documents.rs` calls
-    `languages::detect_document`; the detected style is buffer state on
-    `BufferModel`.
-  - `src/app/editor/editing.rs`: the `INSERT_NEWLINE_COMMAND`,
-    `INSERT_TAB_COMMAND`, and `DELETE_BACKWARD_COMMAND` arms; new commands
-    in `src/app/editor/native_commands.rs`.
-  - `src/app/commands/keymaps/presets.rs` and its tests.
-- Review gate: try indentation in tab- and space-indented files.
-- Notes:
-  - ✅ `BufferModel::apply_edits_from_view` commits a command's edits as one
-    undo step; `EditorView::commit_edits` and `map_offset` are the shared
-    path for every later line command.
-  - ✅ `editor.insertSpaces` and detection (`src/app/indentation.rs`): a
-    style must indent at least twice as many lines as the other; one-space
-    alignment and ` *` continuations do not count. Detection reads the first
-    10,000 lines when a document with a resource enters the collection.
-  - ✅ Shift-Tab binds `editor.outdent-lines` rather than a separate
-    command, since it always outdents the selected lines.
-  - ✅ Enter copies the indentation before the caret, so Enter inside
-    leading whitespace splits it as VS Code does.
+Commands commit through `BufferModel::apply_edits_from_view` and
+`EditorView::commit_edits` (with `map_offset`), one undo step restoring the
+selection; later checkpoints reuse that path. `editor.insertSpaces` and
+detection live in `src/app/indentation.rs`: a style wins when it indents at
+least twice as many of the first 10,000 lines as the other, ignoring
+one-space alignment and ` *` continuations, and only documents with a
+resource detect. Shift-Tab binds `editor.outdent-lines`; Enter copies the
+indentation before the caret. Checkpoint 5 moves these rules into the
+editor views reference and decisions.
 
 ### 2. Comment toggling
 
