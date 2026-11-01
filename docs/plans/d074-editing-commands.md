@@ -1,6 +1,6 @@
 # D074 — Editing commands
 
-Status: 🚧 in progress: checkpoint 4 awaits its review gate. Item of the
+Status: 🚧 in progress: checkpoints 1–4 approved; checkpoint 5 is next. Item of the
 [daily-driver plan](daily-driver.md); builds on D073's
 [language editing configuration](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
@@ -122,29 +122,17 @@ whitespace and leaves the caret at the join. Smart Home binds home,
 shift-home, ⌘←, and ⇧⌘←, while ctrl-a keeps column 0. Checkpoint 5 moves
 these rules into the editor views reference and decisions.
 
-### 4. Unit drag — ✅ implemented, awaiting review
+### 4. Unit drag — ✅ approved
 
-- Deliverables: dragging after a double- or triple-click extends by words
-  or lines.
-- Validation: editor view tests that drive mouse down with `click_count`
-  2 and 3 and then mouse moves, in both directions.
-- **Implementation context:** `src/app/editor/input.rs`, `on_mouse_down`
-  and `on_mouse_move`; the drag keeps its unit next to `drag_anchor`.
-- Review gate: try word and line drags.
-- Notes:
-  - ✅ `drag_anchor` became a `DragAnchor` holding the unit and the clicked
-    unit's range. A drag keeps the clicked word or line selected and
-    extends to the far edge of the unit under the pointer, in either
-    direction; character drags are the same rule with an empty unit.
-    Shift-click still extends by characters.
-  - ✅ Review feedback: Unicode word segmentation kept `some.thing` and
-    `a:b` as one word. Words now follow VS Code's default word separators
-    (`text::word_segments`): each run of separators is its own unit,
-    splitting the Unicode segments, while word characters keep Unicode
-    segmentation for ideographs and emoji. Double-click, word drags, and
-    word movement share the definition; movement stops at word and
-    separator-run edges and skips whitespace. Per-language word characters
-    stay with D131.
+A `DragAnchor` keeps the clicked word or line selected and extends to the
+far edge of the unit under the pointer in either direction; shift-click
+still extends by characters. Review found that Unicode word segmentation
+kept `some.thing` and `a:b` as one word, so words now follow VS Code's
+default word separators (`text::word_segments`): each separator run is its
+own unit and word characters keep Unicode segmentation. Double-click, word
+drags, and word movement share that definition; per-language word
+characters stay with D131. Checkpoint 5 moves these rules into the editor
+views reference and decisions.
 
 ### 5. Documentation
 
