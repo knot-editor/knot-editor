@@ -11,6 +11,22 @@ import * as typescript from "./queries/typescript.js";
 
 const javascriptHighlights = ecma.highlights + jsx.highlights + javascript.highlights;
 
+// Editing data every ECMAScript language shares. JSX children comment with
+// `{/* */}`, which needs syntax-scoped configuration.
+const EDITING = {
+  comments: { line: ["//"], block: ["/*", "*/"] },
+  // No angle brackets: comparisons and arrows would mismatch.
+  brackets: [
+    { open: "{", close: "}" },
+    { open: "[", close: "]" },
+    { open: "(", close: ")" },
+    { open: '"', close: '"', notIn: ["string", "comment"] },
+    { open: "'", close: "'", notIn: ["string", "comment"] },
+    { open: "`", close: "`", notIn: ["string"] },
+  ],
+  autoCloseBefore: ";:.,=}])>",
+} as const satisfies Partial<LanguageDefinition>;
+
 export const LANGUAGES: readonly LanguageDefinition[] = [
   {
     id: "javascript",
@@ -19,6 +35,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     fileExtensions: ["js", "mjs", "cjs"],
     interpreters: ["node"],
     queries: { highlights: javascriptHighlights },
+    ...EDITING,
   },
   {
     id: "javascriptreact",
@@ -26,6 +43,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "javascript",
     fileExtensions: ["jsx"],
     queries: { highlights: javascriptHighlights },
+    ...EDITING,
   },
   {
     id: "typescript",
@@ -34,6 +52,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     fileExtensions: ["ts", "mts", "cts"],
     interpreters: ["deno", "ts-node"],
     queries: { highlights: ecma.highlights + typescript.highlights },
+    ...EDITING,
   },
   {
     id: "typescriptreact",
@@ -41,5 +60,6 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "tsx",
     fileExtensions: ["tsx"],
     queries: { highlights: ecma.highlights + typescript.highlights + jsx.highlights },
+    ...EDITING,
   },
 ];

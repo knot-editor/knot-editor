@@ -13,6 +13,19 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "markdown",
     fileExtensions: ["md", "markdown", "mkd"],
     queries: { highlights: markdown.highlights, injections: injections.markdown },
+    comments: { block: ["<!--", "-->"] },
+    // Prose: Enter never opens a middle line, and quotes only surround,
+    // since apostrophes would auto-close.
+    brackets: [
+      { open: "{", close: "}", newline: false },
+      { open: "[", close: "]", newline: false },
+      { open: "(", close: ")", newline: false },
+      { open: "<", close: ">", newline: false },
+      { open: "`", close: "`" },
+      { open: '"', close: '"', autoClose: false },
+      { open: "'", close: "'", autoClose: false },
+    ],
+    autoCloseBefore: ";:.,=}])>",
   },
   {
     // Markdown's inline syntax, which Markdown injects into each paragraph.

@@ -12,5 +12,15 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "rust",
     fileExtensions: ["rs"],
     queries: { highlights: rust.highlights, injections: injections.rust },
+    comments: { line: ["//", "///", "//!"], block: ["/*", "*/"] },
+    // No single quote: lifetimes and labels outnumber character literals.
+    // No angle brackets: comparisons, shifts, and arrows would mismatch.
+    brackets: [
+      { open: "{", close: "}" },
+      { open: "[", close: "]" },
+      { open: "(", close: ")" },
+      { open: '"', close: '"', notIn: ["string", "comment"] },
+    ],
+    autoCloseBefore: ";:.,=}])>",
   },
 ];

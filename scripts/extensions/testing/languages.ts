@@ -36,9 +36,42 @@ function queries(definitions: readonly LanguageDefinition[]) {
   );
 }
 
-/** Checks one package's registrations and the queries it ships. */
-export function testLanguagePackage(start: () => Promise<void>, definitions: readonly LanguageDefinition[]) {
+/** A token is nonempty and carries no surrounding whitespace. */
+function assertToken(token: string, message: string) {
+  assert.ok(token.length > 0 && token.trim() === token, `${message}: ${JSON.stringify(token)}`);
+}
+
+/** Checks one package's registrations and the queries it ships. `editing`
+ * names the languages that must declare comment tokens. */
+export function testLanguagePackage(
+  start: () => Promise<void>,
+  definitions: readonly LanguageDefinition[],
+  editing: readonly string[] = [],
+) {
   beforeEach(() => host.reset());
+
+  test("editing languages declare comments", () => {
+    const ids = definitions.map((language) => language.id);
+    for (const id of editing) {
+      assert.ok(ids.includes(id), `${id} is not registered`);
+      const { comments } = definitions.find((language) => language.id === id)!;
+      assert.ok((comments?.line?.length ?? 0) > 0 || comments?.block !== undefined, `${id} comments`);
+    }
+  });
+
+  test("editing tokens are nonempty and unpadded, and bracket opens are unique", () => {
+    for (const { id, comments, brackets } of definitions) {
+      for (const token of [...(comments?.line ?? []), ...(comments?.block ?? [])]) {
+        assertToken(token, `${id} comment`);
+      }
+      for (const { open, close } of brackets ?? []) {
+        assertToken(open, `${id} bracket`);
+        assertToken(close, `${id} bracket`);
+      }
+      const opens = (brackets ?? []).map((bracket) => bracket.open);
+      assert.deepEqual(opens.filter((open, index) => opens.indexOf(open) !== index), [], `${id} brackets`);
+    }
+  });
 
   test("registers every language before start resolves", async () => {
     await start();

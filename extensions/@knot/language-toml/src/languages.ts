@@ -12,5 +12,14 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     fileExtensions: ["toml"],
     fileNames: ["Cargo.lock", "Pipfile"],
     queries: { highlights: toml.highlights },
+    comments: { line: ["#"] },
+    brackets: [
+      // Inline tables stay on one line.
+      { open: "{", close: "}", newline: false },
+      { open: "[", close: "]" },
+      { open: '"', close: '"', notIn: ["string", "comment"] },
+      { open: "'", close: "'", notIn: ["string", "comment"] },
+    ],
+    autoCloseBefore: ",]}",
   },
 ];

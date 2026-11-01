@@ -12,5 +12,15 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     fileExtensions: ["py", "pyi", "pyw"],
     interpreters: ["python", "python3"],
     queries: { highlights: python.highlights },
+    // Docstrings are strings, not block comments.
+    comments: { line: ["#"] },
+    brackets: [
+      { open: "{", close: "}" },
+      { open: "[", close: "]" },
+      { open: "(", close: ")" },
+      { open: '"', close: '"', notIn: ["string", "comment"] },
+      { open: "'", close: "'", notIn: ["string", "comment"] },
+    ],
+    autoCloseBefore: ";:.,=}])>",
   },
 ];

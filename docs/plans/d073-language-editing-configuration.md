@@ -1,6 +1,7 @@
 # D073 — Language editing configuration
 
-Status: 🚧 checkpoints 1–2 approved; checkpoint 3 next. Item of the
+Status: 🚧 checkpoints 1–2 approved; checkpoint 3 implemented, awaiting
+review. Item of the
 [daily-driver plan](daily-driver.md); D074 (editing commands) and D075
 (bracket matching and auto-closing) consume it.
 
@@ -105,12 +106,25 @@ Completed: `EditingConfiguration::toggle_comments(lines)` in
 commenting, uncommenting, wrapping, and unwrapping share one shape.
 Indentation was removed from D073 in favor of D066's `indents` queries.
 
-### 3. Bundled language data with per-language behavior tests
+### 3. Bundled language data with per-language behavior tests — ✅ implemented, review pending
 
-- Deliverables: comments, brackets, and `autoCloseBefore` for Rust, the four
+Scope decisions, following Zed's language configs except where noted:
+
+- No `<`/`>` pair in Rust or ECMAScript: matching reads the bracket list, and
+  comparisons, shifts, and arrows would mismatch. Rust also has no `'` pair,
+  since lifetimes and labels outnumber character literals.
+- Quotes take `notIn: ["string", "comment"]` (template backticks only
+  `string`), so an apostrophe in a comment never auto-closes.
+- TOML inline tables `{}` and every Markdown pair have `newline: false`;
+  Markdown quotes only surround (`autoClose: false`) because of apostrophes.
+- TypeScript lists only `//`, as VS Code and Zed do, so toggling a `///`
+  triple-slash directive leaves `/ <reference …>`.
+
+
+- ✅ Deliverables: comments, brackets, and `autoCloseBefore` for Rust, the four
   ECMAScript languages, Python, TOML, and Markdown.
 - Validation:
-  - A product test starts the bundled language packages, asserts the
+  - ✅ A product test (`src/app/product/tests/language_editing.rs`) starts the bundled language packages, asserts the
     startup report has no failures, and runs table-driven comment cases
     through the evaluator on each language's registered configuration. Every
     language's table is a full suite, not a sample: each comment token in
@@ -118,7 +132,7 @@ Indentation was removed from D073 in favor of D066's `indents` queries.
     bracket pairs and flags. For example, Rust toggling on a `///` line
     strips `///`; TypeScript commenting a block indented at mixed levels puts
     `//` at the shallowest column; Markdown commenting wraps in `<!-- -->`.
-  - Shared package tests check token shapes: nonempty tokens, and every
+  - ✅ Shared package tests check token shapes: nonempty tokens, and every
     language in scope declares comments.
 - **Implementation context:**
   - `extensions/@knot/language-{rust,typescript,python,toml,markdown}/src/languages.ts`:

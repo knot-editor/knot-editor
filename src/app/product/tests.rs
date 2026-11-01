@@ -7,6 +7,7 @@ mod extension_api;
 mod extension_restart;
 mod git_status;
 mod keybindings;
+mod language_editing;
 mod languages;
 mod navigation;
 mod observation;
