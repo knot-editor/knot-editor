@@ -1,6 +1,6 @@
 # D134 — Tree-sitter indentation
 
-Status: 🚧 checkpoint 1 awaiting review. Item of the
+Status: 🚧 checkpoint 1 approved; checkpoint 2 next. Item of the
 [daily-driver plan](daily-driver.md); split from D066 in the
 [roadmap](../roadmap.md).
 
@@ -137,68 +137,19 @@ covered by focused unit tests against inline queries.
 
 ## Checkpoints
 
-### 1. Indent query, evaluator, and Reindent Lines (Rust) — 🚧 awaiting review
+### 1. Indent query, evaluator, and Reindent Lines (Rust) — ✅ approved
 
-Deliverables:
-
-- ✅ `queries.indents` in the public declaration, bootstrap encoding, host
-  decoding, `LanguageQueries`, and `SyntaxLanguage`, with its own
-  `SyntaxQuery::Indents` compile error; `languages.get` returns it.
-- ✅ The native evaluator (`src/app/syntax/indent.rs`) with every capture
-  and property above, including strings left untouched and block comments
-  shifted as a unit.
-- ✅ `editor.reindent-lines`. Blank lines among several selected lines stay
-  as they are; a single blank line is indented.
-- ✅ `@knot/language-rust` ships `indents` adapted from nvim-treesitter and
-  `test/indents.jsonc` with reindent cases: nested blocks, `match` arms,
-  method chains, multi-line arguments, closing brackets, multi-line strings
-  and raw strings, block and doc comments, and `where` clauses. Upstream's
-  Rust query uses no `@indent.align`: arguments after an open parenthesis
-  indent one level, as rustfmt lays them out, rather than aligning. The
-  adaptation ignores raw strings instead of auto-indenting them and adds
-  `(block_comment) @indent.auto`.
-- ✅ The generic `indents.jsonc` runner
-  (`src/app/product/tests/language_indents.rs`), with reindent cases only
-  for now; a language that registers an indent query must have cases.
-- ✅ The package test helper checks that indent queries use only indent
-  captures and the evaluator's predicates.
-
-Notes: `@indent.zero` applies to the node at the line's first byte, which
-is the leaf token, as in nvim; a query names that token's node to use it.
-
-Validation: evaluator unit tests against inline queries for each capture
-and property; registration tests for the new query field and its compile
-error; the Rust package's reindent cases; extension package tests for the
-updated declaration.
-
-Review gate: the capture semantics, the predicate handling, the case file
-format, and Reindent's treatment of strings and comments are approved before
-Enter uses the evaluator.
-
-**Implementation context:**
-
-- Query plumbing: `src/host/js/knot.d.ts` (`LanguageDefinition.queries`),
-  `src/host/js/bootstrap.js` (registration encoding),
-  `src/app/extensions/host/handlers.rs` (`HostArguments for
-  LanguageDefinition`, argument 9 is injections), `src/app/languages.rs`
-  (`LanguageQueries`, `LanguageDefinition::compile`), `src/app/syntax.rs`
-  (`SyntaxLanguage::new`, `SyntaxQuery`, `property` helper for `#set!`).
-  Mirror how `injections` is optional and compiled.
-- Evaluator: new `src/app/syntax/indent.rs`; it needs access to a layer's
-  tree, so add a `SyntaxState` method that yields the deepest layer (tree
-  and language) at an offset beside `language_at`
-  (`src/app/syntax.rs:311`).
-- Command: declare in `src/app/editor/native_commands.rs` beside
-  `editor.indent-lines`, dispatch in `execute_editing_command`
-  (`src/app/editor/editing.rs`), implement in
-  `src/app/editor/indentation.rs` with `selected_lines`, `indent_unit`, and
-  `commit_line_edits`; pure text helpers belong in `src/app/indentation.rs`.
-- Cases: mirror `src/app/product/tests/language_editing.rs` (`case_files`,
-  `read_cases`, `start_bundled_packages`); reindent needs an editor view on
-  a document with the registered language.
-- Query source: `extensions/@knot/language-rust/src/queries/` as a new
-  module, with the Apache-2.0 header the highlights module carries;
-  register it in `src/languages.ts`.
+Language registration takes an optional `queries.indents`, evaluated
+natively by `src/app/syntax/indent.rs` through `SyntaxState::reindent` and
+`line_indent`. Reindent Lines (`editor.reindent-lines`) applies it; blank
+lines among several selected lines stay as they are. `@knot/language-rust`
+ships an adapted query: arguments indent one level as rustfmt lays them
+out, since upstream uses no `@indent.align` for Rust; raw strings are
+ignored rather than auto-indented; and block comments are
+`@indent.auto`. `@indent.zero` applies to the leaf token at the line's
+start, as in nvim. Packages keep cases in `test/indents.jsonc`, run by
+`src/app/product/tests/language_indents.rs`; a language with an indent
+query must have cases.
 
 ### 2. Enter from the query, brackets, and blank lines
 
