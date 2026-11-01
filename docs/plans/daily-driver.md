@@ -176,6 +176,7 @@ to be rebuilt later:
   - The bundled language packages ship queries adapted from
     nvim-treesitter, with per-package cases run through the native
     evaluator like `test/comments.jsonc`.
+  - 🚧 [Plan](d134-tree-sitter-indentation.md)
 
 - **D075 — Bracket matching and auto-closing** (depends on D073, D064)
   - Highlight the bracket matching the one at the cursor, and add a jump to

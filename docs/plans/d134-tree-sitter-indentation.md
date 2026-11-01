@@ -1,0 +1,270 @@
+# D134 — Tree-sitter indentation
+
+Status: 🚧 approved, not started. Item of the
+[daily-driver plan](daily-driver.md); split from D066 in the
+[roadmap](../roadmap.md).
+
+## Outcome
+
+Enter indents the new line from the language's syntax tree, as Zed, Helix,
+and Neovim do: after `fn main() {`, `if x:`, or an unclosed `(`, the new line
+is indented one level, and after a statement that ends a block it is not.
+Enter between a `{|}` pair opens an indented middle line. Typing `}`,
+`else`, or `elif x:` at the start of a line outdents it. Reindent Lines
+re-computes the selected lines' indentation. Languages without an indent
+query keep D074's behavior.
+
+## Design
+
+### Queries and captures
+
+- Language registration gains an optional `queries.indents` beside
+  `highlights` and `injections`, compiled with them in
+  `SyntaxLanguage::new`. `languages.get` returns it, so a derived language
+  spreads it.
+- Captures follow nvim-treesitter's indent module, so its queries adapt with
+  light edits: `@indent.begin`, `@indent.end`, `@indent.branch`,
+  `@indent.dedent`, `@indent.align`, `@indent.ignore`, `@indent.auto`,
+  `@indent.zero`, with the `indent.immediate`, `indent.open_delimiter`,
+  `indent.close_delimiter`, and `indent.avoid_last_matching_next`
+  properties.
+- `@indent.align` follows nvim: when the open delimiter ends its line, the
+  next line indents one level (hanging indent); otherwise lines align to the
+  column after the delimiter, as PEP 8 Python continuation lines do.
+- Predicates the queries use that the Rust binding does not evaluate
+  (`has-parent?`, `not-has-parent?`, `kind-eq?`, `lua-match?`) are either
+  evaluated by the indent evaluator as general predicates or rewritten when
+  adapting, as highlights queries were normalized. The first checkpoint
+  decides per predicate; prefer rewriting when the pattern stays readable.
+- The evaluator is native and pure: given a layer's tree, its language's
+  compiled query, the line texts, and a line, it returns the line's
+  indentation as levels plus an optional alignment column. The editor turns
+  it into text with the document's `IndentUnit` (tabs or spaces, D074).
+- The layer is the deepest one at the line's first non-blank byte, through
+  `SyntaxState`, so a code fence in Markdown indents as its language. A layer
+  whose language has no indent query falls back to keeping the indentation,
+  not to the host language's query.
+
+### Strings and comments
+
+Multi-line strings and comments are ordinary code and must be right:
+
+- Enter inside a multi-line string or block comment keeps the current
+  line's indentation. Comment continuation (` * `, `///`) is D131.
+- Reindent never changes lines inside a string, because their leading
+  whitespace is content.
+- Reindent moves a block comment's interior lines by the same amount as its
+  first line, so ` *` lines stay aligned under `/*`. nvim's `@indent.auto`
+  copies the previous line instead, which loses that alignment.
+
+### When indentation is computed
+
+Following Zed and Neovim, the edit commits first and indentation is computed
+on the reparsed tree, which the typed `}` or `else` must already be in:
+
+- Enter commits the line break with the indentation it keeps today (D074),
+  then an auto-indent request recomputes the new line. Inserting first also
+  gives Python's scanner a real newline to parse.
+- When the commit's foreground parse finishes within its 1 ms budget, the
+  request applies immediately. Otherwise it applies when the background
+  parse is accepted, if the buffer revision and the line are unchanged since
+  the request; a superseded request is dropped, leaving D074's indentation.
+  This is the revalidation every asynchronous result performs.
+- The adjustment joins the triggering edit's undo step and keeps the caret
+  at the end of the line's indentation, so Enter stays one undo step that
+  restores its selection.
+
+### Enter between brackets
+
+Enter with the caret between an open and close of a pair whose `newline`
+flag is set (D073, on by default unless open equals close) inserts two line
+breaks: the middle line is indented from the query, or one unit deeper than
+the opening line without one, and the closer keeps the opening line's
+indentation. This works for every language with bracket data.
+
+### Outdent while typing
+
+As in Zed, typing reindents the caret's line only when the typed text
+completes a node that starts at the line's first non-blank byte and is
+captured by `@indent.end`, `@indent.branch`, or `@indent.dedent` (`}`,
+`)`, `else`, `elif`, `except`), and only when the result is shallower than
+the current indentation. It never indents a line further while typing.
+
+### Blank lines
+
+Enter on a line holding only whitespace clears that whitespace, so pressing
+Enter repeatedly leaves no trailing whitespace, as VS Code does.
+
+### Reindent Lines
+
+`editor.reindent-lines`, titled Reindent Lines, recomputes the indentation of
+the selected lines (D074's `selected_lines`), or the caret's line, as one
+undo step through `commit_line_edits`. It is in the palette and unbound,
+since Tab follows VS Code (D074). Lines in a layer without an indent query
+are left unchanged.
+
+### Tests
+
+Each package with a query keeps `test/indents.jsonc` beside
+`test/comments.jsonc`, run by a generic product test through the real
+editor view on the registered language. A case names `before` and `after`
+lines with `‸` marking the caret (`|` is a Rust closure), and one of three
+actions: `enter`, `type` (text typed at the caret), or `reindent` (the
+lines marked by a selection, or the caret's line). Evaluator details are
+covered by focused unit tests against inline queries.
+
+## Exclusions
+
+- Reindenting pasted text: D135.
+- An `editor.autoIndent` setting to turn this off or limit it: D136.
+- Queries for the `@knot/language-others` grammars: D132, with their other
+  editing data.
+- Comment continuation on Enter and `onEnterRules`: D131.
+- Auto-closing and matching brackets: D075.
+- Folds and text objects from queries: D066.
+
+## Deferred decisions
+
+- Per-predicate choice between native evaluation and rewriting the adapted
+  queries, settled in checkpoint 1.
+- How `@indent.align` mixes tabs and spaces in a tab-indented document;
+  follow nvim (indent with the unit, then spaces to the column) unless it
+  misbehaves in practice.
+
+## Checkpoints
+
+### 1. Indent query, evaluator, and Reindent Lines (Rust)
+
+Deliverables:
+
+- `queries.indents` in the public declaration, bootstrap encoding, host
+  decoding, `LanguageQueries`, and `SyntaxLanguage`, with its own
+  `SyntaxQuery::Indents` compile error.
+- The native evaluator with every capture and property above, including
+  strings left untouched and block comments shifted as a unit.
+- `editor.reindent-lines`.
+- `@knot/language-rust` ships `indents` adapted from nvim-treesitter and
+  `test/indents.jsonc` with reindent cases: nested blocks, `match` arms,
+  method chains, multi-line arguments (hanging and aligned), closing
+  brackets, multi-line strings and raw strings, block and doc comments, and
+  `where` clauses.
+- The generic `indents.jsonc` runner, with reindent cases only for now.
+
+Validation: evaluator unit tests against inline queries for each capture
+and property; registration tests for the new query field and its compile
+error; the Rust package's reindent cases; extension package tests for the
+updated declaration.
+
+Review gate: the capture semantics, the predicate handling, the case file
+format, and Reindent's treatment of strings and comments are approved before
+Enter uses the evaluator.
+
+**Implementation context:**
+
+- Query plumbing: `src/host/js/knot.d.ts` (`LanguageDefinition.queries`),
+  `src/host/js/bootstrap.js` (registration encoding),
+  `src/app/extensions/host/handlers.rs` (`HostArguments for
+  LanguageDefinition`, argument 9 is injections), `src/app/languages.rs`
+  (`LanguageQueries`, `LanguageDefinition::compile`), `src/app/syntax.rs`
+  (`SyntaxLanguage::new`, `SyntaxQuery`, `property` helper for `#set!`).
+  Mirror how `injections` is optional and compiled.
+- Evaluator: new `src/app/syntax/indent.rs`; it needs access to a layer's
+  tree, so add a `SyntaxState` method that yields the deepest layer (tree
+  and language) at an offset beside `language_at`
+  (`src/app/syntax.rs:311`).
+- Command: declare in `src/app/editor/native_commands.rs` beside
+  `editor.indent-lines`, dispatch in `execute_editing_command`
+  (`src/app/editor/editing.rs`), implement in
+  `src/app/editor/indentation.rs` with `selected_lines`, `indent_unit`, and
+  `commit_line_edits`; pure text helpers belong in `src/app/indentation.rs`.
+- Cases: mirror `src/app/product/tests/language_editing.rs` (`case_files`,
+  `read_cases`, `start_bundled_packages`); reindent needs an editor view on
+  a document with the registered language.
+- Query source: `extensions/@knot/language-rust/src/queries/` as a new
+  module, with the Apache-2.0 header the highlights module carries;
+  register it in `src/languages.ts`.
+
+### 2. Enter from the query, brackets, and blank lines
+
+Deliverables:
+
+- Auto-indent requests after Enter: immediate when the foreground parse
+  finished, otherwise applied on background parse acceptance after
+  revalidation, joined to Enter's undo step.
+- Enter between a `newline` bracket pair, for every language with bracket
+  data.
+- Enter on a whitespace-only line clears it.
+- `enter` cases in the Rust `indents.jsonc`, including Enter inside strings
+  and comments, after a closing bracket, and between `{}`, `()`, and `[]`.
+
+Validation: the runner's `enter` cases; editor tests for the bracket
+middle line in a language without an indent query, the blank-line clearing,
+one undo step restoring the selection, and a request applied after a
+background parse and dropped after an intervening edit.
+
+Review gate: Enter is approved in daily Rust editing before typing triggers
+reindentation.
+
+**Implementation context:**
+
+- `insert_newline` in `src/app/editor/indentation.rs`; bracket data from
+  `editing_configuration` / `BufferModel` (`src/app/model.rs:531` resolves
+  the editing configuration at an offset), `Bracket::newline` in
+  `src/app/languages/editing.rs`.
+- Parse completion: the foreground parse and `finish_background_parse` in
+  `src/app/syntax.rs`, and where the model drives them (`src/app/model.rs`);
+  the request is view state keyed by revision, like other revalidated
+  asynchronous results.
+- Undo joining: `break_history_group`, `replace_text_with_grouping`, and
+  `commit_edits` in the editor, and the grouping in `src/app/history.rs`.
+
+### 3. Outdent while typing
+
+Deliverables:
+
+- Typing at the start of a line's content reindents it when the typed text
+  completes an `@indent.end`, `@indent.branch`, or `@indent.dedent` node,
+  only to a shallower indentation, joined to the typing undo group.
+- `type` cases in the Rust `indents.jsonc` (`}`, `)`, `]`, closing a `match`
+  arm block) and negative cases where typing must not change indentation.
+
+Validation: the runner's `type` cases; an editor test that IME composition
+and typing in the middle of a line never reindent.
+
+Review gate: typing behavior approved before the remaining languages adopt
+queries.
+
+**Implementation context:** the typing path is `replace_text_in_range` in
+`src/app/editor/input.rs`, which reaches `replace_text_with_grouping` with
+`EditGroupKind::Typing`; reuse checkpoint 2's request so the trigger runs on
+the reparsed tree.
+
+### 4. Bundled language queries
+
+Deliverables: `indents` queries adapted from nvim-treesitter and
+`indents.jsonc` cases (enter, type, reindent) for TypeScript, JavaScript,
+and JSX (shared ECMAScript queries), Python (`else`/`elif`/`except`
+outdent, hanging and aligned brackets, dedent after `return`), TOML, and
+Markdown where nvim-treesitter has one, including a Rust code fence inside
+Markdown indenting as Rust.
+
+Validation: every package's cases; extension package tests.
+
+Review gate: daily editing in each language approved.
+
+**Implementation context:** `extensions/@knot/language-typescript/src/`
+(ECMAScript and JSX query modules shared across its languages),
+`extensions/@knot/language-python/src/`, `language-toml`, and
+`language-markdown`, each with `src/languages.ts` and `test/`.
+
+### 5. Documentation
+
+Deliverables: the extension guide's language section documents `indents`
+and the capture list; [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages)
+and [editor views](../architecture/workbench-and-lifecycle.md#editor-views)
+describe the evaluator, the auto-indent request after parse, and the typing
+trigger; [decisions](../decisions.md#language-editing-configuration) records
+the nvim capture set, inserting before computing, and the string and comment
+rules; the daily-driver item is marked ✅ and this plan removed.
+
+Review gate: documentation approved.

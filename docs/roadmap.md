@@ -74,6 +74,7 @@ complete list for that item.
   - D078 → D112 → D058
   - D074 → D111 → D012, D058
   - D073, D074 → D134 → D066; D068 → D066 → D058
+  - D134 → D135, D136
   - D073, D074, D075 → D130; D074 → D131; D073 → D132
   - D064, D068 → D114 → D058
   - D092 → multi-selection editing in D109, D001, D067
@@ -155,6 +156,28 @@ complete list for that item.
     (D129). Then add the data with per-language behavior tests like
     D073's.
   - Order: after D073; with or after D129.
+
+- **D135 — Reindent pasted text**
+  - Deferred: D134 indents lines from the syntax tree on Enter, while
+    typing a closer, and through Reindent Lines. Pasted lines keep the
+    indentation they had where they were copied from.
+  - Reconsider: Pasting code between different nesting depths needs a
+    Reindent Lines afterwards often enough to be friction. Then decide, as
+    Zed's auto-indent on paste and VS Code's `editor.autoIndentOnPaste` do,
+    whether to reindent every pasted line from the query or shift the block
+    by the first line's change and keep its relative indentation, and how
+    pasting inside strings and comments behaves.
+  - Order: after D134; with D136, which may turn it off.
+
+- **D136 — Auto-indent setting**
+  - Deferred: D134's automatic indentation on Enter and while typing is
+    always on for languages with an indent query.
+  - Reconsider: A language's query misbehaves in daily use, or someone
+    wants plain keep-indentation Enter. Then add a language-scoped
+    `editor.autoIndent` setting (D070), as VS Code's `editor.autoIndent`
+    does, choosing between keeping the indentation, brackets only, and the
+    full query, and decide whether it also governs D135.
+  - Order: after D134.
 
 - **D130 — Syntax-scoped language configuration**
   - Deferred: D073's editing configuration applies to a whole language, or
