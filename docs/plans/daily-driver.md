@@ -158,6 +158,9 @@ to be rebuilt later:
     comes with D066's `indents` queries.
   - Tab and Shift-Tab indent and outdent a multi-line selection.
   - Toggle line comment (⌘/) and block comment.
+    Inside an injection, such as a fenced code block, they use the injected
+    language's editing data, which needs syntax layers to record their
+    language ID.
   - Duplicate, delete, and move lines up/down.
   - Join lines.
   - Smart Home.
