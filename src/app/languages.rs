@@ -3,7 +3,8 @@
 //!
 //! Extensions and personal config register languages: a language ID, the
 //! compiled-in grammar it parses with, the file names, extensions, and shebang
-//! interpreters it claims, and its queries. An association claims patterns for
+//! interpreters it claims, its queries, and the editing data native editing
+//! commands read (see [`editing`]). An association claims patterns for
 //! an ID without defining the language. The latest registration of an ID
 //! defines that language, and the latest registration or association claiming
 //! a pattern decides detection, so removing either reveals the previous one.
@@ -17,8 +18,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 use gpui::{App, Entity, EntityId, Global, WeakEntity};
+use serde::Serialize;
 
 use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
+
+pub(crate) mod editing;
+
+use editing::{EditingConfiguration, EditingDefinition, InvalidPattern};
 
 use super::{
     documents::ApplicationDocuments,
@@ -41,31 +47,57 @@ pub(crate) struct LanguageOwner {
     pub(crate) lifecycle: ExtensionLifecycleId,
 }
 
-/// A language as an extension registers it.
-#[derive(Clone, Debug, PartialEq)]
+/// A language as an extension registers it and `languages.get` returns it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub(crate) struct LanguageDefinition {
+    #[serde(flatten)]
     pub(crate) info: LanguageInfo,
+    pub(crate) queries: LanguageQueries,
+    #[serde(flatten)]
+    pub(crate) editing: EditingDefinition,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub(crate) struct LanguageQueries {
     pub(crate) highlights: String,
     pub(crate) injections: String,
 }
 
+/// Why a language definition did not compile.
+#[derive(Debug)]
+pub(crate) enum LanguageCompileError {
+    Syntax(SyntaxLanguageError),
+    Pattern(InvalidPattern),
+}
+
 impl LanguageDefinition {
-    /// Compile the queries against the grammar. This is the expensive part
-    /// of registering a language, and needs no application state, so callers
-    /// run it off the foreground.
-    pub(crate) fn compile(self) -> Result<CompiledLanguage, SyntaxLanguageError> {
-        let language = SyntaxLanguage::new(&self.info.grammar, &self.highlights, &self.injections)?;
+    /// Compile the queries against the grammar and the indentation patterns.
+    /// This is the expensive part of registering a language, and needs no
+    /// application state, so callers run it off the foreground.
+    pub(crate) fn compile(self) -> Result<CompiledLanguage, LanguageCompileError> {
+        let editing = self
+            .editing
+            .compile()
+            .map_err(LanguageCompileError::Pattern)?;
+        let syntax = SyntaxLanguage::new(
+            &self.info.grammar,
+            &self.queries.highlights,
+            &self.queries.injections,
+        )
+        .map_err(LanguageCompileError::Syntax)?;
         Ok(CompiledLanguage {
-            info: self.info,
-            language: Arc::new(language),
+            definition: self,
+            syntax: Arc::new(syntax),
+            editing: Arc::new(editing),
         })
     }
 }
 
-/// A language definition whose queries compiled.
+/// A language definition whose queries and patterns compiled.
 pub(crate) struct CompiledLanguage {
-    info: LanguageInfo,
-    language: Arc<SyntaxLanguage>,
+    definition: LanguageDefinition,
+    syntax: Arc<SyntaxLanguage>,
+    editing: Arc<EditingConfiguration>,
 }
 
 /// File patterns claimed for a language without defining it.
@@ -83,13 +115,14 @@ struct Registration {
     id: u64,
     owner: LanguageOwner,
     info: LanguageInfo,
-    language: Option<Arc<SyntaxLanguage>>,
+    language: Option<CompiledLanguage>,
 }
 
 /// The languages injections and buffers resolve, rebuilt on every change.
 #[derive(Default)]
 struct LanguageTable {
     languages: HashMap<String, Arc<SyntaxLanguage>>,
+    editing: HashMap<String, Arc<EditingConfiguration>>,
     /// Lowercase file extension to language ID.
     extensions: HashMap<String, String>,
 }
@@ -127,8 +160,8 @@ impl LanguageRegistry {
         self.registrations.push(Registration {
             id: self.next_id,
             owner,
-            info: language.info,
-            language: Some(language.language),
+            info: language.definition.info.clone(),
+            language: Some(language),
         });
         self.rebuild();
         self.next_id
@@ -212,16 +245,14 @@ impl LanguageRegistry {
     }
 
     fn rebuild(&mut self) {
-        let languages = self
-            .effective()
-            .into_iter()
-            .map(|registration| {
-                (
-                    registration.info.id.clone(),
-                    Arc::clone(registration.language.as_ref().expect("effective languages")),
-                )
-            })
-            .collect();
+        let mut languages = HashMap::new();
+        let mut editing = HashMap::new();
+        for registration in self.effective() {
+            let language = registration.language.as_ref().expect("effective languages");
+            let id = registration.info.id.clone();
+            languages.insert(id.clone(), Arc::clone(&language.syntax));
+            editing.insert(id, Arc::clone(&language.editing));
+        }
         let mut extensions = HashMap::new();
         for registration in &self.registrations {
             for extension in &registration.info.file_extensions {
@@ -230,6 +261,7 @@ impl LanguageRegistry {
         }
         self.table = Arc::new(LanguageTable {
             languages,
+            editing,
             extensions,
         });
     }
@@ -242,8 +274,24 @@ impl LanguageRegistry {
             .collect()
     }
 
+    /// The definition of the registration that defines `id`.
+    pub(crate) fn get(&self, id: &str) -> Option<&LanguageDefinition> {
+        self.registrations
+            .iter()
+            .rev()
+            .filter(|registration| registration.info.id == id)
+            .find_map(|registration| registration.language.as_ref())
+            .map(|language| &language.definition)
+    }
+
     pub(crate) fn resolve(&self, id: &str) -> Option<Arc<SyntaxLanguage>> {
         self.table.languages.get(id).cloned()
+    }
+
+    /// The editing configuration of the registration that defines `id`.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn editing(&self, id: &str) -> Option<Arc<EditingConfiguration>> {
+        self.table.editing.get(id).cloned()
     }
 
     /// Resolves injected language names against the registrations as they
@@ -400,6 +448,14 @@ pub(crate) fn effective_language(model: &BufferModel, cx: &App) -> String {
         .to_owned()
 }
 
+/// The editing configuration of a registered language ID, which an injected
+/// layer resolves by its own language's ID.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn editing_configuration(id: &str, cx: &App) -> Option<Arc<EditingConfiguration>> {
+    cx.try_global::<ApplicationLanguages>()
+        .and_then(|languages| languages.registry.editing(id))
+}
+
 #[cfg(test)]
 pub(crate) fn registry(cx: &App) -> &LanguageRegistry {
     &cx.global::<ApplicationLanguages>().registry
@@ -409,6 +465,11 @@ pub(crate) fn list(cx: &App) -> Vec<LanguageInfo> {
     cx.try_global::<ApplicationLanguages>()
         .map(|languages| languages.registry.list())
         .unwrap_or_default()
+}
+
+pub(crate) fn get(id: &str, cx: &App) -> Option<LanguageDefinition> {
+    cx.try_global::<ApplicationLanguages>()
+        .and_then(|languages| languages.registry.get(id).cloned())
 }
 
 /// Detect a document's language from its resource name and first line,

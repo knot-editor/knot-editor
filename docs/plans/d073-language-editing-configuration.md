@@ -1,6 +1,6 @@
 # D073 — Language editing configuration
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 checkpoint 1 implemented, awaiting review. Item of the
 [daily-driver plan](daily-driver.md); D074 (editing commands) and D075
 (bracket matching and auto-closing) consume it.
 
@@ -105,7 +105,29 @@ yet; D074 and D075 call the evaluators.
 
 ## Checkpoints
 
-### 1. Contract and native storage
+### 1. Contract and native storage — ✅ implemented, ⏳ review gate
+
+- ✅ Contract: `LanguageComments`, `BracketPair`, `LanguageIndentation`, the
+  optional `LanguageDefinition` fields, `languages.get`, and `InvalidPattern`
+  in `src/host/js/knot.d.ts`.
+- ✅ JavaScript validation fills bracket defaults (`autoClose` true, `newline`
+  `open !== close`, `notIn` empty) before the definition crosses, so native
+  types have no defaults and `get` returns them filled; absent top-level
+  editing fields stay absent. Comment and bracket tokens must be nonempty
+  without surrounding whitespace, which catches a token written as `"// "`.
+- ✅ Native: `src/app/languages/editing.rs` holds `EditingDefinition` (serde)
+  and the compiled `EditingConfiguration`; patterns compile before queries,
+  so an invalid pattern rejects without query compilation. The registration
+  retains its full definition for `get`; `LanguageRegistry::editing` and
+  `languages::editing_configuration` resolve the defining registration's
+  configuration. `LanguageDefinition` now groups queries as `queries`,
+  matching the public shape it serializes to.
+- ✅ Tests: registry unit tests (latest registration, associations, unregister,
+  teardown, empty configuration, `InvalidPattern`), the product language test
+  (TypeErrors, `InvalidPattern` over the wire, `get` round trip and
+  derivation, the native accessor), the contract fixtures, and fake
+  `languages.get`.
+
 
 - Deliverables: the `LanguageDefinition` fields and `languages.get` in the
   public declarations, JavaScript validation of field shapes, a native

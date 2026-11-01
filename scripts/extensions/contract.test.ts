@@ -169,6 +169,20 @@ void registered;
 await rust.dispose();
 // @ts-expect-error a highlights query is required
 await languages.register({ id: "bad", name: "Bad", grammar: "rust", queries: {} });
+import type { BracketPair, LanguageComments, LanguageDefinition, LanguageIndentation } from "knot";
+const comments: LanguageComments = { line: ["//", "///"], block: ["/*", "*/"] };
+const quotes: BracketPair = { open: "\"", close: "\"", autoClose: true, newline: false, notIn: ["string"] };
+const indentation: LanguageIndentation = { increase: ":\\s*$", decrease: "^\\s*else\\b" };
+await languages.register({
+  id: "edited", name: "Edited", grammar: "python", queries: { highlights: "" },
+  comments, brackets: [{ open: "(", close: ")" }, quotes], autoCloseBefore: ";:.,=}])>", indentation,
+});
+const effective: LanguageDefinition | null = await languages.get("edited");
+if (effective) await languages.register({ ...effective, comments: { line: ["#"] } });
+// @ts-expect-error a block comment is a pair
+await languages.register({ id: "bad", name: "Bad", grammar: "rust", queries: { highlights: "" }, comments: { block: ["/*"] } });
+// @ts-expect-error notIn names syntax families
+await languages.register({ id: "bad", name: "Bad", grammar: "rust", queries: { highlights: "" }, brackets: [{ open: "(", close: ")", notIn: ["code"] }] });
 await workbench.registerView({ id: "check.rust-log", title: "Log", content: { kind: "text" }, language: "rust" });
 for (const window of await windows.list()) {
   const target: WindowTarget = window.target;

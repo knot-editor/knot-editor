@@ -2158,7 +2158,9 @@ async fn focus_window(context: HostContext, arguments: WindowLookup) -> Result<(
     context.foreground(|_, cx| product::sessions::focus_window(&arguments.target, cx))?
 }
 
-use crate::app::languages::LanguageDefinition;
+use crate::app::languages::{
+    LanguageCompileError, LanguageDefinition, LanguageQueries, editing::EditingDefinition,
+};
 use crate::app::syntax::{SyntaxLanguageError, SyntaxQuery};
 use crate::host::protocol::LanguageInfo;
 
@@ -2183,6 +2185,11 @@ pub(crate) enum LanguageError {
         column: usize,
     },
     #[error(
+        code = "InvalidPattern",
+        message = "invalid {pattern} indentation pattern: {message}"
+    )]
+    InvalidPattern { pattern: String, message: String },
+    #[error(
         code = "LanguageRegistrationNotFound",
         message = "LanguageRegistrationNotFound"
     )]
@@ -2196,15 +2203,21 @@ impl From<AccessError> for LanguageError {
 }
 
 impl LanguageError {
-    fn from_syntax(error: SyntaxLanguageError, grammar: String) -> Self {
+    fn from_compile(error: LanguageCompileError, grammar: String) -> Self {
         match error {
-            SyntaxLanguageError::UnknownGrammar => Self::UnknownGrammar { grammar },
-            SyntaxLanguageError::InvalidQuery {
+            LanguageCompileError::Pattern(error) => Self::InvalidPattern {
+                pattern: error.pattern.name().into(),
+                message: error.message,
+            },
+            LanguageCompileError::Syntax(SyntaxLanguageError::UnknownGrammar) => {
+                Self::UnknownGrammar { grammar }
+            }
+            LanguageCompileError::Syntax(SyntaxLanguageError::InvalidQuery {
                 query,
                 message,
                 row,
                 column,
-            } => Self::InvalidQuery {
+            }) => Self::InvalidQuery {
                 query: match query {
                     SyntaxQuery::Highlights => "highlights",
                     SyntaxQuery::Injections => "injections",
@@ -2229,8 +2242,14 @@ impl HostArguments for LanguageDefinition {
                 file_names: reader.text_list(6)?,
                 interpreters: reader.text_list(7)?,
             },
-            highlights: reader.text(8, "highlights query must be text")?,
-            injections: reader.text(9, "injections query must be text")?,
+            queries: LanguageQueries {
+                highlights: reader.text(8, "highlights query must be text")?,
+                injections: reader.text(9, "injections query must be text")?,
+            },
+            editing: serde_json::from_value::<EditingDefinition>(setting_value(
+                reader.command_arguments(10)?,
+            ))
+            .map_err(|_| DecodeError::Type("invalid language editing data"))?,
         })
     }
 }
@@ -2255,7 +2274,7 @@ async fn register_language(
         .background_executor()
         .spawn(async move { arguments.compile() })
         .await
-        .map_err(|error| LanguageError::from_syntax(error, grammar))?;
+        .map_err(|error| LanguageError::from_compile(error, grammar))?;
     let owner = crate::app::languages::LanguageOwner {
         extension: request.extension,
         lifecycle: request.lifecycle,
@@ -2326,6 +2345,27 @@ async fn unregister_language(
 #[host_operation("listLanguages")]
 async fn list_languages(context: HostContext, _: ()) -> Result<Vec<LanguageInfo>, AccessError> {
     context.foreground(|_, cx| crate::app::languages::list(cx))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LanguageId {
+    id: String,
+}
+
+impl HostArguments for LanguageId {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            id: reader.text(2, "language id must be text")?,
+        })
+    }
+}
+
+#[host_operation("getLanguage")]
+async fn get_language(
+    context: HostContext,
+    arguments: LanguageId,
+) -> Result<Option<LanguageDefinition>, AccessError> {
+    context.foreground(|_, cx| crate::app::languages::get(&arguments.id, cx))
 }
 
 #[host_operation("listGrammars")]

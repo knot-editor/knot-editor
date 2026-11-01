@@ -167,6 +167,38 @@ declare module "knot" {
     readonly fileNames?: readonly string[];
     readonly interpreters?: readonly string[];
   }
+  /** Comment tokens, without a trailing space. */
+  export interface LanguageComments {
+    /** Every line comment token. Commenting inserts the first and one space;
+     * uncommenting strips the longest token that matches and one following
+     * space, so Rust lists "//", "///", and "//!". */
+    readonly line?: readonly string[];
+    /** Block comment delimiters. A language with no line comment comments
+     * by wrapping each line in them. */
+    readonly block?: readonly [open: string, close: string];
+  }
+  /** A bracket pair for matching, auto-closing, and surrounding. A pair whose
+   * open equals its close, such as quotes, never takes part in matching or
+   * indentation. */
+  export interface BracketPair {
+    readonly open: string;
+    readonly close: string;
+    /** Whether typing open inserts close; defaults to true. */
+    readonly autoClose?: boolean;
+    /** Whether Enter between the pair opens an indented middle line;
+     * defaults to true unless open equals close. */
+    readonly newline?: boolean;
+    /** Syntax at the cursor where auto-closing is suppressed. */
+    readonly notIn?: readonly ("string" | "comment")[];
+  }
+  /** Indentation patterns in Rust regex syntax, for what brackets miss, such
+   * as Python's trailing ":". */
+  export interface LanguageIndentation {
+    /** Matched against the line above: a match indents the next line. */
+    readonly increase?: string;
+    /** Matched against the current line: a match outdents it. */
+    readonly decrease?: string;
+  }
   export interface LanguageDefinition extends LanguagePatterns {
     readonly id: string;
     readonly name: string;
@@ -174,6 +206,15 @@ declare module "knot" {
     /** Tree-sitter queries using nvim-treesitter capture names. Injections
      * name languages by ID, or by a registered file extension such as "py". */
     readonly queries: Readonly<{ highlights: string; injections?: string }>;
+    readonly comments?: LanguageComments;
+    /** One list for matching, auto-closing, and surrounding. A line ending
+     * in an opener indents the next line, and a line starting with a closer
+     * outdents to its opener's line. */
+    readonly brackets?: readonly BracketPair[];
+    /** Characters before which auto-closing applies, besides whitespace and
+     * the end of the line. */
+    readonly autoCloseBefore?: string;
+    readonly indentation?: LanguageIndentation;
   }
   /**
    * Syntax highlighting languages. The latest registration of an ID defines
@@ -188,9 +229,12 @@ declare module "knot" {
     /**
      * Register a lifecycle-owned language. Queries compile against the grammar
      * before resolution.
-     * @throws TypeError for invalid fields; HostError with UnknownGrammar,
-     * InvalidQuery (details: query "highlights" or "injections", message, and
-     * the 0-indexed row and column), or Cancelled. */
+     * @throws TypeError for invalid fields, including empty comment or
+     * bracket tokens and tokens with surrounding whitespace; HostError with
+     * UnknownGrammar, InvalidQuery (details: query "highlights" or
+     * "injections", message, and the 0-indexed row and column),
+     * InvalidPattern (details: pattern "increase" or "decrease", message),
+     * or Cancelled. */
     register(definition: LanguageDefinition): Promise<Disposable>;
     /**
      * Claim file patterns for a language ID without defining the language, so
@@ -201,6 +245,11 @@ declare module "knot" {
      * ID paints as "plaintext". Associations do not appear in list.
      * @throws TypeError for invalid fields; HostError with Cancelled. */
     associate(id: string, patterns: LanguagePatterns): Promise<Disposable>;
+    /** The registration that defines `id`, queries and editing data
+     * included, so a derived language spreads it and changes a key. Pattern
+     * lists, injections, and bracket defaults are present; absent editing
+     * fields stay absent. */
+    get(id: string): Promise<LanguageDefinition | null>;
     /** The language each registered ID resolves to, sorted by ID. */
     list(): Promise<readonly LanguageInfo[]>;
     /** Every compiled-in grammar ID, sorted. */
@@ -649,7 +698,7 @@ declare module "knot" {
     | "CompletionProviderNotFound" | "CommandNameInUse" | "CommandNotFound"
     | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
-    | "UnknownGrammar" | "InvalidQuery" | "LanguageRegistrationNotFound"
+    | "UnknownGrammar" | "InvalidQuery" | "InvalidPattern" | "LanguageRegistrationNotFound"
     | "DuplicateSetting" | "SettingTypeMismatch"
     | "UnknownCapture" | "DuplicateColor" | "ThemeRegistrationNotFound"
     | "KeymapPresetRegistrationNotFound";

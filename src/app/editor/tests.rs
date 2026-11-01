@@ -285,8 +285,11 @@ fn tab_stops_follow_the_settings_for_each_open_view(cx: &mut TestAppContext) {
                 file_names: Vec::new(),
                 interpreters: Vec::new(),
             },
-            highlights: "(identifier) @variable".into(),
-            injections: String::new(),
+            queries: languages::LanguageQueries {
+                highlights: "(identifier) @variable".into(),
+                injections: String::new(),
+            },
+            editing: Default::default(),
         };
         let owner = LanguageOwner {
             extension: ExtensionId::new(1),

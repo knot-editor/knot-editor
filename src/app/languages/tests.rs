@@ -1,6 +1,9 @@
 use gpui::{AppContext, TestAppContext};
 
-use super::*;
+use super::{
+    editing::{BracketPair, CommentTokens, IndentationPattern, IndentationPatterns},
+    *,
+};
 use crate::app::{
     documents::{DocumentCollection, DocumentState},
     filesystem::ResourceVersion,
@@ -31,8 +34,11 @@ fn definition(id: &str, name: &str) -> LanguageDefinition {
             file_names: Vec::new(),
             interpreters: Vec::new(),
         },
-        highlights: "(identifier) @variable".into(),
-        injections: String::new(),
+        queries: LanguageQueries {
+            highlights: "(identifier) @variable".into(),
+            injections: String::new(),
+        },
+        editing: EditingDefinition::default(),
     }
 }
 
@@ -92,18 +98,107 @@ fn compile_errors_name_the_grammar_or_query() {
     unknown.info.grammar = "cobol".into();
     assert!(matches!(
         unknown.compile(),
-        Err(SyntaxLanguageError::UnknownGrammar)
+        Err(LanguageCompileError::Syntax(
+            SyntaxLanguageError::UnknownGrammar
+        ))
     ));
     let mut invalid = definition("rust", "Rust");
-    invalid.injections = "(not_a_node) @injection.content".into();
+    invalid.queries.injections = "(not_a_node) @injection.content".into();
     assert!(matches!(
         invalid.compile(),
-        Err(SyntaxLanguageError::InvalidQuery {
-            query: SyntaxQuery::Injections,
-            row: 0,
-            ..
-        })
+        Err(LanguageCompileError::Syntax(
+            SyntaxLanguageError::InvalidQuery {
+                query: SyntaxQuery::Injections,
+                row: 0,
+                ..
+            }
+        ))
     ));
+    let mut pattern = definition("python", "Python");
+    pattern.editing.indentation = Some(IndentationPatterns {
+        increase: Some(":\\s*$".into()),
+        decrease: Some("^\\s*(else".into()),
+    });
+    assert!(matches!(
+        pattern.compile(),
+        Err(LanguageCompileError::Pattern(InvalidPattern {
+            pattern: IndentationPattern::Decrease,
+            ..
+        }))
+    ));
+}
+
+fn edited(id: &str, name: &str, line_comment: &str) -> LanguageDefinition {
+    let mut definition = definition(id, name);
+    definition.editing = EditingDefinition {
+        comments: Some(CommentTokens {
+            line: vec![line_comment.into()],
+            block: Some(("/*".into(), "*/".into())),
+        }),
+        brackets: Some(vec![BracketPair {
+            open: "{".into(),
+            close: "}".into(),
+            auto_close: true,
+            newline: true,
+            not_in: Vec::new(),
+        }]),
+        auto_close_before: Some(";)".into()),
+        indentation: Some(IndentationPatterns {
+            increase: Some("^\\s*where$".into()),
+            decrease: None,
+        }),
+    };
+    definition
+}
+
+#[test]
+fn editing_configuration_follows_the_defining_registration() {
+    let mut registry = LanguageRegistry::default();
+    assert!(registry.editing("rust").is_none());
+    assert!(registry.get("rust").is_none());
+    registry.register(owner(1), edited("rust", "First", "//").compile().unwrap());
+    let second = registry.register(owner(2), edited("rust", "Second", "#").compile().unwrap());
+    // An association neither defines a language nor hides its definition.
+    registry.associate(
+        owner(3),
+        LanguageAssociation {
+            language: "rust".into(),
+            file_extensions: vec!["rsx".into()],
+            file_names: Vec::new(),
+            interpreters: Vec::new(),
+        },
+    );
+
+    let editing = registry.editing("rust").unwrap();
+    assert_eq!(editing.line_comments, ["#"]);
+    assert_eq!(editing.block_comment, Some(("/*".into(), "*/".into())));
+    assert_eq!(editing.brackets[0].close, "}");
+    assert_eq!(editing.auto_close_before, ";)");
+    assert!(
+        editing
+            .increase_indent
+            .as_ref()
+            .unwrap()
+            .is_match("  where")
+    );
+    assert!(editing.decrease_indent.is_none());
+    assert_eq!(
+        registry.get("rust").unwrap(),
+        &edited("rust", "Second", "#")
+    );
+
+    assert!(registry.unregister(ExtensionId::new(2), ExtensionLifecycleId::new(1), second));
+    assert_eq!(registry.editing("rust").unwrap().line_comments, ["//"]);
+    assert_eq!(registry.get("rust").unwrap().info.name, "First");
+    assert!(registry.remove_lifecycle(ExtensionId::new(1), ExtensionLifecycleId::new(1)));
+    assert!(registry.editing("rust").is_none());
+    assert!(registry.get("rust").is_none());
+
+    // A language without editing data has an empty configuration.
+    registry.register(owner(4), definition("go", "Go").compile().unwrap());
+    let editing = registry.editing("go").unwrap();
+    assert!(editing.line_comments.is_empty() && editing.brackets.is_empty());
+    assert!(editing.increase_indent.is_none());
 }
 
 #[test]
@@ -351,8 +446,8 @@ fn injecting_languages_reparse_when_registrations_change(cx: &mut TestAppContext
     let documents = install(cx);
     let mut markdown = claiming("markdown", &["md"], &[], &[]);
     markdown.info.grammar = "markdown".into();
-    markdown.highlights = "(fenced_code_block) @markup.raw.block".into();
-    markdown.injections = MARKDOWN_INJECTIONS.into();
+    markdown.queries.highlights = "(fenced_code_block) @markup.raw.block".into();
+    markdown.queries.injections = MARKDOWN_INJECTIONS.into();
     register(cx, owner(1), markdown);
     let text = "```rust\nlet x = 1;\n```\n";
     let model = persisted(&documents, "mem://workspace/README.md", text, cx);

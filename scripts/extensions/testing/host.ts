@@ -565,6 +565,23 @@ function languageInfo(definition: Knot.LanguageDefinition): Knot.LanguageInfo {
   };
 }
 
+// Fills the defaults native validation fills, as `languages.get` returns them.
+function registeredLanguage(definition: Knot.LanguageDefinition): Knot.LanguageDefinition {
+  const brackets = definition.brackets?.map((pair) => ({
+    open: pair.open,
+    close: pair.close,
+    autoClose: pair.autoClose ?? true,
+    newline: pair.newline ?? pair.open !== pair.close,
+    notIn: pair.notIn ?? [],
+  }));
+  return {
+    ...definition,
+    ...languageInfo(definition),
+    queries: { highlights: definition.queries.highlights, injections: definition.queries.injections ?? "" },
+    ...(brackets === undefined ? {} : { brackets }),
+  };
+}
+
 // Settings -----------------------------------------------------------------
 
 const settingTypes: Record<Knot.SettingType, (value: unknown) => boolean> = {
@@ -621,7 +638,8 @@ export const api: KnotApi = {
     },
   },
   languages: {
-    // Queries are not compiled; product tests cover InvalidQuery.
+    // Queries and patterns are not compiled; product tests cover InvalidQuery
+    // and InvalidPattern.
     register: async (definition) => {
       if (!GRAMMARS.includes(definition.grammar)) throw hostError("UnknownGrammar");
       state.languages.push(definition);
@@ -639,6 +657,10 @@ export const api: KnotApi = {
           state.associations = state.associations.filter((candidate) => candidate !== association);
         },
       };
+    },
+    get: async (id) => {
+      const definition = [...state.languages].reverse().find((candidate) => candidate.id === id);
+      return definition === undefined ? null : registeredLanguage(definition);
     },
     // Later registrations win, as in the native registry.
     list: async () => {

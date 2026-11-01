@@ -4,7 +4,7 @@ use super::*;
 use crate::app::workbench::ExtensionView;
 use crate::host::lifecycle::ExtensionKey;
 
-const SOURCE: &str = r#"
+const SOURCE: &str = r##"
 import { commands, documents, languages, workbench } from "knot";
 async function failure(operation) {
   try { await operation(); } catch (error) { return error; }
@@ -30,6 +30,54 @@ const typeError = await failure(() => languages.register({
   id: "rust", name: "Rust", grammar: "rust", fileExtensions: [".rs"], queries: { highlights: "" },
 }));
 if (!(typeError instanceof TypeError)) throw typeError;
+const pattern = await failure(() => languages.register({
+  id: "python", name: "Python", grammar: "python", queries: { highlights: "" },
+  indentation: { increase: ":\\s*$", decrease: "^\\s*(else" },
+}));
+if (pattern.code !== "InvalidPattern" || pattern.details.pattern !== "decrease") {
+  throw new Error(JSON.stringify(pattern.details));
+}
+for (const editing of [
+  { comments: { line: ["// "] } },
+  { comments: { block: ["<!--"] } },
+  { brackets: [{ open: "", close: ")" }] },
+  { brackets: [{ open: "(", close: ")", notIn: ["code"] }] },
+  { indentation: { increase: 1 } },
+]) {
+  const error = await failure(() => languages.register({
+    id: "bad", name: "Bad", grammar: "rust", queries: { highlights: "" }, ...editing,
+  }));
+  if (!(error instanceof TypeError)) throw error;
+}
+await languages.register({
+  id: "edited", name: "Edited", grammar: "python", queries: { highlights: "" },
+  comments: { line: ["#"], block: ['"""', '"""'] },
+  brackets: [{ open: "(", close: ")" }, { open: "'", close: "'", notIn: ["string"] }],
+  autoCloseBefore: ";)",
+  indentation: { increase: ":\\s*$" },
+});
+const edited = await languages.get("edited");
+const expected = {
+  id: "edited", name: "Edited", grammar: "python", fileExtensions: [], fileNames: [],
+  interpreters: [], queries: { highlights: "", injections: "" },
+  comments: { line: ["#"], block: ['"""', '"""'] },
+  brackets: [
+    { open: "(", close: ")", autoClose: true, newline: true, notIn: [] },
+    { open: "'", close: "'", autoClose: true, newline: false, notIn: ["string"] },
+  ],
+  autoCloseBefore: ";)",
+  indentation: { increase: ":\\s*$" },
+};
+if (JSON.stringify(edited) !== JSON.stringify(expected) || !Object.isFrozen(edited.brackets[0])) {
+  throw new Error(JSON.stringify(edited));
+}
+// A derived language spreads the definition and replaces one key.
+await languages.register({ ...edited, comments: { line: ["//"] } });
+const derived = await languages.get("edited");
+if (derived.comments.line[0] !== "//" || derived.brackets.length !== 2) {
+  throw new Error(JSON.stringify(derived));
+}
+if (await languages.get("missing") !== null) throw new Error("unregistered language");
 await languages.register({
   id: "rust", name: "Rust", grammar: "rust", fileExtensions: ["rs"],
   queries: { highlights: "(identifier) @variable" },
@@ -39,8 +87,8 @@ await languages.register({
   interpreters: ["python"], queries: { highlights: "(identifier) @variable" },
 });
 const listed = await languages.list();
-if (listed.map((language) => language.id).join() !== "python,rust"
-    || listed[0].interpreters[0] !== "python" || !Object.isFrozen(listed[0].fileExtensions)) {
+if (listed.map((language) => language.id).join() !== "edited,python,rust"
+    || listed[1].interpreters[0] !== "python" || !Object.isFrozen(listed[1].fileExtensions)) {
   throw new Error(JSON.stringify(listed));
 }
 await workbench.registerView({
@@ -57,7 +105,7 @@ await commands.register("lang.set", async ({ buffer, arguments: language }) => {
     throw new Error(`language ${updated.language}`);
   }
 });
-"#;
+"##;
 
 fn language(model: &Entity<BufferModel>, cx: &TestAppContext) -> (Option<String>, bool) {
     model.read_with(cx, |model, _| {
@@ -112,6 +160,11 @@ fn registered_languages_detect_on_open_and_save_as_and_follow_teardown(cx: &mut 
     wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
     loaded.lock().unwrap().take().unwrap().unwrap();
     assert_eq!(language(&untitled, cx), (None, false));
+    let editing = cx
+        .read(|cx| crate::app::languages::editing_configuration("edited", cx))
+        .unwrap();
+    assert_eq!(editing.line_comments, ["//"]);
+    assert!(editing.increase_indent.as_ref().unwrap().is_match("if x:"));
 
     let execution = dispatch_product_command(&shell, window, SAVE_AS_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);

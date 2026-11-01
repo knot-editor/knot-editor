@@ -871,6 +871,67 @@ export async function associateLanguage(id, patterns) {
   const owned = ownership(() => {}, () => request("unregisterLanguage", association));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
+function editingToken(value, message) {
+  if (string(value, message).length === 0 || value.trim() !== value) {
+    throw new TypeError("comment and bracket tokens must be nonempty without surrounding whitespace");
+  }
+  return value;
+}
+function optionalBoolean(value, fallback, message) {
+  if (value === undefined) return fallback;
+  if (typeof value !== "boolean") throw new TypeError(message);
+  return value;
+}
+function bracketPair(value) {
+  record(value, "brackets must be objects");
+  const open = editingToken(value.open, "bracket open must be text");
+  const close = editingToken(value.close, "bracket close must be text");
+  const notIn = value.notIn === undefined ? [] : arrayItems(value.notIn, (family) => {
+    if (family !== "string" && family !== "comment") {
+      throw new TypeError('bracket notIn entries must be "string" or "comment"');
+    }
+    return family;
+  });
+  return {
+    open,
+    close,
+    autoClose: optionalBoolean(value.autoClose, true, "bracket autoClose must be a boolean"),
+    newline: optionalBoolean(value.newline, open !== close, "bracket newline must be a boolean"),
+    notIn,
+  };
+}
+// Absent fields stay absent, so languages.get returns them as registered.
+function languageEditing(value) {
+  const editing = {};
+  if (value.comments !== undefined) {
+    const comments = record(value.comments, "language comments must be an object");
+    editing.comments = {};
+    if (comments.line !== undefined) {
+      editing.comments.line = arrayItems(comments.line,
+        (item) => editingToken(item, "line comment tokens must be text"));
+    }
+    if (comments.block !== undefined) {
+      const block = arrayItems(comments.block,
+        (item) => editingToken(item, "block comment tokens must be text"));
+      if (block.length !== 2) throw new TypeError("a block comment must be [open, close]");
+      editing.comments.block = block;
+    }
+  }
+  if (value.brackets !== undefined) editing.brackets = arrayItems(value.brackets, bracketPair);
+  if (value.autoCloseBefore !== undefined) {
+    editing.autoCloseBefore = string(value.autoCloseBefore, "autoCloseBefore must be text");
+  }
+  if (value.indentation !== undefined) {
+    const indentation = record(value.indentation, "language indentation must be an object");
+    editing.indentation = {};
+    for (const key of ["increase", "decrease"]) {
+      if (indentation[key] !== undefined) {
+        editing.indentation[key] = string(indentation[key], `indentation ${key} must be text`);
+      }
+    }
+  }
+  return editing;
+}
 export async function registerLanguage(definition) {
   const value = record(definition, "languages.register requires a language object");
   const id = languageId(value.id);
@@ -882,8 +943,9 @@ export async function registerLanguage(definition) {
   const injections = queries.injections === undefined
     ? ""
     : string(queries.injections, "injections query must be text");
+  const editing = languageEditing(value);
   const registration = await request("registerLanguage", id, name, grammar, fileExtensions,
-    fileNames, interpreters, highlights, injections);
+    fileNames, interpreters, highlights, injections, editing);
   const owned = ownership(() => {}, () => request("unregisterLanguage", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
@@ -950,6 +1012,16 @@ globalThis.__knotDispatchSettingChange = async (subscription, key) => {
   const listener = settingListeners.get(subscription);
   if (listener) await listener(key);
 };
+function deepFreeze(value) {
+  if (value !== null && typeof value === "object") {
+    Object.values(value).forEach(deepFreeze);
+    Object.freeze(value);
+  }
+  return value;
+}
+export async function getLanguage(id) {
+  return deepFreeze(await request("getLanguage", string(id, "language id must be text")));
+}
 export async function listLanguages() {
   return Object.freeze((await request("listLanguages")).map((language) => Object.freeze({
     ...language,
