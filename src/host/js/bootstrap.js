@@ -919,15 +919,6 @@ function languageEditing(value) {
   if (value.autoCloseBefore !== undefined) {
     editing.autoCloseBefore = string(value.autoCloseBefore, "autoCloseBefore must be text");
   }
-  if (value.indentation !== undefined) {
-    const indentation = record(value.indentation, "language indentation must be an object");
-    editing.indentation = {};
-    for (const key of ["increase", "decrease"]) {
-      if (indentation[key] !== undefined) {
-        editing.indentation[key] = string(indentation[key], `indentation ${key} must be text`);
-      }
-    }
-  }
   return editing;
 }
 export async function registerLanguage(definition) {

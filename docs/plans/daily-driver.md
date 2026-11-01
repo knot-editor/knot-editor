@@ -43,8 +43,9 @@ to be rebuilt later:
   Go to Line, recent files, and the project selector all rely on one fuzzy
   matcher and one picker presentation.
 - **Language editing configuration before editing commands and brackets.**
-  Toggle comment, auto-indent, and auto-closing all read per-language data
-  from the same registration.
+  Toggle comment and auto-closing read per-language data from the same
+  registration; language-aware indentation comes from D066's `indents`
+  queries.
 - **The keymap preset mechanism before new commands; extra presets last.**
   New commands bind into a single Knot preset as they land. The VS Code, Zed,
   IntelliJ, and Sublime presets are filled in once the command set is stable.
@@ -142,14 +143,14 @@ to be rebuilt later:
 
 - **D073 — Language editing configuration**
   - Language registration gains line and block comment tokens, bracket pairs,
-    auto-closing pairs, and indentation rules (increase and decrease
-    patterns). The bundled language packages supply them for every language.
+    and auto-closing pairs. The bundled language packages supply them.
+    Indentation is left to D066's tree-sitter `indents` queries.
   - Data only. D074 and D075 consume it.
   - 🚧 [Plan](d073-language-editing-configuration.md)
 
 - **D074 — Editing commands** (depends on D073)
-  - Auto-indent on Enter: keep the current indentation, and adjust it with
-    the indentation rules.
+  - Enter keeps the current line's indentation; language-aware adjustment
+    comes with D066's `indents` queries.
   - Tab and Shift-Tab indent and outdent a multi-line selection.
   - Toggle line comment (⌘/) and block comment.
   - Duplicate, delete, and move lines up/down.

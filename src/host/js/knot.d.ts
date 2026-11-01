@@ -178,8 +178,7 @@ declare module "knot" {
     readonly block?: readonly [open: string, close: string];
   }
   /** A bracket pair for matching, auto-closing, and surrounding. A pair whose
-   * open equals its close, such as quotes, never takes part in matching or
-   * indentation. */
+   * open equals its close, such as quotes, never takes part in matching. */
   export interface BracketPair {
     readonly open: string;
     readonly close: string;
@@ -191,14 +190,6 @@ declare module "knot" {
     /** Syntax at the cursor where auto-closing is suppressed. */
     readonly notIn?: readonly ("string" | "comment")[];
   }
-  /** Indentation patterns in Rust regex syntax, for what brackets miss, such
-   * as Python's trailing ":". */
-  export interface LanguageIndentation {
-    /** Matched against the line above: a match indents the next line. */
-    readonly increase?: string;
-    /** Matched against the current line: a match outdents it. */
-    readonly decrease?: string;
-  }
   export interface LanguageDefinition extends LanguagePatterns {
     readonly id: string;
     readonly name: string;
@@ -207,14 +198,11 @@ declare module "knot" {
      * name languages by ID, or by a registered file extension such as "py". */
     readonly queries: Readonly<{ highlights: string; injections?: string }>;
     readonly comments?: LanguageComments;
-    /** One list for matching, auto-closing, and surrounding. A line ending
-     * in an opener indents the next line, and a line starting with a closer
-     * outdents to its opener's line. */
+    /** One list for matching, auto-closing, and surrounding. */
     readonly brackets?: readonly BracketPair[];
     /** Characters before which auto-closing applies, besides whitespace and
      * the end of the line. */
     readonly autoCloseBefore?: string;
-    readonly indentation?: LanguageIndentation;
   }
   /**
    * Syntax highlighting languages. The latest registration of an ID defines
@@ -232,9 +220,8 @@ declare module "knot" {
      * @throws TypeError for invalid fields, including empty comment or
      * bracket tokens and tokens with surrounding whitespace; HostError with
      * UnknownGrammar, InvalidQuery (details: query "highlights" or
-     * "injections", message, and the 0-indexed row and column),
-     * InvalidPattern (details: pattern "increase" or "decrease", message),
-     * or Cancelled. */
+     * "injections", message, and the 0-indexed row and column), or
+     * Cancelled. */
     register(definition: LanguageDefinition): Promise<Disposable>;
     /**
      * Claim file patterns for a language ID without defining the language, so
@@ -697,7 +684,7 @@ declare module "knot" {
     | "CompletionProviderNotFound" | "CommandNameInUse" | "CommandNotFound"
     | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
-    | "UnknownGrammar" | "InvalidQuery" | "InvalidPattern" | "LanguageRegistrationNotFound"
+    | "UnknownGrammar" | "InvalidQuery" | "LanguageRegistrationNotFound"
     | "DuplicateSetting" | "SettingTypeMismatch"
     | "UnknownCapture" | "DuplicateColor" | "ThemeRegistrationNotFound"
     | "KeymapPresetRegistrationNotFound";

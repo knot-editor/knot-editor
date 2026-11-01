@@ -169,13 +169,12 @@ void registered;
 await rust.dispose();
 // @ts-expect-error a highlights query is required
 await languages.register({ id: "bad", name: "Bad", grammar: "rust", queries: {} });
-import type { BracketPair, LanguageComments, LanguageDefinition, LanguageIndentation } from "knot";
+import type { BracketPair, LanguageComments, LanguageDefinition } from "knot";
 const comments: LanguageComments = { line: ["//", "///"], block: ["/*", "*/"] };
 const quotes: BracketPair = { open: "\"", close: "\"", autoClose: true, newline: false, notIn: ["string"] };
-const indentation: LanguageIndentation = { increase: ":\\s*$", decrease: "^\\s*else\\b" };
 await languages.register({
   id: "edited", name: "Edited", grammar: "python", queries: { highlights: "" },
-  comments, brackets: [{ open: "(", close: ")" }, quotes], autoCloseBefore: ";:.,=}])>", indentation,
+  comments, brackets: [{ open: "(", close: ")" }, quotes], autoCloseBefore: ";:.,=}])>",
 });
 const effective: LanguageDefinition | null = await languages.get("edited");
 if (effective) await languages.register({ ...effective, comments: { line: ["#"] } });

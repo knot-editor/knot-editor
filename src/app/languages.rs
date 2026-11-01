@@ -24,7 +24,7 @@ use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
 pub(crate) mod editing;
 
-use editing::{EditingConfiguration, EditingDefinition, InvalidPattern};
+use editing::{EditingConfiguration, EditingDefinition};
 
 use super::{
     documents::ApplicationDocuments,
@@ -63,28 +63,17 @@ pub(crate) struct LanguageQueries {
     pub(crate) injections: String,
 }
 
-/// Why a language definition did not compile.
-#[derive(Debug)]
-pub(crate) enum LanguageCompileError {
-    Syntax(SyntaxLanguageError),
-    Pattern(InvalidPattern),
-}
-
 impl LanguageDefinition {
-    /// Compile the queries against the grammar and the indentation patterns.
-    /// This is the expensive part of registering a language, and needs no
-    /// application state, so callers run it off the foreground.
-    pub(crate) fn compile(self) -> Result<CompiledLanguage, LanguageCompileError> {
-        let editing = self
-            .editing
-            .compile()
-            .map_err(LanguageCompileError::Pattern)?;
+    /// Compile the queries against the grammar. This is the expensive part
+    /// of registering a language, and needs no application state, so callers
+    /// run it off the foreground.
+    pub(crate) fn compile(self) -> Result<CompiledLanguage, SyntaxLanguageError> {
+        let editing = self.editing.resolve();
         let syntax = SyntaxLanguage::new(
             &self.info.grammar,
             &self.queries.highlights,
             &self.queries.injections,
-        )
-        .map_err(LanguageCompileError::Syntax)?;
+        )?;
         Ok(CompiledLanguage {
             definition: self,
             syntax: Arc::new(syntax),
@@ -93,7 +82,7 @@ impl LanguageDefinition {
     }
 }
 
-/// A language definition whose queries and patterns compiled.
+/// A language definition whose queries compiled.
 pub(crate) struct CompiledLanguage {
     definition: LanguageDefinition,
     syntax: Arc<SyntaxLanguage>,

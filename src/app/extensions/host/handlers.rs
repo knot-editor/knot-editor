@@ -2158,9 +2158,7 @@ async fn focus_window(context: HostContext, arguments: WindowLookup) -> Result<(
     context.foreground(|_, cx| product::sessions::focus_window(&arguments.target, cx))?
 }
 
-use crate::app::languages::{
-    LanguageCompileError, LanguageDefinition, LanguageQueries, editing::EditingDefinition,
-};
+use crate::app::languages::{LanguageDefinition, LanguageQueries, editing::EditingDefinition};
 use crate::app::syntax::{SyntaxLanguageError, SyntaxQuery};
 use crate::host::protocol::LanguageInfo;
 
@@ -2185,11 +2183,6 @@ pub(crate) enum LanguageError {
         column: usize,
     },
     #[error(
-        code = "InvalidPattern",
-        message = "invalid {pattern} indentation pattern: {message}"
-    )]
-    InvalidPattern { pattern: String, message: String },
-    #[error(
         code = "LanguageRegistrationNotFound",
         message = "LanguageRegistrationNotFound"
     )]
@@ -2203,21 +2196,15 @@ impl From<AccessError> for LanguageError {
 }
 
 impl LanguageError {
-    fn from_compile(error: LanguageCompileError, grammar: String) -> Self {
+    fn from_syntax(error: SyntaxLanguageError, grammar: String) -> Self {
         match error {
-            LanguageCompileError::Pattern(error) => Self::InvalidPattern {
-                pattern: error.pattern.name().into(),
-                message: error.message,
-            },
-            LanguageCompileError::Syntax(SyntaxLanguageError::UnknownGrammar) => {
-                Self::UnknownGrammar { grammar }
-            }
-            LanguageCompileError::Syntax(SyntaxLanguageError::InvalidQuery {
+            SyntaxLanguageError::UnknownGrammar => Self::UnknownGrammar { grammar },
+            SyntaxLanguageError::InvalidQuery {
                 query,
                 message,
                 row,
                 column,
-            }) => Self::InvalidQuery {
+            } => Self::InvalidQuery {
                 query: match query {
                     SyntaxQuery::Highlights => "highlights",
                     SyntaxQuery::Injections => "injections",
@@ -2274,7 +2261,7 @@ async fn register_language(
         .background_executor()
         .spawn(async move { arguments.compile() })
         .await
-        .map_err(|error| LanguageError::from_compile(error, grammar))?;
+        .map_err(|error| LanguageError::from_syntax(error, grammar))?;
     let owner = crate::app::languages::LanguageOwner {
         extension: request.extension,
         lifecycle: request.lifecycle,

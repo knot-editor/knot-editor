@@ -7,14 +7,16 @@ Status: 🚧 checkpoint 2 implemented, awaiting review. Item of the
 ## Goal
 
 A language registration carries the data editing commands need: comment
-tokens, bracket pairs with auto-closing flags, and indentation patterns.
-Native code evaluates that data in pure functions: the indentation of a new
-line and of a line that starts with a closer, and which comment token
-toggling adds or strips. The bundled Rust, TypeScript and JavaScript (with
-their JSX variants), Python, TOML, and Markdown packages supply the data, and
-tests check concrete results per language. Personal config can replace one
-value by spreading the registered definition. No command behaves differently
-yet; D074 and D075 call the evaluators.
+tokens and bracket pairs with auto-closing flags. A pure native function
+decides which comment token toggling adds or strips. The bundled Rust,
+TypeScript and JavaScript (with their JSX variants), Python, TOML, and
+Markdown packages supply the data, and tests check concrete results per
+language. Personal config can replace one value by spreading the registered
+definition. No command behaves differently yet; D074 and D075 read the data.
+
+Indentation is not part of this item. Zed, Helix, and Neovim indent from
+tree-sitter `indents` queries, which D066 adds, so regex patterns or bracket
+heuristics written now would be replaced.
 
 ## Design
 
@@ -36,7 +38,6 @@ yet; D074 and D075 call the evaluators.
                newline?: boolean;    // default open !== close
                notIn?: ("string" | "comment")[] }[];
   autoCloseBefore?: string;
-  indentation?: { increase?: string; decrease?: string };
   ```
 
   - `comments.line` lists every line comment token. The first is what
@@ -48,147 +49,79 @@ yet; D074 and D075 call the evaluators.
     each line; one with neither makes the commands no-ops.
   - One block comment style per language, as in Zed.
   - `brackets` is one list for matching, auto-closing, and surrounding. A
-    pair whose `open === close` (quotes) never takes part in matching or
-    indentation. `notIn` names syntax capture families at the cursor where
-    auto-closing is suppressed. `newline` means Enter between the pair opens
-    an indented middle line. Auto-closing happens only when the next
-    character is whitespace, the end of the line, or one of
-    `autoCloseBefore`.
-- **Indentation evaluation.** Brackets come first: a line whose last
-  non-whitespace character opens a bracket pair indents the next line one
-  level, and a line whose first non-whitespace character closes one outdents
-  to the level of the line holding its opener's line, or one level when the
-  opener is not found nearby. `indentation.increase`, matched against the
-  line above, indents the next line; `indentation.decrease`, matched against
-  the current line, outdents it. Patterns use Rust `regex` syntax, as in
-  Zed, and cover what brackets miss, such as Python's trailing `:` and
-  `else`/`elif`/`except`. The evaluator returns a change in levels relative
-  to a reference line, not whitespace; D074 turns levels into tabs or spaces
-  with `editor.tabSize`.
+    pair whose `open === close` (quotes) never takes part in matching.
+    `notIn` names syntax families at the cursor where auto-closing is
+    suppressed. `newline` means Enter between the pair opens an indented
+    middle line. Auto-closing happens only when the next character is
+    whitespace, the end of the line, or one of `autoCloseBefore`.
 - **Comment evaluation.** Given a set of lines, the evaluator decides
-  whether toggling comments or uncomments them, and returns the token and
-  column per line: comment at the smallest indentation of non-blank lines,
-  uncomment when every non-blank line starts with a known token, strip the
-  longest match. Block-only languages return a wrap per line.
+  whether toggling comments or uncomments them: comment at the smallest
+  indentation of non-blank lines, uncomment when every non-blank line starts
+  with a known token, strip the longest match. Block-only languages wrap and
+  unwrap each line.
 - **Native ownership.** The definition crosses as one JSON argument decoded
-  with serde, as theme definitions do. Patterns compile with the `regex`
-  crate during the existing off-foreground compile step, and an invalid one
-  rejects the registration with a typed `InvalidPattern` host error naming
-  `increase` or `decrease`. The registry exposes the compiled configuration
-  of a language ID so native editing code reads it without calling
-  JavaScript; injected layers resolve their own language's configuration.
-  The evaluators are plain functions over text lines and the configuration,
-  with no gpui or buffer dependency.
+  with serde, as theme definitions do. The registry exposes the resolved
+  configuration of a language ID so native editing code reads it without
+  calling JavaScript; injected layers resolve their own language's
+  configuration. The evaluator is a plain function over text lines and the
+  configuration, with no gpui or buffer dependency.
 - **Bundled scope.** Rust, `javascript`, `javascriptreact`, `typescript`,
-  `typescriptreact`, Python, TOML, and Markdown get the data. Indentation
-  patterns are written only where brackets do not suffice: Python.
+  `typescriptreact`, Python, TOML, and Markdown get the data.
   `markdown_inline` exists only for injection and gets none. The languages in
   `@knot/language-others` are deferred as D132.
 
 ## Exclusions
 
-- Editing commands: auto-indent on Enter, comment toggling, and auto-closing
-  are D074 and D075, which call these evaluators.
+- Editing commands: comment toggling and auto-closing are D074 and D075.
+- Indentation and auto-indent: D066's `indents` queries. Until then D074's
+  Enter keeps the current line's indentation.
 - Data for the languages in `@knot/language-others`: deferred as D132.
 - Syntax-scoped overrides such as JSX's `{/* */}`: deferred as D130.
 - On-Enter comment continuation, word characters, and a second block comment
   style: deferred as D131.
-- Tree-sitter `indents` queries: D066.
 
 ## Deferred decisions
 
 - Whether `notIn` checks the syntax tree or highlight captures at the
   cursor: decided in D075.
-- How the evaluators treat a cursor in the middle of a line (Enter splits
-  the line, so the remainder may start with a closer): decided in D074,
-  which may add an input to the indentation evaluator.
 
 ## Checkpoints
 
 ### 1. Contract and native storage — ✅ approved
 
-Completed: the editing fields, `languages.get`, and `InvalidPattern` are in
+Completed: the editing fields and `languages.get` are in
 `src/host/js/knot.d.ts`; `src/app/languages/editing.rs` holds the registered
-`EditingDefinition` and the compiled `EditingConfiguration`, whose
-compilation resolves bracket defaults, so `get` returns editing fields as
-registered and JavaScript validation checks shapes only. Comment and bracket
-tokens must be nonempty without surrounding whitespace. Open for D074: a
-syntax layer holds no language ID, so resolving an injected layer's
-configuration needs a layer-to-ID mapping.
+`EditingDefinition` and the resolved `EditingConfiguration`, which fills
+bracket defaults, so `get` returns editing fields as registered and
+JavaScript validation checks shapes only. Comment and bracket tokens must be
+nonempty without surrounding whitespace. Open for D074: a syntax layer holds
+no language ID, so resolving an injected layer's configuration needs a
+layer-to-ID mapping.
 
-### 2. Indentation and comment evaluators — ✅ implemented, ⏳ review gate
+### 2. Comment evaluator — ✅ implemented, ⏳ review gate
 
-- ✅ `EditingConfiguration::indentation_after(lines, row)` (a new empty line
-  after `row`), `indentation(lines, row)` (a line given its own text), and
-  `toggle_comments(lines)` in `src/app/languages/editing.rs`, tested in
-  `src/app/languages/editing/tests.rs`. Indentation returns a reference
-  line and a level change; comment toggling returns byte-range replacements
-  per line, so wrapping and unwrapping use the same shape.
-- Scope decisions for review:
-  - Only pairs with `newline` take part in indentation. Quotes already
-    default to `newline: false`, and a pair that is also an operator, such as
-    Rust's or TSX's `<`/`>`, sets it false so `a > b` is not a closer.
-  - Brackets and patterns read a line's code: string contents (between
-    quote pairs, with backslash escapes) and line and single-line block
-    comments are removed. A quote unclosed on its line counts as code, so a
-    Rust lifetime does not hide the rest of the line.
-  - A reference line that closes a bracket opened on an earlier line, as
-    the last line of a multi-line call does, hands its role to the line
-    holding that opener; its own trailing opener or `increase` match still
-    adds a level, so Python's `    b):` indents relative to `def f(`.
-  - `indentation` covers D074's mid-line Enter: D074 inserts the split
-    remainder as its own line and asks for its indentation, so `{|}` gives
-    `}` its opener's level; the middle line for a `newline` pair stays D074's.
-  - The opener search reads at most 500 lines up.
-
-
-- Deliverables: pure native functions for the indentation change of a new
-  line after a given line, the outdent of a line from its own text, and the
-  comment toggle plan for a set of lines, over the compiled configuration.
-- Validation: unit tests over hand-built configurations, independent of any
-  bundled package: bracket indent and outdent, a closer that finds its
-  opener several lines up, quotes ignored, increase and decrease patterns,
-  blank lines skipped when choosing the reference line, commenting at the
-  minimum indentation, uncommenting with the longest token, mixed commented
-  and uncommented lines commenting, block-only wrapping, and no tokens.
-- **Implementation context:**
-  - New `src/app/languages/editing.rs` (declared from `languages.rs`)
-    holding the configuration type from checkpoint 1 and the evaluators, so
-    they stay beside the registry and free of gpui and `BufferModel`. Inputs
-    are line strings; outputs are levels and byte columns per line.
-  - Tests in `src/app/languages/editing/tests.rs`, following the sibling
-    `tests.rs` layout.
-- Review gate: the evaluation rules match what D074 and D075 need before
-  real language data depends on them.
+- ✅ `EditingConfiguration::toggle_comments(lines)` in
+  `src/app/languages/editing.rs`, tested in
+  `src/app/languages/editing/tests.rs`. It returns byte-range replacements
+  per line, so commenting, uncommenting, wrapping, and unwrapping share one
+  shape; blank lines are untouched.
+- ✅ Indentation removed from D073 (contract fields, `InvalidPattern`, the
+  `regex` dependency, and its evaluators) in favor of D066.
+- Review gate: the comment rules match what D074 needs.
 
 ### 3. Bundled language data with per-language behavior tests
 
 - Deliverables: comments, brackets, and `autoCloseBefore` for Rust, the four
-  ECMAScript languages, Python, TOML, and Markdown, and indentation patterns
-  for Python.
+  ECMAScript languages, Python, TOML, and Markdown.
 - Validation:
   - A product test starts the bundled language packages, asserts the
-    startup report has no failures (so a pattern the `regex` crate rejects
-    fails CI), and runs table-driven cases through the evaluators on each
-    language's registered configuration. Each case names a language, the
-    text above the cursor, and the expected level change or comment result.
-    Every language's table is a full suite, not a sample: each bracket pair
-    in both directions, each comment token in both directions, each
-    indentation pattern with matching and non-matching lines, nesting, blank
-    and comment lines between a line and its reference, and the language's
-    common constructs (Rust closures, `match` arms and `where` clauses;
-    ECMAScript arrow functions, object literals, template literals, and JSX;
-    Python decorators, multi-line calls, `try`/`except`/`finally`, and
-    dedenting keywords; TOML tables and inline arrays; Markdown lists and
-    code fences). The following are illustrative only: Rust `fn main() {` indents the next line and `}` returns to the
-    `fn` line's level; `match x {` inside an indented block nests one more
-    level; `let s = "{";` does not indent; TypeScript `const a = [` and
-    `foo(` indent and `]);` outdents; TSX's `<div>` keeps the level; Python
-    `def f():` and `if x:` indent, `else:` outdents to its `if`, and a
-    `# comment:` does not indent; TOML `[table]` keeps the level and an
-    inline array `a = [` indents; Rust toggling on a `///` line strips
-    `///`; TypeScript commenting a block indented at mixed levels puts `//`
-    at the shallowest column; Markdown commenting wraps in `<!-- -->`.
+    startup report has no failures, and runs table-driven comment cases
+    through the evaluator on each language's registered configuration. Every
+    language's table is a full suite, not a sample: each comment token in
+    both directions, mixed and indented selections, and each language's
+    bracket pairs and flags. For example, Rust toggling on a `///` line
+    strips `///`; TypeScript commenting a block indented at mixed levels puts
+    `//` at the shallowest column; Markdown commenting wraps in `<!-- -->`.
   - Shared package tests check token shapes: nonempty tokens, and every
     language in scope declares comments.
 - **Implementation context:**
@@ -209,10 +142,9 @@ configuration needs a layer-to-ID mapping.
 - Deliverables: the language registration section of the extension guide
   shows editing data and deriving a language with `languages.get`; the
   semantic UI reference notes that the registry owns editing configuration
-  and its evaluators for native editing code; a decision records data in the
-  registration, Zed's merged bracket list, bracket-first indentation, and
-  Rust regex syntax for patterns. Remove this plan and mark D073 ✅ in the
-  daily-driver plan.
+  and the comment evaluator for native editing code; a decision records data
+  in the registration, Zed's merged bracket list, and indentation left to
+  D066's queries. Remove this plan and mark D073 ✅ in the daily-driver plan.
 - **Implementation context:** `docs/extension-api.md` (Register a
   language), `docs/architecture/semantic-ui.md` (Syntax highlighting and
   languages), `docs/decisions.md` (a new Language editing configuration

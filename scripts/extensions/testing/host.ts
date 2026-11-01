@@ -630,8 +630,7 @@ export const api: KnotApi = {
     },
   },
   languages: {
-    // Queries and patterns are not compiled; product tests cover InvalidQuery
-    // and InvalidPattern.
+    // Queries are not compiled; product tests cover InvalidQuery.
     register: async (definition) => {
       if (!GRAMMARS.includes(definition.grammar)) throw hostError("UnknownGrammar");
       state.languages.push(definition);

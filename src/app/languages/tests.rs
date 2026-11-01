@@ -1,9 +1,7 @@
 use gpui::{AppContext, TestAppContext};
 
 use super::{
-    editing::{
-        Bracket, BracketPair, CommentTokens, IndentationPattern, IndentationPatterns, SyntaxFamily,
-    },
+    editing::{Bracket, BracketPair, CommentTokens, SyntaxFamily},
     *,
 };
 use crate::app::{
@@ -100,33 +98,17 @@ fn compile_errors_name_the_grammar_or_query() {
     unknown.info.grammar = "cobol".into();
     assert!(matches!(
         unknown.compile(),
-        Err(LanguageCompileError::Syntax(
-            SyntaxLanguageError::UnknownGrammar
-        ))
+        Err(SyntaxLanguageError::UnknownGrammar)
     ));
     let mut invalid = definition("rust", "Rust");
     invalid.queries.injections = "(not_a_node) @injection.content".into();
     assert!(matches!(
         invalid.compile(),
-        Err(LanguageCompileError::Syntax(
-            SyntaxLanguageError::InvalidQuery {
-                query: SyntaxQuery::Injections,
-                row: 0,
-                ..
-            }
-        ))
-    ));
-    let mut pattern = definition("python", "Python");
-    pattern.editing.indentation = Some(IndentationPatterns {
-        increase: Some(":\\s*$".into()),
-        decrease: Some("^\\s*(else".into()),
-    });
-    assert!(matches!(
-        pattern.compile(),
-        Err(LanguageCompileError::Pattern(InvalidPattern {
-            pattern: IndentationPattern::Decrease,
+        Err(SyntaxLanguageError::InvalidQuery {
+            query: SyntaxQuery::Injections,
+            row: 0,
             ..
-        }))
+        })
     ));
 }
 
@@ -154,10 +136,6 @@ fn edited(id: &str, name: &str, line_comment: &str) -> LanguageDefinition {
             },
         ]),
         auto_close_before: Some(";)".into()),
-        indentation: Some(IndentationPatterns {
-            increase: Some("^\\s*where$".into()),
-            decrease: None,
-        }),
     };
     definition
 }
@@ -204,14 +182,6 @@ fn editing_configuration_follows_the_defining_registration() {
         ]
     );
     assert_eq!(editing.auto_close_before, ";)");
-    assert!(
-        editing
-            .increase_indent
-            .as_ref()
-            .unwrap()
-            .is_match("  where")
-    );
-    assert!(editing.decrease_indent.is_none());
     assert_eq!(
         registry.get("rust").unwrap(),
         &edited("rust", "Second", "#")
@@ -228,7 +198,7 @@ fn editing_configuration_follows_the_defining_registration() {
     registry.register(owner(4), definition("go", "Go").compile().unwrap());
     let editing = registry.editing("go").unwrap();
     assert!(editing.line_comments.is_empty() && editing.brackets.is_empty());
-    assert!(editing.increase_indent.is_none());
+    assert!(editing.block_comment.is_none());
 }
 
 #[test]

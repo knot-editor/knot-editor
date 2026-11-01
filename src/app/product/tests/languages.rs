@@ -30,19 +30,11 @@ const typeError = await failure(() => languages.register({
   id: "rust", name: "Rust", grammar: "rust", fileExtensions: [".rs"], queries: { highlights: "" },
 }));
 if (!(typeError instanceof TypeError)) throw typeError;
-const pattern = await failure(() => languages.register({
-  id: "python", name: "Python", grammar: "python", queries: { highlights: "" },
-  indentation: { increase: ":\\s*$", decrease: "^\\s*(else" },
-}));
-if (pattern.code !== "InvalidPattern" || pattern.details.pattern !== "decrease") {
-  throw new Error(JSON.stringify(pattern.details));
-}
 for (const editing of [
   { comments: { line: ["// "] } },
   { comments: { block: ["<!--"] } },
   { brackets: [{ open: "", close: ")" }] },
   { brackets: [{ open: "(", close: ")", notIn: ["code"] }] },
-  { indentation: { increase: 1 } },
 ]) {
   const error = await failure(() => languages.register({
     id: "bad", name: "Bad", grammar: "rust", queries: { highlights: "" }, ...editing,
@@ -54,7 +46,6 @@ await languages.register({
   comments: { line: ["#"], block: ['"""', '"""'] },
   brackets: [{ open: "(", close: ")" }, { open: "'", close: "'", notIn: ["string"] }],
   autoCloseBefore: ";)",
-  indentation: { increase: ":\\s*$" },
 });
 const edited = await languages.get("edited");
 const expected = {
@@ -63,7 +54,6 @@ const expected = {
   comments: { line: ["#"], block: ['"""', '"""'] },
   brackets: [{ open: "(", close: ")" }, { open: "'", close: "'", notIn: ["string"] }],
   autoCloseBefore: ";)",
-  indentation: { increase: ":\\s*$" },
 };
 if (JSON.stringify(edited) !== JSON.stringify(expected) || !Object.isFrozen(edited.brackets[1].notIn)) {
   throw new Error(JSON.stringify(edited));
@@ -161,7 +151,7 @@ fn registered_languages_detect_on_open_and_save_as_and_follow_teardown(cx: &mut 
         .read(|cx| crate::app::languages::editing_configuration("edited", cx))
         .unwrap();
     assert_eq!(editing.line_comments, ["//"]);
-    assert!(editing.increase_indent.as_ref().unwrap().is_match("if x:"));
+    assert!(!editing.brackets[1].newline);
 
     let execution = dispatch_product_command(&shell, window, SAVE_AS_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);

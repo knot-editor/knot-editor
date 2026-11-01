@@ -138,20 +138,24 @@ complete list for that item.
     or D058 is selected. Then add per-language `folds`, `indents`, and
     `textobjects` queries to language registration and expose node queries
     through the extension API without exposing tree-sitter objects.
+    Auto-indent on Enter and reindenting a line read the `indents` queries,
+    as in Zed, Helix, and Neovim; D073 deliberately carries no indentation
+    data, and D074's Enter only keeps the current indentation until this
+    lands.
   - Order: after D073, which adds editing data to the same language
     registration, and D068, whose gutter lanes hold folds; before D058.
 
 - **D132 — Editing data for the remaining bundled languages**
-  - Deferred: D073 supplies comment, bracket, and indentation data only for
+  - Deferred: D073 supplies comment and bracket data only for
     the languages with their own packages (Rust, TypeScript and JavaScript,
     Python, TOML, Markdown). The languages in `@knot/language-others` (C,
     C++, CSS, Go, HTML, Java, JSON, JSONC, tree-sitter query, shell script,
     YAML) register without it, so editing commands treat them as having no
-    comments, brackets, or indentation rules.
+    comments or brackets.
   - Reconsider: Daily editing in one of those languages misses toggle
-    comment, auto-indent, or auto-closing, or the languages move into their
-    own packages (D129). Then add the data with per-language behavior
-    tests like D073's, including YAML indentation patterns.
+    comment or auto-closing, or the languages move into their own packages
+    (D129). Then add the data with per-language behavior tests like
+    D073's.
   - Order: after D073; with or after D129.
 
 - **D130 — Syntax-scoped language configuration**
@@ -166,8 +170,8 @@ complete list for that item.
   - Order: after D073, D074, and D075.
 
 - **D131 — Richer language editing data**
-  - Deferred: D073 carries comment tokens, one block comment style, bracket
-    pairs, and indentation patterns. Comment continuation on Enter (`///`,
+  - Deferred: D073 carries comment tokens, one block comment style, and
+    bracket pairs. Comment continuation on Enter (`///`,
     `*` inside a block comment), VS Code's `onEnterRules`, per-language word
     characters, and a second block comment style (Pascal's `{ }` and
     `(* *)`) are not modelled.
