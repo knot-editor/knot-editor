@@ -1,6 +1,6 @@
 # D134 — Tree-sitter indentation
 
-Status: 🚧 checkpoint 4 awaiting review. Item of the
+Status: 🚧 checkpoint 4 approved; checkpoint 5 in progress. Item of the
 [daily-driver plan](daily-driver.md); split from D066 in the
 [roadmap](../roadmap.md).
 
@@ -183,44 +183,15 @@ indentation and within the typing undo group. Composition and paste never
 reindent. The Rust `indents.jsonc` carries `type` cases, including negative
 ones.
 
-### 4. Bundled language queries — 🚧 awaiting review
+### 4. Bundled language queries — ✅ approved
 
-Deliverables:
-
-- ✅ ECMAScript, JSX, and TypeScript queries composed per language as the
-  highlights are. Upstream's `(ERROR) @indent.auto` is dropped, so the
-  unclosed-bracket rule indents a block typed before its closer.
-- ✅ Python: `lua-match?` rewritten to `match?`; strings ignored. After
-  `return`, `raise`, `pass`, `break`, or `continue` the next line goes back
-  one level, as in VS Code, through a Knot property,
-  `(#set! indent.after_end)`, which limits `@indent.dedent` to lines after
-  its node; upstream instead indents from the next line's own node, which
-  is column 0 below a nested block. A misplaced `else` or `finally` is a
-  bare keyword in an ERROR followed by its colon in this grammar, so the
-  query captures that shape instead of upstream's text match.
-- ✅ The typing trigger accepts a capture whose match reaches the caret, so
-  a pattern can capture a following token as `@_end`: `else:` outdents when
-  its colon is typed, and `elsewhere` never moves.
-- ✅ TOML: only closing brackets branch, since upstream's opening ones
-  outdent a nested array that opens on its own line.
-- ✅ Markdown ships no query: upstream's only pattern,
-  `(list_item) @indent.auto`, never applies because Markdown's text belongs
-  to the injected inline layer, which keeps the line's indentation. Its
-  cases cover a Rust code fence indenting, outdenting, and reindenting as
-  Rust.
-- ✅ `indents.jsonc` cases for every package; a case file may hold groups
-  with their own languages, so JSX and TypeScript-only cases run only where
-  they apply. Python cases reindent only correctly structured code, since
-  its indentation is its structure.
-
-Validation: every package's cases; extension package tests.
-
-Review gate: daily editing in each language approved.
-
-**Implementation context:** `extensions/@knot/language-typescript/src/`
-(ECMAScript and JSX query modules shared across its languages),
-`extensions/@knot/language-python/src/`, `language-toml`, and
-`language-markdown`, each with `src/languages.ts` and `test/`.
+ECMAScript, JSX, TypeScript, Python, and TOML ship adapted queries with
+`indents.jsonc` cases; Markdown ships none, since its text belongs to the
+inline layer, and its cases cover Rust code fences. Departures from
+upstream: no `(ERROR) @indent.auto` in ECMAScript, Python's dedent after
+`return` and similar statements through `indent.after_end`, misplaced
+`else`/`finally` captured by their ERROR shape with the colon as `@_end`,
+and only closing brackets branching in TOML.
 
 ### 5. Documentation
 
