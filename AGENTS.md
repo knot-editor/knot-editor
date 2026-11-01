@@ -66,6 +66,8 @@ canonical source before reading broadly.
 
 ## Rules
 
+- When the user pushes back on an approach or a result, discuss it first and
+  agree on the way forward before editing any code or documentation.
 - Plan a task, including any `D###` item of an index plan, with the
   `brainstorm-plan` skill, and execute a plan with the `implement-plan` skill.
   Both live in `.agents/skills`, which `.claude/skills` links to.
