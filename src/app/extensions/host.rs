@@ -2623,6 +2623,7 @@ mod tests {
             let report = host.read(cx).startup_report.as_ref().unwrap();
             for name in [
                 "@knot/projects",
+                "@knot/go-to-line",
                 "@knot/language-markdown",
                 "@knot/language-others",
                 "@knot/language-python",

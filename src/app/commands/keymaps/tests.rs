@@ -11,10 +11,11 @@ fn preset_registry(platform: Platform) -> BindingRegistry {
 }
 
 #[test]
-fn every_preset_binding_is_unique_and_names_a_native_command() {
+fn every_preset_binding_is_unique_and_names_a_native_or_bundled_command() {
     let native = inventory::iter::<crate::app::commands::declarations::CommandDescriptor>
         .into_iter()
         .map(|descriptor| descriptor.name)
+        .chain(presets::BUNDLED_PACKAGE_COMMANDS.iter().copied())
         .collect::<HashSet<_>>();
     for platform in PLATFORMS {
         let mut seen = HashSet::new();
@@ -239,6 +240,7 @@ fn every_platform_binds_the_editing_commands_in_the_editor_only() {
             ("alt-down".to_owned(), MOVE_LINES_DOWN_COMMAND),
             (format!("{secondary}-shift-k"), DELETE_LINES_COMMAND),
             (format!("{secondary}-|"), JUMP_TO_MATCHING_BRACKET_COMMAND),
+            ("ctrl-g".to_owned(), presets::GO_TO_LINE_COMMAND),
             (
                 if platform == Platform::Linux {
                     "ctrl-shift-alt-up"

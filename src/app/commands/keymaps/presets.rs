@@ -22,6 +22,12 @@ use crate::host::protocol::{Command, CommandArgumentValue, ExtensionId, Extensio
 /// The name of the native preset, which registrations cannot replace.
 pub(crate) const KNOT_PRESET: &str = "knot";
 
+/// Commands of bundled packages that the Knot preset binds. A key bound to one
+/// reports it unavailable while its package is not running.
+pub(crate) const GO_TO_LINE_COMMAND: &str = "editor.go-to-line";
+#[cfg(test)]
+pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] = &[GO_TO_LINE_COMMAND];
+
 /// One preset binding; a missing command unbinds the key.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -352,6 +358,7 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("backspace", DELETE_BACKWARD_COMMAND, Some("editor")),
     ("delete", DELETE_FORWARD_COMMAND, Some("editor")),
     ("ctrl-space", SHOW_COMPLETIONS_COMMAND, Some("editor")),
+    ("ctrl-g", GO_TO_LINE_COMMAND, Some("editor")),
     ("secondary-n", NEW_COMMAND, None),
     ("ctrl-`", NEW_TERMINAL_COMMAND, None),
     ("ctrl-tab", NEXT_RECENT_TAB_COMMAND, None),

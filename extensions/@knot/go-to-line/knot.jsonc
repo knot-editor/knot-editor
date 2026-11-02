@@ -1,0 +1,11 @@
+{
+  // Bundled Go to Line command.
+  "name": "@knot/go-to-line",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "displayName": "Go to Line",
+  "description": "Move the cursor to a line and column, previewing it while typing.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}

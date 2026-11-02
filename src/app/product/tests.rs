@@ -7,6 +7,7 @@ mod editor_api;
 mod extension_api;
 mod extension_restart;
 mod git_status;
+mod go_to_line;
 mod keybindings;
 mod language_brackets;
 mod language_editing;
