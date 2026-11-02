@@ -5246,7 +5246,10 @@ fn heap_exhaustion_probe_child() {
     let pool = RuntimePool::new(PoolConfig::new(NonZeroUsize::new(2).unwrap()));
     let exhausted = key(1);
     let neighbor = key(2);
-    pool.load(exhausted, IsolateConfig::with_heap_limit(5 * 1024 * 1024))
+    // A limit near V8's minimum working set can fail a background compiler's
+    // allocation, which is fatal for the process rather than reaching the
+    // near-heap-limit callback.
+    pool.load(exhausted, IsolateConfig::with_heap_limit(16 * 1024 * 1024))
         .unwrap();
     pool.load(neighbor, IsolateConfig::default()).unwrap();
     let error = pool
