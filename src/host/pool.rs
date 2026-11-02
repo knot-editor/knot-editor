@@ -424,44 +424,73 @@ mod tests {
             values[values.len() / 2]
         }
         let (pool, _inbox) = ExtensionPool::new(PoolConfig::single_worker());
-        let load = |extension: u64| {
-            let runtime = key(extension, 1);
+        let mut next_extension = 0;
+        let mut load = |source: &str| {
+            let runtime = key(next_extension, 1);
+            next_extension += 1;
+            let graph = ModuleGraph::new(
+                "file:///measure/",
+                "main.js",
+                [("main.js".to_owned(), Arc::from(source))].into(),
+            )
+            .unwrap();
             let start = std::time::Instant::now();
-            pool.load(runtime, ExtensionConfig::default()).unwrap();
-            let elapsed = start.elapsed();
-            pool.execute_fixture_module(runtime, "file:///fixtures/empty.js", "export {};")
-                .unwrap()
-                .wait()
+            let execution = pool
+                .load_package(runtime, ExtensionConfig::default(), graph)
                 .unwrap();
-            elapsed
+            let created = start.elapsed();
+            execution.wait().unwrap();
+            (runtime, created, start.elapsed())
         };
         // The first isolate pays V8's process-wide setup.
-        let first = load(0);
-        let resident_before = process_resident_bytes().unwrap_or(0);
-        let mut durations = (1..=COUNT).map(load).collect::<Vec<_>>();
-        let resident_after = process_resident_bytes().unwrap_or(0);
-        durations.sort_unstable();
-        let usage = pool
-            .heap_usage()
-            .into_iter()
-            .filter_map(|(_, usage)| usage)
-            .collect::<Vec<_>>();
+        let (_, first, _) = load("export {};");
         println!("first isolate creation: {first:?}");
-        println!(
-            "isolate creation over {COUNT}: median {:?}, p90 {:?}",
-            durations[durations.len() / 2],
-            durations[durations.len() * 9 / 10]
-        );
-        println!(
-            "resident size per isolate: {}",
-            mib(resident_after.saturating_sub(resident_before) as f64 / COUNT as f64)
-        );
-        println!(
-            "heap per isolate (median): used {}, total {}, external {}",
-            mib(median(usage.iter().map(|usage| usage.used).collect()) as f64),
-            mib(median(usage.iter().map(|usage| usage.total).collect()) as f64),
-            mib(median(usage.iter().map(|usage| usage.external).collect()) as f64),
-        );
+        for (name, source) in [
+            ("empty package", "export {};"),
+            (
+                "package allocating ~8 MiB transiently at startup",
+                "{ const a = []; for (let i = 0; i < 100000; i++) a.push({ i, s: 'x' + i }); }",
+            ),
+        ] {
+            let resident_before = process_resident_bytes().unwrap_or(0);
+            let loaded = (0..COUNT).map(|_| load(source)).collect::<Vec<_>>();
+            let resident_after = process_resident_bytes().unwrap_or(0);
+            let mut created = loaded
+                .iter()
+                .map(|(_, created, _)| *created)
+                .collect::<Vec<_>>();
+            let mut started = loaded
+                .iter()
+                .map(|(_, _, started)| *started)
+                .collect::<Vec<_>>();
+            created.sort_unstable();
+            started.sort_unstable();
+            let keys = loaded.iter().map(|(key, ..)| *key).collect::<Vec<_>>();
+            let usage = pool
+                .heap_usage()
+                .into_iter()
+                .filter(|(key, _)| keys.contains(key))
+                .filter_map(|(_, usage)| usage)
+                .collect::<Vec<_>>();
+            println!("{name}, {COUNT} isolates:");
+            println!(
+                "  creation median {:?}, p90 {:?}; through startup median {:?}, p90 {:?}",
+                created[created.len() / 2],
+                created[created.len() * 9 / 10],
+                started[started.len() / 2],
+                started[started.len() * 9 / 10],
+            );
+            println!(
+                "  resident size per isolate: {}",
+                mib(resident_after.saturating_sub(resident_before) as f64 / COUNT as f64)
+            );
+            println!(
+                "  heap per isolate (median): used {}, total {}, external {}",
+                mib(median(usage.iter().map(|usage| usage.used).collect()) as f64),
+                mib(median(usage.iter().map(|usage| usage.total).collect()) as f64),
+                mib(median(usage.iter().map(|usage| usage.external).collect()) as f64),
+            );
+        }
     }
 
     #[test]
