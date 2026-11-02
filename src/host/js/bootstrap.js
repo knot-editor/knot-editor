@@ -601,6 +601,16 @@ export async function registerView(contribution) {
   if (language !== null && content.kind !== "text") {
     throw new TypeError("view language applies only to text content");
   }
+  let gutter = false;
+  if (value.gutter !== undefined) {
+    if (typeof value.gutter !== "boolean") {
+      throw new TypeError("view gutter must be a boolean");
+    }
+    if (content.kind !== "text") {
+      throw new TypeError("view gutter applies only to text content");
+    }
+    gutter = value.gutter;
+  }
   let location = "left";
   let order = null;
   let visible = true;
@@ -632,6 +642,7 @@ export async function registerView(contribution) {
     content.kind,
     actions,
     language,
+    gutter ? 1 : 0,
   );
   if (provider !== null) treeProviders.set(registration, provider);
   const owned = ownership(() => treeProviders.delete(registration),

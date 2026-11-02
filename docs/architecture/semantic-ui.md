@@ -39,7 +39,10 @@ into nvim-treesitter's standard capture names by longest dotted prefix, and the
 `Theme` global maps each capture to a style. A decoration or gutter marker
 names a color key instead, so a query can never draw one: decorations form one
 wavy-underline layer per key in the model's paint order, which puts `error`,
-`warning`, and `info` above other keys with the most severe on top.
+`warning`, and `info` above other keys with the most severe on top. Gutter
+markers share one lane, which shows the most severe marker of each line, the
+latest among equals, and runs that contribution's command when clicked
+([editor views](workbench-and-lifecycle.md#editor-views)).
 
 ## Themes and color keys
 
@@ -260,6 +263,7 @@ private read-only `BufferModel` rendered by the ordinary `EditorView`; it is not
 registered with the document collection and has no resource or persistence.
 The extension replaces the whole text through a foreground request, and the
 bridge keeps the last text so a window created later presents current content.
+A frame's editor has no gutter unless its registration asks for one.
 Wrapping the editor surface is provisional; the [roadmap](../roadmap.md) tracks a
 dedicated read-only presentation (D054).
 

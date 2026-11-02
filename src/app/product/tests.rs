@@ -24,6 +24,7 @@ mod sessions;
 mod settings;
 mod startup;
 mod terminal;
+mod text_frames;
 mod themes;
 mod tool_layout;
 mod tools;

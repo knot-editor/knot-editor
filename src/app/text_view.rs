@@ -66,6 +66,12 @@ impl TextView {
         cx.notify();
     }
 
+    /// Show or hide the editor gutter of markers and line numbers.
+    pub(crate) fn set_show_gutter(&mut self, show: bool, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.set_show_gutter(show, cx));
+    }
+
     pub(crate) fn selected_text(&self, cx: &App) -> Option<String> {
         let range = self.editor.read(cx).selected_byte_range(cx)?;
         if range.is_empty() {
@@ -88,6 +94,11 @@ impl TextView {
             return CommandClaim::Finished(crate::host::protocol::CommandOutcome::Completed);
         }
         CommandClaim::Declined
+    }
+
+    #[cfg(test)]
+    pub(crate) fn editor(&self) -> &Entity<EditorView> {
+        &self.editor
     }
 
     #[cfg(test)]

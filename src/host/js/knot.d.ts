@@ -1007,6 +1007,10 @@ declare module "knot" {
     readonly placement?: ViewPlacement;
     /** Language ID a text frame's content is highlighted as; text frames only. */
     readonly language?: string;
+    /** Whether a text frame shows the editor gutter of markers and line
+     * numbers, which then follow `editor.lineNumbers` under the view's ID.
+     * Text frames only; defaults to false. */
+    readonly gutter?: boolean;
   }
   /** Registration owns one contributed view across every live product window. */
   export interface ViewRegistration extends Disposable {

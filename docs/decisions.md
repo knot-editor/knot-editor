@@ -223,6 +223,35 @@ like its indentation cases.
 References: [editor views](architecture/workbench-and-lifecycle.md#editor-views)
 and [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
+## Editor gutter
+
+The gutter is a fixed order of native lanes, markers then line numbers, with
+folds to join beside the text (D066). Extensions share the marker lane rather
+than defining lanes, because nothing yet needs a second one and every lane
+would otherwise need its own width, order, and input rules. The marker lane
+is always reserved, as VS Code's glyph margin and Zed's gutter are, so text
+never shifts sideways when a diagnostic appears or clears; the number lane
+sizes to the line count's digits instead, which changes only when the count
+gains a digit. A line shows one marker, chosen by decoration severity and
+then by the latest, so a click runs the command of what is painted.
+Multi-line bars and marker tooltips wait for extension-owned decoration
+styles (D114).
+
+`editor.lineNumbers` takes `"relative"` beside `"on"` and `"off"`, because it
+costs one subtraction and a Vim mode (D058) needs it. The cursor line's
+background follows VS Code's default `renderLineHighlight`: the text area
+only, hidden while text is selected, shown without focus, with no setting
+because a theme can make the color transparent.
+
+Documents show the gutter and text frames opt in through their
+registration. A setting alone cannot express that split, since the settings
+store has one default per key and the frame's own view ID scope only exists
+once someone writes it; generated output rarely wants line numbers, while a
+frame that does still follows `editor.lineNumbers` under its view ID.
+
+References: [editor views](architecture/workbench-and-lifecycle.md#editor-views)
+and [extension guide](extension-api.md#read-only-text-frames).
+
 ## Editing commands
 
 Editing commands follow VS Code's behavior and default bindings, because

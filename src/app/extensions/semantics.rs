@@ -85,6 +85,8 @@ struct TreeRegistration {
     text: Option<String>,
     /// The language a text frame's content is highlighted as.
     language: Option<String>,
+    /// Whether a text frame shows the editor gutter.
+    gutter: bool,
 }
 
 /// Foreground registries and native view surfaces exposed to extension requests.
@@ -146,8 +148,8 @@ impl ExtensionSemanticBridge {
         Ok(())
     }
 
-    /// Attach a native text instance, seeding it with the last pushed content
-    /// and the registration's language.
+    /// Attach a native text instance, seeding it with the last pushed content,
+    /// the registration's language, and whether it shows the gutter.
     pub(crate) fn add_text_view(
         &mut self,
         kind: impl Into<String>,
@@ -161,6 +163,8 @@ impl ExtensionSemanticBridge {
             .values()
             .find(|entry| entry.definition.id == kind)
         {
+            let gutter = registration.gutter;
+            view.update(cx, |view, cx| view.set_show_gutter(gutter, cx));
             if let Some(text) = registration.text.clone() {
                 view.update(cx, |view, cx| view.replace_text(&text, cx));
             }
@@ -219,6 +223,7 @@ impl ExtensionSemanticBridge {
             order,
             visible,
             language,
+            gutter,
         } = arguments;
 
         if id.is_empty() || id.starts_with("knot.") {
@@ -273,6 +278,7 @@ impl ExtensionSemanticBridge {
                 identity,
                 text: None,
                 language,
+                gutter,
             },
         );
         Ok(registration)
@@ -554,6 +560,7 @@ mod tests {
             order: None,
             visible: true,
             language: None,
+            gutter: false,
         }
     }
 
@@ -567,6 +574,7 @@ mod tests {
             order: None,
             visible: true,
             language: None,
+            gutter: false,
         }
     }
 

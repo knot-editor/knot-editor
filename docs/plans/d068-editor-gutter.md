@@ -1,6 +1,6 @@
 # D068 — Editor gutter and line numbers
 
-Status: 🚧 checkpoints 1–2 complete; checkpoint 3 in progress. Item of the
+Status: 🚧 checkpoint 3 awaiting review. Item of the
 [daily-driver plan](daily-driver.md); depends on D064 (themes, complete).
 
 ## Outcome
@@ -153,7 +153,13 @@ selects. Hitboxes inserted in prepaint give the text an I-beam and command
 markers a hand. Editor tests cover line selection, marker clicks, and
 precedence.
 
-### 3. Text-frame enablement and documentation
+### 3. Text-frame enablement and documentation 🚧 review
+
+Progress: ✅ the `gutter` registration option reaches `TextView` and frames
+start without a gutter; editor views, semantic UI, the extension guide, and a
+new "Editor gutter" decision describe the final behavior. The schema and the
+fake host carry no view fields, so neither changed. Pending after approval:
+mark D068 ✅ in the daily-driver plan and remove this plan.
 
 Deliverables:
 

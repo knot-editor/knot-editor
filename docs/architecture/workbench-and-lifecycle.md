@@ -113,6 +113,22 @@ that no longer holds the pair drops the tracking, after which closers are
 ordinary text. Composition never closes or wraps. `editor.autoClosingBrackets`
 and `editor.autoSurround`, resolved for the view's scope, turn the two off.
 
+The gutter left of the text is an ordered row of native lanes: extension
+markers, then line numbers. The view lays the lanes out before each paint, so
+text bounds, hit testing, and painting read one layout. The marker lane has a
+fixed width that stays reserved, so text never shifts when a marker appears;
+the number lane fits the digits of the line count and is absent when
+`editor.lineNumbers`, resolved for the view's scope, is `"off"`. Relative
+numbers count from the caret's line, which shows its absolute number, and the
+caret line's number paints in `editor.lineNumber.active`. As VS Code's default
+does, the caret's line paints `editor.lineHighlight` across the text area
+while nothing is selected, focused or not. Each lane handles its own pointer:
+a number click selects its line with the line break, shift-click extends from
+the selection's anchor, and dragging extends by lines; a marker click runs
+the command of the marker painted there and never selects. Documents always
+have the gutter, while a contributed text frame has none unless its
+registration asks for one.
+
 Restorable view state is the anchor and caret as byte offsets, the start of the
 top visible line as a byte offset, and horizontal scroll in pixels. Applying it
 clamps each offset to the current text and snaps back to a character boundary,

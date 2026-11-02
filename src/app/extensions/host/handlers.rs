@@ -827,6 +827,8 @@ pub(crate) struct TreeArguments {
     pub order: Option<u64>,
     pub visible: bool,
     pub language: Option<String>,
+    /// Whether a text frame shows the editor gutter.
+    pub gutter: bool,
 }
 impl HostArguments for TreeArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
@@ -855,6 +857,7 @@ impl HostArguments for TreeArguments {
             order: reader.optional_integer(5)?,
             visible: reader.integer(6)? != 0,
             language: reader.optional_text(9, "view language must be text or null")?,
+            gutter: reader.integer(10)? != 0,
         })
     }
 }

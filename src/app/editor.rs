@@ -402,7 +402,8 @@ impl EditorView {
         Self::with_rendering(model, 0, EditorRenderingOptions::default(), cx)
     }
 
-    /// Build an editor presenting `model` inside the contributed view `kind`.
+    /// Build an editor presenting `model` inside the contributed view `kind`,
+    /// without a gutter until the view asks for one.
     pub(crate) fn for_contributed_view(
         model: Entity<BufferModel>,
         kind: impl Into<SharedString>,
@@ -410,7 +411,15 @@ impl EditorView {
     ) -> Self {
         Self {
             view_kind: kind.into(),
-            ..Self::new(model, cx)
+            ..Self::with_rendering(model, 0, EditorRenderingOptions { show_gutter: false }, cx)
+        }
+    }
+
+    /// Show or hide the gutter of markers and line numbers.
+    pub(crate) fn set_show_gutter(&mut self, show: bool, cx: &mut Context<Self>) {
+        if self.rendering.show_gutter != show {
+            self.rendering.show_gutter = show;
+            cx.notify();
         }
     }
 

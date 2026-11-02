@@ -197,7 +197,11 @@ await log.setText("replacement text\n");
 `invalidate` applies to tree frames and `setText` to text frames; the wrong kind
 rejects with `ContentKindMismatch`. Selection and copy work through the normal
 editor surface, but edits are rejected. Pass `language` with the registration to
-highlight the frame's text as a registered language.
+highlight the frame's text as a registered language. A frame has no gutter
+unless the registration passes `gutter: true`; its line numbers then follow
+`editor.lineNumbers` scoped to the frame's view ID, so
+`settings.set("editor.lineNumbers", "off", { view: "example.log" })` keeps
+only the marker lane.
 
 ## Register a language
 
@@ -436,7 +440,9 @@ Editor decorations and gutter markers and tree badges name the color key they
 paint with, native or defined, so a contribution looks right under every
 theme. A key nobody has defined paints as interface text until its definition
 arrives. Where decorations overlap, `error`, `warning`, and `info` paint above
-other keys, the most severe on top:
+other keys, the most severe on top. A gutter marker shows as a dot on the
+range's first line, and a line shows one marker, chosen by the same order and
+then by the latest; clicking it runs that contribution's command:
 
 ```js
 await buffer.contributions.replace([

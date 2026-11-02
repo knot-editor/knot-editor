@@ -3863,6 +3863,7 @@ fn install_semantic_providers(
             order: None,
             visible: true,
             language: None,
+            gutter: false,
         })
     );
     pool.respond(HostResponse {
