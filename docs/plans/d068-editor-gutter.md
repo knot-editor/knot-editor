@@ -1,6 +1,6 @@
 # D068 — Editor gutter and line numbers
 
-Status: 🚧 checkpoint 1 awaiting review. Item of the
+Status: 🚧 checkpoint 1 complete; checkpoint 2 in progress. Item of the
 [daily-driver plan](daily-driver.md); depends on D064 (themes, complete).
 
 ## Outcome
@@ -134,69 +134,15 @@ generated frames.
 
 ## Checkpoints
 
-### 1. Gutter layout, line numbers, and current line 🚧 review
+### 1. Gutter layout, line numbers, and current line ✅
 
-Deliverables:
-
-- `GutterLayout`, with the marker and number lanes, replaces `GUTTER_WIDTH`
-  and `show_gutter_markers`.
-- Line numbers paint in all three modes, with the active number on the caret
-  line.
-- The current-line highlight follows VS Code's rule.
-- The `editor.lineNumbers` setting and its `knot.d.ts` declaration.
-- The four color keys, with values in every bundled theme.
-
-Progress: ✅ deliverables landed. `EditorRenderingOptions.show_gutter` keeps
-the surface switch checkpoint 3 sets for frames; `GutterLayout`
-(`src/app/editor/gutter.rs`) is recomputed at the start of each paint, so
-`text_bounds()` reads the last painted lanes. The theme product test was not
-extended: the native key consistency test and the `@knot/themes` test that
-every theme sets exactly the native keys already cover the new keys.
-
-Validation:
-
-- Editor tests for lane widths: digit growth (9 → 10 lines, 99 → 100), the
-  minimum width, and the `"off"` and gutterless widths of `text_bounds()`.
-- Editor tests for the numbers painted in each mode: in relative mode, the
-  caret line shows its absolute number, and the others show their distance
-  from it.
-- Editor tests that the line highlight shows only with an empty selection.
-- A settings test that a scoped `editor.lineNumbers` value reaches only its
-  views.
-- The existing theme product test extended to the new keys.
-
-Review gate: visually check line numbers, the active number, and the line
-highlight in a dark and a light theme, on a short and a long file.
-
-Implementation context:
-
-- `src/app/editor.rs`:
-  - Replace `EditorRenderingOptions.show_gutter_markers`, `GUTTER_WIDTH`, and
-    the `text_bounds()` computation with a `GutterLayout`.
-  - The `GutterLayout` is computed from the view, its model's line count, and
-    `editor.lineNumbers` resolved through `settings_scope()`, as
-    `layout.rs::tab_size` does.
-  - The existing `observe_global::<ApplicationSettings>` subscription already
-    repaints on change.
-- `src/app/editor/paint.rs`:
-  - Collect visible numbers and lane x ranges into the paint state. The paint
-    state is a tuple, so add a struct for the gutter rather than widening it.
-  - Paint the gutter background, the numbers (shaped with
-    `shape_editor_line`, or `window.text_system().shape_line`, right-aligned),
-    and the markers within the gutter's content mask.
-  - Paint the line highlight inside the text mask, before the selection.
-- `src/app/settings.rs`: the `EDITOR_LINE_NUMBERS` constant, a
-  `native_definitions()` entry, and an `editor_line_numbers(scope, cx)`
-  resolver beside `editor_tab_size`.
-- `src/host/js/knot.d.ts`: declare the key in `Settings`.
-- `src/app/theme.rs`: add the keys to the native table near
-  `EDITOR_BRACKET_MATCH`.
-- `extensions/@knot/themes/src/themes/*.ts`: one value per key per theme.
-- Tests:
-  - `src/app/editor/tests.rs`, beside
-    `gutter_markers_reserve_a_column_beside_the_text`.
-  - `src/app/product/tests/themes.rs`, beside `gutter_colors_for_test`.
-  - `src/app/product/tests/settings.rs`.
+Complete and approved. `GutterLayout` (`src/app/editor/gutter.rs`) is
+recomputed at the start of each paint, and `text_bounds()` reads the last
+painted lanes. `EditorRenderingOptions.show_gutter` is the surface switch that
+checkpoint 3 sets for frames. Editor tests cover lane widths, labels in each
+mode, scoped settings, and the line highlight. The native color key test and
+the `@knot/themes` test that every theme sets exactly the native keys cover
+the new keys.
 
 ### 2. Lane interaction and marker precedence
 
