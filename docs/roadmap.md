@@ -367,6 +367,18 @@ complete list for that item.
     cases. Then choose one of those loading paths and replace every JSONC
     case file with TypeScript, so packages keep one format.
 
+- **D138 — Extension startup report as an untitled document**
+  - Deferred: Developer: Show Extension Startup Report toggles a custom
+    overlay that the product shell renders, and launch opens it when a
+    package failed. Developer: Show Extension Memory already presents its
+    report as a clean untitled document, which can be selected, copied,
+    searched, and compared across runs without a bespoke surface.
+  - Reconsider: The overlay needs a change, or reading or copying a failure
+    from it gets in the way. Then render the report as text into a clean
+    untitled document as Show Extension Memory does, open it from launch
+    when a package failed, and remove the overlay, its toggle, and its
+    rendering.
+
 - **D032 — Extension source maps**
   - Deferred: D018 can load built JavaScript and report generated source
     locations without mapping them back to authoring files.
