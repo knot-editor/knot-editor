@@ -385,6 +385,22 @@ Private native dispatch handles prevent author globals from fabricating callback
 context. Typed field decoding and error variants avoid JSON conversion hooks,
 diagnostic-string protocols, and silent numeric precision loss.
 
+Idle isolates rarely collect garbage on their own, so the worker sends a
+low-memory notification after a package's evaluation settles and after any turn
+of 100 ms or more. On Apple M1 Pro/macOS release builds with V8 152.2, a
+package that allocated about 8 MiB at startup kept 14 MiB resident and 9.3 MiB
+of dead heap without it, and 1.6 MiB resident with it; the bundled packages'
+heap fell from 12.6 to 7.6 MiB. It costs about 0.5 ms per package at startup,
+on the worker. Tuning the young generation was rejected: V8 clamps it to a
+minimum, so an empty package stayed at 0.75 MiB of heap, and limits below
+3 MiB slowed a bursty startup by about 2 ms.
+
+The fixed idle cost stays: an empty package costs about 1.2 MiB resident, of
+which a bare isolate and context are about 1.05 MiB. A startup snapshot could
+skip only the bootstrap's 0.15 MiB and 0.75 ms, so lowering the floor waits for
+enough extensions to justify V8 flags, a snapshot, or sharing (D139).
+Developer: Show Extension Memory stays to repeat those measurements.
+
 Reference: [extension host](architecture/extension-host.md).
 
 ## Handler declarations
