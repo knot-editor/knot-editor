@@ -79,7 +79,7 @@ impl IntoElement for EditorElement {
 
 impl Element for EditorElement {
     type RequestLayoutState = ();
-    type PrepaintState = Bounds<Pixels>;
+    type PrepaintState = EditorHitboxes;
 
     fn id(&self) -> Option<ElementId> {
         None
@@ -109,10 +109,38 @@ impl Element for EditorElement {
         _inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
-        _window: &mut Window,
-        _cx: &mut App,
+        window: &mut Window,
+        cx: &mut App,
     ) -> Self::PrepaintState {
-        bounds
+        let (gutter, markers) = self.entity.update(cx, |view, cx| {
+            view.update_gutter_layout(window, cx);
+            let lines = view.visible_lines();
+            let markers = view
+                .gutter_markers
+                .iter()
+                .filter(|marker| marker.command.is_some() && lines.contains(&marker.line))
+                .map(|marker| Bounds {
+                    origin: point(
+                        bounds.origin.x,
+                        bounds.origin.y + px(marker.line as f32 * LINE_HEIGHT - view.scroll),
+                    ),
+                    size: size(px(view.gutter.markers_width), px(LINE_HEIGHT)),
+                })
+                .collect::<Vec<_>>();
+            (view.gutter, markers)
+        });
+        let gutter_width = px(gutter.width).min(bounds.size.width);
+        let text = Bounds {
+            origin: point(bounds.origin.x + gutter_width, bounds.origin.y),
+            size: size(bounds.size.width - gutter_width, bounds.size.height),
+        };
+        EditorHitboxes {
+            text: window.insert_hitbox(text, HitboxBehavior::Normal),
+            markers: markers
+                .into_iter()
+                .map(|bounds| window.insert_hitbox(bounds, HitboxBehavior::Normal))
+                .collect(),
+        }
     }
 
     fn paint(
@@ -121,12 +149,17 @@ impl Element for EditorElement {
         _inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
-        _prepaint: &mut Self::PrepaintState,
+        hitboxes: &mut Self::PrepaintState,
         window: &mut Window,
         cx: &mut App,
     ) {
+        // The gutter keeps the default arrow; markers that run a command show
+        // a hand.
+        window.set_cursor_style(CursorStyle::IBeam, &hitboxes.text);
+        for marker in &hitboxes.markers {
+            window.set_cursor_style(CursorStyle::PointingHand, marker);
+        }
         self.entity.update(cx, |view, cx| {
-            view.update_gutter_layout(window, cx);
             let resized = view.bounds.size != bounds.size;
             view.bounds = bounds;
             view.viewport_h = f32::from(bounds.size.height);
@@ -594,6 +627,13 @@ pub(super) type EditorPaintState = (
     FocusHandle,
     Entity<EditorView>,
 );
+
+/// Pointer regions inserted before paint: the text area and each visible
+/// marker that runs a command.
+pub(super) struct EditorHitboxes {
+    text: Hitbox,
+    markers: Vec<Hitbox>,
+}
 
 /// The gutter's lanes and visible content, copied out for one paint.
 pub(super) struct GutterPaint {

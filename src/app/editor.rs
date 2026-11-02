@@ -46,7 +46,7 @@ use super::{
     history::{EditGroupKind, EditGrouping, HistoryViewChange, HistoryViewState},
     indentation::{IndentStyle, IndentUnit, leading_whitespace},
     languages,
-    model::{BufferModel, ContributionSource, ResolvedEditorContribution},
+    model::{BufferModel, ContributionSource, ResolvedEditorContribution, decoration_precedence},
     settings::{self, ApplicationSettings, SettingsScope},
     theme::{Highlight, Theme, color, theme},
 };
@@ -92,10 +92,15 @@ impl SyntaxCache {
     }
 }
 
+/// The marker the gutter shows on `line`: the most severe of the line's
+/// markers, with the command a click runs.
 #[derive(Clone)]
 struct RenderedGutterMarker {
     line: usize,
     key: String,
+    command: Option<String>,
+    source: ContributionSource,
+    range: ByteRange,
 }
 
 #[derive(Clone)]
@@ -106,7 +111,6 @@ struct RenderedContributionAction {
     command: String,
     source: ContributionSource,
     range: ByteRange,
-    gutter: bool,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -259,7 +263,7 @@ impl EditorView {
     }
 
     /// The part of `bounds` that shows text: everything right of the gutter.
-    pub(super) fn text_bounds(&self) -> Bounds<Pixels> {
+    pub(crate) fn text_bounds(&self) -> Bounds<Pixels> {
         let gutter = px(self.gutter.width).min(self.bounds.size.width);
         Bounds {
             origin: point(self.bounds.origin.x + gutter, self.bounds.origin.y),
@@ -879,6 +883,9 @@ fn project_contributions(
             gutter_markers.push(RenderedGutterMarker {
                 line: first_line,
                 key: key.clone(),
+                command: contribution.command.clone(),
+                source: contribution.source,
+                range: contribution.range,
             });
         }
 
@@ -917,11 +924,19 @@ fn project_contributions(
                     command: command.clone(),
                     source: contribution.source,
                     range: contribution.range,
-                    gutter: contribution.gutter.is_some() && line == first_line,
                 });
             }
         }
     }
+    // Each line keeps its most severe marker, and among equals the latest.
+    gutter_markers.reverse();
+    gutter_markers.sort_by_key(|marker| {
+        (
+            marker.line,
+            std::cmp::Reverse(decoration_precedence(&marker.key)),
+        )
+    });
+    gutter_markers.dedup_by_key(|marker| marker.line);
     (decorations, gutter_markers, actions)
 }
 

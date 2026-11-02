@@ -1,7 +1,16 @@
-use gpui::{AppContext, TestAppContext, VisualTestContext, px};
+use std::{cell::RefCell, rc::Rc};
 
-use super::super::{BufferModel, EditorView, GutterLayout};
+use gpui::{
+    AppContext, Entity, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point,
+    TestAppContext, VisualTestContext, point, px,
+};
+
+use super::super::{
+    BufferModel, ContributionSource, EditorContributionAction, EditorView, GutterLayout,
+    LINE_HEIGHT, gutter::GutterLane,
+};
 use crate::app::settings::{ApplicationSettings, EDITOR_LINE_NUMBERS, LineNumbers, SettingsScope};
+use crate::host::protocol::{ByteRange, EditorContribution};
 
 fn set_line_numbers(cx: &mut VisualTestContext, value: &str, view: Option<&str>) {
     cx.update(|_, cx| {
@@ -20,7 +29,7 @@ fn set_line_numbers(cx: &mut VisualTestContext, value: &str, view: Option<&str>)
     cx.run_until_parked();
 }
 
-fn gutter(cx: &mut VisualTestContext, editor: &gpui::Entity<EditorView>) -> GutterLayout {
+fn gutter(cx: &mut VisualTestContext, editor: &Entity<EditorView>) -> GutterLayout {
     cx.read(|cx| editor.read(cx).gutter)
 }
 
@@ -130,4 +139,156 @@ fn numbers_and_the_line_highlight_follow_the_cursor(cx: &mut TestAppContext) {
 
     set_line_numbers(cx, "off", None);
     assert!(numbers(cx).is_empty());
+}
+
+/// Where a click in `lane` lands on `line`.
+fn lane_point(
+    cx: &mut VisualTestContext,
+    editor: &Entity<EditorView>,
+    lane: GutterLane,
+    line: usize,
+) -> Point<Pixels> {
+    cx.read(|cx| {
+        let view = editor.read(cx);
+        let bounds = view.interaction_bounds();
+        let x = match lane {
+            GutterLane::Markers => 4.,
+            GutterLane::Numbers => view.gutter.markers_width + 2.,
+        };
+        point(
+            bounds.origin.x + px(x),
+            bounds.origin.y + px(line as f32 * LINE_HEIGHT + 5.),
+        )
+    })
+}
+
+fn press(
+    cx: &mut VisualTestContext,
+    editor: &Entity<EditorView>,
+    position: Point<Pixels>,
+    shift: bool,
+) -> Option<std::ops::Range<usize>> {
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            view.on_mouse_down(
+                &MouseDownEvent {
+                    position,
+                    modifiers: Modifiers {
+                        shift,
+                        ..Modifiers::default()
+                    },
+                    button: MouseButton::Left,
+                    click_count: 1,
+                    first_mouse: false,
+                },
+                window,
+                cx,
+            );
+            view.selected_byte_range(cx)
+        })
+    })
+}
+
+fn drag_to(
+    cx: &mut VisualTestContext,
+    editor: &Entity<EditorView>,
+    position: Point<Pixels>,
+) -> Option<std::ops::Range<usize>> {
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            view.on_mouse_move(
+                &MouseMoveEvent {
+                    position,
+                    modifiers: Modifiers::default(),
+                    pressed_button: Some(MouseButton::Left),
+                },
+                window,
+                cx,
+            );
+            view.selected_byte_range(cx)
+        })
+    })
+}
+
+#[gpui::test]
+fn line_numbers_select_whole_lines(cx: &mut TestAppContext) {
+    let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree"));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    let number =
+        |cx: &mut VisualTestContext, line| lane_point(cx, &editor, GutterLane::Numbers, line);
+
+    // A click selects the line with its line break, or to the end of text.
+    let at = number(cx, 1);
+    assert_eq!(press(cx, &editor, at, false), Some(4..8));
+    let at = number(cx, 2);
+    assert_eq!(press(cx, &editor, at, false), Some(8..13));
+
+    // Shift extends from the selection's anchor by lines.
+    let at = number(cx, 0);
+    assert_eq!(press(cx, &editor, at, false), Some(0..4));
+    let at = number(cx, 2);
+    assert_eq!(press(cx, &editor, at, true), Some(0..13));
+
+    // A drag extends by whole lines either way and keeps the clicked line.
+    let at = number(cx, 1);
+    assert_eq!(press(cx, &editor, at, false), Some(4..8));
+    let at = number(cx, 2);
+    assert_eq!(drag_to(cx, &editor, at), Some(4..13));
+    let at = number(cx, 0);
+    assert_eq!(drag_to(cx, &editor, at), Some(0..8));
+}
+
+#[gpui::test]
+fn the_marker_lane_runs_the_top_marker_command_and_selects_nothing(cx: &mut TestAppContext) {
+    let model = cx.new(|_| {
+        let mut model = BufferModel::from_text("one\ntwo\nthree");
+        let marker = |start, key: &str, command: Option<&str>| EditorContribution {
+            range: ByteRange {
+                start_byte_offset: start,
+                end_byte_offset: start + 1,
+            },
+            decoration: None,
+            gutter: Some(key.to_owned()),
+            command: command.map(Into::into),
+        };
+        model
+            .replace_contributions(
+                ContributionSource::fixture(),
+                &[
+                    marker(0, "error", Some("fixture.error")),
+                    marker(1, "info", Some("fixture.info")),
+                    marker(4, "warning", None),
+                ],
+                0,
+            )
+            .unwrap();
+        model
+    });
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    let commands = Rc::new(RefCell::new(Vec::new()));
+    let seen = commands.clone();
+    cx.update(|_, cx| {
+        cx.subscribe(&editor, move |_, action: &EditorContributionAction, _| {
+            seen.borrow_mut().push(action.command.clone());
+        })
+        .detach();
+    });
+
+    let at = lane_point(cx, &editor, GutterLane::Markers, 0);
+    assert_eq!(press(cx, &editor, at, false), None);
+    cx.run_until_parked();
+    assert_eq!(*commands.borrow(), ["fixture.error"]);
+
+    // A marker without a command, or no marker, leaves the selection alone.
+    let at = lane_point(cx, &editor, GutterLane::Numbers, 2);
+    assert_eq!(press(cx, &editor, at, false), Some(8..13));
+    for line in [1, 2] {
+        let at = lane_point(cx, &editor, GutterLane::Markers, line);
+        assert_eq!(press(cx, &editor, at, false), Some(8..13));
+        let at = lane_point(cx, &editor, GutterLane::Numbers, 0);
+        assert_eq!(drag_to(cx, &editor, at), Some(8..13));
+    }
+    assert_eq!(commands.borrow().len(), 1);
 }

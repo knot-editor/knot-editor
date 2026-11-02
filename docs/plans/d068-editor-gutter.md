@@ -1,6 +1,6 @@
 # D068 — Editor gutter and line numbers
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 in progress. Item of the
+Status: 🚧 checkpoint 2 awaiting review. Item of the
 [daily-driver plan](daily-driver.md); depends on D064 (themes, complete).
 
 ## Outcome
@@ -144,7 +144,16 @@ mode, scoped settings, and the line highlight. The native color key test and
 the `@knot/themes` test that every theme sets exactly the native keys cover
 the new keys.
 
-### 2. Lane interaction and marker precedence
+### 2. Lane interaction and marker precedence 🚧 review
+
+Progress: ✅ deliverables landed. Each line keeps one marker, the most severe
+and then the latest, carrying its own command, so a click runs what is
+painted; text-region actions no longer carry a gutter flag. Pointer styles
+come from hitboxes inserted in prepaint, which now also lays out the gutter:
+the text area shows an I-beam, command markers a hand, and the rest of the
+gutter the default arrow. Shift-click on a number extends from the
+selection's anchor to the clicked line's far edge. No example extension
+paints gutter markers, so the manual check needs a snippet.
 
 Deliverables:
 

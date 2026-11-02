@@ -1,5 +1,6 @@
 //! Pointer gestures and platform text input, including IME composition.
 
+use super::gutter::GutterLane;
 use super::*;
 
 impl EditorView {
@@ -20,26 +21,42 @@ impl EditorView {
         self.drag_anchor = None;
         self.marked_range_utf16 = None;
         let (line, col) = self.hit_test(self.model.read(cx), ev.position, window, cx);
-        let gutter = ev.position.x < self.text_bounds().origin.x;
-        if let Some(action) = self.contribution_actions.iter().rev().find(|action| {
-            action.line == line
-                && if gutter {
-                    action.gutter
-                } else {
-                    (action.start == action.end && col == action.start)
-                        || (col >= action.start && col < action.end)
-                }
-        }) {
+        let action = match self.gutter_lane_at(ev.position) {
+            Some(GutterLane::Markers) => self
+                .gutter_marker(line)
+                .and_then(|marker| Some((marker.command.clone()?, marker.source, marker.range))),
+            Some(GutterLane::Numbers) => {
+                self.suppress_drag_selection = false;
+                self.select_lines_from_gutter(line, ev.modifiers.shift, cx);
+                return;
+            }
+            None => self
+                .contribution_actions
+                .iter()
+                .rev()
+                .find(|action| {
+                    action.line == line
+                        && ((action.start == action.end && col == action.start)
+                            || (col >= action.start && col < action.end))
+                })
+                .map(|action| (action.command.clone(), action.source, action.range)),
+        };
+        if let Some((command, source, range)) = action {
             self.suppress_drag_selection = true;
             cx.emit(EditorContributionAction {
-                command: action.command.clone(),
-                source: action.source,
-                range: action.range,
+                command,
+                source,
+                range,
                 model: self.model.clone(),
                 window: window.window_handle(),
                 focus: self.focus.downgrade(),
             });
             cx.stop_propagation();
+            return;
+        }
+        if self.gutter_lane_at(ev.position) == Some(GutterLane::Markers) {
+            // The marker lane selects nothing.
+            self.suppress_drag_selection = true;
             return;
         }
         self.suppress_drag_selection = false;
@@ -375,7 +392,7 @@ impl EntityInputHandler for EditorView {
 /// positions: the position itself, the word segment at it (see
 /// [`word_segments`]), or the whole line
 /// with its terminator.
-fn unit_range(
+pub(super) fn unit_range(
     model: &BufferModel,
     unit: SelectionUnit,
     line: usize,

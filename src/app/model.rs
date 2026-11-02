@@ -52,7 +52,7 @@ impl ContributionSource {
 
 /// Where a decoration naming color `key` paints among overlapping ones:
 /// status colors above every other key, the most severe on top.
-fn decoration_precedence(key: &str) -> u8 {
+pub(crate) fn decoration_precedence(key: &str) -> u8 {
     match key {
         color::INFO => 1,
         color::WARNING => 2,

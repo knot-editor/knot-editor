@@ -480,8 +480,11 @@ fn product_editor_captures_mouse_selection_outside_its_pane(cx: &mut TestAppCont
             .unwrap()
             .clone()
     });
-    let bounds = cx.read(|cx| editor.read(cx).interaction_bounds());
-    let start = point(bounds.origin.x + px(1.), bounds.origin.y + px(5.));
+    let (bounds, text_bounds) = cx.read(|cx| {
+        let editor = editor.read(cx);
+        (editor.interaction_bounds(), editor.text_bounds())
+    });
+    let start = point(text_bounds.origin.x + px(1.), text_bounds.origin.y + px(5.));
     let outside = point(
         bounds.origin.x + bounds.size.width + px(20.),
         bounds.origin.y + bounds.size.height + px(20.),

@@ -748,8 +748,9 @@ fn action_click_pointer_jitter_does_not_start_text_selection(cx: &mut TestAppCon
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     let click = cx.read(|cx| {
-        let bounds = editor.read(cx).interaction_bounds();
-        point(bounds.origin.x + px(20.), bounds.origin.y + px(10.))
+        let editor = editor.read(cx);
+        let text = editor.text_bounds();
+        point(text.origin.x + px(4.), text.origin.y + px(10.))
     });
 
     cx.update(|window, cx| {
@@ -849,6 +850,7 @@ fn contribution_projection_indexes_multiline_ranges() {
     );
     assert_eq!(gutters.len(), 1);
     assert_eq!(gutters[0].line, 0);
+    assert_eq!(gutters[0].command.as_deref(), Some("fixture.action"));
     assert!(actions.iter().all(|action| {
         action.range
             == ByteRange {
@@ -859,9 +861,45 @@ fn contribution_projection_indexes_multiline_ranges() {
     assert_eq!(
         actions
             .iter()
-            .map(|action| (action.line, action.start, action.end, action.gutter))
+            .map(|action| (action.line, action.start, action.end))
             .collect::<Vec<_>>(),
-        [(0, 1, 2, true), (1, 0, 4, false), (2, 0, 1, false)]
+        [(0, 1, 2), (1, 0, 4), (2, 0, 1)]
+    );
+}
+
+#[test]
+fn each_line_keeps_its_most_severe_marker() {
+    let model = BufferModel::from_text("aa\nbb");
+    let marker = |start, key: &str, command: &str| ResolvedEditorContribution {
+        range: ByteRange {
+            start_byte_offset: start,
+            end_byte_offset: start + 1,
+        },
+        source: ContributionSource::fixture(),
+        decoration: None,
+        gutter: Some(key.to_owned()),
+        command: Some(command.into()),
+    };
+    let (_, gutters, _) = project_contributions(
+        &model,
+        vec![
+            marker(0, "error", "first.error"),
+            marker(1, "info", "info"),
+            marker(0, "error", "second.error"),
+            marker(3, "diff.add", "diff"),
+            marker(4, "warning", "warning"),
+            marker(3, "made.up", "later"),
+        ],
+    );
+    assert_eq!(
+        gutters
+            .iter()
+            .map(|marker| (marker.line, marker.key.as_str(), marker.command.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            (0, "error", Some("second.error")),
+            (1, "warning", Some("warning"))
+        ]
     );
 }
 

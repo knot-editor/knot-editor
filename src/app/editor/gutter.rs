@@ -1,6 +1,7 @@
 //! The gutter beside the text: ordered native lanes for extension markers and
 //! line numbers.
 
+use super::input::unit_range;
 use super::*;
 use crate::app::settings::LineNumbers;
 
@@ -10,6 +11,14 @@ const MARKER_LANE_WIDTH: f32 = 16.;
 const NUMBER_LANE_PADDING: f32 = 12.;
 /// The fewest digits the line-number lane is sized for.
 const MIN_NUMBER_DIGITS: usize = 2;
+
+/// A gutter lane, which handles its own clicks and pointer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum GutterLane {
+    Markers,
+    /// The line numbers and the padding between them and the text.
+    Numbers,
+}
 
 /// Where each gutter lane sits, as x offsets from the view's left edge.
 /// A view without a gutter has a zero-width layout.
@@ -45,6 +54,17 @@ impl GutterLayout {
         }
     }
 
+    /// The lane `x` pixels right of the view's left edge falls in.
+    pub(super) fn lane_at(&self, x: f32) -> Option<GutterLane> {
+        if !(0. ..self.width).contains(&x) {
+            None
+        } else if x < self.markers_width {
+            Some(GutterLane::Markers)
+        } else {
+            Some(GutterLane::Numbers)
+        }
+    }
+
     /// The number shown beside `line`, with the cursor on `cursor_line`.
     pub(super) fn label(&self, line: usize, cursor_line: usize) -> Option<usize> {
         match self.line_numbers {
@@ -73,6 +93,56 @@ impl EditorView {
             )
             .map_or(FONT_SIZE * 0.6, |advance| f32::from(advance.width));
         self.gutter = GutterLayout::new(line_numbers, self.line_count, digit_width);
+    }
+
+    /// The gutter lane under a window position.
+    pub(super) fn gutter_lane_at(&self, position: Point<Pixels>) -> Option<GutterLane> {
+        self.gutter
+            .lane_at(f32::from(position.x - self.bounds.origin.x))
+    }
+
+    /// The marker shown on `line`, if any.
+    pub(super) fn gutter_marker(&self, line: usize) -> Option<&RenderedGutterMarker> {
+        self.gutter_markers
+            .iter()
+            .find(|marker| marker.line == line)
+    }
+
+    /// Select whole lines from a click on the line numbers: the clicked line,
+    /// or with shift, from the selection's anchor through the clicked line.
+    /// A drag then extends by lines.
+    pub(super) fn select_lines_from_gutter(
+        &mut self,
+        line: usize,
+        extend: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let (start, end) = unit_range(self.model.read(cx), SelectionUnit::Line, line, 0);
+        let (fixed_start, fixed_end) = if extend {
+            let fixed = if self.has_selection {
+                (self.anchor_line, self.anchor_col)
+            } else {
+                (self.cursor_line, self.cursor_col)
+            };
+            (fixed, fixed)
+        } else {
+            (start, end)
+        };
+        self.drag_anchor = Some(DragAnchor {
+            unit: SelectionUnit::Line,
+            start: fixed_start,
+            end: fixed_end,
+        });
+        let (anchor, caret) = if start < fixed_start {
+            (fixed_end, start)
+        } else {
+            (fixed_start, end.max(fixed_end))
+        };
+        (self.anchor_line, self.anchor_col) = anchor;
+        (self.cursor_line, self.cursor_col) = caret;
+        self.has_selection = anchor != caret;
+        self.preferred_x = None;
+        self.finish_position_change(cx);
     }
 
     /// Each line in `lines` with the number the gutter shows beside it and
