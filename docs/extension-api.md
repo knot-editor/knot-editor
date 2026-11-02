@@ -93,6 +93,36 @@ The buffer belongs to the command’s captured context. Focus changes during
 the revision read from a snapshot. Completion and change callbacks receive an
 explicit buffer to use outside commands.
 
+Buffers answer line lookups from their line index: `lineCount()`,
+`lineRange(line)` without the line's terminator, and `lineAt(offset)`. Lines
+are 0-based like every other coordinate; snapshot one line's range to work with
+its text, so a large file never crosses the boundary whole.
+
+A command run in a document editor also receives `context.editor`, a handle on
+that editor; it is null for terminals, trees, and text frames. It reads and
+moves the selection and saves and restores the view:
+
+```js
+await commands.register("example.go-to-start", async ({ editor, buffer }) => {
+  if (editor === null) commands.unavailable();
+  const before = await editor.viewState();
+  const line = await buffer.lineRange(0);
+  await editor.setSelection(
+    { anchor: line.startByteOffset, caret: line.startByteOffset },
+    { reveal: "center" },
+  );
+  if (!(await confirm())) await editor.restoreViewState(before);
+});
+```
+
+`reveal: "nearest"`, the default, scrolls as ordinary caret movement does;
+`"center"` centers the caret's line only when it was off screen. Setting the
+selection is not an edit, but it ends the typing undo group as any caret move
+does. Like `context.target`, the handle works only while its command runs and
+rejects `InvalidTarget` once the editor's tab closes or moves.
+`commands.unavailable()` ends a handler with the `unavailable` outcome, as
+native commands report a target they do not apply to.
+
 Registering commands/providers/keymaps is valid during activation. Contextual
 lookup and command invocation require a running command. Await disposal and
 view invalidation to observe completion, and use host error `code` values

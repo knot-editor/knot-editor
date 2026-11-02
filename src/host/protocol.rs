@@ -746,6 +746,8 @@ pub struct CommandCapture {
     pub view: Option<String>,
     /// Stable contribution ID for a captured contributed tool, when any.
     pub tool: Option<String>,
+    /// Whether the captured presentation is a document editor.
+    pub editor: bool,
 }
 
 /// A foreground-authorized command invocation routed to its extension owner.

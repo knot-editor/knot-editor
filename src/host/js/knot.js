@@ -5,6 +5,7 @@ import {
   observeWorkbench, closePresentation, replaceWindows, captureLayout,
   openDocument, createUntitled, presentDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, openTerminal,
   invalidCommandArguments,
+  unavailableCommand,
   keybinding,
   removeKeybinding,
   registerKeymapPreset, getKeymapPreset, listKeymapPresets,
@@ -49,6 +50,7 @@ export const commands = Object.freeze({
   invoke: invokeCommand,
   register: registerCommand,
   registerForView: registerViewCommand,
+  unavailable: unavailableCommand,
 });
 
 export const workbench = Object.freeze({

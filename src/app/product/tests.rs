@@ -3,6 +3,7 @@
 mod closure;
 mod commands;
 mod editing;
+mod editor_api;
 mod extension_api;
 mod extension_restart;
 mod git_status;

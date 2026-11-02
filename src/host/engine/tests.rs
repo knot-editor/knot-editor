@@ -888,6 +888,7 @@ fn execute_captured_fixture(
                 window: "fixture-window".into(),
                 view: None,
                 tool: None,
+                editor: false,
             }),
         },
         Some(BufferHandle::new(3)),

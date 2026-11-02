@@ -26,7 +26,13 @@ export type FakeDocument = {
   language: string;
 };
 
-type FakeTab = { target: Knot.ViewTarget; document: Knot.DocumentId };
+type FakeTab = {
+  target: Knot.ViewTarget;
+  document: Knot.DocumentId;
+  view: Knot.EditorViewState;
+  /** How the last `setSelection` revealed the caret, if any did. */
+  reveal: "nearest" | "center" | null;
+};
 
 type FakeWindow = {
   target: Knot.WindowTarget;
@@ -163,10 +169,91 @@ export function setRecord(key: string, value: Knot.JsonValue) {
 
 // Documents and windows ----------------------------------------------------
 
-function buffer(document: FakeDocument): Knot.Buffer {
+const utf8 = new TextEncoder();
+const byteLength = (text: string) => utf8.encode(text).length;
+
+/** The UTF-16 index of a UTF-8 byte offset into `text`, or undefined when it
+ * splits a scalar or is out of bounds. */
+function utf16AtByte(text: string, offset: number): number | undefined {
+  let bytes = 0;
+  let index = 0;
+  for (const character of text) {
+    if (bytes === offset) return index;
+    bytes += byteLength(character);
+    index += character.length;
+  }
+  return bytes === offset ? index : undefined;
+}
+
+/** Byte ranges of each line without its `\n` or `\r\n` terminator. */
+function lineRanges(text: string): Knot.ByteRange[] {
+  const ranges: Knot.ByteRange[] = [];
+  let start = 0;
+  for (const line of text.split("\n")) {
+    const length = byteLength(line);
+    const end = start + length;
+    ranges.push({ startByteOffset: start, endByteOffset: end });
+    start = end + 1;
+  }
+  for (const range of ranges.slice(0, -1)) {
+    const lineText = slice(text, range);
+    if (lineText.endsWith("\r")) (range as { endByteOffset: number }).endByteOffset -= 1;
+  }
+  return ranges;
+}
+
+function slice(text: string, range: Knot.ByteRange): string {
+  const start = utf16AtByte(text, range.startByteOffset);
+  const end = utf16AtByte(text, range.endByteOffset);
+  if (start === undefined || end === undefined || start > end) throw hostError("InvalidRange");
+  return text.slice(start, end);
+}
+
+function snapshot(text: string, range: Knot.ByteRange, revision: number): Knot.TextSnapshot {
   return {
-    snapshot: async () => ({ text: document.text, revision: document.revision }),
-  } as unknown as Knot.Buffer;
+    text,
+    range,
+    revision,
+    byteOffsetAtUtf16: (offset) => {
+      if (offset < 0 || offset > text.length) throw new RangeError("UTF-16 offset is out of bounds");
+      return byteLength(text.slice(0, offset));
+    },
+    utf16OffsetAtByte: (offset) => {
+      const index = utf16AtByte(text, offset);
+      if (index === undefined) throw new RangeError("byte offset splits a UTF-8 scalar or is out of bounds");
+      return index;
+    },
+  };
+}
+
+// The fake buffer reads text; edits, change listeners, and contributions are
+// not faked.
+function buffer(document: FakeDocument): Knot.Buffer {
+  const fake: Omit<Knot.Buffer, keyof Knot.Buffer & symbol> = {
+    snapshot: async (range) => {
+      const whole = { startByteOffset: 0, endByteOffset: byteLength(document.text) };
+      const actual = range ?? whole;
+      return snapshot(slice(document.text, actual), actual, document.revision);
+    },
+    applyEdits: notFaked("Buffer.applyEdits"),
+    onDidChange: notFaked("Buffer.onDidChange"),
+    lineCount: async () => lineRanges(document.text).length,
+    lineRange: async (line) => {
+      const range = lineRanges(document.text)[line];
+      if (range === undefined) throw hostError("InvalidRange");
+      return range;
+    },
+    lineAt: async (offset) => {
+      const index = utf16AtByte(document.text, offset);
+      if (index === undefined) throw hostError("InvalidRange");
+      return document.text.slice(0, index).split("\n").length - 1;
+    },
+    contributions: {
+      replace: notFaked("Buffer.contributions.replace"),
+      dispose: notFaked("Buffer.contributions.dispose"),
+    },
+  };
+  return fake as unknown as Knot.Buffer;
 }
 
 function documentInfo(document: FakeDocument): Knot.DocumentInfo {
@@ -246,7 +333,12 @@ function fakeWindow(target: Knot.WindowTarget): FakeWindow {
 export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
   const window = fakeWindow(target);
   const view = { window: target, pane: window.pane } as unknown as Knot.ViewTarget;
-  window.tabs.push({ target: view, document: id });
+  window.tabs.push({
+    target: view,
+    document: id,
+    view: { anchor: 0, caret: 0, top: 0, scrollX: 0 },
+    reveal: null,
+  });
   window.selected = window.tabs.length - 1;
 }
 
@@ -378,6 +470,59 @@ export async function treeItems(
 // Commands and events ------------------------------------------------------
 
 class InvalidArguments extends Error {}
+class Unavailable extends Error {}
+
+/** The selected document tab of a window, which a command run there captures. */
+function selectedTab(target: Knot.WindowTarget): FakeTab {
+  const tab = fakeWindow(target).tabs[fakeWindow(target).selected];
+  if (tab === undefined) throw new Error("the window has no selected document");
+  return tab;
+}
+
+/** The view state of the window's selected document editor. */
+export function editorView(window: Knot.WindowTarget = state.windows[0]!.target): Knot.EditorViewState {
+  return selectedTab(window).view;
+}
+
+/** How the last `setSelection` in the window's selected editor revealed its caret. */
+export function editorReveal(window: Knot.WindowTarget = state.windows[0]!.target) {
+  return selectedTab(window).reveal;
+}
+
+/** Sets the view state of the window's selected document editor. */
+export function setEditorView(
+  view: Partial<Knot.EditorViewState>,
+  window: Knot.WindowTarget = state.windows[0]!.target,
+) {
+  const tab = selectedTab(window);
+  tab.view = { ...tab.view, ...view };
+}
+
+// The fake editor does not clamp offsets or check character boundaries
+// beyond the end of the text.
+function editor(tab: FakeTab): Knot.Editor {
+  const live = () => {
+    if (!state.windows.some((window) => window.tabs.includes(tab))) throw hostError("InvalidTarget");
+    return tab;
+  };
+  return {
+    selection: async () => {
+      const { anchor, caret } = live().view;
+      return { anchor, caret };
+    },
+    setSelection: async ({ anchor, caret }, options) => {
+      const tab = live();
+      const length = byteLength(document(tab.document).text);
+      if (anchor > length || caret > length) throw hostError("InvalidRange");
+      tab.view = { ...tab.view, anchor, caret };
+      tab.reveal = options?.reveal ?? "nearest";
+    },
+    viewState: async () => ({ ...live().view }),
+    restoreViewState: async (view) => {
+      live().view = { ...view };
+    },
+  };
+}
 
 function context(window: Knot.WindowTarget, args: Knot.JsonValue, tool: string | null): Knot.CommandContext {
   const signal = {
@@ -388,24 +533,40 @@ function context(window: Knot.WindowTarget, args: Knot.JsonValue, tool: string |
     throwIfAborted() {},
   };
   const target = { window: "window", windowTarget: window, view: null, tool } as unknown as Knot.CommandTarget;
-  return { target, buffer: null, arguments: args, signal };
+  const tab = tool === null ? fakeWindow(window).tabs[fakeWindow(window).selected] : undefined;
+  const presented = tab === undefined ? undefined : state.documents.get(tab.document);
+  return {
+    target,
+    buffer: presented === undefined ? null : buffer(presented),
+    editor: tab === undefined || presented === undefined ? null : editor(tab),
+    arguments: args,
+    signal,
+  };
 }
 
 /**
  * Runs a command as if invoked in `window`, through the view-claimed handler
- * when `view` names one. Handler errors propagate to the test.
+ * when `view` names one, and otherwise in the window's selected document
+ * editor, if any. Resolves with "unavailable" when the handler reports it;
+ * other handler errors propagate to the test.
  */
 export async function run(
   name: string,
   options: { window?: Knot.WindowTarget; arguments?: Knot.JsonValue; view?: string } = {},
-) {
+): Promise<"completed" | "unavailable"> {
   const window = options.window ?? state.windows[0]?.target;
   if (window === undefined) throw new Error("run needs a window");
   const viewHandler =
     options.view === undefined ? undefined : state.viewCommands.get(`${options.view}:${name}`);
   const handler = viewHandler ?? state.commands.get(name);
   if (handler === undefined) throw new Error(`no command ${name}`);
-  await handler(context(window, options.arguments ?? null, options.view ?? null));
+  try {
+    await handler(context(window, options.arguments ?? null, options.view ?? null));
+  } catch (error) {
+    if (error instanceof Unavailable) return "unavailable";
+    throw error;
+  }
+  return "completed";
 }
 
 export function commandNames(): string[] {
@@ -944,6 +1105,7 @@ export const api: KnotApi = {
         return { kind: "completed" };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof Unavailable) return { kind: "unavailable" };
         return error instanceof InvalidArguments
           ? { kind: "invalidArgument", message }
           : { kind: "handlerFailure", message };
@@ -951,6 +1113,9 @@ export const api: KnotApi = {
     },
     invalidArguments: (message) => {
       throw new InvalidArguments(message);
+    },
+    unavailable: () => {
+      throw new Unavailable("command unavailable");
     },
   },
   editor: {

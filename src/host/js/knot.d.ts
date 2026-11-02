@@ -864,8 +864,58 @@ declare module "knot" {
      * @throws TypeError for a nonfunction; HostError with BufferClosed or Cancelled.
      */
     onDidChange(listener: (change: BufferChange) => void | Promise<void>): Promise<Disposable>;
+    /**
+     * Number of lines, from the line index; always at least one. Lines are
+     * 0-based and split at `\n`, so a trailing newline adds an empty last line.
+     * @throws HostError with BufferClosed, or Cancelled on teardown.
+     */
+    lineCount(): Promise<number>;
+    /**
+     * Range of a 0-based line without its `\n` or `\r\n` terminator.
+     * @throws HostError with BufferClosed, InvalidRange for a line at or past
+     * lineCount(), or Cancelled on teardown.
+     */
+    lineRange(line: number): Promise<ByteRange>;
+    /**
+     * The 0-based line holding a byte offset; the buffer length is the last line.
+     * @throws HostError with BufferClosed, InvalidRange for an offset past the
+     * end or splitting a UTF-8 scalar, or Cancelled on teardown.
+     */
+    lineAt(offset: number): Promise<number>;
     /** Lifecycle-owned semantic data; disposing it does not dispose this buffer. */
     readonly contributions: EditorContributions;
+  }
+  /** A selection's ends as UTF-8 byte offsets; equal for a bare caret. */
+  export type EditorSelection = Readonly<{ anchor: number; caret: number }>;
+  export interface SetSelectionOptions {
+    /**
+     * How the view scrolls to show the caret. "nearest" (the default) scrolls
+     * the minimum, as ordinary caret movement does; "center" centers the
+     * caret's line when it is outside the viewport and otherwise keeps scroll.
+     */
+    readonly reveal?: "nearest" | "center";
+  }
+  /**
+   * The document editor a command captured. It is usable within that
+   * command's invocation tree, as CommandTarget is; every call rejects with
+   * InvalidTarget once the editor's tab closes or moves, or the command ends.
+   */
+  export interface Editor {
+    /** @throws HostError with InvalidTarget or Cancelled. */
+    selection(): Promise<EditorSelection>;
+    /**
+     * Move the selection. Not an edit: it ends the current typing undo group,
+     * as other caret moves do, and changes no revision.
+     * @throws HostError with InvalidTarget, InvalidRange for an offset past the
+     * end or splitting a UTF-8 scalar, or Cancelled; TypeError for an invalid reveal.
+     */
+    setSelection(selection: EditorSelection, options?: SetSelectionOptions): Promise<void>;
+    /** Selection and scroll, restorable exactly while the text is unchanged.
+     * @throws HostError with InvalidTarget or Cancelled. */
+    viewState(): Promise<EditorViewState>;
+    /** Apply a view state; offsets clamp to the current text.
+     * @throws HostError with InvalidTarget or Cancelled. */
+    restoreViewState(state: EditorViewState): Promise<void>;
   }
   /**
    * Command cancellation signal with the supported interface below.
@@ -898,6 +948,8 @@ declare module "knot" {
     readonly target: CommandTarget;
     /** Captured text buffer, or null for a surface without a text buffer. */
     readonly buffer: Buffer | null;
+    /** Captured document editor, or null for any other surface. */
+    readonly editor: Editor | null;
     /** Caller-supplied JSON value, defaulting to null when omitted. */
     readonly arguments: JsonValue;
     /** Cancellation of this admitted command. */
@@ -905,7 +957,8 @@ declare module "knot" {
   }
   /**
    * Awaited handler; return values do not become command results.
-   * Throws become handlerFailure; invalidArguments produces invalidArgument.
+   * Throws become handlerFailure; invalidArguments produces invalidArgument
+   * and unavailable produces unavailable.
    */
   export type CommandHandler = (context: CommandContext) => void | Promise<void>;
   /** How a command presents itself in the command palette. */
@@ -1174,6 +1227,9 @@ declare module "knot" {
     invoke(name: string, arguments_?: JsonValue): Promise<CommandOutcome>;
     /** Throw an author diagnostic converted by the handler to invalidArgument. */
     invalidArguments(message: string): never;
+    /** Throw to end the handler with the unavailable outcome, as a command
+     * that does not apply to its target reports. */
+    unavailable(): never;
   }>;
   export type PresentationCloseOutcome = Readonly<{ kind: "closed" | "cancelled" }>;
   /** One document reference of a session window. A live document matching

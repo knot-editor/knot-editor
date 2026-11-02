@@ -102,8 +102,11 @@ remove bindings; late results validate instance and lifecycle.
 Contextual buffer/selection access validates the live invocation, caller lifecycle,
 target authority, and exact presentation. Roots and children inherit the same
 capture. Activation and unrelated callbacks cannot borrow command focus. A valid
-nontext target has a null buffer; current selection support is limited to
-admitted contributed-view handlers. Explicit buffer access remains independent
+nontext target has a null buffer; contributed-view selection support is
+limited to admitted contributed-view handlers. A document-editor target also
+receives an editor handle whose selection and view-state operations resolve the
+captured presentation on every call, so they reject once the tab closes, moves,
+or the invocation tree ends. Explicit buffer access remains independent
 of presentation lifetime; clipboard access is application-scoped.
 
 Outcomes report execution status rather than semantic values. Resource APIs return

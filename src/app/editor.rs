@@ -164,6 +164,15 @@ pub(crate) struct EditorViewState {
     pub(crate) scroll_x: f32,
 }
 
+/// How a selection change scrolls to show the caret.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Reveal {
+    /// Scroll the minimum, as ordinary caret movement does.
+    Nearest,
+    /// Center the caret's line when it is outside the viewport.
+    Center,
+}
+
 pub struct EditorView {
     element_id: usize,
     rendering: EditorRenderingOptions,
@@ -386,14 +395,44 @@ impl EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.focus.focus(window);
+        self.set_selection(
+            range.start_byte_offset,
+            range.end_byte_offset,
+            Reveal::Nearest,
+            cx,
+        );
+    }
+
+    /// The selection's anchor and caret as byte offsets; equal without a
+    /// selection.
+    pub(crate) fn selection(&self, cx: &App) -> (usize, usize) {
+        let state = self.history_view_state(self.model.read(cx));
+        (state.anchor, state.caret)
+    }
+
+    /// Move the selection to byte offsets on character boundaries within the
+    /// text. Like other caret moves, this ends the current typing undo group.
+    pub(crate) fn set_selection(
+        &mut self,
+        anchor: usize,
+        caret: usize,
+        reveal: Reveal,
+        cx: &mut Context<Self>,
+    ) {
         self.break_history_group(cx);
         self.marked_range_utf16 = None;
         self.preferred_x = None;
         let model = self.model.read(cx);
-        (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, range.start_byte_offset);
-        (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, range.end_byte_offset);
-        self.has_selection = range.start_byte_offset != range.end_byte_offset;
-        self.focus.focus(window);
+        (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
+        (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
+        self.has_selection = anchor != caret;
+        if reveal == Reveal::Center && self.viewport_h > 0. {
+            let line_top = self.cursor_line as f32 * LINE_HEIGHT;
+            if line_top < self.scroll || line_top + LINE_HEIGHT > self.scroll + self.viewport_h {
+                self.scroll = line_top + LINE_HEIGHT / 2. - self.viewport_h / 2.;
+            }
+        }
         self.finish_position_change(cx);
     }
 

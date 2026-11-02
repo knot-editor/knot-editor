@@ -165,6 +165,7 @@ const activeCommandFrames = [];
 const snapshotTables = new WeakMap();
 const targetAuthorities = new WeakMap();
 const invalidArgumentErrors = new WeakSet();
+const unavailableErrors = new WeakSet();
 const signalAborters = new WeakMap();
 
 class KnotAbortSignal {
@@ -284,6 +285,12 @@ function bufferFor(handle) {
       const resultRevision = await request("applyEdits", handle, converted, revision(options));
       return Object.freeze({ revision: resultRevision });
     },
+    lineCount: () => request("lineCount", handle),
+    async lineRange(line) {
+      const range = await request("lineRange", handle, safeInteger(line));
+      return Object.freeze({ startByteOffset: range.startByteOffset, endByteOffset: range.endByteOffset });
+    },
+    lineAt: (offset) => request("lineAt", handle, safeInteger(offset)),
     async onDidChange(listener) {
       if (typeof listener !== "function") {
         throw new TypeError("onDidChange requires a listener");
@@ -298,6 +305,38 @@ function bufferFor(handle) {
   });
   buffers.set(handle, buffer);
   return buffer;
+}
+
+function editorFor(authority) {
+  return Object.freeze({
+    async selection() {
+      const value = await request("editorSelection", authority);
+      return Object.freeze({ anchor: value.anchor, caret: value.caret });
+    },
+    async setSelection(selection, options) {
+      record(selection, "selection must be an object");
+      const anchor = safeInteger(selection.anchor);
+      const caret = safeInteger(selection.caret);
+      const reveal = options?.reveal ?? "nearest";
+      if (reveal !== "nearest" && reveal !== "center") {
+        throw new TypeError('reveal must be "nearest" or "center"');
+      }
+      await request("editorSetSelection", authority, anchor, caret, reveal);
+    },
+    async viewState() {
+      const value = await request("editorViewState", authority);
+      return Object.freeze({ anchor: value.anchor, caret: value.caret, top: value.top, scrollX: value.scrollX });
+    },
+    async restoreViewState(state) {
+      record(state, "view state must be an object");
+      const scrollX = state.scrollX;
+      if (typeof scrollX !== "number" || !Number.isFinite(scrollX)) {
+        throw new TypeError("view state scrollX must be a finite number");
+      }
+      await request("editorRestoreViewState", authority, safeInteger(state.anchor),
+        safeInteger(state.caret), safeInteger(state.top), scrollX);
+    },
+  });
 }
 
 function contextualAuthority(target) {
@@ -508,6 +547,13 @@ export function invalidCommandArguments(message) {
   throw error;
 }
 
+export function unavailableCommand() {
+  const error = new Error("command unavailable");
+  error.name = "UnavailableCommandError";
+  unavailableErrors.add(error);
+  throw error;
+}
+
 async function invokeRegisteredCommand(
   invocation,
   registration,
@@ -537,6 +583,7 @@ async function invokeRegisteredCommand(
       await handler(Object.freeze({
         target,
         buffer: activeHandle === null ? null : bufferFor(activeHandle),
+        editor: capture?.editor ? editorFor(capture.authority) : null,
         arguments: validateJsonValue(commandArguments),
         signal: controller.signal,
       }));
@@ -547,6 +594,7 @@ async function invokeRegisteredCommand(
       if (controller.signal.aborted) {
         return { kind: "cancelled" };
       }
+      if (unavailableErrors.has(error)) return { kind: "unavailable" };
       const message = String(error?.stack ?? error);
       if (invalidArgumentErrors.has(error)) {
         return { kind: "invalidArgument", message };

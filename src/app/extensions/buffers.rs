@@ -140,6 +140,23 @@ impl ExtensionBufferBridge {
             .map_err(map_buffer_error)
     }
 
+    /// Read a buffer's model, as the line lookups answered by its line index do.
+    pub(crate) fn read_model<T>(
+        &mut self,
+        request: &RequestContext,
+        buffer: BufferHandle,
+        mut cancelled: impl FnMut() -> bool,
+        cx: &mut App,
+        read: impl FnOnce(&BufferModel) -> Result<T, BufferError>,
+    ) -> Result<T, BufferError> {
+        self.validate(request, &mut cancelled)?;
+        let model = self
+            .buffers
+            .resolve(buffer, cx)
+            .map_err(|_| BufferError::BufferClosed)?;
+        read(model.read(cx))
+    }
+
     pub(crate) fn apply_edits(
         &mut self,
         request: &RequestContext,

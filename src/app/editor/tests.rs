@@ -5,7 +5,7 @@ use gpui::{
 
 use super::{
     BufferModel, ContributionSource, EditorRenderingOptions, EditorView, EditorViewState,
-    LINE_HEIGHT, ResolvedEditorContribution, flat_utf16_to_position,
+    LINE_HEIGHT, ResolvedEditorContribution, Reveal, flat_utf16_to_position,
     layout::{HighlightSpan, runs_for, shape_editor_line, x_for_index_dir},
     project_contributions, to_flat_utf16,
 };
@@ -936,6 +936,42 @@ async fn flat_utf16_offsets_round_trip_across_emoji_lines(cx: &mut TestAppContex
             let utf16 = to_flat_utf16(model, line, byte_col);
             assert_eq!(flat_utf16_to_position(model, utf16), (line, byte_col));
         }
+    });
+}
+
+#[gpui::test]
+fn set_selection_reveals_nearest_or_centers_an_offscreen_caret(cx: &mut TestAppContext) {
+    let text = (0..100)
+        .map(|line| format!("line {line}\n"))
+        .collect::<String>();
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let line_start = |line: usize| cx.read(|cx| model.read(cx).line_range(line).start);
+    let (line_10, line_15, line_50, line_90) = (
+        line_start(10),
+        line_start(15),
+        line_start(50),
+        line_start(90),
+    );
+    editor.update(cx, |editor, cx| {
+        editor.viewport_h = 10. * LINE_HEIGHT;
+
+        // Nearest scrolls just enough to show the caret's line at the bottom.
+        editor.set_selection(line_50, line_50 + 2, Reveal::Nearest, cx);
+        assert_eq!(editor.scroll, 41. * LINE_HEIGHT);
+        assert_eq!(editor.selection(cx), (line_50, line_50 + 2));
+        assert_eq!(editor.selected_byte_range(cx), Some(line_50..line_50 + 2));
+
+        // Center keeps the scroll while the caret's line is visible...
+        editor.set_selection(line_10, line_10, Reveal::Nearest, cx);
+        assert_eq!(editor.scroll, 10. * LINE_HEIGHT);
+        editor.set_selection(line_15, line_15, Reveal::Center, cx);
+        assert_eq!(editor.scroll, 10. * LINE_HEIGHT);
+
+        // ...and centers it when the line is outside the viewport.
+        editor.set_selection(line_90, line_90, Reveal::Center, cx);
+        assert_eq!(editor.scroll, 85.5 * LINE_HEIGHT);
+        assert_eq!(editor.selected_byte_range(cx), None);
     });
 }
 

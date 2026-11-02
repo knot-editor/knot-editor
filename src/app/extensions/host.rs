@@ -1331,6 +1331,22 @@ impl ProductExtensionHost {
         Ok(self.commands.captured_buffer(request.invocation.unwrap()))
     }
 
+    /// The command's captured document editor, while its tab is still live.
+    pub(super) fn contextual_editor(
+        &self,
+        request: &crate::host::protocol::RequestContext,
+        authority: CommandInvocationId,
+        cx: &App,
+    ) -> Result<Entity<crate::app::editor::EditorView>, handlers::AccessError> {
+        match self
+            .context_target(request, Some(authority), cx)?
+            .command_view(cx)
+        {
+            Some(crate::app::workbench::CommandView::Editor(editor)) => Ok(editor),
+            _ => Err(handlers::AccessError::InvalidTarget),
+        }
+    }
+
     fn contextual_selected_text(
         &self,
         request: &crate::host::protocol::RequestContext,
@@ -1393,6 +1409,10 @@ impl ProductExtensionHost {
                                 window: target.window.window_id().as_u64().to_string(),
                                 view: target.view.map(|view| format!("{view:?}")),
                                 tool: target.extension_tool_id(cx),
+                                editor: matches!(
+                                    target.command_view(cx),
+                                    Some(crate::app::workbench::CommandView::Editor(_))
+                                ),
                             }
                         });
                         let id = invocation.id;

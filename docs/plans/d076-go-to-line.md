@@ -1,6 +1,6 @@
 # D076 — Go to Line
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 in progress: checkpoint 1 ✅. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker and
 transient slot). Promotes a single-selection first slice of D109.
 
@@ -89,7 +89,18 @@ unavailable.
 
 ## Checkpoints
 
-### 1. Editor handle and buffer line lookups
+### 1. Editor handle and buffer line lookups ✅
+
+Scope decisions:
+
+- The handle is valid within its command's invocation tree, as
+  `CommandTarget` is, and resolves the captured presentation on every call.
+  A handle that outlives its command is left to D109.
+- `commands.unavailable()` lets a handler report the `unavailable` outcome,
+  since no JavaScript path produced it.
+- Line lookups and editor operations are host operations of their own
+  (`lineCount`, `lineRange`, `lineAt`, `editorSelection`,
+  `editorSetSelection`, `editorViewState`, `editorRestoreViewState`).
 
 Deliverables: `context.editor` with `selection`, `setSelection`,
 `viewState`, and `restoreViewState`; `Buffer.lineCount`, `lineRange`, and

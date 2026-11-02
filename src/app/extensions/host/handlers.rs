@@ -723,6 +723,105 @@ pub(crate) async fn snapshot(
     })?
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LineArguments {
+    pub buffer: BufferHandle,
+    pub value: u64,
+}
+impl HostArguments for LineArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            buffer: BufferHandle::new(reader.integer(2)?),
+            value: reader.integer(3)?,
+        })
+    }
+}
+
+impl HostSuccess for ByteRange {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+#[host_operation("lineCount")]
+pub(crate) async fn line_count(
+    context: HostContext,
+    arguments: BufferArguments,
+) -> Result<u64, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        host.buffers.read_model(
+            &request,
+            arguments.buffer,
+            || commands.is_cancelled(request.invocation),
+            cx,
+            |model| Ok(model.line_count() as u64),
+        )
+    })?
+}
+
+/// A 0-based line's range without its `\n` or `\r\n` terminator.
+#[host_operation("lineRange")]
+pub(crate) async fn line_range(
+    context: HostContext,
+    arguments: LineArguments,
+) -> Result<ByteRange, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        host.buffers.read_model(
+            &request,
+            arguments.buffer,
+            || commands.is_cancelled(request.invocation),
+            cx,
+            |model| {
+                let line = usize::try_from(arguments.value)
+                    .ok()
+                    .filter(|line| *line < model.line_count())
+                    .ok_or(BufferError::InvalidRange)?;
+                let mut range = model.line_range(line);
+                if line + 1 < model.line_count()
+                    && range.end > range.start
+                    && model.is_char_boundary(range.end - 1)
+                    && model.read(range.end - 1..range.end) == "\r"
+                {
+                    range.end -= 1;
+                }
+                Ok(ByteRange {
+                    start_byte_offset: range.start,
+                    end_byte_offset: range.end,
+                })
+            },
+        )
+    })?
+}
+
+/// The 0-based line holding a byte offset on a character boundary.
+#[host_operation("lineAt")]
+pub(crate) async fn line_at(
+    context: HostContext,
+    arguments: LineArguments,
+) -> Result<u64, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        host.buffers.read_model(
+            &request,
+            arguments.buffer,
+            || commands.is_cancelled(request.invocation),
+            cx,
+            |model| {
+                let offset = usize::try_from(arguments.value)
+                    .ok()
+                    .filter(|offset| *offset <= model.len() && model.is_char_boundary(*offset))
+                    .ok_or(BufferError::InvalidRange)?;
+                Ok(model.line_of_offset(offset) as u64)
+            },
+        )
+    })?
+}
+
 #[host_operation("applyEdits")]
 pub(crate) async fn apply_edits(
     context: HostContext,
@@ -1624,6 +1723,170 @@ pub(crate) async fn selected_view_text(
 ) -> Result<Option<String>, ContextError> {
     let request = context.request;
     context.foreground(|host, cx| host.contextual_selected_text(&request, arguments.target, cx))?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EditorArguments {
+    pub authority: CommandInvocationId,
+}
+impl HostArguments for EditorArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: CommandInvocationId::new(reader.integer(2)?),
+        })
+    }
+}
+
+#[derive(Debug, HostError)]
+pub(crate) enum EditorError {
+    #[error(transparent)]
+    Access(AccessError),
+    #[error(code = "InvalidRange", message = "InvalidRange")]
+    InvalidRange,
+}
+impl From<AccessError> for EditorError {
+    fn from(error: AccessError) -> Self {
+        Self::Access(error)
+    }
+}
+
+/// A selection's ends as UTF-8 byte offsets; equal for a bare caret.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct EditorSelection {
+    pub anchor: usize,
+    pub caret: usize,
+}
+impl HostSuccess for EditorSelection {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+impl HostSuccess for crate::app::editor::EditorViewState {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+#[host_operation("editorSelection")]
+pub(crate) async fn editor_selection(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<EditorSelection, AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let (anchor, caret) = editor.read(cx).selection(cx);
+        Ok(EditorSelection { anchor, caret })
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SetSelectionArguments {
+    pub authority: CommandInvocationId,
+    pub anchor: u64,
+    pub caret: u64,
+    pub reveal: crate::app::editor::Reveal,
+}
+impl HostArguments for SetSelectionArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: CommandInvocationId::new(reader.integer(2)?),
+            anchor: reader.integer(3)?,
+            caret: reader.integer(4)?,
+            reveal: match reader.text(5, "reveal must be text")?.as_str() {
+                "nearest" => crate::app::editor::Reveal::Nearest,
+                "center" => crate::app::editor::Reveal::Center,
+                _ => return Err(DecodeError::Range("reveal must be nearest or center")),
+            },
+        })
+    }
+}
+
+/// Move the captured editor's selection. Offsets must lie on character
+/// boundaries within the text.
+#[host_operation("editorSetSelection")]
+pub(crate) async fn editor_set_selection(
+    context: HostContext,
+    arguments: SetSelectionArguments,
+) -> Result<(), EditorError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let valid = |offset: u64| {
+            let model = editor.read(cx).model().read(cx);
+            usize::try_from(offset)
+                .ok()
+                .filter(|offset| *offset <= model.len() && model.is_char_boundary(*offset))
+        };
+        let (Some(anchor), Some(caret)) = (valid(arguments.anchor), valid(arguments.caret)) else {
+            return Err(EditorError::InvalidRange);
+        };
+        editor.update(cx, |editor, cx| {
+            editor.set_selection(anchor, caret, arguments.reveal, cx);
+        });
+        Ok(())
+    })?
+}
+
+#[host_operation("editorViewState")]
+pub(crate) async fn editor_view_state(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<crate::app::editor::EditorViewState, AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        Ok(editor.read(cx).view_state(cx))
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RestoreViewStateArguments {
+    pub authority: CommandInvocationId,
+    pub state: crate::app::editor::EditorViewState,
+}
+impl HostArguments for RestoreViewStateArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let offset = |reader: &mut dyn ArgumentReader, index| {
+            usize::try_from(reader.integer(index)?)
+                .map_err(|_| DecodeError::Range("view state offsets must fit in memory"))
+        };
+        let authority = CommandInvocationId::new(reader.integer(2)?);
+        let anchor = offset(reader, 3)?;
+        let caret = offset(reader, 4)?;
+        let top = offset(reader, 5)?;
+        let crate::host::protocol::CommandArgumentValue::Number(scroll_x) =
+            reader.command_arguments(6)?
+        else {
+            return Err(DecodeError::Type("view state scrollX must be a number"));
+        };
+        Ok(Self {
+            authority,
+            state: crate::app::editor::EditorViewState {
+                anchor,
+                caret,
+                top,
+                scroll_x: scroll_x as f32,
+            },
+        })
+    }
+}
+
+/// Restore a captured editor view state. Offsets clamp to the current text.
+#[host_operation("editorRestoreViewState")]
+pub(crate) async fn editor_restore_view_state(
+    context: HostContext,
+    arguments: RestoreViewStateArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        editor.update(cx, |editor, cx| {
+            editor.break_history_group(cx);
+            editor.restore_view_state(arguments.state, cx);
+        });
+        Ok(())
+    })?
 }
 
 pub(crate) use crate::host::protocol::KeybindingArguments;

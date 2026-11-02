@@ -24,6 +24,21 @@ const registration: Promise<Disposable> = commands.register("check", async (cont
   const completion: Promise<void> = subscription.dispose();
   await completion;
   await buffer.contributions.dispose();
+  const lines: number = await buffer.lineCount();
+  const line: import("knot").ByteRange = await buffer.lineRange(lines - 1);
+  const lineIndex: number = await buffer.lineAt(line.startByteOffset);
+  void lineIndex;
+  const editorHandle: import("knot").Editor | null = context.editor;
+  if (editorHandle !== null) {
+    const state = await editorHandle.viewState();
+    const { caret } = await editorHandle.selection();
+    await editorHandle.setSelection({ anchor: caret, caret }, { reveal: "center" });
+    // @ts-expect-error reveal is "nearest" or "center"
+    await editorHandle.setSelection({ anchor: 0, caret: 0 }, { reveal: "top" });
+    await editorHandle.restoreViewState(state);
+  } else {
+    commands.unavailable();
+  }
   const outcome = await commands.invoke("child", { nested: [null, true, 42, "text"] });
   if (outcome.kind === "invalidArgument" || outcome.kind === "handlerFailure") {
     const message: string = outcome.message;
