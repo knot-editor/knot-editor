@@ -12,6 +12,8 @@ pub(crate) struct RuntimeCapsule {
     pub(super) local_state: Arc<RuntimeLocalState>,
     pub(super) heap_state: Box<HeapLimitState>,
     pub(super) status: Arc<AtomicU8>,
+    /// The root evaluating the package or config entry, until it settles.
+    startup_root: Mutex<Option<RootId>>,
 }
 
 impl RuntimeCapsule {
@@ -83,6 +85,7 @@ impl RuntimeCapsule {
             local_state,
             heap_state,
             status,
+            startup_root: Mutex::new(None),
         })
     }
 
@@ -102,6 +105,18 @@ impl RuntimeCapsule {
             total: statistics.total_heap_size(),
             external: statistics.external_memory(),
         })
+    }
+
+    /// Asks V8 to collect garbage fully and return free pages, from the worker
+    /// that just finished one of this isolate's turns.
+    fn release_memory(&self) {
+        if self.status.load(Ordering::Acquire) != ACTIVE {
+            return;
+        }
+        let data = self.data.lock().unwrap();
+        if let Some(data) = data.as_ref() {
+            data.isolate.lock().low_memory_notification();
+        }
     }
 
     pub(crate) fn termination_handle(&self) -> TerminationHandle {
@@ -1551,6 +1566,10 @@ pub(super) fn execute_engine_turn(
     let root = turn.root;
     let work = turn.work;
     let capsule = Arc::clone(&work.capsule);
+    if matches!(work.work, EngineWork::PackageModule { .. }) {
+        *capsule.startup_root.lock().unwrap() = Some(root);
+    }
+    let started = Instant::now();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match work.work {
         #[cfg(test)]
         EngineWork::Script {
@@ -1627,6 +1646,15 @@ pub(super) fn execute_engine_turn(
             .lock()
             .unwrap()
             .clear();
+    }
+    if !matches!(outcome, TurnOutcome::Fatal(_)) {
+        let settled_startup = matches!(outcome, TurnOutcome::Completed) && {
+            let mut startup = capsule.startup_root.lock().unwrap();
+            startup.take_if(|startup| *startup == root).is_some()
+        };
+        if settled_startup || started.elapsed() >= LONG_TURN {
+            capsule.release_memory();
+        }
     }
     match &outcome {
         TurnOutcome::Fatal(failure) => {

@@ -5275,3 +5275,75 @@ fn heap_exhaustion_probe_child() {
     );
     pool.shutdown();
 }
+
+fn used_heap(pool: &RuntimePool, runtime: ExtensionKey) -> usize {
+    pool.heap_usage()
+        .into_iter()
+        .find(|(key, _)| *key == runtime)
+        .and_then(|(_, usage)| usage)
+        .expect("an idle isolate reports its heap")
+        .used
+}
+
+#[test]
+fn startup_garbage_is_released_once_the_package_settles() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(1);
+    let graph = package_graph(
+        "file:///extensions/%40example/burst/",
+        "main.js",
+        &[(
+            "main.js",
+            "{ const a = []; for (let i = 0; i < 100000; i++) a.push({ i, s: 'x' + i }); } await Promise.resolve(); globalThis.kept = 'kept';",
+        )],
+    );
+    pool.load_package(runtime, IsolateConfig::default(), graph)
+        .unwrap()
+        .wait()
+        .unwrap();
+    // The burst allocates about 9 MiB that no turn would otherwise collect.
+    assert!(used_heap(&pool, runtime) < 2 * 1024 * 1024);
+    assert_eq!(
+        &*pool
+            .execute(runtime, "kept.js", "kept")
+            .unwrap()
+            .wait()
+            .unwrap()
+            .value,
+        "kept"
+    );
+    pool.shutdown();
+}
+
+#[test]
+fn a_long_allocating_turn_runs_normally_and_its_garbage_is_released() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(1);
+    pool.load(runtime, IsolateConfig::default()).unwrap();
+    let report = pool
+        .execute(
+            runtime,
+            "long.js",
+            "const start = Date.now(); let rounds = 0;
+             while (Date.now() - start < 150) {
+               const a = []; for (let i = 0; i < 20000; i++) a.push({ i, s: 'x' + i });
+               rounds++;
+             }
+             globalThis.rounds = rounds; rounds > 0 ? 'done' : 'none'",
+        )
+        .unwrap()
+        .wait()
+        .unwrap();
+    assert_eq!(&*report.value, "done");
+    assert!(used_heap(&pool, runtime) < 2 * 1024 * 1024);
+    assert_eq!(
+        &*pool
+            .execute(runtime, "rounds.js", "rounds > 0")
+            .unwrap()
+            .wait()
+            .unwrap()
+            .value,
+        "true"
+    );
+    pool.shutdown();
+}

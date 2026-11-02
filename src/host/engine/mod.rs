@@ -55,6 +55,9 @@ const ACTIVE: u8 = 0;
 const TERMINATED: u8 = 1;
 const HEAP_LIMIT_EXCEEDED: u8 = 2;
 const DISPOSED: u8 = 3;
+/// A turn at least this long has probably left garbage behind, so the worker
+/// releases the isolate's memory after it.
+const LONG_TURN: Duration = Duration::from_millis(100);
 const PRIVATE_BOOTSTRAP_SPECIFIER: &str = "knot:bootstrap";
 const PUBLIC_FACADE_SPECIFIER: &str = "knot";
 const NATIVE_BINDINGS_GLOBAL: &str = "__knotNativeBindings";
