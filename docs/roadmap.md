@@ -61,6 +61,11 @@ Git links replace a package registry, so publishing is a push and discoverabilit
 is a website; consent stays with entitlement grants. It promotes D033 and adds
 D101–D106.
 
+Extension isolate memory (D137) is selected: measure what one package costs,
+then start isolates from a shared startup snapshot and size their heaps for
+idle packages, so small single-feature packages stay cheap. See its
+[plan](plans/d137-isolate-memory.md).
+
 ## Dependency order
 
 Each line is a chain: an item to the left of an arrow comes first. Items not
