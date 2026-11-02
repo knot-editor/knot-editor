@@ -1,6 +1,6 @@
 # D068 — Editor gutter and line numbers
 
-Status: 🚧 checkpoint 2 awaiting review. Item of the
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 in progress. Item of the
 [daily-driver plan](daily-driver.md); depends on D064 (themes, complete).
 
 ## Outcome
@@ -144,57 +144,14 @@ mode, scoped settings, and the line highlight. The native color key test and
 the `@knot/themes` test that every theme sets exactly the native keys cover
 the new keys.
 
-### 2. Lane interaction and marker precedence 🚧 review
+### 2. Lane interaction and marker precedence ✅
 
-Progress: ✅ deliverables landed. Each line keeps one marker, the most severe
-and then the latest, carrying its own command, so a click runs what is
-painted; text-region actions no longer carry a gutter flag. Pointer styles
-come from hitboxes inserted in prepaint, which now also lays out the gutter:
-the text area shows an I-beam, command markers a hand, and the rest of the
-gutter the default arrow. Shift-click on a number extends from the
-selection's anchor to the clicked line's far edge. No example extension
-paints gutter markers, so the manual check needs a snippet.
-
-Deliverables:
-
-- Hit testing by lane.
-- Line-number click, shift-click, and line drag.
-- The hand pointer over actionable markers, and an arrow elsewhere in the
-  gutter.
-- Severity precedence for markers on the same line.
-
-Validation:
-
-- Editor tests:
-  - clicking a number selects that line, including its line break, or the
-    end of text on the last line;
-  - shift-click extends by lines;
-  - a drag through the number lane extends by whole lines, upward and
-    downward;
-  - clicking the marker lane with no command marker leaves the selection
-    unchanged;
-  - with overlapping `info` and `error` markers, `error` is painted and its
-    command runs.
-- `project_contributions` unit tests for precedence.
-
-Review gate: try selecting by line numbers, and clicking markers from the
-example extension, in the running app.
-
-Implementation context:
-
-- `src/app/editor/input.rs`:
-  - `on_mouse_down` currently treats any x left of `text_bounds()` as the
-    gutter. Branch on the `GutterLayout` lane instead.
-  - The number lane sets `DragAnchor { unit: SelectionUnit::Line, .. }` from
-    `unit_range` and lets `on_mouse_move` extend it as triple-click drags do.
-    `hit_test` already maps y to a line.
-- Cursor styles: set them in paint with
-  `window.set_cursor_style(style, &hitbox)` over a gutter hitbox, as
-  `src/app/terminal/view.rs` does for links.
-- `src/app/editor.rs::project_contributions`: sort the markers on each line
-  using the model's decoration paint order, which already ranks `error`,
-  `warning`, and `info`. Keep the topmost marker per line both for painting
-  and for gutter actions.
+Complete and approved. Each line keeps one marker, the most severe and then
+the latest, with its own command, so a click runs what is painted. Number
+clicks, shift-clicks, and drags select whole lines; the marker lane never
+selects. Hitboxes inserted in prepaint give the text an I-beam and command
+markers a hand. Editor tests cover line selection, marker clicks, and
+precedence.
 
 ### 3. Text-frame enablement and documentation
 
