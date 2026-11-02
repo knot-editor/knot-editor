@@ -183,6 +183,48 @@ pub(crate) fn startup_report(cx: &App) -> Option<StartupReportSnapshot> {
     host.read(cx).startup_report.clone()
 }
 
+/// The process's resident size and each live lifecycle's heap, one line per
+/// lifecycle sorted by name, for Show Extension Memory.
+pub(crate) fn memory_report(cx: &App) -> String {
+    fn mib(bytes: u64) -> String {
+        format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
+    }
+    let resident =
+        crate::host::pool::process_resident_bytes().map_or_else(|| "unavailable".into(), mib);
+    let mut report = format!("Process resident size: {resident}\n");
+    let Some(host) = entity(cx) else {
+        return report;
+    };
+    let host = host.read(cx);
+    let mut lines = host
+        .pool
+        .heap_usage()
+        .into_iter()
+        .map(|(key, usage)| {
+            let label = lifecycle_label(key.extension, key.lifecycle, cx)
+                .unwrap_or_else(|| format!("{:?}", key.extension));
+            let usage = usage.map_or_else(
+                || "running a turn".into(),
+                |usage| {
+                    format!(
+                        "{} used of {}, {} external",
+                        mib(usage.used as u64),
+                        mib(usage.total as u64),
+                        mib(usage.external as u64)
+                    )
+                },
+            );
+            format!("{label}: {usage}")
+        })
+        .collect::<Vec<_>>();
+    lines.sort();
+    for line in lines {
+        report.push('\n');
+        report.push_str(&line);
+    }
+    report
+}
+
 /// The package name of a live lifecycle, or "personal config".
 pub(crate) fn lifecycle_label(
     extension: ExtensionId,
@@ -2610,6 +2652,16 @@ mod tests {
                 parse_color("#282c34")
             );
         });
+    }
+
+    /// Each bundled package's heap once startup settles, as Show Extension
+    /// Memory reports it.
+    #[gpui::test]
+    #[ignore = "measurement: run in release with --ignored --nocapture"]
+    fn measure_bundled_package_memory(cx: &mut TestAppContext) {
+        let (_host, _root) = start_bundled_packages(cx);
+        cx.run_until_parked();
+        println!("{}", cx.read(memory_report));
     }
 
     /// Starts the bundled packages under product discovery, with no installed

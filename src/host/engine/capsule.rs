@@ -90,6 +90,20 @@ impl RuntimeCapsule {
         self.key
     }
 
+    /// Reads the isolate's heap statistics between turns. A turn holds the
+    /// isolate data for its whole duration, so a running or disposed isolate
+    /// reports `None` instead of waiting.
+    pub(crate) fn heap_usage(&self) -> Option<HeapUsage> {
+        let data = self.data.try_lock().ok()?;
+        let data = data.as_ref()?;
+        let statistics = data.isolate.lock().get_heap_statistics();
+        Some(HeapUsage {
+            used: statistics.used_heap_size(),
+            total: statistics.total_heap_size(),
+            external: statistics.external_memory(),
+        })
+    }
+
     pub(crate) fn termination_handle(&self) -> TerminationHandle {
         TerminationHandle {
             isolate: self.heap_state.isolate.clone(),

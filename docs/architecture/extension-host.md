@@ -91,6 +91,14 @@ namespace, so a dependent's own registrations never depended on the restarted
 lifecycle. Personal config is not restartable; restarting Knot is its recovery
 path. Per-turn timeouts remain [D019](../roadmap.md).
 
+### Memory diagnostics
+
+Developer: Show Extension Memory reports the process's resident size and each
+live lifecycle's V8 heap (used, total, external) in a message. Heap statistics
+are read between turns: a turn holds its capsule's isolate data for its whole
+duration, so a package inside a turn is listed as running rather than waited
+for, and a stuck package never blocks the report.
+
 ## Runtime and scheduler flow
 
 One application-owned `ProductExtensionHost` owns the pool, foreground bridges,

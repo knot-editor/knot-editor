@@ -213,6 +213,37 @@ fn restart_terminates_a_stuck_turn_and_rereads_the_installed_package(cx: &mut Te
 }
 
 #[gpui::test]
+fn show_extension_memory_lists_each_live_package(cx: &mut TestAppContext) {
+    let fixture = start(
+        &[
+            ("@example/loop", &[], LOOP_V1),
+            ("@example/dependent", &["@example/loop"], DEPENDENT),
+        ],
+        cx,
+    );
+    let spin = fixture.command("loop.spin", cx);
+    cx.run_until_parked();
+
+    let execution = fixture.command(super::super::commands::SHOW_EXTENSION_MEMORY_COMMAND, cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    let (title, detail) = cx.pending_prompt().unwrap();
+    cx.simulate_prompt_answer("OK");
+    assert_eq!(title, "Extension Memory");
+    let lines = detail.lines().collect::<Vec<_>>();
+    assert!(lines[0].starts_with("Process resident size: "), "{detail}");
+    let dependent = lines
+        .iter()
+        .find(|line| line.starts_with("@example/dependent: "))
+        .unwrap_or_else(|| panic!("{detail}"));
+    assert!(dependent.contains(" MiB used of "), "{detail}");
+    // A package inside a turn is reported without waiting for it.
+    assert!(lines.contains(&"@example/loop: running a turn"), "{detail}");
+
+    fixture.restart("@example/loop", cx);
+    assert_eq!(wait_for_command(spin, cx), CommandOutcome::Cancelled);
+}
+
+#[gpui::test]
 fn a_failed_restart_is_reported_while_dependents_keep_running(cx: &mut TestAppContext) {
     let fixture = start(
         &[

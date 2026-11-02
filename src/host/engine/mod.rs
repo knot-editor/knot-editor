@@ -91,6 +91,14 @@ impl Default for IsolateConfig {
     }
 }
 
+/// V8 heap statistics of one isolate, in bytes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct HeapUsage {
+    pub(crate) used: usize,
+    pub(crate) total: usize,
+    pub(crate) external: usize,
+}
+
 /// Stable, Knot-owned classification of a JavaScript runtime failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RuntimeErrorKind {

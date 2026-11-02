@@ -647,6 +647,15 @@ impl RuntimePool {
         Ok(self.capsule(key)?.local_state.buffer_change_queue_metrics())
     }
 
+    /// Heap statistics of every live lifecycle; `None` for one running a turn.
+    pub(crate) fn heap_usage(&self) -> Vec<(ExtensionKey, Option<HeapUsage>)> {
+        self.finalizer
+            .capsules()
+            .into_iter()
+            .map(|capsule| (capsule.key(), capsule.heap_usage()))
+            .collect()
+    }
+
     #[cfg(test)]
     pub(crate) fn diagnostics(&self) -> crate::host::scheduler::SchedulerDiagnostics {
         self.scheduler_handle.diagnostics()

@@ -14,8 +14,9 @@ use super::{
 };
 
 pub(crate) use super::engine::{
-    RuntimeCommandExecution as ExtensionCommandExecution, RuntimeExecution as ExtensionExecution,
-    RuntimePoolError as ExtensionPoolError, RuntimeProviderExecution as ExtensionProviderExecution,
+    HeapUsage as ExtensionHeapUsage, RuntimeCommandExecution as ExtensionCommandExecution,
+    RuntimeExecution as ExtensionExecution, RuntimePoolError as ExtensionPoolError,
+    RuntimeProviderExecution as ExtensionProviderExecution,
     RuntimeResponseError as ExtensionResponseError,
 };
 
@@ -221,6 +222,12 @@ impl ExtensionPool {
             .dispatch_buffer_change(key, subscription, change)
     }
 
+    /// Heap statistics of every live lifecycle, read between turns; `None`
+    /// for one running a turn.
+    pub(crate) fn heap_usage(&self) -> Vec<(ExtensionKey, Option<ExtensionHeapUsage>)> {
+        self.engine.heap_usage()
+    }
+
     #[cfg(test)]
     pub(crate) fn diagnostics(&self) -> super::scheduler::SchedulerDiagnostics {
         self.engine.diagnostics()
@@ -247,6 +254,42 @@ impl ExtensionPool {
     pub(crate) fn shutdown(self) {
         self.engine.shutdown();
     }
+}
+
+/// The process's resident memory in bytes, where the platform reports it.
+#[cfg(target_os = "macos")]
+pub(crate) fn process_resident_bytes() -> Option<u64> {
+    let mut info = std::mem::MaybeUninit::<libc::proc_taskinfo>::zeroed();
+    let size = std::mem::size_of::<libc::proc_taskinfo>() as libc::c_int;
+    // SAFETY: the buffer is a zeroed `proc_taskinfo` of exactly `size` bytes,
+    // which is what this flavor writes.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            libc::getpid(),
+            libc::PROC_PIDTASKINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            size,
+        )
+    };
+    // SAFETY: a full write initialized the structure.
+    (written == size).then(|| unsafe { info.assume_init() }.pti_resident_size)
+}
+
+/// The process's resident memory in bytes, where the platform reports it.
+#[cfg(target_os = "linux")]
+pub(crate) fn process_resident_bytes() -> Option<u64> {
+    let statm = std::fs::read_to_string("/proc/self/statm").ok()?;
+    let pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
+    // SAFETY: `sysconf` has no preconditions.
+    let page_size = u64::try_from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) }).ok()?;
+    Some(pages * page_size)
+}
+
+/// The process's resident memory in bytes, where the platform reports it.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub(crate) fn process_resident_bytes() -> Option<u64> {
+    None
 }
 
 /// Cloneable, non-V8 watchdog for forcefully interrupting one isolate.
@@ -322,6 +365,110 @@ mod tests {
         ));
         let pool = Arc::try_unwrap(pool).unwrap_or_else(|_| panic!("pool owner leaked"));
         pool.shutdown();
+    }
+
+    #[test]
+    fn heap_usage_reports_live_lifecycles_and_drops_disposed_ones() {
+        let (pool, mut inbox) = ExtensionPool::new(PoolConfig::single_worker());
+        let first = key(1, 1);
+        let second = key(2, 1);
+        pool.load(first, ExtensionConfig::default()).unwrap();
+        pool.load(second, ExtensionConfig::default()).unwrap();
+        pool.execute_fixture_module(
+            second,
+            "file:///fixtures/heap-usage.js",
+            "globalThis.retained = new Array(100000).fill(1);",
+        )
+        .unwrap()
+        .wait()
+        .unwrap();
+
+        let mut usage = pool.heap_usage();
+        usage.sort_by_key(|(key, _)| key.extension.value());
+        assert_eq!(
+            usage.iter().map(|(key, _)| *key).collect::<Vec<_>>(),
+            [first, second]
+        );
+        let first_usage = usage[0].1.expect("an idle isolate reports statistics");
+        let second_usage = usage[1].1.expect("an idle isolate reports statistics");
+        assert!(first_usage.used > 0 && first_usage.used <= first_usage.total);
+        assert!(second_usage.used > first_usage.used + 400_000);
+
+        pool.unload(first).unwrap();
+        assert!(matches!(
+            inbox.receive_timeout(Duration::from_secs(1)),
+            Some(ExtensionEvent::LifecycleEnded { key, .. }) if key == first
+        ));
+        assert_eq!(
+            pool.heap_usage()
+                .iter()
+                .map(|(key, _)| *key)
+                .collect::<Vec<_>>(),
+            [second]
+        );
+        pool.unload(second).unwrap();
+        assert!(pool.heap_usage().is_empty());
+    }
+
+    /// What one more idle package costs: isolate creation time, resident size
+    /// per isolate, and heap per isolate, each loaded with an empty module.
+    #[test]
+    #[ignore = "measurement: run in release with --ignored --nocapture"]
+    fn measure_isolate_cost() {
+        const COUNT: u64 = 50;
+        fn mib(bytes: f64) -> String {
+            format!("{:.2} MiB", bytes / (1024.0 * 1024.0))
+        }
+        fn median(mut values: Vec<usize>) -> usize {
+            values.sort_unstable();
+            values[values.len() / 2]
+        }
+        let (pool, _inbox) = ExtensionPool::new(PoolConfig::single_worker());
+        let load = |extension: u64| {
+            let runtime = key(extension, 1);
+            let start = std::time::Instant::now();
+            pool.load(runtime, ExtensionConfig::default()).unwrap();
+            let elapsed = start.elapsed();
+            pool.execute_fixture_module(runtime, "file:///fixtures/empty.js", "export {};")
+                .unwrap()
+                .wait()
+                .unwrap();
+            elapsed
+        };
+        // The first isolate pays V8's process-wide setup.
+        let first = load(0);
+        let resident_before = process_resident_bytes().unwrap_or(0);
+        let mut durations = (1..=COUNT).map(load).collect::<Vec<_>>();
+        let resident_after = process_resident_bytes().unwrap_or(0);
+        durations.sort_unstable();
+        let usage = pool
+            .heap_usage()
+            .into_iter()
+            .filter_map(|(_, usage)| usage)
+            .collect::<Vec<_>>();
+        println!("first isolate creation: {first:?}");
+        println!(
+            "isolate creation over {COUNT}: median {:?}, p90 {:?}",
+            durations[durations.len() / 2],
+            durations[durations.len() * 9 / 10]
+        );
+        println!(
+            "resident size per isolate: {}",
+            mib(resident_after.saturating_sub(resident_before) as f64 / COUNT as f64)
+        );
+        println!(
+            "heap per isolate (median): used {}, total {}, external {}",
+            mib(median(usage.iter().map(|usage| usage.used).collect()) as f64),
+            mib(median(usage.iter().map(|usage| usage.total).collect()) as f64),
+            mib(median(usage.iter().map(|usage| usage.external).collect()) as f64),
+        );
+    }
+
+    #[test]
+    fn process_resident_size_is_reported() {
+        if cfg!(any(target_os = "macos", target_os = "linux")) {
+            assert!(process_resident_bytes().unwrap() > 1024 * 1024);
+        }
     }
 
     #[test]

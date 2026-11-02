@@ -1,7 +1,7 @@
 # D137 — Extension isolate memory
 
-Status: 🚧 approved, not started. Selected in the [roadmap](../roadmap.md);
-independent of the daily-driver items.
+Status: 🚧 checkpoint 1 implemented, awaiting its review gate. Selected in the
+[roadmap](../roadmap.md); independent of the daily-driver items.
 
 ## Goal
 
@@ -62,7 +62,65 @@ pins.
 
 ## Checkpoints
 
-### 1. Measurement
+### 1. Measurement — ✅ implemented, 🔍 awaiting review
+
+✅ `Developer: Show Extension Memory` (`extensions.show-memory`) shows the
+process's resident size and each live lifecycle's heap in a native message.
+Statistics are read with a `try_lock` of the capsule's isolate data, so a
+package inside a turn reports "running a turn" instead of blocking the
+foreground ([memory diagnostics](../architecture/extension-host.md#memory-diagnostics)).
+✅ Tests: `heap_usage_reports_live_lifecycles_and_drops_disposed_ones` and
+`process_resident_size_is_reported` in `src/host/pool.rs`;
+`show_extension_memory_lists_each_live_package` in
+`src/app/product/tests/extension_restart.rs`.
+
+**Measurement procedure.** Release build with the Metal Toolchain installed
+(`xcodebuild -downloadComponent MetalToolchain`):
+
+```sh
+cargo test --release --lib -- --ignored --nocapture measure_
+```
+
+- `measure_isolate_cost` (`src/host/pool.rs`) loads one warm-up isolate, then
+  50 more on a single worker, each evaluating an empty module. It reports
+  creation time (`load`: isolate, context, and bootstrap), resident size per
+  added isolate (the N to N+1 cost), and median heap per isolate. Repeat it
+  three times and record the range.
+- `measure_bundled_package_memory` (`src/app/extensions/host.rs`) starts the
+  bundled packages under product discovery and prints the Show Extension
+  Memory report once startup settles.
+
+**Baseline** (Apple M1 Pro, macOS, release, V8 152.2, 32 MiB heap limit,
+2026-11-02):
+
+| Measure | Value |
+| --- | --- |
+| First isolate creation (V8 process setup) | 2.0 ms warm, 7.1 ms cold |
+| Isolate creation, median / p90 over 50 | 1.04–1.12 ms / 1.15–1.30 ms |
+| Resident size per added empty package | 1.25–1.55 MiB |
+| Heap per empty package: used / total / external | 0.36 / 0.75 / 0.00 MiB |
+| Test process resident size, 8 bundled packages | 114.1 MiB |
+
+| Bundled package after startup | Used | Total |
+| --- | --- | --- |
+| `@knot/language-markdown` | 0.4 MiB | 1.2 MiB |
+| `@knot/language-others` | 0.6 MiB | 1.8 MiB |
+| `@knot/language-python` | 0.4 MiB | 1.2 MiB |
+| `@knot/language-rust` | 0.4 MiB | 1.2 MiB |
+| `@knot/language-toml` | 0.4 MiB | 1.2 MiB |
+| `@knot/language-typescript` | 0.5 MiB | 1.2 MiB |
+| `@knot/projects` | 0.6 MiB | 2.0 MiB |
+| `@knot/themes` | 1.3 MiB | 2.8 MiB |
+
+External memory is 0.0 MiB for every package.
+
+**Reading.** One more idle package costs about 1.3 MiB resident and 1.1 ms of
+startup; the eight bundled packages together hold about 12 MiB of V8 heap,
+roughly a tenth of the test process. About half of each idle package's heap total
+is reserved but unused (0.75 MiB total for 0.36 MiB used), which is what
+checkpoint 3's young-generation sizing and idle release target. The snapshot
+in checkpoint 2 can only remove the bootstrap's share of the 0.36 MiB used
+and the ~1 ms per package, about 8 ms across today's bundled set.
 
 Deliverables: the developer command and a recorded baseline in this plan:
 resident size with N and N+1 packages, per-package heap after startup, and
