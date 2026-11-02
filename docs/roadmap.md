@@ -379,6 +379,18 @@ complete list for that item.
     when a package failed, and remove the overlay, its toggle, and its
     rendering.
 
+- **D139 — Per-package isolate floor**
+  - Deferred: Each package keeps its own isolate, which costs about 1.2 MiB
+    resident while idle; a bare isolate with an empty context is about
+    1.05 MiB of that, and the bootstrap a startup snapshot could skip is
+    about 0.15 MiB. At 40 packages that is about 48 MiB. With today's
+    handful of packages it is not yet worth the work.
+  - Reconsider: Knot ships enough extensions that their idle cost shows in
+    daily use, with 40 or more as the target. Then follow its
+    [plan](plans/d139-isolate-floor.md): measure the real set again, try V8
+    flags for small isolates, then a startup snapshot, and design sharing or
+    unloading only if those fall short.
+
 - **D032 — Extension source maps**
   - Deferred: D018 can load built JavaScript and report generated source
     locations without mapping them back to authoring files.
