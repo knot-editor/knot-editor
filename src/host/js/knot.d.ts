@@ -273,6 +273,10 @@ declare module "knot" {
     /** Whether typing an opening bracket or quote over a selection wraps the
      * selection in the pair. Native default true. */
     "editor.autoSurround": boolean;
+    /** Line numbers in the editor gutter: "on", "off", or "relative", which
+     * numbers other lines by their distance from the cursor's line. Native
+     * default "on"; other text means "on". */
+    "editor.lineNumbers": "on" | "off" | "relative";
     /** Which theme applies: theme.dark's, theme.light's, or the one matching
      * the system appearance. Native default "dark"; other text means "dark". */
     "theme.mode": "dark" | "light" | "system";
@@ -381,6 +385,14 @@ declare module "knot" {
     readonly "editor.cursor"?: string;
     /** Unhighlighted editor text. */
     readonly "editor.foreground"?: string;
+    /** The editor gutter beside the text. */
+    readonly "editor.gutter.background"?: string;
+    /** Background of the cursor's line while nothing is selected. */
+    readonly "editor.lineHighlight"?: string;
+    /** Line numbers. */
+    readonly "editor.lineNumber"?: string;
+    /** The cursor line's number. */
+    readonly "editor.lineNumber.active"?: string;
     /** Underline of text being composed by an input method. */
     readonly "editor.markedText"?: string;
     /** Selected text. */

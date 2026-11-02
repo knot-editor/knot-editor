@@ -31,6 +31,8 @@ pub(crate) const EDITOR_INSERT_SPACES: &str = "editor.insertSpaces";
 pub(crate) const EDITOR_AUTO_CLOSING_BRACKETS: &str = "editor.autoClosingBrackets";
 /// Whether typing an opening bracket or quote over a selection wraps it.
 pub(crate) const EDITOR_AUTO_SURROUND: &str = "editor.autoSurround";
+/// Line numbers in the editor gutter: `on`, `off`, or `relative`.
+pub(crate) const EDITOR_LINE_NUMBERS: &str = "editor.lineNumbers";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
 pub(crate) const THEME_MODE: &str = "theme.mode";
 /// The theme name used in dark mode.
@@ -195,6 +197,11 @@ fn native_definitions() -> Vec<SettingDefinition> {
             default: true.into(),
             description: "Wrap the selection when typing an opening bracket or quote over it".into(),
         },
+        text(
+            EDITOR_LINE_NUMBERS,
+            "on",
+            "Line numbers in the editor gutter: \"on\", \"off\", or \"relative\" to number lines by their distance from the cursor",
+        ),
         text(
             THEME_MODE,
             "dark",
@@ -382,6 +389,29 @@ pub(crate) fn editor_auto_closing_brackets(context: &SettingsScope, cx: &App) ->
 pub(crate) fn editor_auto_surround(context: &SettingsScope, cx: &App) -> bool {
     resolve(EDITOR_AUTO_SURROUND, context, cx, Value::as_bool)
         .expect("editor.autoSurround is a native boolean setting")
+}
+
+/// How an editor in `context` numbers its lines.
+pub(crate) fn editor_line_numbers(context: &SettingsScope, cx: &App) -> LineNumbers {
+    match resolve(EDITOR_LINE_NUMBERS, context, cx, |value| {
+        value.as_str().map(str::to_owned)
+    })
+    .as_deref()
+    {
+        Some("off") => LineNumbers::Off,
+        Some("relative") => LineNumbers::Relative,
+        _ => LineNumbers::On,
+    }
+}
+
+/// What the editor gutter's line-number lane shows.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum LineNumbers {
+    #[default]
+    On,
+    Off,
+    /// Each line's distance from the cursor's line, which shows its own number.
+    Relative,
 }
 
 fn resolve<T>(

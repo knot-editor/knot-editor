@@ -1,6 +1,6 @@
 # D068 — Editor gutter and line numbers
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 checkpoint 1 awaiting review. Item of the
 [daily-driver plan](daily-driver.md); depends on D064 (themes, complete).
 
 ## Outcome
@@ -134,7 +134,7 @@ generated frames.
 
 ## Checkpoints
 
-### 1. Gutter layout, line numbers, and current line
+### 1. Gutter layout, line numbers, and current line 🚧 review
 
 Deliverables:
 
@@ -145,6 +145,13 @@ Deliverables:
 - The current-line highlight follows VS Code's rule.
 - The `editor.lineNumbers` setting and its `knot.d.ts` declaration.
 - The four color keys, with values in every bundled theme.
+
+Progress: ✅ deliverables landed. `EditorRenderingOptions.show_gutter` keeps
+the surface switch checkpoint 3 sets for frames; `GutterLayout`
+(`src/app/editor/gutter.rs`) is recomputed at the start of each paint, so
+`text_bounds()` reads the last painted lanes. The theme product test was not
+extended: the native key consistency test and the `@knot/themes` test that
+every theme sets exactly the native keys already cover the new keys.
 
 Validation:
 

@@ -86,6 +86,7 @@ function emptyState() {
       ["editor.insertSpaces", { key: "editor.insertSpaces", type: "boolean", default: true, description: "Indent with spaces rather than tabs in documents whose indentation is not detected from their text" }],
       ["editor.autoClosingBrackets", { key: "editor.autoClosingBrackets", type: "boolean", default: true, description: "Insert the closer of a typed bracket or quote where the language allows, and step over or delete it with the opener" }],
       ["editor.autoSurround", { key: "editor.autoSurround", type: "boolean", default: true, description: "Wrap the selection when typing an opening bracket or quote over it" }],
+      ["editor.lineNumbers", { key: "editor.lineNumbers", type: "string", default: "on", description: "Line numbers in the editor gutter" }],
       ["theme.mode", { key: "theme.mode", type: "string", default: "dark", description: "Which theme applies" }],
       ["theme.dark", { key: "theme.dark", type: "string", default: "One Dark", description: "The theme used in dark mode" }],
       ["theme.light", { key: "theme.light", type: "string", default: "One Light", description: "The theme used in light mode" }],
@@ -519,6 +520,7 @@ export const CAPTURE_NAMES: readonly string[] = [
 export const NATIVE_COLOR_KEYS: readonly string[] = [
   "background", "border", "border.hover", "button.background", "button.hover.background",
   "dropTarget.background", "editor.background", "editor.bracketMatch", "editor.cursor", "editor.foreground",
+  "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
   "editor.markedText", "editor.selection", "error", "info", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",
   "popover.background", "popover.border", "scrim", "scrollbar.thumb", "success",

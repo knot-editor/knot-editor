@@ -652,7 +652,7 @@ fn constructs_from_arbitrary_buffer_text(cx: &mut TestAppContext) {
         let editor = editor.read(cx);
         assert_eq!(editor.model(), &model);
         assert_eq!(editor.line_count, 2);
-        assert!(editor.rendering.show_gutter_markers);
+        assert!(editor.rendering.show_gutter);
     });
 }
 
@@ -954,9 +954,7 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
         EditorView::new_with_options(
             model.clone(),
             1,
-            EditorRenderingOptions {
-                show_gutter_markers: false,
-            },
+            EditorRenderingOptions { show_gutter: false },
             cx,
         )
     });
@@ -1014,8 +1012,8 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
         assert!(!second.has_selection);
         assert_eq!(first.scroll, 20.);
         assert_eq!(second.scroll, 40.);
-        assert!(first.rendering.show_gutter_markers);
-        assert!(!second.rendering.show_gutter_markers);
+        assert!(first.rendering.show_gutter);
+        assert!(!second.rendering.show_gutter);
         assert_ne!(first.focus, second.focus);
     });
 }
@@ -1234,26 +1232,22 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
 }
 
 #[gpui::test]
-fn gutter_markers_reserve_a_column_beside_the_text(cx: &mut TestAppContext) {
-    for (show_gutter_markers, gutter) in [(true, 16.), (false, 0.)] {
+fn the_gutter_reserves_its_lanes_beside_the_text(cx: &mut TestAppContext) {
+    for show_gutter in [true, false] {
         let model = cx.new(|_| BufferModel::from_text("abc"));
         let (editor, cx) = cx.add_window_view(|_, cx| {
-            EditorView::new_with_options(
-                model,
-                0,
-                EditorRenderingOptions {
-                    show_gutter_markers,
-                },
-                cx,
-            )
+            EditorView::new_with_options(model, 0, EditorRenderingOptions { show_gutter }, cx)
         });
         cx.refresh().unwrap();
         cx.update(|window, cx| {
             editor.update(cx, |view, cx| {
                 let bounds = view.interaction_bounds();
                 let text = view.text_bounds();
-                assert_eq!(text.origin.x - bounds.origin.x, px(gutter));
-                assert_eq!(text.size.width, bounds.size.width - px(gutter));
+                let gutter = px(view.gutter.width);
+                assert_eq!(gutter > px(16.), show_gutter);
+                assert_eq!(gutter == px(0.), !show_gutter);
+                assert_eq!(text.origin.x - bounds.origin.x, gutter);
+                assert_eq!(text.size.width, bounds.size.width - gutter);
                 view.cursor_col = 1;
                 let x = view.caret_x(view.model.read(cx), window, cx);
                 let y = bounds.origin.y + px(5.);
@@ -1486,6 +1480,7 @@ pub(super) fn check(
 
 mod brackets;
 mod comments;
+mod gutter;
 mod indentation;
 mod lines;
 

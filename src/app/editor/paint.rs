@@ -126,6 +126,7 @@ impl Element for EditorElement {
         cx: &mut App,
     ) {
         self.entity.update(cx, |view, cx| {
+            view.update_gutter_layout(window, cx);
             let resized = view.bounds.size != bounds.size;
             view.bounds = bounds;
             view.viewport_h = f32::from(bounds.size.height);
@@ -174,7 +175,8 @@ impl Element for EditorElement {
             selection,
             marked,
             brackets,
-            gutter_markers,
+            gutter,
+            line_highlight,
             colors,
             focus_handle,
             entity,
@@ -222,15 +224,29 @@ impl Element for EditorElement {
                 })
                 .filter(|(line, ..)| *line >= first && *line < last)
                 .collect();
-            let gutter_markers = if view.rendering.show_gutter_markers {
-                view.gutter_markers
-                    .iter()
-                    .filter(|marker| marker.line >= first && marker.line < last)
-                    .map(|marker| (marker.line, theme.color(&marker.key)))
-                    .collect()
-            } else {
-                Vec::new()
+            let gutter = GutterPaint {
+                layout: view.gutter,
+                numbers: view
+                    .gutter_numbers(first..last)
+                    .into_iter()
+                    .map(|(line, label, active)| (line, label.to_string().into(), active))
+                    .collect(),
+                markers: if view.rendering.show_gutter {
+                    view.gutter_markers
+                        .iter()
+                        .filter(|marker| marker.line >= first && marker.line < last)
+                        .map(|marker| (marker.line, theme.color(&marker.key)))
+                        .collect()
+                } else {
+                    Vec::new()
+                },
+                background: theme.color(color::EDITOR_GUTTER_BACKGROUND),
+                number: theme.color(color::EDITOR_LINE_NUMBER),
+                active_number: theme.color(color::EDITOR_LINE_NUMBER_ACTIVE),
             };
+            let line_highlight = view
+                .highlighted_line()
+                .filter(|line| *line >= first && *line < last);
             (
                 view.scroll,
                 max,
@@ -240,12 +256,14 @@ impl Element for EditorElement {
                 view.selection_range(),
                 marked,
                 brackets,
-                gutter_markers,
+                gutter,
+                line_highlight,
                 PaintColors {
                     selection: theme.color(color::EDITOR_SELECTION),
                     caret: theme.color(color::EDITOR_CURSOR),
                     marked_text: theme.color(color::EDITOR_MARKED_TEXT),
                     bracket_match: theme.color(color::EDITOR_BRACKET_MATCH),
+                    line_highlight: theme.color(color::EDITOR_LINE_HIGHLIGHT),
                     scrollbar: theme.color(color::SCROLLBAR_THUMB),
                 },
                 view.focus.clone(),
@@ -257,10 +275,10 @@ impl Element for EditorElement {
         // and scroll handlers can clamp against the real viewport. No
         // notify: this must not trigger a re-render.
         let viewport_h = f32::from(bounds.size.height);
-        let gutter = bounds;
+        let full_bounds = bounds;
         let bounds = self.entity.update(cx, |view, _cx| {
             view.viewport_h = viewport_h;
-            view.bounds = gutter;
+            view.bounds = full_bounds;
             #[cfg(test)]
             {
                 view.paint_count += 1;
@@ -315,6 +333,16 @@ impl Element for EditorElement {
                     Some((*ix, s, x_off - px(scroll_x), line.as_str()))
                 })
                 .collect();
+
+            // The cursor line's background, behind everything else.
+            if let Some(line) = line_highlight {
+                let top = bounds.origin.y + px(line as f32 * LINE_HEIGHT) - px(scroll);
+                let rect = Bounds {
+                    origin: point(bounds.origin.x, top),
+                    size: size(pane_w, line_height),
+                };
+                window.paint_quad(fill(rect, colors.line_highlight));
+            }
 
             // Selection highlight, painted BEHIND the text. For each visible
             // line in the selection's line range we paint a rect covering the
@@ -477,17 +505,56 @@ impl Element for EditorElement {
                 .fold(0., f32::max)
         });
 
-        // Gutter markers, beside the text area rather than over it.
-        window.with_content_mask(Some(ContentMask { bounds: gutter }), |window| {
-            for (line, color) in &gutter_markers {
-                let top = gutter.origin.y + px(*line as f32 * LINE_HEIGHT) - px(scroll);
-                let marker_bounds = Bounds {
-                    origin: point(gutter.origin.x + px(4.), top + px(6.)),
-                    size: size(px(7.), px(7.)),
-                };
-                window.paint_quad(fill(marker_bounds, *color));
-            }
-        });
+        // The gutter, beside the text area rather than over it.
+        let gutter_bounds = Bounds {
+            origin: full_bounds.origin,
+            size: size(
+                px(gutter.layout.width).min(full_bounds.size.width),
+                full_bounds.size.height,
+            ),
+        };
+        if gutter.layout.width > 0. {
+            window.with_content_mask(
+                Some(ContentMask {
+                    bounds: gutter_bounds,
+                }),
+                |window| {
+                    window.paint_quad(fill(gutter_bounds, gutter.background));
+                    for (line, color) in &gutter.markers {
+                        let top =
+                            gutter_bounds.origin.y + px(*line as f32 * LINE_HEIGHT) - px(scroll);
+                        let marker_bounds = Bounds {
+                            origin: point(gutter_bounds.origin.x + px(4.), top + px(6.)),
+                            size: size(px(7.), px(7.)),
+                        };
+                        window.paint_quad(fill(marker_bounds, *color));
+                    }
+                    for (line, label, active) in &gutter.numbers {
+                        let run = TextRun {
+                            len: label.len(),
+                            font: make_font(false, false),
+                            color: if *active {
+                                gutter.active_number
+                            } else {
+                                gutter.number
+                            },
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        };
+                        let shaped =
+                            window
+                                .text_system()
+                                .shape_line(label.clone(), font_size, &[run], None);
+                        let origin = point(
+                            gutter_bounds.origin.x + px(gutter.layout.numbers_end) - shaped.width,
+                            gutter_bounds.origin.y + px(*line as f32 * LINE_HEIGHT) - px(scroll),
+                        );
+                        let _ = shaped.paint(origin, line_height, window, cx);
+                    }
+                },
+            );
+        }
         self.entity.update(cx, |view, _| {
             view.max_line_width = view.max_line_width.max(widest);
         });
@@ -521,11 +588,23 @@ pub(super) type EditorPaintState = (
     Option<((usize, usize), (usize, usize))>,
     Option<((usize, usize), (usize, usize))>,
     Vec<(usize, usize, usize)>,
-    Vec<(usize, Hsla)>,
+    GutterPaint,
+    Option<usize>,
     PaintColors,
     FocusHandle,
     Entity<EditorView>,
 );
+
+/// The gutter's lanes and visible content, copied out for one paint.
+pub(super) struct GutterPaint {
+    layout: GutterLayout,
+    /// Each visible line's number label and whether it is the cursor's line.
+    numbers: Vec<(usize, SharedString, bool)>,
+    markers: Vec<(usize, Hsla)>,
+    background: Hsla,
+    number: Hsla,
+    active_number: Hsla,
+}
 
 /// Theme colors copied out for one paint.
 pub(super) struct PaintColors {
@@ -533,5 +612,6 @@ pub(super) struct PaintColors {
     caret: Hsla,
     marked_text: Hsla,
     bracket_match: Hsla,
+    line_highlight: Hsla,
     scrollbar: Hsla,
 }

@@ -230,6 +230,10 @@ native_colors! {
     EDITOR_BACKGROUND = "editor.background", "Text editor background.", Key(BACKGROUND), Key(BACKGROUND);
     EDITOR_CURSOR = "editor.cursor", "Text cursor.", Rgb(0xe6e6e6), Rgb(0x1f1f1f);
     EDITOR_FOREGROUND = "editor.foreground", "Unhighlighted editor text.", Rgb(0xd4d4d4), Rgb(0x1f1f1f);
+    EDITOR_GUTTER_BACKGROUND = "editor.gutter.background", "The editor gutter beside the text.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);
+    EDITOR_LINE_HIGHLIGHT = "editor.lineHighlight", "Background of the cursor's line while nothing is selected.", Rgba(0xffffff0d), Rgba(0x0000000a);
+    EDITOR_LINE_NUMBER = "editor.lineNumber", "Line numbers.", Rgb(0x858585), Rgb(0x8c8c8c);
+    EDITOR_LINE_NUMBER_ACTIVE = "editor.lineNumber.active", "The cursor line's number.", Rgb(0xc6c6c6), Rgb(0x1f1f1f);
     EDITOR_MARKED_TEXT = "editor.markedText", "Underline of text being composed by an input method.", Rgba(0xb3b3b3cc), Rgba(0x595959cc);
     EDITOR_SELECTION = "editor.selection", "Selected text.", Rgba(0x3c7cdd59), Rgba(0x3b82d640);
     ERROR = "error", "Errors and failures.", Rgb(0xf48771), Rgb(0xc4314b);

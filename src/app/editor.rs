@@ -10,6 +10,7 @@ mod brackets;
 mod comments;
 mod completion;
 mod editing;
+mod gutter;
 mod indentation;
 mod input;
 mod layout;
@@ -18,6 +19,7 @@ pub(super) mod native_commands;
 mod paint;
 mod text;
 
+use gutter::GutterLayout;
 use layout::*;
 use text::*;
 
@@ -137,14 +139,13 @@ struct DragAnchor {
 
 #[derive(Clone, Copy)]
 pub(crate) struct EditorRenderingOptions {
-    pub show_gutter_markers: bool,
+    /// Whether the view shows a gutter of markers and line numbers.
+    pub show_gutter: bool,
 }
 
 impl Default for EditorRenderingOptions {
     fn default() -> Self {
-        Self {
-            show_gutter_markers: true,
-        }
+        Self { show_gutter: true }
     }
 }
 
@@ -178,6 +179,8 @@ pub struct EditorView {
     /// Renderer-local projection of shared, anchored buffer contributions.
     decorations: Vec<RenderedDecoration>,
     gutter_markers: Vec<RenderedGutterMarker>,
+    /// The gutter's lanes as of the last paint.
+    gutter: GutterLayout,
     contribution_actions: Vec<RenderedContributionAction>,
     /// Syntax highlights of the visible lines and some overscan, shared by
     /// painting and the caret, hit-testing, and IME geometry on those lines.
@@ -255,14 +258,9 @@ impl EditorView {
         self.bounds
     }
 
-    /// The part of `bounds` that shows text: everything right of the gutter,
-    /// which exists only while the view renders gutter markers.
+    /// The part of `bounds` that shows text: everything right of the gutter.
     pub(super) fn text_bounds(&self) -> Bounds<Pixels> {
-        let gutter = if self.rendering.show_gutter_markers {
-            px(GUTTER_WIDTH).min(self.bounds.size.width)
-        } else {
-            px(0.)
-        };
+        let gutter = px(self.gutter.width).min(self.bounds.size.width);
         Bounds {
             origin: point(self.bounds.origin.x + gutter, self.bounds.origin.y),
             size: size(self.bounds.size.width - gutter, self.bounds.size.height),
@@ -483,6 +481,7 @@ impl EditorView {
             max_line_width: 0.,
             decorations,
             gutter_markers,
+            gutter: GutterLayout::default(),
             contribution_actions,
             syntax_cache: RefCell::default(),
             bracket_cache: RefCell::default(),
@@ -938,7 +937,6 @@ const LINE_HEIGHT: f32 = 20.0;
 /// Lines a syntax highlight query covers beyond the requested ones on each
 /// side.
 const SYNTAX_OVERSCAN: usize = 16;
-const GUTTER_WIDTH: f32 = 16.0;
 
 #[cfg(test)]
 mod tests;
