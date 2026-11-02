@@ -247,6 +247,10 @@ fn show_extension_memory_lists_each_live_package(cx: &mut TestAppContext) {
         assert!(!report.is_dirty(cx));
         report.model().read(cx).text()
     });
+    assert!(
+        detail.ends_with('\n') && !detail.ends_with("\n\n"),
+        "{detail:?}"
+    );
     let lines = detail.lines().collect::<Vec<_>>();
     assert!(lines[0].starts_with("Process resident size: "), "{detail}");
     let dependent = lines

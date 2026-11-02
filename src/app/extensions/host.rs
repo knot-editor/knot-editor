@@ -218,9 +218,10 @@ pub(crate) fn memory_report(cx: &App) -> String {
         })
         .collect::<Vec<_>>();
     lines.sort();
+    report.push('\n');
     for line in lines {
-        report.push('\n');
         report.push_str(&line);
+        report.push('\n');
     }
     report
 }
