@@ -188,6 +188,7 @@ to be rebuilt later:
     selection surrounds it.
   - Decide whether matching uses the syntax tree or a text scan. The tree
     avoids false matches inside strings and comments.
+  - 🚧 [Plan](d075-bracket-matching-and-auto-closing.md)
 
 - **D068 — Editor gutter and line numbers** (depends on D064)
   - The gutter becomes ordered native lanes: line numbers, extension markers,
