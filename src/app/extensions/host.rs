@@ -2660,8 +2660,18 @@ mod tests {
     #[gpui::test]
     #[ignore = "measurement: run in release with --ignored --nocapture"]
     fn measure_bundled_package_memory(cx: &mut TestAppContext) {
-        let (_host, _root) = start_bundled_packages(cx);
-        cx.run_until_parked();
+        let (host, _root) = start_bundled_packages(cx);
+        // Wait until every package is between turns.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while host
+            .read_with(cx, |host, _| host.pool.heap_usage())
+            .iter()
+            .any(|(_, usage)| usage.is_none())
+        {
+            assert!(std::time::Instant::now() < deadline, "packages never idled");
+            cx.run_until_parked();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         println!("{}", cx.read(memory_report));
     }
 
