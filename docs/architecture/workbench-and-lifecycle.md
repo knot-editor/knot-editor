@@ -63,6 +63,14 @@ change. A view's own edit
 refreshes its derived state synchronously before resolving the resulting caret.
 Other views update through their persistent positions.
 
+Extension commands captured in a document editor reach it through an editor
+handle ([commands](commands.md#extension-execution)) that reads and moves its
+selection and saves and restores its view state. Moving the selection ends
+the typing undo group as other caret moves do; a centered reveal recenters
+the caret's line only when it lies outside the viewport, and otherwise
+behaves like ordinary movement. Go to Line is the bundled `@knot/go-to-line`
+package built on that handle, bound to ctrl-G in the Knot preset.
+
 Editing commands such as Enter, indent and outdent, comment toggling, and the
 line commands compute every edit first and commit them as one batch that
 records the view's selection before and after, so each command is one undo

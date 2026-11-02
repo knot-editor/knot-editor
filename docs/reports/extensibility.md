@@ -65,9 +65,12 @@ What an extension can do today, from `knot.d.ts`:
 
 What is missing for editing-level extensibility:
 
-- No handle on an editor view: an extension can't read or set the cursor or
-  selections of a native editor. `selectedText` serves contributed views only.
-- No way to reveal a position, scroll, or ask which lines are visible.
+- Only a single-selection editor handle: a command captured in a document
+  editor gets `context.editor`, which reads and sets one selection, reveals
+  the caret nearest or centered, and saves and restores the view state, within
+  that command. Several or rectangular selections, a handle that outlives its
+  command, and cursor style remain. `selectedText` serves contributed views.
+- No way to scroll without moving the caret or ask which lines are visible.
 - No anchored positions apart from decorated contributions, so there is
   nothing to build marks on.
 - No key context other than the focused view kind, and no counts or pending
@@ -86,10 +89,10 @@ What is missing for editing-level extensibility:
 | --- | --- | --- | --- |
 | Normal, visual, and operator-pending modes; `d2w`-style counts and sequences | Extension-set key contexts and ordered key delivery | View-kind scope only; async commands race later keys | D110 |
 | Insert mode | Native typing with IME | Exists | — |
-| Cursor and selection movement, visual and visual-block modes | Read and set selections per view, including several and rectangular | Not exposed | D109 |
+| Cursor and selection movement, visual and visual-block modes | Read and set selections per view, including several and rectangular | One selection, inside a command | D109 |
 | Cursor shape per mode | View cursor style | Not exposed | D109 |
 | `h`/`l`, `w`/`e`/`b`, `f`/`t` | Text and byte/grapheme math on snapshots | Possible in JS | — |
-| `j`/`k`, `gj`, `H`/`M`/`L`, `zz`/`zt` | Visual-line movement, visible range, reveal | Native only | D109, D112 |
+| `j`/`k`, `gj`, `H`/`M`/`L`, `zz`/`zt` | Visual-line movement, visible range, reveal | Line lookups and a nearest or centered reveal; the rest native only | D109, D112 |
 | `iw`, `ip`, `i(` | Text scanning | Possible in JS | — |
 | `if`, `ia`, `ic` (function, argument, class) | Syntax-tree node queries | Not exposed | D066 |
 | `ciw…<Esc>` as one undo step | Undo groups spanning batches and typing | One step per batch | D111 |

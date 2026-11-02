@@ -1,6 +1,7 @@
 # D076 — Go to Line
 
-Status: 🚧 in progress: checkpoints 1 ✅ and 2 ✅. Item of the
+Status: 🚧 checkpoints 1–3 ✅; awaiting the manual review gate of
+checkpoint 3 before this plan is removed. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker and
 transient slot). Promotes a single-selection first slice of D109.
 
@@ -167,7 +168,12 @@ transport rather than adding a second one.
 - Declarations: `InputOptions` in `src/host/js/knot.d.ts`; guide section on
   transient interactions; [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions).
 
-### 3. `@knot/go-to-line` and the binding
+### 3. `@knot/go-to-line` and the binding ✅ (manual review pending)
+
+The preset names the command through `GO_TO_LINE_COMMAND`, and the preset
+test accepts bundled-package commands beside native ones. Enter on text newer
+than the last preview applies the accepted value again rather than trusting
+the preview. Without a column the caret goes to the start of the line.
 
 Deliverables: the bundled package, ctrl-g in the Knot preset, and completion
 of D076 in the daily-driver index.

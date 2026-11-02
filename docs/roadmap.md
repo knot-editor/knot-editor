@@ -546,14 +546,18 @@ Keep each primitive generic, so a Helix or Kakoune mode could use it too. The
 [extensibility report](reports/extensibility.md) maps Vim's needs onto them.
 
 - **D109 — Editor view, selection, and position API**
-  - Deferred: Extensions get a buffer from a command, but no handle on the
-    native editor view: they cannot read or set its cursor and selections,
-    reveal a position, scroll, query the visible lines, or set the cursor
-    style. Anchored positions exist only as decorated contributions, and the
-    clipboard can be written but not read.
+  - Deferred: A command captured in a document editor gets
+    `context.editor`, a first slice landed for Go to Line (D076): it reads
+    and sets one selection, reveals the caret nearest or centered, and saves
+    and restores the view state, and buffers answer line lookups. The handle
+    works only within its command. Extensions cannot hold several or
+    rectangular selections, scroll without moving the caret, query the
+    visible lines, or set the cursor style. Anchored positions exist only as
+    decorated contributions, and the clipboard can be written but not read.
   - Reconsider: D058 or D027 is selected, or a bundled workflow needs
-    cursor-driven editing. Then expose a view handle from a command target
-    with several and rectangular selections, reveal and scroll, the visible
+    cursor-driven editing. Then extend the editor handle with several and
+    rectangular selections, a lifetime beyond its command, a `reveal: "top"`
+    for Vim's `zt` (with D112), scrolling without a caret move, the visible
     line range, cursor style, undecorated anchored positions for marks, and
     clipboard read. Design it with D080's cursor observation.
   - Order: after D080; multi-selection editing with or after D092; before

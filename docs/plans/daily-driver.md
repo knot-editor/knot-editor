@@ -203,10 +203,16 @@ to be rebuilt later:
     [decisions](../decisions.md#editor-gutter),
     [extension guide](../extension-api.md#read-only-text-frames)).
 
-- **D076 — Go to Line** (depends on D071)
-  - Bound to ctrl-G. Accepts `line` and `line:column`, and previews the target
-    while typing.
-  - 🚧 [Plan](d076-go-to-line.md)
+- ✅ **D076 — Go to Line** (depends on D071)
+  - The bundled `@knot/go-to-line` package, bound to ctrl-G in editors.
+    Typing `N`, `N:C`, or `N,C` moves the caret there, centered when off
+    screen, Enter keeps it, and dismissing restores the view. It added
+    `context.editor` (a first slice of D109), buffer line lookups, and an
+    input `onChange` with a message line
+    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
+    [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions),
+    [extension guide](../extension-api.md#register-a-command)).
+  - 🚧 Awaiting manual review: [plan](d076-go-to-line.md)
 
 - **D077 — Status bar** (depends on D064)
   - A native per-window bar showing line:column, the selection size, the

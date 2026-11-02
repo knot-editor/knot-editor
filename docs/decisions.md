@@ -291,6 +291,30 @@ characters, such as `-` in CSS, are D131.
 References: [editor views](architecture/workbench-and-lifecycle.md#editor-views)
 and [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
+## Go to Line and the editor handle
+
+Go to Line is the bundled `@knot/go-to-line` package rather than native code,
+because a workflow that only reads lines and moves the caret should prove the
+public API: it forced a single-selection editor handle, line lookups from the
+line index, and live input, which a Vim mode, occurrence highlighting, and
+language tooling need as well. The handle is the first slice of D109, which
+extends it rather than replacing it. It lives within its command's invocation
+tree, as `CommandTarget` does, and resolves the captured presentation on every
+call, so a handle cannot outlive its tab or act on a view nobody invoked it
+in; a longer-lived handle waits for D109's observation design. Columns are
+computed in JavaScript from one line's snapshot, so a large file never crosses
+the boundary whole. A centered reveal recenters only when the caret's line was
+off screen, as VS Code's Go to Line does, so short hops never jolt the view.
+
+The native Knot preset binds ctrl-G to the package's command, so a preset or
+personal binding replaces it like any default; while the package is not
+running, the key reports the command unavailable. A handler signals that
+outcome with `commands.unavailable()`, the counterpart of `invalidArguments`.
+
+References: [editor views](architecture/workbench-and-lifecycle.md#editor-views),
+[commands](architecture/commands.md#extension-execution), and
+[extension guide](extension-api.md#register-a-command).
+
 ## Themes
 
 Themes are extension contributions registered like languages: the latest
