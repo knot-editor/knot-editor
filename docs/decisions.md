@@ -188,6 +188,41 @@ References: [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-la
 [editor views](architecture/workbench-and-lifecycle.md#editor-views), and
 [extension guide](extension-api.md#register-a-language).
 
+## Brackets
+
+Bracket matching, auto-closing, and wrapping are native, over the bracket
+pairs language registrations carry. Typing must insert the closer in the same
+commit and undo step as the opener, and an extension command is an
+asynchronous turn that typing could race (D110); painting and raw input never
+call JavaScript; and extensions have no caret, typed-text observation, undo
+grouping, or tree access yet (D109, D111, D066). The data stays programmable
+through the registration, and settings turn the behavior off, as VS Code and
+Zed split it; Neovim's autopair plugins work only because its Lua runs
+synchronously in-process.
+
+Matching pairs the bracket tokens of one syntax node rather than scanning
+text, so brackets inside strings and comments never match, and it needs no
+per-language query such as Zed's `brackets.scm`: a token's partner is its
+first balanced sibling with the paired text. Whether the caret is inside a
+string or comment reuses the highlight query's `string` and `comment`
+captures rather than adding per-grammar node lists, since every bundled query
+uses nvim-treesitter's names. Markdown paragraphs belong to the injected inline
+layer, so Markdown Inline carries Markdown's pairs, as it already did its
+comment tokens.
+
+Behavior follows VS Code's defaults: the highlight shows only next to a
+bracket, preferring the one before the caret, and Jump to Matching Bracket
+lands before the partner, so repeating it alternates, or before the enclosing
+closer. Stepping over a closer and deleting an empty pair apply only to
+closers the view inserted, while the caret stays inside them, as VS Code's
+`auto` overtype and delete do. Overtyping any closer, as Sublime Text and
+Helix do, inserts nothing when someone fixing unbalanced code needs an extra
+`)`. Each package keeps bracket cases as JSONC run through an editor view,
+like its indentation cases.
+
+References: [editor views](architecture/workbench-and-lifecycle.md#editor-views)
+and [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages).
+
 ## Editing commands
 
 Editing commands follow VS Code's behavior and default bindings, because

@@ -180,15 +180,17 @@ to be rebuilt later:
     [decisions](../decisions.md#indentation),
     [extension guide](../extension-api.md#register-a-language)).
 
-- **D075 — Bracket matching and auto-closing** (depends on D073, D064)
-  - Highlight the bracket matching the one at the cursor, and add a jump to
-    matching bracket command.
-  - Typing an opening pair inserts its closer. Typing the closer steps over
-    it. Backspace inside an empty pair deletes both characters. Wrapping a
-    selection surrounds it.
-  - Decide whether matching uses the syntax tree or a text scan. The tree
-    avoids false matches inside strings and comments.
-  - 🚧 [Plan](d075-bracket-matching-and-auto-closing.md)
+- ✅ **D075 — Bracket matching and auto-closing**
+  - The bracket next to the caret and its partner are highlighted from the
+    syntax tree, and Jump to Matching Bracket (⌘⇧\) moves between them or to
+    the enclosing closer. Typing an opener closes it by VS Code's rules,
+    including `notIn` strings and comments from highlight captures; closers
+    Knot inserted are stepped over and deleted in pairs, and openers wrap a
+    selection. `editor.autoClosingBrackets` and `editor.autoSurround` turn
+    them off, and packages keep `test/brackets.jsonc` cases
+    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
+    [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
+    [decisions](../decisions.md#brackets)).
 
 - **D068 — Editor gutter and line numbers** (depends on D064)
   - The gutter becomes ordered native lanes: line numbers, extension markers,
