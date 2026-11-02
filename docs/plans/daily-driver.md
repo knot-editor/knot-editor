@@ -206,6 +206,7 @@ to be rebuilt later:
 - **D076 — Go to Line** (depends on D071)
   - Bound to ctrl-G. Accepts `line` and `line:column`, and previews the target
     while typing.
+  - 🚧 [Plan](d076-go-to-line.md)
 
 - **D077 — Status bar** (depends on D064)
   - A native per-window bar showing line:column, the selection size, the
