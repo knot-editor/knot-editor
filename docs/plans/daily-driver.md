@@ -192,15 +192,16 @@ to be rebuilt later:
     [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
     [decisions](../decisions.md#brackets)).
 
-- **D068 — Editor gutter and line numbers** (depends on D064)
-  - The gutter becomes ordered native lanes: line numbers, extension markers,
-    and folds later. Lane widths come from content, such as the number of
-    digits in the line count.
-  - Extensions contribute markers through `EditorContribution.gutter`.
-    Enablement is per surface, so read-only text frames can omit the gutter.
-  - Each lane defines its own click and hover behavior. Highlight the current
-    line's number.
-  - 🚧 [Plan](d068-editor-gutter.md)
+- ✅ **D068 — Editor gutter and line numbers**
+  - The gutter is a marker lane, always reserved, then line numbers sized to
+    the line count. `editor.lineNumbers` takes `"on"`, `"off"`, or
+    `"relative"`; the cursor line's number and, as in VS Code, its background
+    are highlighted. Number clicks and drags select lines, and a line shows
+    its most severe marker, whose command a click runs. Text frames opt in
+    with `gutter: true`
+    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
+    [decisions](../decisions.md#editor-gutter),
+    [extension guide](../extension-api.md#read-only-text-frames)).
 
 - **D076 — Go to Line** (depends on D071)
   - Bound to ctrl-G. Accepts `line` and `line:column`, and previews the target
