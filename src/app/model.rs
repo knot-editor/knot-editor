@@ -27,6 +27,7 @@ use super::{
     languages::editing::EditingConfiguration,
     syntax::{
         FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState,
+        brackets::BracketPair,
         indent::{LineIndent, LineSource},
     },
     theme::{Highlight, color},
@@ -532,6 +533,21 @@ impl BufferModel {
         self.syntax
             .as_ref()
             .map(|syntax| Arc::clone(syntax.language_at(offset).editing()))
+    }
+
+    /// The bracket touching `offset`, the one ending there first, and its
+    /// partner. `None` without a syntax state.
+    pub(crate) fn bracket_at(&self, offset: usize) -> Option<(Range<usize>, Range<usize>)> {
+        self.syntax
+            .as_ref()?
+            .bracket_at(&self.buffer.snapshot(), offset)
+    }
+
+    /// The innermost bracket pair around `offset`.
+    pub(crate) fn enclosing_brackets(&self, offset: usize) -> Option<BracketPair> {
+        self.syntax
+            .as_ref()?
+            .enclosing_brackets(&self.buffer.snapshot(), offset)
     }
 
     /// The rows of `rows` whose indentation the language's indent query

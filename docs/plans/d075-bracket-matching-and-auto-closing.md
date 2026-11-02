@@ -1,6 +1,6 @@
 # D075 — Bracket matching and auto-closing
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 checkpoint 1 implemented, awaiting review. Item of the
 [daily-driver plan](daily-driver.md); consumes the bracket data of D073
 ([language editing configuration](../decisions.md#language-editing-configuration)).
 
@@ -36,8 +36,8 @@ registration, and the settings turn the behavior off per language.
   At an offset, take the leaf token ending at it, else the one starting at
   it, whose text is a registered `open` or `close` of the layer's language at
   that offset (pairs whose open equals close never match). Its partner is
-  the first child (for a closer) or last child (for an opener) of the same
-  parent node holding the paired text. A bracket inside a string or comment
+  the first sibling in its direction holding the paired text, with balanced
+  pairs between them skipped. A bracket inside a string or comment
   is part of a string or comment leaf, so it never matches.
 - A token whose parent lacks the partner, as inside a parse error, has no
   match. A document without a language matches nothing.
@@ -45,9 +45,10 @@ registration, and the settings turn the behavior off per language.
   before the caret wins when both sides hold one. The enclosing pair is never
   highlighted.
 - Jump to Matching Bracket with the caret next to a bracket moves the caret
-  to the partner, on the side VS Code places it (verify against VS Code while
-  implementing); otherwise it moves to the
-  closer of the innermost enclosing registered pair. It clears the selection.
+  before the partner, as VS Code's Go to Bracket does, so repeating it
+  alternates; between an adjacent pair it goes before the opener. Otherwise
+  it moves before the closer of the innermost enclosing registered pair. It
+  clears the selection.
 - The highlight is a background behind both brackets in a new native color
   key, `editor.bracketMatch`, which the bundled themes set.
 
@@ -102,7 +103,7 @@ delete defaults:
 
 ## Checkpoints
 
-### 1. Matching, highlight, and Jump to Matching Bracket
+### 1. ✅ Matching, highlight, and Jump to Matching Bracket
 
 Deliverables:
 
@@ -140,6 +141,12 @@ Implementation context:
 
 Review gate: the highlight and Jump behave as in VS Code on the bundled
 languages.
+
+Completion note: lookup in `src/app/syntax/brackets.rs`, view cache and Jump
+in `src/app/editor/brackets.rs`. gpui reports ⌘⇧\ and ctrl-shift-\ as `|`
+without shift on every platform, so the preset binds `secondary-|`. The fake
+extension host's `NATIVE_COLOR_KEYS` and `ThemeColors` in `knot.d.ts` list
+the new key.
 
 ### 2. Auto-closing, overtype, paired delete, wrapping, and settings
 

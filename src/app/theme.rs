@@ -226,6 +226,7 @@ native_colors! {
     BUTTON_BACKGROUND = "button.background", "Inline action buttons.", Rgb(0x2d2d2d), Rgb(0xececec);
     BUTTON_HOVER_BACKGROUND = "button.hover.background", "An inline action button under the pointer.", Rgb(0x3a3a3a), Rgb(0xdcdcdc);
     DROP_TARGET_BACKGROUND = "dropTarget.background", "Where a dragged tab would land.", Rgba(0x7fb5ff55), Rgba(0x3b82d640);
+    EDITOR_BRACKET_MATCH = "editor.bracketMatch", "Background of the bracket at the cursor and its partner.", Rgba(0x8c8c8c40), Rgba(0x8c8c8c33);
     EDITOR_BACKGROUND = "editor.background", "Text editor background.", Key(BACKGROUND), Key(BACKGROUND);
     EDITOR_CURSOR = "editor.cursor", "Text cursor.", Rgb(0xe6e6e6), Rgb(0x1f1f1f);
     EDITOR_FOREGROUND = "editor.foreground", "Unhighlighted editor text.", Rgb(0xd4d4d4), Rgb(0x1f1f1f);

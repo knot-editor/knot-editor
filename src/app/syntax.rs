@@ -28,6 +28,7 @@
 //! before or after every pattern of another priority. An injected layer
 //! paints over the layer that hosts it.
 
+pub(crate) mod brackets;
 pub(crate) mod grammars;
 pub(crate) mod indent;
 

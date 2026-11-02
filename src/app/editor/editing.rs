@@ -111,6 +111,10 @@ impl EditorView {
                 self.join_lines(cx);
                 return true;
             }
+            commands::JUMP_TO_MATCHING_BRACKET_COMMAND => {
+                self.jump_to_matching_bracket(cx);
+                return true;
+            }
             commands::TOGGLE_LINE_COMMENT_COMMAND => {
                 self.toggle_line_comment(cx);
                 return true;

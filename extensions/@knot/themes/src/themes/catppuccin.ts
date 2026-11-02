@@ -36,6 +36,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "button.hover.background": p.surface1,
       "dropTarget.background": `${p.blue}40`,
       "editor.background": p.base,
+      "editor.bracketMatch": `${p.overlay2}33`,
       "editor.cursor": p.rosewater,
       "editor.foreground": p.text,
       "editor.markedText": `${p.text}99`,

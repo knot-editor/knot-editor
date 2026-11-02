@@ -48,6 +48,7 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 #[command("editor.move-lines-down", title = "Move Lines Down", description = "Move the selected lines below the next line.", id = MOVE_LINES_DOWN_COMMAND, participant = Editor)]
 #[command("editor.delete-lines", title = "Delete Lines", description = "Delete the selected lines.", id = DELETE_LINES_COMMAND, participant = Editor)]
 #[command("editor.join-lines", title = "Join Lines", description = "Join the selected lines, or the current line and the next.", id = JOIN_LINES_COMMAND, participant = Editor)]
+#[command("editor.jump-to-matching-bracket", title = "Jump to Matching Bracket", description = "Move to the bracket matching the one at the cursor, or to the closing bracket around it.", id = JUMP_TO_MATCHING_BRACKET_COMMAND, participant = Editor)]
 #[command("editor.toggle-line-comment", title = "Toggle Line Comment", description = "Comment or uncomment the selected lines.", id = TOGGLE_LINE_COMMENT_COMMAND, participant = Editor)]
 #[command("editor.toggle-block-comment", title = "Toggle Block Comment", description = "Wrap the selection in a block comment, or unwrap it.", id = TOGGLE_BLOCK_COMMENT_COMMAND, participant = Editor)]
 #[command("editor.delete-backward", title = "Delete Backward", palette = false, id = DELETE_BACKWARD_COMMAND, participant = Editor)]

@@ -25,6 +25,7 @@ export const ONE_DARK: ThemeDefinition = {
     "button.hover.background": "#3a3f4b",
     "dropTarget.background": "#528bff40",
     "editor.background": bg,
+    "editor.bracketMatch": "#515a6b80",
     "editor.cursor": accent,
     "editor.foreground": fg,
     "editor.markedText": "#abb2bf99",

@@ -238,6 +238,7 @@ fn every_platform_binds_the_editing_commands_in_the_editor_only() {
             ("alt-up".to_owned(), MOVE_LINES_UP_COMMAND),
             ("alt-down".to_owned(), MOVE_LINES_DOWN_COMMAND),
             (format!("{secondary}-shift-k"), DELETE_LINES_COMMAND),
+            (format!("{secondary}-|"), JUMP_TO_MATCHING_BRACKET_COMMAND),
             (
                 if platform == Platform::Linux {
                     "ctrl-shift-alt-up"

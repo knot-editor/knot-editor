@@ -6,6 +6,7 @@
 //! A view keeps no copy of the text: it reads the lines it needs from the model
 //! and converts positions through the model's line index.
 
+mod brackets;
 mod comments;
 mod completion;
 mod editing;
@@ -181,6 +182,8 @@ pub struct EditorView {
     /// Syntax highlights of the visible lines and some overscan, shared by
     /// painting and the caret, hit-testing, and IME geometry on those lines.
     syntax_cache: RefCell<Option<SyntaxCache>>,
+    /// The brackets matched at the caret, for painting.
+    bracket_cache: RefCell<Option<brackets::BracketCache>>,
     /// Vertical scroll offset in pixels (0 = top of buffer).
     scroll: f32,
     /// Caret position: (line index, byte offset within that line).
@@ -472,6 +475,7 @@ impl EditorView {
             gutter_markers,
             contribution_actions,
             syntax_cache: RefCell::default(),
+            bracket_cache: RefCell::default(),
             scroll: 0.,
             cursor_line: 0,
             cursor_col: 0,

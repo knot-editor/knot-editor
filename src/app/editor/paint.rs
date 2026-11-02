@@ -173,6 +173,7 @@ impl Element for EditorElement {
             caret,
             selection,
             marked,
+            brackets,
             gutter_markers,
             colors,
             focus_handle,
@@ -211,6 +212,16 @@ impl Element for EditorElement {
                 let e = flat_utf16_to_position(model, mr.end);
                 (s, e)
             });
+            let brackets = view
+                .matched_brackets(model)
+                .into_iter()
+                .flatten()
+                .map(|range| {
+                    let (line, start) = flat_byte_to_position(model, range.start);
+                    (line, start, start + range.len())
+                })
+                .filter(|(line, ..)| *line >= first && *line < last)
+                .collect();
             let gutter_markers = if view.rendering.show_gutter_markers {
                 view.gutter_markers
                     .iter()
@@ -228,11 +239,13 @@ impl Element for EditorElement {
                 caret,
                 view.selection_range(),
                 marked,
+                brackets,
                 gutter_markers,
                 PaintColors {
                     selection: theme.color(color::EDITOR_SELECTION),
                     caret: theme.color(color::EDITOR_CURSOR),
                     marked_text: theme.color(color::EDITOR_MARKED_TEXT),
+                    bracket_match: theme.color(color::EDITOR_BRACKET_MATCH),
                     scrollbar: theme.color(color::SCROLLBAR_THUMB),
                 },
                 view.focus.clone(),
@@ -359,6 +372,23 @@ impl Element for EditorElement {
                         window.paint_quad(fill(rect, sel_color));
                     }
                 }
+            }
+
+            // Matched brackets, behind the text.
+            for (line, start, end) in &brackets {
+                let Some((_, s, x_off, line_str)) = shaped.iter().find(|(ix, ..)| ix == line)
+                else {
+                    continue;
+                };
+                let x0 = x_for_index_dir(s, *start, line_str, tab_size);
+                let x1 = x_for_index_dir(s, *end, line_str, tab_size);
+                let (lo, hi) = if x0 <= x1 { (x0, x1) } else { (x1, x0) };
+                let top = bounds.origin.y + px(*line as f32 * LINE_HEIGHT) - px(scroll);
+                let rect = Bounds {
+                    origin: point(bounds.origin.x + *x_off + lo, top),
+                    size: size(hi - lo, line_height),
+                };
+                window.paint_quad(fill(rect, colors.bracket_match));
             }
 
             // Text, reusing the shaped lines from above.
@@ -490,6 +520,7 @@ pub(super) type EditorPaintState = (
     Option<(usize, usize)>,
     Option<((usize, usize), (usize, usize))>,
     Option<((usize, usize), (usize, usize))>,
+    Vec<(usize, usize, usize)>,
     Vec<(usize, Hsla)>,
     PaintColors,
     FocusHandle,
@@ -501,5 +532,6 @@ pub(super) struct PaintColors {
     selection: Hsla,
     caret: Hsla,
     marked_text: Hsla,
+    bracket_match: Hsla,
     scrollbar: Hsla,
 }

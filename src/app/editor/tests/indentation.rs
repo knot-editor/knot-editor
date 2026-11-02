@@ -211,7 +211,7 @@ fn detected_indentation_overrides_the_setting(cx: &mut TestAppContext) {
 /// Register Rust with `indents` and bracket pairs, then open an editor
 /// over `text` in it whose parses all run in the background when
 /// `background`.
-fn rust_editor<'a>(
+pub(super) fn rust_editor<'a>(
     cx: &'a mut TestAppContext,
     indents: &str,
     text: &str,

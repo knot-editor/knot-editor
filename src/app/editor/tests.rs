@@ -1484,6 +1484,7 @@ pub(super) fn check(
     });
 }
 
+mod brackets;
 mod comments;
 mod indentation;
 mod lines;

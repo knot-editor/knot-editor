@@ -340,6 +340,12 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("secondary-]", INDENT_LINES_COMMAND, Some("editor")),
     ("secondary-[", OUTDENT_LINES_COMMAND, Some("editor")),
     ("secondary-/", TOGGLE_LINE_COMMENT_COMMAND, Some("editor")),
+    // Every platform reports the shifted backslash as `|` without shift.
+    (
+        "secondary-|",
+        JUMP_TO_MATCHING_BRACKET_COMMAND,
+        Some("editor"),
+    ),
     ("alt-up", MOVE_LINES_UP_COMMAND, Some("editor")),
     ("alt-down", MOVE_LINES_DOWN_COMMAND, Some("editor")),
     ("secondary-shift-k", DELETE_LINES_COMMAND, Some("editor")),

@@ -363,6 +363,8 @@ declare module "knot" {
     readonly "dropTarget.background"?: string;
     /** Text editor background. */
     readonly "editor.background"?: string;
+    /** Background of the bracket at the cursor and its partner. */
+    readonly "editor.bracketMatch"?: string;
     /** Text cursor. */
     readonly "editor.cursor"?: string;
     /** Unhighlighted editor text. */

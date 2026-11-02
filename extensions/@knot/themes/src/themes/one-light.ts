@@ -25,6 +25,7 @@ export const ONE_LIGHT: ThemeDefinition = {
     "button.hover.background": "#cfcfd0",
     "dropTarget.background": "#526fff33",
     "editor.background": bg,
+    "editor.bracketMatch": "#383a4226",
     "editor.cursor": accent,
     "editor.foreground": fg,
     "editor.markedText": "#383a4299",
