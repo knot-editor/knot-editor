@@ -292,6 +292,12 @@ impl EditorView {
             .collect()
     }
 
+    /// The brackets the view highlights at the caret.
+    #[cfg(test)]
+    pub(crate) fn matched_brackets_for_test(&self, cx: &App) -> Option<[Range<usize>; 2]> {
+        self.matched_brackets(self.model.read(cx))
+    }
+
     /// Each gutter marker's line and color, as the view paints them.
     #[cfg(test)]
     pub(crate) fn gutter_colors_for_test(&self, cx: &App) -> Vec<(usize, Hsla)> {

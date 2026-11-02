@@ -93,6 +93,26 @@ the same way within the typing group, never indenting it further; composition
 and paste never reindent. Reindent Lines applies the query to the selected
 lines as one step.
 
+Brackets follow VS Code's language-defined behavior, read from the bracket
+pairs of the language at the caret
+([semantic UI](semantic-ui.md#syntax-highlighting-and-languages)). With the
+caret next to a bracket, the view paints it and its partner in
+`editor.bracketMatch`, caching the match per syntax generation and caret so
+painting walks no tree; the bracket before the caret wins. Jump to Matching
+Bracket moves before the partner, or before the closer of the innermost pair
+around the caret. Typing an opener over a selection wraps it, as one undo
+step, and keeps the inner text selected. Typing an opener without a
+selection inserts its closer in the same typing commit when the pair
+auto-closes, the next character is whitespace, the line end, or in
+`autoCloseBefore`, the caret is not in a string or comment the pair lists in
+`notIn`, and, for quotes, no word character precedes it. The view tracks
+each pair it closed as an anchored range while the caret stays between
+opener and closer: typing the tracked closer steps over it and Backspace
+between the empty pair deletes both. Leaving the pair, selecting, or text
+that no longer holds the pair drops the tracking, after which closers are
+ordinary text. Composition never closes or wraps. `editor.autoClosingBrackets`
+and `editor.autoSurround`, resolved for the view's scope, turn the two off.
+
 Restorable view state is the anchor and caret as byte offsets, the start of the
 top visible line as a byte offset, and horizontal scroll in pixels. Applying it
 clamps each offset to the current text and snaps back to a character boundary,

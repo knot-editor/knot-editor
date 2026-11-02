@@ -7,10 +7,12 @@
 //! marked lines, or every line without a marker, and expects `after`. An
 //! `enter` case presses Enter at the marked selection, and a `type` case
 //! types `text` there one character at a time, each expecting `after` with
-//! the caret where its marker is.
+//! the caret where its marker is. The file reading, markers, and editor
+//! runs are shared with the bracket cases.
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
 
 use super::language_editing::start_bundled_packages;
 use super::*;
@@ -18,7 +20,9 @@ use gpui::EntityInputHandler;
 
 use crate::app::editor::{EditorView, EditorViewState};
 
-const CARET: char = '‸';
+pub(super) const CARET: char = '‸';
+/// In typed text, presses Backspace.
+pub(super) const BACKSPACE: char = '⌫';
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -34,33 +38,57 @@ struct IndentCases {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct TypeCase {
-    name: String,
-    before: Vec<String>,
-    text: String,
-    after: Vec<String>,
+pub(super) struct TypeCase {
+    pub(super) name: String,
+    pub(super) before: Vec<String>,
+    pub(super) text: String,
+    pub(super) after: Vec<String>,
 }
 
 /// What a case does at its selection.
-enum Action<'a> {
+pub(super) enum Action<'a> {
     Command(&'a str),
+    /// Type the text one character at a time, pressing Backspace for `⌫`.
     Type(&'a str),
+    /// Leave the view as it is.
+    Inspect,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct IndentCase {
-    name: String,
-    before: Vec<String>,
-    after: Vec<String>,
+pub(super) struct IndentCase {
+    pub(super) name: String,
+    pub(super) before: Vec<String>,
+    pub(super) after: Vec<String>,
 }
 
-/// Every bundled package's case file.
-fn case_files() -> Vec<PathBuf> {
+/// What a run left: the text, the selection, and the brackets the view
+/// highlights.
+pub(super) struct Outcome {
+    pub(super) text: String,
+    pub(super) anchor: usize,
+    pub(super) caret: usize,
+    pub(super) matched: Option<[Range<usize>; 2]>,
+}
+
+impl Outcome {
+    /// The text with `‸` at the caret, or at both ends of the selection.
+    pub(super) fn marked(&self) -> String {
+        let mut marked = self.text.clone();
+        marked.insert(self.anchor.max(self.caret), CARET);
+        if self.anchor != self.caret {
+            marked.insert(self.anchor.min(self.caret), CARET);
+        }
+        marked
+    }
+}
+
+/// Every bundled package's case file named `name`.
+pub(super) fn case_files(name: &str) -> Vec<PathBuf> {
     let packages = Path::new(env!("CARGO_MANIFEST_DIR")).join("extensions/@knot");
     let mut files: Vec<PathBuf> = std::fs::read_dir(packages)
         .unwrap()
-        .map(|entry| entry.unwrap().path().join("test/indents.jsonc"))
+        .map(|entry| entry.unwrap().path().join("test").join(name))
         .filter(|path| path.exists())
         .collect();
     files.sort();
@@ -70,14 +98,14 @@ fn case_files() -> Vec<PathBuf> {
 /// A case file: one group of cases, or several for different languages.
 #[derive(Deserialize)]
 #[serde(untagged)]
-enum CaseFile {
-    One(IndentCases),
-    Groups(Vec<IndentCases>),
+enum CaseFile<T> {
+    One(T),
+    Groups(Vec<T>),
 }
 
-fn read_cases(path: &Path) -> Vec<IndentCases> {
+pub(super) fn read_cases<T: DeserializeOwned>(path: &Path) -> Vec<T> {
     let text = std::fs::read_to_string(path).unwrap();
-    let file: CaseFile = jsonc_parser::parse_to_serde_value(&text, &Default::default())
+    let file: CaseFile<T> = jsonc_parser::parse_to_serde_value(&text, &Default::default())
         .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     match file {
         CaseFile::One(cases) => vec![cases],
@@ -86,7 +114,7 @@ fn read_cases(path: &Path) -> Vec<IndentCases> {
 }
 
 /// `lines` joined, without markers, and the selection they mark.
-fn unmark(lines: &[String]) -> (String, Option<(usize, usize)>) {
+pub(super) fn unmark(lines: &[String]) -> (String, Option<(usize, usize)>) {
     let marked = lines.join("\n");
     let markers: Vec<usize> = marked
         .match_indices(CARET)
@@ -103,22 +131,15 @@ fn unmark(lines: &[String]) -> (String, Option<(usize, usize)>) {
     (text, selection)
 }
 
-/// `text` with `‸` at `caret`.
-fn mark(text: &str, caret: usize) -> String {
-    let mut marked = text.to_owned();
-    marked.insert(caret, CARET);
-    marked
-}
-
-/// Run `command` on `text` in `language` with the marked selection, or with
-/// everything selected, and return the resulting text and caret.
-fn run(
+/// Run `action` on `text` in `language` with the marked selection, or with
+/// everything selected.
+pub(super) fn run(
     cx: &mut TestAppContext,
     language: &str,
     text: &str,
     selection: Option<(usize, usize)>,
     action: Action,
-) -> (String, usize) {
+) -> Outcome {
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text(text);
         model.detect_indent_style();
@@ -144,15 +165,28 @@ fn run(
                 }
                 Action::Type(text) => {
                     for character in text.chars() {
-                        view.replace_text_in_range(None, &character.to_string(), window, cx);
+                        if character == BACKSPACE {
+                            view.execute_editing_command("editor.delete-backward", window, cx);
+                        } else {
+                            view.replace_text_in_range(None, &character.to_string(), window, cx);
+                        }
                     }
                 }
+                Action::Inspect => {}
             }
         })
     });
     cx.run_until_parked();
-    let caret = cx.read(|cx| editor.read(cx).view_state(cx).caret);
-    (model.read_with(cx, |model, _| model.text()), caret)
+    let (state, matched) = cx.read(|cx| {
+        let view = editor.read(cx);
+        (view.view_state(cx), view.matched_brackets_for_test(cx))
+    });
+    Outcome {
+        text: model.read_with(cx, |model, _| model.text()),
+        anchor: state.anchor,
+        caret: state.caret,
+        matched,
+    }
 }
 
 #[gpui::test]
@@ -161,19 +195,23 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
 
     let mut tested = Vec::new();
     let mut failures = Vec::new();
-    for cases in case_files().iter().flat_map(|path| read_cases(path)) {
+    for cases in case_files("indents.jsonc")
+        .iter()
+        .flat_map(|path| read_cases::<IndentCases>(path))
+    {
         for id in &cases.languages {
             tested.push(id.clone());
             for case in &cases.reindent {
                 let (before, selection) = unmark(&case.before);
                 let expected = case.after.join("\n");
-                let (actual, _) = run(
+                let actual = run(
                     cx,
                     id,
                     &before,
                     selection,
                     Action::Command("editor.reindent-lines"),
-                );
+                )
+                .text;
                 if actual != expected {
                     failures.push(format!(
                         "{id}: {}\n  expected:\n{expected}\n  actual:\n{actual}",
@@ -185,8 +223,7 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
                 let (before, selection) = unmark(&case.before);
                 assert!(selection.is_some(), "{id}: {} marks no caret", case.name);
                 let expected = case.after.join("\n");
-                let (text, caret) = run(cx, id, &before, selection, Action::Type(&case.text));
-                let actual = mark(&text, caret);
+                let actual = run(cx, id, &before, selection, Action::Type(&case.text)).marked();
                 if actual != expected {
                     failures.push(format!(
                         "{id}: {}\n  expected:\n{expected}\n  actual:\n{actual}",
@@ -198,14 +235,14 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
                 let (before, selection) = unmark(&case.before);
                 assert!(selection.is_some(), "{id}: {} marks no caret", case.name);
                 let expected = case.after.join("\n");
-                let (text, caret) = run(
+                let actual = run(
                     cx,
                     id,
                     &before,
                     selection,
                     Action::Command("editor.insert-newline"),
-                );
-                let actual = mark(&text, caret);
+                )
+                .marked();
                 if actual != expected {
                     failures.push(format!(
                         "{id}: {}\n  expected:\n{expected}\n  actual:\n{actual}",

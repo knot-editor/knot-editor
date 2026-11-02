@@ -260,8 +260,16 @@ await languages.register({
 ```
 
 `autoClose` defaults to true and `newline`, whether Enter between the pair
-opens an indented middle line, to true unless open equals close. `notIn`
-suppresses auto-closing inside strings or comments.
+opens an indented middle line, to true unless open equals close. Typing an
+opener inserts its closer when the pair auto-closes and the next character is
+whitespace, the end of the line, or in `autoCloseBefore`; a quote also needs
+no word character before it. `notIn` suppresses auto-closing inside strings or
+comments, which Knot finds from the `@string` and `@comment` captures of the
+highlight query, so name them as nvim-treesitter does. Typing any opener over
+a selection wraps it, including pairs that do not auto-close, and matching
+pairs in the syntax tree highlight their partner and drive Jump to Matching
+Bracket. The `editor.autoClosingBrackets` and `editor.autoSurround` settings,
+scoped by language, turn closing and wrapping off.
 
 An optional `queries.indents` drives indentation: Enter indents the new line
 from it, typing a closer such as `}` at the start of a line outdents the

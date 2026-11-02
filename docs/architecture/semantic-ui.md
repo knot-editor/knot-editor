@@ -130,6 +130,21 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   Each bundled language package keeps line and block comment toggling cases
   in `test/comments.jsonc`, which a product test runs through the native
   toggles on the registered configuration.
+- Bracket matching reads the syntax tree with the registered pairs and no
+  extra query. A bracket is a leaf token whose text is a pair's opener or
+  closer, in the deepest layer holding it, and its partner is the first
+  sibling in its direction with the paired text, skipping balanced pairs,
+  so brackets inside strings and comments, which belong to larger leaves,
+  never match, and a parse error leaves a bracket unmatched. Whether the
+  caret is inside a string or comment, which `notIn` reads, comes from the
+  `string` and `comment` highlight captures of the layer holding the text
+  before it, dotted children included, so no grammar needs extra data. A
+  string holds only offsets strictly inside it; a comment also holds its end
+  unless its last line ends with the language's block comment closer.
+  Markdown's inline language shares Markdown's bracket pairs, since it is the
+  language at the caret inside paragraphs. Packages keep typing, Backspace,
+  wrapping, jump, and highlight cases in `test/brackets.jsonc`, run through
+  an editor view; a language with bracket pairs must have cases.
 - An optional `indents` query compiles with the others and drives native
   indentation. The evaluator follows nvim-treesitter's indent module over the
   tree of the deepest layer at a line's first non-blank byte, so a code fence

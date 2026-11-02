@@ -6,6 +6,24 @@ import * as injections from "./queries/injections.js";
 import * as markdown from "./queries/markdown.js";
 import * as markdownInline from "./queries/markdown_inline.js";
 
+// Editing data both languages share: comments and brackets apply with the
+// language at the cursor, which inside a paragraph is Markdown Inline.
+const EDITING = {
+  comments: { block: ["<!--", "-->"] },
+  // Prose: Enter never opens a middle line, and quotes only surround,
+  // since apostrophes would auto-close.
+  brackets: [
+    { open: "{", close: "}", newline: false },
+    { open: "[", close: "]", newline: false },
+    { open: "(", close: ")", newline: false },
+    { open: "<", close: ">", newline: false },
+    { open: "`", close: "`" },
+    { open: '"', close: '"', autoClose: false },
+    { open: "'", close: "'", autoClose: false },
+  ],
+  autoCloseBefore: ";:.,=}])>",
+} as const satisfies Partial<LanguageDefinition>;
+
 export const LANGUAGES: readonly LanguageDefinition[] = [
   {
     id: "markdown",
@@ -13,19 +31,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "markdown",
     fileExtensions: ["md", "markdown", "mkd"],
     queries: { highlights: markdown.highlights, injections: injections.markdown },
-    comments: { block: ["<!--", "-->"] },
-    // Prose: Enter never opens a middle line, and quotes only surround,
-    // since apostrophes would auto-close.
-    brackets: [
-      { open: "{", close: "}", newline: false },
-      { open: "[", close: "]", newline: false },
-      { open: "(", close: ")", newline: false },
-      { open: "<", close: ">", newline: false },
-      { open: "`", close: "`" },
-      { open: '"', close: '"', autoClose: false },
-      { open: "'", close: "'", autoClose: false },
-    ],
-    autoCloseBefore: ";:.,=}])>",
+    ...EDITING,
   },
   {
     // Markdown's inline syntax, which Markdown injects into each paragraph.
@@ -33,8 +39,6 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     name: "Markdown Inline",
     grammar: "markdown_inline",
     queries: { highlights: markdownInline.highlights, injections: injections.markdownInline },
-    // Comments toggle with the language at the cursor, which inside a
-    // paragraph is this one.
-    comments: { block: ["<!--", "-->"] },
+    ...EDITING,
   },
 ];

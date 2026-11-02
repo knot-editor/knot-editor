@@ -51,7 +51,10 @@ Files under a package's `test/fixtures` are test inputs and are not compiled;
 The bundled language packages keep highlight fixtures there, checked by a Rust test that
 highlights them with the bundled queries (see `src/app/extensions/host/highlight_tests.rs`).
 A language package's `test/comments.jsonc` lists comment toggling cases, which
-`src/app/product/tests/language_editing.rs` runs through the native toggle.
+`src/app/product/tests/language_editing.rs` runs through the native toggle;
+`test/indents.jsonc` and `test/brackets.jsonc` list indentation and bracket
+cases, which `language_indents.rs` and `language_brackets.rs` beside it run
+through an editor view.
 
 ## Website
 

@@ -1,0 +1,21 @@
+// Bracket cases, run through an editor view on each group's languages.
+// Lines join with "\n" and "‸" marks the caret: one marker places it, two
+// select between them. A type case types `text` there one character at a
+// time, "⌫" pressing Backspace, and expects `after` with its caret or
+// selection. A jump case runs Jump to Matching Bracket and expects the
+// caret. A match case expects `after` to be the text with "«" and "»"
+// around the brackets highlighted at the caret, or no markers when none.
+{
+  "languages": ["markdown", "markdown_inline"],
+  "type": [
+    {"name": "a parenthesis closes", "before": ["See ‸"], "text": "(", "after": ["See (‸)"]},
+    {"name": "a code span closes", "before": ["Use ‸"], "text": "`", "after": ["Use `‸`"]},
+    {"name": "a double quote does not close", "before": ["Say ‸"], "text": "\"", "after": ["Say \"‸"]},
+    {"name": "an apostrophe stays single", "before": ["don‸"], "text": "'", "after": ["don'‸"]},
+    {"name": "a quote wraps the selection", "before": ["‸word‸"], "text": "\"", "after": ["\"‸word‸\""]},
+    {"name": "a bracket wraps the selection", "before": ["‸text‸"], "text": "[", "after": ["[‸text‸]"]}
+  ],
+  "match": [
+    {"name": "a link destination", "before": ["[a](‸b)"], "after": ["[a]«(»b«)»"]}
+  ]
+}

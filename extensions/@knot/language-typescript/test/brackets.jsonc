@@ -1,0 +1,35 @@
+// Bracket cases, run through an editor view on each group's languages.
+// Lines join with "\n" and "‸" marks the caret: one marker places it, two
+// select between them. A type case types `text` there one character at a
+// time, "⌫" pressing Backspace, and expects `after` with its caret or
+// selection. A jump case runs Jump to Matching Bracket and expects the
+// caret. A match case expects `after` to be the text with "«" and "»"
+// around the brackets highlighted at the caret, or no markers when none.
+[
+  {
+    "languages": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+    "type": [
+      {"name": "a template literal closes", "before": ["const s = ‸;"], "text": "`", "after": ["const s = `‸`;"]},
+      {"name": "a single quote closes in code", "before": ["const s = ‸;"], "text": "'", "after": ["const s = '‸';"]},
+      {"name": "a single quote does not close inside a comment", "before": ["// say ‸"], "text": "'", "after": ["// say '‸"]},
+      {"name": "a backtick does not close inside a template", "before": ["const s = `a ‸ b`;"], "text": "`", "after": ["const s = `a `‸ b`;"]},
+      {"name": "an arrow body closes", "before": ["f(x => ‸)"], "text": "{", "after": ["f(x => {‸})"]},
+      {"name": "angle brackets do not close", "before": ["let a: Array‸"], "text": "<", "after": ["let a: Array<‸"]},
+      {"name": "Backspace deletes an empty pair", "before": ["f‸"], "text": "(⌫", "after": ["f‸"]},
+      {"name": "a backtick wraps the selection", "before": ["‸a‸"], "text": "`", "after": ["`‸a‸`"]}
+    ],
+    "jump": [
+      {"name": "from an opener to before its closer", "before": ["if (‸a) {}"], "after": ["if (a‸) {}"]}
+    ],
+    "match": [
+      {"name": "an empty parameter list", "before": ["function f(‸) {}"], "after": ["function f«(»«)» {}"]},
+      {"name": "an object literal", "before": ["const o = {‸a: 1};"], "after": ["const o = «{»a: 1«}»;"]}
+    ]
+  },
+  {
+    "languages": ["javascriptreact", "typescriptreact"],
+    "match": [
+      {"name": "a JSX expression", "before": ["const a = <div>{‸x}</div>;"], "after": ["const a = <div>«{»x«}»</div>;"]}
+    ]
+  }
+]

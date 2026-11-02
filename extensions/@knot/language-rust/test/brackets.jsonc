@@ -1,0 +1,35 @@
+// Bracket cases, run through an editor view on each group's languages.
+// Lines join with "\n" and "‸" marks the caret: one marker places it, two
+// select between them. A type case types `text` there one character at a
+// time, "⌫" pressing Backspace, and expects `after` with its caret or
+// selection. A jump case runs Jump to Matching Bracket and expects the
+// caret. A match case expects `after` to be the text with "«" and "»"
+// around the brackets highlighted at the caret, or no markers when none.
+{
+  "languages": ["rust"],
+  "type": [
+    {"name": "a parenthesis closes at the end of the line", "before": ["fn f‸"], "text": "(", "after": ["fn f(‸)"]},
+    {"name": "typing through closers steps over them", "before": ["let x = ‸;"], "text": "f(a[0])", "after": ["let x = f(a[0])‸;"]},
+    {"name": "a brace closes before a closer", "before": ["foo(‸)"], "text": "{", "after": ["foo({‸})"]},
+    {"name": "an opener before a word does not close", "before": ["‸x"], "text": "(", "after": ["(‸x"]},
+    {"name": "an untracked closer is typed", "before": ["f(‸)"], "text": ")", "after": ["f()‸)"]},
+    {"name": "a string's quotes close and step over", "before": ["let s = ‸;"], "text": "\"ab\"", "after": ["let s = \"ab\"‸;"]},
+    {"name": "a quote does not close inside a string", "before": ["let s = \"a ‸ b\";"], "text": "\"", "after": ["let s = \"a \"‸ b\";"]},
+    {"name": "a quote does not close inside a comment", "before": ["// say ‸"], "text": "\"", "after": ["// say \"‸"]},
+    {"name": "a single quote never closes, for lifetimes", "before": ["fn f<‸>"], "text": "'a", "after": ["fn f<'a‸>"]},
+    {"name": "Backspace deletes an empty pair", "before": ["let v = ‸;"], "text": "[⌫", "after": ["let v = ‸;"]},
+    {"name": "an opener wraps the selection", "before": ["let v = ‸a + b‸;"], "text": "(", "after": ["let v = (‸a + b‸);"]},
+    {"name": "a quote wraps the selection", "before": ["‸name‸"], "text": "\"", "after": ["\"‸name‸\""]}
+  ],
+  "jump": [
+    {"name": "from an opener to before its closer", "before": ["fn f(‸a: u8) {}"], "after": ["fn f(a: u8‸) {}"]},
+    {"name": "from a closer to before its opener", "before": ["fn f(a: u8‸) {}"], "after": ["fn f‸(a: u8) {}"]},
+    {"name": "away from brackets to the enclosing closer", "before": ["fn f() {", "    let x = ‸1;", "}"], "after": ["fn f() {", "    let x = 1;", "‸}"]}
+  ],
+  "match": [
+    {"name": "a parameter list", "before": ["fn f(‸a) {}"], "after": ["fn f«(»a«)» {}"]},
+    {"name": "the bracket before the caret wins", "before": ["vec![1, (2)‸]"], "after": ["vec![1, «(»2«)»]"]},
+    {"name": "a bracket inside a string", "before": ["let s = \"(‸\";"], "after": ["let s = \"(\";"]},
+    {"name": "comparisons are not brackets", "before": ["a <‸ b"], "after": ["a < b"]}
+  ]
+}

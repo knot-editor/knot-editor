@@ -187,7 +187,9 @@ declare module "knot" {
     /** Whether Enter between the pair opens an indented middle line;
      * defaults to true unless open equals close. */
     readonly newline?: boolean;
-    /** Syntax at the cursor where auto-closing is suppressed. */
+    /** Syntax at the cursor where auto-closing is suppressed: inside a node
+     * the highlight query captures as `@string` or `@comment`, or a dotted
+     * child of either. */
     readonly notIn?: readonly ("string" | "comment")[];
   }
   export interface LanguageDefinition extends LanguagePatterns {
@@ -204,7 +206,9 @@ declare module "knot" {
      * an indents query keeps the previous line's indentation. */
     readonly queries: Readonly<{ highlights: string; injections?: string; indents?: string }>;
     readonly comments?: LanguageComments;
-    /** One list for matching, auto-closing, and surrounding. */
+    /** One list for matching, auto-closing, and surrounding. Matching pairs
+     * the bracket tokens of one syntax node; typing an opener inserts its
+     * closer, and typing over a selection wraps it. */
     readonly brackets?: readonly BracketPair[];
     /** Characters before which auto-closing applies, besides whitespace and
      * the end of the line. */
