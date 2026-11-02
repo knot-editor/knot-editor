@@ -5222,14 +5222,20 @@ fn stale_unload_cannot_dispose_a_replacement_lifecycle() {
 
 #[test]
 fn heap_exhaustion_probe_runs_in_a_sacrificial_process() {
-    let status = Command::new(std::env::current_exe().unwrap())
+    let output = Command::new(std::env::current_exe().unwrap())
         .arg("--exact")
         .arg("host::engine::tests::heap_exhaustion_probe_child")
         .arg("--nocapture")
         .env("KNOT_RUN_HEAP_EXHAUSTION_PROBE", "1")
-        .status()
+        .output()
         .expect("heap-exhaustion probe process must start");
-    assert!(status.success(), "heap limit must fail only its isolate");
+    assert!(
+        output.status.success(),
+        "heap limit must fail only its isolate; child status: {:?}\n--- stdout ---\n{}\n--- stderr ---\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
 }
 
 #[test]
