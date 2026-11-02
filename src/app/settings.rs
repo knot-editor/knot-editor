@@ -26,6 +26,11 @@ pub(crate) const EDITOR_TAB_SIZE: &str = "editor.tabSize";
 /// Whether indenting inserts spaces rather than a tab, unless the document's
 /// own indentation shows otherwise.
 pub(crate) const EDITOR_INSERT_SPACES: &str = "editor.insertSpaces";
+/// Whether typing an opening bracket or quote inserts its closer, and typing
+/// or deleting that closer steps over or deletes the pair.
+pub(crate) const EDITOR_AUTO_CLOSING_BRACKETS: &str = "editor.autoClosingBrackets";
+/// Whether typing an opening bracket or quote over a selection wraps it.
+pub(crate) const EDITOR_AUTO_SURROUND: &str = "editor.autoSurround";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
 pub(crate) const THEME_MODE: &str = "theme.mode";
 /// The theme name used in dark mode.
@@ -177,6 +182,18 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: true.into(),
             description: "Indent with spaces rather than tabs in documents whose indentation is not detected from their text".into(),
+        },
+        SettingDefinition {
+            key: EDITOR_AUTO_CLOSING_BRACKETS.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Insert the closer of a typed bracket or quote where the language allows, and step over or delete it with the opener".into(),
+        },
+        SettingDefinition {
+            key: EDITOR_AUTO_SURROUND.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Wrap the selection when typing an opening bracket or quote over it".into(),
         },
         text(
             THEME_MODE,
@@ -353,6 +370,18 @@ pub(crate) fn editor_tab_size(context: &SettingsScope, cx: &App) -> usize {
 pub(crate) fn editor_insert_spaces(context: &SettingsScope, cx: &App) -> bool {
     resolve(EDITOR_INSERT_SPACES, context, cx, Value::as_bool)
         .expect("editor.insertSpaces is a native boolean setting")
+}
+
+/// Whether an editor in `context` auto-closes brackets and quotes.
+pub(crate) fn editor_auto_closing_brackets(context: &SettingsScope, cx: &App) -> bool {
+    resolve(EDITOR_AUTO_CLOSING_BRACKETS, context, cx, Value::as_bool)
+        .expect("editor.autoClosingBrackets is a native boolean setting")
+}
+
+/// Whether an editor in `context` wraps a selection in a typed pair.
+pub(crate) fn editor_auto_surround(context: &SettingsScope, cx: &App) -> bool {
+    resolve(EDITOR_AUTO_SURROUND, context, cx, Value::as_bool)
+        .expect("editor.autoSurround is a native boolean setting")
 }
 
 fn resolve<T>(

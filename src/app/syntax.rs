@@ -48,7 +48,7 @@ use tree_sitter::{
 
 use crate::core::buffer::{BufferEdit, TextPoint, TextSnapshot};
 
-use super::languages::editing::EditingConfiguration;
+use super::languages::editing::{EditingConfiguration, SyntaxFamily};
 use super::theme::Highlight;
 
 /// How long a commit may spend reparsing on the foreground before the parse
@@ -82,6 +82,9 @@ pub(crate) struct SyntaxLanguage {
     highlights: Query,
     /// The highlight each capture resolves to, indexed by capture index.
     capture_highlights: Vec<Option<Highlight>>,
+    /// The syntax family each capture names, by capture index: `string` or
+    /// `comment`, or a dotted child of either.
+    capture_families: Vec<Option<SyntaxFamily>>,
     /// Indexed by pattern index.
     pattern_priorities: Vec<u32>,
     injections: Query,
@@ -155,6 +158,18 @@ impl SyntaxLanguage {
             .iter()
             .map(|name| Highlight::resolve(name))
             .collect();
+        let capture_families = highlights
+            .capture_names()
+            .iter()
+            .map(|name| {
+                let root = name.split('.').next().unwrap_or(name);
+                match root {
+                    "string" => Some(SyntaxFamily::String),
+                    "comment" => Some(SyntaxFamily::Comment),
+                    _ => None,
+                }
+            })
+            .collect();
         let pattern_priorities = (0..highlights.pattern_count())
             .map(|pattern| {
                 property(&highlights, pattern, "priority")
@@ -174,6 +189,7 @@ impl SyntaxLanguage {
             grammar,
             highlights,
             capture_highlights,
+            capture_families,
             pattern_priorities,
             injection_content: injections.capture_index_for_name("injection.content"),
             injection_language: injections.capture_index_for_name("injection.language"),
@@ -407,6 +423,54 @@ impl SyntaxState {
         Some(indent::evaluate(
             tree, query, brackets, text, lines, row, injected,
         ))
+    }
+
+    /// The syntax family a caret at `offset` is inside, from the highlight
+    /// captures of the layer holding the text before it. A string contains
+    /// only offsets strictly inside it; a comment also contains its end,
+    /// unless it ends with the language's block comment closer, so a caret at
+    /// the end of a line comment is inside it.
+    pub(crate) fn family_at(&self, text: &TextSnapshot, offset: usize) -> Option<SyntaxFamily> {
+        if offset == 0 || offset > text.len() {
+            return None;
+        }
+        let layer = self.layer_at(offset - 1);
+        let tree = layer.tree.as_ref()?;
+        let language = &*layer.language;
+        let block_close = language
+            .editing
+            .block_comment
+            .as_ref()
+            .map(|(_, close)| close.as_str());
+        let mut cursor = QueryCursor::new();
+        cursor.set_byte_range(offset - 1..offset);
+        let node_text = |node: Node| {
+            text.chunks(clamp(node.byte_range(), text))
+                .map(str::as_bytes)
+        };
+        let mut captures = cursor.captures(&language.highlights, tree.root_node(), node_text);
+        let mut found = None;
+        while let Some((matched, index)) = captures.next() {
+            let capture = matched.captures()[*index];
+            let Some(family) = language.capture_families[capture.index as usize] else {
+                continue;
+            };
+            let node = clamp(capture.node.byte_range(), text);
+            // The comment's last line, read from a character boundary.
+            let last_line = || {
+                let column = capture.node.end_position().column;
+                text.read_range(node.start.max(node.end.saturating_sub(column))..node.end)
+            };
+            let inside = node.start < offset
+                && (offset < node.end
+                    || (family == SyntaxFamily::Comment
+                        && offset == node.end
+                        && !block_close.is_some_and(|close| last_line().ends_with(close))));
+            if inside {
+                found = Some(family);
+            }
+        }
+        found
     }
 
     /// Whether the tree is a parse of the current text rather than an edited

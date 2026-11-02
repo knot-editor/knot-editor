@@ -24,7 +24,7 @@ use crate::{
 use super::{
     history::{EditGrouping, EditHistory, HistoryViewChange, HistoryViewState},
     indentation::{self, IndentStyle},
-    languages::editing::EditingConfiguration,
+    languages::editing::{EditingConfiguration, SyntaxFamily},
     syntax::{
         FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState,
         brackets::BracketPair,
@@ -541,6 +541,13 @@ impl BufferModel {
         self.syntax
             .as_ref()?
             .bracket_at(&self.buffer.snapshot(), offset)
+    }
+
+    /// The string or comment a caret at `offset` is inside, if any.
+    pub(crate) fn syntax_family_at(&self, offset: usize) -> Option<SyntaxFamily> {
+        self.syntax
+            .as_ref()?
+            .family_at(&self.buffer.snapshot(), offset)
     }
 
     /// The innermost bracket pair around `offset`.

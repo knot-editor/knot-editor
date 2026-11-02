@@ -1,6 +1,6 @@
 # D075 — Bracket matching and auto-closing
 
-Status: 🚧 checkpoint 1 implemented, awaiting review. Item of the
+Status: 🚧 checkpoints 1 and 2 implemented, awaiting review. Item of the
 [daily-driver plan](daily-driver.md); consumes the bracket data of D073
 ([language editing configuration](../decisions.md#language-editing-configuration)).
 
@@ -148,7 +148,7 @@ without shift on every platform, so the preset binds `secondary-|`. The fake
 extension host's `NATIVE_COLOR_KEYS` and `ThemeColors` in `knot.d.ts` list
 the new key.
 
-### 2. Auto-closing, overtype, paired delete, wrapping, and settings
+### 2. ✅ Auto-closing, overtype, paired delete, wrapping, and settings
 
 Deliverables:
 
@@ -192,6 +192,14 @@ Implementation context:
 
 Review gate: typing, overtype, Backspace, and wrapping feel like VS Code in
 Rust, TypeScript, Python, and Markdown.
+
+Completion note: decisions on `EditingConfiguration` (`auto_close`,
+`surround`), the family lookup as `SyntaxState::family_at`, and the view
+behavior in `src/app/editor/brackets.rs`. A comment contains its end unless
+its last line ends with the language's block comment closer, so a caret at
+the end of a line comment counts as inside it. Typing at a new position
+starts a new undo step, so undoing `f({` removes `{}` and then `f()`. The
+Rust indent case that types ` else {` now expects the auto-closed `{}`.
 
 ### 3. Package bracket cases and documentation
 

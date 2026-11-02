@@ -59,7 +59,7 @@
       "name": "typing after a closing brace leaves a placed brace alone",
       "before": ["fn f() {", "    if x {", "        a();", "        }‸", "}"],
       "text": " else {",
-      "after": ["fn f() {", "    if x {", "        a();", "        } else {‸", "}"]
+      "after": ["fn f() {", "    if x {", "        a();", "        } else {‸}", "}"]
     },
     {
       "name": "inside a string nothing moves",

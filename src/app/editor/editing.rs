@@ -135,7 +135,10 @@ impl EditorView {
                 let backward = command.ends_with("backward");
                 let model = self.model.read(cx);
                 let range = backward
-                    .then(|| self.tab_stop_deletion_range(model, cx))
+                    .then(|| {
+                        self.auto_closed_deletion_range(model)
+                            .or_else(|| self.tab_stop_deletion_range(model, cx))
+                    })
                     .flatten()
                     .unwrap_or_else(|| self.grapheme_deletion_range(model, backward));
                 if !range.is_empty() {

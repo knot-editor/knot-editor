@@ -236,6 +236,8 @@ pub struct EditorView {
     /// A line Enter left for the indent query to indent, once the tree
     /// covers the edit.
     pending_indent: Option<indentation::PendingIndent>,
+    /// Pairs typing closed, tracked while the caret stays inside them.
+    auto_closed: Vec<brackets::AutoClosed>,
     #[cfg(test)]
     paint_count: u64,
     _model_subscription: Subscription,
@@ -461,6 +463,8 @@ impl EditorView {
             this.model.update(cx, |model, _| {
                 model.remove_view_position(this.position_range);
             });
+            let pairs = std::mem::take(&mut this.auto_closed);
+            this.release_auto_closed(pairs, cx);
         });
 
         Self {
@@ -503,6 +507,7 @@ impl EditorView {
             completion_tasks: Vec::new(),
             next_completion_generation: 1,
             pending_indent: None,
+            auto_closed: Vec::new(),
             #[cfg(test)]
             paint_count: 0,
             _model_subscription: model_subscription,
@@ -574,6 +579,7 @@ impl EditorView {
     }
 
     fn finish_position_change(&mut self, cx: &mut Context<Self>) {
+        self.prune_auto_closed(cx);
         self.dismiss_completion();
         self.reveal_caret = true;
         self.ensure_cursor_visible(self.viewport_h);

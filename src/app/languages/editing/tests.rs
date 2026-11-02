@@ -125,3 +125,94 @@ fn block_toggle_wraps_and_unwraps_inside_surrounding_whitespace() {
     };
     assert!(python.toggle_block_comment("a").is_empty());
 }
+
+fn pair(open: &str, close: &str) -> Bracket {
+    Bracket {
+        open: open.into(),
+        close: close.into(),
+        auto_close: true,
+        newline: open != close,
+        not_in: Vec::new(),
+    }
+}
+
+fn brackets() -> EditingConfiguration {
+    let mut quote = pair("\"", "\"");
+    quote.not_in = vec![SyntaxFamily::String, SyntaxFamily::Comment];
+    let mut single = pair("'", "'");
+    single.auto_close = false;
+    EditingConfiguration {
+        brackets: vec![
+            pair("{", "}"),
+            pair("(", ")"),
+            quote,
+            single,
+            pair("/**", " */"),
+        ],
+        auto_close_before: ";:.,=}])>".into(),
+        ..Default::default()
+    }
+}
+
+fn close<'a>(
+    config: &'a EditingConfiguration,
+    before: &str,
+    typed: &str,
+    after: &str,
+    family: Option<SyntaxFamily>,
+) -> Option<&'a str> {
+    config
+        .auto_close(before, typed, after, family)
+        .map(|bracket| bracket.close.as_str())
+}
+
+#[test]
+fn an_opener_closes_before_whitespace_the_line_end_and_listed_characters() {
+    let config = brackets();
+    assert_eq!(close(&config, "f", "(", "", None), Some(")"));
+    assert_eq!(close(&config, "f", "(", " x", None), Some(")"));
+    assert_eq!(close(&config, "[", "(", "];", None), Some(")"));
+    assert_eq!(close(&config, "f", "(", "x", None), None);
+    assert_eq!(close(&config, "", "x", "", None), None);
+    assert_eq!(close(&config, "", "", "", None), None);
+}
+
+#[test]
+fn a_pair_that_does_not_auto_close_still_surrounds() {
+    let config = brackets();
+    assert_eq!(close(&config, "", "'", "", None), None);
+    assert_eq!(
+        config.surround("'").map(|pair| pair.close.as_str()),
+        Some("'")
+    );
+    assert_eq!(config.surround("x"), None);
+}
+
+#[test]
+fn quotes_close_outside_their_syntax_and_after_non_word_characters() {
+    let config = brackets();
+    assert_eq!(close(&config, "x = ", "\"", "", None), Some("\""));
+    assert_eq!(close(&config, "(", "\"", ")", None), Some("\""));
+    assert_eq!(close(&config, "don", "\"", "", None), None);
+    assert_eq!(close(&config, "a_", "\"", "", None), None);
+    assert_eq!(
+        close(&config, "x = ", "\"", "", Some(SyntaxFamily::String)),
+        None
+    );
+    assert_eq!(
+        close(&config, "// ", "\"", "", Some(SyntaxFamily::Comment)),
+        None
+    );
+    // Brackets have no `notIn`, so they close inside strings.
+    assert_eq!(
+        close(&config, "\"", "(", " x\"", Some(SyntaxFamily::String)),
+        Some(")")
+    );
+}
+
+#[test]
+fn a_multi_character_opener_closes_when_typing_completes_it() {
+    let config = brackets();
+    assert_eq!(close(&config, "  /*", "*", "", None), Some(" */"));
+    assert_eq!(close(&config, "  /", "*", "", None), None);
+}

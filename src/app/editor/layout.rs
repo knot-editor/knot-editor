@@ -41,7 +41,7 @@ impl EditorView {
     }
 
     /// The settings context of this view's kind and its buffer's language.
-    fn settings_scope(&self, model: &BufferModel, cx: &App) -> SettingsScope {
+    pub(super) fn settings_scope(&self, model: &BufferModel, cx: &App) -> SettingsScope {
         SettingsScope {
             language: Some(languages::effective_language(model, cx)),
             view: Some(self.view_kind.to_string()),

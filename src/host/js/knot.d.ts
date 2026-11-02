@@ -261,6 +261,14 @@ declare module "knot" {
      * own indentation is detected from its text when it opens follows that
      * instead. Native default true. */
     "editor.insertSpaces": boolean;
+    /** Whether typing an opening bracket or quote inserts its closer where
+     * the language's bracket pairs allow, and typing that closer or Backspace
+     * between the pair steps over or deletes it while the cursor stays
+     * inside. Native default true. */
+    "editor.autoClosingBrackets": boolean;
+    /** Whether typing an opening bracket or quote over a selection wraps the
+     * selection in the pair. Native default true. */
+    "editor.autoSurround": boolean;
     /** Which theme applies: theme.dark's, theme.light's, or the one matching
      * the system appearance. Native default "dark"; other text means "dark". */
     "theme.mode": "dark" | "light" | "system";

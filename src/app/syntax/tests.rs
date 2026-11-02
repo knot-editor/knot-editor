@@ -840,3 +840,72 @@ fn injection_costs_on_a_large_markdown_file() {
         );
     }
 }
+
+/// The syntax family at the `|` in `marked`, parsed as `root`.
+fn family(root: &'static str, marked: &str) -> Option<SyntaxFamily> {
+    let offset = marked.find('|').unwrap();
+    let fixture = Fixture::of(root, &marked.replacen('|', "", 1));
+    fixture.state.family_at(&fixture.buffer.snapshot(), offset)
+}
+
+#[test]
+fn a_string_contains_only_offsets_strictly_inside_it() {
+    assert_eq!(
+        family("rust", "let s = \"a|b\";"),
+        Some(SyntaxFamily::String)
+    );
+    assert_eq!(
+        family("rust", "let s = \"|ab\";"),
+        Some(SyntaxFamily::String)
+    );
+    assert_eq!(family("rust", "let s = |\"ab\";"), None);
+    assert_eq!(family("rust", "let s = \"ab\"|;"), None);
+    assert_eq!(family("rust", "|let s;"), None);
+}
+
+#[test]
+fn a_line_comment_contains_its_end() {
+    assert_eq!(
+        family("rust", "let s; // a|b\n"),
+        Some(SyntaxFamily::Comment)
+    );
+    assert_eq!(
+        family("rust", "let s; // ab|\nlet t;"),
+        Some(SyntaxFamily::Comment)
+    );
+    assert_eq!(family("rust", "let s; // ab|"), Some(SyntaxFamily::Comment));
+    assert_eq!(family("rust", "let s; |// ab"), None);
+}
+
+#[test]
+fn a_block_comment_ending_in_its_closer_does_not_contain_its_end() {
+    let rust = Arc::new(
+        SyntaxLanguage::new("rust", RUST_HIGHLIGHTS, "")
+            .unwrap()
+            .with_editing(EditingConfiguration {
+                block_comment: Some(("/*".into(), "*/".into())),
+                ..Default::default()
+            }),
+    );
+    let at = |marked: &str| {
+        let offset = marked.find('|').unwrap();
+        let fixture = Fixture::parsed(
+            &marked.replacen('|', "", 1),
+            SyntaxState::new(Arc::clone(&rust), languages()),
+            "rust",
+        );
+        fixture.state.family_at(&fixture.buffer.snapshot(), offset)
+    };
+    assert_eq!(at("let s; /* a| */"), Some(SyntaxFamily::Comment));
+    assert_eq!(at("let s; /* a */|"), None);
+    assert_eq!(at("let s; /* é */|"), None);
+}
+
+#[test]
+fn injected_code_reports_its_own_strings() {
+    assert_eq!(
+        family("markdown", "# T\n\n```rust\nlet s = \"a|b\";\n```\n"),
+        Some(SyntaxFamily::String)
+    );
+    assert_eq!(family("markdown", "# \"a|b\"\n"), None);
+}

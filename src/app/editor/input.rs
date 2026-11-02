@@ -250,7 +250,11 @@ impl EntityInputHandler for EditorView {
             EditGroupKind::Typing
         };
         let range = self.bytes_for_utf16(range, cx);
-        self.replace_text_with_grouping(range, text, Some(grouping), window, cx);
+        let bracket =
+            grouping == EditGroupKind::Typing && self.type_bracket(range.clone(), text, cx);
+        if !bracket {
+            self.replace_text_with_grouping(range, text, Some(grouping), window, cx);
+        }
         if grouping == EditGroupKind::Typing && !text.contains(['\n', '\r']) {
             self.outdent_typed_line(cx);
         }

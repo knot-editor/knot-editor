@@ -84,6 +84,8 @@ function emptyState() {
     settingDefinitions: new Map<string, Knot.SettingDefinition>([
       ["editor.tabSize", { key: "editor.tabSize", type: "integer", default: 4, description: "Columns per tab stop in editor views" }],
       ["editor.insertSpaces", { key: "editor.insertSpaces", type: "boolean", default: true, description: "Indent with spaces rather than tabs in documents whose indentation is not detected from their text" }],
+      ["editor.autoClosingBrackets", { key: "editor.autoClosingBrackets", type: "boolean", default: true, description: "Insert the closer of a typed bracket or quote where the language allows, and step over or delete it with the opener" }],
+      ["editor.autoSurround", { key: "editor.autoSurround", type: "boolean", default: true, description: "Wrap the selection when typing an opening bracket or quote over it" }],
       ["theme.mode", { key: "theme.mode", type: "string", default: "dark", description: "Which theme applies" }],
       ["theme.dark", { key: "theme.dark", type: "string", default: "One Dark", description: "The theme used in dark mode" }],
       ["theme.light", { key: "theme.light", type: "string", default: "One Light", description: "The theme used in light mode" }],

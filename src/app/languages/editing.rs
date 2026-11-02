@@ -236,6 +236,57 @@ impl EditingConfiguration {
     }
 }
 
+impl EditingConfiguration {
+    /// The pair whose closer to insert after the caret when `typed` is typed with
+    /// `before` and `after` the caret on its line, at a caret inside
+    /// `family`. A pair applies when it auto-closes, the text before the
+    /// caret and `typed` end with its opener, the character after the caret
+    /// is whitespace, the end of the line, or in `autoCloseBefore`, `family`
+    /// is not in its `notIn`, and, for a pair whose opener is its closer,
+    /// no word character precedes the opener. The longest opener wins.
+    pub(crate) fn auto_close(
+        &self,
+        before: &str,
+        typed: &str,
+        after: &str,
+        family: Option<SyntaxFamily>,
+    ) -> Option<&Bracket> {
+        if typed.is_empty()
+            || !after
+                .chars()
+                .next()
+                .is_none_or(|next| next.is_whitespace() || self.auto_close_before.contains(next))
+        {
+            return None;
+        }
+        let text = format!("{before}{typed}");
+        self.brackets
+            .iter()
+            .filter(|bracket| {
+                bracket.auto_close
+                    && text.ends_with(&bracket.open)
+                    && (bracket.open.ends_with(typed) || typed.ends_with(&bracket.open))
+                    && family.is_none_or(|family| !bracket.not_in.contains(&family))
+                    && (bracket.open != bracket.close
+                        || !text[..text.len() - bracket.open.len()]
+                            .chars()
+                            .next_back()
+                            .is_some_and(is_word_character))
+            })
+            .max_by_key(|bracket| bracket.open.len())
+    }
+
+    /// The pair whose opener is `typed`, which wraps a selection when typed
+    /// over it, whether or not the pair auto-closes.
+    pub(crate) fn surround(&self, typed: &str) -> Option<&Bracket> {
+        self.brackets.iter().find(|bracket| bracket.open == typed)
+    }
+}
+
+fn is_word_character(character: char) -> bool {
+    character.is_alphanumeric() || character == '_'
+}
+
 /// The ranges of `open` and `close`, each with one space inside, when
 /// `text` without surrounding whitespace starts and ends with them.
 fn unwrap_block(text: &str, open: &str, close: &str) -> Option<(Range<usize>, Range<usize>)> {
