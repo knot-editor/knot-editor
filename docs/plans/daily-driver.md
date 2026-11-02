@@ -200,6 +200,7 @@ to be rebuilt later:
     Enablement is per surface, so read-only text frames can omit the gutter.
   - Each lane defines its own click and hover behavior. Highlight the current
     line's number.
+  - 🚧 [Plan](d068-editor-gutter.md)
 
 - **D076 — Go to Line** (depends on D071)
   - Bound to ctrl-G. Accepts `line` and `line:column`, and previews the target
