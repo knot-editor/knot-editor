@@ -910,7 +910,7 @@ pub(crate) async fn dispose_editor_contributions(
 use crate::app::extensions::semantics::{SemanticError, ViewPresentation};
 use crate::host::protocol::{
     CompletionProviderRegistrationId, ConfirmationResult, FolderPickerResult, InputResult,
-    PickerItem, PickerResult, PickerUpdate, ProviderIdentity, TreeAction,
+    InputUpdate, PickerItem, PickerResult, PickerUpdate, ProviderIdentity, TreeAction,
     TreeProviderRegistrationId, ViewContentKind,
 };
 
@@ -1161,19 +1161,28 @@ pub(crate) async fn show_picker(
     }
 }
 
-/// A picker whose caller previews the highlighted item. The caller pulls each
-/// change within its own turn, because a separate notification root could not
-/// run while the caller awaits the picker.
-pub(crate) struct PickerSession {
+/// A picker or input whose caller follows its changes: the highlighted item,
+/// or the typed value. The caller pulls each change within its own turn,
+/// because a separate notification root could not run while the caller awaits
+/// the interaction.
+pub(crate) struct TransientSession {
     owner: ExtensionKey,
     completion: tokio::sync::oneshot::Receiver<TransientOutcome>,
-    highlights: tokio::sync::watch::Receiver<Option<String>>,
+    changes: tokio::sync::watch::Receiver<Option<String>>,
+    /// The input that shows the caller's messages.
+    input: Option<WeakEntity<crate::app::transient::InputView>>,
 }
 
-impl PickerSession {
+impl TransientSession {
     pub(crate) fn owner(&self) -> ExtensionKey {
         self.owner
     }
+}
+
+/// The next thing a caller pulls from a session.
+enum Pulled {
+    Changed { session: u64, value: Option<String> },
+    Settled(TransientOutcome),
 }
 
 /// Open a picker and settle with its first highlight or its outcome.
@@ -1189,7 +1198,7 @@ pub(crate) async fn begin_picker(
         items,
         target,
     } = arguments;
-    let (sender, highlights) = tokio::sync::watch::channel(None);
+    let (sender, changes) = tokio::sync::watch::channel(None);
     let completion = context.foreground(|host, cx| {
         host.with_transient_window(
             &request,
@@ -1200,12 +1209,13 @@ pub(crate) async fn begin_picker(
             cx,
         )
     })??;
-    let session = PickerSession {
+    let session = TransientSession {
         owner: ExtensionKey::new(request.extension, request.lifecycle),
         completion,
-        highlights,
+        changes,
+        input: None,
     };
-    next_picker_update(&context, session).await
+    picker_update(next_change(&context, session).await?)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1229,21 +1239,31 @@ pub(crate) async fn next_picker_event(
 ) -> Result<PickerUpdate, TransientError> {
     let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
     let session = context
-        .foreground(|host, _| host.take_picker_session(owner, arguments.session))?
+        .foreground(|host, _| host.take_transient_session(owner, arguments.session))?
         .ok_or(TransientError::Cancelled)?;
-    next_picker_update(&context, session).await
+    picker_update(next_change(&context, session).await?)
 }
 
-async fn next_picker_update(
+fn picker_update(pulled: Pulled) -> Result<PickerUpdate, TransientError> {
+    match pulled {
+        Pulled::Changed { session, value } => Ok(PickerUpdate::Highlighted { session, id: value }),
+        Pulled::Settled(TransientOutcome::Picker(id)) => Ok(PickerUpdate::Selected { id }),
+        Pulled::Settled(TransientOutcome::Dismissed) => Ok(PickerUpdate::Dismissed),
+        Pulled::Settled(_) => Err(TransientError::Cancelled),
+    }
+}
+
+/// Settle with the session's next change, or with its outcome once it settles.
+async fn next_change(
     context: &HostContext,
-    mut session: PickerSession,
-) -> Result<PickerUpdate, TransientError> {
+    mut session: TransientSession,
+) -> Result<Pulled, TransientError> {
     enum Next {
         Settled(Result<TransientOutcome, tokio::sync::oneshot::error::RecvError>),
-        Highlighted,
+        Changed,
         Closed,
     }
-    // A settled picker wins over a highlight that was never read.
+    // A settled interaction wins over a change that was never read.
     let next = match session.completion.try_recv() {
         Ok(outcome) => Next::Settled(Ok(outcome)),
         Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
@@ -1251,7 +1271,7 @@ async fn next_picker_update(
         }
         Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
             let completion = &mut session.completion;
-            let mut changed = std::pin::pin!(session.highlights.changed());
+            let mut changed = std::pin::pin!(session.changes.changed());
             std::future::poll_fn(|task| {
                 if let std::task::Poll::Ready(outcome) =
                     std::pin::Pin::new(&mut *completion).poll(task)
@@ -1259,7 +1279,7 @@ async fn next_picker_update(
                     return std::task::Poll::Ready(Next::Settled(outcome));
                 }
                 changed.as_mut().poll(task).map(|changed| match changed {
-                    Ok(()) => Next::Highlighted,
+                    Ok(()) => Next::Changed,
                     Err(_) => Next::Closed,
                 })
             })
@@ -1271,16 +1291,12 @@ async fn next_picker_update(
         next => next,
     };
     match next {
-        Next::Settled(Ok(TransientOutcome::Picker(id))) => Ok(PickerUpdate::Selected { id }),
-        Next::Settled(Ok(TransientOutcome::Dismissed)) => Ok(PickerUpdate::Dismissed),
-        Next::Settled(_) => Err(TransientError::Cancelled),
-        Next::Highlighted | Next::Closed => {
-            let id = session.highlights.borrow_and_update().clone();
-            let id_number = context.foreground(|host, _| host.keep_picker_session(session))?;
-            Ok(PickerUpdate::Highlighted {
-                session: id_number,
-                id,
-            })
+        Next::Settled(Ok(outcome)) => Ok(Pulled::Settled(outcome)),
+        Next::Settled(Err(_)) => Err(TransientError::Cancelled),
+        Next::Changed | Next::Closed => {
+            let value = session.changes.borrow_and_update().clone();
+            let session = context.foreground(|host, _| host.keep_transient_session(session))?;
+            Ok(Pulled::Changed { session, value })
         }
     }
 }
@@ -1297,12 +1313,12 @@ pub(crate) async fn show_input(
         value,
         target,
     } = arguments;
-    let receiver = context.foreground(|host, cx| {
+    let (receiver, _) = context.foreground(|host, cx| {
         host.with_transient_window(
             &request,
             target.as_deref(),
             move |shell, window, cx| {
-                shell.begin_input(owner, title, value.unwrap_or_default(), window, cx)
+                shell.begin_input(owner, title, value.unwrap_or_default(), None, window, cx)
             },
             cx,
         )
@@ -1311,6 +1327,94 @@ pub(crate) async fn show_input(
         Ok(TransientOutcome::Input(value)) => Ok(InputResult::Accepted { value }),
         Ok(TransientOutcome::Dismissed) => Ok(InputResult::Dismissed),
         _ => Err(TransientError::Cancelled),
+    }
+}
+
+/// Open an input and settle with its initial value or its outcome.
+#[host_operation("beginInput")]
+pub(crate) async fn begin_input(
+    context: HostContext,
+    arguments: InputArguments,
+) -> Result<InputUpdate, TransientError> {
+    let request = context.request;
+    let owner = transient_owner(&request);
+    let InputArguments {
+        title,
+        value,
+        target,
+    } = arguments;
+    let (sender, changes) = tokio::sync::watch::channel(None);
+    let (completion, input) = context.foreground(|host, cx| {
+        host.with_transient_window(
+            &request,
+            target.as_deref(),
+            move |shell, window, cx| {
+                shell.begin_input(
+                    owner,
+                    title,
+                    value.unwrap_or_default(),
+                    Some(sender),
+                    window,
+                    cx,
+                )
+            },
+            cx,
+        )
+    })??;
+    let session = TransientSession {
+        owner: ExtensionKey::new(request.extension, request.lifecycle),
+        completion,
+        changes,
+        input: Some(input),
+    };
+    input_update(next_change(&context, session).await?)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct InputSessionArguments {
+    pub session: u64,
+    pub message: Option<String>,
+}
+impl HostArguments for InputSessionArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            session: reader.integer(2)?,
+            message: reader.optional_text(3, "input message must be text or null")?,
+        })
+    }
+}
+
+/// Show the message the caller derived from the last value, then settle with
+/// the input's next value, or with its outcome once it settles. Only the
+/// latest unread value is kept.
+#[host_operation("nextInputEvent")]
+pub(crate) async fn next_input_event(
+    context: HostContext,
+    arguments: InputSessionArguments,
+) -> Result<InputUpdate, TransientError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    let InputSessionArguments { session, message } = arguments;
+    let session = context
+        .foreground(|host, cx| {
+            let session = host.take_transient_session(owner, session)?;
+            if let Some(input) = session.input.as_ref().and_then(WeakEntity::upgrade) {
+                input.update(cx, |input, cx| input.set_message(message, cx));
+            }
+            Some(session)
+        })?
+        .ok_or(TransientError::Cancelled)?;
+    input_update(next_change(&context, session).await?)
+}
+
+fn input_update(pulled: Pulled) -> Result<InputUpdate, TransientError> {
+    match pulled {
+        Pulled::Changed { session, value } => Ok(InputUpdate::Changed {
+            session,
+            value: value.unwrap_or_default(),
+        }),
+        Pulled::Settled(TransientOutcome::Input(value)) => Ok(InputUpdate::Accepted { value }),
+        Pulled::Settled(TransientOutcome::Dismissed) => Ok(InputUpdate::Dismissed),
+        Pulled::Settled(_) => Err(TransientError::Cancelled),
     }
 }
 

@@ -553,8 +553,18 @@ if (picked.kind === "dismissed") await settings.set("theme.dark", before);
 
 The callback runs inside the awaiting command, one call at a time; changes
 made while it runs collapse into the latest highlight. Undoing a preview after
-dismissal is the caller's job. Inputs are single-line and
-support the usual editing, clipboard, IME, and selection behavior. Confirmation
+dismissal is the caller's job. An input's `onChange` works the same way for
+its text, starting with the initial value; return a string to show it as a
+muted line under the field, or nothing to clear it:
+
+```js
+const named = await workbench.showInput({
+  title: "Port",
+  onChange: (value) => (/^\d*$/.test(value) ? null : "Type digits only."),
+});
+```
+
+Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. Confirmation
 and message use the native platform prompt.
 
 One extension transient interaction may own a window at a time. A second

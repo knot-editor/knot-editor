@@ -462,7 +462,32 @@ export async function showInput(options) {
   const target = transientTarget(options);
   const title = string(options.title, "input title must be text");
   const value = optionalText(options.value);
-  return request("showInput", title, value, target);
+  const onChange = options.onChange;
+  if (onChange == null) return request("showInput", title, value, target);
+  if (typeof onChange !== "function") {
+    throw new TypeError("input onChange must be a function");
+  }
+  // Values are pulled inside this turn, as picker highlights are, and each
+  // returned message travels back with the next pull.
+  let failure = null;
+  let update = await request("beginInput", title, value, target);
+  while (update.kind === "changed") {
+    let message = null;
+    if (failure === null) {
+      try {
+        const result = await onChange(update.value);
+        if (typeof result === "string") message = result;
+        else if (result != null) throw new TypeError("input onChange must return text or nothing");
+      } catch (error) {
+        failure = { error };
+      }
+    }
+    update = await request("nextInputEvent", update.session, message);
+  }
+  if (failure !== null) throw failure.error;
+  return update.kind === "accepted"
+    ? Object.freeze({ kind: "accepted", value: update.value })
+    : Object.freeze({ kind: "dismissed" });
 }
 
 export async function showConfirmation(options) {

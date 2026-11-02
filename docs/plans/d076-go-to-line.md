@@ -1,6 +1,6 @@
 # D076 — Go to Line
 
-Status: 🚧 in progress: checkpoint 1 ✅. Item of the
+Status: 🚧 in progress: checkpoints 1 ✅ and 2 ✅. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker and
 transient slot). Promotes a single-selection first slice of D109.
 
@@ -136,7 +136,11 @@ Review gate: the handle's shape is the one D109 will extend.
 - Docs: [extension guide](../extension-api.md),
   [commands](../architecture/commands.md) for the captured editor.
 
-### 2. Live input with a message line
+### 2. Live input with a message line ✅
+
+The picker's pulled session became one transient session shared by both
+interactions, so `beginInput`/`nextInputEvent` reuse its storage, collapsing,
+and settlement; `nextInputEvent` carries the previous call's message.
 
 Deliverables: `onChange` on `showInput`, the message line in the native input
 view, and fake-host support.

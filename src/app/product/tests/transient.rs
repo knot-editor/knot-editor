@@ -78,7 +78,9 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
     let overlap = cx
         .update_window(window, |_, window, cx| {
             shell.update(cx, |shell, cx| {
-                shell.begin_input(owner(None), "Name".into(), String::new(), window, cx)
+                shell
+                    .begin_input(owner(None), "Name".into(), String::new(), None, window, cx)
+                    .map(|(receiver, _)| receiver)
             })
         })
         .unwrap();
@@ -104,7 +106,16 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     let mut input = cx
         .update_window(window, |_, window, cx| {
             shell.update(cx, |shell, cx| {
-                shell.begin_input(owner(None), "Add path".into(), "seed".into(), window, cx)
+                shell
+                    .begin_input(
+                        owner(None),
+                        "Add path".into(),
+                        "seed".into(),
+                        None,
+                        window,
+                        cx,
+                    )
+                    .map(|(receiver, _)| receiver)
             })
         })
         .unwrap()
@@ -538,6 +549,200 @@ fn picker_previews_settle_on_dismissal_and_unload(cx: &mut TestAppContext) {
 
     // Unloading while the extension awaits the next highlight settles it.
     let pending = dispatch_product_command(&shell, window, "transient.preview", cx);
+    wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    cx.run_until_parked();
+    cx.read(|cx| assert!(shell.read(cx).transient.is_none()));
+    assert_ne!(wait_for_command(pending, cx), CommandOutcome::Completed);
+}
+
+fn transient_input(
+    shell: &Entity<ProductShell>,
+    cx: &mut TestAppContext,
+) -> Entity<crate::app::transient::InputView> {
+    cx.read(
+        |cx| match shell.read(cx).transient.as_ref().unwrap().surface.as_ref() {
+            Some(crate::app::transient::TransientSurface::Input(input)) => input.clone(),
+            _ => panic!("the transient is not an input"),
+        },
+    )
+}
+
+fn type_into(
+    input: &Entity<crate::app::transient::InputView>,
+    texts: &[&str],
+    cx: &mut TestAppContext,
+) {
+    input.update(cx, |input, cx| {
+        let field = input.input().clone();
+        for text in texts {
+            field.update(cx, |field, cx| field.set_text(*text, cx));
+        }
+    });
+}
+
+fn input_message(
+    input: &Entity<crate::app::transient::InputView>,
+    cx: &gpui::App,
+) -> Option<String> {
+    input.read(cx).message().map(str::to_string)
+}
+
+const LIVE_INPUT_SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+await commands.register("transient.live-input", async () => {
+  const seen = [];
+  const result = await workbench.showInput({
+    title: "Line",
+    value: "1",
+    onChange: async (value) => {
+      seen.push(value);
+      await workbench.writeClipboardText(seen.join(","));
+      return value === "" ? null : `message ${value}`;
+    },
+  });
+  await workbench.writeClipboardText(`${seen.join(",")}|${JSON.stringify(result)}`);
+});
+await commands.register("transient.failing-input", async () => {
+  const seen = [];
+  try {
+    await workbench.showInput({
+      title: "Line",
+      onChange: async (value) => {
+        seen.push(value);
+        await workbench.writeClipboardText(seen.join(","));
+        if (value === "x") throw new Error("boom");
+        return `ok ${value}`;
+      },
+    });
+  } catch (error) {
+    await workbench.writeClipboardText(`caught ${error.message}|${seen.join(",")}`);
+    return;
+  }
+  await workbench.writeClipboardText("not rethrown");
+});
+"#;
+
+fn start_live_input(
+    name: &'static str,
+    cx: &mut TestAppContext,
+) -> (
+    Entity<crate::app::extensions::host::ProductExtensionHost>,
+    crate::host::lifecycle::ExtensionKey,
+    Entity<ProductShell>,
+    gpui::AnyWindowHandle,
+    crate::app::CommandExecution,
+) {
+    use crate::host::lifecycle::ExtensionKey;
+
+    let documents = install_globals(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(714), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, LIVE_INPUT_SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("transient.failing-input")
+            .is_ok()
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let pending = dispatch_product_command(&shell, window, name, cx);
+    wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
+    (host, key, shell, window, pending)
+}
+
+#[gpui::test]
+fn live_input_reports_the_latest_value_and_shows_returned_messages(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, completion) = start_live_input("transient.live-input", cx);
+    let input = transient_input(&shell, cx);
+    // The initial value reaches the callback, and its message shows once the
+    // extension pulls again.
+    wait_for_api_condition(cx, |cx| {
+        input_message(&input, cx).as_deref() == Some("message 1")
+    });
+    assert_eq!(clipboard(cx).as_deref(), Some("1"));
+    // Two edits before the extension asks again collapse into the latest.
+    type_into(&input, &["12", "123"], cx);
+    wait_for_api_condition(cx, |cx| {
+        input_message(&input, cx).as_deref() == Some("message 123")
+    });
+    assert_eq!(clipboard(cx).as_deref(), Some("1,123"));
+    // Returning nothing clears the message.
+    type_into(&input, &[""], cx);
+    wait_for_api_condition(cx, |cx| input_message(&input, cx).is_none());
+    type_into(&input, &["42"], cx);
+    wait_for_api_condition(cx, |cx| {
+        input_message(&input, cx).as_deref() == Some("message 42")
+    });
+    input.update(cx, |_, cx| {
+        cx.emit(crate::app::transient::InputEvent::Accepted("42".into()))
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .is_some_and(|text| text.contains('|'))
+    });
+    assert_eq!(
+        clipboard(cx).as_deref(),
+        Some(r#"1,123,,42|{"kind":"accepted","value":"42"}"#)
+    );
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn a_throwing_change_callback_stops_and_rethrows_once_the_input_settles(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, completion) = start_live_input("transient.failing-input", cx);
+    let input = transient_input(&shell, cx);
+    wait_for_api_condition(cx, |cx| input_message(&input, cx).as_deref() == Some("ok "));
+    type_into(&input, &["x"], cx);
+    wait_for_api_condition(cx, |cx| input_message(&input, cx).is_none());
+    // The input stays open and later values reach no callback.
+    cx.read(|cx| assert!(shell.read(cx).transient.is_some()));
+    type_into(&input, &["y"], cx);
+    cx.run_until_parked();
+    input.update(cx, |_, cx| {
+        cx.emit(crate::app::transient::InputEvent::Dismissed)
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .is_some_and(|text| text.contains('|'))
+    });
+    assert_eq!(clipboard(cx).as_deref(), Some("caught boom|,x"));
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn live_input_settles_on_dismissal_and_unload(cx: &mut TestAppContext) {
+    let (host, key, shell, window, completion) = start_live_input("transient.live-input", cx);
+    let input = transient_input(&shell, cx);
+    wait_for_api_condition(cx, |cx| {
+        input_message(&input, cx).as_deref() == Some("message 1")
+    });
+    input.update(cx, |_, cx| {
+        cx.emit(crate::app::transient::InputEvent::Dismissed)
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .is_some_and(|text| text.contains('|'))
+    });
+    assert_eq!(clipboard(cx).as_deref(), Some(r#"1|{"kind":"dismissed"}"#));
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+
+    // Unloading while the extension awaits the next value settles it.
+    let pending = dispatch_product_command(&shell, window, "transient.live-input", cx);
     wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.run_until_parked();

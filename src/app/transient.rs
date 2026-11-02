@@ -13,7 +13,7 @@ use gpui::{prelude::*, *};
 use crate::host::protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId};
 
 use super::picker::Picker;
-use super::text_input::TextInput;
+use super::text_input::{TextInput, TextInputEvent};
 use super::theme::{color, theme};
 
 const PANEL_WIDTH: f32 = 560.;
@@ -60,19 +60,59 @@ pub(crate) enum InputEvent {
 pub(crate) struct InputView {
     title: SharedString,
     input: Entity<TextInput>,
+    /// A muted line under the field, set by the interaction's owner.
+    message: Option<SharedString>,
+    _changes: Option<Subscription>,
 }
 
 impl InputView {
-    pub(crate) fn new(title: String, initial: String, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| TextInput::new(initial, cx));
+    /// With `changes`, the field's value is published as it changes,
+    /// starting with the initial one.
+    pub(crate) fn new(
+        title: String,
+        initial: String,
+        changes: Option<tokio::sync::watch::Sender<Option<String>>>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let input = cx.new(|cx| TextInput::new(initial.clone(), cx));
+        let subscription = changes.map(|changes| {
+            changes.send_replace(Some(initial));
+            cx.subscribe(&input, move |_, input, _: &TextInputEvent, cx| {
+                let value = input.read(cx).text();
+                changes.send_if_modified(|current| {
+                    let changed = current.as_deref() != Some(value);
+                    if changed {
+                        *current = Some(value.to_string());
+                    }
+                    changed
+                });
+            })
+        });
         Self {
             title: title.into(),
             input,
+            message: None,
+            _changes: subscription,
         }
     }
 
     pub(crate) fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.input.read(cx).focus_handle()
+    }
+
+    pub(crate) fn set_message(&mut self, message: Option<String>, cx: &mut Context<Self>) {
+        self.message = message.map(Into::into);
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn message(&self) -> Option<&str> {
+        self.message.as_ref().map(SharedString::as_ref)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn input(&self) -> &Entity<TextInput> {
+        &self.input
     }
 
     fn on_key_down(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
@@ -113,5 +153,13 @@ impl Render for InputView {
                     .child(self.title.clone()),
             )
             .child(div().px_3().pb_3().child(self.input.clone()))
+            .children(self.message.clone().map(|message| {
+                div()
+                    .px_3()
+                    .pb_2()
+                    .text_sm()
+                    .text_color(theme(cx).color(color::TEXT_MUTED))
+                    .child(message)
+            }))
     }
 }

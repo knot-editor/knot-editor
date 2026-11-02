@@ -80,6 +80,8 @@ function emptyState() {
     answers: new Map<keyof Answers, unknown[]>(),
     prompts: [] as Prompt[],
     pickerHighlights: [] as (string | null)[],
+    inputValues: [] as string[],
+    inputMessages: [] as (string | null)[],
     messages: [] as Knot.MessageOptions[],
     clipboard: null as string | null,
     selectedText: null as string | null,
@@ -423,6 +425,18 @@ export function answer<K extends keyof Answers>(kind: K, result: Answers[K]) {
  * before it settles with its scripted answer. */
 export function highlight(...ids: (string | null)[]) {
   state.pickerHighlights.push(...ids);
+}
+
+/** Values the next input reports to its `onChange` after its initial value,
+ * in order, before it settles with its scripted answer. */
+export function type(...values: string[]) {
+  state.inputValues.push(...values);
+}
+
+/** The message each `onChange` call returned, in order; null when it
+ * returned nothing. */
+export function inputMessages(): readonly (string | null)[] {
+  return state.inputMessages;
 }
 
 function prompt<K extends keyof Answers>(kind: K, options: unknown): Answers[K] {
@@ -1066,7 +1080,18 @@ export const api: KnotApi = {
       }
       return result;
     },
-    showInput: async (options) => prompt("showInput", options),
+    showInput: async (options) => {
+      const result = prompt("showInput", options);
+      const values = [options.value ?? "", ...state.inputValues];
+      state.inputValues = [];
+      if (options.onChange !== undefined) {
+        for (const value of values) {
+          const message = await options.onChange(value);
+          state.inputMessages.push(typeof message === "string" ? message : null);
+        }
+      }
+      return result;
+    },
     showConfirmation: async (options) => prompt("showConfirmation", options),
     showMessage: async (options) => {
       state.messages.push(options);

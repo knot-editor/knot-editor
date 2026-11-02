@@ -1144,6 +1144,15 @@ declare module "knot" {
     readonly title: string;
     /** Initial text; defaults to empty. */
     readonly value?: string;
+    /**
+     * Called with the field's text, first with the initial value and then
+     * whenever it changes. Calls are serial; while one runs, later changes
+     * collapse into the latest. A returned string shows as a muted message
+     * line under the field; null or nothing clears it. A throw, or a return
+     * value of another type, stops further calls and is rethrown once the
+     * input settles.
+     */
+    readonly onChange?: (value: string) => string | null | void | Promise<string | null | void>;
   }
   export interface ConfirmationOptions extends TransientTargetOptions {
     readonly title: string;

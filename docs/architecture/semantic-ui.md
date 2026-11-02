@@ -325,6 +325,11 @@ showPicker({ onHighlight })
 
 Native code keeps only the latest unread highlight, so a slow callback skips
 intermediate items, and a settled picker wins over an unread highlight.
+An input with `onChange` follows its typed value through the same session:
+`beginInput` and `nextInputEvent` pull `changed(session, value)` until the
+input is accepted or dismissed, and each pull carries the message the
+callback returned for the previous value, which the input shows as a muted
+line under its field.
 Unloading the lifecycle drops its sessions with its transients.
 
 Settlement happens once on acceptance, dismissal, native-prompt answer, window

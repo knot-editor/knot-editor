@@ -1211,18 +1211,28 @@ impl ProductShell {
     }
 
     /// Present a lifecycle-authorized single-line input, or reject when another
-    /// extension interaction already owns this window.
+    /// extension interaction already owns this window. With `changes`, the
+    /// value is published as it changes, starting with the initial one; the
+    /// returned view takes the owner's messages.
     pub(crate) fn begin_input(
         &mut self,
         owner: TransientOwner,
         title: String,
         initial: String,
+        changes: Option<tokio::sync::watch::Sender<Option<String>>>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
+    ) -> Result<
+        (
+            tokio::sync::oneshot::Receiver<TransientOutcome>,
+            WeakEntity<InputView>,
+        ),
+        TransientError,
+    > {
         self.transient_slot_free()?;
         let restore_focus = self.transient_restore_focus(window, cx);
-        let view = cx.new(|cx| InputView::new(title, initial, cx));
+        let view = cx.new(|cx| InputView::new(title, initial, changes, cx));
+        let weak = view.downgrade();
         let focus = view.read(cx).focus_handle(cx);
         let subscription = cx.subscribe(&view, |this: &mut Self, _view, event: &InputEvent, cx| {
             this.finish_transient(
@@ -1244,7 +1254,7 @@ impl ProductShell {
         });
         window.focus(&focus);
         cx.notify();
-        Ok(receiver)
+        Ok((receiver, weak))
     }
 
     /// Present the native confirmation prompt, settling the shared slot when it

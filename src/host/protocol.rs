@@ -385,6 +385,15 @@ pub enum PickerUpdate {
     Dismissed,
 }
 
+/// The next change of a followed text input, or its outcome.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum InputUpdate {
+    Changed { session: u64, value: String },
+    Accepted { value: String },
+    Dismissed,
+}
+
 /// Settled outcome of a text input interaction.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]

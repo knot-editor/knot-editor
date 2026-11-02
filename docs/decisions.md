@@ -946,7 +946,10 @@ Highlight previews are pulled rather than pushed. Package roots run one at a
 time, so a notification for each highlight would queue behind the command that
 awaits the picker until it settles. The caller's own turn instead asks for the
 next highlight or the outcome, and native code keeps only the latest unread
-highlight, which coalesces a slow callback without a queue. One extension interaction owns a
+highlight, which coalesces a slow callback without a queue. An input's
+`onChange` follows the same pulled session, and its returned message rides on
+the next pull rather than a separate call, so validation and live previews
+share one transport with pickers. One extension interaction owns a
 window at a time and a second request rejects `OperationInProgress`; the
 command palette stays an independent native surface rather than sharing that
 slot. Window closure, extension unload, and caller cancellation settle the
