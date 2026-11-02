@@ -117,6 +117,13 @@ Only thread-safe embedder state travels with the capsule. Ordinary callback
 exceptions fail that request/turn; forced interruption and heap failure are fatal
 to the lifecycle.
 
+Extensions are mostly idle, so V8 rarely collects on its own garbage left by a
+burst of work. The worker that finishes a turn therefore sends the isolate a
+low-memory notification, a full collection that returns free pages, when the
+turn settles the package or config entry's evaluation, and after any turn that
+ran 100 ms or longer. The notification runs off the foreground, after the turn
+and before the root's completion is delivered.
+
 Host requests retain persistent promise resolvers and yield the worker while
 awaiting native work. A validated response queues a continuation under the same
 root, settles its resolver in a later locked turn, then drains microtasks.

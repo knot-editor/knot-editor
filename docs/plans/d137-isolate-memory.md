@@ -1,7 +1,8 @@
 # D137 — Extension isolate memory
 
-Status: 🚧 checkpoint 1 implemented, awaiting its review gate. Selected in the
-[roadmap](../roadmap.md); independent of the daily-driver items.
+Status: 🚧 checkpoints 1 and 3 implemented; checkpoint 3 awaiting its review
+gate, checkpoint 2 deferred. Selected in the [roadmap](../roadmap.md);
+independent of the daily-driver items.
 
 ## Goal
 
@@ -35,10 +36,8 @@ short.
   confirming the `v8` crate can snapshot an evaluated module; if it cannot,
   turn the bootstrap into a classic script that the snapshot evaluates, or fall
   back to a code cache, which removes compile cost but not heap.
-- **Young generation sized for idle packages.** `CreateParams` sets only the
-  maximum heap today. Set a small initial and maximum young generation, chosen
-  from the measurements, since extensions are mostly idle and allocate in short
-  turns.
+- **Young generation sized for idle packages.** ❌ Rejected by checkpoint 3's
+  measurements: V8's defaults stay (see checkpoint 3).
 - **Release idle memory.** After a package's startup turn settles, and after
   any turn that ran long, signal low memory to that isolate so V8 compacts and
   returns pages. Only at turn boundaries, from the worker that holds the lock.
@@ -62,89 +61,66 @@ pins.
 
 ## Checkpoints
 
-### 1. Measurement — ✅ implemented, 🔍 awaiting review
+### 1. Measurement — ✅ complete
 
-✅ `Developer: Show Extension Memory` (`extensions.show-memory`) opens the
-process's resident size and each live lifecycle's heap as a clean untitled
-document. Statistics are read with a `try_lock` of the capsule's isolate data, so a
-package inside a turn reports "running a turn" instead of blocking the
-foreground ([memory diagnostics](../architecture/extension-host.md#memory-diagnostics)).
-✅ Tests: `heap_usage_reports_live_lifecycles_and_drops_disposed_ones` and
-`process_resident_size_is_reported` in `src/host/pool.rs`;
-`show_extension_memory_lists_each_live_package` in
-`src/app/product/tests/extension_restart.rs`.
+`Developer: Show Extension Memory` opens the process's resident size and each
+live lifecycle's heap as a clean untitled document
+([memory diagnostics](../architecture/extension-host.md#memory-diagnostics)).
+Review decision: the baseline showed about half of each idle heap reserved but
+unused and a snapshot worth only ~1 ms per package, so checkpoint 3 ran before
+checkpoint 2.
 
 **Measurement procedure.** Release build with the Metal Toolchain installed
-(`xcodebuild -downloadComponent MetalToolchain`):
+(`xcodebuild -downloadComponent MetalToolchain`). Run each measurement in its
+own process, since a shared test process mixes their resident sizes:
 
 ```sh
-cargo test --release --lib -- --ignored --nocapture measure_
+cargo test --release --lib -- --ignored --nocapture measure_isolate_cost
+cargo test --release --lib -- --ignored --nocapture measure_bundled
 ```
 
-- `measure_isolate_cost` (`src/host/pool.rs`) loads one warm-up isolate, then
-  50 more on a single worker, each evaluating an empty module. It reports
-  creation time (`load`: isolate, context, and bootstrap), resident size per
-  added isolate (the N to N+1 cost), and median heap per isolate. Repeat it
-  three times and record the range.
+- `measure_isolate_cost` (`src/host/pool.rs`) loads one warm-up package, then
+  50 packages on a single worker for each of two sources: an empty module, and
+  one that allocates about 8 MiB of temporary objects at startup. It reports
+  isolate creation, time through the settled startup, resident size per added
+  package (the N to N+1 cost), and median heap per package. Repeat it three
+  times and record the range.
 - `measure_bundled_package_memory` (`src/app/extensions/host.rs`) starts the
-  bundled packages under product discovery and prints the Show Extension
-  Memory report once startup settles.
+  bundled packages under product discovery, waits until every package is
+  between turns, and prints the Show Extension Memory report.
 
-**Baseline** (Apple M1 Pro, macOS, release, V8 152.2, 32 MiB heap limit,
-2026-11-02):
+**Measurements** (Apple M1 Pro, macOS, release, V8 152.2, 32 MiB heap limit,
+2026-11-02). "Before" is the runtime at checkpoint 1; "after" adds checkpoint
+3's idle release.
 
-| Measure | Value |
-| --- | --- |
-| First isolate creation (V8 process setup) | 2.0 ms warm, 7.1 ms cold |
-| Isolate creation, median / p90 over 50 | 1.04–1.12 ms / 1.15–1.30 ms |
-| Resident size per added empty package | 1.25–1.55 MiB |
-| Heap per empty package: used / total / external | 0.36 / 0.75 / 0.00 MiB |
-| Test process resident size, 8 bundled packages | 114.1 MiB |
-
-| Bundled package after startup | Used | Total |
+| Measure | Before | After |
 | --- | --- | --- |
-| `@knot/language-markdown` | 0.4 MiB | 1.2 MiB |
-| `@knot/language-others` | 0.6 MiB | 1.8 MiB |
-| `@knot/language-python` | 0.4 MiB | 1.2 MiB |
-| `@knot/language-rust` | 0.4 MiB | 1.2 MiB |
-| `@knot/language-toml` | 0.4 MiB | 1.2 MiB |
-| `@knot/language-typescript` | 0.5 MiB | 1.2 MiB |
-| `@knot/projects` | 0.6 MiB | 2.0 MiB |
-| `@knot/themes` | 1.3 MiB | 2.8 MiB |
+| Isolate creation, median | 1.02–1.05 ms | 1.09–1.15 ms |
+| Empty package through startup, median | 1.03–1.07 ms | 1.52–1.59 ms |
+| Empty package: resident size per package | 1.25–1.55 MiB | 1.21 MiB |
+| Empty package: heap used / total | 0.36 / 0.75 MiB | 0.31 / 0.75 MiB |
+| 8 MiB startup burst through startup, median | 7.4–7.6 ms | 8.1–8.2 ms |
+| 8 MiB startup burst: resident size per package | 13.7–14.0 MiB | 1.60 MiB |
+| 8 MiB startup burst: heap used / total | 9.3 / 13.1–13.3 MiB | 0.43 / 1.39 MiB |
+| Bundled packages: test process resident size | 61.6–62.3 MiB | 60.8–61.3 MiB |
+| Bundled packages: heap used / total, sum of 8 | 4.6 / 12.6 MiB | 3.0 / 7.6 MiB |
 
-External memory is 0.0 MiB for every package.
+| Bundled package, used / total | Before | After |
+| --- | --- | --- |
+| `@knot/language-markdown` | 0.4 / 1.2 MiB | 0.3 / 0.8 MiB |
+| `@knot/language-others` | 0.6 / 1.8 MiB | 0.5 / 1.2 MiB |
+| `@knot/language-python` | 0.4 / 1.2 MiB | 0.4 / 0.8 MiB |
+| `@knot/language-rust` | 0.4 / 1.2 MiB | 0.4 / 0.8 MiB |
+| `@knot/language-toml` | 0.4 / 1.2 MiB | 0.3 / 0.8 MiB |
+| `@knot/language-typescript` | 0.5 / 1.2 MiB | 0.4 / 0.8 MiB |
+| `@knot/projects` | 0.6 / 2.0 MiB | 0.5 / 1.2 MiB |
+| `@knot/themes` | 1.3 / 2.8 MiB | 0.4 / 1.2 MiB |
 
-**Reading.** One more idle package costs about 1.3 MiB resident and 1.1 ms of
-startup; the eight bundled packages together hold about 12 MiB of V8 heap,
-roughly a tenth of the test process. About half of each idle package's heap total
-is reserved but unused (0.75 MiB total for 0.36 MiB used), which is what
-checkpoint 3's young-generation sizing and idle release target. The snapshot
-in checkpoint 2 can only remove the bootstrap's share of the 0.36 MiB used
-and the ~1 ms per package, about 8 ms across today's bundled set.
+External memory is 0.0 MiB everywhere. The checkpoint 1 baseline's 114.1 MiB
+process size ran both measurements in one process; the "before" column above
+repeats it in isolation.
 
-Deliverables: the developer command and a recorded baseline in this plan:
-resident size with N and N+1 packages, per-package heap after startup, and
-isolate creation time, on an Apple M-series release build.
-
-Validation: a host test that heap statistics are reported for every live
-capsule and exclude disposed ones; the measurement procedure written here so
-later checkpoints repeat it exactly.
-
-Review gate: the baseline decides whether checkpoints 2 and 3 are both worth
-doing and in which order.
-
-**Implementation context**
-
-- Isolate creation: `RuntimeCapsule::new_with_graph` in
-  `src/host/engine/capsule.rs`; a heap-statistics read needs a turn-boundary
-  lock like other capsule operations.
-- Pool control surface: `src/host/pool.rs` and `src/host/engine/pool.rs`
-  expose operations without V8 types, so statistics cross as plain numbers.
-- Command: beside `extensions.show-startup-report` in
-  `src/app/product/commands.rs`, presenting through the native picker or a
-  message like the startup report.
-
-### 2. Startup snapshot
+### 2. Startup snapshot — ⏸ deferred, decided at checkpoint 3's review
 
 Deliverables: every isolate starts from one snapshot of the initialized
 extension context; the bootstrap is no longer compiled per package.
@@ -167,21 +143,29 @@ Review gate: memory and creation-time gain against build and code complexity.
 - One-time V8 setup: `initialize()` in `src/host/engine/mod.rs`.
 - Documentation: [extension host](../architecture/extension-host.md#runtime-and-scheduler-flow).
 
-### 3. Heap sizing and idle release
+### 3. Heap sizing and idle release — ✅ implemented, 🔍 awaiting review
 
-Deliverables: tuned young-generation limits and low-memory release after
-startup and long turns.
+✅ After a turn settles a package or config entry's evaluation, and after any
+turn of 100 ms or more, the worker sends the isolate a low-memory notification
+([runtime flow](../architecture/extension-host.md#runtime-and-scheduler-flow)).
+It costs about 0.5 ms per package at startup, on the worker. A package that
+allocates 8 MiB at startup now keeps 1.6 MiB resident instead of 14 MiB, the
+bundled packages hold 7.6 MiB of heap instead of 12.6 MiB, and an empty package
+is unchanged (see the measurements in checkpoint 1).
 
-Validation: host tests that an isolate still reaches its heap-limit failure
-correctly, and that a package allocating in a long turn runs normally; the
-measurement repeated and recorded.
+❌ Young-generation sizing is rejected. Maximum sizes of 3 MiB, 1.5 MiB, and
+768 KiB, with and without a smaller initial size, left an empty package at
+0.75 MiB total, since V8 clamps the young generation to its minimum. Below
+3 MiB they slowed a bursty startup by about 2 ms through extra scavenges and
+promotion. With idle release, a 3 MiB maximum measured the same as V8's 6 MiB
+default.
 
-Review gate: the final numbers. Record the result and rationale in
-[decisions](../decisions.md#extension-runtime) and remove this plan.
+✅ Tests in `src/host/engine/tests.rs`:
+`startup_garbage_is_released_once_the_package_settles` and
+`a_long_allocating_turn_runs_normally_and_its_garbage_is_released`, which fail
+without the release. The existing `heap_exhaustion_probe_child` still reaches
+`HeapLimitExceeded`; a fatal turn skips the release.
 
-**Implementation context**
-
-- `CreateParams` in `RuntimeCapsule::new_with_graph` and `IsolateConfig` in
-  `src/host/engine/mod.rs`.
-- Turn completion in `src/host/engine/execution.rs` and the worker loop in
-  `src/host/engine/pool.rs`, where the lock is held.
+Review gate: the final numbers. On approval, record the result and rationale in
+[decisions](../decisions.md#extension-runtime), decide checkpoint 2 and the
+deferred developer-command question, and remove this plan.
