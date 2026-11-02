@@ -226,9 +226,27 @@ fn show_extension_memory_lists_each_live_package(cx: &mut TestAppContext) {
 
     let execution = fixture.command(super::super::commands::SHOW_EXTENSION_MEMORY_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-    let (title, detail) = cx.pending_prompt().unwrap();
-    cx.simulate_prompt_answer("OK");
-    assert_eq!(title, "Extension Memory");
+    assert!(!cx.has_pending_prompt());
+    // The report opens as a clean untitled document, so closing it never asks.
+    let detail = cx.read(|cx| {
+        let documents = fixture.documents.read(cx);
+        let report = fixture
+            .shell
+            .read(cx)
+            .workbench
+            .read(cx)
+            .tab_snapshots()
+            .into_iter()
+            .find_map(|tab| match tab.surface {
+                TabSurfaceId::Document(document) => documents
+                    .get(document)
+                    .filter(|document| document.title() == "Extension Memory"),
+                _ => None,
+            })
+            .expect("the report opens in a tab");
+        assert!(!report.is_dirty(cx));
+        report.model().read(cx).text()
+    });
     let lines = detail.lines().collect::<Vec<_>>();
     assert!(lines[0].starts_with("Process resident size: "), "{detail}");
     let dependent = lines

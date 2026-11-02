@@ -64,9 +64,9 @@ pins.
 
 ### 1. Measurement — ✅ implemented, 🔍 awaiting review
 
-✅ `Developer: Show Extension Memory` (`extensions.show-memory`) shows the
-process's resident size and each live lifecycle's heap in a native message.
-Statistics are read with a `try_lock` of the capsule's isolate data, so a
+✅ `Developer: Show Extension Memory` (`extensions.show-memory`) opens the
+process's resident size and each live lifecycle's heap as a clean untitled
+document. Statistics are read with a `try_lock` of the capsule's isolate data, so a
 package inside a turn reports "running a turn" instead of blocking the
 foreground ([memory diagnostics](../architecture/extension-host.md#memory-diagnostics)).
 ✅ Tests: `heap_usage_reports_live_lifecycles_and_drops_disposed_ones` and

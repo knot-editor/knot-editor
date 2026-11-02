@@ -1431,12 +1431,25 @@ impl ProductShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<(DocumentId, OpenTarget)> {
+        self.new_untitled_in_pane(pane, "Untitled", "", window, cx)
+    }
+
+    /// Open an untitled document holding `text` in `pane` and focus it. The
+    /// text is its clean state, so closing it unedited never prompts.
+    fn new_untitled_in_pane(
+        &mut self,
+        pane: PaneId,
+        title: &str,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<(DocumentId, OpenTarget)> {
         self.next_open_generation();
         self.workbench.read(cx).pane(pane)?;
         let documents = Self::documents(cx);
-        let model = cx.new(|_| BufferModel::from_text(""));
+        let model = cx.new(|_| BufferModel::from_text(text));
         let document = documents.update(cx, |documents, cx| {
-            documents.create_untitled("Untitled", model, cx)
+            documents.create_untitled(title.to_owned(), model, cx)
         });
         let model = documents.read(cx).get(document).unwrap().model().clone();
         let (pane, tab) = self.workbench.update(cx, |workbench, cx| {

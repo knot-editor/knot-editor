@@ -498,16 +498,18 @@ pub(crate) async fn show_extension_report(
         .await
 }
 
-#[command("extensions.show-memory", title = "Developer: Show Extension Memory", description = "Show the process's resident size and each package's JavaScript heap.", id = SHOW_EXTENSION_MEMORY_COMMAND, participant = Application)]
+#[command("extensions.show-memory", title = "Developer: Show Extension Memory", description = "Show the process's resident size and each package's JavaScript heap.", id = SHOW_EXTENSION_MEMORY_COMMAND, participant = Workbench)]
 pub(crate) async fn show_extension_memory(
     context: CommandContext,
     (): (),
 ) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, _, _, cx| {
+        .shell(|shell, target, window, cx| {
             let report = super::super::extensions::host::memory_report(cx);
-            shell.show_notice(PromptLevel::Info, "Extension Memory", Some(report), cx);
-            Ok(())
+            shell
+                .new_untitled_in_pane(target.pane, "Extension Memory", &report, window, cx)
+                .map(|_| ())
+                .ok_or(CommandOutcome::InvalidTarget)
         })
         .await
 }

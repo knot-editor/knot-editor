@@ -93,11 +93,13 @@ path. Per-turn timeouts remain [D019](../roadmap.md).
 
 ### Memory diagnostics
 
-Developer: Show Extension Memory reports the process's resident size and each
-live lifecycle's V8 heap (used, total, external) in a message. Heap statistics
-are read between turns: a turn holds its capsule's isolate data for its whole
-duration, so a package inside a turn is listed as running rather than waited
-for, and a stuck package never blocks the report.
+Developer: Show Extension Memory opens the process's resident size and each
+live lifecycle's V8 heap (used, total, external) as a new untitled document.
+The report is its clean state, so closing it unedited never prompts and hot
+exit does not keep it. Heap statistics are read between turns: a turn holds its
+capsule's isolate data for its whole duration, so a package inside a turn is
+listed as running rather than waited for, and a stuck package never blocks the
+report.
 
 ## Runtime and scheduler flow
 
