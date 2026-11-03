@@ -59,13 +59,12 @@ Each primitive lands with a use in `examples/extensions/@example/modal`
 
 `setCursorStyle` is lifecycle-owned view state on `EditorView`: the latest set
 wins, clearing reveals the previous, and teardown or the view closing clears it.
-Block is drawn translucent over the character, underline beneath it, and both
-are half a line high or wide at a line's end. Behavior is in
+Block is drawn translucent over the character and underline beneath it; both
+are half a line height wide at a line's end. Behavior is in
 [commands](../architecture/commands.md#key-contexts) and the
 [extension guide](../extension-api.md). Painting has no automated test; it was
 checked by eye in a real window. Shape resolution, the host operation, and the
 fake host are covered by tests.
-
 
 ### 2. Visible lines, scrolling, and reveal ⏳
 
