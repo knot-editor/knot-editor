@@ -113,6 +113,7 @@ D077 moved here from the daily-driver plan.
     D142.
 
 - **D077 — Status bar** (depends on D109)
+  - 🚧 [Plan](d077-status-bar.md). Line ending moved to D149.
   - A native per-window bar below the workbench, and a
     `workbench.registerStatusItem` API: lifecycle-owned items with text, an
     optional tooltip, a command with JSON arguments, and a theme color key,
@@ -121,16 +122,16 @@ D077 moved here from the daily-driver plan.
   - The built-in items live in a bundled `@knot/status-bar` package and
     follow VS Code: position and selection size (click: Go to Line),
     indentation (click: indent using spaces or tabs, change tab size,
-    convert indentation), line ending (click: LF or CRLF), and language
-    (click: Set Language Mode). Columns count characters with a tab as one,
-    as Go to Line reads them. No dirty or encoding item.
+    convert indentation) and language (click: Set Language Mode). Columns
+    count characters with a tab as one, as Go to Line reads them. No dirty,
+    encoding, or line-ending item.
   - Which editor the bar describes follows VS Code: the focused editor,
     else the last focused one while it stays visible; a focused terminal
     tab clears the editor items.
-  - New document facts: line ending and indentation style in
+  - New document facts: indentation style and size in
     `DocumentInfo`, changes published as `documentChanged`, setting a
-    document's indentation style, and native commands that convert line
-    endings and indentation in one undo step.
+    document's indentation style, and a native command that converts
+    indentation in one undo step.
   - `statusBar.visible` with Toggle Status Bar, and a
     `statusBar.hiddenItems` setting that hides items by ID, so personal
     config can hide and replace the bundled items.

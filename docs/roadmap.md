@@ -88,6 +88,7 @@ complete list for that item.
   D114, and D141–D143):
   - D110 → D113, D147, D148; D109 → D113, D027, D142
   - D134 → D135, D136
+  - D077 → D149
   - D073, D074, D075 → D130; D074 → D131; D073 → D132
   - D066 → D144
   - D092 → D142, D001, D067
@@ -122,6 +123,18 @@ complete list for that item.
   - Reconsider: Daily use identifies required replacement, regular-expression,
     case, or whole-word behavior.
   - Order: after D031; replace-all is a bulk edit, so with or after D092.
+
+- **D149 — Line ending facts and conversion**
+  - Deferred: Newlines take the buffer's first line terminator (see
+    [core and buffers](architecture/core-and-buffers.md)), derived from the
+    text, and nothing reports or changes it. The status bar (D077) ships
+    without a line-ending item.
+  - Reconsider: A CRLF/LF workflow needs to see or convert a file's endings, or
+    mixed endings cause trouble. Then decide whether the ending stays derived
+    or becomes stored document state that can report mixed, add it to
+    `DocumentInfo` as `documentChanged`, convert every terminator in one undo
+    step, and add a status bar item (click: LF or CRLF).
+  - Order: after D077.
 
 - **D006 — File drag and drop**
   - Deferred: Open and Save As establish workspace-independent documents first.
