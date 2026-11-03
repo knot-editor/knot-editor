@@ -75,7 +75,6 @@ What is missing for editing-level extensibility:
   nothing to build marks on.
 - No key context other than the focused view kind, and no counts or pending
   operator state in the keymap.
-- No undo grouping: each `applyEdits` batch is its own step.
 - No layout facts: visual lines, wrapped lines, and shaped-x vertical movement
   are native and invisible to scripts.
 - No syntax-tree queries (D066).
@@ -95,7 +94,7 @@ What is missing for editing-level extensibility:
 | `j`/`k`, `gj`, `H`/`M`/`L`, `zz`/`zt` | Visual-line movement, visible range, reveal | Line lookups and a nearest or centered reveal; the rest native only | D109, D112 |
 | `iw`, `ip`, `i(` | Text scanning | Possible in JS | — |
 | `if`, `ia`, `ic` (function, argument, class) | Syntax-tree node queries | Not exposed | D066 |
-| `ciw…<Esc>` as one undo step | Undo groups spanning batches and typing | One step per batch | D111 |
+| `ciw…<Esc>` as one undo step | Undo groups spanning batches and typing | `editor.beginUndoGroup()` | D111 |
 | `.` repeat, `q` macros | Record commands with arguments plus typed text; replay through dispatch | Not possible | D113 |
 | Registers | Extension state plus clipboard read and write | Write only | D109 |
 | Marks, jumplist | Anchored positions without decoration | Only decorated contributions | D109 |

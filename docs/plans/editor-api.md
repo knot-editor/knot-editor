@@ -1,6 +1,6 @@
 # Editor API and Vim mode
 
-Status: 🚧 phase 1 (D110) complete. Promotes D058, D066 (folding), D077, D109,
+Status: 🚧 phase 1 (D110) and D111 complete. Promotes D058, D066 (folding), D077, D109,
 D110, D111, D112, and D114 (decoration styles) from the
 [roadmap](../roadmap.md) and adds D141–D143. Vim features left for later are
 D113, D142, D144, and D146.
@@ -125,11 +125,14 @@ D077 moved here from the daily-driver plan.
 
 ## Phase 3 — Editing primitives
 
-- **D111 — Undo groups across edit batches**
-  - 🚧 [Plan](d111-undo-groups.md)
-  - An extension opens and closes a group on a view or buffer that spans
-    its edit batches and the native typing between them, sharing the native
-    grouping editing commands use. Vim's `ciw…<Esc>` is one step.
+- **D111 — Undo groups across edit batches** ✅
+  - Complete: `editor.beginUndoGroup()` holds a lifecycle-owned group open on
+    the buffer, so batches, native typing, and caret moves in between are one
+    undo step. Behavior in
+    [core and buffers](../architecture/core-and-buffers.md) and
+    [commands](../architecture/commands.md#extension-execution), rationale in
+    [decisions](../decisions.md#editor-handles), and a change command in
+    `examples/extensions/@example/modal`, to be removed when D058 lands.
 
 - **D141 — Editor view controls**
   - Extend the D109 handle with what modal editing needs: cursor style,
