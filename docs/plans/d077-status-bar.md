@@ -1,6 +1,6 @@
 # D077 — Status bar
 
-Status: 🚧 approved; checkpoint 1 done. Item of the [editor API](editor-api.md)
+Status: 🚧 approved; checkpoints 1 and 2 done. Item of the [editor API](editor-api.md)
 plan; depends on D109 (done). Follows its brief; this file holds the design.
 
 ## Goal
@@ -100,24 +100,13 @@ only the document fact.
 
 ### 2. Active editor per window ✅
 
-Implemented, awaiting the review gate (the rule against VS Code on real
-windows). The shell remembers the last focused document tab; `application_window`
-derives `statusTarget` from it and the focused surface, and the observation
-comparison publishes `presentationsChanged` when it moves. Closed tabs resolve
-to none because the remembered tab ID no longer exists; the product test covers
-editor, tool, terminal, and hidden-tab focus, but not closure.
-
-- Deliverables: `WindowInfo.statusTarget` computed natively by the focused or
-  last-focused-visible rule, cleared by a focused terminal, published as a
-  change when it moves.
-- Validation: gpui product tests for focus between editors, a terminal, a
-  tool, and a closed or hidden last-focused tab.
-- **Implementation context:** focus observation in `src/app/product.rs`
-  (`observe_application_focus`) and the window snapshot code feeding
-  `src/app/application_observation.rs`; `WindowInfo` in
-  `src/host/protocol.rs` and its marshaling. Existing observation tests in
-  `src/app/product/tests/observation.rs` show the pattern.
-- Review gate: confirm the rule against VS Code on real windows.
+Approved after checking the rule on real windows: switching between editors,
+a tool, a terminal, a hidden editor tab, and closing the last editor. Behavior:
+`WindowInfo.statusTarget` is the focused document tab, else the last focused
+document tab while it is the selected tab of its pane, and none while a terminal
+is focused ([extension host](../architecture/extension-host.md)). Closing the
+last-focused tab resolves to none; the product test does not cover closure, which
+was checked by hand.
 
 ### 3. Native bar and item API
 
