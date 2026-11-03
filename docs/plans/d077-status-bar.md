@@ -108,7 +108,15 @@ is focused ([extension host](../architecture/extension-host.md)). Closing the
 last-focused tab resolves to none; the product test does not cover closure, which
 was checked by hand.
 
-### 3. Native bar and item API
+### 3. Native bar and item API ✅
+
+Implemented, awaiting the review gate. Behavior is in the [extension guide](../extension-api.md#show-status-items), [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#status-bar), and [decisions](../decisions.md#status-bar). Scope decisions made while building it:
+
+- `statusBar.hiddenItems` needed a list, so settings gained a `strings` type.
+- `update` replaces the whole value, and the same applies to a window's value, so partial merges and field clearing never arise.
+- Higher `priority` sits further left, as in VS Code, and ties keep registration order.
+- `console.log` now writes to standard error and names its extension, which the real-window checks of checkpoint 2 needed.
+- Validation limits: the product test covers one window, so the click's window comes from the shell that was clicked rather than from a second window. Debug bounds outlive their elements in gpui, so hiding is asserted by layout shifts. Tooltip painting and whether a click leaves the editor focused were not exercised.
 
 - Deliverables: the bar rendered below the workbench; `registerStatusItem`
   with application-wide values, per-window overrides, priority ordering, and

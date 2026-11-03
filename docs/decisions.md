@@ -1082,6 +1082,25 @@ Developer tooling shares a `Developer:` title prefix and stays out of the menus.
 
 Reference: [workbench and lifecycle](architecture/workbench-and-lifecycle.md#product-application-launch).
 
+## Status bar
+
+The bar is native and its items are extension registrations, so the shell owns
+layout and painting while a package, including the bundled `@knot/status-bar`,
+decides what the bar says; personal config replaces a bundled item by
+registering its ID again, under the latest-registration rule of languages and
+themes. `update` replaces the whole value, which keeps a window's value
+independent of the shared one: a partial merge would need a way to clear a
+field and a rule for what a window inherits. A per-window value exists because
+the position and indentation of an item describe one window's editor, so a
+single shared value could not serve two windows. Items sort by a priority where
+higher sits further left, as VS Code orders them, and ties keep registration
+order. Hiding an item is a setting, `statusBar.hiddenItems`, not
+unregistration, so a user hides a bundled item without stopping its package.
+That needed a list of strings, so settings gained a `strings` type rather than
+a delimited string. A click dispatches through the same captured
+command target as keys and tree actions, so no second way to run a command from
+the pointer exists.
+
 ## Generated text surfaces
 
 Use ordinary buffers and views when generated output benefits from text

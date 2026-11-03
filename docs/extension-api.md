@@ -630,6 +630,38 @@ may be open at the same time. Window closure, extension unload, and caller
 cancellation settle a pending interaction as cancellation; focus returns to the
 surface that was focused before it opened.
 
+## Show status items
+
+Every product window shows a status bar below the workbench. A package fills
+it with `workbench.registerStatusItem`, which returns a handle; disposing it,
+or unloading the package, removes the item.
+
+```js
+const position = await workbench.registerStatusItem("position", {
+  text: "Ln 1, Col 1",
+  tooltip: "Go to line",
+  side: "right",
+  priority: 10,
+  command: { name: "editor.go-to-line" },
+});
+await position.update({ text: "Ln 4, Col 2", side: "right", priority: 10 });
+```
+
+An item has text and optionally a tooltip, a command with JSON arguments that a
+click runs in the window it was clicked in, and a theme color key for its
+text. It sits on the `left` or `right` side; within a side, a higher `priority`
+sits further left and equal priorities keep registration order. `update`
+replaces the whole value, so pass every field each time. With
+`{ window }` it sets that window's own value, which shadows the shared one
+until `update(null, { window })` clears it. The latest registration of an ID
+defines the item, and disposing it reveals the previous one, so personal
+config can replace a bundled item by registering the same ID in `post-init`.
+
+The `statusBar.visible` setting and the Toggle Status Bar command show or hide
+the bar, and `statusBar.hiddenItems` lists IDs the bar skips. A hidden item
+keeps its registration and its package keeps running. To follow the editor the
+bar describes, observe `statusTarget` on each window.
+
 ## Compose commands
 
 `await commands.invoke(name, arguments)` routes a child through the originating

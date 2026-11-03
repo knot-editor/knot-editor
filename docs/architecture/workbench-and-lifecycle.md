@@ -147,6 +147,18 @@ so a changed or shorter file never yields an invalid position, and keeps the
 restored scroll instead of revealing the caret. Folding and zoom do not exist
 yet and are not recorded.
 
+## Status bar
+
+Each product window renders a fixed-height bar below the workbench from the
+application-owned status registry in `src/app/status_bar.rs`; extensions fill it
+through `workbench.registerStatusItem` and own nothing else about it. The shell
+repaints it when the registry or any setting changes. A click captures the
+window's command target and dispatches the item's command as a key or a tree
+action does, so it runs in the clicked window. `statusBar.visible`, its Toggle Status
+Bar command, and `statusBar.hiddenItems` are settings, and lifecycle teardown
+removes a package's items. The editor a bar describes is `WindowInfo.statusTarget`
+([extension host](extension-host.md#application-metadata-queries)).
+
 ## Workbench and protected closure
 
 `Workbench` owns a window-local binary split tree, stable pane/tab identities,
