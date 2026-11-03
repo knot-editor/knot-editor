@@ -55,7 +55,8 @@ and language tooling (D067) also need. Nothing in it is a private bypass.
 `@knot/go-to-line` registers `editor.go-to-line`, titled Go to Line….
 
 - Opening reads the selection and view state, then shows the input with a
-  message such as "Current line 12, column 4. Type a line between 1 and 340."
+  message such as "Current Line: 12 of 340 (column 4)". ✅ The wording follows
+  Zed's after manual review.
 - Accepted forms: `N`, `N:C`, and `N,C` (compiler locations), surrounding
   whitespace ignored. ✅ A trailing separator without a column (`42:`) reads
   as `N`, so the preview holds while a column is typed. Columns count Unicode scalar values, 1-based, with a tab
@@ -63,7 +64,7 @@ and language tooling (D067) also need. Nothing in it is a private bypass.
   end clamps to the end. Anything else restores the original view state, shows
   the usage message, and Enter does nothing beyond dismissing.
 - Each valid value moves the caret (no selection) with `reveal: "center"` and
-  the message names the target ("Go to line 120, column 8").
+  the message names the target ("Go to line 120, character 8").
 - Enter keeps the position. Esc or dismissal restores the captured
   `EditorViewState`, so selection and scroll return exactly. A command run
   without an editor reports `unavailable`.

@@ -28,10 +28,10 @@ test("typing previews each location, centered, and Enter keeps the last", async 
 
   assert.equal(prompt().title, "Go to Line");
   assert.deepEqual(host.inputMessages(), [
-    "Current line 1, column 5. Type a line between 1 and 4.",
+    "Current Line: 1 of 4 (column 5)",
     "Go to line 2",
-    "Go to line 2, column 9",
-    "Go to line 2, column 10",
+    "Go to line 2, character 9",
+    "Go to line 2, character 10",
   ]);
   const caret = LINE_2 + offset("\tsecond é");
   assert.deepEqual(host.editorView(), { ...ORIGINAL, anchor: caret, caret });
@@ -43,7 +43,7 @@ test("lines and columns past the end clamp", async () => {
   host.answer("showInput", { kind: "accepted", value: "99:2" });
   await host.run(COMMAND);
 
-  assert.deepEqual(host.inputMessages().slice(1), ["Go to line 3, column 6", "Go to line 4, column 1"]);
+  assert.deepEqual(host.inputMessages().slice(1), ["Go to line 3, character 6", "Go to line 4, character 1"]);
   const end = offset(TEXT);
   assert.deepEqual(host.editorView(), { ...ORIGINAL, anchor: end, caret: end });
 });
@@ -64,7 +64,7 @@ test("invalid input restores the view, shows the usage, and Enter only dismisses
 
   assert.deepEqual(host.inputMessages().slice(1), [
     "Go to line 3",
-    "Current line 1, column 5. Type a line between 1 and 4.",
+    "Current Line: 1 of 4 (column 5)",
   ]);
   assert.deepEqual(host.editorView(), ORIGINAL);
 });
@@ -82,7 +82,7 @@ test("the current position counts columns in scalar values", async () => {
   host.answer("showInput", { kind: "dismissed" });
   await host.run(COMMAND);
 
-  assert.equal(host.inputMessages()[0], "Current line 2, column 11. Type a line between 1 and 4.");
+  assert.equal(host.inputMessages()[0], "Current Line: 2 of 4 (column 11)");
 });
 
 test("a command without an editor is unavailable", async () => {

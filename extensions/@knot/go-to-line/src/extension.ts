@@ -31,16 +31,14 @@ async function caretPosition(buffer: Buffer, caret: number) {
 function describe(target: Target, location: Location) {
   return location.column === null
     ? `Go to line ${target.line}`
-    : `Go to line ${target.line}, column ${target.column}`;
+    : `Go to line ${target.line}, character ${target.column}`;
 }
 
 async function goToLine(editor: Editor, buffer: Buffer) {
   const original = await editor.viewState();
   const lineCount = await buffer.lineCount();
   const current = await caretPosition(buffer, original.caret);
-  const usage =
-    `Current line ${current.line}, column ${current.column}. ` +
-    `Type a line between 1 and ${lineCount}.`;
+  const usage = `Current Line: ${current.line} of ${lineCount} (column ${current.column})`;
 
   // Moves the caret to a typed location, or restores the view for anything
   // else, and returns the message to show.
