@@ -29,7 +29,12 @@ impl RuntimeCapsule {
     ) -> Result<Self, RuntimeError> {
         initialize();
         let status = Arc::new(AtomicU8::new(ACTIVE));
-        let local_state = Arc::new(RuntimeLocalState::new(key, graph, Arc::clone(&status)));
+        let local_state = Arc::new(RuntimeLocalState::new(
+            key,
+            config.name.clone(),
+            graph,
+            Arc::clone(&status),
+        ));
         let mut isolate =
             v8::Isolate::new(v8::CreateParams::default().heap_limits(0, config.heap_limit_bytes));
         isolate.set_microtasks_policy(v8::MicrotasksPolicy::Explicit);

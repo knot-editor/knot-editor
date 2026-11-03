@@ -158,8 +158,12 @@ pub(super) fn log_callback<'s, 'i>(
     _result: v8::ReturnValue,
 ) {
     if arguments.get(0).is_string() && arguments.get(1).is_string() {
+        let name = scope
+            .get_slot::<Arc<RuntimeLocalState>>()
+            .and_then(|state| state.name.clone());
         eprintln!(
-            "[knot] console.{}: {}",
+            "[knot] {} console.{}: {}",
+            name.as_deref().unwrap_or("extension"),
             arguments.get(0).to_rust_string_lossy(scope),
             arguments.get(1).to_rust_string_lossy(scope)
         );

@@ -21,10 +21,15 @@ pub(crate) use super::engine::{
 };
 
 /// Configuration for one persistent extension isolate.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ExtensionConfig(engine::IsolateConfig);
 
 impl ExtensionConfig {
+    /// Names the extension in its console output.
+    pub(crate) fn named(name: &str) -> Self {
+        Self(engine::IsolateConfig::named(name))
+    }
+
     #[cfg(test)]
     pub(crate) const fn with_heap_limit(heap_limit_bytes: usize) -> Self {
         Self(engine::IsolateConfig::with_heap_limit(heap_limit_bytes))

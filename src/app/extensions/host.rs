@@ -1132,7 +1132,7 @@ impl ProductExtensionHost {
         graph: ModuleGraph,
     ) -> Result<(), String> {
         self.pool
-            .load_personal_config(key, ExtensionConfig::default(), graph)
+            .load_personal_config(key, ExtensionConfig::named("personal-config"), graph)
             .map_err(|error| error.to_string())?;
         self.storage_owners.insert(
             key,
@@ -1168,9 +1168,14 @@ impl ProductExtensionHost {
         graph: ModuleGraph,
         owner: Option<crate::app::extensions::storage::StorageOwner>,
     ) -> Result<ExtensionExecution, String> {
+        let config = owner
+            .as_ref()
+            .map_or_else(ExtensionConfig::default, |owner| {
+                ExtensionConfig::named(&owner.identity())
+            });
         let execution = self
             .pool
-            .load_package(key, ExtensionConfig::default(), graph)
+            .load_package(key, config, graph)
             .map_err(|error| error.to_string())?;
         self.admit_lifecycle(key);
         if let Some(owner) = owner {

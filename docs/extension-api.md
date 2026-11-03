@@ -49,7 +49,8 @@ name, such as `./model.js`. `npm --prefix scripts/extensions run build <dir>`
 emits one package's `dist/`; Cargo builds bundled packages itself.
 
 `console.debug`, `log`, `info`, `warn`, and `error` write to the standard error
-of the process running Knot, as `[knot] console.<level>: ...`; start Knot from a
+of the process running Knot, as `[knot] <package> console.<level>: ...` (`personal-config` for your
+config); start Knot from a
 terminal to read them. Use them to inspect events while writing a package.
 
 Keep policy in plain functions over plain data and keep mutable state out of

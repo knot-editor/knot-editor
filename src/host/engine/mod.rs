@@ -77,14 +77,26 @@ pub(crate) fn initialize() {
 }
 
 /// Engine configuration for one extension lifetime.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct IsolateConfig {
     heap_limit_bytes: usize,
+    /// Names the extension in its console output.
+    name: Option<Arc<str>>,
 }
 
 impl IsolateConfig {
     pub(crate) const fn with_heap_limit(heap_limit_bytes: usize) -> Self {
-        Self { heap_limit_bytes }
+        Self {
+            heap_limit_bytes,
+            name: None,
+        }
+    }
+
+    pub(crate) fn named(name: &str) -> Self {
+        Self {
+            name: Some(Arc::from(name)),
+            ..Self::default()
+        }
     }
 }
 
@@ -258,6 +270,7 @@ enum RuntimeCallback {
 
 struct RuntimeLocalState {
     key: ExtensionKey,
+    name: Option<Arc<str>>,
     status: Arc<AtomicU8>,
     next_request: AtomicU64,
     event_sender: Mutex<Option<tokio::sync::mpsc::UnboundedSender<EngineEvent>>>,
@@ -283,9 +296,15 @@ struct RuntimeLocalState {
 }
 
 impl RuntimeLocalState {
-    fn new(key: ExtensionKey, graph: Option<&ModuleGraph>, status: Arc<AtomicU8>) -> Self {
+    fn new(
+        key: ExtensionKey,
+        name: Option<Arc<str>>,
+        graph: Option<&ModuleGraph>,
+        status: Arc<AtomicU8>,
+    ) -> Self {
         Self {
             key,
+            name,
             status,
             next_request: AtomicU64::new(1),
             event_sender: Mutex::new(None),
