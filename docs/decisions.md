@@ -193,7 +193,8 @@ References: [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-la
 Bracket matching, auto-closing, and wrapping are native, over the bracket
 pairs language registrations carry. Typing must insert the closer in the same
 commit and undo step as the opener, and an extension command is an
-asynchronous turn that typing could race (D110); painting and raw input never
+asynchronous turn, which ordered key delivery keeps in sequence but cannot join
+to the typed edit's commit; painting and raw input never
 call JavaScript; and extensions have no caret, typed-text observation, undo
 grouping, or tree access yet (D109, D111, D066). The data stays programmable
 through the registration, and settings turn the behavior off, as VS Code and

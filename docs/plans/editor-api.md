@@ -1,6 +1,6 @@
 # Editor API and Vim mode
 
-Status: 🚧 approved, not started. Promotes D058, D066 (folding), D077, D109,
+Status: 🚧 phase 1 (D110) complete. Promotes D058, D066 (folding), D077, D109,
 D110, D111, D112, and D114 (decoration styles) from the
 [roadmap](../roadmap.md) and adds D141–D143. Vim features left for later are
 D113, D142, D144, and D146.
@@ -89,17 +89,15 @@ D077 moved here from the daily-driver plan.
 
 ## Phase 1 — Key input
 
-- **D110 — Key contexts and ordered key delivery**
-  - 🚧 [Plan](d110-key-contexts.md)
-  - Start with the spike from the
-    [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency):
-    measure key-to-commit latency for a trivial extension command under the
-    current pool, and race a context switch against typed text.
-  - Then choose between extension-set key contexts resolved natively (with
-    counts and multi-key sequences), native buffering of keys while a mode
-    owner handles one, or both, and build it.
-  - Contexts are generic: an extension sets named contexts on a view, and
-    keymaps bind within them. No Vim mode names in the boundary.
+- **D110 — Key contexts and ordered key delivery** ✅
+  - Complete: lifecycle-owned key contexts on editor views, bindings and
+    text bindings scoped to a context and resolved against the live
+    contexts, and ordered delivery of keys after key-invoked extension
+    commands. Behavior in [commands](../architecture/commands.md#key-contexts),
+    rationale and latency in
+    [decisions](../decisions.md#commands-and-keymaps), and a small modal
+    package in `examples/extensions/@example/modal`, to be removed when
+    D058 lands.
 
 ## Phase 2 — Editor handles and the status bar
 
