@@ -135,6 +135,7 @@ D077 moved here from the daily-driver plan.
     `examples/extensions/@example/modal`, to be removed when D058 lands.
 
 - **D141 — Editor view controls**
+  - 🚧 [Plan](d141-editor-view-controls.md)
   - Extend the D109 handle with what modal editing needs: cursor style,
     the visible line range, scrolling without moving the caret, a reveal at
     the top or bottom (Vim's `zt`, `zb`), undecorated anchored positions
