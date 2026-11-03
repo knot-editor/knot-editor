@@ -55,29 +55,17 @@ Each primitive lands with a use in `examples/extensions/@example/modal`
 
 ## Checkpoints
 
-### 1. Cursor style ✅ (review gate pending)
+### 1. Cursor style ✅
 
-- Deliver `setCursorStyle`: view state with an owner, painting of block and
-  underline carets, host operation, declarations, `knot.d.ts`, JS bootstrap,
-  and the in-memory fake host.
-- Validation: `node:test` cases in `scripts/extensions/testing/editor.test.ts`
-  against the fake (override, `null`, independent lifecycles, tab close); editor tests that each style paints over the right character and
-  blink and focus behave as for the bar; product tests in `editor_api.rs` for
-  override, `null`, other lifecycles' independence, teardown, and tab close.
-- **Implementation context:** the fake host is
-  `scripts/extensions/testing/host.ts` (typed against `knot.d.ts`; unfaked
-  surface throws `not faked`). Add the state to `EditorView` and paint it in
-  `src/app/editor/paint.rs` (caret section, currently a fixed 2px bar). Mirror
-  `editor_set_key_context` in `src/app/extensions/host/handlers.rs` for the
-  handler and owner cleanup, register it in `src/host/declarations.rs`, wire
-  `src/host/js/bootstrap.js` and `knot.js`, and type it in `knot.d.ts`.
-- **Completion note:** `setCursorStyle` is lifecycle-owned view state on
-  `EditorView` (latest set wins, clearing reveals the previous, teardown clears),
-  documented in [commands](../architecture/commands.md#key-contexts) and the
-  extension guide. Painting is not covered by an automated test; the shape
-  resolution, host operation, and fake host are.
-- **Review gate:** painting looks right on a real window (block translucent over
-  the character, underline, end-of-line width); ownership matches key contexts.
+`setCursorStyle` is lifecycle-owned view state on `EditorView`: the latest set
+wins, clearing reveals the previous, and teardown or the view closing clears it.
+Block is drawn translucent over the character, underline beneath it, and both
+are half a line high or wide at a line's end. Behavior is in
+[commands](../architecture/commands.md#key-contexts) and the
+[extension guide](../extension-api.md). Painting has no automated test; it was
+checked by eye in a real window. Shape resolution, the host operation, and the
+fake host are covered by tests.
+
 
 ### 2. Visible lines, scrolling, and reveal ⏳
 
