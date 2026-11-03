@@ -1,6 +1,6 @@
 # D077 — Status bar
 
-Status: 🚧 approved; checkpoints 1 to 3 done. Item of the [editor API](editor-api.md)
+Status: 🚧 approved; all checkpoints done. Item of the [editor API](editor-api.md)
 plan; depends on D109 (done). Follows its brief; this file holds the design.
 
 ## Goal
@@ -122,39 +122,13 @@ so hiding is asserted by layout shifts.
 
 ### 4. `@knot/status-bar` package ✅
 
-Implemented, awaiting the review gate (a daily-use pass). Behavior is in
+Approved after a daily-use pass over the position, indentation, and language
+items and the indentation picker. Behavior:
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#status-bar)
-and [decisions](../decisions.md#status-bar). Scope decisions made while building it:
-
-- An item with empty text is not shown, which lets a window's missing editor hide
-  the items there.
-- The three click commands act on the window's focused view, so Go to Line,
-  Set Language Mode, and the Convert Indentation choices are unavailable while a
-  tool has focus; the Indentation picker's settings writes use `statusTarget` and
-  work anywhere.
-- Selection size counts characters up to 1 MiB of selected text and shows
-  kilobytes beyond.
-- The indentation picker follows VS Code's actions and wording with a size from
-  1 to 8, without "Indent Using Spaces/Tabs", which Convert Indentation already
-  covers. That added Detect Indentation from Content and split reindenting into
-  Reindent Buffer and Reindent Selected Lines. Trim Trailing Whitespace is absent
-  because Knot has no such command, and detecting the size stays D090.
-
-The remaining plan steps wait for the gate: remove this plan in a separate
-final commit, and update the references to D077 in the
-[editor API plan](editor-api.md) and the [roadmap](../roadmap.md).
-
-- Deliverables: the position, indentation, and language items, their click
-  pickers and commands, tab-size and indent-style changes as document-scoped settings writes,
-  and bundling; docs and decisions updated, with the plan reduced to a
-  completion note and then removed per the editor API plan's rule.
-- Validation: `node:test` package tests on the fake host for each item and
-  picker; a Rust product test through the real host showing the caret item
-  follows selection and `statusTarget`.
-- **Implementation context:** mirror `extensions/@knot/go-to-line`
-  (`knot.jsonc`, `src/extension.ts`, `src/main.ts`, `test/`), register in
-  `src/app/extensions/bundled.rs`, and rely on `build.rs` to compile it.
-  Document the behavior in `docs/architecture/workbench-and-lifecycle.md` and
-  `docs/architecture/extension-host.md`, and record rationale in
-  `docs/decisions.md`; update `docs/architecture.md` only if boundaries move.
-- Review gate: daily-use pass over the bar before D058 builds on it.
+and [decisions](../decisions.md#status-bar). The picker follows VS Code's
+actions and wording with a size from 1 to 8, without "Indent Using Spaces/Tabs",
+which Convert Indentation already covers; that added Detect Indentation from
+Content and split reindenting into Reindent Buffer and Reindent Selected Lines.
+An item with empty text is not shown. Detecting the indentation size stays D090,
+and Trim Trailing Whitespace does not exist. The three click commands act on the
+window's focused view, so they are unavailable while a tool has focus.
