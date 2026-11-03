@@ -222,7 +222,10 @@ fn show_extension_memory_lists_each_live_package(cx: &mut TestAppContext) {
         cx,
     );
     let spin = fixture.command("loop.spin", cx);
-    cx.run_until_parked();
+    // The spin turn starts on a worker thread; wait until it is running.
+    wait_for_api_condition(cx, |cx| {
+        crate::app::extensions::host::memory_report(cx).contains("@example/loop: running a turn")
+    });
 
     let execution = fixture.command(super::super::commands::SHOW_EXTENSION_MEMORY_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
