@@ -418,3 +418,119 @@ fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAp
     cx.simulate_input(window, "x");
     wait_for_api_condition(cx, |cx| clipboard_text(cx).as_deref() == Some("3:5"));
 }
+
+/// Caret change to a listener's effect, and notifications per burst.
+#[gpui::test]
+#[ignore = "measurement: run in release with --ignored --nocapture"]
+fn measure_selection_notification_latency(cx: &mut TestAppContext) {
+    use crate::host::lifecycle::ExtensionKey;
+    use std::time::{Duration, Instant};
+    const MOVES: usize = 1000;
+    const BURSTS: usize = 200;
+    const SOURCE: &str = r#"
+        import { commands, workbench } from "knot";
+        let handle;
+        let tick = false;
+        let count = 0;
+        await commands.register("probe.attach", async () => {
+          const { snapshot } = await workbench.observe(() => {});
+          handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+          await handle.onDidChangeSelection(async () => {
+            count += 1;
+            await handle.selection();
+            tick = !tick;
+            await handle.setKeyContext("tick", tick);
+          });
+        });
+        await commands.register("probe.count", () => workbench.writeClipboardText(String(count)));
+    "#;
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(723), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("probe.attach")
+            .is_ok()
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    model.update(cx, |model, _| model.replace(0..0, "0123456789").unwrap());
+    let (shell, window) = product_window(document, model, cx);
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+    let execution = dispatch_product_command(&shell, window, "probe.attach", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+
+    let ticking = |cx: &gpui::App| !editor.read(cx).key_contexts().is_empty();
+    let mut state = false;
+    let mut single = Vec::with_capacity(MOVES);
+    for index in 0..MOVES {
+        let caret = (index % 9) + 1;
+        let start = Instant::now();
+        editor.update(cx, |editor, cx| {
+            editor.set_selection(caret, caret, crate::app::editor::Reveal::Nearest, cx)
+        });
+        state = !state;
+        wait_for_api_condition(cx, |cx| ticking(cx) == state);
+        single.push(start.elapsed());
+    }
+    let report = |name: &str, mut samples: Vec<Duration>| {
+        samples.sort_unstable();
+        let at = |fraction: f64| {
+            samples[((samples.len() as f64 * fraction) as usize).min(samples.len() - 1)]
+        };
+        println!(
+            "{name}, {} samples: p50 {:?}, p90 {:?}, p99 {:?}, max {:?}",
+            samples.len(),
+            at(0.5),
+            at(0.9),
+            at(0.99),
+            samples[samples.len() - 1]
+        );
+    };
+    report("caret change to listener effect", single);
+
+    // Ten changes in separate foreground updates: how many listener runs?
+    let mut runs = Vec::with_capacity(BURSTS);
+    let mut tally = |cx: &mut TestAppContext| -> usize {
+        let execution = dispatch_product_command(&shell, window, "probe.count", cx);
+        wait_for_command(execution, cx);
+        cx.read(|cx| {
+            cx.read_from_clipboard()
+                .unwrap()
+                .text()
+                .unwrap()
+                .parse()
+                .unwrap()
+        })
+    };
+    let mut previous = tally(cx);
+    for burst in 0..BURSTS {
+        for step in 0..10 {
+            let caret = (burst + step) % 9 + 1;
+            editor.update(cx, |editor, cx| {
+                editor.set_selection(caret, caret, crate::app::editor::Reveal::Nearest, cx)
+            });
+        }
+        cx.run_until_parked();
+        let now = tally(cx);
+        runs.push(now - previous);
+        previous = now;
+    }
+    runs.sort_unstable();
+    println!(
+        "listener runs per burst of 10 changes: min {}, median {}, max {}",
+        runs[0],
+        runs[runs.len() / 2],
+        runs[runs.len() - 1]
+    );
+}

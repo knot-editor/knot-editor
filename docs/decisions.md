@@ -453,6 +453,14 @@ during it. Observing the editor entity covers every cause of a caret change
 without instrumenting each selection mutation, at the cost of comparing two
 offsets per repaint-triggering notification of a watched editor.
 
+On Apple M1 Pro/macOS release builds under the gpui test dispatcher, a caret
+change reached a listener that read the selection and set a key context in
+p50 305 µs, p90 342 µs, p99 415 µs, and max 639 µs over 1,000 changes, the
+same order as a key-bound command awaiting `setSelection` (see Commands and
+keymaps). Ten caret changes made in separate foreground updates cost one
+listener run in each of 200 bursts. The dispatcher polls rather than running
+the platform loop, so a real window adds its wakeup latency.
+
 Reference: [extension host](architecture/extension-host.md#editor-handle-notifications).
 
 ## Handler declarations
