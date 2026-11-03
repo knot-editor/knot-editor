@@ -80,8 +80,12 @@ column 0. The indentation unit is a tab or `editor.tabSize` spaces, resolved
 from `editor.insertSpaces` in the view's scope, which includes its document:
 a document entering the collection from a resource writes the style its
 leading lines show as its own document-scoped value, and any later write to
-that scope replaces it. The two Convert Indentation commands rewrite every
-line's leading whitespace as one undo step and write the same value.
+that scope replaces it. Detect Indentation from Content detects again, dropping
+the document's own values when the text shows no clear style. The two Convert
+Indentation commands rewrite every line's leading whitespace at the same widths
+as one undo step and write the same value; they never change how deep a line is
+indented. Reindent Lines recomputes every line from the language's indent query,
+at `editor.tabSize` per level, and Reindent Selected Lines only the selection.
 Backspace in leading spaces deletes back to
 the previous tab stop. Comment
 toggling reads the editing data of the language at the selection start,
@@ -167,10 +171,11 @@ editors; a window with no target has no values, and the items' empty shared
 text hides them. Position updates from selection notifications, and indentation
 and language from `documentChanged`, which every settings write publishes. Each
 item's click runs a command: Go to Line, Change Indentation, and Set Language
-Mode. Change Indentation picks between document-scoped writes of
-`editor.insertSpaces` and `editor.tabSize`, which work with focus anywhere, and
-the Convert Indentation commands, which act on the focused editor like the other
-two clicks. The package's tests run against the fake host and a product test
+Mode. Change Indentation offers VS Code's actions. Indent Using Spaces or Tabs and
+Change Tab Display Size ask for a size from 1 to 8 and write the document's own
+`editor.insertSpaces` and `editor.tabSize`, which works with focus anywhere. The
+others run the detect, convert, and reindent commands on the focused editor, as
+the other two clicks do. The package's tests run against the fake host and a product test
 drives it through the real host.
 
 ## Workbench and protected closure

@@ -163,44 +163,42 @@ async function statusDocument(context: CommandContext): Promise<DocumentId> {
   return tab.document;
 }
 
+/** VS Code's Select Action picker for a document's indentation. Choosing a
+ * style or a size writes the document's own settings; the rest run native
+ * commands on the focused editor. */
+const ACTIONS = [
+  { id: "spaces", label: "Indent Using Spaces" },
+  { id: "tabs", label: "Indent Using Tabs" },
+  { id: "size", label: "Change Tab Display Size" },
+  { id: "detect", label: "Detect Indentation from Content", command: "editor.detect-indentation" },
+  { id: "to-spaces", label: "Convert Indentation to Spaces", command: "editor.convert-indentation-to-spaces" },
+  { id: "to-tabs", label: "Convert Indentation to Tabs", command: "editor.convert-indentation-to-tabs" },
+  { id: "reindent", label: "Reindent Lines", command: "editor.reindent-lines" },
+  { id: "reindent-selected", label: "Reindent Selected Lines", command: "editor.reindent-selected-lines" },
+] as const;
+
 async function changeIndentation(context: CommandContext) {
   const document = await statusDocument(context);
-  const picked = await workbench.showPicker({
+  const action = await workbench.showPicker({
     title: "Select Action",
-    items: [
-      { id: "spaces", label: "Indent Using Spaces" },
-      { id: "tabs", label: "Indent Using Tabs" },
-      { id: "size", label: "Change Tab Size" },
-      { id: "to-spaces", label: "Convert Indentation to Spaces" },
-      { id: "to-tabs", label: "Convert Indentation to Tabs" },
-    ],
+    items: ACTIONS.map(({ id, label }) => ({ id, label })),
   });
-  if (picked.kind !== "selected") return;
-  switch (picked.id) {
-    case "spaces":
-    case "tabs":
-      await settings.set("editor.insertSpaces", picked.id === "spaces", { document });
-      break;
-    case "size": {
-      const size = await workbench.showInput({
-        title: "Tab Size",
-        onChange: (value) => (parseTabSize(value) === null ? "Enter a number from 1 to 32" : null),
-      });
-      const parsed = size.kind === "accepted" ? parseTabSize(size.value) : null;
-      if (parsed !== null) await settings.set("editor.tabSize", parsed, { document });
-      break;
-    }
-    case "to-spaces":
-      await commands.invoke("editor.convert-indentation-to-spaces");
-      break;
-    case "to-tabs":
-      await commands.invoke("editor.convert-indentation-to-tabs");
-      break;
+  if (action.kind !== "selected") return;
+  const chosen = ACTIONS.find(({ id }) => id === action.id)!;
+  if ("command" in chosen) {
+    await commands.invoke(chosen.command);
+    return;
   }
-}
-
-function parseTabSize(value: string): number | null {
-  if (!/^\s*\d+\s*$/.test(value)) return null;
-  const size = Number(value);
-  return size >= 1 && size <= 32 ? size : null;
+  const current = await settings.get("editor.tabSize", { document });
+  const size = await workbench.showPicker({
+    title: "Select Tab Size for Current File",
+    items: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+      id: String(n),
+      label: String(n),
+      ...(n === current ? { description: "Configured Tab Size" } : {}),
+    })),
+  });
+  if (size.kind !== "selected") return;
+  if (chosen.id !== "size") await settings.set("editor.insertSpaces", chosen.id === "spaces", { document });
+  await settings.set("editor.tabSize", Number(size.id), { document });
 }

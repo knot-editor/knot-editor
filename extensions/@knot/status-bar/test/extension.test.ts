@@ -110,57 +110,87 @@ test("a window opened later and a closed window are followed and released", asyn
   await assert.rejects(editor.selection(), { code: "InvalidTarget" });
 });
 
-test("Change Indentation writes document-scoped settings", async () => {
+test("Change Indentation lists VS Code's actions and a size from 1 to 8", async () => {
+  const document = host.addDocument({ text: TEXT });
+  host.openWindow({ documents: [document] });
+  await start();
+  host.answer("showPicker", { kind: "selected", id: "spaces" });
+  host.answer("showPicker", { kind: "dismissed" });
+  await host.run(INDENTATION_COMMAND);
+  const [actions, sizes] = host.prompts().map((prompt) => prompt.options as {
+    title: string; items: { id: string; label: string; description?: string }[];
+  });
+  assert.equal(actions!.title, "Select Action");
+  assert.deepEqual(actions!.items.map((item) => item.label), [
+    "Indent Using Spaces",
+    "Indent Using Tabs",
+    "Change Tab Display Size",
+    "Detect Indentation from Content",
+    "Convert Indentation to Spaces",
+    "Convert Indentation to Tabs",
+    "Reindent Lines",
+    "Reindent Selected Lines",
+  ]);
+  assert.equal(sizes!.title, "Select Tab Size for Current File");
+  assert.deepEqual(sizes!.items.map((item) => item.label), ["1", "2", "3", "4", "5", "6", "7", "8"]);
+  assert.deepEqual(
+    sizes!.items.filter((item) => item.description !== undefined).map((item) => item.label),
+    ["4"],
+  );
+});
+
+test("a style and a size write the document's settings, and dismissing writes nothing", async () => {
   const document = host.addDocument({ text: TEXT });
   const other = host.addDocument({ text: TEXT });
   host.openWindow({ documents: [document] });
   host.openWindow({ documents: [other] });
   await start();
+  const pick = async (...ids: string[]) => {
+    for (const id of ids) host.answer("showPicker", id === "" ? { kind: "dismissed" } : { kind: "selected", id });
+    await host.run(INDENTATION_COMMAND);
+  };
 
-  host.answer("showPicker", { kind: "selected", id: "tabs" });
-  assert.equal(await host.run(INDENTATION_COMMAND), "completed");
+  await pick("tabs", "7");
   assert.equal(await settings.get("editor.insertSpaces", { document }), false);
+  assert.equal(await settings.get("editor.tabSize", { document }), 7);
   assert.equal(await settings.get("editor.insertSpaces", { document: other }), true);
-
-  host.answer("showPicker", { kind: "selected", id: "size" });
-  host.type("0", "99", "x", "8");
-  host.answer("showInput", { kind: "accepted", value: "8" });
-  await host.run(INDENTATION_COMMAND);
-  const hint = "Enter a number from 1 to 32";
-  assert.deepEqual(host.inputMessages(), [hint, hint, hint, hint, null]);
-  assert.equal(await settings.get("editor.tabSize", { document }), 8);
   assert.equal(await settings.get("editor.tabSize", { document: other }), 4);
 
-  host.answer("showPicker", { kind: "selected", id: "size" });
-  host.answer("showInput", { kind: "accepted", value: "0" });
-  await host.run(INDENTATION_COMMAND);
-  assert.equal(await settings.get("editor.tabSize", { document }), 8);
-
-  host.answer("showPicker", { kind: "dismissed" });
-  await host.run(INDENTATION_COMMAND);
+  // Changing the display size leaves the style alone.
+  await pick("size", "2");
   assert.equal(await settings.get("editor.insertSpaces", { document }), false);
+  assert.equal(await settings.get("editor.tabSize", { document }), 2);
+
+  // Dismissing either picker changes nothing.
+  await pick("spaces", "");
+  await pick("");
+  assert.equal(await settings.get("editor.insertSpaces", { document }), false);
+  assert.equal(await settings.get("editor.tabSize", { document }), 2);
 });
 
-test("Change Indentation converts through the native commands and needs an editor", async () => {
+test("the other actions run their native command and need an editor", async () => {
   const document = host.addDocument({ text: TEXT });
-  const window = host.openWindow({ documents: [document] });
+  host.openWindow({ documents: [document] });
   await start();
-  const converted: string[] = [];
-  for (const name of ["editor.convert-indentation-to-spaces", "editor.convert-indentation-to-tabs"]) {
+  const ran: string[] = [];
+  const native = [
+    ["detect", "editor.detect-indentation"],
+    ["to-spaces", "editor.convert-indentation-to-spaces"],
+    ["to-tabs", "editor.convert-indentation-to-tabs"],
+    ["reindent", "editor.reindent-lines"],
+    ["reindent-selected", "editor.reindent-selected-lines"],
+  ] as const;
+  for (const [, name] of native) {
     await commands.register(name, () => {
-      converted.push(name);
+      ran.push(name);
     });
   }
-  host.answer("showPicker", { kind: "selected", id: "to-spaces" });
-  await host.run(INDENTATION_COMMAND);
-  host.answer("showPicker", { kind: "selected", id: "to-tabs" });
-  await host.run(INDENTATION_COMMAND);
-  assert.deepEqual(converted, [
-    "editor.convert-indentation-to-spaces",
-    "editor.convert-indentation-to-tabs",
-  ]);
+  for (const [id] of native) {
+    host.answer("showPicker", { kind: "selected", id });
+    await host.run(INDENTATION_COMMAND);
+  }
+  assert.deepEqual(ran, native.map(([, name]) => name));
 
   const empty = host.openWindow();
   assert.equal(await host.run(INDENTATION_COMMAND, { window: empty }), "unavailable");
-  void window;
 });

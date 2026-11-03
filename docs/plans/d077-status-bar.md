@@ -134,6 +134,11 @@ and [decisions](../decisions.md#status-bar). Scope decisions made while building
   work anywhere.
 - Selection size counts characters up to 1 MiB of selected text and shows
   kilobytes beyond.
+- The indentation picker follows VS Code: the same actions and wording, and a
+  size from 1 to 8. That added Detect Indentation from Content and split
+  Reindent Lines into the whole document and Reindent Selected Lines. Trim
+  Trailing Whitespace is absent because Knot has no such command, and detecting
+  the size stays D090.
 
 The remaining plan steps wait for the gate: remove this plan in a separate
 final commit, and update the references to D077 in the

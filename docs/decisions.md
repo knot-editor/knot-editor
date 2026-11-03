@@ -281,8 +281,9 @@ instead of guessing. One-space indents are alignment and ` *` lines are
 block-comment continuations, so neither counts. Detection writes
 `editor.insertSpaces` scoped to the document, rather than keeping a field on
 the buffer, so the indentation of a document is one resolved setting that the
-status bar and any extension change with an ordinary write. The size always
-comes from `editor.tabSize`; detecting it, and EditorConfig, are D090.
+status bar and any extension change with an ordinary write. Detect Indentation from
+Content repeats it on request. The size always comes from `editor.tabSize`;
+detecting it, and EditorConfig, are D090.
 
 Words split at VS Code's default separators rather than at Unicode word
 boundaries alone. UAX #29 is designed for prose and keeps `some.thing`,
@@ -1108,8 +1109,12 @@ values rather than one shared value, since two windows show different editors,
 and a window with no editor leaves the shared empty text to hide them. Selection
 size counts characters up to 1 MiB and shows kilobytes beyond, because counting
 sends the selection to JavaScript on every change. Indentation is one picker
-that follows VS Code's actions, with the writes as ordinary document-scoped
-settings, so any extension can offer the same choices.
+with VS Code's actions and wording, including a size from 1 to 8, since a
+changed tab size not rewriting the text, a conversion keeping each line's
+depth, and a language-aware reindent being a separate action are what its
+users expect and what Zed, Sublime Text, Emacs, Vim, and JetBrains do too. The
+writes are ordinary document-scoped settings, so any extension can offer the
+same choices.
 
 ## Generated text surfaces
 
