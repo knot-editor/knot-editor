@@ -60,7 +60,8 @@ long-lived editor handles with selection observation, the status bar, undo
 groups, view controls, decoration styles, visual-line movement, and folding,
 proven by a bundled JavaScript Vim mode. It promotes D058, D066's folding,
 D077, D109, D110, D111, D112, and D114's decoration styles, schedules the
-daily-driver items D031, D078, and D080, and adds D141–D143. Language servers
+daily-driver items D031, D078, and D080, and adds D141–D143. Vim features
+left for later are D113, D142, D144, and D146. Language servers
 (D067) follow it.
 
 The [package manager](plans/package-manager.md) initiative is selected: extension
@@ -564,6 +565,18 @@ Kakoune mode could use it too. The
     `folds` and `indents`, and expose node queries through the extension API
     without exposing tree-sitter objects.
   - Order: after D066.
+
+- **D146 — Broad Ex command set**
+  - Deferred: The first Vim mode (D058) implements the core Ex set: `:w`,
+    `:q`, `:wq`, `:e`, `:s` and `:%s` with ranges, `:<line>`, `:noh`, and
+    `:set` for a few options. `:g` and `:v`, `:normal`, `:sort`, `:d`, `:m`,
+    `:t` and other range commands, `:reg` and `:marks`, `:map` and its
+    variants, and user-defined Ex commands are missing.
+  - Reconsider: Daily Vim use reaches for one of them. Then add it inside
+    the Vim package over existing primitives; `:normal` and `:g` with a
+    normal-mode command also need replaying keys through the mode, which
+    D113's recording provides.
+  - Order: after D058; `:normal` after D113.
 
 - **D145 — Virtual text and anchored floating panels**
   - Deferred: D114 adds decoration styles. Extensions still cannot draw

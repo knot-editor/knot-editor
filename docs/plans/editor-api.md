@@ -2,7 +2,8 @@
 
 Status: 🚧 approved, not started. Promotes D058, D066 (folding), D077, D109,
 D110, D111, D112, and D114 (decoration styles) from the
-[roadmap](../roadmap.md) and adds D141–D143.
+[roadmap](../roadmap.md) and adds D141–D143. Vim features left for later are
+D113, D142, D144, and D146.
 
 ## Goal
 
@@ -53,7 +54,7 @@ Excluded, and staying deferred in the roadmap:
 - Language servers (D067) and the presentation and hook items that would be
   designed against a real server: virtual text and floating panels (D145),
   lifecycle hooks (D115), and progress (D117).
-- The broad Ex set (`:g`, `:normal`, `:sort`, user-defined Ex commands).
+- The broad Ex set (D146).
 
 ## Relation to the daily-driver plan
 
@@ -182,5 +183,6 @@ D078 from the daily-driver plan lands before this phase.
 
 - **D058 — Vim mode** (depends on every item above)
   - A bundled `@knot/vim` package implementing the scope above on public
-    APIs only. Decide how it is turned on and off. Any gap it finds is
+    APIs only. A `vim.enabled` setting, off by default, turns it on and off
+    at runtime, and scoped values can turn it off for a language or view. Any gap it finds is
     closed as a generic primitive, never a private bypass.
