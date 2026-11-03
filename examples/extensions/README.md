@@ -27,4 +27,7 @@ manifest schema, lifetime rules, and checked examples.
 `@example/modal` is a tiny modal editor on key contexts. **Example: Enter
 Modal Mode** puts the focused editor into the `modal` context, where h, j, k,
 and l move the caret, other typed text is swallowed by a text binding, and
-Escape leaves. It will be removed once the bundled Vim mode exists.
+Escape leaves. **Example: Toggle Modal Mode in Every Editor** uses long-lived editor handles
+instead: each editor you activate enters the `modal` context, and selecting
+text in one leaves it, through `onDidChangeSelection`. It will be removed once
+the bundled Vim mode exists.

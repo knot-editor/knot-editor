@@ -1137,7 +1137,10 @@ export const api: KnotApi = {
           documents: [...state.documents.values()].map(documentInfo),
           windows: state.windows.map(windowInfo),
           activeWindow: state.focused,
-          activeTarget: null,
+          activeTarget:
+            state.windows.find((window) => window.target === state.focused)?.tabs[
+              state.windows.find((window) => window.target === state.focused)!.selected
+            ]?.target ?? null,
           launched: state.launched,
         },
         watermark: state.sequence,

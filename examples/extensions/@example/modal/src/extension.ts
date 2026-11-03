@@ -3,7 +3,8 @@
 // swallowed, and Escape leaves. Everything else, including typing outside the
 // context, stays native.
 import { commands, keymaps } from "knot";
-import type { Buffer, Editor, JsonValue } from "knot";
+import type { Buffer, Disposable, Editor, JsonValue } from "knot";
+import { follow } from "./follow.js";
 import { column, type Direction } from "./motion.js";
 
 const modal = { view: "editor", context: "modal" } as const;
@@ -12,6 +13,16 @@ export async function start() {
   await commands.register("example.modal.enter", async ({ editor }) => {
     await editor?.setKeyContext("modal", true);
   }, { title: "Example: Enter Modal Mode" });
+  let following: Disposable | null = null;
+  await commands.register("example.modal.follow", async () => {
+    if (following === null) {
+      following = await follow();
+    } else {
+      const stopped = following;
+      following = null;
+      await stopped.dispose();
+    }
+  }, { title: "Example: Toggle Modal Mode in Every Editor" });
   await commands.register("example.modal.leave", async ({ editor }) => {
     await editor?.setKeyContext("modal", false);
   }, { palette: false });

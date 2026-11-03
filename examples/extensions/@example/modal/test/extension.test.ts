@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
+import { windows, workbench } from "knot";
 import * as host from "knot/testing";
 import { start } from "../src/extension.js";
 import { column } from "../src/motion.js";
@@ -63,4 +64,19 @@ test("columns never split a surrogate pair", () => {
   assert.equal(column("a😀b", 2, "down"), 1);
   assert.equal(column("ab", 5, "up"), 2);
   assert.equal(column("", 0, "left"), 0);
+});
+
+test("following puts each activated editor in modal mode until text is selected", async () => {
+  await windows.focus((await windows.list())[0]!.target);
+  await host.run("example.modal.follow");
+  assert.deepEqual(host.keyContexts(), ["modal"], "the active editor joins at once");
+  const window = host.openWindow({ documents: [host.addDocument({ text: "second" })] });
+  assert.deepEqual(host.keyContexts(window), [], "an editor not yet activated is untouched");
+  await host.emit({ type: "activeTargetChanged", activeWindow: window, activeTarget: host.tabTarget(window, 0) });
+  assert.deepEqual(host.keyContexts(window), ["modal"]);
+  const editor = await workbench.editor(host.tabTarget(window, 0));
+  await editor.setSelection({ anchor: 1, caret: 4 });
+  assert.deepEqual(host.keyContexts(window), [], "selecting text leaves modal mode");
+  await host.run("example.modal.follow");
+  assert.deepEqual(host.keyContexts(), [], "toggling off leaves every editor");
 });
