@@ -1057,3 +1057,195 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
     cx.run_until_parked();
     assert_eq!(tabs(cx), before + 1);
 }
+
+/// Key-to-commit latency of a key bound to an extension command that moves
+/// the caret, and how often text typed right after such a key lands before
+/// the command's commit.
+#[gpui::test]
+#[ignore = "measurement: run in release with --ignored --nocapture"]
+fn measure_extension_key_latency(cx: &mut TestAppContext) {
+    use crate::host::lifecycle::ExtensionKey;
+    use std::time::{Duration, Instant};
+    const KEYS: usize = 1000;
+    const RACES: usize = 200;
+    const SOURCE: &str = r#"
+        import { commands } from "knot";
+        let next = 0;
+        await commands.register("probe.move", async ({ editor }) => {
+          next = (next + 1) % 10;
+          await editor.setSelection({ anchor: next, caret: next });
+        });
+        await commands.register("probe.home", async ({ editor }) => {
+          await editor.setSelection({ anchor: 0, caret: 0 });
+        });
+        await commands.register("probe.noop", () => {});
+    "#;
+
+    let documents = install_globals(cx);
+    cx.update(super::super::bind_product_keys);
+    let host = cx.update(super::super::super::extensions::host::install);
+    host.update(cx, |host, cx| {
+        let execution = host
+            .load_test_source(
+                ExtensionKey::new(ExtensionId::new(730), ExtensionLifecycleId::new(1)),
+                SOURCE,
+            )
+            .unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("probe.noop")
+            .is_ok()
+    });
+    cx.update(|cx| {
+        let registry = &mut cx.global_mut::<ApplicationKeymaps>().0;
+        let owner = BindingOwner::Extension(ExtensionId::new(730), ExtensionLifecycleId::new(1));
+        for (key, name) in [("f9", "probe.move"), ("f8", "probe.home")] {
+            registry
+                .set(
+                    owner,
+                    key,
+                    None,
+                    Some(Command {
+                        name: name.into(),
+                        arguments: CommandArgumentValue::Null,
+                    }),
+                )
+                .unwrap();
+        }
+        super::super::super::commands::keymaps::rebuild(cx);
+    });
+    let model = cx.new(|_| BufferModel::from_text("0123456789"));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Probe", model.clone(), cx)
+    });
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.update_window(window, |_, window, cx| {
+        shell.read(cx).focus_active_editor(window, cx)
+    })
+    .unwrap();
+    cx.refresh().unwrap();
+    let editor = cx.read(|cx| {
+        shell
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane()
+            .unwrap()
+            .active_tab()
+            .editor()
+            .unwrap()
+            .clone()
+    });
+    let wait = |cx: &mut TestAppContext, mut done: Box<dyn FnMut(&gpui::App) -> bool>| {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            cx.run_until_parked();
+            if cx.read(|cx| done(cx)) {
+                return;
+            }
+            assert!(Instant::now() < deadline, "probe did not settle");
+            std::thread::yield_now();
+        }
+    };
+    let report = |name: &str, mut samples: Vec<Duration>| {
+        samples.sort_unstable();
+        let at = |fraction: f64| {
+            samples[((samples.len() as f64 * fraction) as usize).min(samples.len() - 1)]
+        };
+        println!(
+            "{name}, {} samples: p50 {:?}, p90 {:?}, p99 {:?}, max {:?}",
+            samples.len(),
+            at(0.5),
+            at(0.9),
+            at(0.99),
+            samples[samples.len() - 1]
+        );
+    };
+
+    // Warm the isolate and the dispatch path.
+    for _ in 0..50 {
+        let execution = dispatch_product_command(&shell, window, "probe.noop", cx);
+        wait_for_command(execution, cx);
+    }
+    let mut round_trips = Vec::with_capacity(KEYS);
+    for _ in 0..KEYS {
+        let start = Instant::now();
+        let execution = dispatch_product_command(&shell, window, "probe.noop", cx);
+        wait_for_command(execution, cx);
+        round_trips.push(start.elapsed());
+    }
+    report("dispatch to completion, no-op handler", round_trips);
+
+    cx.update_window(window, |_, window, cx| {
+        shell.read(cx).focus_active_editor(window, cx)
+    })
+    .unwrap();
+    cx.refresh().unwrap();
+    // What simulating and settling one keystroke costs with no binding.
+    let mut unbound = Vec::with_capacity(KEYS);
+    for _ in 0..KEYS {
+        let start = Instant::now();
+        cx.simulate_keystrokes(window, "f7");
+        cx.run_until_parked();
+        unbound.push(start.elapsed());
+    }
+    report("unbound key, test harness baseline", unbound);
+    let mut latencies = Vec::with_capacity(KEYS);
+    for index in 0..KEYS + 50 {
+        let expected = (index + 1) % 10;
+        let start = Instant::now();
+        cx.simulate_keystrokes(window, "f9");
+        let editor = editor.clone();
+        wait(
+            cx,
+            Box::new(move |cx| editor.read(cx).view_state(cx).caret == expected),
+        );
+        if index >= 50 {
+            latencies.push(start.elapsed());
+        }
+    }
+    report("key to committed selection", latencies);
+
+    // Text typed right after the key: ordered delivery would insert it at
+    // the caret the command placed.
+    let mut text_first = 0;
+    for _ in 0..RACES {
+        model.update(cx, |model, _| {
+            let length = model.text().len();
+            model.replace(0..length, "abc").unwrap();
+        });
+        editor.update(cx, |editor, cx| {
+            editor.restore_view_state(
+                crate::app::editor::EditorViewState {
+                    anchor: 3,
+                    caret: 3,
+                    top: 0,
+                    scroll_x: 0.,
+                },
+                cx,
+            )
+        });
+        cx.simulate_keystrokes(window, "f8");
+        cx.simulate_input(window, "x");
+        let (model_ref, editor_ref) = (model.clone(), editor.clone());
+        wait(
+            cx,
+            Box::new(move |cx| {
+                let text = model_ref.read(cx).text();
+                let caret = editor_ref.read(cx).view_state(cx).caret;
+                (text == "abcx" && caret == 0) || (text == "xabc" && caret == 1)
+            }),
+        );
+        if cx.read(|cx| model.read(cx).text() == "abcx") {
+            text_first += 1;
+        }
+    }
+    println!("text typed after the key landed before its commit in {text_first} of {RACES} trials");
+}

@@ -1,6 +1,6 @@
 # D110 — Key contexts and ordered key delivery
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 checkpoint 1 awaiting review. Item of the
 [editor API and Vim mode](editor-api.md) plan; background in the
 [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency).
 
@@ -84,6 +84,23 @@ release build. Also measure the same path with a fixture that types text
 right after the key to confirm today's race.
 
 - Deliverables: an ignored measurement test, numbers recorded in this plan.
+  ✅ `measure_extension_key_latency` in
+  `src/app/product/tests/keybindings.rs`.
+- ✅ Results, Apple M1 Pro/macOS 27 release build, gpui test dispatcher,
+  1,000 keys per run, three runs:
+  - Key bound to a command that awaits `editor.setSelection`, from
+    `simulate_keystrokes` to the committed caret: p50 169–176 µs, p90
+    187–200 µs, p99 245–277 µs, max under 0.5 ms.
+  - A no-op extension command, dispatch to completion: p50 21 µs, p99
+    62–64 µs, so most of the key path is the foreground request and the
+    turn's resumption after it, not dispatch.
+  - Simulating an unbound key: p50 5 µs, so the harness adds little.
+  - Text typed right after the key landed before the command's commit in
+    199–200 of 200 trials: the race is real and ordered delivery
+    (checkpoint 3) is required.
+  - Limitation: the test dispatcher polls rather than running the
+    platform's run loop, so a real window adds its own wakeup latency;
+    the margin to a 16 ms frame leaves room for it.
 - Review gate: if p50 is well under a frame (around 1–2 ms) and p99 under
   a frame, continue. Otherwise investigate the pool hop first, for example
   waking the worker directly, before reconsidering synchronous handling.
