@@ -91,7 +91,7 @@ impl EditorView {
                 self.outdent_lines(cx);
                 return true;
             }
-            commands::REINDENT_LINES_COMMAND | commands::REINDENT_SELECTED_LINES_COMMAND => {
+            commands::REINDENT_BUFFER_COMMAND | commands::REINDENT_SELECTED_LINES_COMMAND => {
                 self.reindent_lines(command == commands::REINDENT_SELECTED_LINES_COMMAND, cx);
                 return true;
             }

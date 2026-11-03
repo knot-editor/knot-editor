@@ -155,10 +155,10 @@ complete list for that item.
 
 - **D135 — Reindent pasted text**
   - Deferred: D134 indents lines from the syntax tree on Enter, while
-    typing a closer, and through Reindent Lines. Pasted lines keep the
-    indentation they had where they were copied from.
+    typing a closer, and through Reindent Selected Lines and Reindent Buffer.
+    Pasted lines keep the indentation they had where they were copied from.
   - Reconsider: Pasting code between different nesting depths needs a
-    Reindent Lines afterwards often enough to be friction. Then decide, as
+    Reindent Selected Lines afterwards often enough to be friction. Then decide, as
     Zed's auto-indent on paste and VS Code's `editor.autoIndentOnPaste` do,
     whether to reindent every pasted line from the query or shift the block
     by the first line's change and keep its relative indentation, and how

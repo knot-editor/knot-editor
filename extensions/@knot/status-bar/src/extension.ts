@@ -163,17 +163,16 @@ async function statusDocument(context: CommandContext): Promise<DocumentId> {
   return tab.document;
 }
 
-/** VS Code's Select Action picker for a document's indentation. Choosing a
- * style or a size writes the document's own settings; the rest run native
+/** The indentation actions, in VS Code's order and wording without its
+ * separate "Indent Using" entries, which Convert Indentation already covers by
+ * also making the style the document's own. All but the size run native
  * commands on the focused editor. */
 const ACTIONS = [
-  { id: "spaces", label: "Indent Using Spaces" },
-  { id: "tabs", label: "Indent Using Tabs" },
   { id: "size", label: "Change Tab Display Size" },
   { id: "detect", label: "Detect Indentation from Content", command: "editor.detect-indentation" },
   { id: "to-spaces", label: "Convert Indentation to Spaces", command: "editor.convert-indentation-to-spaces" },
   { id: "to-tabs", label: "Convert Indentation to Tabs", command: "editor.convert-indentation-to-tabs" },
-  { id: "reindent", label: "Reindent Lines", command: "editor.reindent-lines" },
+  { id: "reindent", label: "Reindent Buffer", command: "editor.reindent-buffer" },
   { id: "reindent-selected", label: "Reindent Selected Lines", command: "editor.reindent-selected-lines" },
 ] as const;
 
@@ -198,7 +197,5 @@ async function changeIndentation(context: CommandContext) {
       ...(n === current ? { description: "Configured Tab Size" } : {}),
     })),
   });
-  if (size.kind !== "selected") return;
-  if (chosen.id !== "size") await settings.set("editor.insertSpaces", chosen.id === "spaces", { document });
-  await settings.set("editor.tabSize", Number(size.id), { document });
+  if (size.kind === "selected") await settings.set("editor.tabSize", Number(size.id), { document });
 }

@@ -1109,12 +1109,14 @@ values rather than one shared value, since two windows show different editors,
 and a window with no editor leaves the shared empty text to hide them. Selection
 size counts characters up to 1 MiB and shows kilobytes beyond, because counting
 sends the selection to JavaScript on every change. Indentation is one picker
-with VS Code's actions and wording, including a size from 1 to 8, since a
-changed tab size not rewriting the text, a conversion keeping each line's
-depth, and a language-aware reindent being a separate action are what its
-users expect and what Zed, Sublime Text, Emacs, Vim, and JetBrains do too. The
-writes are ordinary document-scoped settings, so any extension can offer the
-same choices.
+with VS Code's actions and wording, including a size from 1 to 8, but not its
+"Indent Using Spaces" and "Indent Using Tabs", which differ from the Convert
+entries only by leaving the text alone, so users could not tell them apart. The
+rest keep what other editors share: a changed tab size does not rewrite the
+text, a conversion keeps each line's depth, and a language-aware reindent is a
+separate action, as in Zed, Sublime Text, Emacs, Vim, and JetBrains. The writes
+are ordinary document-scoped settings, so any extension can offer the same
+choices.
 
 ## Generated text surfaces
 

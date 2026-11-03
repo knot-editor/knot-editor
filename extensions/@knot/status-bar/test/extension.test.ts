@@ -110,11 +110,11 @@ test("a window opened later and a closed window are followed and released", asyn
   await assert.rejects(editor.selection(), { code: "InvalidTarget" });
 });
 
-test("Change Indentation lists VS Code's actions and a size from 1 to 8", async () => {
+test("Change Indentation lists the actions and a tab size from 1 to 8", async () => {
   const document = host.addDocument({ text: TEXT });
   host.openWindow({ documents: [document] });
   await start();
-  host.answer("showPicker", { kind: "selected", id: "spaces" });
+  host.answer("showPicker", { kind: "selected", id: "size" });
   host.answer("showPicker", { kind: "dismissed" });
   await host.run(INDENTATION_COMMAND);
   const [actions, sizes] = host.prompts().map((prompt) => prompt.options as {
@@ -122,13 +122,11 @@ test("Change Indentation lists VS Code's actions and a size from 1 to 8", async 
   });
   assert.equal(actions!.title, "Select Action");
   assert.deepEqual(actions!.items.map((item) => item.label), [
-    "Indent Using Spaces",
-    "Indent Using Tabs",
     "Change Tab Display Size",
     "Detect Indentation from Content",
     "Convert Indentation to Spaces",
     "Convert Indentation to Tabs",
-    "Reindent Lines",
+    "Reindent Buffer",
     "Reindent Selected Lines",
   ]);
   assert.equal(sizes!.title, "Select Tab Size for Current File");
@@ -139,33 +137,27 @@ test("Change Indentation lists VS Code's actions and a size from 1 to 8", async 
   );
 });
 
-test("a style and a size write the document's settings, and dismissing writes nothing", async () => {
+test("a size writes the document's own tab size, and dismissing writes nothing", async () => {
   const document = host.addDocument({ text: TEXT });
   const other = host.addDocument({ text: TEXT });
   host.openWindow({ documents: [document] });
   host.openWindow({ documents: [other] });
   await start();
-  const pick = async (...ids: string[]) => {
-    for (const id of ids) host.answer("showPicker", id === "" ? { kind: "dismissed" } : { kind: "selected", id });
+  const pick = async (...answers: (string | null)[]) => {
+    for (const id of answers) {
+      host.answer("showPicker", id === null ? { kind: "dismissed" } : { kind: "selected", id });
+    }
     await host.run(INDENTATION_COMMAND);
   };
 
-  await pick("tabs", "7");
-  assert.equal(await settings.get("editor.insertSpaces", { document }), false);
+  await pick("size", "7");
   assert.equal(await settings.get("editor.tabSize", { document }), 7);
-  assert.equal(await settings.get("editor.insertSpaces", { document: other }), true);
   assert.equal(await settings.get("editor.tabSize", { document: other }), 4);
+  assert.equal(await settings.get("editor.insertSpaces", { document }), true);
 
-  // Changing the display size leaves the style alone.
-  await pick("size", "2");
-  assert.equal(await settings.get("editor.insertSpaces", { document }), false);
-  assert.equal(await settings.get("editor.tabSize", { document }), 2);
-
-  // Dismissing either picker changes nothing.
-  await pick("spaces", "");
-  await pick("");
-  assert.equal(await settings.get("editor.insertSpaces", { document }), false);
-  assert.equal(await settings.get("editor.tabSize", { document }), 2);
+  await pick("size", null);
+  await pick(null);
+  assert.equal(await settings.get("editor.tabSize", { document }), 7);
 });
 
 test("the other actions run their native command and need an editor", async () => {
@@ -177,7 +169,7 @@ test("the other actions run their native command and need an editor", async () =
     ["detect", "editor.detect-indentation"],
     ["to-spaces", "editor.convert-indentation-to-spaces"],
     ["to-tabs", "editor.convert-indentation-to-tabs"],
-    ["reindent", "editor.reindent-lines"],
+    ["reindent", "editor.reindent-buffer"],
     ["reindent-selected", "editor.reindent-selected-lines"],
   ] as const;
   for (const [, name] of native) {

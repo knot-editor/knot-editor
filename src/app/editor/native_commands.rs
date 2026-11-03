@@ -40,7 +40,7 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 #[command("editor.insert-newline", title = "Insert Newline", palette = false, id = INSERT_NEWLINE_COMMAND, participant = Editor)]
 #[command("editor.insert-tab", title = "Insert Tab", palette = false, id = INSERT_TAB_COMMAND, participant = Editor)]
 #[command("editor.indent-lines", title = "Indent Lines", description = "Indent the selected lines by one level.", id = INDENT_LINES_COMMAND, participant = Editor)]
-#[command("editor.reindent-lines", title = "Reindent Lines", description = "Indent every line of the document from the language's syntax.", id = REINDENT_LINES_COMMAND, participant = Editor)]
+#[command("editor.reindent-buffer", title = "Reindent Buffer", description = "Indent every line of the document from the language's syntax.", id = REINDENT_BUFFER_COMMAND, participant = Editor)]
 #[command("editor.reindent-selected-lines", title = "Reindent Selected Lines", description = "Indent the selected lines from the language's syntax.", id = REINDENT_SELECTED_LINES_COMMAND, participant = Editor)]
 #[command("editor.detect-indentation", title = "Detect Indentation from Content", description = "Indent with the style the document's text uses, or the default when it shows none.", id = DETECT_INDENTATION_COMMAND, participant = Editor)]
 #[command("editor.convert-indentation-to-spaces", title = "Convert Indentation to Spaces", description = "Rewrite the indentation of every line with spaces, and indent with spaces from now on.", id = CONVERT_INDENTATION_TO_SPACES_COMMAND, participant = Editor)]

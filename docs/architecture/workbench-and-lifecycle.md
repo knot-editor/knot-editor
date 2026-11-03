@@ -84,7 +84,7 @@ that scope replaces it. Detect Indentation from Content detects again, dropping
 the document's own values when the text shows no clear style. The two Convert
 Indentation commands rewrite every line's leading whitespace at the same widths
 as one undo step and write the same value; they never change how deep a line is
-indented. Reindent Lines recomputes every line from the language's indent query,
+indented. Reindent Buffer recomputes every line from the language's indent query,
 at `editor.tabSize` per level, and Reindent Selected Lines only the selection.
 Backspace in leading spaces deletes back to
 the previous tab stop. Comment
@@ -105,8 +105,8 @@ below at the opening line's indentation; on a line holding only whitespace,
 Enter clears it. Typing that completes a closing or branching capture at the
 start of a line's content, such as `}` or Python's `else:`, outdents the line
 the same way within the typing group, never indenting it further; composition
-and paste never reindent. Reindent Lines applies the query to the selected
-lines as one step.
+and paste never reindent. Reindent Selected Lines applies the query to the
+selected lines as one step, and Reindent Buffer to every line.
 
 Brackets follow VS Code's language-defined behavior, read from the bracket
 pairs of the language at the caret
@@ -171,11 +171,12 @@ editors; a window with no target has no values, and the items' empty shared
 text hides them. Position updates from selection notifications, and indentation
 and language from `documentChanged`, which every settings write publishes. Each
 item's click runs a command: Go to Line, Change Indentation, and Set Language
-Mode. Change Indentation offers VS Code's actions. Indent Using Spaces or Tabs and
-Change Tab Display Size ask for a size from 1 to 8 and write the document's own
-`editor.insertSpaces` and `editor.tabSize`, which works with focus anywhere. The
-others run the detect, convert, and reindent commands on the focused editor, as
-the other two clicks do. The package's tests run against the fake host and a product test
+Mode. Change Indentation offers VS Code's actions. Change Tab Display Size asks
+for a size from 1 to 8 and writes the document's own `editor.tabSize`, which
+works with focus anywhere. The others run the detect, convert, and reindent
+commands on the focused editor, as the other two clicks do. Its "Indent Using"
+entries are absent, since Convert Indentation also makes the style the
+document's own. The package's tests run against the fake host and a product test
 drives it through the real host.
 
 ## Workbench and protected closure

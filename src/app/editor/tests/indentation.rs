@@ -513,13 +513,13 @@ fn convert_indentation_rewrites_every_line_as_one_undoable_step(cx: &mut TestApp
 }
 
 #[gpui::test]
-fn reindent_lines_covers_the_whole_document_regardless_of_the_selection(cx: &mut TestAppContext) {
+fn reindent_buffer_covers_the_whole_document_regardless_of_the_selection(cx: &mut TestAppContext) {
     let text = "fn a() {\nb();\n  c();\n}";
     let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
             place(view, (1, 0), cx);
-            assert!(view.execute_editing_command("editor.reindent-lines", window, cx));
+            assert!(view.execute_editing_command("editor.reindent-buffer", window, cx));
             assert_eq!(view.text(cx), "fn a() {\n    b();\n    c();\n}");
             view.execute_editing_command("editor.undo", window, cx);
             assert_eq!(view.text(cx), text);

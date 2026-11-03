@@ -334,7 +334,7 @@ scoped by language, turn closing and wrapping off.
 
 An optional `queries.indents` drives indentation: Enter indents the new line
 from it, typing a closer such as `}` at the start of a line outdents the
-line, and Reindent Lines and Reindent Selected Lines recompute the document's or
+line, and Reindent Buffer and Reindent Selected Lines recompute the document's or
 the selection's lines. It uses
 [nvim-treesitter's indent captures](https://github.com/nvim-treesitter/nvim-treesitter/blob/main/CONTRIBUTING.md#indents)
 (`@indent.begin`, `end`, `branch`, `dedent`, `align`, `ignore`, `auto`,
