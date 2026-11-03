@@ -90,6 +90,7 @@ D077 moved here from the daily-driver plan.
 ## Phase 1 — Key input
 
 - **D110 — Key contexts and ordered key delivery**
+  - 🚧 [Plan](d110-key-contexts.md)
   - Start with the spike from the
     [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency):
     measure key-to-commit latency for a trivial extension command under the
@@ -107,6 +108,8 @@ D077 moved here from the daily-driver plan.
   - An editor handle that outlives its command: extensions find the editor
     a window currently presents and hold its handle while the tab lives.
     Decide how a handle is obtained outside a command and when it expires.
+  - D110's `setKeyContext` works on long-lived handles, so a mode enters its
+    context in editors it did not get from a command.
   - Coalesced selection and caret observation: native code marks a view's
     selection changed and keeps at most one pending notification per
     listener, which then reads the current state, as picker highlight

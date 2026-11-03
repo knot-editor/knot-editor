@@ -86,7 +86,7 @@ complete list for that item.
   [extensibility report](reports/extensibility.md); the
   [editor API](plans/editor-api.md) plan orders D058, D066, D077, D109–D112,
   D114, and D141–D143):
-  - D110 → D113; D109 → D113, D027, D142
+  - D110 → D113, D147, D148; D109 → D113, D027, D142
   - D134 → D135, D136
   - D073, D074, D075 → D130; D074 → D131; D073 → D132
   - D066 → D144
@@ -597,6 +597,24 @@ Kakoune mode could use it too. The
     command, with a bounded wait so a slow hook cannot block saving.
   - Order: after D079, which defines the save pipeline; before format on
     save in D067.
+
+- **D147 — Key contexts on non-editor views**
+  - Deferred: D110 lets extensions set key contexts on editor views only.
+    Terminals, the explorer, and contributed tree and text views resolve
+    bindings by view kind alone.
+  - Reconsider: A consumer needs a modal tree, terminal, or contributed
+    view, such as Vim keys in the explorer. Then extend the same
+    lifecycle-owned contexts and fact-count resolution to that view.
+  - Order: after D110.
+
+- **D148 — Richer key context matching**
+  - Deferred: A D110 binding names at most one context, with no negation or
+    `when`-style expressions.
+  - Reconsider: One context per binding forces an extension to duplicate
+    many bindings or keep redundant contexts in sync. Then allow several
+    contexts, or negated ones, per binding, still resolved by counting
+    matching facts rather than by an expression language.
+  - Order: after D110.
 
 ## Terminals and generated surfaces
 
