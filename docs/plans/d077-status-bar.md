@@ -1,6 +1,6 @@
 # D077 — Status bar
 
-Status: 🚧 approved; checkpoint 1 implemented, awaiting review. Item of the [editor API](editor-api.md)
+Status: 🚧 approved; checkpoint 1 done. Item of the [editor API](editor-api.md)
 plan; depends on D109 (done). Follows its brief; this file holds the design.
 
 ## Goal
@@ -88,18 +88,15 @@ and document facts, ahead of the Vim mode indicator (D058).
 
 ### 1. Document settings scope and indentation ✅
 
-Implemented, awaiting the review gate. The buffer carries a `document` UUID
-stamp set when its document is created; views put it in the settings read
-context, so no lookup happens per painted line, and a buffer without a document
-(a contributed text frame) matches only scopes without the fact. Entries with a
-`document` fact are dropped in `DocumentCollection::remove`. Detection and the
-two Convert Indentation commands (which also write the document's
-`editor.insertSpaces`) share `set_document_insert_spaces`. `DocumentInfo` gains
-`indentation: { style, size }`, and every settings write or reset recompares
-the snapshot. Review point: under the
-fact-count rule a `{ language, view }` value (two facts) beats a `document`
-value (one fact), so a personal `editor.insertSpaces` scoped to both now
-overrides detection, which previously beat every setting.
+Approved. Behavior: the `document` settings fact and its release on close
+([extension host](../architecture/extension-host.md#settings)), indentation
+resolved through document-scoped `editor.insertSpaces` and `editor.tabSize`
+with Convert Indentation commands
+([editor views](../architecture/workbench-and-lifecycle.md#editor-views)), and
+the rationale in [decisions](../decisions.md). `DocumentInfo.indentation`
+publishes `documentChanged` on any settings write. Under the fact-count rule a
+two-fact scope such as `{ language, view }` overrides detection, which writes
+only the document fact.
 
 ### 2. Active editor per window
 
