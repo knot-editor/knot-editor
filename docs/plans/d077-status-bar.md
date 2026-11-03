@@ -1,6 +1,6 @@
 # D077 — Status bar
 
-Status: 🚧 approved; checkpoints 1 and 2 done. Item of the [editor API](editor-api.md)
+Status: 🚧 approved; checkpoints 1 to 3 done. Item of the [editor API](editor-api.md)
 plan; depends on D109 (done). Follows its brief; this file holds the design.
 
 ## Goal
@@ -110,34 +110,15 @@ was checked by hand.
 
 ### 3. Native bar and item API ✅
 
-Implemented, awaiting the review gate. Behavior is in the [extension guide](../extension-api.md#show-status-items), [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#status-bar), and [decisions](../decisions.md#status-bar). Scope decisions made while building it:
-
-- `statusBar.hiddenItems` needed a list, so settings gained a `strings` type.
-- `update` replaces the whole value, and the same applies to a window's value, so partial merges and field clearing never arise.
-- Higher `priority` sits further left, as in VS Code, and ties keep registration order.
-- `console.log` now writes to standard error and names its extension, which the real-window checks of checkpoint 2 needed.
-- Validation limits: the product test covers one window, so the click's window comes from the shell that was clicked rather than from a second window. Debug bounds outlive their elements in gpui, so hiding is asserted by layout shifts. Tooltip painting and whether a click leaves the editor focused were not exercised.
-
-- Deliverables: the bar rendered below the workbench; `registerStatusItem`
-  with application-wide values, per-window overrides, priority ordering, and
-  lifecycle teardown; click dispatch; `statusBar.visible`,
-  `statusBar.hiddenItems`, and Toggle Status Bar; colors for the bar in the
-  native color table.
-- Validation: host handler tests for registration, override, replacement and
-  teardown; product tests for rendering, hidden items, toggling, and a click
-  running its command in the right window; a `node:test` case on the fake host.
-- **Implementation context:** a sibling child after the workbench row in
-  `ProductShell::render` (`src/app/product/render.rs`); item state is an
-  application-owned gpui `Global` like `ApplicationExtensionHost`, declared in
-  `src/app/mod.rs`. Registration mirrors `register_tree_provider` and
-  `register_command` in `src/app/extensions/host/handlers.rs` and their
-  lifecycle cleanup in `src/app/extensions/host.rs`. Settings definitions
-  follow `src/app/settings.rs`; the toggle command follows
-  `src/app/product/commands.rs`. Color keys live in `src/app/theme.rs`.
-  Update `docs/extension-api.md` and `docs/schemas/knot.schema.json` if the
-  API surfaces there.
-- Review gate: confirm the look, item ordering, and the per-window override
-  API before the package depends on them.
+Approved after a real-window pass over the look, item order, per-window
+override, click focus, tooltip, Toggle Status Bar, and `statusBar.hiddenItems`.
+Behavior: [extension guide](../extension-api.md#show-status-items),
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md#status-bar),
+and [decisions](../decisions.md#status-bar). Settings gained a `strings` type
+for `statusBar.hiddenItems`, and `console` output now goes to standard error
+under the extension's name. The product test covers one window, so the click's
+window comes from the clicked shell; gpui debug bounds outlive their elements,
+so hiding is asserted by layout shifts.
 
 ### 4. `@knot/status-bar` package
 
