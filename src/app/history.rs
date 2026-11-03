@@ -5,7 +5,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::core::{buffer::TextBuffer, transaction::EditTransaction};
+use crate::{
+    core::{buffer::TextBuffer, transaction::EditTransaction},
+    host::lifecycle::ExtensionKey,
+};
 
 const GROUPING_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -62,6 +65,15 @@ struct GroupState {
 pub(crate) struct EditHistory {
     undo: Vec<HistoryEntry>,
     redo: Vec<HistoryEntry>,
+    open: Option<OpenGroup>,
+}
+
+/// An undo group an extension holds open: every commit joins one entry.
+#[derive(Clone, Copy, Debug)]
+struct OpenGroup {
+    owner: ExtensionKey,
+    /// Whether the group's entry exists, as the last undo entry.
+    started: bool,
 }
 
 impl EditHistory {
@@ -77,6 +89,12 @@ impl EditHistory {
         let (range, text) = edit;
         let (before_state, after_state) = state_change;
         self.redo.clear();
+        if self.joins_open_group() {
+            let entry = self.undo.last_mut().expect("open group entry exists");
+            entry.transaction.replace(buffer, range, text);
+            entry.extend(after_state, view);
+            return;
+        }
         if let Some(grouping) = grouping
             && self
                 .undo
@@ -106,6 +124,7 @@ impl EditHistory {
             after_state,
             view,
         });
+        self.start_open_group();
     }
 
     pub(crate) fn apply_batch<'a>(
@@ -117,6 +136,14 @@ impl EditHistory {
         view: Option<HistoryViewChange>,
     ) {
         self.redo.clear();
+        if self.joins_open_group() {
+            let entry = self.undo.last_mut().expect("open group entry exists");
+            for (range, text) in edits.rev() {
+                entry.transaction.replace(buffer, range, text);
+            }
+            entry.extend(after_state, view);
+            return;
+        }
         self.break_group();
         let mut transaction = EditTransaction::new();
         for (range, text) in edits.rev() {
@@ -129,6 +156,51 @@ impl EditHistory {
             after_state,
             view,
         });
+        self.start_open_group();
+    }
+
+    /// Hold an undo group open for `owner`, so that every commit until it
+    /// ends joins one entry. `false` when a group is open.
+    pub(crate) fn begin_open_group(&mut self, owner: ExtensionKey) -> bool {
+        if self.open.is_some() {
+            return false;
+        }
+        self.break_group();
+        self.open = Some(OpenGroup {
+            owner,
+            started: false,
+        });
+        true
+    }
+
+    /// End the open group if `owner` holds it.
+    pub(crate) fn end_open_group(&mut self, owner: ExtensionKey) -> bool {
+        if self.open.is_some_and(|open| open.owner == owner) {
+            self.open = None;
+            self.break_group();
+            return true;
+        }
+        false
+    }
+
+    /// End the open group whoever holds it.
+    pub(crate) fn end_any_open_group(&mut self) {
+        if self.open.take().is_some() {
+            self.break_group();
+        }
+    }
+
+    fn joins_open_group(&self) -> bool {
+        self.open.is_some_and(|open| open.started) && !self.undo.is_empty()
+    }
+
+    fn start_open_group(&mut self) {
+        if let Some(open) = &mut self.open {
+            open.started = true;
+            if let Some(entry) = self.undo.last_mut() {
+                entry.group = None;
+            }
+        }
     }
 
     /// Apply `edits`, ascending and disjoint, as part of the last undo step,
@@ -177,6 +249,7 @@ impl EditHistory {
     }
 
     pub(crate) fn undo(&mut self, buffer: &mut TextBuffer) -> Option<HistoryReplay> {
+        self.end_any_open_group();
         let mut entry = self.undo.pop()?;
         entry.group = None;
         entry.transaction.prepare_for_history_replay(buffer);
@@ -191,6 +264,7 @@ impl EditHistory {
     }
 
     pub(crate) fn redo(&mut self, buffer: &mut TextBuffer) -> Option<HistoryReplay> {
+        self.end_any_open_group();
         let mut entry = self.redo.pop()?;
         entry.transaction.prepare_for_history_replay(buffer);
         entry.transaction.redo(buffer);
@@ -202,6 +276,23 @@ impl EditHistory {
         self.undo.push(entry);
         self.break_group();
         Some(replay)
+    }
+}
+
+impl HistoryEntry {
+    /// Make a commit part of this entry: it now ends at `after_state`, and
+    /// its view ends where the commit's does when both come from the same
+    /// editor, and records none otherwise.
+    fn extend(&mut self, after_state: u64, view: Option<HistoryViewChange>) {
+        self.group = None;
+        self.after_state = after_state;
+        match (&mut self.view, view) {
+            (Some(entry_view), Some(view)) if entry_view.after.context == view.after.context => {
+                entry_view.after = view.after
+            }
+            (None, None) => {}
+            _ => self.view = None,
+        }
     }
 }
 

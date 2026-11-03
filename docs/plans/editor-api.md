@@ -126,6 +126,7 @@ D077 moved here from the daily-driver plan.
 ## Phase 3 — Editing primitives
 
 - **D111 — Undo groups across edit batches**
+  - 🚧 [Plan](d111-undo-groups.md)
   - An extension opens and closes a group on a view or buffer that spans
     its edit batches and the native typing between them, sharing the native
     grouping editing commands use. Vim's `ciw…<Esc>` is one step.

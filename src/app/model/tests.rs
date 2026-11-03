@@ -944,3 +944,122 @@ fn indentation_is_detected_from_the_leading_lines() {
     let model = BufferModel::from_text("");
     assert_eq!(model.detect_indent_style(), None);
 }
+
+fn group_owner(lifecycle: u64) -> ExtensionKey {
+    ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(lifecycle))
+}
+
+fn typing(context: u64) -> EditGrouping {
+    EditGrouping {
+        context,
+        kind: crate::app::history::EditGroupKind::Typing,
+    }
+}
+
+fn caret(context: u64, at: usize) -> HistoryViewState {
+    HistoryViewState {
+        context,
+        anchor: at,
+        caret: at,
+    }
+}
+
+fn view_change(context: u64, before: usize, after: usize) -> HistoryViewChange {
+    HistoryViewChange {
+        before: caret(context, before),
+        after: caret(context, after),
+    }
+}
+
+#[test]
+fn an_open_undo_group_joins_batches_typing_and_amends_into_one_step() {
+    let mut model = BufferModel::from_text("one two three");
+    let owner = group_owner(1);
+    assert!(model.begin_undo_group(owner));
+    model
+        .apply_edits_from_view(vec![(4..7, String::new())], view_change(7, 4, 4))
+        .unwrap();
+    model.break_history_group();
+    model
+        .replace_grouped_from_view(4..4, "x", typing(7), view_change(7, 4, 5))
+        .unwrap();
+    model.break_history_group();
+    model
+        .replace_grouped_from_view(5..5, "y", typing(7), view_change(7, 5, 6))
+        .unwrap();
+    model
+        .amend_last_edit_from_view(vec![(6..6, "!".into())], caret(7, 7))
+        .unwrap();
+    model
+        .replace_from_view(0..0, ">", view_change(7, 7, 8))
+        .unwrap();
+    assert_eq!(model.text(), ">one xy! three");
+    assert!(model.end_undo_group(owner));
+
+    assert!(model.undo().unwrap());
+    assert_eq!(model.text(), "one two three");
+    assert!(!model.undo().unwrap());
+    assert!(model.redo().unwrap());
+    assert_eq!(model.text(), ">one xy! three");
+}
+
+#[test]
+fn an_open_undo_group_records_its_first_and_last_view_state() {
+    let owner = group_owner(1);
+    let mut model = BufferModel::from_text("ab");
+    assert!(model.begin_undo_group(owner));
+    model
+        .replace_from_view(0..0, "x", view_change(7, 0, 1))
+        .unwrap();
+    model
+        .replace_from_view(1..1, "y", view_change(7, 1, 2))
+        .unwrap();
+    model.end_undo_group(owner);
+    model.undo().unwrap();
+    assert_eq!(model.history_view_restore().unwrap().state, caret(7, 0));
+    model.redo().unwrap();
+    assert_eq!(model.history_view_restore().unwrap().state, caret(7, 2));
+
+    let mut model = BufferModel::from_text("ab");
+    assert!(model.begin_undo_group(owner));
+    model
+        .replace_from_view(0..0, "x", view_change(7, 0, 1))
+        .unwrap();
+    model
+        .replace_from_view(1..1, "y", view_change(8, 1, 2))
+        .unwrap();
+    model.end_undo_group(owner);
+    model.undo().unwrap();
+    assert_eq!(model.text(), "ab");
+    assert!(model.history_view_restore().is_none());
+}
+
+#[test]
+fn undo_group_rules_for_ownership_emptiness_and_replay() {
+    let mut model = BufferModel::from_text("a");
+    let owner = group_owner(1);
+    let other = group_owner(2);
+    assert!(model.begin_undo_group(owner));
+    assert!(!model.begin_undo_group(other));
+    assert!(!model.end_undo_group(other));
+    assert!(model.end_undo_group(owner));
+    // An empty group leaves no step.
+    assert!(!model.undo().unwrap());
+
+    model.replace_grouped(1..1, "b", typing(1)).unwrap();
+    model.break_history_group();
+    assert!(model.begin_undo_group(owner));
+    model.replace_grouped(2..2, "c", typing(1)).unwrap();
+    model.replace_grouped(3..3, "d", typing(1)).unwrap();
+    // Undo ends the open group and replays it as one step.
+    assert!(model.undo().unwrap());
+    assert_eq!(model.text(), "ab");
+    assert!(!model.end_undo_group(owner));
+    // A forward edit after the step no longer joins it.
+    model.replace_grouped(2..2, "e", typing(1)).unwrap();
+    assert!(!model.redo().unwrap());
+
+    assert!(model.begin_undo_group(owner));
+    model.close();
+    assert!(!model.end_undo_group(owner));
+}

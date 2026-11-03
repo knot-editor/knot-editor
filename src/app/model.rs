@@ -15,6 +15,7 @@ use crate::{
         anchored_range::{AnchoredRangeId, AnchoredRangeStore},
         buffer::{BufferEdit, TextBuffer},
     },
+    host::lifecycle::ExtensionKey,
     host::protocol::{
         BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, ExtensionId,
         ExtensionLifecycleId, SnapshotText,
@@ -1026,6 +1027,18 @@ impl BufferModel {
         self.history.break_group();
     }
 
+    /// Make every commit until the group ends one undo step. `false` when a
+    /// group is already open.
+    pub(crate) fn begin_undo_group(&mut self, owner: ExtensionKey) -> bool {
+        assert!(self.open, "cannot edit a closed buffer");
+        self.history.begin_open_group(owner)
+    }
+
+    /// End the open undo group if `owner` holds it.
+    pub(crate) fn end_undo_group(&mut self, owner: ExtensionKey) -> bool {
+        self.history.end_open_group(owner)
+    }
+
     pub(crate) fn undo(&mut self) -> Result<bool, BufferAccessError> {
         self.replay_history(true)
     }
@@ -1102,6 +1115,7 @@ impl BufferModel {
     }
 
     pub(crate) fn close(&mut self) {
+        self.history.end_any_open_group();
         self.snapshot_cache.get_mut().take();
         self.anchored_ranges = AnchoredRangeStore::new();
         self.contributions = ContributionRegistry::new();
