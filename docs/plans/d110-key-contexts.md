@@ -1,6 +1,6 @@
 # D110 — Key contexts and ordered key delivery
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 awaiting review. Item of the
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 next. Item of the
 [editor API and Vim mode](editor-api.md) plan; background in the
 [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency).
 
@@ -117,52 +117,21 @@ already in the text. The checkpoint 1 race fixture went from 199–200 of 200
 early insertions to 0, with key-to-commit p50 about 194 µs. Tests in
 `src/app/product/tests/key_hold.rs`.
 
-### 4. Text fallback
+### 4. Text fallback ✅
 
-`keymaps.bindText(command, { view, context })` and `unbindText`, a slot in
-the same registry that wins by the same rule, routing committed text input
-in a matching view to the command with `{ text }` as its arguments, under
-ordered delivery.
-
-- Tests: typed and IME-committed text reach the command in order and are not
-  inserted; keys bound in the same context still win over the fallback; no
-  fallback means native typing; teardown restores typing.
-- Review gate: the argument shape and preedit handling.
-
-Implemented ✅, awaiting review:
-
-- ✅ `keymaps.bindText(command, options)` and `unbindText(options)` take
-  the `bind` options; **the command is a name or null**, not a
-  `KeybindingCommand`, and always receives exactly `{ text }`, so there is
-  no merging of fixed arguments with the text. Null masks a lower text
-  binding so the view types natively. Text slots live beside key slots and
-  win by the same rule; they change no gpui bindings.
-- ✅ Routing happens in the editor's `replace_text_in_range`, for the
-  editor's view kind and live contexts. The editor cannot dispatch while it
-  is being updated, because capturing a target reads it, so a
-  `TextCommandRouter` global the product shell installs starts the key
-  hold synchronously and dispatches on `window.defer`. Later keys and text
-  wait behind the text's command, and a replayed text item that routes
-  holds the rest, as a replayed key does. The editor stays independent of
-  the product shell.
-- ✅ **Preedit:** where a text binding applies, composition does not touch
-  the buffer and no marked range is kept, so nothing is shown and the IME's
-  commit arrives as ordinary text routed to the command.
-- ✅ Show Keybindings lists text slots as `text` with the hint `Text`, and
-  accepting one runs nothing, because its command expects the typed text.
-- ✅ Tests: registry precedence, masking, teardown, listing, and batch
-  validation in `src/app/commands/keymaps/tests.rs`; the decoder and facade
-  in `src/host/engine/tests.rs`; and
-  `a_text_binding_receives_typed_and_composed_text_in_order` in
-  `src/app/product/tests/key_hold.rs`, covering native typing without the
-  context, key and text order, a bound key winning, composition, and
-  teardown restoring typing.
-
-**Implementation context:** routing happens in `replace_text_in_range` in
-`src/app/editor/input.rs`, which asks the keymap registry for a text
-binding for its view kind and contexts and dispatches through the product
-command path rather than editing. Registry storage beside key slots in
-`src/app/commands/keymaps.rs`; Show Keybindings lists it as `text`.
+Approved. `keymaps.bindText(command, { view, context })` and `unbindText`
+route committed text that the editor would insert to a command name, which
+always receives exactly `{ text }`; null masks a lower text binding. Text
+slots sit beside key slots and win by the same rule, and a key bound in the
+context still wins because text only arrives for unbound keys. The editor's
+`replace_text_in_range` resolves the binding and calls a `TextCommandRouter`
+global the product shell installs: it starts the key hold synchronously,
+since the editor is mid-update and cannot capture a target, and dispatches
+on `window.defer`. Where a text binding applies, composition never touches
+the buffer and the IME commit routes as text. Show Keybindings lists text
+slots as `text` and accepting one runs nothing. Tests in
+`src/app/commands/keymaps/tests.rs` and
+`a_text_binding_receives_typed_and_composed_text_in_order`.
 
 ### 5. Small modal example and documentation
 
