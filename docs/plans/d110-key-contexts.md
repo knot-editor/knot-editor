@@ -1,6 +1,6 @@
 # D110 — Key contexts and ordered key delivery
 
-Status: 🚧 checkpoint 2 awaiting review. Item of the
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 in progress. Item of the
 [editor API and Vim mode](editor-api.md) plan; background in the
 [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency).
 
@@ -89,57 +89,20 @@ polls instead of running the platform loop, so a real window adds its
 wakeup latency within the remaining frame margin. Checkpoint 5 moves these
 numbers into decisions.
 
-### 2. View key contexts and context-scoped bindings
+### 2. View key contexts and context-scoped bindings ✅
 
-`Editor.setKeyContext(name, active)` on the editor handle, lifecycle-owned
-contexts on `EditorView`, and a `context` option on `keymaps.bind` and
-`unbind`, resolved by fact count. Teardown clears a lifecycle's contexts
-and bindings.
-
-- Tests: registry precedence (context beats view beats global, latest write
-  among equals, preset beneath), teardown revealing earlier writes; product
-  tests that a key resolves by the live context immediately after it is set,
-  before a repaint, and that an unmatched key in a context still types.
-- Review gate: the API shape in `knot.d.ts` and the precedence rule.
-
-Implemented ✅, awaiting review:
-
-- ✅ `Editor.setKeyContext(name, active)` (`editorSetKeyContext`). Contexts
-  are `(lifecycle, name)` pairs on `EditorView`, so two lifecycles setting
-  the same name are independent; the host remembers which editors each
-  lifecycle touched and clears them in the shared foreground teardown.
-- ✅ `keymaps.bind`/`unbind` take `context`, which **requires a `view`**:
-  contexts belong to a view kind, so `{ view: "editor", context: "modal" }`
-  is the scope and a context alone is rejected as an invalid batch. This
-  keeps fact counting unambiguous and leaves room for D147.
-- ✅ Precedence: extension slots beat the preset, then the slot requiring
-  the most facts, then the latest write. A view holding several contexts
-  takes the latest write among their slots.
-- ✅ gpui recognizes a context-scoped key with `product > editor`, also when
-  a global binding excludes the editor because the editor unbinds it.
-  `dispatch_keybinding` resolves against the editor's live contexts.
-- ✅ The palette's shown keys and menu key equivalents ignore contexts; a
-  key some context unbinds gets no menu equivalent, as a view unbind does.
-- ✅ The fake host's `setKeyContext` is `not faked` until checkpoint 5.
-- ✅ Tests: registry precedence, validation, gpui predicates, and listing in
-  `src/app/commands/keymaps/tests.rs`; the decoder in
-  `src/host/engine/tests.rs`; the product test
-  `editor_key_contexts_resolve_live_and_end_with_their_lifecycle` in
-  `src/app/product/tests/keybindings.rs` covers resolution before any
-  repaint, unmatched keys typing, leaving, and teardown.
-
-**Implementation context:** `BindingRegistry` in
-`src/app/commands/keymaps.rs` keys slots by `(owner, key, view)`; extend the
-slot key and `winning_slot`/`refresh_key` with the context, and
-`gpui_bindings` with a broad `product > editor` predicate for context-scoped
-keys. `KeybindingMutation` in `src/host/protocol.rs` and its decoder carry
-the option. `dispatch_keybinding` and `target_view_kind` in
-`src/app/product.rs` pass the focused editor's contexts to `resolve`.
-The handle operation follows `editor_set_selection` in
-`src/app/extensions/host/handlers.rs` (`contextual_editor`), with the JS
-side beside the existing `Editor` in `src/host/js/knot.d.ts`. Lifecycle
-cleanup hooks in the shared foreground teardown that already removes
-keybinding owners (`remove_owner`).
+Approved. `Editor.setKeyContext(name, active)` sets lifecycle-owned contexts
+on `EditorView`, cleared at teardown, and `keymaps.bind`/`unbind` take a
+`context` that requires a `view`, so a context is always scoped to a view
+kind and fact counting stays unambiguous. Extension slots beat the preset,
+then the slot requiring the most facts, then the latest write; a view
+holding several contexts takes the latest of their slots. gpui recognizes a
+context-scoped key broadly in its view and `dispatch_keybinding` resolves
+against the live contexts, so a key resolves in a context before any
+repaint. Show Keybindings lists the scope as `in editor (modal)`; the
+palette and menu keys ignore contexts. Contract in `src/host/js/knot.d.ts`;
+tests in `src/app/commands/keymaps/tests.rs` and
+`editor_key_contexts_resolve_live_and_end_with_their_lifecycle`.
 
 ### 3. Ordered key delivery
 
