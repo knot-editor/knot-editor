@@ -10,8 +10,13 @@ test("lines, compiler locations, and whitespace parse", () => {
   assert.deepEqual(parseLocation("007"), { line: 7, column: null });
 });
 
+test("a separator without a column reads as the line alone", () => {
+  assert.deepEqual(parseLocation("42:"), { line: 42, column: null });
+  assert.deepEqual(parseLocation("42, "), { line: 42, column: null });
+});
+
 test("anything else is not a location", () => {
-  for (const text of ["", " ", "abc", "0", "1:0", "+5", "-1", "1:", ":3", "1:2:3", "1.5", "1 2"]) {
+  for (const text of ["", " ", "abc", "0", "1:0", "+5", "-1", ":3", "1:2:3", "1.5", "1 2"]) {
     assert.equal(parseLocation(text), null, text);
   }
 });

@@ -5,13 +5,14 @@ import type { TextSnapshot } from "knot";
 /** A typed location; a missing column means the start of the line. */
 export type Location = { line: number; column: number | null };
 
-/** Reads `N`, `N:C`, or `N,C`, ignoring surrounding whitespace. Lines and
+/** Reads `N`, `N:C`, or `N,C`, ignoring surrounding whitespace. A separator
+ * without a column reads as `N`, so typing `N:C` never leaves `N`. Lines and
  * columns start at 1; anything else is not a location. */
 export function parseLocation(text: string): Location | null {
-  const match = /^(\d+)(?:[:,](\d+))?$/.exec(text.trim());
+  const match = /^(\d+)(?:[:,](\d*))?$/.exec(text.trim());
   if (match === null) return null;
   const line = Number(match[1]);
-  const column = match[2] === undefined ? null : Number(match[2]);
+  const column = match[2] === undefined || match[2] === "" ? null : Number(match[2]);
   if (line < 1 || (column !== null && column < 1)) return null;
   return { line, column };
 }

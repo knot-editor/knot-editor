@@ -57,7 +57,8 @@ and language tooling (D067) also need. Nothing in it is a private bypass.
 - Opening reads the selection and view state, then shows the input with a
   message such as "Current line 12, column 4. Type a line between 1 and 340."
 - Accepted forms: `N`, `N:C`, and `N,C` (compiler locations), surrounding
-  whitespace ignored. Columns count Unicode scalar values, 1-based, with a tab
+  whitespace ignored. ✅ A trailing separator without a column (`42:`) reads
+  as `N`, so the preview holds while a column is typed. Columns count Unicode scalar values, 1-based, with a tab
   as one. A line past the end clamps to the last line, a column past the line
   end clamps to the end. Anything else restores the original view state, shows
   the usage message, and Enter does nothing beyond dismissing.
