@@ -162,7 +162,8 @@ impl StatusRegistry {
     }
 
     /// The items a window's bar shows: each ID's latest registration, minus
-    /// the hidden IDs, ordered by priority and then by registration.
+    /// the hidden IDs and the items without text, ordered by priority and then
+    /// by registration.
     pub(crate) fn items(&self, window: &str, hidden: &[String]) -> BarItems {
         let mut effective = Vec::<&Registration>::new();
         for registration in &self.registrations {
@@ -183,6 +184,9 @@ impl StatusRegistry {
                 .get(window)
                 .unwrap_or(&registration.value)
                 .clone();
+            if item.text.is_empty() {
+                continue;
+            }
             let side = match item.side {
                 StatusSide::Left => &mut items.left,
                 StatusSide::Right => &mut items.right,

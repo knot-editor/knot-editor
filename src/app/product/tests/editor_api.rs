@@ -78,7 +78,7 @@ fn load(cx: &mut TestAppContext) -> Entity<crate::app::extensions::host::Product
     host
 }
 
-fn active_editor(
+pub(super) fn active_editor(
     shell: &Entity<ProductShell>,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::editor::EditorView> {

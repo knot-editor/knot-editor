@@ -647,7 +647,7 @@ const position = await workbench.registerStatusItem("position", {
 await position.update({ text: "Ln 4, Col 2", side: "right", priority: 10 });
 ```
 
-An item has text and optionally a tooltip, a command with JSON arguments that a
+An item has text, which hides it while empty, and optionally a tooltip, a command with JSON arguments that a
 click runs in the window it was clicked in, and a theme color key for its
 text. It sits on the `left` or `right` side; within a side, a higher `priority`
 sits further left and equal priorities keep registration order. `update`

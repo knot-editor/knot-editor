@@ -528,6 +528,7 @@ export function statusItems(target: Knot.WindowTarget): (Knot.StatusItemOptions 
     .filter((item) => !hidden.includes(item.id))
     .sort((a, b) => state.statusItems.indexOf(a) - state.statusItems.indexOf(b))
     .map((item) => ({ id: item.id, ...(item.windows.get(target) ?? item.value) }))
+    .filter((item) => item.text !== "")
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 }
 

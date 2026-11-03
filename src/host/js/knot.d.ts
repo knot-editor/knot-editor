@@ -1213,6 +1213,8 @@ declare module "knot" {
   }
   /** What the status bar shows for one item. */
   export interface StatusItemOptions {
+    /** An item with empty text is not shown, so a window's value can hide an
+     * item there. */
     readonly text: string;
     /** Shown while the pointer rests on the item. */
     readonly tooltip?: string;

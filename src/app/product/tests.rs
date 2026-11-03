@@ -27,6 +27,7 @@ mod sessions;
 mod settings;
 mod startup;
 mod status_bar;
+mod status_bar_package;
 mod terminal;
 mod text_frames;
 mod themes;

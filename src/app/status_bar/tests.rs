@@ -104,6 +104,21 @@ fn updates_need_a_live_registration_of_the_owner_and_a_value() {
 }
 
 #[test]
+fn items_without_text_are_not_shown() {
+    let mut registry = StatusRegistry::default();
+    let id = registry.register(owner(1), "a".into(), item("", StatusSide::Left, 0));
+    assert_eq!(registry.items("w", &[]), BarItems::default());
+    registry.update(
+        owner(1),
+        id,
+        Some("w".into()),
+        Some(item("a", StatusSide::Left, 0)),
+    );
+    assert_eq!(texts(&registry.items("w", &[]).left), ["a"]);
+    assert_eq!(registry.items("other", &[]), BarItems::default());
+}
+
+#[test]
 fn hidden_ids_are_skipped_but_keep_their_registration() {
     let mut registry = StatusRegistry::default();
     registry.register(owner(1), "a".into(), item("a", StatusSide::Left, 0));

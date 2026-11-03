@@ -1,0 +1,11 @@
+{
+  // Bundled status bar items.
+  "name": "@knot/status-bar",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "displayName": "Status Bar",
+  "description": "Shows the editor's cursor position, indentation, and language in the status bar.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}
