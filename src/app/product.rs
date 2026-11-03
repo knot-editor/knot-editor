@@ -11,6 +11,7 @@ use std::{
     path::Path,
     pin::Pin,
     sync::{Arc, OnceLock},
+    time::Duration,
 };
 
 use gpui::{prelude::FluentBuilder, *};
@@ -18,6 +19,7 @@ use gpui::{prelude::FluentBuilder, *};
 mod closure;
 pub(super) mod commands;
 mod extension_restart;
+mod key_hold;
 mod language_mode;
 mod launch;
 mod move_tool;
@@ -426,6 +428,9 @@ pub(crate) struct ProductShell {
     view_state: view_state::ViewStateTracking,
     /// Creation order across product windows; window identities are reused.
     created: u64,
+    /// Input waiting for a key-invoked extension command to finish.
+    key_hold: Option<key_hold::KeyHold>,
+    key_hold_generation: u64,
 }
 
 /// One live transient interaction owned by this window. Native interactions
@@ -532,6 +537,8 @@ impl ProductShell {
                 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
                 NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             },
+            key_hold: None,
+            key_hold_generation: 0,
         }
     }
 
@@ -981,10 +988,24 @@ impl ProductShell {
             view_kind.as_deref(),
             &contexts,
         );
-        match resolution {
-            Some(BindingResolution::Command(command)) => self.dispatch_command(command, target, cx),
-            Some(BindingResolution::Unbound) => cx.propagate(),
-            None => cx.propagate(),
+        let Some(BindingResolution::Command(command)) = resolution else {
+            cx.propagate();
+            return;
+        };
+        let dispatcher = Self::command_dispatcher(cx);
+        let native = matches!(
+            dispatcher
+                .read(cx)
+                .catalog()
+                .borrow()
+                .resolve(command.name.as_ref()),
+            Ok(super::commands::catalog::CommandTargetKind::Native)
+        );
+        let execution = dispatcher.update(cx, |dispatcher, cx| {
+            dispatcher.dispatch(command, target, cx)
+        });
+        if !native && self.key_hold.is_none() {
+            self.hold_keys_until(execution.completion, editor, window, cx);
         }
     }
 

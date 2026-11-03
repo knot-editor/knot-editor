@@ -5,4 +5,5 @@ pub(crate) mod catalog;
 pub(super) mod declarations;
 pub(super) mod dispatch;
 pub(super) mod extension;
+pub(crate) mod key_hold;
 pub(super) mod keymaps;

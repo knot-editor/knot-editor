@@ -261,6 +261,15 @@ impl EntityInputHandler for EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A composition commits in place: its preedit is already in the text.
+        if self.marked_range_utf16.is_none()
+            && let Some(queue) = &self.held_input
+        {
+            queue.push(crate::app::commands::key_hold::HeldInput::Text(
+                text.to_owned(),
+            ));
+            return;
+        }
         let grouping = if self.marked_range_utf16.is_some() {
             EditGroupKind::Composition
         } else {

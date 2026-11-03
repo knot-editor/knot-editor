@@ -1,6 +1,6 @@
 # D110 — Key contexts and ordered key delivery
 
-Status: 🚧 checkpoints 1–2 complete; checkpoint 3 in progress. Item of the
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 awaiting review. Item of the
 [editor API and Vim mode](editor-api.md) plan; background in the
 [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency).
 
@@ -117,6 +117,36 @@ or timeout.
   queue; native commands are unaffected.
 - Review gate: behavior when the queued key itself starts another extension
   command (the hold chains), and the timeout value.
+
+Implemented ✅, awaiting review:
+
+- ✅ `src/app/product/key_hold.rs`: `dispatch_keybinding` starts a hold
+  whenever the command it dispatched is not native. One application-wide
+  `intercept_keystrokes` interceptor, installed with the product keys,
+  queues key-downs for a window whose shell holds; an interceptor runs
+  before keybindings and stops macOS text insertion for that key, so a held
+  printable key neither types nor dispatches. The held editor queues its
+  committed text in `replace_text_in_range` through the same queue
+  (`src/app/commands/key_hold.rs`), so keys and text keep one order.
+- ✅ Release replays keys with `Window::dispatch_keystroke` and text
+  through the editor's input path. **Chaining:** a replayed key that starts
+  another extension command gets a new hold, and the rest of the queue
+  moves into it ahead of anything newer, so `f8 a f8 b` applies as typed.
+- ✅ Release on completion, on the first key after focus left the held
+  view (both that key and the queued ones go to the new focus, such as a
+  picker the command opened), or after **1 s** (`KEY_HOLD_TIMEOUT`).
+  Focus loss is noticed on the next key rather than on the focus change:
+  with no key there is nothing to deliver.
+- ✅ An IME composition's commit is not queued, because its preedit is
+  already in the text; a composition cannot start during a hold because
+  its first key is held. Key-ups pass through.
+- ✅ The checkpoint 1 race fixture now reports text before the commit in
+  0 of 200 trials; key-to-commit p50 rose from about 172 µs to 194 µs.
+- ✅ Tests in `src/app/product/tests/key_hold.rs`: keys and text in order
+  with a chained hold, a held key resolving in the context the command set,
+  native commands not holding, the timeout, and focus loss. They fail with
+  the hold disabled. The checkpoint 2 product test now waits for typed text,
+  since keys after an extension key wait for its completion.
 
 **Implementation context:** the hold lives with the product window, which
 already sees every keymap action and owns the command target capture; it

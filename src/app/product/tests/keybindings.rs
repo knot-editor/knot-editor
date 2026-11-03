@@ -1313,20 +1313,17 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
     cx.simulate_keystrokes(window, "h");
     wait_for_api_condition(cx, |cx| editor.read(cx).selection(cx) == (2, 2));
     cx.simulate_keystrokes(window, "x");
-    cx.run_until_parked();
-    cx.read(|cx| assert_eq!(model.read(cx).text(), "abxc"));
+    wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxc");
 
     cx.simulate_keystrokes(window, "escape");
     wait_for_api_condition(cx, |cx| editor.read(cx).key_contexts().is_empty());
     cx.simulate_keystrokes(window, "h");
-    cx.run_until_parked();
-    cx.read(|cx| assert_eq!(model.read(cx).text(), "abxhc"));
+    wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhc");
 
     cx.simulate_keystrokes(window, "f8");
     wait_for_api_condition(cx, in_modal);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.read(|cx| assert!(editor.read(cx).key_contexts().is_empty()));
     cx.simulate_keystrokes(window, "h");
-    cx.run_until_parked();
-    cx.read(|cx| assert_eq!(model.read(cx).text(), "abxhhc"));
+    wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhhc");
 }

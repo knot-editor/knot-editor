@@ -257,6 +257,9 @@ pub struct EditorView {
     /// Named key contexts keybindings can require, each owned by the
     /// extension lifecycle that set it. Presentation state, never recorded.
     key_contexts: Vec<(crate::host::lifecycle::ExtensionKey, SharedString)>,
+    /// Where committed text input goes instead of the buffer while a
+    /// key-invoked extension command holds this view's input.
+    held_input: Option<crate::app::commands::key_hold::HeldInputQueue>,
     #[cfg(test)]
     paint_count: u64,
     _model_subscription: Subscription,
@@ -442,6 +445,15 @@ impl EditorView {
         }
     }
 
+    /// Queue committed text input in `queue` rather than inserting it, or
+    /// insert it again with `None`.
+    pub(crate) fn set_held_input(
+        &mut self,
+        queue: Option<crate::app::commands::key_hold::HeldInputQueue>,
+    ) {
+        self.held_input = queue;
+    }
+
     /// Clear every key context `owner` set.
     pub(crate) fn remove_key_context_owner(&mut self, owner: crate::host::lifecycle::ExtensionKey) {
         self.key_contexts.retain(|(key, _)| *key != owner);
@@ -602,6 +614,7 @@ impl EditorView {
             pending_indent: None,
             auto_closed: Vec::new(),
             key_contexts: Vec::new(),
+            held_input: None,
             #[cfg(test)]
             paint_count: 0,
             _model_subscription: model_subscription,

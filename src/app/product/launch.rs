@@ -541,4 +541,5 @@ fn product_menus() -> Vec<Menu> {
 
 pub(in crate::app) fn bind_product_keys(cx: &mut App) {
     crate::app::commands::keymaps::install(cx);
+    super::key_hold::intercept_held_keys(cx);
 }
