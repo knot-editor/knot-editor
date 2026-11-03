@@ -173,6 +173,18 @@ pub(crate) enum Reveal {
     Center,
 }
 
+/// How the caret is drawn.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum CaretShape {
+    /// A thin vertical bar before the character.
+    #[default]
+    Bar,
+    /// A box over the character under the caret.
+    Block,
+    /// A line under the character under the caret.
+    Underline,
+}
+
 pub struct EditorView {
     element_id: usize,
     rendering: EditorRenderingOptions,
@@ -257,6 +269,9 @@ pub struct EditorView {
     /// Named key contexts keybindings can require, each owned by the
     /// extension lifecycle that set it. Presentation state, never recorded.
     key_contexts: Vec<(crate::host::lifecycle::ExtensionKey, SharedString)>,
+    /// Caret shapes lifecycles have set; the latest one wins and each belongs
+    /// to its lifecycle. Presentation state, never recorded.
+    caret_shapes: Vec<(crate::host::lifecycle::ExtensionKey, CaretShape)>,
     /// Where committed text input goes instead of the buffer while a
     /// key-invoked extension command holds this view's input.
     held_input: Option<crate::app::commands::key_hold::HeldInputQueue>,
@@ -445,6 +460,28 @@ impl EditorView {
         }
     }
 
+    /// The shape the caret is drawn with: the latest lifecycle's, else a bar.
+    pub(crate) fn caret_shape(&self) -> CaretShape {
+        self.caret_shapes
+            .last()
+            .map_or(CaretShape::Bar, |(_, shape)| *shape)
+    }
+
+    /// Set `owner`'s caret shape, or clear it with `None` to reveal the
+    /// previous lifecycle's.
+    pub(crate) fn set_caret_shape(
+        &mut self,
+        owner: crate::host::lifecycle::ExtensionKey,
+        shape: Option<CaretShape>,
+        cx: &mut Context<Self>,
+    ) {
+        self.caret_shapes.retain(|(key, _)| *key != owner);
+        if let Some(shape) = shape {
+            self.caret_shapes.push((owner, shape));
+        }
+        cx.notify();
+    }
+
     /// Queue committed text input in `queue` rather than inserting it, or
     /// insert it again with `None`.
     pub(crate) fn set_held_input(
@@ -461,9 +498,18 @@ impl EditorView {
             .resolve_text(&self.view_kind, &self.key_contexts())
     }
 
-    /// Clear every key context `owner` set.
-    pub(crate) fn remove_key_context_owner(&mut self, owner: crate::host::lifecycle::ExtensionKey) {
+    /// Clear every key context and caret shape `owner` set.
+    pub(crate) fn remove_owner_state(
+        &mut self,
+        owner: crate::host::lifecycle::ExtensionKey,
+        cx: &mut Context<Self>,
+    ) {
         self.key_contexts.retain(|(key, _)| *key != owner);
+        let had_shape = self.caret_shapes.iter().any(|(key, _)| *key == owner);
+        self.caret_shapes.retain(|(key, _)| *key != owner);
+        if had_shape {
+            cx.notify();
+        }
     }
 
     /// Move the selection to byte offsets on character boundaries within the
@@ -621,6 +667,7 @@ impl EditorView {
             pending_indent: None,
             auto_closed: Vec::new(),
             key_contexts: Vec::new(),
+            caret_shapes: Vec::new(),
             held_input: None,
             #[cfg(test)]
             paint_count: 0,

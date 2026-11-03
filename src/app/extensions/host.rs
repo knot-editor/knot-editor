@@ -578,9 +578,9 @@ pub(crate) struct ProductExtensionHost {
     next_transient_session: u64,
     /// Values dropped because a later definition gave their key another type.
     setting_warnings: Vec<String>,
-    /// Editors each lifecycle set a key context on, cleared at teardown.
-    key_context_editors:
-        HashMap<ExtensionKey, Vec<gpui::WeakEntity<crate::app::editor::EditorView>>>,
+    /// Editors each lifecycle set a key context or caret shape on, cleared at
+    /// teardown.
+    owned_editors: HashMap<ExtensionKey, Vec<gpui::WeakEntity<crate::app::editor::EditorView>>>,
     /// Long-lived editor handles, each bound to one exact tab presentation.
     editor_handles: HashMap<u64, EditorHandle>,
     next_editor_handle: u64,
@@ -647,7 +647,7 @@ impl ProductExtensionHost {
         Self {
             pool,
             lifecycles: HashSet::new(),
-            key_context_editors: HashMap::new(),
+            owned_editors: HashMap::new(),
             editor_handles: HashMap::new(),
             undo_groups: HashMap::new(),
             next_undo_group: 0,
@@ -1608,7 +1608,28 @@ impl ProductExtensionHost {
         cx: &mut App,
     ) {
         editor.update(cx, |editor, _| editor.set_key_context(owner, name, active));
-        let editors = self.key_context_editors.entry(owner).or_default();
+        self.track_owned_editor(owner, &editor);
+    }
+
+    /// Set or clear the calling lifecycle's caret shape on an editor,
+    /// remembering the editor so teardown clears it.
+    pub(super) fn set_editor_caret_shape(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::EditorView>,
+        shape: Option<crate::app::editor::CaretShape>,
+        cx: &mut App,
+    ) {
+        editor.update(cx, |editor, cx| editor.set_caret_shape(owner, shape, cx));
+        self.track_owned_editor(owner, &editor);
+    }
+
+    fn track_owned_editor(
+        &mut self,
+        owner: ExtensionKey,
+        editor: &Entity<crate::app::editor::EditorView>,
+    ) {
+        let editors = self.owned_editors.entry(owner).or_default();
         editors.retain(|weak| weak.upgrade().is_some());
         if !editors
             .iter()
@@ -2601,9 +2622,9 @@ impl ProductExtensionHost {
         }
         self.editor_handles.retain(|_, handle| handle.owner != key);
         self.end_undo_groups_where(cx, |group| group.owner == key);
-        for editor in self.key_context_editors.remove(&key).unwrap_or_default() {
+        for editor in self.owned_editors.remove(&key).unwrap_or_default() {
             if let Some(editor) = editor.upgrade() {
-                editor.update(cx, |editor, _| editor.remove_key_context_owner(key));
+                editor.update(cx, |editor, cx| editor.remove_owner_state(key, cx));
             }
         }
         if self.personal_config_key == Some(key) {

@@ -236,7 +236,7 @@ impl Element for EditorElement {
             let caret =
                 if view.caret_blink.visible && view.cursor_line >= first && view.cursor_line < last
                 {
-                    Some((view.cursor_line, view.cursor_col))
+                    Some((view.cursor_line, view.cursor_col, view.caret_shape()))
                 } else {
                     None
                 };
@@ -515,21 +515,52 @@ impl Element for EditorElement {
             // during the hidden half of a blink.
             if focused
                 && selection.is_none()
-                && let Some((line_ix, col)) = caret
+                && let Some((line_ix, col, shape)) = caret
             {
-                let (caret_x, x_off) = shaped
+                let (caret_x, x_off, cell_w) = shaped
                     .iter()
                     .find(|(ix, _, _, _)| *ix == line_ix)
                     .map(|(_, s, x_off, line_str)| {
-                        (x_for_index_dir(s, col, line_str, tab_size), *x_off)
+                        let x = x_for_index_dir(s, col, line_str, tab_size);
+                        // The character under the caret spans to the next
+                        // grapheme boundary; past the line's end there is
+                        // none, so use half the line height.
+                        let width = line_str
+                            .get(col..)
+                            .and_then(|rest| rest.graphemes(true).next())
+                            .filter(|grapheme| !grapheme.starts_with(['\r', '\n']))
+                            .map(|grapheme| {
+                                let end =
+                                    x_for_index_dir(s, col + grapheme.len(), line_str, tab_size);
+                                (end - x).abs()
+                            })
+                            .filter(|width| *width > px(0.))
+                            .unwrap_or(line_height / 2.);
+                        (x, *x_off, width)
                     })
-                    .unwrap_or((px(0.), px(0.)));
+                    .unwrap_or((px(0.), px(0.), line_height / 2.));
                 let top = bounds.origin.y + px(line_ix as f32 * LINE_HEIGHT) - px(scroll);
-                let caret_bounds = Bounds {
-                    origin: point(bounds.origin.x + x_off + caret_x, top),
-                    size: size(px(2.), line_height),
+                let left = bounds.origin.x + x_off + caret_x;
+                let (origin, extent) = match shape {
+                    CaretShape::Bar => (point(left, top), size(px(2.), line_height)),
+                    // Translucent, so the character stays legible beneath.
+                    CaretShape::Block => (point(left, top), size(cell_w, line_height)),
+                    CaretShape::Underline => (
+                        point(left, top + line_height - px(2.)),
+                        size(cell_w, px(2.)),
+                    ),
                 };
-                window.paint_quad(fill(caret_bounds, colors.caret));
+                let color = match shape {
+                    CaretShape::Block => colors.caret.opacity(0.5),
+                    _ => colors.caret,
+                };
+                window.paint_quad(fill(
+                    Bounds {
+                        origin,
+                        size: extent,
+                    },
+                    color,
+                ));
             }
 
             shaped
@@ -617,7 +648,7 @@ pub(super) type EditorPaintState = (
     f32,
     Vec<(usize, String, Vec<TextRun>)>,
     usize,
-    Option<(usize, usize)>,
+    Option<(usize, usize, CaretShape)>,
     Option<((usize, usize), (usize, usize))>,
     Option<((usize, usize), (usize, usize))>,
     Vec<(usize, usize, usize)>,

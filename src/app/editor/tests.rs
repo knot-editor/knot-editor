@@ -4,8 +4,8 @@ use gpui::{
 };
 
 use super::{
-    BufferModel, ContributionSource, EditorRenderingOptions, EditorView, EditorViewState,
-    LINE_HEIGHT, ResolvedEditorContribution, Reveal, flat_utf16_to_position,
+    BufferModel, CaretShape, ContributionSource, EditorRenderingOptions, EditorView,
+    EditorViewState, LINE_HEIGHT, ResolvedEditorContribution, Reveal, flat_utf16_to_position,
     layout::{HighlightSpan, runs_for, shape_editor_line, x_for_index_dir},
     project_contributions, to_flat_utf16,
 };
@@ -1702,5 +1702,27 @@ fn double_click_and_word_movement_stop_at_separators(cx: &mut TestAppContext) {
             }
             assert_eq!(stops, [17, 14, 13, 12, 2, 1, 0]);
         })
+    });
+}
+
+#[gpui::test]
+fn caret_shape_is_the_latest_lifecycles_and_reverts_when_cleared(cx: &mut TestAppContext) {
+    use crate::host::lifecycle::ExtensionKey;
+    let first = ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    let second = ExtensionKey::new(ExtensionId::new(2), ExtensionLifecycleId::new(1));
+    let model = cx.new(|_| BufferModel::from_text("abc".to_string()));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    editor.update(cx, |view, cx| {
+        assert_eq!(view.caret_shape(), CaretShape::Bar);
+        view.set_caret_shape(first, Some(CaretShape::Block), cx);
+        view.set_caret_shape(second, Some(CaretShape::Underline), cx);
+        assert_eq!(view.caret_shape(), CaretShape::Underline);
+        view.set_caret_shape(second, None, cx);
+        assert_eq!(view.caret_shape(), CaretShape::Block);
+        view.set_caret_shape(second, Some(CaretShape::Bar), cx);
+        view.remove_owner_state(second, cx);
+        assert_eq!(view.caret_shape(), CaretShape::Block);
+        view.remove_owner_state(first, cx);
+        assert_eq!(view.caret_shape(), CaretShape::Bar);
     });
 }

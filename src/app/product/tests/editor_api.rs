@@ -204,6 +204,9 @@ await commands.register("handle.attach", async () => {
   handle.onDidClose(() => { closed += 1; });
   await handle.setKeyContext("held", true);
 });
+await commands.register("handle.block", async () => { await handle.setCursorStyle("block"); });
+await commands.register("handle.underline", async () => { await handle.setCursorStyle("underline"); });
+await commands.register("handle.plain", async () => { await handle.setCursorStyle(null); });
 await commands.register("handle.move", async () => {
   await handle.setSelection({ anchor: 1, caret: 1 });
 });
@@ -336,6 +339,35 @@ fn editor_handle_key_contexts_end_with_their_lifecycle(cx: &mut TestAppContext) 
     cx.read(|cx| assert_eq!(editor.read(cx).key_contexts(), ["held"]));
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.read(|cx| assert!(editor.read(cx).key_contexts().is_empty()));
+}
+
+#[gpui::test]
+fn editor_handle_cursor_style_follows_the_latest_choice_and_ends_with_its_lifecycle(
+    cx: &mut TestAppContext,
+) {
+    use crate::app::editor::CaretShape;
+    let documents = install_globals(cx);
+    let (host, key) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(&shell, window, name, cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    };
+    run("handle.attach", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).caret_shape(), CaretShape::Bar));
+    run("handle.block", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).caret_shape(), CaretShape::Block));
+    run("handle.underline", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).caret_shape(), CaretShape::Underline));
+    run("handle.plain", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).caret_shape(), CaretShape::Bar));
+    run("handle.block", cx);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    cx.read(|cx| assert_eq!(editor.read(cx).caret_shape(), CaretShape::Bar));
 }
 
 const SELECTION_SOURCE: &str = r#"

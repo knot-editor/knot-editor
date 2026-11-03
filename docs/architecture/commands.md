@@ -87,6 +87,12 @@ against the view's live contexts, propagating a key that resolves to nothing as
 an unbound key. Menus and the palette ignore contexts, and a key that some
 context unbinds shows no menu key.
 
+An editor also takes a caret shape (`bar`, `block`, or `underline`) from an
+extension, kept per lifecycle like key contexts: the latest set wins, clearing
+reveals the previous one, and teardown clears its own. A block or underline
+covers the character under the caret, with a half-line width at the end of a
+line; the shape is presentation state and never recorded.
+
 A text binding routes committed text that an editor would insert to a command
 with `{ text }` as its arguments, scoped and resolved like key bindings but in
 its own slots, so it changes no gpui bindings. The editor resolves it in its

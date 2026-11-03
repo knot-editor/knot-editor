@@ -355,6 +355,12 @@ function editorFor(authority) {
       if (typeof active !== "boolean") throw new TypeError("active must be a boolean");
       await request("editorSetKeyContext", authority, name, active);
     },
+    async setCursorStyle(style) {
+      if (style !== null && style !== "bar" && style !== "block" && style !== "underline") {
+        throw new TypeError('cursor style must be "bar", "block", "underline" or null');
+      }
+      await request("editorSetCursorStyle", authority, style);
+    },
     async beginUndoGroup() {
       const group = await request("editorBeginUndoGroup", authority);
       const owned = ownership(() => {}, () => request("editorEndUndoGroup", group));

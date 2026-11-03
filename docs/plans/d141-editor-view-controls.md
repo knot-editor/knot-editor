@@ -55,7 +55,7 @@ Each primitive lands with a use in `examples/extensions/@example/modal`
 
 ## Checkpoints
 
-### 1. Cursor style ⏳
+### 1. Cursor style ✅ (review gate pending)
 
 - Deliver `setCursorStyle`: view state with an owner, painting of block and
   underline carets, host operation, declarations, `knot.d.ts`, JS bootstrap,
@@ -71,8 +71,13 @@ Each primitive lands with a use in `examples/extensions/@example/modal`
   `editor_set_key_context` in `src/app/extensions/host/handlers.rs` for the
   handler and owner cleanup, register it in `src/host/declarations.rs`, wire
   `src/host/js/bootstrap.js` and `knot.js`, and type it in `knot.d.ts`.
-- **Review gate:** painting looks right on a real window; ownership matches key
-  contexts.
+- **Completion note:** `setCursorStyle` is lifecycle-owned view state on
+  `EditorView` (latest set wins, clearing reveals the previous, teardown clears),
+  documented in [commands](../architecture/commands.md#key-contexts) and the
+  extension guide. Painting is not covered by an automated test; the shape
+  resolution, host operation, and fake host are.
+- **Review gate:** painting looks right on a real window (block translucent over
+  the character, underline, end-of-line width); ownership matches key contexts.
 
 ### 2. Visible lines, scrolling, and reveal ⏳
 

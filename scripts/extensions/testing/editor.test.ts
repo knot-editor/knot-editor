@@ -87,6 +87,22 @@ test("an editor handle outlives commands and rejects after its tab closes", asyn
   await assert.rejects(workbench.editor(first), { code: "InvalidTarget" });
 });
 
+test("an editor handle sets and clears its cursor style", async () => {
+  const document = host.addDocument({ text: "x" });
+  const window = host.openWindow({ documents: [document] });
+  const target = host.tabTarget(window, 0);
+  const editor = await workbench.editor(target);
+  assert.equal(host.cursorStyle(window), "bar");
+  await editor.setCursorStyle("block");
+  assert.equal(host.cursorStyle(window), "block");
+  await editor.setCursorStyle(null);
+  assert.equal(host.cursorStyle(window), "bar");
+  // @ts-expect-error not a cursor style
+  await assert.rejects(editor.setCursorStyle("beam"), TypeError);
+  await host.closeTab(target);
+  await assert.rejects(editor.setCursorStyle("block"), { code: "InvalidTarget" });
+});
+
 test("a disposed handle stops listening and acting", async () => {
   const document = host.addDocument({ text: "x" });
   const window = host.openWindow({ documents: [document] });

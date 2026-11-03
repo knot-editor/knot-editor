@@ -33,6 +33,8 @@ type FakeTab = {
   /** How the last `setSelection` revealed the caret, if any did. */
   reveal: "nearest" | "center" | null;
   keyContexts: Set<string>;
+  /** The caret style the extension chose, or null for the default bar. */
+  cursorStyle: Knot.CursorStyle | null;
   /** Close listeners of the long-lived handles bound to this tab. */
   closeListeners: Set<() => void | Promise<void>>;
   /** Selection listeners of the long-lived handles bound to this tab. The
@@ -395,6 +397,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     document: id,
     view: { anchor: 0, caret: 0, top: 0, scrollX: 0 },
     keyContexts: new Set(),
+    cursorStyle: null,
     closeListeners: new Set(),
     selectionListeners: new Set(),
     reveal: null,
@@ -606,6 +609,11 @@ export function keyContexts(window: Knot.WindowTarget = state.windows[0]!.target
   return [...selectedTab(window).keyContexts].sort();
 }
 
+/** The caret style set on the window's selected document editor, or "bar". */
+export function cursorStyle(window: Knot.WindowTarget = state.windows[0]!.target): Knot.CursorStyle {
+  return selectedTab(window).cursorStyle ?? "bar";
+}
+
 /** Whether the window's selected document has an open undo group. */
 export function undoGroupOpen(window: Knot.WindowTarget = state.windows[0]!.target): boolean {
   return undoGroups.has(selectedTab(window).document);
@@ -650,6 +658,12 @@ function editor(tab: FakeTab): Knot.Editor {
       if (active) keyContexts.add(name);
       else keyContexts.delete(name);
     },
+    setCursorStyle: async (style) => {
+      if (style !== null && style !== "bar" && style !== "block" && style !== "underline") {
+        throw new TypeError("cursor style must be bar, block, underline or null");
+      }
+      live().cursorStyle = style;
+    },
     beginUndoGroup: async () => {
       const { document } = live();
       if (undoGroups.has(document)) throw hostError("OperationInProgress");
@@ -685,6 +699,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     selection: guard(live.selection),
     setSelection: guard(live.setSelection),
     setKeyContext: guard(live.setKeyContext),
+    setCursorStyle: guard(live.setCursorStyle),
     beginUndoGroup: guard(live.beginUndoGroup),
     viewState: guard(live.viewState),
     restoreViewState: guard(live.restoreViewState),

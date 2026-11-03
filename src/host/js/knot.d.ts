@@ -924,6 +924,8 @@ declare module "knot" {
   }
   /** A selection's ends as UTF-8 byte offsets; equal for a bare caret. */
   export type EditorSelection = Readonly<{ anchor: number; caret: number }>;
+  /** How an editor draws its caret. */
+  export type CursorStyle = "bar" | "block" | "underline";
   export interface SetSelectionOptions {
     /**
      * How the view scrolls to show the caret. "nearest" (the default) scrolls
@@ -957,6 +959,18 @@ declare module "knot" {
      * empty name or a non-boolean `active`.
      */
     setKeyContext(name: string, active: boolean): Promise<void>;
+    /**
+     * Draw this editor's caret as a thin "bar" (the default), a "block" over
+     * the character under it, or an "underline" beneath it; `null` clears the
+     * caller's choice. Like key contexts the choice belongs to the caller's
+     * lifecycle: other lifecycles' choices are independent, the latest set wins,
+     * clearing reveals the previous one, and teardown clears it. It is
+     * presentation state, never recorded, and lasts until cleared or the view
+     * closes.
+     * @throws HostError with InvalidTarget or Cancelled; TypeError for an
+     * unknown style.
+     */
+    setCursorStyle(style: CursorStyle | null): Promise<void>;
     /**
      * Make everything committed to this editor's buffer until the returned
      * group is disposed one undo step: this caller's edit batches, native

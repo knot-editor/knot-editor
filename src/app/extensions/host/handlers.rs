@@ -2085,6 +2085,49 @@ pub(crate) async fn editor_set_key_context(
     })?
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SetCursorStyleArguments {
+    pub authority: EditorAuthority,
+    pub style: Option<crate::app::editor::CaretShape>,
+}
+impl HostArguments for SetCursorStyleArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        use crate::app::editor::CaretShape;
+        let authority = EditorAuthority::decode(reader, 2)?;
+        let style = match reader
+            .optional_text(3, "cursor style must be text or null")?
+            .as_deref()
+        {
+            None => None,
+            Some("bar") => Some(CaretShape::Bar),
+            Some("block") => Some(CaretShape::Block),
+            Some("underline") => Some(CaretShape::Underline),
+            Some(_) => {
+                return Err(DecodeError::Range(
+                    "cursor style must be bar, block, or underline",
+                ));
+            }
+        };
+        Ok(Self { authority, style })
+    }
+}
+
+/// Set or clear the caller's caret shape on the captured editor. The shape
+/// lasts until cleared, the view closes, or the caller's lifecycle ends.
+#[host_operation("editorSetCursorStyle")]
+pub(crate) async fn editor_set_cursor_style(
+    context: HostContext,
+    arguments: SetCursorStyleArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        host.set_editor_caret_shape(owner, editor, arguments.style, cx);
+        Ok(())
+    })?
+}
+
 #[host_operation("editorViewState")]
 pub(crate) async fn editor_view_state(
     context: HostContext,

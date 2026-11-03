@@ -144,6 +144,11 @@ obtains a new one from the next observation. `onDidClose` runs once when that
 happens, and not on `dispose()` or unload. A key context set through a handle
 stays until cleared or the package unloads, even after `dispose()`.
 
+`editor.setCursorStyle("block")` draws the caret as a block over the character
+under it, `"underline"` beneath it, and `"bar"` or `null` restores the default.
+Like a key context it belongs to the package and ends with it, so a mode sets
+it on entering and clears it on leaving.
+
 `editor.onDidChangeSelection(listener)` runs after the selection changes for
 any reason, edits that move the caret included. It carries nothing: read
 `editor.selection()` in the listener. Notifications coalesce, so a burst of
