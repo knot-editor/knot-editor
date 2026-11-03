@@ -1,6 +1,6 @@
 # D110 — Key contexts and ordered key delivery
 
-Status: 🚧 checkpoint 1 awaiting review. Item of the
+Status: 🚧 checkpoint 1 complete; checkpoint 2 in progress. Item of the
 [editor API and Vim mode](editor-api.md) plan; background in the
 [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency).
 
@@ -75,45 +75,19 @@ order however fast they are typed.
 
 ## Checkpoints
 
-### 1. Latency spike
+### 1. Latency spike ✅
 
-Measure key-to-commit latency for a trivial extension command: a key bound
-to a command whose handler calls `context.editor.setSelection`, from
-dispatch to the committed selection, p50 and p99 over many keys, on a
-release build. Also measure the same path with a fixture that types text
-right after the key to confirm today's race.
-
-- Deliverables: an ignored measurement test, numbers recorded in this plan.
-  ✅ `measure_extension_key_latency` in
-  `src/app/product/tests/keybindings.rs`.
-- ✅ Results, Apple M1 Pro/macOS 27 release build, gpui test dispatcher,
-  1,000 keys per run, three runs:
-  - Key bound to a command that awaits `editor.setSelection`, from
-    `simulate_keystrokes` to the committed caret: p50 169–176 µs, p90
-    187–200 µs, p99 245–277 µs, max under 0.5 ms.
-  - A no-op extension command, dispatch to completion: p50 21 µs, p99
-    62–64 µs, so most of the key path is the foreground request and the
-    turn's resumption after it, not dispatch.
-  - Simulating an unbound key: p50 5 µs, so the harness adds little.
-  - Text typed right after the key landed before the command's commit in
-    199–200 of 200 trials: the race is real and ordered delivery
-    (checkpoint 3) is required.
-  - Limitation: the test dispatcher polls rather than running the
-    platform's run loop, so a real window adds its own wakeup latency;
-    the margin to a 16 ms frame leaves room for it.
-- Review gate: if p50 is well under a frame (around 1–2 ms) and p99 under
-  a frame, continue. Otherwise investigate the pool hop first, for example
-  waking the worker directly, before reconsidering synchronous handling.
-
-**Implementation context:** mirror the ignored measurements in
-`src/host/pool.rs` and `src/app/extensions/host.rs`
-(`#[ignore = "measurement: run in release with --ignored --nocapture"]`).
-The path is `ProductView::dispatch_keybinding` (`src/app/product.rs`) →
-`CommandDispatcher::dispatch` (`src/app/commands/dispatch.rs`, which
-returns a `CommandExecution` with a completion receiver) →
-`extensions::host::start_global_command` → the `editorSetSelection` handler
-in `src/app/extensions/host/handlers.rs`. Product tests already bind keys
-and drive editors in `src/app/product/tests/keybindings.rs`.
+Approved. `measure_extension_key_latency` in
+`src/app/product/tests/keybindings.rs` measured, on an Apple M1 Pro/macOS
+27 release build under the gpui test dispatcher over 1,000 keys and three
+runs: a key bound to a command awaiting `editor.setSelection`, to the
+committed caret, p50 169–176 µs and p99 245–277 µs; a no-op extension
+command p50 21 µs, so most of the path is the foreground request and the
+turn's resumption. Text typed right after the key landed before the commit
+in 199–200 of 200 trials, so ordered delivery is required. The dispatcher
+polls instead of running the platform loop, so a real window adds its
+wakeup latency within the remaining frame margin. Checkpoint 5 moves these
+numbers into decisions.
 
 ### 2. View key contexts and context-scoped bindings
 
