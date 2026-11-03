@@ -1101,6 +1101,16 @@ a delimited string. A click dispatches through the same captured
 command target as keys and tree actions, so no second way to run a command from
 the pointer exists.
 
+The built-in items are the bundled `@knot/status-bar` package, so personal config
+hides one with the setting or replaces it by registering its ID, and the Vim mode
+indicator (D058) uses the same API. Each window's items are that window's own
+values rather than one shared value, since two windows show different editors,
+and a window with no editor leaves the shared empty text to hide them. Selection
+size counts characters up to 1 MiB and shows kilobytes beyond, because counting
+sends the selection to JavaScript on every change. Indentation is one picker
+that follows VS Code's actions, with the writes as ordinary document-scoped
+settings, so any extension can offer the same choices.
+
 ## Generated text surfaces
 
 Use ordinary buffers and views when generated output benefits from text

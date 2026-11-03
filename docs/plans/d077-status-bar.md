@@ -120,7 +120,24 @@ under the extension's name. The product test covers one window, so the click's
 window comes from the clicked shell; gpui debug bounds outlive their elements,
 so hiding is asserted by layout shifts.
 
-### 4. `@knot/status-bar` package
+### 4. `@knot/status-bar` package ✅
+
+Implemented, awaiting the review gate (a daily-use pass). Behavior is in
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md#status-bar)
+and [decisions](../decisions.md#status-bar). Scope decisions made while building it:
+
+- An item with empty text is not shown, which lets a window's missing editor hide
+  the items there.
+- The three click commands act on the window's focused view, so Go to Line,
+  Set Language Mode, and the Convert Indentation choices are unavailable while a
+  tool has focus; the Indentation picker's settings writes use `statusTarget` and
+  work anywhere.
+- Selection size counts characters up to 1 MiB of selected text and shows
+  kilobytes beyond.
+
+The remaining plan steps wait for the gate: remove this plan in a separate
+final commit, and update the references to D077 in the
+[editor API plan](editor-api.md) and the [roadmap](../roadmap.md).
 
 - Deliverables: the position, indentation, and language items, their click
   pickers and commands, tab-size and indent-style changes as document-scoped settings writes,
