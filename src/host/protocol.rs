@@ -211,6 +211,17 @@ pub enum KeybindingMutation {
         view: Option<String>,
         context: Option<String>,
     },
+    /// Route committed text in matching views to a command, or mask a lower
+    /// text binding with `None`.
+    SetText {
+        view: Option<String>,
+        context: Option<String>,
+        command: Option<CommandName>,
+    },
+    RemoveText {
+        view: Option<String>,
+        context: Option<String>,
+    },
     Invalid(String),
 }
 

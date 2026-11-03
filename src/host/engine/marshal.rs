@@ -203,6 +203,22 @@ pub(super) fn parse_keybinding_mutation<'s, 'i>(
     };
     match operation.as_str() {
         "remove" => Ok(KeybindingMutation::Remove { key, view, context }),
+        "removeText" => Ok(KeybindingMutation::RemoveText { view, context }),
+        "setText" => {
+            let value = arguments.get(2);
+            let command = if value.is_null() {
+                None
+            } else if value.is_string() {
+                Some(required_string(scope, value, "text command must be a string or null")?.into())
+            } else {
+                return Err("text command must be a string or null".into());
+            };
+            Ok(KeybindingMutation::SetText {
+                view,
+                context,
+                command,
+            })
+        }
         "set" => {
             let value = arguments.get(2);
             let command = if value.is_null() {

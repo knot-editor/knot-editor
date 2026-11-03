@@ -176,6 +176,8 @@ fn keybinding_calls_are_void_and_one_turn_sends_one_ordered_batch() {
                 if (knot.keymaps.unbind("Cmd-C", { view: "editor" }) !== undefined) throw new Error("remove returned a value");
                 knot.keymaps.bind("h", "left", { view: "editor", context: "modal" });
                 knot.keymaps.unbind("h", { view: "editor", context: "modal" });
+                knot.keymaps.bindText("modal.text", { view: "editor", context: "modal" });
+                knot.keymaps.unbindText({ view: "editor", context: "modal" });
             "#,
         )
         .unwrap();
@@ -187,7 +189,13 @@ fn keybinding_calls_are_void_and_one_turn_sends_one_ordered_batch() {
         .arguments::<declared::mutate_keybindings>()
         .expect("keybinding batch")
         .mutations;
-    assert_eq!(mutations.len(), 5);
+    assert_eq!(mutations.len(), 7);
+    assert!(
+        matches!(&mutations[5], KeybindingMutation::SetText { view: Some(view), context: Some(context), command: Some(command) } if view == "editor" && context == "modal" && command.as_ref() == "modal.text")
+    );
+    assert!(
+        matches!(&mutations[6], KeybindingMutation::RemoveText { context: Some(context), .. } if context == "modal")
+    );
     assert!(
         matches!(&mutations[3], KeybindingMutation::Set { context: Some(context), .. } if context == "modal")
     );
@@ -2201,7 +2209,7 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (!Object.isFrozen(knot.themes) || Object.keys(knot.themes).sort().join(",") !== "defineColor,get,list,register") {
                 throw new Error("themes facade is incomplete");
             }
-            if (!Object.isFrozen(knot.keymaps) || Object.keys(knot.keymaps).sort().join(",") !== "bind,getPreset,listPresets,registerPreset,unbind") {
+            if (!Object.isFrozen(knot.keymaps) || Object.keys(knot.keymaps).sort().join(",") !== "bind,bindText,getPreset,listPresets,registerPreset,unbind,unbindText") {
                 throw new Error("keymaps facade is incomplete");
             }
             if (!["macos", "windows", "linux"].includes(knot.platform)) {

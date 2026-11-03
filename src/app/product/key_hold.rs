@@ -9,9 +9,10 @@
 //! a stuck extension never keeps the keyboard.
 
 use super::*;
-use crate::app::commands::key_hold::{HeldInput, HeldInputQueue};
+use crate::app::commands::key_hold::{HeldInput, HeldInputQueue, TextCommandRouter};
 use crate::app::editor::EditorView;
 use crate::host::protocol::CommandOutcome;
+use crate::host::protocol::{Command, CommandArgumentValue, CommandName};
 
 /// How long a command may hold later input before it is released anyway.
 pub(super) const KEY_HOLD_TIMEOUT: Duration = Duration::from_secs(1);
@@ -32,22 +33,54 @@ impl ProductShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(focus) = window.focused(cx) else {
+        let queue = HeldInputQueue::default();
+        let Some(generation) = self.start_key_hold(
+            editor.as_ref().map(Entity::downgrade),
+            queue.clone(),
+            window,
+            cx,
+        ) else {
             return;
         };
-        self.key_hold_generation += 1;
-        let generation = self.key_hold_generation;
-        let queue = HeldInputQueue::default();
         if let Some(editor) = &editor {
-            editor.update(cx, |editor, _| editor.set_held_input(Some(queue.clone())));
+            editor.update(cx, |editor, _| editor.set_held_input(Some(queue)));
         }
+        self.release_key_hold_after(generation, completion, window, cx);
+    }
+
+    /// Begin holding input into `queue`; the caller attaches the held editor
+    /// to the same queue. `None` when a hold is already active or nothing
+    /// has focus.
+    fn start_key_hold(
+        &mut self,
+        editor: Option<WeakEntity<EditorView>>,
+        queue: HeldInputQueue,
+        window: &Window,
+        cx: &App,
+    ) -> Option<u64> {
+        if self.key_hold.is_some() {
+            return None;
+        }
+        let focus = window.focused(cx)?;
+        self.key_hold_generation += 1;
         self.key_hold = Some(KeyHold {
-            generation,
+            generation: self.key_hold_generation,
             focus,
             queue,
-            editor: editor.as_ref().map(Entity::downgrade),
+            editor,
         });
-        // Whichever comes first releases; the other finds a newer generation.
+        Some(self.key_hold_generation)
+    }
+
+    /// Release hold `generation` when `completion` settles or the timeout
+    /// passes, whichever comes first; the other finds a newer generation.
+    fn release_key_hold_after(
+        &mut self,
+        generation: u64,
+        completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         cx.spawn_in(window, async move |this, cx| {
             let _ = completion.await;
             let _ = cx.update(|window, cx| release_key_hold(&this, generation, window, cx));
@@ -66,9 +99,56 @@ impl ProductShell {
     }
 }
 
+/// Send text an editor's text binding claims to its command as
+/// `{ text }`. The hold starts now, while the editor is still handling the
+/// input, so later keys and text wait; the command is dispatched once the
+/// editor is free, since capturing a target reads it.
+fn route_text_command(
+    editor: WeakEntity<EditorView>,
+    command: CommandName,
+    text: String,
+    queue: HeldInputQueue,
+    window: &mut Window,
+    cx: &mut App,
+) -> bool {
+    let Some(Some(shell)) = window.root::<ProductShell>() else {
+        return false;
+    };
+    let Some(generation) = shell.update(cx, |shell, cx| {
+        shell.start_key_hold(Some(editor), queue, window, cx)
+    }) else {
+        return false;
+    };
+    let shell = shell.downgrade();
+    window.defer(cx, move |window, cx| {
+        let Some(shell_entity) = shell.upgrade() else {
+            return;
+        };
+        let dispatched = shell_entity.update(cx, |this, cx| {
+            let target = this.capture_command_target(window, cx)?;
+            let command = Command {
+                name: command,
+                arguments: CommandArgumentValue::Object(
+                    [("text".to_owned(), CommandArgumentValue::String(text))].into(),
+                ),
+            };
+            let execution = ProductShell::command_dispatcher(cx).update(cx, |dispatcher, cx| {
+                dispatcher.dispatch(command, target, cx)
+            });
+            this.release_key_hold_after(generation, execution.completion, window, cx);
+            Some(())
+        });
+        if dispatched.is_none() {
+            release_key_hold(&shell, generation, window, cx);
+        }
+    });
+    true
+}
+
 /// Queue key-downs for product windows that hold their input. Interceptors
 /// run before keybindings and text input, so a held key does neither.
 pub(in crate::app) fn intercept_held_keys(cx: &mut App) {
+    cx.set_global(TextCommandRouter(route_text_command));
     cx.intercept_keystrokes(|event, window, cx| {
         let Some(Some(shell)) = window.root::<ProductShell>() else {
             return;

@@ -8,6 +8,8 @@ import {
   unavailableCommand,
   keybinding,
   removeKeybinding,
+  textBinding,
+  removeTextBinding,
   registerKeymapPreset, getKeymapPreset, listKeymapPresets,
   platform,
   invokeCommand,
@@ -35,6 +37,8 @@ export { platform };
 export const keymaps = Object.freeze({
   bind: keybinding,
   unbind: removeKeybinding,
+  bindText: textBinding,
+  unbindText: removeTextBinding,
   registerPreset: registerKeymapPreset,
   getPreset: getKeymapPreset,
   listPresets: listKeymapPresets,

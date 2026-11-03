@@ -1517,6 +1517,19 @@ declare module "knot" {
      * Lifecycle teardown removes its slots without requiring explicit removal.
      */
     unbind(key: string, options?: KeybindingOptions | null): void;
+    /**
+     * Route committed text typed in a matching editor to `command` instead
+     * of inserting it, with `{ text }` as the command's arguments, where
+     * `text` is what the editor would have inserted after keyboard layout
+     * and IME. Keys bound in the same scope still win, because text arrives
+     * only for keys nothing binds. Null masks a lower text binding so the
+     * view types natively. Text bindings resolve by the same scope rule as
+     * `bind`; a composition's preedit is not shown where one applies.
+     * Same synchronous atomic turn batch as bind; teardown removes it.
+     */
+    bindText(command: string | null, options?: KeybindingOptions | null): void;
+    /** Remove only the caller's text binding for this scope. */
+    unbindText(options?: KeybindingOptions | null): void;
     /** Register a lifecycle-owned preset. The latest registration of a name
      * wins and teardown reveals the previous one. A derived preset spreads
      * `getPreset`'s bindings. Registering the selected name takes effect at

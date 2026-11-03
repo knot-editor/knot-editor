@@ -2,6 +2,7 @@
 use super::*;
 use crate::app::editor::{EditorView, Reveal};
 use crate::host::lifecycle::ExtensionKey;
+use gpui::EntityInputHandler;
 
 const SOURCE: &str = r#"
     import { commands, keymaps, workbench } from "knot";
@@ -17,7 +18,13 @@ const SOURCE: &str = r#"
     keymaps.bind("f8", "hold.home");
     keymaps.bind("f7", "hold.enter");
     keymaps.bind("h", "hold.left", { view: "editor", context: "modal" });
+    const typed = [];
+    await commands.register("hold.text", ({ arguments: args }) => { typed.push(args.text); });
+    await commands.register("hold.report", () => workbench.writeClipboardText(typed.join(",")));
+    keymaps.bindText("hold.text", { view: "editor", context: "modal" });
 "#;
+
+const KEY: ExtensionKey = ExtensionKey::new(ExtensionId::new(732), ExtensionLifecycleId::new(1));
 
 struct Fixture {
     host: Entity<crate::app::extensions::host::ProductExtensionHost>,
@@ -34,8 +41,7 @@ fn fixture(text: &str, cx: &mut TestAppContext) -> Fixture {
     cx.update(super::super::bind_product_keys);
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
-        let key = ExtensionKey::new(ExtensionId::new(732), ExtensionLifecycleId::new(1));
-        let execution = host.load_test_source(key, SOURCE).unwrap();
+        let execution = host.load_test_source(KEY, SOURCE).unwrap();
         cx.spawn(async move |_, _| execution.await.unwrap())
             .detach();
     });
@@ -117,9 +123,10 @@ fn keys_and_text_after_an_extension_command_apply_after_it_in_order(cx: &mut Tes
 #[gpui::test]
 fn a_held_key_resolves_in_the_context_the_command_set(cx: &mut TestAppContext) {
     let fixture = fixture("abc", cx);
-    cx.simulate_keystrokes(fixture.window, "f7 h x");
+    cx.simulate_keystrokes(fixture.window, "f7 h");
     fixture.settle(cx);
-    assert_eq!(fixture.text(cx), "abxc");
+    assert_eq!(fixture.text(cx), "abc");
+    cx.read(|cx| assert_eq!(fixture.editor.read(cx).selection(cx), (2, 2)));
 }
 
 #[gpui::test]
@@ -182,4 +189,50 @@ fn a_key_after_focus_leaves_the_view_releases_the_held_keys(cx: &mut TestAppCont
         .host
         .update(cx, |host, cx| host.release_view_requests(cx));
     cx.run_until_parked();
+}
+
+#[gpui::test]
+fn a_text_binding_receives_typed_and_composed_text_in_order(cx: &mut TestAppContext) {
+    let fixture = fixture("abc", cx);
+    let typed = |cx: &mut TestAppContext| {
+        let report = dispatch_product_command(&fixture.shell, fixture.window, "hold.report", cx);
+        assert_eq!(wait_for_command(report, cx), CommandOutcome::Completed);
+        cx.read(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
+            .unwrap_or_default()
+    };
+    // Without the context nothing claims the text.
+    cx.simulate_keystrokes(fixture.window, "x");
+    fixture.settle(cx);
+    assert_eq!(fixture.text(cx), "abcx");
+
+    cx.simulate_keystrokes(fixture.window, "f7 a b");
+    cx.simulate_input(fixture.window, "c");
+    // A key bound in the context still wins over the text binding.
+    cx.simulate_keystrokes(fixture.window, "h");
+    cx.simulate_input(fixture.window, "e");
+    fixture.settle(cx);
+    assert_eq!(fixture.text(cx), "abcx");
+    cx.read(|cx| assert_eq!(fixture.editor.read(cx).selection(cx), (3, 3)));
+    assert_eq!(typed(cx), "a,b,c,e");
+
+    // The preedit is not shown; the commit arrives as text.
+    cx.update_window(fixture.window, |_, window, cx| {
+        fixture.editor.update(cx, |editor, cx| {
+            editor.replace_and_mark_text_in_range(None, "k", None, window, cx);
+            assert_eq!(editor.marked_text_range(window, cx), None);
+            editor.replace_text_in_range(None, "か", window, cx);
+        })
+    })
+    .unwrap();
+    fixture.settle(cx);
+    assert_eq!(fixture.text(cx), "abcx");
+    assert_eq!(typed(cx), "a,b,c,e,か");
+
+    // Teardown restores typing.
+    fixture
+        .host
+        .update(cx, |host, cx| host.unload(KEY, cx).unwrap());
+    cx.simulate_keystrokes(fixture.window, "z");
+    fixture.settle(cx);
+    assert_eq!(fixture.text(cx), "abczx");
 }

@@ -49,6 +49,8 @@ impl ProductShell {
                 .parse::<usize>()
                 .ok()
                 .and_then(|index| listing.get(index))
+                // A text binding's command expects the typed text.
+                .filter(|binding| !binding.text)
                 .and_then(|binding| binding.command.clone())
             else {
                 return;
@@ -72,7 +74,8 @@ fn keybinding_item(
             .unwrap_or_else(|| command.name.to_string()),
         None => "Unbound".into(),
     };
-    let mut description = format!("{} · {}", binding.key, owner_label(binding.owner, cx));
+    let key = if binding.text { "text" } else { &binding.key };
+    let mut description = format!("{key} · {}", owner_label(binding.owner, cx));
     match (&binding.view, &binding.context) {
         (Some(view), Some(context)) => description.push_str(&format!(" · in {view} ({context})")),
         (Some(view), None) => description.push_str(&format!(" · in {view}")),
@@ -85,7 +88,11 @@ fn keybinding_item(
         detail: binding
             .shadowed_by
             .map(|owner| format!("Overridden by {}", owner_label(owner, cx))),
-        hint: Some(display_key(&binding.key)),
+        hint: Some(if binding.text {
+            "Text".to_owned()
+        } else {
+            display_key(&binding.key)
+        }),
     }
 }
 

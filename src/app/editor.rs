@@ -454,6 +454,13 @@ impl EditorView {
         self.held_input = queue;
     }
 
+    /// The command a text binding routes this view's typed text to.
+    pub(crate) fn text_command(&self, cx: &App) -> Option<crate::host::protocol::CommandName> {
+        cx.try_global::<crate::app::commands::keymaps::ApplicationKeymaps>()?
+            .0
+            .resolve_text(&self.view_kind, &self.key_contexts())
+    }
+
     /// Clear every key context `owner` set.
     pub(crate) fn remove_key_context_owner(&mut self, owner: crate::host::lifecycle::ExtensionKey) {
         self.key_contexts.retain(|(key, _)| *key != owner);

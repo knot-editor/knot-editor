@@ -22,6 +22,14 @@ export function removeKeybinding(key, options) {
   nativeBindings.keybinding("remove", key, undefined, options);
 }
 
+export function textBinding(command, options) {
+  nativeBindings.keybinding("setText", "", command, options);
+}
+
+export function removeTextBinding(options) {
+  nativeBindings.keybinding("removeText", "", undefined, options);
+}
+
 function hostError(code) {
   const exception = new Error(code);
   exception.name = "KnotHostError";

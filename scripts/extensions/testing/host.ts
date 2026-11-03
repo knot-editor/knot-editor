@@ -1153,6 +1153,8 @@ export const api: KnotApi = {
   keymaps: {
     bind: notFaked("keymaps.bind"),
     unbind: notFaked("keymaps.unbind"),
+    bindText: notFaked("keymaps.bindText"),
+    unbindText: notFaked("keymaps.unbindText"),
     registerPreset: async (definition) => {
       if (definition.name === "knot") throw new TypeError("the knot keymap preset cannot be replaced");
       state.keymapPresets.push(definition);

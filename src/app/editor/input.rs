@@ -270,6 +270,19 @@ impl EntityInputHandler for EditorView {
             ));
             return;
         }
+        if self.marked_range_utf16.is_none()
+            && let Some(command) = self.text_command(cx)
+            && let Some(route) = cx
+                .try_global::<crate::app::commands::key_hold::TextCommandRouter>()
+                .map(|router| router.0)
+        {
+            let queue = crate::app::commands::key_hold::HeldInputQueue::default();
+            let editor = cx.entity().downgrade();
+            if route(editor, command, text.to_owned(), queue.clone(), window, cx) {
+                self.held_input = Some(queue);
+                return;
+            }
+        }
         let grouping = if self.marked_range_utf16.is_some() {
             EditGroupKind::Composition
         } else {
@@ -300,7 +313,9 @@ impl EntityInputHandler for EditorView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.model.read(cx).is_editable() {
+        // Text a binding claims never reaches the buffer, so neither does
+        // its composition; the commit arrives as ordinary text.
+        if !self.model.read(cx).is_editable() || self.text_command(cx).is_some() {
             return;
         }
         self.preferred_x = None;

@@ -54,6 +54,20 @@ impl SlotKey {
     }
 }
 
+/// A text binding's scope; the owner and facts follow key slots' rule.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct TextSlotKey {
+    owner: BindingOwner,
+    view: Option<String>,
+    context: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct TextSlot {
+    command: Option<CommandName>,
+    order: u64,
+}
+
 #[derive(Clone, Debug)]
 struct Slot {
     command: Option<Command>,
@@ -63,7 +77,10 @@ struct Slot {
 /// One slot of the keymap, as Show Keybindings lists it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ListedBinding {
+    /// Empty for a text binding.
     pub(crate) key: String,
+    /// Whether the slot routes typed text rather than binding a key.
+    pub(crate) text: bool,
     pub(crate) view: Option<String>,
     pub(crate) context: Option<String>,
     pub(crate) owner: BindingOwner,
@@ -124,6 +141,7 @@ pub(crate) enum BindingError {
 #[derive(Clone, Default)]
 pub(crate) struct BindingRegistry {
     slots: HashMap<SlotKey, Slot>,
+    text_slots: HashMap<TextSlotKey, TextSlot>,
     active: HashMap<String, EffectiveKey>,
     kinds: HashSet<String>,
     next_order: u64,
@@ -245,7 +263,75 @@ impl BindingRegistry {
         Ok(before != self.active.get(&key).cloned())
     }
 
+    /// Route committed text typed in matching views to `command`, or mask a
+    /// lower text binding with `None`.
+    pub(crate) fn set_text(
+        &mut self,
+        owner: BindingOwner,
+        view: Option<&str>,
+        context: Option<&str>,
+        command: Option<CommandName>,
+    ) -> Result<(), BindingError> {
+        let view = self.validate_view(view)?;
+        let context = validate_context(view.as_deref(), context)?;
+        self.next_order += 1;
+        self.text_slots.insert(
+            TextSlotKey {
+                owner,
+                view,
+                context,
+            },
+            TextSlot {
+                command,
+                order: self.next_order,
+            },
+        );
+        Ok(())
+    }
+
+    pub(crate) fn remove_text(
+        &mut self,
+        owner: BindingOwner,
+        view: Option<&str>,
+        context: Option<&str>,
+    ) -> Result<(), BindingError> {
+        let context = validate_context(view, context)?;
+        self.text_slots.remove(&TextSlotKey {
+            owner,
+            view: view.map(ToOwned::to_owned),
+            context,
+        });
+        Ok(())
+    }
+
+    /// The command that receives text typed in `view` holding `contexts`,
+    /// or `None` when the text is inserted.
+    pub(crate) fn resolve_text(&self, view: &str, contexts: &[&str]) -> Option<CommandName> {
+        self.winning_text_slot(Some(view), contexts)
+            .and_then(|slot_key| self.text_slots[slot_key].command.clone())
+    }
+
+    fn winning_text_slot(&self, view: Option<&str>, contexts: &[&str]) -> Option<&TextSlotKey> {
+        self.text_slots
+            .iter()
+            .filter(|(slot_key, _)| {
+                (slot_key.view.is_none() || slot_key.view.as_deref() == view)
+                    && slot_key
+                        .context
+                        .as_deref()
+                        .is_none_or(|context| contexts.contains(&context))
+            })
+            .max_by_key(|(slot_key, slot)| {
+                (
+                    usize::from(slot_key.view.is_some()) + usize::from(slot_key.context.is_some()),
+                    slot.order,
+                )
+            })
+            .map(|(slot_key, _)| slot_key)
+    }
+
     pub(crate) fn remove_owner(&mut self, owner: BindingOwner) -> bool {
+        self.text_slots.retain(|key, _| key.owner != owner);
         let keys = self
             .slots
             .keys()
@@ -313,6 +399,27 @@ impl BindingRegistry {
                 KeybindingMutation::Remove { key, view, context } => {
                     candidate.remove_in_context(owner, key, view.as_deref(), context.as_deref())
                 }
+                KeybindingMutation::SetText {
+                    view,
+                    context,
+                    command,
+                } => {
+                    if command
+                        .as_ref()
+                        .is_some_and(|command| command.as_ref().is_empty())
+                    {
+                        return Err(format!(
+                            "keybinding operation {}: command name is empty",
+                            index + 1
+                        ));
+                    }
+                    candidate
+                        .set_text(owner, view.as_deref(), context.as_deref(), command.clone())
+                        .map(|()| false)
+                }
+                KeybindingMutation::RemoveText { view, context } => candidate
+                    .remove_text(owner, view.as_deref(), context.as_deref())
+                    .map(|()| false),
                 KeybindingMutation::Invalid(message) => {
                     return Err(format!("keybinding operation {}: {message}", index + 1));
                 }
@@ -461,6 +568,7 @@ impl BindingRegistry {
                 let winner = self.winning_slot(&slot_key.key, slot_key.view.as_deref(), &contexts);
                 ListedBinding {
                     key: slot_key.key.clone(),
+                    text: false,
                     view: slot_key.view.clone(),
                     context: slot_key.context.clone(),
                     owner: slot_key.owner,
@@ -470,6 +578,24 @@ impl BindingRegistry {
                         .map(|winner| winner.owner),
                 }
             })
+            .chain(self.text_slots.iter().map(|(slot_key, slot)| {
+                let contexts = slot_key.context.as_deref().into_iter().collect::<Vec<_>>();
+                let winner = self.winning_text_slot(slot_key.view.as_deref(), &contexts);
+                ListedBinding {
+                    key: String::new(),
+                    text: true,
+                    view: slot_key.view.clone(),
+                    context: slot_key.context.clone(),
+                    owner: slot_key.owner,
+                    command: slot.command.clone().map(|name| Command {
+                        name,
+                        arguments: CommandArgumentValue::Null,
+                    }),
+                    shadowed_by: winner
+                        .filter(|winner| *winner != slot_key)
+                        .map(|winner| winner.owner),
+                }
+            }))
             .collect::<Vec<_>>();
         listing.sort_by(|a, b| {
             (&a.key, &a.view, &a.context, a.shadowed_by.is_some()).cmp(&(

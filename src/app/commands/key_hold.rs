@@ -32,3 +32,19 @@ impl HeldInputQueue {
         *queue = inputs;
     }
 }
+
+/// Routes text an editor's text binding claims to its command. The product
+/// shell installs it; returning `true` means the text is held in `queue`
+/// behind the command, so the editor must queue later text there too.
+pub(crate) struct TextCommandRouter(
+    pub(crate)  fn(
+        gpui::WeakEntity<crate::app::editor::EditorView>,
+        crate::host::protocol::CommandName,
+        String,
+        HeldInputQueue,
+        &mut gpui::Window,
+        &mut gpui::App,
+    ) -> bool,
+);
+
+impl gpui::Global for TextCommandRouter {}

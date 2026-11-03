@@ -1203,3 +1203,89 @@ fn context_slots_recognize_their_key_broadly_in_the_view() {
             .all(|binding| binding.shadowed_by.is_none())
     );
 }
+
+#[test]
+fn text_bindings_win_by_fact_count_then_latest_write_and_mask_with_null() {
+    let mut registry = BindingRegistry::new();
+    let modal = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    let other = BindingOwner::Extension(ExtensionId::new(2), ExtensionLifecycleId::new(1));
+    let name = |command: Option<CommandName>| command.map(|name| name.to_string());
+    assert_eq!(registry.resolve_text("editor", &["normal"]), None);
+    registry
+        .set_text(
+            modal,
+            Some("editor"),
+            Some("normal"),
+            Some("normal.text".into()),
+        )
+        .unwrap();
+    registry
+        .set_text(other, Some("editor"), None, Some("editor.text".into()))
+        .unwrap();
+    assert_eq!(
+        name(registry.resolve_text("editor", &["normal"])).as_deref(),
+        Some("normal.text")
+    );
+    assert_eq!(
+        name(registry.resolve_text("editor", &[])).as_deref(),
+        Some("editor.text")
+    );
+    // Null masks the lower binding, so the view types natively.
+    registry
+        .set_text(other, Some("editor"), Some("normal"), None)
+        .unwrap();
+    assert_eq!(registry.resolve_text("editor", &["normal"]), None);
+    let listing = registry.listing();
+    let text_rows = listing.iter().filter(|binding| binding.text).count();
+    assert_eq!(text_rows, 3);
+    assert!(listing.iter().any(|binding| binding.text
+        && binding.owner == modal
+        && binding.shadowed_by == Some(other)));
+    // Teardown reveals the earlier write; removal is per scope.
+    assert!(!registry.remove_owner(other));
+    assert_eq!(
+        name(registry.resolve_text("editor", &["normal"])).as_deref(),
+        Some("normal.text")
+    );
+    registry
+        .remove_text(modal, Some("editor"), Some("normal"))
+        .unwrap();
+    assert_eq!(registry.resolve_text("editor", &["normal"]), None);
+    assert!(registry.listing().is_empty());
+}
+
+#[test]
+fn text_binding_batches_validate_scope_and_command() {
+    let mut registry = BindingRegistry::new();
+    let owner = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    for (view, context, command, expected) in [
+        (None, Some("normal"), Some("t"), "needs a view"),
+        (Some("unknown"), None, Some("t"), "unknown view kind"),
+        (Some("editor"), None, Some(""), "command name is empty"),
+    ] {
+        let error = registry
+            .apply_batch(
+                owner,
+                &[KeybindingMutation::SetText {
+                    view: view.map(Into::into),
+                    context: context.map(Into::into),
+                    command: command.map(Into::into),
+                }],
+            )
+            .unwrap_err();
+        assert!(error.contains(expected), "{error}");
+    }
+    assert!(
+        !registry
+            .apply_batch(
+                owner,
+                &[KeybindingMutation::SetText {
+                    view: Some("editor".into()),
+                    context: None,
+                    command: Some("t".into()),
+                }],
+            )
+            .unwrap()
+    );
+    assert!(registry.resolve_text("editor", &[]).is_some());
+}
