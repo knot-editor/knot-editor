@@ -217,6 +217,13 @@ with the workbench and exact presentation so replacement or transfer cannot
 retarget them. Queries require a live lifecycle, honor command cancellation, and
 work without command context; returned targets reserve no future validity.
 
+A window's `statusTarget` is the editor a status display describes, computed
+by the shell, which already tracks focus: the focused document tab; else the
+last focused document tab while it is the selected tab of its pane; none while
+a terminal has focus. Tools and focus outside tabs keep the previous editor,
+as in VS Code, so a consumer follows one value and never reimplements the
+rule. A change publishes `presentationsChanged` like `currentTarget`.
+
 ## Application observation
 
 The foreground host owns a comparison baseline, session sequence, and

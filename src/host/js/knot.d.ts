@@ -87,6 +87,10 @@ declare module "knot" {
     readonly panes: readonly PaneInfo[];
     /** Actual focused tab surface; null for focus outside tabs. */
     readonly currentTarget: ViewTarget | null;
+    /** The editor tab a status display describes: the focused editor, else the
+     * last focused editor while its tab is shown; null while a terminal has
+     * focus or before any editor was. */
+    readonly statusTarget: ViewTarget | null;
     readonly workspace: WorkspaceInfo;
   }
   /** Current metadata queries do not grant future target validity. Valid during

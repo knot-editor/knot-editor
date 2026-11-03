@@ -411,6 +411,9 @@ pub(crate) struct ProductShell {
     /// The document of the last focused document tab, which new terminals
     /// follow while a terminal or tool has focus.
     last_focused_document: Option<DocumentId>,
+    /// The last focused document tab, which the status bar keeps describing
+    /// while its tab stays visible and focus is elsewhere.
+    last_focused_editor_tab: Option<super::workbench::TabId>,
     application_observer: Option<Subscription>,
     application_activation: Option<Subscription>,
     _appearance_observer: Option<Subscription>,
@@ -518,6 +521,7 @@ impl ProductShell {
             transient: None,
             workspace: WorkspaceState::default(),
             last_focused_document: None,
+            last_focused_editor_tab: None,
             application_observer: None,
             application_activation: None,
             _appearance_observer: None,
@@ -651,7 +655,7 @@ impl ProductShell {
     }
 
     fn remember_focused_document(&mut self, handle: &FocusHandle, cx: &App) {
-        let document = self
+        let tab = self
             .workbench
             .read(cx)
             .panes()
@@ -661,9 +665,12 @@ impl ProductShell {
                 tab.command_view()
                     .is_some_and(|view| &view.focus_handle(cx) == handle)
             })
-            .and_then(|tab| tab.document_id());
-        if document.is_some() {
+            .map(|tab| (tab.id(), tab.document_id()));
+        if let Some((id, document)) = tab
+            && document.is_some()
+        {
             self.last_focused_document = document;
+            self.last_focused_editor_tab = Some(id);
         }
     }
 
@@ -732,6 +739,8 @@ impl ProductShell {
         let workbench = self.workbench.read(cx);
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
         let mut current_target = None;
+        let mut current_kind = None;
+        let mut last_editor_target = None;
         let panes = workbench
             .panes()
             .iter()
@@ -760,6 +769,13 @@ impl ProductShell {
                                 .is_some_and(|view| view.matches_focus(&focus.downgrade(), cx))
                         {
                             current_target = Some(view_target.clone());
+                            current_kind = Some(tab.surface_id());
+                        }
+                        if self.last_focused_editor_tab == Some(tab.id())
+                            && tab.document_id().is_some()
+                            && tab.id() == pane.active_tab_id()
+                        {
+                            last_editor_target = Some(view_target.clone());
                         }
                         let document = tab.document_id();
                         PresentationInfo {
@@ -795,11 +811,19 @@ impl ProductShell {
                 }
             })
             .collect();
+        // The focused editor, else the last focused editor while its tab is
+        // shown; a focused terminal describes no editor.
+        let status_target = match current_kind {
+            Some(TabSurfaceId::Document(_)) => current_target.clone(),
+            Some(TabSurfaceId::Terminal(_)) => None,
+            _ => last_editor_target,
+        };
         let workspace = self.workspace.snapshot();
         WindowInfo {
             target: target.clone(),
             panes,
             current_target,
+            status_target,
             workspace: operations::workspace_info(target, &workspace),
         }
     }

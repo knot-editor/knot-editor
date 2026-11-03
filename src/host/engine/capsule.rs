@@ -1611,7 +1611,7 @@ pub(super) fn execute_engine_turn(
         } => capsule.start_notification_turn(
             root,
             subscription.value(),
-            ListenerNotification::Application(event),
+            ListenerNotification::Application(Box::new(event)),
             Instant::now(),
         ),
         EngineWork::EditorEvent { handle, event } => capsule.start_notification_turn(

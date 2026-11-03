@@ -448,6 +448,7 @@ function windowInfo(window: FakeWindow): Knot.WindowInfo {
     target: window.target,
     panes: [{ target: window.pane, tabs, selected: selected as Knot.ViewTarget }],
     currentTarget: selected,
+    statusTarget: selected,
     workspace: workspaceInfo(window),
   };
 }

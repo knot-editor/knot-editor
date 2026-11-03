@@ -98,7 +98,14 @@ publishes `documentChanged` on any settings write. Under the fact-count rule a
 two-fact scope such as `{ language, view }` overrides detection, which writes
 only the document fact.
 
-### 2. Active editor per window
+### 2. Active editor per window ✅
+
+Implemented, awaiting the review gate (the rule against VS Code on real
+windows). The shell remembers the last focused document tab; `application_window`
+derives `statusTarget` from it and the focused surface, and the observation
+comparison publishes `presentationsChanged` when it moves. Closed tabs resolve
+to none because the remembered tab ID no longer exists; the product test covers
+editor, tool, terminal, and hidden-tab focus, but not closure.
 
 - Deliverables: `WindowInfo.statusTarget` computed natively by the focused or
   last-focused-visible rule, cleared by a focused terminal, published as a

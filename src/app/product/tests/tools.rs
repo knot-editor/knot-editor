@@ -347,3 +347,90 @@ fn explorer_docks_have_visible_geometry_and_open_files_by_click(cx: &mut TestApp
         });
     }
 }
+
+#[gpui::test]
+fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    cx.set_global(ApplicationFileSystems(memory_filesystems()));
+    let (shell, window) = empty_product_window(&documents, cx);
+    shell.update(cx, |shell, cx| {
+        shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
+    });
+    cx.run_until_parked();
+    let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
+    let state = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            shell
+                .read(cx)
+                .application_window(window, &std::collections::HashMap::new(), cx)
+        })
+        .unwrap()
+    };
+    let settle = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.draw(cx).clear();
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    let focus_editor = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));
+            shell.read(cx).focus_active_editor(window, cx);
+        })
+        .unwrap();
+        cx.update_window(window, |_, window, cx| {
+            window.draw(cx).clear();
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+
+    cx.update_window(window, |_, window, _| window.activate_window())
+        .unwrap();
+
+    // Before any editor was focused there is nothing to describe.
+    assert_eq!(state(cx).status_target, None);
+
+    focus_editor(cx);
+    let editor = state(cx).current_target.expect("focused editor");
+    assert_eq!(state(cx).status_target, Some(editor.clone()));
+
+    // A tool keeps the editor it was focused from.
+    cx.update_window(window, |_, window, cx| {
+        shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));
+        tree.focus_handle(cx).focus(window);
+    })
+    .unwrap();
+    settle(cx);
+    let with_tool = state(cx);
+    assert_ne!(with_tool.current_target, Some(editor.clone()));
+    assert_eq!(with_tool.status_target, Some(editor.clone()));
+
+    // A focused terminal clears the editor items, and its tab hides the
+    // editor, so the editor does not return when focus moves to the tool.
+    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    assert_eq!(wait_for_command(command, cx), CommandOutcome::Completed);
+    cx.update_window(window, |_, window, cx| {
+        shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));
+    })
+    .unwrap();
+    assert!(state(cx).current_target.is_some());
+    assert_eq!(state(cx).status_target, None);
+    cx.update_window(window, |_, window, cx| {
+        tree.focus_handle(cx).focus(window);
+    })
+    .unwrap();
+    assert_eq!(state(cx).status_target, None);
+
+    // Showing the editor again restores it, even with focus on the tool.
+    cx.update(|cx| {
+        let workbench = shell.read(cx).workbench.clone();
+        workbench.update(cx, |workbench, _| {
+            let pane = workbench.focused_pane().unwrap();
+            let (pane, tab) = (pane.id(), pane.tabs()[0].id());
+            assert!(workbench.activate_tab(pane, tab));
+        });
+    });
+    assert_eq!(state(cx).status_target, Some(editor));
+}

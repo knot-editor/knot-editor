@@ -70,7 +70,10 @@ impl ApplicationObservation {
                     window: window.clone(),
                 }),
                 Some(old) => {
-                    if old.panes != window.panes || old.current_target != window.current_target {
+                    if old.panes != window.panes
+                        || old.current_target != window.current_target
+                        || old.status_target != window.status_target
+                    {
                         changes.push(ApplicationChange::PresentationsChanged {
                             window: window.clone(),
                         });
@@ -250,6 +253,7 @@ mod tests {
         let window = WindowInfo {
             target: target.clone(),
             current_target: Some(view.clone()),
+            status_target: None,
             panes: vec![PaneInfo {
                 target: pane,
                 selected: view.clone(),
@@ -311,6 +315,16 @@ mod tests {
                 active_target: None,
                 ..
             }
+        ));
+        snapshot.windows[0].status_target = snapshot.windows[0].panes[0]
+            .tabs
+            .first()
+            .map(|tab| tab.target.clone());
+        let status = owner.commit(snapshot.clone());
+        assert_eq!(status.len(), 1);
+        assert!(matches!(
+            status[0].change,
+            ApplicationChange::PresentationsChanged { .. }
         ));
         let mut split = snapshot.windows[0].panes[0].clone();
         split.target.pane = "split".into();

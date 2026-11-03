@@ -57,7 +57,7 @@ pub(super) struct EngineTurn {
 
 pub(super) enum ListenerNotification {
     Buffer(BufferChange),
-    Application(ApplicationEvent),
+    Application(Box<ApplicationEvent>),
     /// The key of a setting written or reset in any scope.
     Setting(String),
     Editor(EditorEvent),

@@ -614,6 +614,10 @@ pub struct WindowInfo {
     pub target: WindowTarget,
     pub panes: Vec<PaneInfo>,
     pub current_target: Option<PresentationTarget>,
+    /// The editor tab the status bar describes: the focused editor, else the
+    /// last focused editor while its tab is shown, and none while a terminal
+    /// has focus.
+    pub status_target: Option<PresentationTarget>,
     pub workspace: WorkspaceInfo,
 }
 
