@@ -13,7 +13,8 @@ items. "After" means the earlier item must be complete or designed together
 with this one; "before" is the same constraint seen from the other side. IDs
 are never renumbered or reused. New items take the next unused ID. When an
 item is promoted, its slice plan retains the ID and the item is removed from
-this register. Items of the active [daily-driver](plans/daily-driver.md) and
+this register. Items of the active [daily-driver](plans/daily-driver.md),
+[editor API](plans/editor-api.md), and
 [package manager](plans/package-manager.md) plans are referenced here by ID
 and ordered in their plans.
 
@@ -44,7 +45,7 @@ Syntax highlighting (D002) is complete: native incremental tree-sitter
 parsing with injections, languages registered through the bundled
 language packages, explicit languages that survive restarts and project
 sessions, and a layered paint pipeline shaped for later language servers. Its
-follow-ups are D064–D067; D066 precedes D058.
+follow-ups are D064–D067.
 
 The [daily-driver editor](plans/daily-driver.md) initiative is selected: it
 removes demo surfaces and adds workbench and editing commands, a richer
@@ -52,6 +53,15 @@ palette, themes, Find, navigation, file watching, and bundled explorer,
 project-selector, and search extensions, keymap presets, and extension
 entitlements. It promotes D007, D008, D010, D031, D034, D053, D060, D064, D068,
 and D089 and adds D069–D088, D120–D123, D127, and D134.
+
+The [editor API and Vim mode](plans/editor-api.md) initiative is selected
+and runs ahead of the daily-driver files-and-workspace phase: key contexts,
+long-lived editor handles with selection observation, the status bar, undo
+groups, view controls, decoration styles, visual-line movement, and folding,
+proven by a bundled JavaScript Vim mode. It promotes D058, D066's folding,
+D077, D109, D110, D111, D112, and D114's decoration styles, schedules the
+daily-driver items D031, D078, and D080, and adds D141–D143. Language servers
+(D067) follow it.
 
 The [package manager](plans/package-manager.md) initiative is selected: extension
 installation becomes an inspectable application-owned lifecycle with a lockfile,
@@ -71,24 +81,22 @@ Each line is a chain: an item to the left of an arrow comes first. Items not
 listed have no ordering constraint; each item's **Order** line is the
 complete list for that item.
 
-- **Vim mode and editing extensibility** (see the
-  [extensibility report](reports/extensibility.md)):
-  - D086 → D110 → D113 → D058
-  - D080 → D109 → D112, D113, D027
-  - D078 → D112 → D058
-  - D074 → D111 → D012, D058
-  - D073, D074 → D134 → D066; D068 → D066 → D058
+- **Editing extensibility** (see the
+  [extensibility report](reports/extensibility.md); the
+  [editor API](plans/editor-api.md) plan orders D058, D066, D077, D109–D112,
+  D114, and D141–D143):
+  - D110 → D113; D109 → D113, D027, D142
   - D134 → D135, D136
   - D073, D074, D075 → D130; D074 → D131; D073 → D132
-  - D064, D068 → D114 → D058
-  - D092 → multi-selection editing in D109, D001, D067
+  - D066 → D144
+  - D092 → D142, D001, D067
 - **Extension presentation and language tooling:**
-  - D064 → D114 → D067 → D022
+  - D114 → D145 → D067 → D022
   - D064 → D055
   - D087 → D067, D023
   - D079 → D115 → format on save with D067
-  - D114 before D021, which is reconsidered only if D114 falls short.
-  - D064, D068 → D114 → D027; D080 → D109 → D027
+  - D145 before D021, which is reconsidered only if D145 falls short.
+  - D114 → D027
   - D077 → D117 → D067
   - D071 → D118 → D067, D082
   - D053 → D119
@@ -117,36 +125,6 @@ complete list for that item.
 - **D006 — File drag and drop**
   - Deferred: Open and Save As establish workspace-independent documents first.
   - Reconsider: Platform interaction becomes a selected product slice.
-
-- **D058 — Complete Vim mode in JavaScript**
-  - Deferred: No modal editing contract has been selected. The native core owns
-    raw key input, IME, and text mechanics. Extensions reach commands,
-    keybindings, and buffers, but not editor views, selections, key contexts,
-    undo grouping, layout, recording, or the syntax tree, so a full emulation
-    would need a private host bypass today.
-  - Reconsider: A daily Vim workflow is selected, or Knot sets out to reach
-    Neovim-level extensibility, which this item is the forcing function for.
-    Then build it as an ordinary bundled or installed extension over the
-    generic primitives listed in the
-    [extensibility report](reports/extensibility.md), keeping registers,
-    operators, and Vim's mode names inside the extension. The Ex command line
-    adds completion to `showInput`, and the mode indicator and relative line
-    numbers use D077 and D068.
-  - Order: after D066, D109, D110, D111, D112, D113, and D114's decoration
-    styles, and the daily-driver items D068, D072, and D077.
-
-- **D066 — Syntax-tree editing features and public syntax-tree API**
-  - Deferred: D002 uses tree-sitter trees for highlighting, and D134 adds
-    `indents` queries. Folding, structural selection expansion, text
-    objects, and tree-based motions are not built, and extensions cannot
-    query the tree.
-  - Reconsider: Daily editing needs folding, or D058 is selected. Then add
-    per-language `folds` and `textobjects` queries to language registration
-    beside D134's `indents`, and expose node queries through the extension
-    API without exposing tree-sitter objects.
-  - Order: after D134, which adds the first editing query to the same
-    language registration, and D068, whose gutter lanes hold folds; before
-    D058.
 
 - **D132 — Editing data for the remaining bundled languages**
   - Deferred: D073 supplies comment and bracket data only for
@@ -270,7 +248,7 @@ complete list for that item.
     bytes, line breaks, and UTF-16 length, resolve positions through ordered
     piece locators, and keep the piece semantics, edit log, and `TextBuffer`
     API unchanged.
-  - Order: before or with D001, multi-selection editing in D109, and D067.
+  - Order: before or with D001, D142, and D067.
 
 - **D015 — URI deduplication across processes**
   - Deferred: The first slice handles identity within one application process.
@@ -350,7 +328,7 @@ complete list for that item.
     to file-sized token counts unlike per-item anchored contributions, and
     connect diagnostics to decorations and completion to D022.
   - Order: after D087 if the client is an extension that spawns servers,
-    D092 for server edit lists, and D114 for hover, inlay hints, and
+    D092 for server edit lists, and D145 for hover, inlay hints, and
     diagnostic text; before D022's language-server completion. Format on
     save builds on D115.
 
@@ -409,7 +387,7 @@ complete list for that item.
 - **D021 — General extension UI or WebView escape hatch**
   - Deferred: Surface-specific semantic UI remains sufficient.
   - Reconsider: A selected extension requires genuinely arbitrary UI.
-  - Order: after D114; reconsider only if its surfaces fall short.
+  - Order: after D145; reconsider only if its surfaces fall short.
 
 - **D125 — Tasks and run configurations**
   - Deferred: No investigation yet. VS Code and Zed read `tasks.json`, Emacs
@@ -550,82 +528,51 @@ complete list for that item.
 
 ## Editor extensibility
 
-These items bring the public API to Neovim-level depth for editing. D058 is
-their forcing function; D067 and D027 drive the presentation and hook items.
-Keep each primitive generic, so a Helix or Kakoune mode could use it too. The
+These items remain after the [editor API](plans/editor-api.md) plan, which
+builds the primitives its Vim mode (D058) needs. D067 and D027 drive the
+presentation and hook items. Keep each primitive generic, so a Helix or
+Kakoune mode could use it too. The
 [extensibility report](reports/extensibility.md) maps Vim's needs onto them.
-
-- **D109 — Editor view, selection, and position API**
-  - Deferred: A command captured in a document editor gets
-    `context.editor`, a first slice landed for Go to Line (D076): it reads
-    and sets one selection, reveals the caret nearest or centered, and saves
-    and restores the view state, and buffers answer line lookups. The handle
-    works only within its command. Extensions cannot hold several or
-    rectangular selections, scroll without moving the caret, query the
-    visible lines, or set the cursor style. Anchored positions exist only as
-    decorated contributions, and the clipboard can be written but not read.
-  - Reconsider: D058 or D027 is selected, or a bundled workflow needs
-    cursor-driven editing. Then extend the editor handle with several and
-    rectangular selections, a lifetime beyond its command, a `reveal: "top"`
-    for Vim's `zt` (with D112), scrolling without a caret move, the visible
-    line range, cursor style, undecorated anchored positions for marks, and
-    clipboard read. Design it with D080's cursor observation.
-  - Order: after D080; multi-selection editing with or after D092; before
-    D112, D113, D027, and D058.
-
-- **D110 — Key contexts and ordered key delivery**
-  - Deferred: Keybindings are scoped only by focused view kind. An
-    extension command runs as an async turn, so keys typed after a
-    mode-switching command can reach native input before the turn finishes,
-    and every bound key pays a pool round trip.
-  - Reconsider: D058 or another modal or sequence-heavy extension is
-    selected. Start with a spike that measures key-to-commit latency for an
-    extension command and races a context switch against typed text. Then
-    choose between extension-set key contexts resolved natively (with counts
-    and sequences), native buffering of keys while a mode owner handles one,
-    or both, as the report describes.
-  - Order: after D086, which settles the keymap model; before D113 and D058.
-    Do this spike first among this section's items.
-
-- **D111 — Undo groups across edit batches**
-  - Deferred: Each `applyEdits` batch is its own undo step, and an extension
-    cannot group several batches with the native typing between them.
-  - Reconsider: D058 needs `ciw…<Esc>` as one step, or replace-all (D001) or
-    formatting applies several batches. Then add an explicit group that an
-    extension opens and closes on a view or buffer, sharing the native
-    grouping D074 introduces for editing commands.
-  - Order: after D074; before D012 and D058.
-
-- **D112 — Visual-line movement and layout queries**
-  - Deferred: Vertical movement uses shaped x positions, and soft wrap
-    (D078) defines visual lines in the view's line model. Extensions only see
-    bytes.
-  - Reconsider: D058 needs `j`/`k`, `gj`, `H`/`M`/`L`, and `zz`, or an
-    extension needs screen-relative motion. Then expose native movement as
-    parameterized commands (by visual line, page, or screen position) rather
-    than exporting shaping data.
-  - Order: after D078 and D109; before D058.
 
 - **D113 — Command and input recording**
   - Deferred: Nothing can observe the stream of invoked commands together
     with the text typed between them, so neither repeat nor macros can be
-    built. Absorbs user macros and repetition from D020.
-  - Reconsider: D058 needs `.` and `q`, or a user macro workflow is selected.
-    Then record a view's invoked commands with arguments plus its typed text
-    as edits, and replay the recording through ordinary dispatch.
-  - Order: after D109 and D110; before D058.
+    built. Absorbs user macros and repetition from D020. The first Vim mode
+    (D058) ships without `.` and `q`.
+  - Reconsider: Daily Vim use misses `.` or `q`, or a user macro workflow is
+    selected. Then record a view's invoked commands with arguments plus its
+    typed text as edits, and replay the recording through ordinary dispatch.
+  - Order: after D109 and D110.
 
-- **D114 — Extension-owned editor presentation**
-  - Deferred: Contribution decorations name any theme color key but always
-    paint as a wavy underline. Extensions cannot choose another decoration
-    style, such as a background or a straight underline, draw virtual text or
-    inlay hints, or anchor a floating panel to a position.
-  - Reconsider: D067 needs hover, inlay hints, or diagnostic text, or D058
-    needs search and mode highlights. Then add decoration styles, inline
-    virtual text, and an anchored floating surface that reuses the semantic
-    tree and text content kinds.
-  - Order: after D064 and D068; before D067 and D058; D021 only if it falls
-    short.
+- **D142 — Multiple and rectangular selections**
+  - Deferred: The editor handle (D109) and views hold one selection. Vim's
+    visual-block mode, multi-cursor editing, and rectangular selection need
+    several, and each edit across them is a bulk edit.
+  - Reconsider: Visual-block mode or multi-cursor editing is selected. Then
+    let views and the editor handle hold an ordered selection set, with
+    rectangular selection as one way to create it, and apply edits across
+    the set as one batch.
+  - Order: after D109 and D092.
+
+- **D144 — Syntax-tree queries and text objects**
+  - Deferred: D066 adds `folds` queries for folding only. Extensions cannot
+    query the syntax tree, and there are no `textobjects` queries, so Vim's
+    `if`, `ac`, and `ia`, structural selection expansion, and tree-based
+    motions cannot be built.
+  - Reconsider: Daily Vim use misses tree-sitter text objects, or structural
+    selection is selected. Then add per-language `textobjects` queries beside
+    `folds` and `indents`, and expose node queries through the extension API
+    without exposing tree-sitter objects.
+  - Order: after D066.
+
+- **D145 — Virtual text and anchored floating panels**
+  - Deferred: D114 adds decoration styles. Extensions still cannot draw
+    virtual text or inlay hints, or anchor a floating panel to a position.
+  - Reconsider: D067 needs hover, inlay hints, or diagnostic text. Then
+    design them against a real language server, as inline virtual text and
+    an anchored floating surface that reuses the semantic tree and text
+    content kinds.
+  - Order: after D114; before D067; D021 only if it falls short.
 
 - **D115 — Lifecycle hooks and native command overrides**
   - Deferred: Extensions observe document and window changes after they

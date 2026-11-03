@@ -213,13 +213,9 @@ to be rebuilt later:
     [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions),
     [extension guide](../extension-api.md#register-a-command)).
 
-- **D077 — Status bar** (depends on D064)
-  - A native per-window bar showing line:column, the selection size, the
-    language (click to open Set Language Mode), line ending, indentation, and
-    the dirty state.
-  - Extensions contribute items: short text with an optional command, ordered
-    within a left or right side. D058's mode indicator and D117's progress
-    need them, and Git will later.
+- **D077 — Status bar**
+  - 🚧 Moved to the [editor API](editor-api.md) plan, which also schedules
+    D031, D078, and D080.
 
 - **D078 — Zoom, font size, and soft wrap** (depends on D070)
   - ⌘+ / ⌘- / ⌘0 zoom the current view or every view (decide which). The base
