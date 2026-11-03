@@ -534,3 +534,170 @@ fn measure_selection_notification_latency(cx: &mut TestAppContext) {
         runs[runs.len() - 1]
     );
 }
+
+const UNDO_GROUP_SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+let handle;
+let group;
+let result = "";
+await commands.register("group.attach", async () => {
+  const { snapshot } = await workbench.observe(() => {});
+  handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+});
+await commands.register("group.begin", async () => {
+  group = await handle.beginUndoGroup();
+});
+await commands.register("group.again", async () => {
+  try { await handle.beginUndoGroup(); result = "opened"; } catch (error) { result = error.code; }
+  await workbench.writeClipboardText(result);
+});
+await commands.register("group.edit", async ({ buffer }) => {
+  const { revision } = await buffer.snapshot({ startByteOffset: 0, endByteOffset: 0 });
+  await buffer.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 3 }, text: "" }], { ifRevision: revision });
+});
+await commands.register("group.end", async () => {
+  await group.dispose();
+});
+"#;
+
+fn undo_group_fixture(
+    cx: &mut TestAppContext,
+) -> (
+    Entity<crate::app::extensions::host::ProductExtensionHost>,
+    crate::host::lifecycle::ExtensionKey,
+    Entity<ProductShell>,
+    gpui::AnyWindowHandle,
+    Entity<crate::app::editor::EditorView>,
+    Entity<BufferModel>,
+) {
+    use crate::host::lifecycle::ExtensionKey;
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(722), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, UNDO_GROUP_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("group.end")
+            .is_ok()
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+    let execution = dispatch_product_command(&shell, window, "group.attach", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    (host, key, shell, window, editor, model)
+}
+
+fn run_group_command(
+    shell: &Entity<ProductShell>,
+    window: gpui::AnyWindowHandle,
+    name: &'static str,
+    cx: &mut TestAppContext,
+) {
+    let execution = dispatch_product_command(shell, window, name, cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+fn type_in(
+    editor: &Entity<crate::app::editor::EditorView>,
+    window: gpui::AnyWindowHandle,
+    text: &str,
+    cx: &mut TestAppContext,
+) {
+    cx.update_window(window, |_, window, cx| {
+        editor.update(cx, |view, cx| {
+            gpui::EntityInputHandler::replace_text_in_range(view, None, text, window, cx)
+        })
+    })
+    .unwrap();
+}
+
+#[gpui::test]
+fn an_undo_group_makes_edits_and_typing_across_commands_one_step(cx: &mut TestAppContext) {
+    let (_host, _, shell, window, editor, model) = undo_group_fixture(cx);
+    type_in(&editor, window, "one two", cx);
+    cx.update_window(window, |_, _, cx| {
+        editor.update(cx, |view, cx| view.break_history_group(cx))
+    })
+    .unwrap();
+    run_group_command(&shell, window, "group.begin", cx);
+    run_group_command(&shell, window, "group.edit", cx);
+    // The caret moves between commands; the group stays open.
+    cx.update_window(window, |_, _, cx| {
+        editor.update(cx, |view, cx| view.break_history_group(cx))
+    })
+    .unwrap();
+    type_in(&editor, window, "X", cx);
+    cx.update_window(window, |_, _, cx| {
+        editor.update(cx, |view, cx| view.break_history_group(cx))
+    })
+    .unwrap();
+    type_in(&editor, window, "Y", cx);
+    run_group_command(&shell, window, "group.end", cx);
+    cx.read(|cx| assert_eq!(model.read(cx).text(), " twoXY"));
+
+    model.update(cx, |model, _| assert!(model.undo().unwrap()));
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "one two"));
+    model.update(cx, |model, _| assert!(model.redo().unwrap()));
+    cx.read(|cx| assert_eq!(model.read(cx).text(), " twoXY"));
+}
+
+#[gpui::test]
+fn a_second_undo_group_is_rejected_until_the_first_ends(cx: &mut TestAppContext) {
+    let (_host, _, shell, window, _editor, _model) = undo_group_fixture(cx);
+    run_group_command(&shell, window, "group.begin", cx);
+    run_group_command(&shell, window, "group.again", cx);
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
+        "OperationInProgress"
+    );
+    run_group_command(&shell, window, "group.end", cx);
+    run_group_command(&shell, window, "group.again", cx);
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
+        "opened"
+    );
+}
+
+#[gpui::test]
+fn an_undo_group_ends_with_its_lifecycle_or_its_tab(cx: &mut TestAppContext) {
+    let (host, key, shell, window, editor, model) = undo_group_fixture(cx);
+    type_in(&editor, window, "ab", cx);
+    cx.update_window(window, |_, _, cx| {
+        editor.update(cx, |view, cx| view.break_history_group(cx))
+    })
+    .unwrap();
+    run_group_command(&shell, window, "group.begin", cx);
+    type_in(&editor, window, "c", cx);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    // Typing after the lifecycle ended is a separate step.
+    cx.update_window(window, |_, _, cx| {
+        editor.update(cx, |view, cx| view.break_history_group(cx))
+    })
+    .unwrap();
+    type_in(&editor, window, "d", cx);
+    model.update(cx, |model, _| assert!(model.undo().unwrap()));
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "abc"));
+    host.read_with(cx, |host, _| assert_eq!(host.open_undo_group_count(), 0));
+}
+
+#[gpui::test]
+fn an_undo_group_ends_when_its_tab_closes(cx: &mut TestAppContext) {
+    let (host, _, shell, window, _editor, _model) = undo_group_fixture(cx);
+    run_group_command(&shell, window, "group.begin", cx);
+    host.read_with(cx, |host, _| assert_eq!(host.open_undo_group_count(), 1));
+    let execution = dispatch_product_command(&shell, window, "workbench.close-tab", cx);
+    wait_for_command(execution, cx);
+    cx.run_until_parked();
+    host.read_with(cx, |host, _| assert_eq!(host.open_undo_group_count(), 0));
+}

@@ -957,6 +957,20 @@ declare module "knot" {
      * empty name or a non-boolean `active`.
      */
     setKeyContext(name: string, active: boolean): Promise<void>;
+    /**
+     * Make everything committed to this editor's buffer until the returned
+     * group is disposed one undo step: this caller's edit batches, native
+     * typing, paste and deletion, and other views' edits. Caret moves and
+     * other native history breaks do not end it. The step restores this view's
+     * selection from before the first to after the last commit, and a group
+     * with no commit leaves no step. Undo and redo end an open group first.
+     * The group belongs to the caller's lifecycle and also ends when its
+     * lifecycle ends, when the editor handle is released, or when the handle's
+     * tab closes.
+     * @throws HostError with InvalidTarget, Cancelled, or OperationInProgress
+     * when the buffer already has an open group.
+     */
+    beginUndoGroup(): Promise<Disposable>;
     /** Selection and scroll, restorable exactly while the text is unchanged.
      * @throws HostError with InvalidTarget or Cancelled. */
     viewState(): Promise<EditorViewState>;

@@ -119,3 +119,14 @@ test("a handle reports selection changes until the listener or handle is dispose
   await editor.dispose();
   await assert.rejects(editor.onDidChangeSelection(() => {}), { code: "InvalidTarget" });
 });
+
+test("an undo group is open until disposed, and a second one is rejected", async () => {
+  const document = host.addDocument({ text: "x" });
+  const window = host.openWindow({ documents: [document] });
+  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const group = await editor.beginUndoGroup();
+  assert.equal(host.undoGroupOpen(window), true);
+  await assert.rejects(editor.beginUndoGroup(), { code: "OperationInProgress" });
+  await group.dispose();
+  assert.equal(host.undoGroupOpen(window), false);
+});

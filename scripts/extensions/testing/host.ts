@@ -142,10 +142,14 @@ type FakeSettingValue = {
 };
 
 let state = emptyState();
+// Documents with an open undo group. The fake keeps no edit history, so a
+// group only records that one is open.
+let undoGroups = new Set<Knot.DocumentId>();
 
 /** Clears every record, window, registration, and scripted answer. */
 export function reset() {
   state = emptyState();
+  undoGroups = new Set();
 }
 
 function nextId(prefix: string) {
@@ -585,6 +589,11 @@ export function keyContexts(window: Knot.WindowTarget = state.windows[0]!.target
   return [...selectedTab(window).keyContexts].sort();
 }
 
+/** Whether the window's selected document has an open undo group. */
+export function undoGroupOpen(window: Knot.WindowTarget = state.windows[0]!.target): boolean {
+  return undoGroups.has(selectedTab(window).document);
+}
+
 /** Every `bind` and `bindText` call so far, in order. */
 export function bindings(): readonly FakeBinding[] {
   return state.bindings;
@@ -624,6 +633,12 @@ function editor(tab: FakeTab): Knot.Editor {
       if (active) keyContexts.add(name);
       else keyContexts.delete(name);
     },
+    beginUndoGroup: async () => {
+      const { document } = live();
+      if (undoGroups.has(document)) throw hostError("OperationInProgress");
+      undoGroups.add(document);
+      return { dispose: async () => void undoGroups.delete(document) };
+    },
     viewState: async () => ({ ...live().view }),
     restoreViewState: async (view) => {
       live().view = { ...view };
@@ -653,6 +668,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     selection: guard(live.selection),
     setSelection: guard(live.setSelection),
     setKeyContext: guard(live.setKeyContext),
+    beginUndoGroup: guard(live.beginUndoGroup),
     viewState: guard(live.viewState),
     restoreViewState: guard(live.restoreViewState),
     onDidClose(listener) {

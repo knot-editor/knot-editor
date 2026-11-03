@@ -355,6 +355,11 @@ function editorFor(authority) {
       if (typeof active !== "boolean") throw new TypeError("active must be a boolean");
       await request("editorSetKeyContext", authority, name, active);
     },
+    async beginUndoGroup() {
+      const group = await request("editorBeginUndoGroup", authority);
+      const owned = ownership(() => {}, () => request("editorEndUndoGroup", group));
+      return Object.freeze({ dispose: () => owned.dispose() });
+    },
     async viewState() {
       const value = await request("editorViewState", authority);
       return Object.freeze({ anchor: value.anchor, caret: value.caret, top: value.top, scrollX: value.scrollX });

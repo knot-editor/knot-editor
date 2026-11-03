@@ -70,7 +70,7 @@ close); tests in `src/app/model/tests.rs`. Mirror the entry-extending code in
 `apply_replace` and `amend`; edits of a batch apply in reverse so earlier
 offsets stay valid.
 
-## Checkpoint 2 — Extension API and ownership
+## Checkpoint 2 — Extension API and ownership ✅
 
 Deliverables: `beginUndoGroup` on the editor handle and on the command's
 `context.editor`; a host operation that begins the group for the caller's

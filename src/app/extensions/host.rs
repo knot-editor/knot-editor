@@ -539,6 +539,14 @@ struct EditorHandle {
     selection: Option<SelectionWatch>,
 }
 
+/// An undo group a lifecycle holds open on one buffer. `handle` is the
+/// editor handle it was opened through; the group ends with that handle.
+struct UndoGroup {
+    owner: ExtensionKey,
+    model: gpui::WeakEntity<crate::app::model::BufferModel>,
+    handle: Option<u64>,
+}
+
 /// Follows an editor's selection for one handle. At most one notification is
 /// outstanding: `pending` stays set until the listener turn starts and
 /// acknowledges it, so changes in between coalesce into that turn.
@@ -576,6 +584,9 @@ pub(crate) struct ProductExtensionHost {
     /// Long-lived editor handles, each bound to one exact tab presentation.
     editor_handles: HashMap<u64, EditorHandle>,
     next_editor_handle: u64,
+    /// Open undo groups, ended by disposal, teardown, or their handle's tab.
+    undo_groups: HashMap<u64, UndoGroup>,
+    next_undo_group: u64,
     #[cfg(test)]
     application_events: Vec<crate::host::protocol::ApplicationEvent>,
     _application_window_closed: Subscription,
@@ -638,6 +649,8 @@ impl ProductExtensionHost {
             lifecycles: HashSet::new(),
             key_context_editors: HashMap::new(),
             editor_handles: HashMap::new(),
+            undo_groups: HashMap::new(),
+            next_undo_group: 0,
             next_editor_handle: 0,
             storage: test_storage(cx),
             storage_owners: HashMap::new(),
@@ -1482,18 +1495,91 @@ impl ProductExtensionHost {
         }
     }
 
-    pub(super) fn release_editor(&mut self, owner: ExtensionKey, id: u64) {
+    pub(super) fn release_editor(&mut self, owner: ExtensionKey, id: u64, cx: &mut App) {
         if self
             .editor_handles
             .get(&id)
             .is_some_and(|handle| handle.owner == owner)
         {
             self.editor_handles.remove(&id);
+            self.end_handle_undo_groups(id, cx);
+        }
+    }
+
+    /// Open an undo group on the editor's buffer; `None` when the buffer has
+    /// one open already.
+    pub(super) fn begin_undo_group(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::EditorView>,
+        authority: handlers::EditorAuthority,
+        cx: &mut App,
+    ) -> Option<u64> {
+        let model = editor.read(cx).model().clone();
+        if !model.update(cx, |model, _| model.begin_undo_group(owner)) {
+            return None;
+        }
+        self.next_undo_group += 1;
+        let id = self.next_undo_group;
+        let handle = match authority {
+            handlers::EditorAuthority::Handle(handle) => Some(handle),
+            handlers::EditorAuthority::Command(_) => None,
+        };
+        self.undo_groups.insert(
+            id,
+            UndoGroup {
+                owner,
+                model: model.downgrade(),
+                handle,
+            },
+        );
+        Some(id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn open_undo_group_count(&self) -> usize {
+        self.undo_groups.len()
+    }
+
+    pub(super) fn end_undo_group(&mut self, owner: ExtensionKey, id: u64, cx: &mut App) {
+        if self
+            .undo_groups
+            .get(&id)
+            .is_some_and(|group| group.owner == owner)
+            && let Some(group) = self.undo_groups.remove(&id)
+        {
+            Self::finish_undo_group(&group, cx);
+        }
+    }
+
+    fn end_handle_undo_groups(&mut self, handle: u64, cx: &mut App) {
+        self.end_undo_groups_where(cx, |group| group.handle == Some(handle));
+    }
+
+    fn end_undo_groups_where(&mut self, cx: &mut App, mut ends: impl FnMut(&UndoGroup) -> bool) {
+        let ids = self
+            .undo_groups
+            .iter()
+            .filter(|(_, group)| ends(group))
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+        for id in ids {
+            if let Some(group) = self.undo_groups.remove(&id) {
+                Self::finish_undo_group(&group, cx);
+            }
+        }
+    }
+
+    fn finish_undo_group(group: &UndoGroup, cx: &mut App) {
+        if let Some(model) = group.model.upgrade() {
+            model.update(cx, |model, _| {
+                model.end_undo_group(group.owner);
+            });
         }
     }
 
     /// Drop handles whose tab presentation is gone and tell their owners.
-    fn release_stale_editor_handles(&mut self, cx: &App) {
+    fn release_stale_editor_handles(&mut self, cx: &mut App) {
         let stale = self
             .editor_handles
             .iter()
@@ -1502,6 +1588,7 @@ impl ProductExtensionHost {
             .collect::<Vec<_>>();
         for (id, owner) in stale {
             self.editor_handles.remove(&id);
+            self.end_handle_undo_groups(id, cx);
             let _ = self.pool.dispatch_editor_event(
                 owner,
                 handlers::EditorAuthority::handle_wire(id),
@@ -2513,6 +2600,7 @@ impl ProductExtensionHost {
             }
         }
         self.editor_handles.retain(|_, handle| handle.owner != key);
+        self.end_undo_groups_where(cx, |group| group.owner == key);
         for editor in self.key_context_editors.remove(&key).unwrap_or_default() {
             if let Some(editor) = editor.upgrade() {
                 editor.update(cx, |editor, _| editor.remove_key_context_owner(key));

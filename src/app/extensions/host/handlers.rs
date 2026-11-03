@@ -1905,11 +1905,50 @@ pub(crate) async fn release_editor(
     arguments: EditorArguments,
 ) -> Result<(), AccessError> {
     let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
-    context.foreground(|host, _| {
+    context.foreground(|host, cx| {
         if let EditorAuthority::Handle(id) = arguments.authority {
-            host.release_editor(owner, id);
+            host.release_editor(owner, id, cx);
         }
     })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct UndoGroupArguments {
+    pub group: u64,
+}
+impl HostArguments for UndoGroupArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            group: reader.integer(2)?,
+        })
+    }
+}
+
+/// Open an undo group on the editor's buffer for the caller's lifecycle,
+/// returning its identity. Every commit to the buffer joins one undo step
+/// until the group ends.
+#[host_operation("editorBeginUndoGroup")]
+pub(crate) async fn editor_begin_undo_group(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<u64, EditorError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        host.begin_undo_group(owner, editor, arguments.authority, cx)
+            .ok_or(EditorError::OperationInProgress)
+    })?
+}
+
+/// End an undo group. A group that already ended is not an error.
+#[host_operation("editorEndUndoGroup")]
+pub(crate) async fn editor_end_undo_group(
+    context: HostContext,
+    arguments: UndoGroupArguments,
+) -> Result<(), AccessError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, cx| host.end_undo_group(owner, arguments.group, cx))
 }
 
 #[derive(Debug, HostError)]
@@ -1918,6 +1957,8 @@ pub(crate) enum EditorError {
     Access(AccessError),
     #[error(code = "InvalidRange", message = "InvalidRange")]
     InvalidRange,
+    #[error(code = "OperationInProgress", message = "OperationInProgress")]
+    OperationInProgress,
 }
 impl From<AccessError> for EditorError {
     fn from(error: AccessError) -> Self {
