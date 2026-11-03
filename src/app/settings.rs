@@ -43,6 +43,10 @@ pub(crate) const THEME_LIGHT: &str = "theme.light";
 pub(crate) const KEYMAP_PRESET: &str = "keymap.preset";
 /// Whether documents browsed from the explorer and search open as previews.
 pub(crate) const WORKBENCH_PREVIEW_TABS: &str = "workbench.previewTabs";
+/// Whether product windows show the status bar.
+pub(crate) const STATUS_BAR_VISIBLE: &str = "statusBar.visible";
+/// IDs of status items the bar skips.
+pub(crate) const STATUS_BAR_HIDDEN_ITEMS: &str = "statusBar.hiddenItems";
 
 /// The value type a definition accepts.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -51,6 +55,8 @@ pub(crate) enum SettingType {
     Integer,
     Number,
     String,
+    /// A list of strings.
+    Strings,
 }
 
 impl SettingType {
@@ -60,6 +66,7 @@ impl SettingType {
             "integer" => Self::Integer,
             "number" => Self::Number,
             "string" => Self::String,
+            "strings" => Self::Strings,
             _ => return None,
         })
     }
@@ -70,6 +77,7 @@ impl SettingType {
             Self::Integer => "integer",
             Self::Number => "number",
             Self::String => "string",
+            Self::Strings => "strings",
         }
     }
 
@@ -79,6 +87,9 @@ impl SettingType {
             Self::Integer => value.is_i64(),
             Self::Number => value.is_number(),
             Self::String => value.is_string(),
+            Self::Strings => value
+                .as_array()
+                .is_some_and(|items| items.iter().all(Value::is_string)),
         }
     }
 }
@@ -226,6 +237,18 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: true.into(),
             description: "Open documents browsed from the explorer or search as preview tabs that the next preview replaces".into(),
+        },
+        SettingDefinition {
+            key: STATUS_BAR_VISIBLE.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Show the status bar below the workbench".into(),
+        },
+        SettingDefinition {
+            key: STATUS_BAR_HIDDEN_ITEMS.into(),
+            value_type: SettingType::Strings,
+            default: Value::Array(Vec::new()),
+            description: "IDs of status bar items the bar skips; hidden items keep running".into(),
         },
     ]
 }
@@ -476,6 +499,27 @@ pub(crate) fn text(key: &str, cx: &App) -> String {
         value.as_str().map(str::to_owned)
     })
     .expect("a native text setting")
+}
+
+/// Write a native boolean setting for every context.
+pub(crate) fn set_boolean(key: &str, value: bool, cx: &mut App) {
+    cx.default_global::<ApplicationSettings>()
+        .0
+        .set(key, Value::Bool(value), SettingsScope::default())
+        .expect("a native boolean setting");
+}
+
+/// The value of a native text-list setting, unscoped.
+pub(crate) fn strings(key: &str, cx: &App) -> Vec<String> {
+    resolve(key, &SettingsScope::default(), cx, |value| {
+        value.as_array().map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_owned))
+                .collect()
+        })
+    })
+    .expect("a native text-list setting")
 }
 
 #[cfg(test)]

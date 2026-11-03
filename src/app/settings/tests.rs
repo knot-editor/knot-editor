@@ -51,6 +51,34 @@ fn native_definitions_resolve_their_default() {
 }
 
 #[test]
+fn text_lists_accept_only_strings() {
+    let mut store = SettingsStore::default();
+    assert_eq!(
+        store.get(STATUS_BAR_HIDDEN_ITEMS, &SettingsScope::default()),
+        Some(&json!([]))
+    );
+    store
+        .set(
+            STATUS_BAR_HIDDEN_ITEMS,
+            json!(["position", "language"]),
+            SettingsScope::default(),
+        )
+        .unwrap();
+    for invalid in [json!("position"), json!(["position", 3])] {
+        assert_eq!(
+            store.set(STATUS_BAR_HIDDEN_ITEMS, invalid, SettingsScope::default()),
+            Err(SettingsError::TypeMismatch {
+                expected: SettingType::Strings
+            })
+        );
+    }
+    assert_eq!(
+        store.get(STATUS_BAR_HIDDEN_ITEMS, &SettingsScope::default()),
+        Some(&json!(["position", "language"]))
+    );
+}
+
+#[test]
 fn unscoped_value_replaces_the_default() {
     let mut store = store_with_integer();
     assert_eq!(store.get(KEY, &rust_editor()), Some(&json!(10)));

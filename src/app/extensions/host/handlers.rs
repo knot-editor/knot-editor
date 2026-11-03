@@ -2963,7 +2963,9 @@ impl HostArguments for SettingDefinition {
         Ok(Self {
             key: reader.text(2, "setting key must be text")?,
             value_type: SettingType::parse(&reader.text(3, "setting type must be text")?).ok_or(
-                DecodeError::Type("setting type must be boolean, integer, number, or string"),
+                DecodeError::Type(
+                    "setting type must be boolean, integer, number, string, or strings",
+                ),
             )?,
             default: setting_value(reader.command_arguments(4)?),
             description: reader.text(5, "setting description must be text")?,

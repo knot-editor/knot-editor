@@ -114,6 +114,8 @@ function emptyState() {
       ["theme.dark", { key: "theme.dark", type: "string", default: "One Dark", description: "The theme used in dark mode" }],
       ["theme.light", { key: "theme.light", type: "string", default: "One Light", description: "The theme used in light mode" }],
       ["keymap.preset", { key: "keymap.preset", type: "string", default: "knot", description: "The keymap preset that supplies default key bindings" }],
+      ["statusBar.visible", { key: "statusBar.visible", type: "boolean", default: true, description: "Show the status bar below the workbench" }],
+      ["statusBar.hiddenItems", { key: "statusBar.hiddenItems", type: "strings", default: [], description: "IDs of status bar items the bar skips" }],
     ]),
     settingValues: [] as FakeSettingValue[],
     settingListeners: [] as { key: string; listener: (key: Knot.SettingKey) => void | Promise<void> }[],
@@ -887,6 +889,7 @@ const settingTypes: Record<Knot.SettingType, (value: unknown) => boolean> = {
   integer: (value) => Number.isSafeInteger(value),
   number: (value) => Number.isFinite(value),
   string: (value) => typeof value === "string",
+  strings: (value) => Array.isArray(value) && value.every((item) => typeof item === "string"),
 };
 
 function settingScope(scope: Knot.SettingsScope | undefined) {

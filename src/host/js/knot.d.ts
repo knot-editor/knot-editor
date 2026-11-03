@@ -307,10 +307,16 @@ declare module "knot" {
     /** The keymap preset that supplies default bindings. Native default
      * "knot"; an unregistered name selects "knot". */
     "keymap.preset": string;
+    /** Whether product windows show the status bar. Native default true. */
+    "statusBar.visible": boolean;
+    /** IDs of status items the bar skips. Hidden items keep running, so a
+     * package that registered one is unaffected. Native default empty. */
+    "statusBar.hiddenItems": readonly string[];
   }
   export type SettingKey = keyof Settings & string;
-  /** "integer" accepts safe integers; "number" accepts any finite number. */
-  export type SettingType = "boolean" | "integer" | "number" | "string";
+  /** "integer" accepts safe integers; "number" accepts any finite number;
+   * "strings" accepts an array of strings. */
+  export type SettingType = "boolean" | "integer" | "number" | "string" | "strings";
   export interface SettingDefinition<K extends SettingKey = SettingKey> {
     /** Flat dotted name saying what the key sets, such as "lsp.timeout.launch". */
     readonly key: K;
