@@ -18,7 +18,7 @@ const TAB: &str = "editor.insert-tab";
 const INDENT: &str = "editor.indent-lines";
 const OUTDENT: &str = "editor.outdent-lines";
 const BACKSPACE: &str = "editor.delete-backward";
-const REINDENT: &str = "editor.reindent-lines";
+const REINDENT: &str = "editor.reindent-selected-lines";
 
 #[gpui::test]
 fn enter_keeps_the_indentation_before_the_caret(cx: &mut TestAppContext) {
@@ -510,4 +510,55 @@ fn convert_indentation_rewrites_every_line_as_one_undoable_step(cx: &mut TestApp
             assert!(view.indent_unit(view.model.read(cx), cx).tabs);
         });
     });
+}
+
+#[gpui::test]
+fn reindent_lines_covers_the_whole_document_regardless_of_the_selection(cx: &mut TestAppContext) {
+    let text = "fn a() {\nb();\n  c();\n}";
+    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            place(view, (1, 0), cx);
+            assert!(view.execute_editing_command("editor.reindent-lines", window, cx));
+            assert_eq!(view.text(cx), "fn a() {\n    b();\n    c();\n}");
+            view.execute_editing_command("editor.undo", window, cx);
+            assert_eq!(view.text(cx), text);
+            // The selected variant leaves the other lines alone.
+            place(view, (1, 0), cx);
+            assert!(view.execute_editing_command(REINDENT, window, cx));
+            assert_eq!(view.text(cx), "fn a() {\n    b();\n  c();\n}");
+        });
+    });
+}
+
+#[gpui::test]
+fn detecting_indentation_replaces_the_documents_own_settings(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    // The user chose the opposite of what the first text shows and chose
+    // tabs for the second, which shows no style.
+    let open = |text: &str, spaces: bool, cx: &mut TestAppContext| {
+        let document = uuid::Uuid::new_v4();
+        let model = cx.new(|_| {
+            let mut model = BufferModel::from_text(text);
+            model.set_document(document);
+            model
+        });
+        cx.update(|cx| crate::app::settings::set_document_insert_spaces(document, spaces, cx));
+        let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
+        (editor, cx.clone())
+    };
+    for (text, spaces, expect_tabs) in [
+        ("a\n\tb\n\tc\n\td\n", true, true),
+        ("a\nb\nc\n", false, false),
+    ] {
+        let (editor, cx) = open(text, spaces, cx);
+        let mut cx = cx;
+        cx.update(|window, cx| {
+            editor.update(cx, |view, cx| {
+                assert_eq!(view.indent_unit(view.model.read(cx), cx).tabs, !spaces);
+                assert!(view.execute_editing_command("editor.detect-indentation", window, cx));
+                assert_eq!(view.indent_unit(view.model.read(cx), cx).tabs, expect_tabs);
+            });
+        });
+    }
 }

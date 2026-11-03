@@ -419,6 +419,18 @@ pub(crate) fn set_document_insert_spaces(document: uuid::Uuid, spaces: bool, cx:
         .expect("editor.insertSpaces is a native boolean setting");
 }
 
+/// Drop a document's own indentation values, so its style and size follow the
+/// language and global settings again.
+pub(crate) fn reset_document_indentation(document: uuid::Uuid, cx: &mut App) {
+    let scope = SettingsScope {
+        document: Some(document.to_string()),
+        ..Default::default()
+    };
+    let store = &mut cx.default_global::<ApplicationSettings>().0;
+    store.reset(EDITOR_INSERT_SPACES, &scope);
+    store.reset(EDITOR_TAB_SIZE, &scope);
+}
+
 /// Drop the settings values scoped to a document that was released.
 pub(crate) fn release_document(document: uuid::Uuid, cx: &mut App) {
     if cx.has_global::<ApplicationSettings>() {

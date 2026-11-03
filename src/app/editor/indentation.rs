@@ -221,13 +221,18 @@ impl EditorView {
         self.commit_line_edits(edits, cx);
     }
 
-    /// Indent the selected lines from the indent query of the language at
-    /// each, leaving lines of a language without one as they are.
-    pub(super) fn reindent_lines(&mut self, cx: &mut Context<Self>) {
+    /// Indent the selected lines, or every line, from the indent query of the
+    /// language at each, leaving lines of a language without one as they are.
+    pub(super) fn reindent_lines(&mut self, selected_only: bool, cx: &mut Context<Self>) {
         let model = self.model.read(cx);
         let unit = self.indent_unit(model, cx);
+        let lines = if selected_only {
+            self.selected_lines()
+        } else {
+            0..model.line_count()
+        };
         let edits = model
-            .reindent(self.selected_lines(), unit.size)
+            .reindent(lines, unit.size)
             .into_iter()
             .map(|(line, columns)| {
                 let text = line_text(model, line);
@@ -239,6 +244,17 @@ impl EditorView {
             })
             .collect();
         self.commit_line_edits(edits, cx);
+    }
+
+    /// Indent with the style the text uses, dropping the document's own
+    /// indentation settings first so a text with no clear style follows the
+    /// language and global settings again.
+    pub(super) fn detect_indentation(&mut self, cx: &mut Context<Self>) {
+        if let Some(document) = self.model.read(cx).document() {
+            settings::reset_document_indentation(document, cx);
+        }
+        crate::app::documents::detect_indentation(&self.model, cx);
+        crate::app::application_observation::changed(cx);
     }
 
     /// Rewrite the leading whitespace of every line with tabs or spaces at

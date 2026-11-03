@@ -91,8 +91,12 @@ impl EditorView {
                 self.outdent_lines(cx);
                 return true;
             }
-            commands::REINDENT_LINES_COMMAND => {
-                self.reindent_lines(cx);
+            commands::REINDENT_LINES_COMMAND | commands::REINDENT_SELECTED_LINES_COMMAND => {
+                self.reindent_lines(command == commands::REINDENT_SELECTED_LINES_COMMAND, cx);
+                return true;
+            }
+            commands::DETECT_INDENTATION_COMMAND => {
+                self.detect_indentation(cx);
                 return true;
             }
             commands::CONVERT_INDENTATION_TO_SPACES_COMMAND

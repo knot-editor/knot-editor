@@ -210,7 +210,7 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
                     id,
                     &before,
                     selection,
-                    Action::Command("editor.reindent-lines"),
+                    Action::Command("editor.reindent-selected-lines"),
                 )
                 .text;
                 if actual != expected {
