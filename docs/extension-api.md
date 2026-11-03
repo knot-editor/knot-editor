@@ -139,6 +139,12 @@ obtains a new one from the next observation. `onDidClose` runs once when that
 happens, and not on `dispose()` or unload. A key context set through a handle
 stays until cleared or the package unloads, even after `dispose()`.
 
+`editor.onDidChangeSelection(listener)` runs after the selection changes for
+any reason, edits that move the caret included. It carries nothing: read
+`editor.selection()` in the listener. Notifications coalesce, so a burst of
+changes runs the listener once with the final selection, and a listener still
+busy when more changes arrive gets one further call, not a queue.
+
 Registering commands/providers/keymaps is valid during activation. Contextual
 lookup and command invocation require a running command. Await disposal and
 view invalidation to observe completion, and use host error `code` values

@@ -536,6 +536,16 @@ fn test_storage(
 struct EditorHandle {
     owner: ExtensionKey,
     tab: crate::app::product::operations::EditorTab,
+    selection: Option<SelectionWatch>,
+}
+
+/// Follows an editor's selection for one handle. At most one notification is
+/// outstanding: `pending` stays set until the listener turn starts and
+/// acknowledges it, so changes in between coalesce into that turn.
+struct SelectionWatch {
+    last: (usize, usize),
+    pending: bool,
+    _observation: Subscription,
 }
 
 /// Owns the one process-wide extension pool and all foreground protocol state.
@@ -1386,8 +1396,85 @@ impl ProductExtensionHost {
         let tab = crate::app::product::operations::capture_editor_tab(target, cx)?;
         self.next_editor_handle += 1;
         let id = self.next_editor_handle;
-        self.editor_handles.insert(id, EditorHandle { owner, tab });
+        self.editor_handles.insert(
+            id,
+            EditorHandle {
+                owner,
+                tab,
+                selection: None,
+            },
+        );
         Ok(handlers::EditorAuthority::handle_wire(id))
+    }
+
+    /// Start notifying the handle's owner when its editor's selection changes.
+    /// Idempotent.
+    pub(super) fn watch_editor_selection(
+        &mut self,
+        request: &crate::host::protocol::RequestContext,
+        authority: handlers::EditorAuthority,
+        cx: &mut Context<Self>,
+    ) -> Result<(), handlers::AccessError> {
+        let editor = self.contextual_editor(request, authority, cx)?;
+        let handlers::EditorAuthority::Handle(id) = authority else {
+            return Err(handlers::AccessError::InvalidTarget);
+        };
+        let handle = self.editor_handles.get_mut(&id).expect("resolved handle");
+        if handle.selection.is_none() {
+            let last = editor.read(cx).selection(cx);
+            let observation = cx.observe(&editor, move |host, editor, cx| {
+                host.editor_selection_observed(id, &editor, cx)
+            });
+            handle.selection = Some(SelectionWatch {
+                last,
+                pending: false,
+                _observation: observation,
+            });
+        }
+        Ok(())
+    }
+
+    fn editor_selection_observed(
+        &mut self,
+        id: u64,
+        editor: &Entity<crate::app::editor::EditorView>,
+        cx: &App,
+    ) {
+        let current = editor.read(cx).selection(cx);
+        let Some(handle) = self.editor_handles.get_mut(&id) else {
+            return;
+        };
+        let Some(watch) = handle.selection.as_mut() else {
+            return;
+        };
+        if watch.last == current {
+            return;
+        }
+        watch.last = current;
+        if !watch.pending {
+            watch.pending = true;
+            let _ = self.pool.dispatch_editor_event(
+                handle.owner,
+                handlers::EditorAuthority::handle_wire(id),
+                crate::host::protocol::EditorEvent::SelectionChanged,
+            );
+        }
+    }
+
+    /// A selection notification's listener turn has started: later changes
+    /// queue the next one.
+    pub(super) fn acknowledge_editor_selection(
+        &mut self,
+        owner: ExtensionKey,
+        authority: handlers::EditorAuthority,
+    ) {
+        if let handlers::EditorAuthority::Handle(id) = authority
+            && let Some(handle) = self.editor_handles.get_mut(&id)
+            && handle.owner == owner
+            && let Some(watch) = handle.selection.as_mut()
+        {
+            watch.pending = false;
+        }
     }
 
     pub(super) fn release_editor(&mut self, owner: ExtensionKey, id: u64) {

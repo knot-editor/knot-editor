@@ -101,3 +101,21 @@ test("a disposed handle stops listening and acting", async () => {
   assert.equal(closed, 0);
   await assert.rejects(editor.selection(), { code: "InvalidTarget" });
 });
+
+test("a handle reports selection changes until the listener or handle is disposed", async () => {
+  const document = host.addDocument({ text: "one\ntwo\n" });
+  const window = host.openWindow({ documents: [document] });
+  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const seen: number[] = [];
+  const subscription = await editor.onDidChangeSelection(async () => {
+    seen.push((await editor.selection()).caret);
+  });
+  await editor.setSelection({ anchor: 2, caret: 2 });
+  await editor.setSelection({ anchor: 4, caret: 4 });
+  assert.deepEqual(seen, [2, 4]);
+  await subscription.dispose();
+  await editor.setSelection({ anchor: 5, caret: 5 });
+  assert.deepEqual(seen, [2, 4]);
+  await editor.dispose();
+  await assert.rejects(editor.onDidChangeSelection(() => {}), { code: "InvalidTarget" });
+});

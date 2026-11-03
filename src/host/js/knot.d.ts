@@ -1373,6 +1373,16 @@ declare module "knot" {
      * per-editor state. Not run for disposal or lifecycle teardown. Registered
      * after the tab already closed, it runs asynchronously once. */
     onDidClose(listener: () => void | Promise<void>): Disposable;
+    /**
+     * Runs after the selection changes for any reason, including caret motion
+     * caused by edits. The notification has no payload: read `selection()`.
+     * Notifications coalesce: changes while one is queued join it, and a
+     * listener still running when more arrive gets one further notification,
+     * never a queue. Native painting and input never wait on a listener.
+     * Resolves once the editor is being followed; changes before then are not
+     * reported. @throws HostError with InvalidTarget or Cancelled.
+     */
+    onDidChangeSelection(listener: () => void | Promise<void>): Promise<Disposable>;
   }
   /** Contributed view registration, captured selection, and clipboard access. */
   export const workbench: Readonly<{

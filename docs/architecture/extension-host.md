@@ -240,6 +240,21 @@ callback path. Commits never await listeners, and a listener may await host work
 or its own disposal. Queries can see newer state than an event. No separate replay,
 recovery, or backpressure mechanism is introduced.
 
+### Editor handle notifications
+
+A long-lived [editor handle](commands.md#extension-execution) is notified
+without payloads, as a root like a setting change: `closed` when the host finds
+its tab presentation gone after an observation refresh, and `selection` when
+its selection changes. A handle's first `onDidChangeSelection` makes the host
+observe the editor entity, so any caret change, motion or edit, reaches it, and
+compare the selection with the last one it saw. Each handle has at most one
+pending notification: the flag stays set until the listener turn starts and
+acknowledges it, so changes in between join that turn, and changes while
+listeners run queue exactly one more. Listeners then read the final
+`selection()`. The foreground only compares two offsets and enqueues a root, so
+painting and input never wait on JavaScript. The observation ends with the
+handle.
+
 ## Settings
 
 `app::settings` owns one `ApplicationSettings` global: definitions and value

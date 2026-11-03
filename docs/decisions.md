@@ -432,6 +432,29 @@ Developer: Show Extension Memory stays to repeat those measurements.
 
 Reference: [extension host](architecture/extension-host.md).
 
+## Editor handles
+
+A long-lived editor handle is bound to the exact tab presentation rather than
+to a command capture or the tab's editor entity, because a mode that follows
+editors must never act on a replacement tab, and tab moves keep the entity
+alive while changing where it is shown. The host re-resolves the presentation
+on every call and drops stale handles after each observation refresh, which
+also tells the owner once, so no second ownership catalog or per-tab close hook
+exists. Handles travel as the same authority integer as command captures, so
+the editor operations stay one set.
+
+Selection notifications carry no payload and coalesce to one pending turn per
+handle. A payload would need the old selection or the cause, which no consumer
+asked for (D080 may need the cause); a queue would let a slow listener grow
+unbounded work, while pulling the current selection is always correct, as with
+picker highlight previews. Acknowledging when the listener turn starts, rather
+than when it ends, keeps a long listener from losing the change that arrived
+during it. Observing the editor entity covers every cause of a caret change
+without instrumenting each selection mutation, at the cost of comparing two
+offsets per repaint-triggering notification of a watched editor.
+
+Reference: [extension host](architecture/extension-host.md#editor-handle-notifications).
+
 ## Handler declarations
 
 Annotated async handlers keep argument, result, and error types paired at their

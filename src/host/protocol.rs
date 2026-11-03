@@ -663,11 +663,14 @@ impl SettingsSubscriptionId {
 pub enum EditorEvent {
     /// The handle's tab presentation is gone.
     Closed,
+    /// The editor's selection changed since the last acknowledged notification.
+    SelectionChanged,
 }
 impl EditorEvent {
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Closed => "closed",
+            Self::SelectionChanged => "selection",
         }
     }
 }

@@ -359,11 +359,12 @@ const editorHandles = new Map();
 export async function openEditor(target) {
   if (!livePresentations.has(target)) hostError("InvalidTarget");
   const authority = await request("openEditor", destinationAuthority({ target }));
-  const entry = { closed: false, listeners: new Set() };
+  const entry = { closed: false, listeners: new Set(), selectionListeners: new Set(), watching: null };
   editorHandles.set(authority, entry);
   const owned = ownership(() => {
     editorHandles.delete(authority);
     entry.listeners.clear();
+    entry.selectionListeners.clear();
   }, () => request("releaseEditor", authority));
   return Object.freeze({
     ...editorFor(authority),
@@ -375,6 +376,14 @@ export async function openEditor(target) {
       }
       entry.listeners.add(listener);
       return Object.freeze({ dispose: async () => { entry.listeners.delete(listener); } });
+    },
+    async onDidChangeSelection(listener) {
+      if (typeof listener !== "function") throw new TypeError("onDidChangeSelection requires a listener");
+      owned.assertActive();
+      entry.watching ??= request("watchEditorSelection", authority);
+      try { await entry.watching; } catch (error) { entry.watching = null; throw error; }
+      entry.selectionListeners.add(listener);
+      return Object.freeze({ dispose: async () => { entry.selectionListeners.delete(listener); } });
     },
     dispose: () => owned.dispose(),
   });
@@ -388,6 +397,13 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
     entry.closed = true;
     const listeners = [...entry.listeners];
     entry.listeners.clear();
+    const results = await Promise.allSettled(listeners.map((listener) => listener()));
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+  } else if (kind === "selection") {
+    // Acknowledge first, so changes during the listeners queue one more turn.
+    await request("acknowledgeEditorSelection", authority);
+    const listeners = [...entry.selectionListeners];
     const results = await Promise.allSettled(listeners.map((listener) => listener()));
     const failure = results.find((result) => result.status === "rejected");
     if (failure) throw failure.reason;

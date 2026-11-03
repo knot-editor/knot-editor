@@ -1,6 +1,6 @@
 # D109 — Editor handles and selection observation
 
-Status: 🚧 in progress; checkpoint 1 ✅ awaiting its review gate. Item of the [editor API](editor-api.md)
+Status: 🚧 in progress; checkpoint 1 ✅; checkpoint 2 ✅ awaiting its review gate. Item of the [editor API](editor-api.md)
 plan; absorbs D080's observation API. Builds on D110's `setKeyContext`.
 Consumers: D077 (status bar), D080 (occurrence highlighting), D058 (Vim).
 
@@ -96,7 +96,7 @@ Deliver `workbench.editor(target)` with the exact-tab authority, disposal,
 - **Review gate.** The authority rule and the `InvalidTarget` cases are
   agreed before observation builds on them. ⏳ pending.
 
-### 2. Coalesced selection observation
+### 2. Coalesced selection observation ✅
 
 Deliver `onDidChangeSelection` with one pending notification per listener.
 
@@ -114,8 +114,21 @@ Deliver `onDidChangeSelection` with one pending notification per listener.
   `bufferChangeListeners` registry in `bootstrap.js`. Record the flow in
   [extension host](../architecture/extension-host.md) and the rationale in
   [decisions](../decisions.md).
+- **Completion note.** ✅ `EditorHandle.onDidChangeSelection`. Implemented
+  by observing the editor entity from the host (covers every cause without
+  touching each selection mutation) and comparing offsets; one pending flag
+  per handle, cleared when the listener turn starts, fans out to every
+  listener in JavaScript. This is per handle rather than per listener: the
+  observable behavior is the same and it needs no per-listener host state.
+  Delivery reuses the `EditorEvent` root from checkpoint 1. Docs:
+  [extension host](../architecture/extension-host.md#editor-handle-notifications),
+  [decisions](../decisions.md#editor-handles). Tests: product test for
+  unchanged selections, a busy listener with a burst, and typing; fake-host
+  test. Closure and teardown stop delivery by dropping the handle and its
+  observation, covered only through handle removal.
 - **Review gate.** Latency and coalescing behavior agreed on a small example
-  consumer (an occurrence-style listener) before D077 depends on it.
+  consumer (an occurrence-style listener) before D077 depends on it. ⏳ pending;
+  the example is checkpoint 3's deliverable, so measure latency there.
 
 ### 3. Example and durable docs
 

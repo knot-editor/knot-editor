@@ -35,6 +35,10 @@ type FakeTab = {
   keyContexts: Set<string>;
   /** Close listeners of the long-lived handles bound to this tab. */
   closeListeners: Set<() => void | Promise<void>>;
+  /** Selection listeners of the long-lived handles bound to this tab. The
+   * fake runs each one per change; the host's coalescing is covered by
+   * product tests. */
+  selectionListeners: Set<() => void | Promise<void>>;
 };
 
 /** A `bind` or `bindText` call; text bindings have a null key. */
@@ -353,6 +357,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     view: { anchor: 0, caret: 0, top: 0, scrollX: 0 },
     keyContexts: new Set(),
     closeListeners: new Set(),
+    selectionListeners: new Set(),
     reveal: null,
   });
   window.selected = window.tabs.length - 1;
@@ -576,6 +581,7 @@ function editor(tab: FakeTab): Knot.Editor {
       if (anchor > length || caret > length) throw hostError("InvalidRange");
       tab.view = { ...tab.view, anchor, caret };
       tab.reveal = options?.reveal ?? "nearest";
+      await notifySelection(tab);
     },
     setKeyContext: async (name, active) => {
       const { keyContexts } = live();
@@ -585,14 +591,20 @@ function editor(tab: FakeTab): Knot.Editor {
     viewState: async () => ({ ...live().view }),
     restoreViewState: async (view) => {
       live().view = { ...view };
+      await notifySelection(tab);
     },
   };
+}
+
+async function notifySelection(tab: FakeTab) {
+  for (const listener of [...tab.selectionListeners]) await listener();
 }
 
 function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
   const tab = state.windows.flatMap((window) => window.tabs).find((candidate) => candidate.target === target);
   if (tab === undefined) throw hostError("InvalidTarget");
   const listeners = new Set<() => void | Promise<void>>();
+  const selectionListeners = new Set<() => void | Promise<void>>();
   let disposed = false;
   const live = editor(tab);
   const guard =
@@ -617,10 +629,23 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
         },
       };
     },
+    async onDidChangeSelection(listener) {
+      if (disposed) throw hostError("InvalidTarget");
+      tab.selectionListeners.add(listener);
+      selectionListeners.add(listener);
+      return {
+        dispose: async () => {
+          tab.selectionListeners.delete(listener);
+          selectionListeners.delete(listener);
+        },
+      };
+    },
     async dispose() {
       disposed = true;
       for (const listener of listeners) tab.closeListeners.delete(listener);
+      for (const listener of selectionListeners) tab.selectionListeners.delete(listener);
       listeners.clear();
+      selectionListeners.clear();
     },
   };
 }

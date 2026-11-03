@@ -337,3 +337,84 @@ fn editor_handle_key_contexts_end_with_their_lifecycle(cx: &mut TestAppContext) 
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.read(|cx| assert!(editor.read(cx).key_contexts().is_empty()));
 }
+
+const SELECTION_SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+let count = 0;
+await commands.register("selection.attach", async () => {
+  const { snapshot } = await workbench.observe(() => {});
+  const handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+  await handle.onDidChangeSelection(async () => {
+    count += 1;
+    const { caret } = await handle.selection();
+    await workbench.writeClipboardText(`${count}:${caret}`);
+  });
+});
+"#;
+
+fn clipboard_text(cx: &gpui::App) -> Option<String> {
+    cx.read_from_clipboard()?.text()
+}
+
+#[gpui::test]
+fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAppContext) {
+    use crate::host::lifecycle::ExtensionKey;
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(722), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SELECTION_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("selection.attach")
+            .is_ok()
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    model.update(cx, |model, _| model.replace(0..0, "abcdefghij").unwrap());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+    let move_to = |caret: usize, cx: &mut TestAppContext| {
+        editor.update(cx, |editor, cx| {
+            editor.set_selection(caret, caret, crate::app::editor::Reveal::Nearest, cx)
+        })
+    };
+    let execution = dispatch_product_command(&shell, window, "selection.attach", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+
+    // An unchanged selection notifies nobody.
+    move_to(0, cx);
+    cx.run_until_parked();
+    assert_eq!(cx.read(clipboard_text), None);
+
+    // The first change starts a listener turn that stays busy; three more
+    // changes meanwhile produce exactly one further notification, which reads
+    // the final caret.
+    host.update(cx, |host, _| host.hold_clipboard_writes());
+    move_to(1, cx);
+    wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
+    for caret in [2, 3, 4] {
+        move_to(caret, cx);
+    }
+    cx.run_until_parked();
+    host.update(cx, |host, cx| host.release_view_requests(cx));
+    wait_for_api_condition(cx, |cx| clipboard_text(cx).as_deref() == Some("2:4"));
+    cx.run_until_parked();
+    assert_eq!(cx.read(clipboard_text).as_deref(), Some("2:4"));
+
+    // Typing moves the caret, which is a selection change too.
+    cx.update_window(window, |_, window, cx| {
+        shell.read(cx).focus_active_editor(window, cx)
+    })
+    .unwrap();
+    cx.simulate_input(window, "x");
+    wait_for_api_condition(cx, |cx| clipboard_text(cx).as_deref() == Some("3:5"));
+}
