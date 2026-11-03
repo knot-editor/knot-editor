@@ -354,6 +354,46 @@ function editorFor(authority) {
   });
 }
 
+const editorHandles = new Map();
+
+export async function openEditor(target) {
+  if (!livePresentations.has(target)) hostError("InvalidTarget");
+  const authority = await request("openEditor", destinationAuthority({ target }));
+  const entry = { closed: false, listeners: new Set() };
+  editorHandles.set(authority, entry);
+  const owned = ownership(() => {
+    editorHandles.delete(authority);
+    entry.listeners.clear();
+  }, () => request("releaseEditor", authority));
+  return Object.freeze({
+    ...editorFor(authority),
+    onDidClose(listener) {
+      if (typeof listener !== "function") throw new TypeError("onDidClose requires a listener");
+      if (entry.closed) {
+        queueMicrotask(() => listener());
+        return Object.freeze({ dispose: async () => {} });
+      }
+      entry.listeners.add(listener);
+      return Object.freeze({ dispose: async () => { entry.listeners.delete(listener); } });
+    },
+    dispose: () => owned.dispose(),
+  });
+}
+
+globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
+  const entry = editorHandles.get(authority);
+  if (!entry) return;
+  if (kind === "closed") {
+    editorHandles.delete(authority);
+    entry.closed = true;
+    const listeners = [...entry.listeners];
+    entry.listeners.clear();
+    const results = await Promise.allSettled(listeners.map((listener) => listener()));
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+  }
+};
+
 function contextualAuthority(target) {
   if (target === undefined) return null;
   const frame = activeCommandFrames.at(-1);

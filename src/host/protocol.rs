@@ -658,6 +658,20 @@ impl SettingsSubscriptionId {
     }
 }
 
+/// A payload-free notification about a long-lived editor handle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EditorEvent {
+    /// The handle's tab presentation is gone.
+    Closed,
+}
+impl EditorEvent {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Closed => "closed",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationEvent {

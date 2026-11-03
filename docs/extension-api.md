@@ -122,6 +122,23 @@ rejects `InvalidTarget` once the editor's tab closes or moves.
 `commands.unavailable()` ends a handler with the `unavailable` outcome, as
 native commands report a target they do not apply to.
 
+An editor can also outlive the command: `workbench.editor(target)` takes the
+`ViewTarget` of a document tab, from observation, and returns the same editor
+bound to that exact tab, plus `onDidClose` and `dispose`.
+
+```js
+const { snapshot } = await workbench.observe(() => {});
+const editor = await workbench.editor(snapshot.windows[0].panes[0].selected);
+await editor.setKeyContext("normal", true);
+editor.onDidClose(() => { /* drop per-editor state */ });
+```
+
+Every call rejects `InvalidTarget` once the tab closes, moves to another pane
+or window, or is replaced; the handle never follows a replacement, so a mode
+obtains a new one from the next observation. `onDidClose` runs once when that
+happens, and not on `dispose()` or unload. A key context set through a handle
+stays until cleared or the package unloads, even after `dispose()`.
+
 Registering commands/providers/keymaps is valid during activation. Contextual
 lookup and command invocation require a running command. Await disposal and
 view invalidation to observe completion, and use host error `code` values

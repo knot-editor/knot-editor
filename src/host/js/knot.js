@@ -2,7 +2,7 @@ import {
   activeBuffer,
   storageRead, storageWrite, storageDelete, storageList,
   recoveryList, recoveryRetain, recoveryRelease, recoveryRestore,
-  observeWorkbench, closePresentation, replaceWindows, captureLayout,
+  observeWorkbench, closePresentation, openEditor, replaceWindows, captureLayout,
   openDocument, createUntitled, presentDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, openTerminal,
   invalidCommandArguments,
   unavailableCommand,
@@ -60,6 +60,7 @@ export const commands = Object.freeze({
 export const workbench = Object.freeze({
   observe: observeWorkbench,
   close: closePresentation,
+  editor: openEditor,
   replaceWindows,
   captureLayout,
   registerView,

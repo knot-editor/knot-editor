@@ -60,6 +60,7 @@ pub(super) enum ListenerNotification {
     Application(ApplicationEvent),
     /// The key of a setting written or reset in any scope.
     Setting(String),
+    Editor(EditorEvent),
 }
 
 pub(super) enum EngineWork {
@@ -70,6 +71,10 @@ pub(super) enum EngineWork {
     SettingChange {
         subscription: SettingsSubscriptionId,
         key: String,
+    },
+    EditorEvent {
+        handle: u64,
+        event: EditorEvent,
     },
     #[cfg(test)]
     Script {

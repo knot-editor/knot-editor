@@ -597,11 +597,11 @@ impl From<AccessError> for CloseError {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CloseArguments {
+pub(crate) struct ViewTargetArguments {
     pub target: crate::host::protocol::PresentationTarget,
 }
 
-impl HostArguments for CloseArguments {
+impl HostArguments for ViewTargetArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         match reader.destination(2)? {
             Some(crate::host::protocol::DocumentDestination::View(target)) => Ok(Self { target }),
@@ -613,7 +613,7 @@ impl HostArguments for CloseArguments {
 #[host_operation("closePresentation")]
 pub(crate) async fn close_presentation(
     context: HostContext,
-    arguments: CloseArguments,
+    arguments: ViewTargetArguments,
 ) -> Result<crate::host::protocol::PresentationCloseOutcome, CloseError> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let caller = product::operations::OperationCaller {
@@ -1829,16 +1829,67 @@ pub(crate) async fn selected_view_text(
     context.foreground(|host, cx| host.contextual_selected_text(&request, arguments.target, cx))?
 }
 
+/// What an editor operation acts through: a command's captured target, or a
+/// long-lived handle bound to one tab presentation. Handles travel as
+/// `EDITOR_HANDLE_AUTHORITY + id`, above every invocation ID and still exact
+/// in a JavaScript number.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum EditorAuthority {
+    Command(CommandInvocationId),
+    Handle(u64),
+}
+
+const EDITOR_HANDLE_AUTHORITY: u64 = 1 << 52;
+
+impl EditorAuthority {
+    pub(crate) fn handle_wire(id: u64) -> u64 {
+        EDITOR_HANDLE_AUTHORITY + id
+    }
+
+    fn decode(reader: &mut dyn ArgumentReader, index: usize) -> Result<Self, DecodeError> {
+        let value = reader.integer(index)?;
+        Ok(match value.checked_sub(EDITOR_HANDLE_AUTHORITY) {
+            Some(id) => Self::Handle(id),
+            None => Self::Command(CommandInvocationId::new(value)),
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct EditorArguments {
-    pub authority: CommandInvocationId,
+    pub authority: EditorAuthority,
 }
 impl HostArguments for EditorArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         Ok(Self {
-            authority: CommandInvocationId::new(reader.integer(2)?),
+            authority: EditorAuthority::decode(reader, 2)?,
         })
     }
+}
+
+/// Bind a long-lived editor handle to the document tab a view target names,
+/// returning its authority.
+#[host_operation("openEditor")]
+pub(crate) async fn open_editor(
+    context: HostContext,
+    arguments: ViewTargetArguments,
+) -> Result<u64, AccessError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, cx| host.open_editor(owner, &arguments.target, cx))?
+}
+
+/// Release a handle. A handle the tab already invalidated is not an error.
+#[host_operation("releaseEditor")]
+pub(crate) async fn release_editor(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<(), AccessError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, _| {
+        if let EditorAuthority::Handle(id) = arguments.authority {
+            host.release_editor(owner, id);
+        }
+    })
 }
 
 #[derive(Debug, HostError)]
@@ -1886,7 +1937,7 @@ pub(crate) async fn editor_selection(
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SetSelectionArguments {
-    pub authority: CommandInvocationId,
+    pub authority: EditorAuthority,
     pub anchor: u64,
     pub caret: u64,
     pub reveal: crate::app::editor::Reveal,
@@ -1894,7 +1945,7 @@ pub(crate) struct SetSelectionArguments {
 impl HostArguments for SetSelectionArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         Ok(Self {
-            authority: CommandInvocationId::new(reader.integer(2)?),
+            authority: EditorAuthority::decode(reader, 2)?,
             anchor: reader.integer(3)?,
             caret: reader.integer(4)?,
             reveal: match reader.text(5, "reveal must be text")?.as_str() {
@@ -1934,13 +1985,13 @@ pub(crate) async fn editor_set_selection(
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SetKeyContextArguments {
-    pub authority: CommandInvocationId,
+    pub authority: EditorAuthority,
     pub name: String,
     pub active: bool,
 }
 impl HostArguments for SetKeyContextArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        let authority = CommandInvocationId::new(reader.integer(2)?);
+        let authority = EditorAuthority::decode(reader, 2)?;
         let name = reader.text(3, "key context must be text")?;
         if name.is_empty() {
             return Err(DecodeError::Range("key context must not be empty"));
@@ -1987,7 +2038,7 @@ pub(crate) async fn editor_view_state(
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct RestoreViewStateArguments {
-    pub authority: CommandInvocationId,
+    pub authority: EditorAuthority,
     pub state: crate::app::editor::EditorViewState,
 }
 impl HostArguments for RestoreViewStateArguments {
@@ -1996,7 +2047,7 @@ impl HostArguments for RestoreViewStateArguments {
             usize::try_from(reader.integer(index)?)
                 .map_err(|_| DecodeError::Range("view state offsets must fit in memory"))
         };
-        let authority = CommandInvocationId::new(reader.integer(2)?);
+        let authority = EditorAuthority::decode(reader, 2)?;
         let anchor = offset(reader, 3)?;
         let caret = offset(reader, 4)?;
         let top = offset(reader, 5)?;

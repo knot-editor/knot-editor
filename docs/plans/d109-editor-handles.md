@@ -1,6 +1,6 @@
 # D109 — Editor handles and selection observation
 
-Status: 🚧 approved, not started. Item of the [editor API](editor-api.md)
+Status: 🚧 in progress; checkpoint 1 ✅ awaiting its review gate. Item of the [editor API](editor-api.md)
 plan; absorbs D080's observation API. Builds on D110's `setKeyContext`.
 Consumers: D077 (status bar), D080 (occurrence highlighting), D058 (Vim).
 
@@ -60,7 +60,7 @@ command.
 
 ## Checkpoints
 
-### 1. Long-lived handle from a ViewTarget
+### 1. Long-lived handle from a ViewTarget ✅
 
 Deliver `workbench.editor(target)` with the exact-tab authority, disposal,
 `onDidClose`, and the docs. Key contexts work on it.
@@ -81,8 +81,20 @@ Deliver `workbench.editor(target)` with the exact-tab authority, disposal,
   `knot` host in `scripts/extensions/`. Update
   [commands](../architecture/commands.md#extension-execution) and the
   extension guide.
+- **Completion note.** ✅ `workbench.editor(target)` returns an
+  `EditorHandle` (`Editor` plus `onDidClose` and `dispose`). Decisions made
+  while implementing: the host keeps one `EditorTab` per handle (the tab's
+  exact identity, resolved on every call) and carries handle authority to the
+  existing `editor*` operations as `EDITOR_HANDLE_AUTHORITY + id`; the host
+  drops stale handles after each application observation refresh and queues
+  one payload-free `closed` event through a generic `EditorEvent`
+  notification that checkpoint 2 extends with a selection event; disposal and
+  teardown release without notifying; a key context set through a handle
+  stays until cleared or teardown. Docs: [commands](../architecture/commands.md#extension-execution),
+  [extension guide](../extension-api.md). Tests: `editor_api.rs` product tests
+  (close, move, replacement, teardown) and `editor.test.ts`.
 - **Review gate.** The authority rule and the `InvalidTarget` cases are
-  agreed before observation builds on them.
+  agreed before observation builds on them. ⏳ pending.
 
 ### 2. Coalesced selection observation
 

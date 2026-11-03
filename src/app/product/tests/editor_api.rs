@@ -193,3 +193,147 @@ fn commands_on_other_surfaces_have_no_editor(cx: &mut TestAppContext) {
     let execution = dispatch_product_command(&shell, window, "api.noeditor", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Unavailable);
 }
+
+const HANDLE_SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+let handle;
+let closed = 0;
+await commands.register("handle.attach", async () => {
+  const { snapshot } = await workbench.observe(() => {});
+  handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+  handle.onDidClose(() => { closed += 1; });
+  await handle.setKeyContext("held", true);
+});
+await commands.register("handle.move", async () => {
+  await handle.setSelection({ anchor: 1, caret: 1 });
+});
+await commands.register("handle.report", async () => {
+  let code = "ok";
+  try { await handle.selection(); } catch (error) { code = error.code; }
+  let other = "ok";
+  try { await workbench.editor({}); } catch (error) { other = error.code; }
+  await workbench.writeClipboardText(`${code}:${closed}:${other}`);
+});
+"#;
+
+fn load_handle_extension(
+    cx: &mut TestAppContext,
+) -> (
+    Entity<crate::app::extensions::host::ProductExtensionHost>,
+    crate::host::lifecycle::ExtensionKey,
+) {
+    use crate::host::lifecycle::ExtensionKey;
+    let host = cx.update(super::super::super::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(721), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, HANDLE_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("handle.report")
+            .is_ok()
+    });
+    (host, key)
+}
+
+fn handle_report(
+    shell: &Entity<ProductShell>,
+    window: gpui::AnyWindowHandle,
+    cx: &mut TestAppContext,
+) -> String {
+    let execution = dispatch_product_command(shell, window, "handle.report", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap())
+}
+
+#[gpui::test]
+fn editor_handle_outlives_its_command_and_rejects_once_its_tab_is_gone(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (_host, _) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    // A second tab, so that moving the active one leaves its pane occupied.
+    let second_model = cx.new(|_| BufferModel::from_text("abc"));
+    let second = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Second", second_model.clone(), cx)
+    });
+    shell.update(cx, |shell, cx| {
+        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
+        shell.workbench.update(cx, |workbench, cx| {
+            workbench
+                .open_tab_for_document(pane, second, second_model, cx)
+                .unwrap();
+        });
+    });
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+
+    let execution = dispatch_product_command(&shell, window, "handle.attach", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    cx.read(|cx| assert_eq!(editor.read(cx).key_contexts(), ["held"]));
+
+    // A later command acts through the handle; the target is not rejected
+    // for lacking a capture, and a non-target is an InvalidTarget.
+    let execution = dispatch_product_command(&shell, window, "handle.move", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    cx.read(|cx| assert_eq!(editor.read(cx).selection(cx), (1, 1)));
+    assert_eq!(handle_report(&shell, window, cx), "ok:0:InvalidTarget");
+
+    // Moving the tab to another pane invalidates the handle, once.
+    let execution = dispatch_product_command(&shell, window, "workbench.move-tab-right", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    cx.run_until_parked();
+    assert_eq!(
+        handle_report(&shell, window, cx),
+        "InvalidTarget:1:InvalidTarget"
+    );
+    assert_eq!(
+        handle_report(&shell, window, cx),
+        "InvalidTarget:1:InvalidTarget"
+    );
+}
+
+#[gpui::test]
+fn editor_handle_rejects_after_closure_replaces_its_tab(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (_host, _) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    cx.run_until_parked();
+    let execution = dispatch_product_command(&shell, window, "handle.attach", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+
+    // Closing the only tab makes the shell present a fresh untitled one; the
+    // handle never follows it.
+    let execution = dispatch_product_command(&shell, window, "workbench.close-tab", cx);
+    wait_for_command(execution, cx);
+    cx.run_until_parked();
+    assert_eq!(
+        handle_report(&shell, window, cx),
+        "InvalidTarget:1:InvalidTarget"
+    );
+}
+
+#[gpui::test]
+fn editor_handle_key_contexts_end_with_their_lifecycle(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (host, key) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+    let execution = dispatch_product_command(&shell, window, "handle.attach", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    cx.read(|cx| assert_eq!(editor.read(cx).key_contexts(), ["held"]));
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    cx.read(|cx| assert!(editor.read(cx).key_contexts().is_empty()));
+}

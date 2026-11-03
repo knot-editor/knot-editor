@@ -1360,6 +1360,20 @@ declare module "knot" {
      * automatic recovery before resolution, so its captures may be released. */
     readonly protected: boolean;
   }
+  /**
+   * An editor that outlives the command that found it, bound to one exact
+   * document tab presentation. Every call resolves that presentation and
+   * rejects InvalidTarget once the tab closes, moves to another pane or
+   * window, or is replaced; it never retargets a replacement. Disposing it,
+   * its lifecycle ending, or its tab closing releases its listeners, though a
+   * key context it set stays until cleared or the lifecycle ends.
+   */
+  export interface EditorHandle extends Editor, Disposable {
+    /** Runs once when the tab presentation goes away, so a mode can drop its
+     * per-editor state. Not run for disposal or lifecycle teardown. Registered
+     * after the tab already closed, it runs asynchronously once. */
+    onDidClose(listener: () => void | Promise<void>): Disposable;
+  }
   /** Contributed view registration, captured selection, and clipboard access. */
   export const workbench: Readonly<{
     /** Atomically register and capture current metadata plus sequence watermark.
@@ -1379,6 +1393,10 @@ declare module "knot" {
      * Caller cancellation/unload before closure commits prevents the close; an
      * accepted save may already have persisted content and cannot be rolled back. */
     close(target: ViewTarget): Promise<PresentationCloseOutcome>;
+    /** A long-lived editor for the document tab `target` names; targets come
+     * from observation. @throws HostError with InvalidTarget for a target that
+     * is not a live document tab, or Cancelled. */
+    editor(target: ViewTarget): Promise<EditorHandle>;
     /** Close a set of windows and open their replacements in one foreground
      * commit, without prompts: final-view text must already be retained.
      * Resources and captures are read before the commit; a commit then

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { commands } from "knot";
+import { commands, workbench } from "knot";
 import type { CommandContext } from "knot";
 import * as host from "knot/testing";
 
@@ -65,4 +65,39 @@ test("a handler reports unavailable through commands.unavailable", async () => {
   await commands.register("test.unavailable", () => commands.unavailable());
   assert.equal(await host.run("test.unavailable"), "unavailable");
   assert.deepEqual(await commands.invoke("test.unavailable"), { kind: "unavailable" });
+});
+
+test("an editor handle outlives commands and rejects after its tab closes", async () => {
+  const document = host.addDocument({ text: "one\ntwo\n" });
+  const window = host.openWindow({ documents: [document, document] });
+  const [first, second] = [host.tabTarget(window, 0), host.tabTarget(window, 1)];
+  const editor = await workbench.editor(first);
+  await editor.setKeyContext("normal", true);
+  await editor.setSelection({ anchor: 2, caret: 2 });
+  assert.deepEqual(await editor.selection(), { anchor: 2, caret: 2 });
+  let closed = 0;
+  editor.onDidClose(() => {
+    closed += 1;
+  });
+  await host.closeTab(second);
+  assert.equal(closed, 0);
+  await host.closeTab(first);
+  assert.equal(closed, 1);
+  await assert.rejects(editor.selection(), { code: "InvalidTarget" });
+  await assert.rejects(workbench.editor(first), { code: "InvalidTarget" });
+});
+
+test("a disposed handle stops listening and acting", async () => {
+  const document = host.addDocument({ text: "x" });
+  const window = host.openWindow({ documents: [document] });
+  const target = host.tabTarget(window, 0);
+  const editor = await workbench.editor(target);
+  let closed = 0;
+  editor.onDidClose(() => {
+    closed += 1;
+  });
+  await editor.dispose();
+  await host.closeTab(target);
+  assert.equal(closed, 0);
+  await assert.rejects(editor.selection(), { code: "InvalidTarget" });
 });

@@ -260,6 +260,44 @@ pub(crate) fn open_terminal(
     .map_err(|_| AccessError::InvalidTarget)?
 }
 
+/// An exact document tab presentation retained beyond one command. It never
+/// resolves to a replacement tab, or to the tab after a move.
+#[derive(Clone)]
+pub(crate) struct EditorTab(OpenTarget);
+
+impl EditorTab {
+    /// The tab's editor, while this exact presentation is live.
+    pub(crate) fn editor(&self, cx: &App) -> Option<Entity<crate::app::editor::EditorView>> {
+        let target = &self.0;
+        let workbench = target.workbench.upgrade()?;
+        if !workbench_is_live(target.window, &workbench, cx)
+            || !target.matches_presentation(&workbench, cx)
+        {
+            return None;
+        }
+        let workbench = workbench.read(cx);
+        let tab = workbench
+            .pane(target.pane)?
+            .tabs()
+            .iter()
+            .find(|tab| tab.id() == target.tab && tab.surface_id() == target.surface)?;
+        match tab.command_view()? {
+            crate::app::workbench::CommandView::Editor(editor) => Some(editor),
+            _ => None,
+        }
+    }
+}
+
+pub(crate) fn capture_editor_tab(
+    target: &PresentationTarget,
+    cx: &mut App,
+) -> Result<EditorTab, AccessError> {
+    let (_, target) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
+    let tab = EditorTab(target);
+    tab.editor(cx).ok_or(AccessError::InvalidTarget)?;
+    Ok(tab)
+}
+
 pub(crate) fn validate_presentation(
     target: &PresentationTarget,
     cx: &mut App,

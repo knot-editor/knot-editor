@@ -144,7 +144,17 @@ nontext target has a null buffer; contributed-view selection support is
 limited to admitted contributed-view handlers. A document-editor target also
 receives an editor handle whose selection and view-state operations resolve the
 captured presentation on every call, so they reject once the tab closes, moves,
-or the invocation tree ends. Explicit buffer access remains independent
+or the invocation tree ends. `workbench.editor(target)` instead binds a
+long-lived handle to the exact document tab a `ViewTarget` names: the host
+keeps the tab's identity (window, pane, tab, surface, presentation) per
+lifecycle, and each call resolves it, rejecting `InvalidTarget` once the tab
+closes, moves to another pane or window, or is replaced, and never following a
+replacement. A handle is the same editor interface under another authority,
+carried to the native operations as one integer that cannot collide with
+invocation IDs. After each committed application change the host drops the
+handles whose tab is gone and queues one `onDidClose` notification, as a
+payload-free root like setting changes; disposal and lifecycle teardown drop
+handles without notifying. Explicit buffer access remains independent
 of presentation lifetime; clipboard access is application-scoped.
 
 Outcomes report execution status rather than semantic values. Resource APIs return

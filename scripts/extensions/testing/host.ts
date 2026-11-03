@@ -33,6 +33,8 @@ type FakeTab = {
   /** How the last `setSelection` revealed the caret, if any did. */
   reveal: "nearest" | "center" | null;
   keyContexts: Set<string>;
+  /** Close listeners of the long-lived handles bound to this tab. */
+  closeListeners: Set<() => void | Promise<void>>;
 };
 
 /** A `bind` or `bindText` call; text bindings have a null key. */
@@ -350,9 +352,32 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     document: id,
     view: { anchor: 0, caret: 0, top: 0, scrollX: 0 },
     keyContexts: new Set(),
+    closeListeners: new Set(),
     reveal: null,
   });
   window.selected = window.tabs.length - 1;
+}
+
+/** Closes one tab, running the close listeners of its editor handles. */
+export async function closeTab(target: Knot.ViewTarget) {
+  for (const window of state.windows) {
+    const index = window.tabs.findIndex((tab) => tab.target === target);
+    if (index < 0) continue;
+    const [tab] = window.tabs.splice(index, 1);
+    window.selected = Math.max(0, Math.min(window.selected, window.tabs.length - 1));
+    const listeners = [...tab!.closeListeners];
+    tab!.closeListeners.clear();
+    for (const listener of listeners) await listener();
+    return;
+  }
+  throw hostError("InvalidTarget");
+}
+
+/** The view target of the tab at `index` in the window. */
+export function tabTarget(window: Knot.WindowTarget, index: number): Knot.ViewTarget {
+  const tab = fakeWindow(window).tabs[index];
+  if (tab === undefined) throw new Error(`the window has no tab ${index}`);
+  return tab.target;
 }
 
 /** Closes a window; documents no longer presented anywhere close with it. */
@@ -560,6 +585,42 @@ function editor(tab: FakeTab): Knot.Editor {
     viewState: async () => ({ ...live().view }),
     restoreViewState: async (view) => {
       live().view = { ...view };
+    },
+  };
+}
+
+function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
+  const tab = state.windows.flatMap((window) => window.tabs).find((candidate) => candidate.target === target);
+  if (tab === undefined) throw hostError("InvalidTarget");
+  const listeners = new Set<() => void | Promise<void>>();
+  let disposed = false;
+  const live = editor(tab);
+  const guard =
+    <A extends unknown[], R>(call: (...args: A) => Promise<R>) =>
+    async (...args: A) => {
+      if (disposed) throw hostError("InvalidTarget");
+      return call(...args);
+    };
+  return {
+    selection: guard(live.selection),
+    setSelection: guard(live.setSelection),
+    setKeyContext: guard(live.setKeyContext),
+    viewState: guard(live.viewState),
+    restoreViewState: guard(live.restoreViewState),
+    onDidClose(listener) {
+      tab.closeListeners.add(listener);
+      listeners.add(listener);
+      return {
+        dispose: async () => {
+          tab.closeListeners.delete(listener);
+          listeners.delete(listener);
+        },
+      };
+    },
+    async dispose() {
+      disposed = true;
+      for (const listener of listeners) tab.closeListeners.delete(listener);
+      listeners.clear();
     },
   };
 }
@@ -1061,6 +1122,7 @@ export const api: KnotApi = {
       };
     },
     close: notFaked("workbench.close"),
+    editor: async (target) => editorHandle(target),
     replaceWindows: async (options) => replaceWindows(options),
     captureLayout: async (target) => {
       fakeWindow(target);

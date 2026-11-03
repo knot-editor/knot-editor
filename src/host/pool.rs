@@ -212,6 +212,15 @@ impl ExtensionPool {
             .dispatch_setting_change(key, subscription, setting)
     }
 
+    pub(crate) fn dispatch_editor_event(
+        &self,
+        key: ExtensionKey,
+        handle: u64,
+        event: super::protocol::EditorEvent,
+    ) -> Result<(), ExtensionPoolError> {
+        self.engine.dispatch_editor_event(key, handle, event)
+    }
+
     pub(crate) fn dispatch_buffer_change(
         &self,
         key: ExtensionKey,

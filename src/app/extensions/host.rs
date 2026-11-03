@@ -532,6 +532,12 @@ fn test_storage(
     })
 }
 
+/// A lifecycle's long-lived editor, bound to one exact tab presentation.
+struct EditorHandle {
+    owner: ExtensionKey,
+    tab: crate::app::product::operations::EditorTab,
+}
+
 /// Owns the one process-wide extension pool and all foreground protocol state.
 pub(crate) struct ProductExtensionHost {
     pool: Arc<ExtensionPool>,
@@ -557,6 +563,9 @@ pub(crate) struct ProductExtensionHost {
     /// Editors each lifecycle set a key context on, cleared at teardown.
     key_context_editors:
         HashMap<ExtensionKey, Vec<gpui::WeakEntity<crate::app::editor::EditorView>>>,
+    /// Long-lived editor handles, each bound to one exact tab presentation.
+    editor_handles: HashMap<u64, EditorHandle>,
+    next_editor_handle: u64,
     #[cfg(test)]
     application_events: Vec<crate::host::protocol::ApplicationEvent>,
     _application_window_closed: Subscription,
@@ -618,6 +627,8 @@ impl ProductExtensionHost {
             pool,
             lifecycles: HashSet::new(),
             key_context_editors: HashMap::new(),
+            editor_handles: HashMap::new(),
+            next_editor_handle: 0,
             storage: test_storage(cx),
             storage_owners: HashMap::new(),
             storage_stopping: false,
@@ -1335,19 +1346,75 @@ impl ProductExtensionHost {
         Ok(self.commands.captured_buffer(request.invocation.unwrap()))
     }
 
-    /// The command's captured document editor, while its tab is still live.
+    /// The editor an authority names, while its tab presentation is live.
     pub(super) fn contextual_editor(
         &self,
         request: &crate::host::protocol::RequestContext,
-        authority: CommandInvocationId,
+        authority: handlers::EditorAuthority,
         cx: &App,
     ) -> Result<Entity<crate::app::editor::EditorView>, handlers::AccessError> {
-        match self
-            .context_target(request, Some(authority), cx)?
-            .command_view(cx)
+        use handlers::{AccessError, EditorAuthority};
+        match authority {
+            EditorAuthority::Command(authority) => {
+                match self
+                    .context_target(request, Some(authority), cx)?
+                    .command_view(cx)
+                {
+                    Some(crate::app::workbench::CommandView::Editor(editor)) => Ok(editor),
+                    _ => Err(AccessError::InvalidTarget),
+                }
+            }
+            EditorAuthority::Handle(id) => self
+                .editor_handles
+                .get(&id)
+                .filter(|handle| {
+                    handle.owner == ExtensionKey::new(request.extension, request.lifecycle)
+                })
+                .and_then(|handle| handle.tab.editor(cx))
+                .ok_or(AccessError::InvalidTarget),
+        }
+    }
+
+    /// Bind a handle for the calling lifecycle to the exact document tab
+    /// `target` names; returns its wire authority.
+    pub(super) fn open_editor(
+        &mut self,
+        owner: ExtensionKey,
+        target: &crate::host::protocol::PresentationTarget,
+        cx: &mut App,
+    ) -> Result<u64, handlers::AccessError> {
+        let tab = crate::app::product::operations::capture_editor_tab(target, cx)?;
+        self.next_editor_handle += 1;
+        let id = self.next_editor_handle;
+        self.editor_handles.insert(id, EditorHandle { owner, tab });
+        Ok(handlers::EditorAuthority::handle_wire(id))
+    }
+
+    pub(super) fn release_editor(&mut self, owner: ExtensionKey, id: u64) {
+        if self
+            .editor_handles
+            .get(&id)
+            .is_some_and(|handle| handle.owner == owner)
         {
-            Some(crate::app::workbench::CommandView::Editor(editor)) => Ok(editor),
-            _ => Err(handlers::AccessError::InvalidTarget),
+            self.editor_handles.remove(&id);
+        }
+    }
+
+    /// Drop handles whose tab presentation is gone and tell their owners.
+    fn release_stale_editor_handles(&mut self, cx: &App) {
+        let stale = self
+            .editor_handles
+            .iter()
+            .filter(|(_, handle)| handle.tab.editor(cx).is_none())
+            .map(|(id, handle)| (*id, handle.owner))
+            .collect::<Vec<_>>();
+        for (id, owner) in stale {
+            self.editor_handles.remove(&id);
+            let _ = self.pool.dispatch_editor_event(
+                owner,
+                handlers::EditorAuthority::handle_wire(id),
+                crate::host::protocol::EditorEvent::Closed,
+            );
         }
     }
 
@@ -1943,6 +2010,7 @@ impl ProductExtensionHost {
     }
 
     fn refresh_application_observation(&mut self, cx: &mut Context<Self>) {
+        self.release_stale_editor_handles(cx);
         let snapshot = self.application_snapshot(cx);
         let events = self.application_observation.commit(snapshot);
         #[cfg(test)]
@@ -2352,6 +2420,7 @@ impl ProductExtensionHost {
                 crate::app::commands::keymaps::rebuild(cx);
             }
         }
+        self.editor_handles.retain(|_, handle| handle.owner != key);
         for editor in self.key_context_editors.remove(&key).unwrap_or_default() {
             if let Some(editor) = editor.upgrade() {
                 editor.update(cx, |editor, _| editor.remove_key_context_owner(key));

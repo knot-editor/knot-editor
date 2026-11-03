@@ -613,6 +613,23 @@ impl RuntimePool {
         Ok(())
     }
 
+    pub(crate) fn dispatch_editor_event(
+        &self,
+        key: ExtensionKey,
+        handle: u64,
+        event: EditorEvent,
+    ) -> Result<(), RuntimePoolError> {
+        let capsule = self.capsule(key)?;
+        self.scheduler_handle.enqueue_root(
+            key,
+            EngineTurn {
+                capsule,
+                work: EngineWork::EditorEvent { handle, event },
+            },
+        )?;
+        Ok(())
+    }
+
     pub(crate) fn dispatch_buffer_change(
         &self,
         key: ExtensionKey,
@@ -809,6 +826,7 @@ pub(super) fn initialize_extension_context(
             RuntimeCallback::SettingChange,
             "__knotDispatchSettingChange",
         ),
+        (RuntimeCallback::EditorEvent, "__knotDispatchEditorEvent"),
         (RuntimeCallback::Command, "__knotInvokeCommand"),
         (RuntimeCallback::CancelCommand, "__knotCancelCommand"),
         (RuntimeCallback::Tree, "__knotRequestTreeChildren"),
