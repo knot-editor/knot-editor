@@ -66,7 +66,7 @@ are half a line height wide at a line's end. Behavior is in
 checked by eye in a real window. Shape resolution, the host operation, and the
 fake host are covered by tests.
 
-### 2. Visible lines, scrolling, and reveal ⏳
+### 2. Visible lines, scrolling, and reveal ✅ (review gate pending)
 
 - Deliver `visibleLines`, `scrollBy`, and `reveal: "top" | "bottom"`, with the
   fake host modelling a configurable viewport and scroll position.
@@ -77,6 +77,12 @@ fake host are covered by tests.
 - **Implementation context:** `scroll`, `viewport_h`, `ensure_cursor_visible`,
   and `clamp_scroll` on `EditorView`; extend the `Reveal` enum decoded in
   `editor_set_selection`; same host-operation wiring as checkpoint 1.
+- **Completion note:** the operations are documented in the
+  [extension guide](../extension-api.md) and
+  [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views).
+  `visibleLines` counts only wholly visible lines and is never empty; `scrollBy`
+  takes whole lines. The product test asserts only the first line and caret,
+  since painting re-measures the viewport.
 - **Review gate:** the visible range agrees with what is painted.
 
 ### 3. Marks ⏳

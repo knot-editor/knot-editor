@@ -922,6 +922,8 @@ declare module "knot" {
     /** Lifecycle-owned semantic data; disposing it does not dispose this buffer. */
     readonly contributions: EditorContributions;
   }
+  /** The 0-based first and last lines wholly inside an editor's viewport. */
+  export type VisibleLines = Readonly<{ first: number; last: number }>;
   /** A selection's ends as UTF-8 byte offsets; equal for a bare caret. */
   export type EditorSelection = Readonly<{ anchor: number; caret: number }>;
   /** How an editor draws its caret. */
@@ -930,9 +932,11 @@ declare module "knot" {
     /**
      * How the view scrolls to show the caret. "nearest" (the default) scrolls
      * the minimum, as ordinary caret movement does; "center" centers the
-     * caret's line when it is outside the viewport and otherwise keeps scroll.
+     * caret's line when it is outside the viewport and otherwise keeps scroll;
+     * "top" and "bottom" always put the caret's line at that edge of the
+     * viewport, as far as the text allows (Vim's `zt` and `zb`).
      */
-    readonly reveal?: "nearest" | "center";
+    readonly reveal?: "nearest" | "center" | "top" | "bottom";
   }
   /**
    * The document editor a command captured. It is usable within that
@@ -949,6 +953,21 @@ declare module "knot" {
      * end or splitting a UTF-8 scalar, or Cancelled; TypeError for an invalid reveal.
      */
     setSelection(selection: EditorSelection, options?: SetSelectionOptions): Promise<void>;
+    /**
+     * The lines wholly visible in the viewport, from the view's last layout,
+     * so it may lag a scroll or resize by one frame. Always at least one line;
+     * an editor that has not been laid out yet reports the first line.
+     * @throws HostError with InvalidTarget or Cancelled.
+     */
+    visibleLines(): Promise<VisibleLines>;
+    /**
+     * Scroll by whole lines, negative upward, without moving or revealing the
+     * caret; the scroll stays within the text. Not an edit and not a caret
+     * move, so it does not end an undo group.
+     * @throws HostError with InvalidTarget or Cancelled; TypeError for a
+     * non-integer.
+     */
+    scrollBy(lines: number): Promise<void>;
     /**
      * Set or clear a named key context on this editor, which bindings with a
      * matching `context` option require. The context belongs to the caller's

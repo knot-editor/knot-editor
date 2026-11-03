@@ -120,7 +120,11 @@ await commands.register("example.go-to-start", async ({ editor, buffer }) => {
 ```
 
 `reveal: "nearest"`, the default, scrolls as ordinary caret movement does;
-`"center"` centers the caret's line only when it was off screen. Setting the
+`"center"` centers the caret's line only when it was off screen; `"top"` and
+`"bottom"` always put it at that edge of the viewport, as far as the text
+allows. `editor.visibleLines()` returns the `first` and `last` lines wholly
+inside the viewport from the last layout, and `editor.scrollBy(lines)` scrolls
+by whole lines, negative upward, without moving the caret. Setting the
 selection is not an edit, but it ends the typing undo group as any caret move
 does. Like `context.target`, the handle works only while its command runs and
 rejects `InvalidTarget` once the editor's tab closes or moves.

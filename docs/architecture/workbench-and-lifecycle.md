@@ -68,7 +68,10 @@ handle ([commands](commands.md#extension-execution)) that reads and moves its
 selection and saves and restores its view state. Moving the selection ends
 the typing undo group as other caret moves do; a centered reveal recenters
 the caret's line only when it lies outside the viewport, and otherwise
-behaves like ordinary movement. Go to Line is the bundled `@knot/go-to-line`
+behaves like ordinary movement; top and bottom reveals always align it with
+that edge. The handle also reports the wholly visible lines from the last
+layout, which may lag a scroll by a frame, and scrolls by lines without moving
+the caret or asking the next paint to reveal it. Go to Line is the bundled `@knot/go-to-line`
 package built on that handle, bound to ctrl-G in the Knot preset.
 
 Editing commands such as Enter, indent and outdent, comment toggling, and the

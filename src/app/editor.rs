@@ -171,6 +171,12 @@ pub(crate) enum Reveal {
     Nearest,
     /// Center the caret's line when it is outside the viewport.
     Center,
+    /// Put the caret's line at the top of the viewport, as far as the text
+    /// allows.
+    Top,
+    /// Put the caret's line at the bottom of the viewport, as far as the text
+    /// allows.
+    Bottom,
 }
 
 /// How the caret is drawn.
@@ -534,7 +540,35 @@ impl EditorView {
                 self.scroll = line_top + LINE_HEIGHT / 2. - self.viewport_h / 2.;
             }
         }
+        match reveal {
+            Reveal::Top if self.viewport_h > 0. => {
+                self.scroll = self.cursor_line as f32 * LINE_HEIGHT;
+            }
+            Reveal::Bottom if self.viewport_h > 0. => {
+                self.scroll = (self.cursor_line + 1) as f32 * LINE_HEIGHT - self.viewport_h;
+            }
+            _ => {}
+        }
         self.finish_position_change(cx);
+    }
+
+    /// The first and last lines wholly inside the viewport, from the last
+    /// layout; always at least one line.
+    pub(crate) fn fully_visible_lines(&self) -> (usize, usize) {
+        let last_line = self.line_count.saturating_sub(1);
+        let first = ((self.scroll / LINE_HEIGHT).ceil() as usize).min(last_line);
+        let end =
+            (((self.scroll + self.viewport_h) / LINE_HEIGHT).floor() as usize).min(self.line_count);
+        (first, end.saturating_sub(1).max(first))
+    }
+
+    /// Scroll by `lines`, negative upward, without moving the caret or
+    /// revealing it; the scroll stays within the text.
+    pub(crate) fn scroll_by_lines(&mut self, lines: f64, cx: &mut Context<Self>) {
+        self.scroll += lines as f32 * LINE_HEIGHT;
+        self.reveal_caret = false;
+        self.clamp_scroll();
+        cx.notify();
     }
 
     /// Build an editor presenting `model`.

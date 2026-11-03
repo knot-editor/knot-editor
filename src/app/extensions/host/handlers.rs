@@ -2012,7 +2012,13 @@ impl HostArguments for SetSelectionArguments {
             reveal: match reader.text(5, "reveal must be text")?.as_str() {
                 "nearest" => crate::app::editor::Reveal::Nearest,
                 "center" => crate::app::editor::Reveal::Center,
-                _ => return Err(DecodeError::Range("reveal must be nearest or center")),
+                "top" => crate::app::editor::Reveal::Top,
+                "bottom" => crate::app::editor::Reveal::Bottom,
+                _ => {
+                    return Err(DecodeError::Range(
+                        "reveal must be nearest, center, top, or bottom",
+                    ));
+                }
             },
         })
     }
@@ -2124,6 +2130,64 @@ pub(crate) async fn editor_set_cursor_style(
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
         let owner = ExtensionKey::new(request.extension, request.lifecycle);
         host.set_editor_caret_shape(owner, editor, arguments.style, cx);
+        Ok(())
+    })?
+}
+
+/// The first and last lines wholly inside an editor's viewport.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct VisibleLines {
+    pub first: usize,
+    pub last: usize,
+}
+impl HostSuccess for VisibleLines {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+/// The 0-based lines wholly visible in the captured editor, from its last
+/// layout.
+#[host_operation("editorVisibleLines")]
+pub(crate) async fn editor_visible_lines(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<VisibleLines, AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let (first, last) = editor.read(cx).fully_visible_lines();
+        Ok(VisibleLines { first, last })
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ScrollByArguments {
+    pub authority: EditorAuthority,
+    pub lines: f64,
+}
+impl HostArguments for ScrollByArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let authority = EditorAuthority::decode(reader, 2)?;
+        let crate::host::protocol::CommandArgumentValue::Number(lines) =
+            reader.command_arguments(3)?
+        else {
+            return Err(DecodeError::Type("scroll lines must be a number"));
+        };
+        Ok(Self { authority, lines })
+    }
+}
+
+/// Scroll the captured editor by whole lines without moving its caret.
+#[host_operation("editorScrollBy")]
+pub(crate) async fn editor_scroll_by(
+    context: HostContext,
+    arguments: ScrollByArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        editor.update(cx, |editor, cx| editor.scroll_by_lines(arguments.lines, cx));
         Ok(())
     })?
 }

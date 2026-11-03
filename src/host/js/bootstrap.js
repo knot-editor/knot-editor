@@ -343,10 +343,18 @@ function editorFor(authority) {
       const anchor = safeInteger(selection.anchor);
       const caret = safeInteger(selection.caret);
       const reveal = options?.reveal ?? "nearest";
-      if (reveal !== "nearest" && reveal !== "center") {
-        throw new TypeError('reveal must be "nearest" or "center"');
+      if (reveal !== "nearest" && reveal !== "center" && reveal !== "top" && reveal !== "bottom") {
+        throw new TypeError('reveal must be "nearest", "center", "top" or "bottom"');
       }
       await request("editorSetSelection", authority, anchor, caret, reveal);
+    },
+    async visibleLines() {
+      const value = await request("editorVisibleLines", authority);
+      return Object.freeze({ first: value.first, last: value.last });
+    },
+    async scrollBy(lines) {
+      if (!Number.isSafeInteger(lines)) throw new TypeError("lines must be a safe integer");
+      await request("editorScrollBy", authority, lines);
     },
     async setKeyContext(name, active) {
       if (typeof name !== "string" || name === "") {

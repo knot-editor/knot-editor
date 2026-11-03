@@ -103,6 +103,43 @@ test("an editor handle sets and clears its cursor style", async () => {
   await assert.rejects(editor.setCursorStyle("block"), { code: "InvalidTarget" });
 });
 
+test("an editor handle reports visible lines and scrolls without moving the caret", async () => {
+  const text = Array.from({ length: 30 }, (_, line) => `line ${line}\n`).join("");
+  const document = host.addDocument({ text });
+  const window = host.openWindow({ documents: [document] });
+  host.setViewportLines(10, window);
+  const editor = await workbench.editor(host.tabTarget(window, 0));
+  assert.deepEqual(await editor.visibleLines(), { first: 0, last: 9 });
+  await editor.scrollBy(4);
+  assert.deepEqual(await editor.visibleLines(), { first: 4, last: 13 });
+  assert.deepEqual(await editor.selection(), { anchor: 0, caret: 0 });
+  await editor.scrollBy(-100);
+  assert.deepEqual(await editor.visibleLines(), { first: 0, last: 9 });
+  await editor.scrollBy(100);
+  assert.deepEqual(await editor.visibleLines(), { first: 21, last: 30 });
+  await assert.rejects(editor.scrollBy(1.5), TypeError);
+});
+
+test("reveal top and bottom put the caret's line at that edge of the viewport", async () => {
+  const text = Array.from({ length: 30 }, (_, line) => `line ${line}\n`).join("");
+  const document = host.addDocument({ text });
+  const window = host.openWindow({ documents: [document] });
+  host.setViewportLines(10, window);
+  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const lineStart = (line: number) => text.split("\n").slice(0, line).join("\n").length + (line > 0 ? 1 : 0);
+  const caret = lineStart(7);
+  await editor.setSelection({ anchor: caret, caret }, { reveal: "bottom" });
+  assert.deepEqual(await editor.visibleLines(), { first: 0, last: 9 });
+  const far = lineStart(15);
+  await editor.setSelection({ anchor: far, caret: far }, { reveal: "bottom" });
+  assert.deepEqual(await editor.visibleLines(), { first: 6, last: 15 });
+  await editor.setSelection({ anchor: far, caret: far }, { reveal: "top" });
+  assert.deepEqual(await editor.visibleLines(), { first: 15, last: 24 });
+  const end = text.length;
+  await editor.setSelection({ anchor: end, caret: end }, { reveal: "top" });
+  assert.deepEqual(await editor.visibleLines(), { first: 21, last: 30 });
+});
+
 test("a disposed handle stops listening and acting", async () => {
   const document = host.addDocument({ text: "x" });
   const window = host.openWindow({ documents: [document] });

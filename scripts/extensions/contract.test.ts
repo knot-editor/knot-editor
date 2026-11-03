@@ -33,8 +33,11 @@ const registration: Promise<Disposable> = commands.register("check", async (cont
     const state = await editorHandle.viewState();
     const { caret } = await editorHandle.selection();
     await editorHandle.setSelection({ anchor: caret, caret }, { reveal: "center" });
-    // @ts-expect-error reveal is "nearest" or "center"
-    await editorHandle.setSelection({ anchor: 0, caret: 0 }, { reveal: "top" });
+    await editorHandle.setSelection({ anchor: caret, caret }, { reveal: "top" });
+    // @ts-expect-error reveal is "nearest", "center", "top" or "bottom"
+    await editorHandle.setSelection({ anchor: 0, caret: 0 }, { reveal: "middle" });
+    const { first, last }: import("knot").VisibleLines = await editorHandle.visibleLines();
+    await editorHandle.scrollBy(last - first);
     await editorHandle.restoreViewState(state);
   } else {
     commands.unavailable();

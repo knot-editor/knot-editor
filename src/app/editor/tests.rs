@@ -977,6 +977,47 @@ fn set_selection_reveals_nearest_or_centers_an_offscreen_caret(cx: &mut TestAppC
 }
 
 #[gpui::test]
+fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret(cx: &mut TestAppContext) {
+    let text = (0..100)
+        .map(|line| format!("line {line}\n"))
+        .collect::<String>();
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let line_start = |line: usize| cx.read(|cx| model.read(cx).line_range(line).start);
+    let (line_5, line_50, line_100) = (line_start(5), line_start(50), line_start(100));
+    editor.update(cx, |editor, cx| {
+        // Before layout there is a single visible line.
+        assert_eq!(editor.fully_visible_lines(), (0, 0));
+        editor.viewport_h = 10. * LINE_HEIGHT;
+        assert_eq!(editor.fully_visible_lines(), (0, 9));
+
+        editor.set_selection(line_50, line_50, Reveal::Top, cx);
+        assert_eq!(editor.scroll, 50. * LINE_HEIGHT);
+        assert_eq!(editor.fully_visible_lines(), (50, 59));
+        editor.set_selection(line_50, line_50, Reveal::Bottom, cx);
+        assert_eq!(editor.scroll, 41. * LINE_HEIGHT);
+        assert_eq!(editor.fully_visible_lines(), (41, 50));
+
+        // Both stop at the ends of the text.
+        editor.set_selection(line_5, line_5, Reveal::Bottom, cx);
+        assert_eq!(editor.scroll, 0.);
+        editor.set_selection(line_100, line_100, Reveal::Top, cx);
+        assert_eq!(editor.scroll, 91. * LINE_HEIGHT);
+        assert_eq!(editor.fully_visible_lines(), (91, 100));
+
+        // Scrolling moves neither the caret nor the reveal-on-paint flag.
+        editor.scroll_by_lines(-30., cx);
+        assert_eq!(editor.scroll, 61. * LINE_HEIGHT);
+        assert_eq!(editor.selection(cx), (line_100, line_100));
+        assert!(!editor.reveal_caret);
+        editor.scroll_by_lines(-1000., cx);
+        assert_eq!(editor.scroll, 0.);
+        editor.scroll_by_lines(1000., cx);
+        assert_eq!(editor.scroll, 91. * LINE_HEIGHT);
+    });
+}
+
+#[gpui::test]
 fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree\nfour"));
     let editor = cx.new(|cx| EditorView::new(model.clone(), cx));

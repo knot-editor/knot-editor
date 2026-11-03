@@ -207,6 +207,14 @@ await commands.register("handle.attach", async () => {
 await commands.register("handle.block", async () => { await handle.setCursorStyle("block"); });
 await commands.register("handle.underline", async () => { await handle.setCursorStyle("underline"); });
 await commands.register("handle.plain", async () => { await handle.setCursorStyle(null); });
+await commands.register("handle.scroll", async () => {
+  await handle.setSelection({ anchor: 0, caret: 0 }, { reveal: "top" });
+  await handle.scrollBy(4);
+  await handle.scrollBy(-1);
+  const { first, last } = await handle.visibleLines();
+  const { caret } = await handle.selection();
+  await workbench.writeClipboardText(`${first}:${last}:${caret}`);
+});
 await commands.register("handle.move", async () => {
   await handle.setSelection({ anchor: 1, caret: 1 });
 });
@@ -368,6 +376,37 @@ fn editor_handle_cursor_style_follows_the_latest_choice_and_ends_with_its_lifecy
     run("handle.block", cx);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.read(|cx| assert_eq!(editor.read(cx).caret_shape(), CaretShape::Bar));
+}
+
+#[gpui::test]
+fn editor_handle_scrolls_and_reports_visible_lines(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (_host, _) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+    cx.update(|cx| {
+        model.update(cx, |model, cx| {
+            model.replace(0..0, &"line\n".repeat(100)).unwrap();
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(&shell, window, name, cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    };
+    run("handle.attach", cx);
+    // Scrolls three lines down; the caret stays on line 0.
+    run("handle.scroll", cx);
+    let reported = cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap());
+    // Painting measures the viewport, so only the first line and caret are
+    // exact.
+    let parts = reported.split(':').collect::<Vec<_>>();
+    assert_eq!((parts[0], parts[2]), ("3", "0"), "{reported}");
+    assert!(parts[1].parse::<usize>().unwrap() >= 3, "{reported}");
 }
 
 const SELECTION_SOURCE: &str = r#"

@@ -31,8 +31,10 @@ type FakeTab = {
   document: Knot.DocumentId;
   view: Knot.EditorViewState;
   /** How the last `setSelection` revealed the caret, if any did. */
-  reveal: "nearest" | "center" | null;
+  reveal: "nearest" | "center" | "top" | "bottom" | null;
   keyContexts: Set<string>;
+  /** Lines the viewport shows; the view's `top` is its first line. */
+  viewportLines: number;
   /** The caret style the extension chose, or null for the default bar. */
   cursorStyle: Knot.CursorStyle | null;
   /** Close listeners of the long-lived handles bound to this tab. */
@@ -398,6 +400,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     view: { anchor: 0, caret: 0, top: 0, scrollX: 0 },
     keyContexts: new Set(),
     cursorStyle: null,
+    viewportLines: 10,
     closeListeners: new Set(),
     selectionListeners: new Set(),
     reveal: null,
@@ -609,6 +612,11 @@ export function keyContexts(window: Knot.WindowTarget = state.windows[0]!.target
   return [...selectedTab(window).keyContexts].sort();
 }
 
+/** Sets how many lines the window's selected document editor shows. */
+export function setViewportLines(lines: number, window: Knot.WindowTarget = state.windows[0]!.target) {
+  selectedTab(window).viewportLines = lines;
+}
+
 /** The caret style set on the window's selected document editor, or "bar". */
 export function cursorStyle(window: Knot.WindowTarget = state.windows[0]!.target): Knot.CursorStyle {
   return selectedTab(window).cursorStyle ?? "bar";
@@ -633,6 +641,17 @@ export function setEditorView(
   tab.view = { ...tab.view, ...view };
 }
 
+function lineOf(text: string, byteOffset: number): number {
+  const index = utf16AtByte(text, byteOffset) ?? 0;
+  return text.slice(0, index).split("\n").length - 1;
+}
+
+// The first line the viewport can show without scrolling past the text.
+function clampTop(tab: FakeTab, top: number): number {
+  const count = lineRanges(document(tab.document).text).length;
+  return Math.max(0, Math.min(top, count - tab.viewportLines));
+}
+
 // The fake editor does not clamp offsets or check character boundaries
 // beyond the end of the text.
 function editor(tab: FakeTab): Knot.Editor {
@@ -651,7 +670,23 @@ function editor(tab: FakeTab): Knot.Editor {
       if (anchor > length || caret > length) throw hostError("InvalidRange");
       tab.view = { ...tab.view, anchor, caret };
       tab.reveal = options?.reveal ?? "nearest";
+      const reveal = tab.reveal;
+      if (reveal === "top" || reveal === "bottom") {
+        const line = lineOf(document(tab.document).text, caret);
+        tab.view = { ...tab.view, top: clampTop(tab, reveal === "top" ? line : line - tab.viewportLines + 1) };
+      }
       await notifySelection(tab);
+    },
+    visibleLines: async () => {
+      const tab = live();
+      const count = lineRanges(document(tab.document).text).length;
+      const first = Math.min(tab.view.top, count - 1);
+      return { first, last: Math.max(first, Math.min(first + tab.viewportLines, count) - 1) };
+    },
+    scrollBy: async (lines) => {
+      if (!Number.isSafeInteger(lines)) throw new TypeError("lines must be a safe integer");
+      const tab = live();
+      tab.view = { ...tab.view, top: clampTop(tab, tab.view.top + lines) };
     },
     setKeyContext: async (name, active) => {
       const { keyContexts } = live();
@@ -699,6 +734,8 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     selection: guard(live.selection),
     setSelection: guard(live.setSelection),
     setKeyContext: guard(live.setKeyContext),
+    visibleLines: guard(live.visibleLines),
+    scrollBy: guard(live.scrollBy),
     setCursorStyle: guard(live.setCursorStyle),
     beginUndoGroup: guard(live.beginUndoGroup),
     viewState: guard(live.viewState),
