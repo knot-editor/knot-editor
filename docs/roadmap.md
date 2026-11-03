@@ -519,6 +519,16 @@ complete list for that item.
   - Order: after D071, which settles the shared picker; before D067's
     workspace symbols and D082 on large trees.
 
+- **D140 — Placeholder text in input fields**
+  - Deferred: The shared `TextInput` behind `workbench.showInput` and the
+    palette query shows nothing while empty, so an input can only explain
+    itself through its title or message line.
+  - Reconsider: Before the next bundled input that would benefit from a
+    hint. Then render placeholder text in `TextInput` and add a
+    `placeholder` option to `showInput`, and let Tab accept it into an empty
+    field, as Zed's Go to Line does. Update `@knot/go-to-line` to show the
+    current position as `line:column` there.
+
 - **D119 — Extension menu and context-menu items**
   - Deferred: Extension commands reach the palette and keymaps but not the
     application menus or the context menus of the editor and tabs.
