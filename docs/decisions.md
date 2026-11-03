@@ -305,6 +305,10 @@ in; a longer-lived handle waits for D109's observation design. Columns are
 computed in JavaScript from one line's snapshot, so a large file never crosses
 the boundary whole. A centered reveal recenters only when the caret's line was
 off screen, as VS Code's Go to Line does, so short hops never jolt the view.
+Its message line copies Zed's wording, which changes less as one types than
+VS Code's prompts, and a separator typed before its column reads as the line
+alone, so the preview holds while `42:4` is typed. Showing the current
+position as placeholder text, as Zed does, waits for D140.
 
 The native Knot preset binds ctrl-G to the package's command, so a preset or
 personal binding replaces it like any default; while the package is not

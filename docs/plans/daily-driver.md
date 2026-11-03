@@ -212,7 +212,6 @@ to be rebuilt later:
     ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
     [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions),
     [extension guide](../extension-api.md#register-a-command)).
-  - 🚧 Awaiting manual review: [plan](d076-go-to-line.md)
 
 - **D077 — Status bar** (depends on D064)
   - A native per-window bar showing line:column, the selection size, the
