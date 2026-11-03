@@ -501,7 +501,7 @@ fn measure_selection_notification_latency(cx: &mut TestAppContext) {
 
     // Ten changes in separate foreground updates: how many listener runs?
     let mut runs = Vec::with_capacity(BURSTS);
-    let mut tally = |cx: &mut TestAppContext| -> usize {
+    let tally = |cx: &mut TestAppContext| -> usize {
         let execution = dispatch_product_command(&shell, window, "probe.count", cx);
         wait_for_command(execution, cx);
         cx.read(|cx| {
