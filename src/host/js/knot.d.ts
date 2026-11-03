@@ -447,6 +447,14 @@ declare module "knot" {
     readonly "scrim"?: string;
     /** Scrollbar thumb. */
     readonly "scrollbar.thumb"?: string;
+    /** The status bar below the workbench. */
+    readonly "statusBar.background"?: string;
+    /** The line above the status bar. */
+    readonly "statusBar.border"?: string;
+    /** Status bar items that choose no color. */
+    readonly "statusBar.foreground"?: string;
+    /** A status bar item that runs a command, under the pointer. */
+    readonly "statusBar.item.hover.background"?: string;
     /** Success markers. */
     readonly "success"?: string;
     /** The active tab. */
@@ -751,6 +759,7 @@ declare module "knot" {
     | "UnknownGrammar" | "InvalidQuery" | "LanguageRegistrationNotFound"
     | "DuplicateSetting" | "SettingTypeMismatch"
     | "UnknownCapture" | "DuplicateColor" | "ThemeRegistrationNotFound"
+    | "StatusItemRegistrationNotFound"
     | "KeymapPresetRegistrationNotFound";
   /**
    * Native operation failure. Narrow a caught Error by name === "KnotHostError"
@@ -1202,6 +1211,31 @@ declare module "knot" {
     readonly title: string;
     readonly message?: string;
   }
+  /** What the status bar shows for one item. */
+  export interface StatusItemOptions {
+    readonly text: string;
+    /** Shown while the pointer rests on the item. */
+    readonly tooltip?: string;
+    /** Run when the item is clicked, in the window that shows it. */
+    readonly command?: { readonly name: string; readonly arguments?: JsonValue };
+    /** A theme color key for the text, such as "warning". */
+    readonly color?: string;
+    /** Which end of the bar the item sits at. Defaults to "left". */
+    readonly side?: "left" | "right";
+    /** Higher values sit further left within a side; equal values keep
+     * registration order. Defaults to 0. */
+    readonly priority?: number;
+  }
+  /**
+   * One status bar item. `update` replaces the whole value, so pass every
+   * field each time. With a window it sets that window's own value, which
+   * shadows the application-wide one until a null clears it.
+   */
+  export interface StatusItem extends Disposable {
+    readonly id: string;
+    update(options: StatusItemOptions): Promise<void>;
+    update(options: StatusItemOptions | null, scope: { readonly window: WindowTarget }): Promise<void>;
+  }
   /** Native completion request; use its explicit buffer without borrowing focus. */
   export interface CompletionContext {
     readonly buffer: Buffer;
@@ -1491,6 +1525,14 @@ declare module "knot" {
      * showPicker.
      */
     showMessage(options: MessageOptions): Promise<void>;
+    /**
+     * Add an item to the status bar of every product window. The latest
+     * registration of an ID defines the item and disposing it reveals the
+     * previous one. The `statusBar.hiddenItems` setting hides an ID without
+     * stopping its registrant, and teardown removes the item.
+     * @throws TypeError for invalid options; HostError with Cancelled.
+     */
+    registerStatusItem(id: string, options: StatusItemOptions): Promise<StatusItem>;
     /**
      * Read selection for an admitted contributed view handler; no selection is
      * null. Omission uses its current capture; explicit target must be authorized

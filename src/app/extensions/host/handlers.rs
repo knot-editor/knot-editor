@@ -3388,6 +3388,139 @@ async fn unregister_theme(
     })?
 }
 
+use crate::app::status_bar::{ApplicationStatusBar, StatusItem, StatusOwner};
+
+/// Failures of a status item operation.
+#[derive(Debug, HostError)]
+pub(crate) enum StatusItemError {
+    #[error(transparent)]
+    Access(AccessError),
+    #[error(
+        code = "StatusItemRegistrationNotFound",
+        message = "StatusItemRegistrationNotFound"
+    )]
+    RegistrationNotFound,
+}
+
+impl From<AccessError> for StatusItemError {
+    fn from(error: AccessError) -> Self {
+        Self::Access(error)
+    }
+}
+
+fn status_owner(context: &HostContext) -> StatusOwner {
+    StatusOwner {
+        extension: context.request.extension,
+        lifecycle: context.request.lifecycle,
+    }
+}
+
+fn status_item(
+    value: crate::host::protocol::CommandArgumentValue,
+) -> Result<StatusItem, DecodeError> {
+    serde_json::from_value(setting_value(value))
+        .map_err(|_| DecodeError::Type("invalid status item"))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct StatusItemRegistration {
+    id: String,
+    item: StatusItem,
+}
+
+impl HostArguments for StatusItemRegistration {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            id: reader.text(2, "status item id must be text")?,
+            item: status_item(reader.command_arguments(3)?)?,
+        })
+    }
+}
+
+#[host_operation("registerStatusItem")]
+async fn register_status_item(
+    context: HostContext,
+    arguments: StatusItemRegistration,
+) -> Result<u64, StatusItemError> {
+    let owner = status_owner(&context);
+    Ok(context.foreground(|_, cx| {
+        cx.default_global::<ApplicationStatusBar>()
+            .0
+            .register(owner, arguments.id, arguments.item)
+    })?)
+}
+
+/// A new value for a registration, or for one window's replacement of it,
+/// where null clears the replacement.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct StatusItemUpdate {
+    registration: u64,
+    item: Option<StatusItem>,
+    window: Option<String>,
+}
+
+impl HostArguments for StatusItemUpdate {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let item = match reader.command_arguments(3)? {
+            crate::host::protocol::CommandArgumentValue::Null => None,
+            value => Some(status_item(value)?),
+        };
+        Ok(Self {
+            registration: reader.integer(2)?,
+            item,
+            window: reader.optional_text(4, "window target must be text or null")?,
+        })
+    }
+}
+
+#[host_operation("updateStatusItem")]
+async fn update_status_item(
+    context: HostContext,
+    arguments: StatusItemUpdate,
+) -> Result<(), StatusItemError> {
+    let owner = status_owner(&context);
+    context.foreground(|_, cx| {
+        if cx.default_global::<ApplicationStatusBar>().0.update(
+            owner,
+            arguments.registration,
+            arguments.window,
+            arguments.item,
+        ) {
+            Ok(())
+        } else {
+            Err(StatusItemError::RegistrationNotFound)
+        }
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct StatusItemRegistrationId(u64);
+
+impl HostArguments for StatusItemRegistrationId {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self(reader.integer(2)?))
+    }
+}
+
+#[host_operation("unregisterStatusItem")]
+async fn unregister_status_item(
+    context: HostContext,
+    arguments: StatusItemRegistrationId,
+) -> Result<(), StatusItemError> {
+    let owner = status_owner(&context);
+    context.foreground(|_, cx| {
+        if cx
+            .default_global::<ApplicationStatusBar>()
+            .0
+            .unregister(owner, arguments.0)
+        {
+            Ok(())
+        } else {
+            Err(StatusItemError::RegistrationNotFound)
+        }
+    })?
+}
+
 #[host_operation("listThemes")]
 async fn list_themes(context: HostContext, _: ()) -> Result<Vec<ThemeInfo>, AccessError> {
     context.foreground(|_, cx| {

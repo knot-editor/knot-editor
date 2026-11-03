@@ -123,8 +123,15 @@ function emptyState() {
     keymapPresets: [] as Knot.KeymapPresetDefinition[],
     bindings: [] as FakeBinding[],
     colors: new Map<string, Knot.ColorDefinition>(),
+    statusItems: [] as FakeStatusItem[],
   };
 }
+
+type FakeStatusItem = {
+  id: string;
+  value: Knot.StatusItemOptions;
+  windows: Map<Knot.WindowTarget, Knot.StatusItemOptions>;
+};
 
 type FakeSettingValue = {
   key: string;
@@ -508,6 +515,22 @@ export function messages(): string[] {
   return state.messages.map((options) => options.message ?? options.title);
 }
 
+/**
+ * The items a window's status bar shows, in display order: each ID's latest
+ * registration with the window's own value in place of the shared one, minus
+ * the IDs in `statusBar.hiddenItems`.
+ */
+export function statusItems(target: Knot.WindowTarget): (Knot.StatusItemOptions & { id: string })[] {
+  const hidden = (resolveSetting("statusBar.hiddenItems", settingScope(undefined)) ?? []) as string[];
+  const latest = new Map<string, FakeStatusItem>();
+  for (const item of state.statusItems) latest.set(item.id, item);
+  return [...latest.values()]
+    .filter((item) => !hidden.includes(item.id))
+    .sort((a, b) => state.statusItems.indexOf(a) - state.statusItems.indexOf(b))
+    .map((item) => ({ id: item.id, ...(item.windows.get(target) ?? item.value) }))
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+}
+
 export function clipboard() {
   return state.clipboard;
 }
@@ -822,7 +845,8 @@ export const NATIVE_COLOR_KEYS: readonly string[] = [
   "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
   "editor.markedText", "editor.selection", "error", "info", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",
-  "popover.background", "popover.border", "scrim", "scrollbar.thumb", "success",
+  "popover.background", "popover.border", "scrim", "scrollbar.thumb",
+  "statusBar.background", "statusBar.border", "statusBar.foreground", "statusBar.item.hover.background", "success",
   "tab.active.background", "tab.active.foreground", "tab.bar.background",
   "tab.inactive.background", "tab.inactive.foreground", "terminal.ansi.black",
   "terminal.ansi.blue", "terminal.ansi.brightBlack", "terminal.ansi.brightBlue",
@@ -1227,6 +1251,28 @@ export const api: KnotApi = {
     showConfirmation: async (options) => prompt("showConfirmation", options),
     showMessage: async (options) => {
       state.messages.push(options);
+    },
+    registerStatusItem: async (id, options) => {
+      const entry: FakeStatusItem = { id, value: { ...options }, windows: new Map() };
+      state.statusItems.push(entry);
+      let live = true;
+      return {
+        id,
+        update: async (next: Knot.StatusItemOptions | null, scope?: { readonly window: Knot.WindowTarget }) => {
+          if (!live || !state.statusItems.includes(entry)) throw hostError("StatusItemRegistrationNotFound");
+          if (scope === undefined) {
+            entry.value = { ...next! };
+          } else if (next === null) {
+            entry.windows.delete(scope.window);
+          } else {
+            entry.windows.set(scope.window, { ...next });
+          }
+        },
+        dispose: async () => {
+          live = false;
+          state.statusItems = state.statusItems.filter((candidate) => candidate !== entry);
+        },
+      };
     },
     selectedText: async () => state.selectedText,
     writeClipboardText: async (text) => {

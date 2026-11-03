@@ -26,6 +26,7 @@ mod reopen;
 mod sessions;
 mod settings;
 mod startup;
+mod status_bar;
 mod terminal;
 mod text_frames;
 mod themes;

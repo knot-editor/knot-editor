@@ -594,6 +594,42 @@ export async function showMessage(options) {
   await request("showMessage", title, message, target);
 }
 
+function statusItemValue(options) {
+  const value = record(options, "status item options must be an object");
+  const command = value.command == null ? null : record(value.command, "status item command must be an object");
+  const side = value.side ?? "left";
+  if (side !== "left" && side !== "right") throw new TypeError('status item side must be "left" or "right"');
+  const priority = value.priority ?? 0;
+  if (!Number.isSafeInteger(priority)) throw new TypeError("status item priority must be an integer");
+  return {
+    text: string(value.text, "status item text must be text"),
+    tooltip: optionalText(value.tooltip),
+    command: command && {
+      name: string(command.name, "status item command name must be text"),
+      arguments: command.arguments === undefined ? null : validateJsonValue(command.arguments),
+    },
+    color: optionalText(value.color),
+    side,
+    priority,
+  };
+}
+export async function registerStatusItem(id, options) {
+  const name = string(id, "status item id must be text");
+  if (name.length === 0) throw new TypeError("status item id must be nonempty");
+  const registration = await request("registerStatusItem", name, statusItemValue(options));
+  const owned = ownership(() => {}, () => request("unregisterStatusItem", registration));
+  return Object.freeze({
+    id: name,
+    async update(next, scope) {
+      owned.assertActive();
+      const window = scope == null ? null : windowAuthority(record(scope, "status item scope must be an object").window);
+      if (next === null && window === null) throw new TypeError("a status item needs a value");
+      await owned.track(request("updateStatusItem", registration, next === null ? null : statusItemValue(next), window));
+    },
+    dispose: () => owned.dispose(),
+  });
+}
+
 export async function invokeCommand(name, commandArguments) {
   if (typeof name !== "string") {
     throw new TypeError("commands.invoke requires a command name");

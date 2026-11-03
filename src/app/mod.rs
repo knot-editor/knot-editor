@@ -31,6 +31,7 @@ mod record_store;
 mod recovery;
 mod resource;
 mod settings;
+mod status_bar;
 mod syntax;
 mod terminal;
 mod text_input;

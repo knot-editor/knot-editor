@@ -21,6 +21,7 @@ import {
   showInput,
   showConfirmation,
   showMessage,
+  registerStatusItem,
   registerCompletionProvider,
   registerView,
   registerLanguage,
@@ -70,6 +71,7 @@ export const workbench = Object.freeze({
   showInput,
   showConfirmation,
   showMessage,
+  registerStatusItem,
 });
 
 export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, setLanguage: setDocumentLanguage });

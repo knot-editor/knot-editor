@@ -417,6 +417,8 @@ pub(crate) struct ProductShell {
     application_observer: Option<Subscription>,
     application_activation: Option<Subscription>,
     _appearance_observer: Option<Subscription>,
+    /// Repaints the status bar when its items or settings change.
+    _status_bar_observers: Vec<Subscription>,
     application_focus: Vec<(FocusHandle, Subscription, Subscription)>,
     workspace_tree: Option<Entity<WorkspaceTree>>,
     workspace_tree_subscription: Option<Subscription>,
@@ -525,6 +527,7 @@ impl ProductShell {
             application_observer: None,
             application_activation: None,
             _appearance_observer: None,
+            _status_bar_observers: Vec::new(),
             application_focus: Vec::new(),
             workspace_tree: None,
             workspace_tree_subscription: None,
@@ -565,6 +568,10 @@ impl ProductShell {
         self._appearance_observer = Some(
             native_window.observe_window_appearance(|_, cx| super::themes::selection_changed(cx)),
         );
+        self._status_bar_observers = vec![
+            cx.observe_global::<super::status_bar::ApplicationStatusBar>(|_, cx| cx.notify()),
+            cx.observe_global::<super::settings::ApplicationSettings>(|_, cx| cx.notify()),
+        ];
         super::extensions::host::application_changed(cx);
         // A closed window drops its live frames and any pending transient
         // interaction; other windows keep theirs.

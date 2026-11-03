@@ -247,6 +247,10 @@ native_colors! {
     POPOVER_BORDER = "popover.border", "Border of popovers.", Rgb(0x555555), Rgb(0xc8c8c8);
     SCRIM = "scrim", "Dims the window behind a modal surface.", Rgba(0x00000080), Rgba(0x00000040);
     SCROLLBAR_THUMB = "scrollbar.thumb", "Scrollbar thumb.", Rgba(0x99999966), Rgba(0x64646466);
+    STATUS_BAR_BACKGROUND = "statusBar.background", "The status bar below the workbench.", Key(TAB_BAR_BACKGROUND), Key(TAB_BAR_BACKGROUND);
+    STATUS_BAR_BORDER = "statusBar.border", "The line above the status bar.", Key(BORDER), Key(BORDER);
+    STATUS_BAR_FOREGROUND = "statusBar.foreground", "Status bar items that choose no color.", Key(TEXT_MUTED), Key(TEXT_MUTED);
+    STATUS_BAR_ITEM_HOVER_BACKGROUND = "statusBar.item.hover.background", "A status bar item that runs a command, under the pointer.", Key(LIST_HOVER_BACKGROUND), Key(LIST_HOVER_BACKGROUND);
     SUCCESS = "success", "Success markers.", Rgb(0x8fd18f), Rgb(0x2e8540);
     TAB_ACTIVE_BACKGROUND = "tab.active.background", "The active tab.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);
     TAB_ACTIVE_FOREGROUND = "tab.active.foreground", "Title of the active tab.", Rgb(0xf0f0f0), Key(TEXT);

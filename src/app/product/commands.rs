@@ -604,6 +604,25 @@ pub(crate) async fn toggle_explorer(context: CommandContext, (): ()) -> Result<(
         .await
 }
 
+#[command("workbench.toggle-status-bar", title = "Toggle Status Bar", description = "Show or hide the status bar.", id = TOGGLE_STATUS_BAR_COMMAND, participant = Workbench)]
+pub(crate) async fn toggle_status_bar(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    context
+        .shell(|_, _, _, cx| {
+            let visible =
+                crate::app::settings::boolean(crate::app::settings::STATUS_BAR_VISIBLE, cx);
+            crate::app::settings::set_boolean(
+                crate::app::settings::STATUS_BAR_VISIBLE,
+                !visible,
+                cx,
+            );
+            Ok(())
+        })
+        .await
+}
+
 #[command("workspace.add-folder", title = "Add Folder to Workspace…", description = "Add a folder to this window's workspace.", id = ADD_FOLDER_COMMAND, participant = Workbench)]
 pub(crate) async fn add_folder(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context

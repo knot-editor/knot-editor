@@ -1,6 +1,7 @@
 //! Rendering of the product shell's panes, split layout, dividers, and extension report.
 
 use super::*;
+use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Theme, color, theme};
 
 impl ProductShell {
@@ -311,6 +312,118 @@ impl ProductShell {
     }
 }
 
+impl ProductShell {
+    /// The status bar below the workbench, unless the setting hides it.
+    fn render_status_bar(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        use crate::app::{settings, status_bar::ApplicationStatusBar};
+        if !settings::boolean(settings::STATUS_BAR_VISIBLE, cx) {
+            return None;
+        }
+        let window_key = window.window_handle().window_id().as_u64().to_string();
+        let hidden = settings::strings(settings::STATUS_BAR_HIDDEN_ITEMS, cx);
+        let items = cx
+            .try_global::<ApplicationStatusBar>()
+            .map(|bar| bar.0.items(&window_key, &hidden))
+            .unwrap_or_default();
+        let left = items
+            .left
+            .into_iter()
+            .map(|item| self.render_status_item(item, cx))
+            .collect::<Vec<_>>();
+        let right = items
+            .right
+            .into_iter()
+            .map(|item| self.render_status_item(item, cx))
+            .collect::<Vec<_>>();
+        let group = || div().flex().flex_row().items_center().h_full();
+        Some(
+            div()
+                .id("status-bar")
+                .debug_selector(|| "status-bar".to_owned())
+                .flex()
+                .flex_none()
+                .flex_row()
+                .items_center()
+                .h(px(22.))
+                .px_1()
+                .text_xs()
+                .border_t_1()
+                .border_color(theme(cx).color(color::STATUS_BAR_BORDER))
+                .bg(theme(cx).color(color::STATUS_BAR_BACKGROUND))
+                .text_color(theme(cx).color(color::STATUS_BAR_FOREGROUND))
+                .child(group().children(left))
+                .child(div().flex_1())
+                .child(group().children(right))
+                .into_any_element(),
+        )
+    }
+
+    fn render_status_item(&self, bar_item: BarItem, cx: &mut Context<Self>) -> AnyElement {
+        let BarItem { id, item } = bar_item;
+        let StatusItem {
+            text,
+            tooltip,
+            command,
+            color: color_key,
+            ..
+        } = item;
+        let hover = theme(cx).color(color::STATUS_BAR_ITEM_HOVER_BACKGROUND);
+        div()
+            .id(SharedString::from(format!("status-item-{id}")))
+            .debug_selector(move || format!("status-item-{id}"))
+            .flex()
+            .items_center()
+            .h_full()
+            .px_2()
+            .when_some(color_key, |element, key| {
+                element.text_color(theme(cx).color(&key))
+            })
+            .when_some(command, |element, command| {
+                element
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(hover))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        let Some(target) = this.capture_command_target(window, cx) else {
+                            return;
+                        };
+                        let name = command.name.clone();
+                        let arguments = command.arguments.clone();
+                        this.dispatch_command(
+                            crate::host::protocol::Command {
+                                name: name.into(),
+                                arguments,
+                            },
+                            target,
+                            cx,
+                        );
+                    }))
+            })
+            .when_some(tooltip, |element, tooltip| {
+                element
+                    .tooltip(move |_, cx| cx.new(|_| StatusTooltip(tooltip.clone().into())).into())
+            })
+            .child(text)
+            .into_any_element()
+    }
+}
+
+/// The text shown while the pointer rests on a status item.
+struct StatusTooltip(SharedString);
+
+impl Render for StatusTooltip {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_2()
+            .py_1()
+            .text_xs()
+            .border_1()
+            .border_color(theme(cx).color(color::POPOVER_BORDER))
+            .bg(theme(cx).color(color::POPOVER_BACKGROUND))
+            .text_color(theme(cx).color(color::TEXT))
+            .child(self.0.clone())
+    }
+}
+
 impl Render for ProductShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.observe_application_focus(window, cx);
@@ -326,6 +439,7 @@ impl Render for ProductShell {
             .as_ref()
             .map(|palette| palette.picker().clone());
         let transient = self.render_transient();
+        let status_bar = self.render_status_bar(window, cx);
         let dismiss_transient =
             cx.listener(|this: &mut Self, _: &MouseDownEvent, _: &mut Window, cx| {
                 this.finish_transient(TransientOutcome::Dismissed, cx);
@@ -371,6 +485,7 @@ impl Render for ProductShell {
                         )
                     }),
             )
+            .children(status_bar)
             .child(self.drag_listener(cx))
             .when_some(transient, |root, transient| {
                 root.child(
