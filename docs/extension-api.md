@@ -481,7 +481,33 @@ await buffer.contributions.replace([
 ], { ifRevision: revision });
 ```
 
-## Register a keymap preset
+## Bind keys and modal contexts
+
+`keymaps.bind` binds a key to a command in the calling package's lifecycle.
+Options scope it to a view kind and, within it, to a key context that a
+command sets on its editor, which is enough for modal editing:
+
+```js
+import { commands, keymaps } from "knot";
+
+const normal = { view: "editor", context: "normal" };
+await commands.register("me.normal", ({ editor }) => editor?.setKeyContext("normal", true));
+await commands.register("me.insert", ({ editor }) => editor?.setKeyContext("normal", false));
+await commands.register("me.typed", ({ arguments: { text } }) => { /* a key nothing binds */ });
+keymaps.bind("escape", "me.normal", { view: "editor" });
+keymaps.bind("i", "me.insert", normal);
+keymaps.bindText("me.typed", normal);
+```
+
+The binding whose scope requires the most facts wins, so `i` in the `normal`
+context beats a plain editor binding, and the latest write breaks ties.
+`bindText` receives typed text, after keyboard layout and IME, that nothing
+binds as a key, so `$` arrives as `$` on any layout; without it, the context
+types natively. Keys typed while a key-invoked extension command runs wait
+for it and then apply in order, so a mode switch is in effect for the next
+key however fast it is typed. The
+[modal example](../examples/extensions/@example/modal/) is a complete package.
+
 
 A preset is a named set of default bindings that replaces Knot's when the
 `keymap.preset` [setting](#read-and-write-settings) selects it; every

@@ -47,8 +47,10 @@ inline children. Dialog and protected-close handlers await semantic completion.
 
 One application-owned registry retains a preset slot and lifecycle-owned slots,
 then derives a merged effective map. The selected preset's bindings are defaults
-beneath every extension and personal-config binding. Among those, view-specific
-bindings outrank global bindings and the latest write breaks remaining ties.
+beneath every extension and personal-config binding. Among those, the binding
+whose scope requires the most facts of the focused view wins (a view kind and
+one of its key contexts, then a view kind, then global), and the latest write
+breaks remaining ties.
 Removing a lifecycle's ownership reveals earlier writes. An unavailable command
 does not select another binding. Null unbinds leave raw input available.
 
@@ -71,6 +73,42 @@ GPUI recognizes keys and scoped sequences, then one Knot action consults the map
 and enters command dispatch. Scoped prefixes remain local to their views; the
 palette retains its own input context. Menus and palette commands bypass keymaps.
 Fixed config-error bindings remain available independently of product windows.
+
+### Key contexts
+
+Extensions set named key contexts on editor views through the editor handle.
+The view keeps each context with the lifecycle that set it, so two packages'
+contexts of one name are independent and teardown clears its own; contexts are
+presentation state, never recorded in layouts. gpui matches its key contexts
+against the last rendered frame, which a context set by the previous key may
+not have reached, so Knot resolves contexts itself: gpui recognizes a
+context-scoped key anywhere in its view kind, and the Knot action resolves it
+against the view's live contexts, propagating a key that resolves to nothing as
+an unbound key. Menus and the palette ignore contexts, and a key that some
+context unbinds shows no menu key.
+
+A text binding routes committed text that an editor would insert to a command
+with `{ text }` as its arguments, scoped and resolved like key bindings but in
+its own slots, so it changes no gpui bindings. The editor resolves it in its
+text input handler, after keyboard layout and IME, and hands the text to a
+router the product shell installs: the editor is mid-update there and cannot
+capture a command target, so the router starts the key hold at once and
+dispatches once the handler returns. Where a text binding applies, composition
+never touches the buffer and the IME's commit routes as text.
+
+### Ordered delivery
+
+A key that dispatches an extension command holds its window's later input
+until that command finishes: key-downs are intercepted before keybindings and
+text insertion, and the held editor queues its committed text, in one queue.
+Release replays the queue in order through gpui's keystroke dispatch and the
+editor's input path, so each key sees the state its predecessor committed, as
+native commands already do by finishing in the dispatch turn. A replayed key or
+text that starts another extension command holds the rest of the queue. The
+hold also releases on the first key after focus leaves the held view, such as
+a command awaiting a picker, and after one second, so a stuck extension never
+keeps the keyboard. Composition preedit is not queued, since the IME already
+shows it.
 
 Menus show each command's shown global single-keystroke binding through a
 binding to the menu action in a context no element declares, so it labels the

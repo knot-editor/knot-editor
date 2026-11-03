@@ -35,6 +35,7 @@ check: fmt lint test ext
 install-example-apps-mac:
     npm --prefix scripts/extensions ci --ignore-scripts --no-audit --no-fund
     npm --prefix scripts/extensions run build examples/extensions/@example/git-status
+    npm --prefix scripts/extensions run build examples/extensions/@example/modal
     rm -rf ~/Library/Application\ Support/Knot/extensions/@example
     mkdir -p "$HOME/Library/Application Support/Knot/extensions"
     cp -av examples/extensions/@example "$HOME/Library/Application Support/Knot/extensions"

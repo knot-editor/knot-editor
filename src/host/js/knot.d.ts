@@ -1505,7 +1505,9 @@ declare module "knot" {
      * runs after packages start. Contexts resolve against the view's state
      * when the key arrives; a key nothing binds in the view's contexts falls
      * through to the remaining bindings and then to typing. Teardown
-     * reveals the previous write.
+     * reveals the previous write. Keys and text typed while a key-invoked
+     * extension command runs wait for it and then apply in order; the wait
+     * ends early when focus leaves the view or after one second.
      * Synchronous void call: mutations commit atomically at the end of the V8 turn.
      * Invalid input fails the whole batch through its turn/startup/command result,
      * with no partial map. No separate promise or asynchronous HostError is returned.

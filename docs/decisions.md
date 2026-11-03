@@ -724,6 +724,36 @@ listed, and copy and paste move to ctrl-shift-c and ctrl-shift-v. On macOS
 editors take the Cocoa text system's Emacs keys, which every native text field
 accepts.
 
+Modal editing keeps its grammar in JavaScript and gets three generic
+primitives: lifecycle-owned key contexts on editor views, bindings scoped to
+a context, and text bindings that route typed text to a command. Counts,
+operators, and pending state cannot be native sequences, because gpui 0.2.2
+drops a pending sequence after one second and counts cannot be enumerated as
+bindings. A context is one more scope fact, so context bindings join the
+settings rule of most facts, then latest write, rather than gpui's context
+depth. Knot resolves contexts against the view's live state, because gpui
+matches the last rendered frame and a context set by the previous key may not
+be painted yet. Text bindings follow VS Code's `type` override scoped to a
+context, as an Evil state map has its own default binding, and receive text
+after keyboard layout and IME, so symbols are right on any layout. A text
+command gets exactly `{ text }` rather than merged fixed arguments, and preedit
+is not shown where text routes to a command, since nothing would ever insert it.
+
+Keys after a key-invoked extension command wait for it and replay in order,
+for every such command without opt-in, rather than adding a synchronous host
+API: native painting and raw input never call JavaScript, and a busy isolate
+would block the foreground. On Apple M1 Pro/macOS release builds under the
+gpui test dispatcher, a key bound to a command awaiting `setSelection`
+reached the committed caret at p50 169–176 µs, p99 245–277 µs, and a no-op
+command at p50 21 µs, so most of the path is the foreground request and the
+turn's resumption; the dispatcher polls instead of running the platform loop,
+so a real window adds its wakeup latency within the frame margin. Text typed
+right after the key landed before the commit in 199–200 of 200 trials without
+ordering and in none with it, at p50 about 194 µs. The hold releases when
+focus leaves the view, so a command awaiting a picker never swallows its
+typing, and after one second, so a stuck extension never keeps the keyboard;
+Restart Extension remains the recovery.
+
 Overlapping bindings are not reported as conflicts, because the latest write
 winning is the rule rather than an error. Show Keybindings instead lists every
 slot with its owner and what overrides it. Menus show the effective key

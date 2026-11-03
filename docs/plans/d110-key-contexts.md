@@ -1,6 +1,6 @@
 # D110 — Key contexts and ordered key delivery
 
-Status: 🚧 checkpoints 1–4 complete; checkpoint 5 next. Item of the
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 awaiting review. Item of the
 [editor API and Vim mode](editor-api.md) plan; background in the
 [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency).
 
@@ -146,6 +146,26 @@ and [decisions](../decisions.md) with the validated choices and checkpoint
 1's numbers.
 
 - Review gate: final review of docs and the example's size.
+
+Implemented ✅, awaiting review:
+
+- ✅ `examples/extensions/@example/modal`: `extension.ts` registers enter,
+  leave, move, and ignore commands and binds h/j/k/l, Escape, and the text
+  fallback in `{ view: "editor", context: "modal" }`; `motion.ts` computes
+  columns without splitting surrogate pairs. About 90 lines of source.
+- ✅ Package tests under `node:test`: the bindings, entering and leaving,
+  motions across lines and an emoji, and swallowed text. The fake host now
+  records `bind`/`bindText` calls (`host.bindings()`) and implements
+  `setKeyContext` (`host.keyContexts()`), without resolving bindings.
+- ✅ A product test, `the_modal_example_moves_with_keys_swallows_text_and_leaves_on_escape`,
+  installs the compiled example and drives it with real keys and text.
+- ✅ Docs: [commands](../architecture/commands.md#key-contexts) gains key
+  contexts, text bindings, and ordered delivery; the
+  [extension guide](../extension-api.md#bind-keys-and-modal-contexts) a
+  section on binding keys and modal contexts; `knot.d.ts` notes ordered
+  delivery on `bind`; [decisions](../decisions.md#commands-and-keymaps) the
+  rationale and checkpoint 1's numbers; the examples README and
+  `just install-example-apps-mac` include the package.
 
 **Implementation context:** mirror `examples/extensions/@example/git-status`
 (`knot.jsonc`, `src/`, `test/`, `tsconfig.json`); the fake host in

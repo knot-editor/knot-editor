@@ -1,11 +1,13 @@
-# Installed extension example
+# Installed extension examples
 
-`@example/git-status` is an installed package written in TypeScript. Build it
-with the repository's pinned toolchain, which emits `dist/` beside `src/`:
+`@example/git-status` and `@example/modal` are installed packages written in
+TypeScript. Build them with the repository's pinned toolchain, which emits
+`dist/` beside `src/`:
 
 ```sh
 npm --prefix scripts/extensions ci
 npm --prefix scripts/extensions run build examples/extensions/@example/git-status
+npm --prefix scripts/extensions run build examples/extensions/@example/modal
 ```
 
 Then copy the `@example` directory into Knot's per-user `extensions` directory
@@ -41,3 +43,10 @@ its result inside the extension command before refreshing the frame.
 `src/model.ts` holds the fixture state and tree as plain data, and
 `src/extension.ts` exports `start()`, which registers the frames and commands;
 `src/main.ts` only calls it.
+
+## Modal editing
+
+`@example/modal` is a tiny modal editor on key contexts. **Example: Enter
+Modal Mode** puts the focused editor into the `modal` context, where h, j, k,
+and l move the caret, other typed text is swallowed by a text binding, and
+Escape leaves. It will be removed once the bundled Vim mode exists.

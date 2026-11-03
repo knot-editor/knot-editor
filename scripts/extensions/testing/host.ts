@@ -32,6 +32,15 @@ type FakeTab = {
   view: Knot.EditorViewState;
   /** How the last `setSelection` revealed the caret, if any did. */
   reveal: "nearest" | "center" | null;
+  keyContexts: Set<string>;
+};
+
+/** A `bind` or `bindText` call; text bindings have a null key. */
+export type FakeBinding = {
+  key: string | null;
+  command: string | Knot.KeybindingCommand | null;
+  view: string | null;
+  context: string | null;
 };
 
 type FakeWindow = {
@@ -104,6 +113,7 @@ function emptyState() {
     settingListeners: [] as { key: string; listener: (key: Knot.SettingKey) => void | Promise<void> }[],
     themes: [] as Knot.ThemeDefinition[],
     keymapPresets: [] as Knot.KeymapPresetDefinition[],
+    bindings: [] as FakeBinding[],
     colors: new Map<string, Knot.ColorDefinition>(),
   };
 }
@@ -339,6 +349,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     target: view,
     document: id,
     view: { anchor: 0, caret: 0, top: 0, scrollX: 0 },
+    keyContexts: new Set(),
     reveal: null,
   });
   window.selected = window.tabs.length - 1;
@@ -503,6 +514,16 @@ export function editorReveal(window: Knot.WindowTarget = state.windows[0]!.targe
   return selectedTab(window).reveal;
 }
 
+/** The key contexts set on the window's selected document editor, sorted. */
+export function keyContexts(window: Knot.WindowTarget = state.windows[0]!.target): string[] {
+  return [...selectedTab(window).keyContexts].sort();
+}
+
+/** Every `bind` and `bindText` call so far, in order. */
+export function bindings(): readonly FakeBinding[] {
+  return state.bindings;
+}
+
 /** Sets the view state of the window's selected document editor. */
 export function setEditorView(
   view: Partial<Knot.EditorViewState>,
@@ -531,7 +552,11 @@ function editor(tab: FakeTab): Knot.Editor {
       tab.view = { ...tab.view, anchor, caret };
       tab.reveal = options?.reveal ?? "nearest";
     },
-    setKeyContext: notFaked("Editor.setKeyContext"),
+    setKeyContext: async (name, active) => {
+      const { keyContexts } = live();
+      if (active) keyContexts.add(name);
+      else keyContexts.delete(name);
+    },
     viewState: async () => ({ ...live().view }),
     restoreViewState: async (view) => {
       live().view = { ...view };
@@ -1148,12 +1173,16 @@ export const api: KnotApi = {
     activeBuffer: notFaked("editor.activeBuffer"),
     registerCompletionProvider: notFaked("editor.registerCompletionProvider"),
   },
-  // The fake neither validates keys nor selects a preset, and does not know
-  // the native Knot preset's bindings.
+  // The fake records bindings without resolving or validating them, selects
+  // no preset, and does not know the native Knot preset's bindings.
   keymaps: {
-    bind: notFaked("keymaps.bind"),
+    bind: (key, command, options) => {
+      state.bindings.push({ key, command, view: options?.view ?? null, context: options?.context ?? null });
+    },
     unbind: notFaked("keymaps.unbind"),
-    bindText: notFaked("keymaps.bindText"),
+    bindText: (command, options) => {
+      state.bindings.push({ key: null, command, view: options?.view ?? null, context: options?.context ?? null });
+    },
     unbindText: notFaked("keymaps.unbindText"),
     registerPreset: async (definition) => {
       if (definition.name === "knot") throw new TypeError("the knot keymap preset cannot be replaced");
