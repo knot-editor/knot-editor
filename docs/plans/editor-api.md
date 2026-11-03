@@ -114,6 +114,7 @@ D077 moved here from the daily-driver plan.
     previews are pulled. A busy extension falls behind without a queue, and
     painting never waits on JavaScript.
   - One selection per view; several and rectangular selections are D142.
+  - 🚧 [Plan](d109-editor-handles.md)
 
 - **D077 — Status bar** (depends on D109)
   - A native per-window bar below the workbench, and a
