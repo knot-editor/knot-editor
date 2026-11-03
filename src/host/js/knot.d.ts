@@ -10,6 +10,19 @@
  * mutation prevents it; rejection after a commit does not imply rollback.
  * Public snapshots, contexts, proxies and callback payloads are read-only.
  */
+/**
+ * Writes to the standard error of the process running Knot, prefixed with the
+ * level. Strings print as they are; other values print as JSON.
+ */
+interface Console {
+  debug(...values: unknown[]): void;
+  log(...values: unknown[]): void;
+  info(...values: unknown[]): void;
+  warn(...values: unknown[]): void;
+  error(...values: unknown[]): void;
+}
+declare var console: Console;
+
 declare module "knot" {
   const windowIdentity: unique symbol;
   const viewIdentity: unique symbol;

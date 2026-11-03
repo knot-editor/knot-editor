@@ -151,6 +151,21 @@ pub(super) fn host_request_callback<'s, 'i>(
     result.set(resolver.get_promise(scope).into());
 }
 
+/// Writes `console` output to the process's standard error.
+pub(super) fn log_callback<'s, 'i>(
+    scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
+    arguments: v8::FunctionCallbackArguments<'s>,
+    _result: v8::ReturnValue,
+) {
+    if arguments.get(0).is_string() && arguments.get(1).is_string() {
+        eprintln!(
+            "[knot] console.{}: {}",
+            arguments.get(0).to_rust_string_lossy(scope),
+            arguments.get(1).to_rust_string_lossy(scope)
+        );
+    }
+}
+
 pub(super) fn cancellation_listener_failure_callback<'s, 'i>(
     scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
     arguments: v8::FunctionCallbackArguments<'s>,

@@ -781,6 +781,8 @@ pub(super) fn initialize_extension_context(
         v8::String::new(scope, "keybinding").ok_or_else(RuntimeError::disposed)?;
     let keybinding =
         v8::Function::new(scope, keybinding_callback).ok_or_else(RuntimeError::disposed)?;
+    let log_name = v8::String::new(scope, "log").ok_or_else(RuntimeError::disposed)?;
+    let log = v8::Function::new(scope, log_callback).ok_or_else(RuntimeError::disposed)?;
     let platform_name = v8::String::new(scope, "platform").ok_or_else(RuntimeError::disposed)?;
     let platform = v8::String::new(
         scope,
@@ -799,6 +801,7 @@ pub(super) fn initialize_extension_context(
         .ok_or_else(RuntimeError::disposed)?;
     if bindings.set(scope, request_name.into(), request.into()) != Some(true)
         || bindings.set(scope, keybinding_name.into(), keybinding.into()) != Some(true)
+        || bindings.set(scope, log_name.into(), log.into()) != Some(true)
         || bindings.set(scope, platform_name.into(), platform.into()) != Some(true)
         || bindings.set(scope, listener_failure_name.into(), listener_failure.into()) != Some(true)
         || scope.get_current_context().global(scope).set(

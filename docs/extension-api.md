@@ -48,6 +48,10 @@ ES2022 and the `knot` declarations. Import sibling modules by their emitted
 name, such as `./model.js`. `npm --prefix scripts/extensions run build <dir>`
 emits one package's `dist/`; Cargo builds bundled packages itself.
 
+`console.debug`, `log`, `info`, `warn`, and `error` write to the standard error
+of the process running Knot, as `[knot] console.<level>: ...`; start Knot from a
+terminal to read them. Use them to inspect events while writing a package.
+
 Keep policy in plain functions over plain data and keep mutable state out of
 module scope: export `start()` to create state and register contributions, and
 make `main.ts` only `await start()`. Tests then exercise policy directly and run

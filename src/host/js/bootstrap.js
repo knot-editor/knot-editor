@@ -3,6 +3,23 @@ delete globalThis.__knotNativeBindings;
 
 export const platform = nativeBindings.platform;
 
+function formatLogArgument(value) {
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.stack ?? String(value);
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+// V8's console discards its output; this one writes to standard error.
+for (const level of ["debug", "log", "info", "warn", "error"]) {
+  console[level] = (...values) => {
+    nativeBindings.log(level, values.map(formatLogArgument).join(" "));
+  };
+}
+
 export function keybinding(key, command, options) {
   if (command !== null && typeof command === "object" && !Array.isArray(command)) {
     try {

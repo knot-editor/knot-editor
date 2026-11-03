@@ -2017,6 +2017,23 @@ fn native_numeric_decoder_rejects_coercion_and_precision_loss() {
 }
 
 #[test]
+fn console_methods_accept_any_value_without_failing() {
+    let capsule = RuntimeCapsule::new(key(200), IsolateConfig::default()).unwrap();
+    let report = capsule
+        .execute(
+            "console.js",
+            r#"
+        const cycle = {};
+        cycle.self = cycle;
+        ["debug", "log", "info", "warn", "error"].every((level) =>
+            console[level]("text", 1, { a: [1] }, new Error("boom"), cycle, undefined) === undefined)
+    "#,
+        )
+        .unwrap();
+    assert_eq!(&*report.value, "true");
+}
+
+#[test]
 fn native_dispatch_callbacks_are_not_available_to_extension_code() {
     let capsule = RuntimeCapsule::new(key(201), IsolateConfig::default()).unwrap();
     let report = capsule
