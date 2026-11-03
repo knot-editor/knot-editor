@@ -41,8 +41,7 @@ validate runtime behavior.
 
 A TypeScript package keeps `src/*.ts`, `test/*.test.ts`, and a `tsconfig.json`
 beside its manifest; Knot loads only the emitted `dist/` modules, one per source
-file. The [git-status example](../examples/extensions/@example/git-status/) and
-the bundled [project registry](../extensions/@knot/projects/) show the layout.
+file. The bundled [project registry](../extensions/@knot/projects/) shows the layout.
 In this repository, packages extend the shared
 [base configuration](../scripts/extensions/tsconfig.base.json), which sees only
 ES2022 and the `knot` declarations. Import sibling modules by their emitted
@@ -614,10 +613,6 @@ includes `guide.compose`, which awaits another JavaScript command, and
 contributed view's `copy` registration shares the native command name and handles
 it only when that view instance claims the command. Dispose these registrations
 when removing the feature; native definitions retain their application ownership.
-
-The [Git-status fixture](../examples/extensions/@example/git-status/src/extension.ts)
-uses only the public API for grouped frames, row/group/frame actions, file
-activation, a read-only log frame, and refresh after actions.
 
 ## Identity and lifetime
 

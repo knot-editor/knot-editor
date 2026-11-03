@@ -112,7 +112,7 @@ editor.
 
 - [Extension guide](docs/extension-api.md): setup, testing, and common workflows
 - [API declarations](src/host/js/knot.d.ts): the precise reference
-- [Git status example](examples/extensions/): a complete installed package
+- [Installed package example](examples/extensions/): a complete installed package
 - [Projects](extensions/@knot/projects/): the bundled project manager
 
 ## Learn more
