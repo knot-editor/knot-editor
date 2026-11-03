@@ -465,6 +465,17 @@ keymaps). Ten caret changes made in separate foreground updates cost one
 listener run in each of 200 bursts. The dispatcher polls rather than running
 the platform loop, so a real window adds its wakeup latency.
 
+A mode that changes text and then lets the user type, as Vim's `ciw…<Esc>`
+does, must undo as one step across extension commands and native typing, so
+undo groups are opened and closed rather than scoped to a callback, which
+cannot span key presses. The group lives in the buffer's history, so native
+typing and paste join it without a hook, and the editor handle opens it so the
+step restores that view's selection. It is lifecycle-owned like key contexts,
+so a stuck or unloaded extension cannot leave history unbreakable. One group
+per buffer and no nesting: nothing needs a counter, and a second open is a
+typed error. Undo ends the group first rather than rejecting, which keeps Undo
+usable while a mode is in a bad state.
+
 Reference: [extension host](architecture/extension-host.md#editor-handle-notifications).
 
 ## Handler declarations

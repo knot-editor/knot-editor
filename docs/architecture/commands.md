@@ -157,6 +157,13 @@ payload-free root like setting changes; disposal and lifecycle teardown drop
 handles without notifying. Explicit buffer access remains independent
 of presentation lifetime; clipboard access is application-scoped.
 
+An editor can open an undo group on its buffer, owned by the calling lifecycle.
+The host records each open group with its owner and, when opened through a
+handle, that handle. Disposal, lifecycle teardown, and the handle's release or
+stale tab end it; a group opened through a command's editor is bounded by
+disposal, teardown, or buffer closure, since the command's end must not close
+a mode the next command finishes.
+
 Outcomes report execution status rather than semantic values. Resource APIs return
 committed data directly; ordinary functions suit composition that needs return
 values without command routing. Cancellation and exactly-once response settlement

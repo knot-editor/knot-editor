@@ -95,7 +95,7 @@ after commits in `host.rs` for the tab-close ending. Annotated handlers follow
 [handler declarations](../decisions.md#handler-declarations); add the typed
 error beside the existing access errors and to the TypeScript error union.
 
-## Checkpoint 3 — Consumer and documentation
+## Checkpoint 3 — Consumer and documentation ✅
 
 Deliverables: the example `@example/modal` package gains a change command
 (delete the word, enter insert mode, `<Esc>` leaves it) whose edit, typing,

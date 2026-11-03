@@ -258,8 +258,8 @@ function snapshot(text: string, range: Knot.ByteRange, revision: number): Knot.T
   };
 }
 
-// The fake buffer reads text; edits, change listeners, and contributions are
-// not faked.
+// The fake buffer reads and edits text; change listeners and contributions are
+// not faked. Edits leave view offsets alone.
 function buffer(document: FakeDocument): Knot.Buffer {
   const fake: Omit<Knot.Buffer, keyof Knot.Buffer & symbol> = {
     snapshot: async (range) => {
@@ -267,7 +267,24 @@ function buffer(document: FakeDocument): Knot.Buffer {
       const actual = range ?? whole;
       return snapshot(slice(document.text, actual), actual, document.revision);
     },
-    applyEdits: notFaked("Buffer.applyEdits"),
+    applyEdits: async (edits, { ifRevision }) => {
+      if (ifRevision !== document.revision) throw hostError("RevisionConflict");
+      let text = document.text;
+      let changed = false;
+      for (const edit of [...edits].sort((a, b) => b.range.startByteOffset - a.range.startByteOffset)) {
+        const start = utf16AtByte(text, edit.range.startByteOffset);
+        const end = utf16AtByte(text, edit.range.endByteOffset);
+        if (start === undefined || end === undefined || start > end) throw hostError("InvalidRange");
+        const next = text.slice(0, start) + edit.text + text.slice(end);
+        changed ||= next !== text;
+        text = next;
+      }
+      if (changed) {
+        document.text = text;
+        document.revision += 1;
+      }
+      return { revision: document.revision };
+    },
     onDidChange: notFaked("Buffer.onDidChange"),
     lineCount: async () => lineRanges(document.text).length,
     lineRange: async (line) => {

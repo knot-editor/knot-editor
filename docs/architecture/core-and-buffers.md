@@ -149,6 +149,12 @@ BufferEdit log ---> AnchoredRangeStore::stabilize
   a short elapsed-time boundary. Cursor or selection movement, focus transfer,
   paste, other explicit commands, and a change of editor or edit kind end the
   current group. A forward edit after undo clears redo.
+- An extension can hold one undo group open on a buffer. Every commit while it
+  is open, whatever its source, joins a single history entry, and grouping
+  breaks from caret moves and commands do not end it. The entry takes its
+  view snapshots from the first and last commits when one view made them all,
+  and none otherwise. Undo, redo, ending the group, and closing the buffer end
+  it, so no group survives replay.
 - An adjustment that belongs to the edit before it, such as the indentation
   a line break receives once the tree covers it, amends the last history
   entry rather than adding one. The amend is still a public commit with its

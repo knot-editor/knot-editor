@@ -27,3 +27,22 @@ const isLowSurrogate = (text: string, index: number) => {
   const unit = text.charCodeAt(index);
   return unit >= 0xdc00 && unit <= 0xdfff;
 };
+
+/**
+ * The UTF-16 range of the word at `from` in `text`, or the rest of the run of
+ * word characters after it; empty when none follows.
+ */
+export function wordBounds(text: string, from: number): [number, number] {
+  const word = /[\p{L}\p{N}_]/u;
+  const chars = [...text];
+  let index = 0;
+  let unit = 0;
+  while (index < chars.length && unit + chars[index]!.length <= from) unit += chars[index++]!.length;
+  let start = index;
+  while (start > 0 && word.test(chars[start - 1]!)) start--;
+  let end = index;
+  while (end < chars.length && word.test(chars[end]!)) end++;
+  if (end === start || (start === index && !word.test(chars[index] ?? ""))) return [from, from];
+  const length = (count: number) => chars.slice(0, count).join("").length;
+  return [length(start), length(end)];
+}

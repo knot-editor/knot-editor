@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import { windows, workbench } from "knot";
 import * as host from "knot/testing";
 import { start } from "../src/extension.js";
-import { column } from "../src/motion.js";
+import { column, wordBounds } from "../src/motion.js";
 
 beforeEach(async () => {
   host.reset();
@@ -21,7 +21,9 @@ test("h, j, k, l, Escape, and typed text are bound in the modal context", () => 
     { key: "j", command: { name: "example.modal.move", arguments: { direction: "down" } }, ...modal },
     { key: "k", command: { name: "example.modal.move", arguments: { direction: "up" } }, ...modal },
     { key: "l", command: { name: "example.modal.move", arguments: { direction: "right" } }, ...modal },
+    { key: "c", command: "example.modal.change", ...modal },
     { key: "escape", command: "example.modal.leave", ...modal },
+    { key: "escape", command: "example.modal.finish", view: "editor", context: "inserting" },
     { key: null, command: "example.modal.ignore", ...modal },
   ]);
 });
@@ -79,4 +81,23 @@ test("following puts each activated editor in modal mode until text is selected"
   assert.deepEqual(host.keyContexts(window), [], "selecting text leaves modal mode");
   await host.run("example.modal.follow");
   assert.deepEqual(host.keyContexts(), [], "toggling off leaves every editor");
+});
+
+test("words are the run of word characters at or after the caret", () => {
+  assert.deepEqual(wordBounds("foo bar", 1), [0, 3]);
+  assert.deepEqual(wordBounds("foo bar", 3), [0, 3], "at a word's end");
+  assert.deepEqual(wordBounds("foo  bar", 4), [4, 4], "between words");
+  assert.deepEqual(wordBounds("😀 né", 4), [3, 5]);
+  assert.deepEqual(wordBounds("", 0), [0, 0]);
+});
+
+test("change deletes the word and holds one undo group until Escape", async () => {
+  await host.run("example.modal.enter");
+  await host.run("example.modal.change");
+  assert.equal(host.undoGroupOpen(), true);
+  assert.deepEqual(host.keyContexts(), ["inserting"]);
+  assert.equal(host.document(host.documentIds()[0]!).text, "\nab😀\n");
+  await host.run("example.modal.finish");
+  assert.equal(host.undoGroupOpen(), false);
+  assert.deepEqual(host.keyContexts(), ["modal"]);
 });

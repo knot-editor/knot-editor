@@ -150,6 +150,26 @@ any reason, edits that move the caret included. It carries nothing: read
 changes runs the listener once with the final selection, and a listener still
 busy when more changes arrive gets one further call, not a queue.
 
+`editor.beginUndoGroup()` makes everything committed to the editor's buffer
+until the returned group is disposed one undo step: the package's own edit
+batches, native typing, paste, and deletion, and moving the caret between
+them. A mode that changes text and then lets the user type, such as Vim's
+`ciw`, opens the group before the change and disposes it on leaving insert
+mode.
+
+```js
+const group = await editor.beginUndoGroup();
+await buffer.applyEdits([{ range, text: "" }], { ifRevision: revision });
+// ...the user types; later, on Escape:
+await group.dispose();
+```
+
+One group is open per buffer: a second `beginUndoGroup` rejects
+`OperationInProgress`. Native undo and redo end an open group first. The group
+also ends when the package unloads or the handle's tab closes or the handle is
+disposed, so it never outlives its owner. A group with no edits leaves no undo
+step.
+
 Registering commands/providers/keymaps is valid during activation. Contextual
 lookup and command invocation require a running command. Await disposal and
 view invalidation to observe completion, and use host error `code` values
