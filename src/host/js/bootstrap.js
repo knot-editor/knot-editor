@@ -323,6 +323,13 @@ function editorFor(authority) {
       }
       await request("editorSetSelection", authority, anchor, caret, reveal);
     },
+    async setKeyContext(name, active) {
+      if (typeof name !== "string" || name === "") {
+        throw new TypeError("key context must be a non-empty string");
+      }
+      if (typeof active !== "boolean") throw new TypeError("active must be a boolean");
+      await request("editorSetKeyContext", authority, name, active);
+    },
     async viewState() {
       const value = await request("editorViewState", authority);
       return Object.freeze({ anchor: value.anchor, caret: value.caret, top: value.top, scrollX: value.scrollX });

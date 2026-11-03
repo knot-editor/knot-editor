@@ -962,10 +962,25 @@ impl ProductShell {
             return;
         };
         let view_kind = Self::target_view_kind(&target, cx);
-        let resolution = cx
-            .global::<ApplicationKeymaps>()
-            .0
-            .resolve(&action.key, view_kind.as_deref());
+        // The view's live contexts rather than gpui's, which reflect the last
+        // rendered frame: the previous key may have changed them.
+        let editor = view_kind
+            .is_some()
+            .then(|| target.command_view(cx))
+            .flatten()
+            .and_then(|view| match view {
+                super::workbench::CommandView::Editor(editor) => Some(editor),
+                _ => None,
+            });
+        let contexts = editor
+            .as_ref()
+            .map(|editor| editor.read(cx).key_contexts())
+            .unwrap_or_default();
+        let resolution = cx.global::<ApplicationKeymaps>().0.resolve_in(
+            &action.key,
+            view_kind.as_deref(),
+            &contexts,
+        );
         match resolution {
             Some(BindingResolution::Command(command)) => self.dispatch_command(command, target, cx),
             Some(BindingResolution::Unbound) => cx.propagate(),

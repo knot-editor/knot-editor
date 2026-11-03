@@ -34,6 +34,24 @@ struct SlotKey {
     owner: BindingOwner,
     key: String,
     view: Option<String>,
+    /// A key context the focused view must have; only with a view.
+    context: Option<String>,
+}
+
+impl SlotKey {
+    /// How many facts of a view's state the slot requires.
+    fn facts(&self) -> usize {
+        usize::from(self.view.is_some()) + usize::from(self.context.is_some())
+    }
+
+    fn applies(&self, key: &str, view: Option<&str>, contexts: &[&str]) -> bool {
+        self.key == key
+            && (self.view.is_none() || self.view.as_deref() == view)
+            && self
+                .context
+                .as_deref()
+                .is_none_or(|context| contexts.contains(&context))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -47,6 +65,7 @@ struct Slot {
 pub(crate) struct ListedBinding {
     pub(crate) key: String,
     pub(crate) view: Option<String>,
+    pub(crate) context: Option<String>,
     pub(crate) owner: BindingOwner,
     pub(crate) command: Option<Command>,
     /// The owner of the slot that wins where this one applies.
@@ -63,23 +82,43 @@ pub(crate) enum BindingResolution {
 struct EffectiveKey {
     global: Option<BindingResolution>,
     views: HashMap<String, BindingResolution>,
+    /// The latest context-scoped write for each view and context, with its
+    /// order, so a view holding several contexts picks the latest of them.
+    contexts: HashMap<(String, String), (u64, BindingResolution)>,
 }
 
 impl EffectiveKey {
-    fn resolve(&self, view: Option<&str>) -> Option<&BindingResolution> {
-        view.and_then(|view| self.views.get(view))
-            .or(self.global.as_ref())
+    fn resolve(&self, view: Option<&str>, contexts: &[&str]) -> Option<&BindingResolution> {
+        view.and_then(|view| {
+            contexts
+                .iter()
+                .filter_map(|context| self.contexts.get(&(view.to_owned(), (*context).to_owned())))
+                .max_by_key(|(order, _)| *order)
+                .map(|(_, resolution)| resolution)
+        })
+        .or_else(|| view.and_then(|view| self.views.get(view)))
+        .or(self.global.as_ref())
     }
 
     fn is_empty(&self) -> bool {
-        self.global.is_none() && self.views.is_empty()
+        self.global.is_none() && self.views.is_empty() && self.contexts.is_empty()
+    }
+
+    /// The views that have a context-scoped slot for this key.
+    fn context_views(&self) -> HashSet<&str> {
+        self.contexts
+            .keys()
+            .map(|(view, _)| view.as_str())
+            .collect()
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
+/// Which part of a binding is invalid.
 pub(crate) enum BindingError {
-    InvalidKey,
-    InvalidView,
+    Key,
+    View,
+    Context,
 }
 
 #[derive(Clone, Default)]
@@ -106,7 +145,7 @@ impl BindingRegistry {
             || matches!(kind, "editor" | "terminal" | "workspace-tree")
             || kind.chars().any(char::is_whitespace)
         {
-            return Err(BindingError::InvalidView);
+            return Err(BindingError::View);
         }
         self.kinds.insert(kind.to_owned());
         Ok(())
@@ -141,8 +180,20 @@ impl BindingRegistry {
         view: Option<&str>,
         command: Option<Command>,
     ) -> Result<bool, BindingError> {
+        self.set_in_context(owner, key, view, None, command)
+    }
+
+    pub(crate) fn set_in_context(
+        &mut self,
+        owner: BindingOwner,
+        key: &str,
+        view: Option<&str>,
+        context: Option<&str>,
+        command: Option<Command>,
+    ) -> Result<bool, BindingError> {
         let key = canonical_key(key)?;
         let view = self.validate_view(view)?;
+        let context = validate_context(view.as_deref(), context)?;
         let before = self.active.get(&key).cloned();
         self.next_order += 1;
         self.slots.insert(
@@ -150,6 +201,7 @@ impl BindingRegistry {
                 owner,
                 key: key.clone(),
                 view,
+                context,
             },
             Slot {
                 command,
@@ -160,21 +212,34 @@ impl BindingRegistry {
         Ok(before != self.active.get(&key).cloned())
     }
 
+    #[cfg(test)]
     pub(crate) fn remove(
         &mut self,
         owner: BindingOwner,
         key: &str,
         view: Option<&str>,
     ) -> Result<bool, BindingError> {
+        self.remove_in_context(owner, key, view, None)
+    }
+
+    pub(crate) fn remove_in_context(
+        &mut self,
+        owner: BindingOwner,
+        key: &str,
+        view: Option<&str>,
+        context: Option<&str>,
+    ) -> Result<bool, BindingError> {
         let key = canonical_key(key)?;
         // Removal is idempotent: the scoped kind may already be gone when an
         // unload or view disposal commits before the keybinding batch.
         let view = view.map(ToOwned::to_owned);
+        let context = validate_context(view.as_deref(), context)?;
         let before = self.active.get(&key).cloned();
         self.slots.remove(&SlotKey {
             owner,
             key: key.clone(),
             view,
+            context,
         });
         self.refresh_key(&key);
         Ok(before != self.active.get(&key).cloned())
@@ -222,7 +287,12 @@ impl BindingRegistry {
         let mut candidate = self.clone();
         for (index, mutation) in mutations.iter().enumerate() {
             let result = match mutation {
-                KeybindingMutation::Set { key, view, command } => {
+                KeybindingMutation::Set {
+                    key,
+                    view,
+                    context,
+                    command,
+                } => {
                     if command
                         .as_ref()
                         .is_some_and(|command| command.name.as_ref().is_empty())
@@ -232,10 +302,16 @@ impl BindingRegistry {
                             index + 1
                         ));
                     }
-                    candidate.set(owner, key, view.as_deref(), command.clone())
+                    candidate.set_in_context(
+                        owner,
+                        key,
+                        view.as_deref(),
+                        context.as_deref(),
+                        command.clone(),
+                    )
                 }
-                KeybindingMutation::Remove { key, view } => {
-                    candidate.remove(owner, key, view.as_deref())
+                KeybindingMutation::Remove { key, view, context } => {
+                    candidate.remove_in_context(owner, key, view.as_deref(), context.as_deref())
                 }
                 KeybindingMutation::Invalid(message) => {
                     return Err(format!("keybinding operation {}: {message}", index + 1));
@@ -243,8 +319,9 @@ impl BindingRegistry {
             };
             if let Err(error) = result {
                 let message = match error {
-                    BindingError::InvalidKey => "invalid key sequence",
-                    BindingError::InvalidView => "unknown view kind",
+                    BindingError::Key => "invalid key sequence",
+                    BindingError::View => "unknown view kind",
+                    BindingError::Context => "a context must be a non-empty name and needs a view",
                 };
                 return Err(format!("keybinding operation {}: {message}", index + 1));
             }
@@ -255,8 +332,19 @@ impl BindingRegistry {
     }
 
     /// Reads a canonical key sequence from the merged map.
+    #[cfg(test)]
     pub(crate) fn resolve(&self, key: &str, view: Option<&str>) -> Option<BindingResolution> {
-        self.active.get(key)?.resolve(view).cloned()
+        self.resolve_in(key, view, &[])
+    }
+
+    /// Reads a canonical key sequence for a focused view holding `contexts`.
+    pub(crate) fn resolve_in(
+        &self,
+        key: &str,
+        view: Option<&str>,
+        contexts: &[&str],
+    ) -> Option<BindingResolution> {
+        self.active.get(key)?.resolve(view, contexts).cloned()
     }
 
     /// The key sequence to show for each argument-less command in a view:
@@ -266,7 +354,7 @@ impl BindingRegistry {
         let mut shown: HashMap<CommandName, (usize, usize, std::cmp::Reverse<u64>, &str)> =
             HashMap::new();
         for (key, effective) in &self.active {
-            let Some(BindingResolution::Command(command)) = effective.resolve(view) else {
+            let Some(BindingResolution::Command(command)) = effective.resolve(view, &[]) else {
                 continue;
             };
             if command.arguments != CommandArgumentValue::Null {
@@ -304,11 +392,16 @@ impl BindingRegistry {
         keys
     }
 
+    /// gpui recognizes each key wherever some binding could apply. Knot
+    /// resolves key contexts itself against the view's live state, so a
+    /// view with a context-scoped slot recognizes the key broadly and an
+    /// unmatched key propagates like an unbound one.
     fn gpui_bindings(&self) -> Vec<(String, String)> {
         self.keys()
             .into_iter()
             .flat_map(|key| {
                 let effective = &self.active[&key];
+                let context_views = effective.context_views();
                 if matches!(effective.global, Some(BindingResolution::Command(_))) {
                     let mut context = "product && !palette && !transient".to_owned();
                     let mut unbound_views = effective
@@ -319,19 +412,27 @@ impl BindingRegistry {
                         })
                         .collect::<Vec<_>>();
                     unbound_views.sort();
+                    let mut bindings = Vec::new();
                     for view in unbound_views {
                         context.push_str(&format!(" && !{}", view_context(view)));
+                        if context_views.contains(view.as_str()) {
+                            bindings
+                                .push((key.clone(), format!("product > {}", view_context(view))));
+                        }
                     }
-                    return vec![(key, context)];
+                    bindings.insert(0, (key, context));
+                    return bindings;
                 }
                 let mut views = effective
                     .views
                     .iter()
                     .filter_map(|(view, resolution)| {
-                        matches!(resolution, BindingResolution::Command(_)).then_some(view)
+                        matches!(resolution, BindingResolution::Command(_)).then_some(view.as_str())
                     })
+                    .chain(context_views.iter().copied())
                     .collect::<Vec<_>>();
                 views.sort();
+                views.dedup();
                 views
                     .into_iter()
                     .map(|view| (key.clone(), format!("product > {}", view_context(view))))
@@ -343,7 +444,7 @@ impl BindingRegistry {
     fn validate_view(&self, view: Option<&str>) -> Result<Option<String>, BindingError> {
         match view {
             Some(kind) if self.kinds.contains(kind) => Ok(Some(kind.to_owned())),
-            Some(_) => Err(BindingError::InvalidView),
+            Some(_) => Err(BindingError::View),
             None => Ok(None),
         }
     }
@@ -356,10 +457,12 @@ impl BindingRegistry {
             .slots
             .iter()
             .map(|(slot_key, slot)| {
-                let winner = self.winning_slot(&slot_key.key, slot_key.view.as_deref());
+                let contexts = slot_key.context.as_deref().into_iter().collect::<Vec<_>>();
+                let winner = self.winning_slot(&slot_key.key, slot_key.view.as_deref(), &contexts);
                 ListedBinding {
                     key: slot_key.key.clone(),
                     view: slot_key.view.clone(),
+                    context: slot_key.context.clone(),
                     owner: slot_key.owner,
                     command: slot.command.clone(),
                     shadowed_by: winner
@@ -369,41 +472,35 @@ impl BindingRegistry {
             })
             .collect::<Vec<_>>();
         listing.sort_by(|a, b| {
-            (&a.key, &a.view, a.shadowed_by.is_some()).cmp(&(
+            (&a.key, &a.view, &a.context, a.shadowed_by.is_some()).cmp(&(
                 &b.key,
                 &b.view,
+                &b.context,
                 b.shadowed_by.is_some(),
             ))
         });
         listing
     }
 
-    /// The slot that decides `key` in `view`: extension slots beat preset
-    /// ones, then a view-scoped slot beats a global one, then the latest write.
-    fn winning_slot(&self, key: &str, view: Option<&str>) -> Option<&SlotKey> {
+    /// The slot that decides `key` in `view` holding `contexts`: extension
+    /// slots beat preset ones, then the slot requiring the most facts (view,
+    /// context) wins, then the latest write.
+    fn winning_slot(&self, key: &str, view: Option<&str>, contexts: &[&str]) -> Option<&SlotKey> {
         self.slots
             .iter()
-            .filter(|(slot_key, _)| {
-                slot_key.key == key && (slot_key.view.is_none() || slot_key.view.as_deref() == view)
-            })
+            .filter(|(slot_key, _)| slot_key.applies(key, view, contexts))
             .max_by_key(|(slot_key, slot)| {
-                (
-                    !slot_key.owner.is_default(),
-                    slot_key.view.is_some(),
-                    slot.order,
-                )
+                (!slot_key.owner.is_default(), slot_key.facts(), slot.order)
             })
             .map(|(slot_key, _)| slot_key)
     }
 
     fn refresh_key(&mut self, key: &str) {
-        let winner = |view: Option<&str>| {
-            self.winning_slot(key, view)
-                .map(|slot_key| match &self.slots[slot_key].command {
-                    Some(command) => BindingResolution::Command(command.clone()),
-                    None => BindingResolution::Unbound,
-                })
+        let resolution = |slot_key: &SlotKey| match &self.slots[slot_key].command {
+            Some(command) => BindingResolution::Command(command.clone()),
+            None => BindingResolution::Unbound,
         };
+        let winner = |view: Option<&str>| self.winning_slot(key, view, &[]).map(resolution);
         let global = winner(None);
         let views = self
             .kinds
@@ -413,7 +510,33 @@ impl BindingRegistry {
                 (Some(&resolution) != global.as_ref()).then(|| (kind.clone(), resolution))
             })
             .collect();
-        let effective = EffectiveKey { global, views };
+        // Every context slot is an extension's and requires two facts, so the
+        // latest one for a view and context wins there.
+        let contexts = self
+            .slots
+            .iter()
+            .filter(|(slot_key, _)| slot_key.key == key)
+            .filter_map(|(slot_key, slot)| {
+                let context = slot_key.context.clone()?;
+                Some(((slot_key.view.clone()?, context), slot.order, slot_key))
+            })
+            .fold(
+                HashMap::<(String, String), (u64, BindingResolution)>::new(),
+                |mut contexts, (scope, order, slot_key)| {
+                    if contexts
+                        .get(&scope)
+                        .is_none_or(|(latest, _)| *latest < order)
+                    {
+                        contexts.insert(scope, (order, resolution(slot_key)));
+                    }
+                    contexts
+                },
+            );
+        let effective = EffectiveKey {
+            global,
+            views,
+            contexts,
+        };
         if effective.is_empty() {
             self.active.remove(key);
         } else {
@@ -521,9 +644,20 @@ pub(crate) fn view_context(kind: &str) -> String {
     }
 }
 
+/// A context names a key context of the slot's view, so it needs one.
+fn validate_context(
+    view: Option<&str>,
+    context: Option<&str>,
+) -> Result<Option<String>, BindingError> {
+    match context {
+        Some(context) if view.is_none() || context.is_empty() => Err(BindingError::Context),
+        context => Ok(context.map(ToOwned::to_owned)),
+    }
+}
+
 fn canonical_key(source: &str) -> Result<String, BindingError> {
     if source.trim().is_empty() {
-        return Err(BindingError::InvalidKey);
+        return Err(BindingError::Key);
     }
     let canonical = source
         .split_whitespace()
@@ -535,7 +669,7 @@ fn canonical_key(source: &str) -> Result<String, BindingError> {
             };
             Keystroke::parse(&stroke)
                 .map(|stroke| stroke.unparse())
-                .map_err(|_| BindingError::InvalidKey)
+                .map_err(|_| BindingError::Key)
         })
         .collect::<Result<Vec<_>, _>>()?
         .join(" ");
@@ -546,14 +680,14 @@ fn canonical_key(source: &str) -> Result<String, BindingError> {
         }),
         Some(
             KeyBindingContextPredicate::parse("product")
-                .map_err(|_| BindingError::InvalidKey)?
+                .map_err(|_| BindingError::Key)?
                 .into(),
         ),
         false,
         None,
         &DummyKeyboardMapper,
     )
-    .map_err(|_| BindingError::InvalidKey)?;
+    .map_err(|_| BindingError::Key)?;
     Ok(canonical)
 }
 
@@ -591,6 +725,12 @@ fn menu_shortcuts(registry: &BindingRegistry) -> Vec<(CommandName, String)> {
                 && !registry.active[key]
                     .views
                     .values()
+                    .chain(
+                        registry.active[key]
+                            .contexts
+                            .values()
+                            .map(|(_, resolution)| resolution),
+                    )
                     .any(|resolution| *resolution == BindingResolution::Unbound)
         })
         .collect()

@@ -531,6 +531,7 @@ function editor(tab: FakeTab): Knot.Editor {
       tab.view = { ...tab.view, anchor, caret };
       tab.reveal = options?.reveal ?? "nearest";
     },
+    setKeyContext: notFaked("Editor.setKeyContext"),
     viewState: async () => ({ ...live().view }),
     restoreViewState: async (view) => {
       live().view = { ...view };

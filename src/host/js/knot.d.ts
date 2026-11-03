@@ -910,6 +910,16 @@ declare module "knot" {
      * end or splitting a UTF-8 scalar, or Cancelled; TypeError for an invalid reveal.
      */
     setSelection(selection: EditorSelection, options?: SetSelectionOptions): Promise<void>;
+    /**
+     * Set or clear a named key context on this editor, which bindings with a
+     * matching `context` option require. The context belongs to the caller's
+     * lifecycle: other lifecycles' contexts of the same name are independent,
+     * and teardown clears it. It is presentation state, never recorded, and
+     * lasts until cleared or the view closes.
+     * @throws HostError with InvalidTarget or Cancelled; TypeError for an
+     * empty name or a non-boolean `active`.
+     */
+    setKeyContext(name: string, active: boolean): Promise<void>;
     /** Selection and scroll, restorable exactly while the text is unchanged.
      * @throws HostError with InvalidTarget or Cancelled. */
     viewState(): Promise<EditorViewState>;
@@ -1441,8 +1451,15 @@ declare module "knot" {
      */
     writeClipboardText(text: string): Promise<void>;
   }>;
-  /** Optional focused view scope; omission/null means application-wide. */
-  export interface KeybindingOptions { readonly view?: string | null; }
+  /**
+   * Optional focused view scope; omission/null means application-wide. A
+   * `context` additionally requires the focused view to hold that key
+   * context (see `Editor.setKeyContext`) and needs a `view`.
+   */
+  export interface KeybindingOptions {
+    readonly view?: string | null;
+    readonly context?: string | null;
+  }
   /** Command name and JSON arguments, defaulting to null when omitted. */
   export interface KeybindingCommand { readonly name: string; readonly arguments?: JsonValue; }
   /** One preset binding; a null command unbinds the key. A view scope names
@@ -1481,10 +1498,14 @@ declare module "knot" {
     /**
      * Bind a gpui key sequence, e.g. "cmd-g", in the caller's lifecycle-owned slot.
      * Null command masks earlier bindings and leaves raw input available.
-     * Every binding outranks the preset. Among the rest, a view-specific
-     * binding beats a global one and then the latest write wins, so personal
-     * config overrides a package's binding from post-init, which runs after
-     * packages start. Teardown reveals the previous write.
+     * Every binding outranks the preset. Among the rest, the binding whose
+     * scope requires the most facts of the focused view wins (view and
+     * context beat view, which beats global), then the latest write, so
+     * personal config overrides a package's binding from post-init, which
+     * runs after packages start. Contexts resolve against the view's state
+     * when the key arrives; a key nothing binds in the view's contexts falls
+     * through to the remaining bindings and then to typing. Teardown
+     * reveals the previous write.
      * Synchronous void call: mutations commit atomically at the end of the V8 turn.
      * Invalid input fails the whole batch through its turn/startup/command result,
      * with no partial map. No separate promise or asynchronous HostError is returned.

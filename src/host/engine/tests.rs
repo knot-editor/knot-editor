@@ -174,6 +174,8 @@ fn keybinding_calls_are_void_and_one_turn_sends_one_ordered_batch() {
                 if (knot.keymaps.bind("Cmd-C", "copy") !== undefined) throw new Error("set returned a value");
                 if (knot.keymaps.bind("Cmd-C", { name: "copy", arguments: { format: "plain" } }, { view: "editor" }) !== undefined) throw new Error("set returned a value");
                 if (knot.keymaps.unbind("Cmd-C", { view: "editor" }) !== undefined) throw new Error("remove returned a value");
+                knot.keymaps.bind("h", "left", { view: "editor", context: "modal" });
+                knot.keymaps.unbind("h", { view: "editor", context: "modal" });
             "#,
         )
         .unwrap();
@@ -185,9 +187,15 @@ fn keybinding_calls_are_void_and_one_turn_sends_one_ordered_batch() {
         .arguments::<declared::mutate_keybindings>()
         .expect("keybinding batch")
         .mutations;
-    assert_eq!(mutations.len(), 3);
+    assert_eq!(mutations.len(), 5);
     assert!(
-        matches!(&mutations[0], KeybindingMutation::Set { key, view: None, command: Some(command) } if key == "Cmd-C" && command.name.as_ref() == "copy")
+        matches!(&mutations[3], KeybindingMutation::Set { context: Some(context), .. } if context == "modal")
+    );
+    assert!(
+        matches!(&mutations[4], KeybindingMutation::Remove { context: Some(context), .. } if context == "modal")
+    );
+    assert!(
+        matches!(&mutations[0], KeybindingMutation::Set { key, view: None, context: None, command: Some(command) } if key == "Cmd-C" && command.name.as_ref() == "copy")
     );
     assert!(
         matches!(&mutations[1], KeybindingMutation::Set { view: Some(view), command: Some(command), .. } if view == "editor" && command.arguments != CommandArgumentValue::Null)

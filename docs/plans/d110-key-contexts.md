@@ -1,6 +1,6 @@
 # D110 — Key contexts and ordered key delivery
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 in progress. Item of the
+Status: 🚧 checkpoint 2 awaiting review. Item of the
 [editor API and Vim mode](editor-api.md) plan; background in the
 [extensibility report](../reports/extensibility.md#keystroke-ordering-and-latency).
 
@@ -70,8 +70,8 @@ order however fast they are typed.
 ## Deferred decisions
 
 - The exact timeout, settled from checkpoint 1 and daily use.
-- Whether Show Keybindings needs a context column beyond listing the scope;
-  decide when checkpoint 2 touches the listing.
+- ✅ Show Keybindings needs no context column: a context slot's row reads
+  `in editor (modal)` beside the key and owner.
 
 ## Checkpoints
 
@@ -101,6 +101,32 @@ and bindings.
   tests that a key resolves by the live context immediately after it is set,
   before a repaint, and that an unmatched key in a context still types.
 - Review gate: the API shape in `knot.d.ts` and the precedence rule.
+
+Implemented ✅, awaiting review:
+
+- ✅ `Editor.setKeyContext(name, active)` (`editorSetKeyContext`). Contexts
+  are `(lifecycle, name)` pairs on `EditorView`, so two lifecycles setting
+  the same name are independent; the host remembers which editors each
+  lifecycle touched and clears them in the shared foreground teardown.
+- ✅ `keymaps.bind`/`unbind` take `context`, which **requires a `view`**:
+  contexts belong to a view kind, so `{ view: "editor", context: "modal" }`
+  is the scope and a context alone is rejected as an invalid batch. This
+  keeps fact counting unambiguous and leaves room for D147.
+- ✅ Precedence: extension slots beat the preset, then the slot requiring
+  the most facts, then the latest write. A view holding several contexts
+  takes the latest write among their slots.
+- ✅ gpui recognizes a context-scoped key with `product > editor`, also when
+  a global binding excludes the editor because the editor unbinds it.
+  `dispatch_keybinding` resolves against the editor's live contexts.
+- ✅ The palette's shown keys and menu key equivalents ignore contexts; a
+  key some context unbinds gets no menu equivalent, as a view unbind does.
+- ✅ The fake host's `setKeyContext` is `not faked` until checkpoint 5.
+- ✅ Tests: registry precedence, validation, gpui predicates, and listing in
+  `src/app/commands/keymaps/tests.rs`; the decoder in
+  `src/host/engine/tests.rs`; the product test
+  `editor_key_contexts_resolve_live_and_end_with_their_lifecycle` in
+  `src/app/product/tests/keybindings.rs` covers resolution before any
+  repaint, unmatched keys typing, leaving, and teardown.
 
 **Implementation context:** `BindingRegistry` in
 `src/app/commands/keymaps.rs` keys slots by `(owner, key, view)`; extend the

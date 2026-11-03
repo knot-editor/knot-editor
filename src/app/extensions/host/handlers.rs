@@ -1932,6 +1932,47 @@ pub(crate) async fn editor_set_selection(
     })?
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SetKeyContextArguments {
+    pub authority: CommandInvocationId,
+    pub name: String,
+    pub active: bool,
+}
+impl HostArguments for SetKeyContextArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let authority = CommandInvocationId::new(reader.integer(2)?);
+        let name = reader.text(3, "key context must be text")?;
+        if name.is_empty() {
+            return Err(DecodeError::Range("key context must not be empty"));
+        }
+        let active = reader
+            .optional_boolean(4, "key context active must be a boolean")?
+            .ok_or(DecodeError::Type("key context active must be a boolean"))?;
+        Ok(Self {
+            authority,
+            name,
+            active,
+        })
+    }
+}
+
+/// Set or clear the caller's key context on the captured editor. The
+/// context lasts until cleared, the view closes, or the caller's lifecycle
+/// ends.
+#[host_operation("editorSetKeyContext")]
+pub(crate) async fn editor_set_key_context(
+    context: HostContext,
+    arguments: SetKeyContextArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        host.set_editor_key_context(owner, editor, &arguments.name, arguments.active, cx);
+        Ok(())
+    })?
+}
+
 #[host_operation("editorViewState")]
 pub(crate) async fn editor_view_state(
     context: HostContext,

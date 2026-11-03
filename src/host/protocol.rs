@@ -203,11 +203,13 @@ pub enum KeybindingMutation {
     Set {
         key: String,
         view: Option<String>,
+        context: Option<String>,
         command: Option<Command>,
     },
     Remove {
         key: String,
         view: Option<String>,
+        context: Option<String>,
     },
     Invalid(String),
 }

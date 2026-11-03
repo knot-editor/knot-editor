@@ -254,6 +254,9 @@ pub struct EditorView {
     pending_indent: Option<indentation::PendingIndent>,
     /// Pairs typing closed, tracked while the caret stays inside them.
     auto_closed: Vec<brackets::AutoClosed>,
+    /// Named key contexts keybindings can require, each owned by the
+    /// extension lifecycle that set it. Presentation state, never recorded.
+    key_contexts: Vec<(crate::host::lifecycle::ExtensionKey, SharedString)>,
     #[cfg(test)]
     paint_count: u64,
     _model_subscription: Subscription,
@@ -411,6 +414,39 @@ impl EditorView {
         (state.anchor, state.caret)
     }
 
+    /// The key contexts some live lifecycle has set on this view.
+    pub(crate) fn key_contexts(&self) -> Vec<&str> {
+        let mut contexts = self
+            .key_contexts
+            .iter()
+            .map(|(_, name)| name.as_ref())
+            .collect::<Vec<_>>();
+        contexts.sort_unstable();
+        contexts.dedup();
+        contexts
+    }
+
+    /// Set or clear `owner`'s key context `name`. Lifecycles own their
+    /// contexts independently, so one clearing a name leaves another's.
+    pub(crate) fn set_key_context(
+        &mut self,
+        owner: crate::host::lifecycle::ExtensionKey,
+        name: &str,
+        active: bool,
+    ) {
+        self.key_contexts
+            .retain(|(key, context)| *key != owner || context.as_ref() != name);
+        if active {
+            self.key_contexts
+                .push((owner, SharedString::from(name.to_owned())));
+        }
+    }
+
+    /// Clear every key context `owner` set.
+    pub(crate) fn remove_key_context_owner(&mut self, owner: crate::host::lifecycle::ExtensionKey) {
+        self.key_contexts.retain(|(key, _)| *key != owner);
+    }
+
     /// Move the selection to byte offsets on character boundaries within the
     /// text. Like other caret moves, this ends the current typing undo group.
     pub(crate) fn set_selection(
@@ -565,6 +601,7 @@ impl EditorView {
             next_completion_generation: 1,
             pending_indent: None,
             auto_closed: Vec::new(),
+            key_contexts: Vec::new(),
             #[cfg(test)]
             paint_count: 0,
             _model_subscription: model_subscription,

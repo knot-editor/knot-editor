@@ -1249,3 +1249,84 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
     }
     println!("text typed after the key landed before its commit in {text_first} of {RACES} trials");
 }
+
+/// A key resolves against the context an extension set on the focused editor
+/// as soon as the command that set it commits, without waiting for a frame;
+/// keys the context leaves unbound still type, and teardown clears it.
+#[gpui::test]
+fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAppContext) {
+    use crate::host::lifecycle::ExtensionKey;
+    const SOURCE: &str = r#"
+        import { commands, keymaps } from "knot";
+        await commands.register("modal.enter", ({ editor }) => editor.setKeyContext("modal", true));
+        await commands.register("modal.leave", ({ editor }) => editor.setKeyContext("modal", false));
+        await commands.register("modal.left", async ({ editor }) => {
+          const { caret } = await editor.selection();
+          await editor.setSelection({ anchor: caret - 1, caret: caret - 1 });
+        });
+        keymaps.bind("f8", "modal.enter");
+        keymaps.bind("h", "modal.left", { view: "editor", context: "modal" });
+        keymaps.bind("escape", "modal.leave", { view: "editor", context: "modal" });
+    "#;
+    let documents = install_globals(cx);
+    cx.update(super::super::bind_product_keys);
+    let key = ExtensionKey::new(ExtensionId::new(731), ExtensionLifecycleId::new(1));
+    let host = cx.update(super::super::super::extensions::host::install);
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        keymap_command(cx, "f8", Some("editor")).as_deref() == Some("modal.enter")
+    });
+    let model = cx.new(|_| BufferModel::from_text("abc"));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Modal", model.clone(), cx)
+    });
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.update_window(window, |_, window, cx| {
+        shell.read(cx).focus_active_editor(window, cx)
+    })
+    .unwrap();
+    let editor = cx.read(|cx| {
+        shell
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane()
+            .unwrap()
+            .active_tab()
+            .editor()
+            .unwrap()
+            .clone()
+    });
+    editor.update(cx, |editor, cx| {
+        editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
+    });
+    cx.refresh().unwrap();
+    let in_modal = |cx: &gpui::App| editor.read(cx).key_contexts() == ["modal"];
+
+    cx.simulate_keystrokes(window, "f8");
+    wait_for_api_condition(cx, in_modal);
+    // No refresh: the context is not in any painted frame yet.
+    cx.simulate_keystrokes(window, "h");
+    wait_for_api_condition(cx, |cx| editor.read(cx).selection(cx) == (2, 2));
+    cx.simulate_keystrokes(window, "x");
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "abxc"));
+
+    cx.simulate_keystrokes(window, "escape");
+    wait_for_api_condition(cx, |cx| editor.read(cx).key_contexts().is_empty());
+    cx.simulate_keystrokes(window, "h");
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "abxhc"));
+
+    cx.simulate_keystrokes(window, "f8");
+    wait_for_api_condition(cx, in_modal);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    cx.read(|cx| assert!(editor.read(cx).key_contexts().is_empty()));
+    cx.simulate_keystrokes(window, "h");
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "abxhhc"));
+}

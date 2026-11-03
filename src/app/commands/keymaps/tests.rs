@@ -461,19 +461,19 @@ fn declared_kinds_and_sequences_are_validated_and_normalized() {
     let owner = BindingOwner::Preset;
     assert_eq!(
         registry.set(owner, "", None, Some(command("x"))),
-        Err(BindingError::InvalidKey)
+        Err(BindingError::Key)
     );
     assert_eq!(
         registry.set(owner, "cmd-foo-bar", None, Some(command("x"))),
-        Err(BindingError::InvalidKey)
+        Err(BindingError::Key)
     );
     assert_eq!(
         registry.set(owner, "cmd-a", Some("unknown"), Some(command("x"))),
-        Err(BindingError::InvalidView)
+        Err(BindingError::View)
     );
     assert_eq!(
         registry.declare_extension_kind("editor"),
-        Err(BindingError::InvalidView)
+        Err(BindingError::View)
     );
     registry.declare_extension_kind("outline").unwrap();
     registry
@@ -620,6 +620,7 @@ fn batch_is_ordered_atomic_and_reports_only_effective_changes() {
     let set = |name: &str| KeybindingMutation::Set {
         key: "cmd-c".into(),
         view: None,
+        context: None,
         command: Some(command(name)),
     };
     assert!(
@@ -644,6 +645,7 @@ fn batch_is_ordered_atomic_and_reports_only_effective_changes() {
                 KeybindingMutation::Set {
                     key: "bad-modifier-key".into(),
                     view: None,
+                    context: None,
                     command: Some(command("invalid")),
                 },
             ],
@@ -661,6 +663,7 @@ fn batch_is_ordered_atomic_and_reports_only_effective_changes() {
                 &[KeybindingMutation::Remove {
                     key: "cmd-c".into(),
                     view: None,
+                    context: None,
                 }],
             )
             .unwrap()
@@ -1019,4 +1022,184 @@ fn menu_shortcuts_follow_the_effective_global_keymap(cx: &mut TestAppContext) {
         assert_eq!(menu_key(cx, SAVE_COMMAND), Some(key("cmd-g")));
         assert_eq!(menu_key(cx, NEW_COMMAND), Some(key("cmd-s")));
     });
+}
+
+fn resolved_in(
+    registry: &BindingRegistry,
+    key: &str,
+    view: Option<&str>,
+    contexts: &[&str],
+) -> Option<String> {
+    match registry.resolve_in(&canonical_key(key).unwrap(), view, contexts) {
+        Some(BindingResolution::Command(command)) => Some(command.name.to_string()),
+        Some(BindingResolution::Unbound) => Some("<unbound>".into()),
+        None => None,
+    }
+}
+
+#[test]
+fn context_slots_win_by_fact_count_then_latest_write() {
+    let mut registry = BindingRegistry::new();
+    let modal = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    let other = BindingOwner::Extension(ExtensionId::new(2), ExtensionLifecycleId::new(1));
+    registry
+        .set(
+            BindingOwner::Preset,
+            "h",
+            Some("editor"),
+            Some(command("preset")),
+        )
+        .unwrap();
+    registry
+        .set_in_context(
+            modal,
+            "h",
+            Some("editor"),
+            Some("normal"),
+            Some(command("left")),
+        )
+        .unwrap();
+    // Written later but requiring fewer facts.
+    registry
+        .set(other, "h", Some("editor"), Some(command("view")))
+        .unwrap();
+    registry
+        .set(other, "h", None, Some(command("global")))
+        .unwrap();
+    assert_eq!(
+        resolved_in(&registry, "h", Some("editor"), &["normal"]).as_deref(),
+        Some("left")
+    );
+    assert_eq!(
+        resolved_in(&registry, "h", Some("editor"), &[]).as_deref(),
+        Some("view")
+    );
+    assert_eq!(
+        resolved_in(&registry, "h", Some("terminal"), &["normal"]).as_deref(),
+        Some("global")
+    );
+    // Among context slots of a view holding both contexts, the latest wins.
+    registry
+        .set_in_context(
+            other,
+            "h",
+            Some("editor"),
+            Some("visual"),
+            Some(command("extend")),
+        )
+        .unwrap();
+    assert_eq!(
+        resolved_in(&registry, "h", Some("editor"), &["normal", "visual"]).as_deref(),
+        Some("extend")
+    );
+    registry
+        .set_in_context(
+            modal,
+            "h",
+            Some("editor"),
+            Some("normal"),
+            Some(command("left again")),
+        )
+        .unwrap();
+    assert_eq!(
+        resolved_in(&registry, "h", Some("editor"), &["normal", "visual"]).as_deref(),
+        Some("left again")
+    );
+    // A context slot masks with null, and teardown reveals the earlier write.
+    registry
+        .set_in_context(other, "h", Some("editor"), Some("normal"), None)
+        .unwrap();
+    assert_eq!(
+        resolved_in(&registry, "h", Some("editor"), &["normal"]).as_deref(),
+        Some("<unbound>")
+    );
+    assert!(registry.remove_owner(other));
+    assert_eq!(
+        resolved_in(&registry, "h", Some("editor"), &["normal"]).as_deref(),
+        Some("left again")
+    );
+    assert_eq!(
+        resolved_in(&registry, "h", Some("editor"), &[]).as_deref(),
+        Some("preset")
+    );
+    assert!(
+        registry
+            .remove_in_context(modal, "h", Some("editor"), Some("normal"))
+            .unwrap()
+    );
+    assert_eq!(
+        resolved_in(&registry, "h", Some("editor"), &["normal"]).as_deref(),
+        Some("preset")
+    );
+}
+
+#[test]
+fn a_context_needs_a_view_and_a_name() {
+    let mut registry = BindingRegistry::new();
+    let owner = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    for (view, context) in [(None, "normal"), (Some("editor"), "")] {
+        assert_eq!(
+            registry.set_in_context(owner, "h", view, Some(context), Some(command("left"))),
+            Err(BindingError::Context)
+        );
+    }
+    let error = registry
+        .apply_batch(
+            owner,
+            &[KeybindingMutation::Set {
+                key: "h".into(),
+                view: None,
+                context: Some("normal".into()),
+                command: Some(command("left")),
+            }],
+        )
+        .unwrap_err();
+    assert!(error.contains("needs a view"), "{error}");
+}
+
+#[test]
+fn context_slots_recognize_their_key_broadly_in_the_view() {
+    let mut registry = BindingRegistry::new();
+    let owner = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    registry
+        .set_in_context(
+            owner,
+            "h",
+            Some("editor"),
+            Some("normal"),
+            Some(command("left")),
+        )
+        .unwrap();
+    assert_eq!(
+        registry.gpui_bindings(),
+        [("h".to_owned(), "product > editor".to_owned())]
+    );
+    // A global binding the editor unbinds still needs the editor binding so
+    // the context can claim the key there.
+    registry
+        .set(owner, "h", None, Some(command("global")))
+        .unwrap();
+    registry.set(owner, "h", Some("editor"), None).unwrap();
+    assert_eq!(
+        registry.gpui_bindings(),
+        [
+            (
+                "h".to_owned(),
+                "product && !palette && !transient && !editor".to_owned()
+            ),
+            ("h".to_owned(), "product > editor".to_owned()),
+        ]
+    );
+    let listing = registry.listing();
+    let context_slot = listing
+        .iter()
+        .find(|binding| binding.context.as_deref() == Some("normal"))
+        .unwrap();
+    assert_eq!(context_slot.shadowed_by, None);
+    assert!(
+        listing
+            .iter()
+            .filter(|binding| binding.context.is_none() && binding.view.is_some())
+            .all(|binding| binding.shadowed_by.is_none())
+    );
 }

@@ -554,6 +554,9 @@ pub(crate) struct ProductExtensionHost {
     next_transient_session: u64,
     /// Values dropped because a later definition gave their key another type.
     setting_warnings: Vec<String>,
+    /// Editors each lifecycle set a key context on, cleared at teardown.
+    key_context_editors:
+        HashMap<ExtensionKey, Vec<gpui::WeakEntity<crate::app::editor::EditorView>>>,
     #[cfg(test)]
     application_events: Vec<crate::host::protocol::ApplicationEvent>,
     _application_window_closed: Subscription,
@@ -614,6 +617,7 @@ impl ProductExtensionHost {
         Self {
             pool,
             lifecycles: HashSet::new(),
+            key_context_editors: HashMap::new(),
             storage: test_storage(cx),
             storage_owners: HashMap::new(),
             storage_stopping: false,
@@ -1344,6 +1348,27 @@ impl ProductExtensionHost {
         {
             Some(crate::app::workbench::CommandView::Editor(editor)) => Ok(editor),
             _ => Err(handlers::AccessError::InvalidTarget),
+        }
+    }
+
+    /// Set or clear the calling lifecycle's key context on an editor,
+    /// remembering the editor so teardown clears it.
+    pub(super) fn set_editor_key_context(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::EditorView>,
+        name: &str,
+        active: bool,
+        cx: &mut App,
+    ) {
+        editor.update(cx, |editor, _| editor.set_key_context(owner, name, active));
+        let editors = self.key_context_editors.entry(owner).or_default();
+        editors.retain(|weak| weak.upgrade().is_some());
+        if !editors
+            .iter()
+            .any(|weak| weak.entity_id() == editor.entity_id())
+        {
+            editors.push(editor.downgrade());
         }
     }
 
@@ -2325,6 +2350,11 @@ impl ProductExtensionHost {
                 .remove_owner(owner)
             {
                 crate::app::commands::keymaps::rebuild(cx);
+            }
+        }
+        for editor in self.key_context_editors.remove(&key).unwrap_or_default() {
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, _| editor.remove_key_context_owner(key));
             }
         }
         if self.personal_config_key == Some(key) {

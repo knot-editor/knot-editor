@@ -73,8 +73,10 @@ fn keybinding_item(
         None => "Unbound".into(),
     };
     let mut description = format!("{} · {}", binding.key, owner_label(binding.owner, cx));
-    if let Some(view) = &binding.view {
-        description.push_str(&format!(" · in {view}"));
+    match (&binding.view, &binding.context) {
+        (Some(view), Some(context)) => description.push_str(&format!(" · in {view} ({context})")),
+        (Some(view), None) => description.push_str(&format!(" · in {view}")),
+        _ => {}
     }
     PickerItem {
         id: index.to_string(),

@@ -187,8 +187,8 @@ pub(super) fn parse_keybinding_mutation<'s, 'i>(
         return Ok(KeybindingMutation::Invalid(key));
     }
     let options = arguments.get(3);
-    let view = if options.is_null_or_undefined() {
-        None
+    let (view, context) = if options.is_null_or_undefined() {
+        (None, None)
     } else {
         if options.is_array() || options.is_function() {
             return Err("options must be an object".into());
@@ -196,10 +196,13 @@ pub(super) fn parse_keybinding_mutation<'s, 'i>(
         let object =
             v8::Local::<v8::Object>::try_from(options).map_err(|_| "options must be an object")?;
         let view = property(scope, object, "view", "invalid view selector")?;
-        optional_string(scope, view, "view must be a string")?
+        let view = optional_string(scope, view, "view must be a string")?;
+        let context = property(scope, object, "context", "invalid key context")?;
+        let context = optional_string(scope, context, "context must be a string")?;
+        (view, context)
     };
     match operation.as_str() {
-        "remove" => Ok(KeybindingMutation::Remove { key, view }),
+        "remove" => Ok(KeybindingMutation::Remove { key, view, context }),
         "set" => {
             let value = arguments.get(2);
             let command = if value.is_null() {
@@ -231,7 +234,12 @@ pub(super) fn parse_keybinding_mutation<'s, 'i>(
                     arguments: command_arguments,
                 })
             };
-            Ok(KeybindingMutation::Set { key, view, command })
+            Ok(KeybindingMutation::Set {
+                key,
+                view,
+                context,
+                command,
+            })
         }
         _ => Err("invalid keybinding operation".into()),
     }
