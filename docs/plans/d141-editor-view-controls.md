@@ -59,11 +59,14 @@ Each primitive lands with a use in `examples/extensions/@example/modal`
 
 - Deliver `setCursorStyle`: view state with an owner, painting of block and
   underline carets, host operation, declarations, `knot.d.ts`, JS bootstrap,
-  and the fake host in `scripts/extensions`.
-- Validation: editor tests that each style paints over the right character and
+  and the in-memory fake host.
+- Validation: `node:test` cases in `scripts/extensions/testing/editor.test.ts`
+  against the fake (override, `null`, independent lifecycles, tab close); editor tests that each style paints over the right character and
   blink and focus behave as for the bar; product tests in `editor_api.rs` for
   override, `null`, other lifecycles' independence, teardown, and tab close.
-- **Implementation context:** add the state to `EditorView` and paint it in
+- **Implementation context:** the fake host is
+  `scripts/extensions/testing/host.ts` (typed against `knot.d.ts`; unfaked
+  surface throws `not faked`). Add the state to `EditorView` and paint it in
   `src/app/editor/paint.rs` (caret section, currently a fixed 2px bar). Mirror
   `editor_set_key_context` in `src/app/extensions/host/handlers.rs` for the
   handler and owner cleanup, register it in `src/host/declarations.rs`, wire
@@ -73,8 +76,10 @@ Each primitive lands with a use in `examples/extensions/@example/modal`
 
 ### 2. Visible lines, scrolling, and reveal ⏳
 
-- Deliver `visibleLines`, `scrollBy`, and `reveal: "top" | "bottom"`.
-- Validation: editor tests beside the reveal tests (`src/app/editor/tests.rs`,
+- Deliver `visibleLines`, `scrollBy`, and `reveal: "top" | "bottom"`, with the
+  fake host modelling a configurable viewport and scroll position.
+- Validation: `node:test` cases for the fake (clamping, caret untouched, reveal
+  placement); editor tests beside the reveal tests (`src/app/editor/tests.rs`,
   around the `Reveal` cases) for clamping at both ends and caret untouched;
   product tests for the operations and `InvalidTarget`.
 - **Implementation context:** `scroll`, `viewport_h`, `ensure_cursor_visible`,
@@ -84,8 +89,10 @@ Each primitive lands with a use in `examples/extensions/@example/modal`
 
 ### 3. Marks ⏳
 
-- Deliver `buffer.createMark`, `Mark.position`, and disposal.
-- Validation: model tests for edits before, inside, and after a mark, deletion,
+- Deliver `buffer.createMark`, `Mark.position`, and disposal. The fake host
+  moves marks with the edits it already applies, so its tests stay policy-level.
+- Validation: `node:test` cases for the fake (edits around a mark, deletion
+  gives `null`, disposal); model tests for edits before, inside, and after a mark, deletion,
   undo, and disposal; product tests for lifecycle teardown and buffer closure.
 - **Implementation context:** `ContributionRegistry`/`ContributionSource` in
   `src/app/model.rs` and `AnchoredRangeStore` in `src/core/anchored_range.rs`
@@ -100,8 +107,9 @@ Each primitive lands with a use in `examples/extensions/@example/modal`
   consumers, and update the extension guide, [commands](../architecture/commands.md#extension-execution),
   and [decisions](../decisions.md#editor-handles); then remove this plan and mark
   D141 complete in the index plan.
-- Validation: product test for read after write and `null` for nontext;
-  `node:test` for the example against the fake host.
+- Validation: product test for read after write and `null` for nontext; the
+  fake reads the clipboard state `writeClipboardText` already fills, and the
+  example's `node:test` cases run against it.
 - **Implementation context:** `writeClipboardText` handler and its `cx`
   clipboard calls; `examples/extensions/@example/modal/src` and `test`.
 - **Review gate:** the example exercises every primitive end to end.
