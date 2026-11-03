@@ -112,29 +112,16 @@ D077 moved here from the daily-driver plan.
     lands. One selection per view; several and rectangular selections are
     D142.
 
-- **D077 — Status bar** (depends on D109)
-  - 🚧 [Plan](d077-status-bar.md). Line ending moved to D149.
-  - A native per-window bar below the workbench, and a
-    `workbench.registerStatusItem` API: lifecycle-owned items with text, an
-    optional tooltip, a command with JSON arguments, and a theme color key,
-    ordered by side and priority, application-wide with per-window
-    overrides.
-  - The built-in items live in a bundled `@knot/status-bar` package and
-    follow VS Code: position and selection size (click: Go to Line),
-    indentation (click: indent using spaces or tabs, change tab size,
-    convert indentation) and language (click: Set Language Mode). Columns
-    count characters with a tab as one, as Go to Line reads them. No dirty,
-    encoding, or line-ending item.
-  - Which editor the bar describes follows VS Code: the focused editor,
-    else the last focused one while it stays visible; a focused terminal
-    tab clears the editor items.
-  - New document facts: indentation style and size in
-    `DocumentInfo`, changes published as `documentChanged`, setting a
-    document's indentation style, and a native command that converts
-    indentation in one undo step.
-  - `statusBar.visible` with Toggle Status Bar, and a
-    `statusBar.hiddenItems` setting that hides items by ID, so personal
-    config can hide and replace the bundled items.
+- **D077 — Status bar** (depends on D109) ✅
+  - Complete: a native per-window bar with `workbench.registerStatusItem`,
+    the `statusBar.visible` and `statusBar.hiddenItems` settings, and Toggle
+    Status Bar; the bundled `@knot/status-bar` package shows position,
+    indentation, and language. Behavior in
+    [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#status-bar)
+    and the [extension guide](../extension-api.md#show-status-items),
+    rationale in [decisions](../decisions.md#status-bar). Windows publish the
+    editor a bar describes as `statusTarget`, indentation is a
+    document-scoped setting, and line ending is D149.
 
 ## Phase 3 — Editing primitives
 

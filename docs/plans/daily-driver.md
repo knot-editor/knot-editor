@@ -214,7 +214,7 @@ to be rebuilt later:
     [extension guide](../extension-api.md#register-a-command)).
 
 - **D077 — Status bar**
-  - 🚧 Moved to the [editor API](editor-api.md) plan, which also schedules
+  - ✅ Moved to the [editor API](editor-api.md) plan, which also schedules
     D031, D078, and D080.
 
 - **D078 — Zoom, font size, and soft wrap** (depends on D070)

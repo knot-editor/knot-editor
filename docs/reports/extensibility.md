@@ -103,7 +103,7 @@ What is missing for editing-level extensibility:
 | `:s` | Regex over snapshots and an edit batch | Possible in JS; bulk edits need D092 | D092 |
 | Ex command line | Transient input with completion | `showInput` without completion | D058 |
 | Folds | Fold state and commands | None | D066 |
-| Relative line numbers, mode indicator | Gutter lanes, status bar items | `editor.lineNumbers: "relative"`; no status bar | D077 |
+| Relative line numbers, mode indicator | Gutter lanes, status bar items | `editor.lineNumbers: "relative"`; `workbench.registerStatusItem` | D077 |
 | `<C-w>` window commands | Workbench navigation commands | Daily-driver plan | D072 |
 
 Most of the editing half of Neovim's API is in that table.
