@@ -416,6 +416,37 @@ fn switching_to_a_project_with_a_missing_root_is_actionable_and_keeps_the_source
     };
     let (gone, other) = (id("Gone"), id("Other"));
     let tree = wait_for_contributed_view(&fixture.shell, "builtin.projects", cx);
+    wait_for_api_condition(cx, |cx| tree.read(cx).visible_labels().len() == 2);
+
+    // Frame actions are exposed beside the rows.
+    let frame_commands: Vec<String> = cx.read(|cx| {
+        tree.read(cx)
+            .frame_actions_for_test()
+            .into_iter()
+            .map(|action| action.command)
+            .collect()
+    });
+    assert_eq!(
+        frame_commands,
+        ["projects.create", "projects.new-window", "projects.refresh"]
+    );
+
+    // Arrow navigation follows the rendered rows.
+    activate_tree_tab(&fixture.shell, &tree, fixture.window, cx);
+    let _ = cx.update_window(fixture.window, |_, window, cx| {
+        tree.read(cx).focus_handle(cx).focus(window);
+    });
+    cx.refresh().unwrap();
+    let labels = cx.read(|cx| tree.read(cx).visible_labels());
+    for expected in &labels {
+        cx.simulate_keystrokes(fixture.window, "down");
+        cx.run_until_parked();
+        assert_eq!(
+            cx.read(|cx| tree.read(cx).selected_text()).as_deref(),
+            Some(expected.as_str())
+        );
+    }
+
     assert_eq!(listed["sessions"][&gone]["state"], "suspended");
     assert_eq!(listed["sessions"][&other]["state"], "active");
 

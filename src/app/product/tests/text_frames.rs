@@ -64,6 +64,13 @@ fn text_frames_show_the_gutter_only_when_registered_with_one(cx: &mut TestAppCon
             ExtensionView::Tree(_) => panic!("{id} is a text frame"),
         })
     };
+    // Pushed text is what the frame's editor shows.
+    cx.read(
+        |cx| match &shell.read(cx).contributed_views["frame.plain"].content {
+            ExtensionView::Text(view) => assert_eq!(view.read(cx).text(cx), "one\ntwo\n"),
+            ExtensionView::Tree(_) => panic!("frame.plain is a text frame"),
+        },
+    );
     assert_eq!(text_offset("frame.plain", cx), px(0.));
     assert!(text_offset("frame.numbered", cx) > px(16.));
 }
