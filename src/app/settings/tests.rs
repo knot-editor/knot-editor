@@ -8,6 +8,7 @@ fn scope(language: Option<&str>, view: Option<&str>) -> SettingsScope {
     SettingsScope {
         language: language.map(Into::into),
         view: view.map(Into::into),
+        document: None,
     }
 }
 
@@ -248,4 +249,50 @@ fn undefined_keys_are_inert() {
         .unwrap();
     assert_eq!(store.get("test.typo", &SettingsScope::default()), None);
     assert!(store.reset("test.typo", &SettingsScope::default()));
+}
+
+fn document(id: &str) -> SettingsScope {
+    SettingsScope {
+        document: Some(id.into()),
+        ..rust_editor()
+    }
+}
+
+#[test]
+fn a_document_value_beats_language_and_view_values_whenever_written() {
+    let mut store = store_with_integer();
+    store.set(KEY, json!(4), document("a")).unwrap();
+    store.set(KEY, json!(8), rust_editor()).unwrap();
+    store
+        .set(KEY, json!(6), scope(None, Some("editor")))
+        .unwrap();
+    assert_eq!(store.get(KEY, &document("a")), Some(&json!(4)));
+    assert_eq!(store.get(KEY, &document("b")), Some(&json!(8)));
+    assert_eq!(store.get(KEY, &rust_editor()), Some(&json!(8)));
+}
+
+#[test]
+fn equal_document_scopes_resolve_to_the_latest_write() {
+    let mut store = store_with_integer();
+    store.set(KEY, json!(4), document("a")).unwrap();
+    store.set(KEY, json!(2), document("a")).unwrap();
+    assert_eq!(store.get(KEY, &document("a")), Some(&json!(2)));
+}
+
+#[test]
+fn a_read_without_a_document_ignores_document_values() {
+    let mut store = store_with_integer();
+    store.set(KEY, json!(4), document("a")).unwrap();
+    assert_eq!(store.get(KEY, &rust_editor()), Some(&json!(10)));
+}
+
+#[test]
+fn releasing_a_document_drops_only_its_values() {
+    let mut store = store_with_integer();
+    store.set(KEY, json!(4), document("a")).unwrap();
+    store.set(KEY, json!(5), document("b")).unwrap();
+    store.set(KEY, json!(8), rust_editor()).unwrap();
+    store.release_document("a");
+    assert_eq!(store.get(KEY, &document("a")), Some(&json!(8)));
+    assert_eq!(store.get(KEY, &document("b")), Some(&json!(5)));
 }

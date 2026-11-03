@@ -2954,6 +2954,7 @@ fn settings_scope(
     Ok(SettingsScope {
         language: reader.optional_text(index, "scope language must be text")?,
         view: reader.optional_text(index + 1, "scope view must be text")?,
+        document: reader.optional_text(index + 2, "scope document must be text")?,
     })
 }
 
@@ -3003,10 +3004,14 @@ async fn define_setting(
 }
 
 fn describe_scope(scope: &SettingsScope) -> String {
-    let facts = [("language", &scope.language), ("view", &scope.view)]
-        .into_iter()
-        .filter_map(|(name, value)| value.as_ref().map(|value| format!("{name} {value}")))
-        .collect::<Vec<_>>();
+    let facts = [
+        ("language", &scope.language),
+        ("view", &scope.view),
+        ("document", &scope.document),
+    ]
+    .into_iter()
+    .filter_map(|(name, value)| value.as_ref().map(|value| format!("{name} {value}")))
+    .collect::<Vec<_>>();
     if facts.is_empty() {
         "every context".into()
     } else {
@@ -3048,6 +3053,7 @@ async fn set_settings(context: HostContext, arguments: SettingWrites) -> Result<
                 .expect("checked setting value");
             host.setting_changed(&key);
         }
+        crate::app::application_observation::changed(cx);
         Ok(())
     })?
 }
@@ -3099,6 +3105,7 @@ async fn reset_setting(context: HostContext, arguments: SettingLookup) -> Result
                 .reset(&arguments.key, &arguments.scope)
         {
             host.setting_changed(&arguments.key);
+            crate::app::application_observation::changed(cx);
         }
     })
 }

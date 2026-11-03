@@ -195,9 +195,10 @@ fn detected_indentation_overrides_the_setting(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text("a\n\tb\nc");
-        model.detect_indent_style();
+        model.set_document(uuid::Uuid::new_v4());
         model
     });
+    cx.update(|cx| crate::app::documents::detect_indentation(&model, cx));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
@@ -477,6 +478,36 @@ fn composition_never_outdents(cx: &mut TestAppContext) {
                 view.text(cx),
                 "fn a() {\n    if x {\n        b();\n        }\n}"
             );
+        });
+    });
+}
+
+#[gpui::test]
+fn convert_indentation_rewrites_every_line_as_one_undoable_step(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let text = "a\n\tb\n\t\tc\n  \td\n    e";
+    let model = cx.new(|_| {
+        let mut model = BufferModel::from_text(text);
+        model.set_document(uuid::Uuid::new_v4());
+        model
+    });
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            assert!(view.execute_editing_command(
+                "editor.convert-indentation-to-spaces",
+                window,
+                cx
+            ));
+            assert_eq!(view.text(cx), "a\n    b\n        c\n    d\n    e");
+            assert!(!view.indent_unit(view.model.read(cx), cx).tabs);
+
+            view.execute_editing_command("editor.undo", window, cx);
+            assert_eq!(view.text(cx), text);
+
+            assert!(view.execute_editing_command("editor.convert-indentation-to-tabs", window, cx));
+            assert_eq!(view.text(cx), "a\n\tb\n\t\tc\n\td\n\te");
+            assert!(view.indent_unit(view.model.read(cx), cx).tabs);
         });
     });
 }

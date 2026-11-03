@@ -237,6 +237,7 @@ impl DocumentCollection {
         if let Some(uri) = document.resource_uri() {
             self.resources.remove(uri);
         }
+        super::settings::release_document(document.identity, cx);
         super::recovery::forget_document(document.identity, cx);
         super::application_observation::changed(cx);
         true
@@ -364,8 +365,9 @@ impl DocumentCollection {
             .checked_add(1)
             .expect("document identity space exhausted");
         super::languages::detect_document(&model, state.resource_uri(), cx);
+        model.update(cx, |model, _| model.set_document(identity));
         if state.resource_uri().is_some() {
-            model.update(cx, |model, _| model.detect_indent_style());
+            detect_indentation(&model, cx);
         }
         let observed_model = model.clone();
         self.documents.push(Document {
@@ -379,6 +381,19 @@ impl DocumentCollection {
         super::recovery::observe_document(&observed_model, identity, cx);
         super::application_observation::changed(cx);
         id
+    }
+}
+
+/// Record the indentation style a stamped buffer's text uses as its
+/// document's `editor.insertSpaces`, when the text has a clear style.
+pub(crate) fn detect_indentation(model: &Entity<BufferModel>, cx: &mut App) {
+    let model = model.read(cx);
+    if let (Some(document), Some(style)) = (model.document(), model.detect_indent_style()) {
+        super::settings::set_document_insert_spaces(
+            document,
+            style == super::indentation::IndentStyle::Spaces,
+            cx,
+        );
     }
 }
 

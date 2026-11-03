@@ -411,7 +411,8 @@ await settings.observe("lsp.timeout.launch", async () => {
 
 A write applies everywhere, or only where every fact of its scope matches:
 `language` is a document's language ID and `view` a surface kind such as
-`editor` or a contributed view ID. A read picks the matching value with the
+`editor` or a contributed view ID, and `document` a document's ID. Values
+scoped to a document end when it closes. A read picks the matching value with the
 most facts, so `settings.set("editor.tabSize", 8, { language: "rust" })` beats
 an unscoped value however late that one was written. Among equally specific
 values the latest write wins, whoever made it, so personal overrides belong in

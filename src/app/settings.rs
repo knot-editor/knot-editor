@@ -109,18 +109,25 @@ pub(crate) struct SettingsScope {
     pub(crate) language: Option<String>,
     /// A native surface kind (`editor`, `terminal`) or a contributed view ID.
     pub(crate) view: Option<String>,
+    /// A document's UUID, as text. Entries carrying it belong to the document
+    /// and are dropped when it is released.
+    pub(crate) document: Option<String>,
 }
 
 impl SettingsScope {
     fn fact_count(&self) -> usize {
-        usize::from(self.language.is_some()) + usize::from(self.view.is_some())
+        usize::from(self.language.is_some())
+            + usize::from(self.view.is_some())
+            + usize::from(self.document.is_some())
     }
 
     fn matches(&self, context: &SettingsScope) -> bool {
         fn fact(scope: &Option<String>, context: &Option<String>) -> bool {
             scope.is_none() || scope == context
         }
-        fact(&self.language, &context.language) && fact(&self.view, &context.view)
+        fact(&self.language, &context.language)
+            && fact(&self.view, &context.view)
+            && fact(&self.document, &context.document)
     }
 }
 
@@ -183,7 +190,7 @@ fn native_definitions() -> Vec<SettingDefinition> {
             key: EDITOR_INSERT_SPACES.into(),
             value_type: SettingType::Boolean,
             default: true.into(),
-            description: "Indent with spaces rather than tabs in documents whose indentation is not detected from their text".into(),
+            description: "Indent with spaces rather than tabs; a document whose text shows a clear style gets its own value".into(),
         },
         SettingDefinition {
             key: EDITOR_AUTO_CLOSING_BRACKETS.into(),
@@ -320,6 +327,13 @@ impl SettingsStore {
         entries.len() != before
     }
 
+    /// Drop every entry scoped to the document with this UUID.
+    pub(crate) fn release_document(&mut self, document: &str) {
+        for entries in self.entries.values_mut() {
+            entries.retain(|entry| entry.scope.document.as_deref() != Some(document));
+        }
+    }
+
     /// The value of a defined `key` for `context`, or its default when no
     /// entry matches. `None` for an undefined key.
     pub(crate) fn get(&self, key: &str, context: &SettingsScope) -> Option<&Value> {
@@ -363,6 +377,31 @@ pub(crate) fn remove_lifecycle(
         cx.global_mut::<ApplicationSettings>()
             .0
             .remove_lifecycle(extension, lifecycle);
+    }
+}
+
+/// Write a document's own `editor.insertSpaces` value, which beats language
+/// and global values.
+pub(crate) fn set_document_insert_spaces(document: uuid::Uuid, spaces: bool, cx: &mut App) {
+    cx.default_global::<ApplicationSettings>()
+        .0
+        .set(
+            EDITOR_INSERT_SPACES,
+            Value::Bool(spaces),
+            SettingsScope {
+                document: Some(document.to_string()),
+                ..Default::default()
+            },
+        )
+        .expect("editor.insertSpaces is a native boolean setting");
+}
+
+/// Drop the settings values scoped to a document that was released.
+pub(crate) fn release_document(document: uuid::Uuid, cx: &mut App) {
+    if cx.has_global::<ApplicationSettings>() {
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .release_document(&document.to_string());
     }
 }
 

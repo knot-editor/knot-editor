@@ -185,6 +185,10 @@ mod tests {
             revision,
             buffer: BufferHandle::new(1),
             language: "plaintext".into(),
+            indentation: IndentationInfo {
+                style: IndentationStyle::Spaces,
+                size: 4,
+            },
         }
     }
 

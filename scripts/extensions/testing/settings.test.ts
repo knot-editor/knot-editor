@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { settings } from "knot";
+import { documents, settings } from "knot";
 import * as host from "knot/testing";
 
 declare module "knot" {
@@ -51,4 +51,17 @@ test("observers see writes and resets of their key in any scope", async () => {
   await watch.dispose();
   await settings.set("editor.tabSize", 3);
   assert.deepEqual(seen, ["editor.tabSize", "editor.tabSize"]);
+});
+
+test("a document value beats language values and shows in the document's indentation", async () => {
+  const id = host.addDocument({ language: "rust" });
+  assert.deepEqual((await documents.get(id))?.indentation, { style: "spaces", size: 4 });
+  await settings.set("editor.tabSize", 2, { language: "rust" });
+  await settings.set("editor.insertSpaces", false, { document: id });
+  await settings.set("editor.tabSize", 8, { document: id });
+  assert.deepEqual((await documents.get(id))?.indentation, { style: "tabs", size: 8 });
+  assert.equal(await settings.get("editor.tabSize", { language: "rust" }), 2);
+  assert.equal(await settings.get("editor.tabSize", { document: id }), 8);
+  await settings.reset("editor.tabSize", { document: id });
+  assert.equal((await documents.get(id))?.indentation.size, 2);
 });

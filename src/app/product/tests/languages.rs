@@ -282,10 +282,16 @@ fn opened_documents_detect_their_indentation_and_untitled_ones_do_not(cx: &mut T
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let opened = active_model(&shell, cx);
     cx.read(|cx| {
-        assert_eq!(
-            opened.read(cx).indent_style(),
-            Some(crate::app::indentation::IndentStyle::Tabs)
-        );
-        assert_eq!(untitled.read(cx).indent_style(), None);
+        let spaces = |model: &Entity<BufferModel>| {
+            crate::app::settings::editor_insert_spaces(
+                &crate::app::settings::SettingsScope {
+                    document: model.read(cx).document().map(|id| id.to_string()),
+                    ..Default::default()
+                },
+                cx,
+            )
+        };
+        assert!(!spaces(&opened));
+        assert!(spaces(&untitled));
     });
 }

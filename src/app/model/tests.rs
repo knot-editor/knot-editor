@@ -939,11 +939,8 @@ fn a_view_batch_is_one_undo_step_that_restores_its_selection() {
 
 #[test]
 fn indentation_is_detected_from_the_leading_lines() {
-    let mut model = BufferModel::from_text("a\r\n\tb\r\n\tc");
-    assert_eq!(model.indent_style(), None);
-    model.detect_indent_style();
-    assert_eq!(model.indent_style(), Some(IndentStyle::Tabs));
-    let mut model = BufferModel::from_text("");
-    model.detect_indent_style();
-    assert_eq!(model.indent_style(), None);
+    let model = BufferModel::from_text("a\r\n\tb\r\n\tc");
+    assert_eq!(model.detect_indent_style(), Some(IndentStyle::Tabs));
+    let model = BufferModel::from_text("");
+    assert_eq!(model.detect_indent_style(), None);
 }

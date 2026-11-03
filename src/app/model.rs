@@ -135,9 +135,9 @@ pub struct BufferModel {
     language: Option<String>,
     /// Whether `language` was chosen rather than detected.
     language_explicit: bool,
-    /// The indentation style detected from the text, which overrides the
-    /// `editor.insertSpaces` setting.
-    indent_style: Option<IndentStyle>,
+    /// The identity of the document presenting this buffer, which scopes
+    /// its settings. Absent for buffers no document owns.
+    document: Option<uuid::Uuid>,
     /// Derived syntax tree, kept current with every commit.
     syntax: Option<SyntaxState>,
     /// Starts a background parse after any notify that leaves the tree
@@ -216,7 +216,7 @@ impl BufferModel {
             history_view_restore: None,
             language: None,
             language_explicit: false,
-            indent_style: None,
+            document: None,
             syntax: None,
             syntax_driver: None,
             syntax_budget: FOREGROUND_BUDGET,
@@ -516,15 +516,20 @@ impl BufferModel {
         self.language_explicit = explicit;
     }
 
-    pub(crate) fn indent_style(&self) -> Option<IndentStyle> {
-        self.indent_style
+    /// The identity of the document presenting this buffer.
+    pub(crate) fn document(&self) -> Option<uuid::Uuid> {
+        self.document
     }
 
-    /// Detect the indentation style from the leading lines of the text.
-    pub(crate) fn detect_indent_style(&mut self) {
+    pub(crate) fn set_document(&mut self, document: uuid::Uuid) {
+        self.document = Some(document);
+    }
+
+    /// The indentation style the leading lines of the text use, if clear.
+    pub(crate) fn detect_indent_style(&self) -> Option<IndentStyle> {
         let lines = self.line_count().min(indentation::DETECTION_LINES);
         let text = self.buffer.read_range(0..self.line_range(lines - 1).end);
-        self.indent_style = indentation::detect(text.lines());
+        indentation::detect(text.lines())
     }
 
     /// The editing data of the language at `offset`: the deepest syntax

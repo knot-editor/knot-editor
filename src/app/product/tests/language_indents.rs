@@ -142,9 +142,10 @@ pub(super) fn run(
 ) -> Outcome {
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text(text);
-        model.detect_indent_style();
+        model.set_document(uuid::Uuid::new_v4());
         model
     });
+    cx.update(|cx| crate::app::documents::detect_indentation(&model, cx));
     cx.update(|cx| crate::app::languages::set_language(&model, language.into(), cx));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     let (anchor, caret) = selection.unwrap_or((0, text.len()));

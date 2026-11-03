@@ -106,7 +106,7 @@ function emptyState() {
     associations: [] as { id: string; patterns: Knot.LanguagePatterns }[],
     settingDefinitions: new Map<string, Knot.SettingDefinition>([
       ["editor.tabSize", { key: "editor.tabSize", type: "integer", default: 4, description: "Columns per tab stop in editor views" }],
-      ["editor.insertSpaces", { key: "editor.insertSpaces", type: "boolean", default: true, description: "Indent with spaces rather than tabs in documents whose indentation is not detected from their text" }],
+      ["editor.insertSpaces", { key: "editor.insertSpaces", type: "boolean", default: true, description: "Indent with spaces rather than tabs; a document whose text shows a clear style gets its own value" }],
       ["editor.autoClosingBrackets", { key: "editor.autoClosingBrackets", type: "boolean", default: true, description: "Insert the closer of a typed bracket or quote where the language allows, and step over or delete it with the opener" }],
       ["editor.autoSurround", { key: "editor.autoSurround", type: "boolean", default: true, description: "Wrap the selection when typing an opening bracket or quote over it" }],
       ["editor.lineNumbers", { key: "editor.lineNumbers", type: "string", default: "on", description: "Line numbers in the editor gutter" }],
@@ -128,6 +128,7 @@ type FakeSettingValue = {
   key: string;
   language: string | null;
   view: string | null;
+  document: string | null;
   value: Knot.JsonValue;
 };
 
@@ -276,7 +277,15 @@ function buffer(document: FakeDocument): Knot.Buffer {
 
 function documentInfo(document: FakeDocument): Knot.DocumentInfo {
   const { text: _text, ...info } = document;
-  return { ...info, buffer: buffer(document) };
+  const context = { language: document.language, view: "editor", document: document.id };
+  return {
+    ...info,
+    buffer: buffer(document),
+    indentation: {
+      style: resolveSetting("editor.insertSpaces", context) === false ? "tabs" : "spaces",
+      size: resolveSetting("editor.tabSize", context) as number,
+    },
+  };
 }
 
 /** Adds a live document. A URI makes it persisted unless a kind is given. */
@@ -880,11 +889,31 @@ const settingTypes: Record<Knot.SettingType, (value: unknown) => boolean> = {
 };
 
 function settingScope(scope: Knot.SettingsScope | undefined) {
-  return { language: scope?.language ?? null, view: scope?.view ?? null };
+  return { language: scope?.language ?? null, view: scope?.view ?? null, document: scope?.document ?? null };
 }
 
 function sameScope(entry: FakeSettingValue, scope: ReturnType<typeof settingScope>) {
-  return entry.language === scope.language && entry.view === scope.view;
+  return entry.language === scope.language && entry.view === scope.view && entry.document === scope.document;
+}
+
+// The matching entry with the most facts wins, and the latest write wins a tie.
+function resolveSetting(key: string, context: ReturnType<typeof settingScope>): Knot.JsonValue | undefined {
+  const definition = state.settingDefinitions.get(key);
+  if (definition === undefined) return undefined;
+  let best: FakeSettingValue | undefined;
+  let bestFacts = -1;
+  for (const entry of state.settingValues) {
+    if (entry.key !== key) continue;
+    if (entry.language !== null && entry.language !== context.language) continue;
+    if (entry.view !== null && entry.view !== context.view) continue;
+    if (entry.document !== null && entry.document !== context.document) continue;
+    const count = Number(entry.language !== null) + Number(entry.view !== null) + Number(entry.document !== null);
+    if (count >= bestFacts) {
+      best = entry;
+      bestFacts = count;
+    }
+  }
+  return best === undefined ? definition.default : best.value;
 }
 
 async function notifySetting(key: string) {
@@ -987,24 +1016,7 @@ export const api: KnotApi = {
         await notifySetting(key);
       }
     },
-    get: async (key, facts) => {
-      const definition = state.settingDefinitions.get(key);
-      if (definition === undefined) return undefined;
-      const context = settingScope(facts);
-      let best: FakeSettingValue | undefined;
-      let bestFacts = -1;
-      for (const entry of state.settingValues) {
-        if (entry.key !== key) continue;
-        if (entry.language !== null && entry.language !== context.language) continue;
-        if (entry.view !== null && entry.view !== context.view) continue;
-        const count = Number(entry.language !== null) + Number(entry.view !== null);
-        if (count >= bestFacts) {
-          best = entry;
-          bestFacts = count;
-        }
-      }
-      return (best === undefined ? definition.default : best.value) as never;
-    },
+    get: async (key, facts) => resolveSetting(key, settingScope(facts)) as never,
     reset: async (key, scope) => {
       const facts = settingScope(scope);
       const before = state.settingValues.length;

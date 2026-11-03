@@ -1341,3 +1341,95 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     assert_eq!(settled(cx), [window.window_id().as_u64().to_string()]);
     let _ = other;
 }
+
+#[gpui::test]
+fn document_scoped_settings_publish_document_changed_and_end_with_the_document(
+    cx: &mut TestAppContext,
+) {
+    use crate::app::settings::{ApplicationSettings, EDITOR_TAB_SIZE, SettingsScope};
+    use crate::host::lifecycle::ExtensionKey;
+    use crate::host::protocol::{IndentationInfo, IndentationStyle};
+    let documents = install_globals(cx);
+    let host = cx.update(extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(710), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host
+            .load_test_source(
+                key,
+                r#"
+import { commands, documents, settings } from "knot";
+await commands.register("indentation.write", async () => {
+  const [document] = await documents.list();
+  await settings.set("editor.insertSpaces", false, { document: document.id });
+  await settings.set("editor.tabSize", 8, { document: document.id });
+});
+"#,
+            )
+            .unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("indentation.write")
+            .is_ok()
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    take_events(&host, cx);
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command(&shell, window, "indentation.write", cx),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+    let events = take_events(&host, cx);
+    let last = changed_documents(&events).pop().expect("a document change");
+    assert_eq!(
+        last.indentation,
+        IndentationInfo {
+            style: IndentationStyle::Tabs,
+            size: 8
+        }
+    );
+
+    // Releasing a document drops its values; the open one keeps them.
+    let other = cx.update(|cx| create_untitled_document(&documents, cx));
+    let other_model = cx.read(|cx| documents.read(cx).get(other).unwrap().model().clone());
+    let tab_size = |model: &Entity<BufferModel>, cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            let scope = SettingsScope {
+                document: model.read(cx).document().map(|id| id.to_string()),
+                ..Default::default()
+            };
+            cx.global::<ApplicationSettings>()
+                .0
+                .get(EDITOR_TAB_SIZE, &scope)
+                .cloned()
+        })
+    };
+    cx.update(|cx| {
+        let scope = SettingsScope {
+            document: other_model.read(cx).document().map(|id| id.to_string()),
+            ..Default::default()
+        };
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .set(EDITOR_TAB_SIZE, 2.into(), scope)
+            .unwrap();
+    });
+    assert_eq!(tab_size(&model, cx), Some(8.into()));
+    assert_eq!(tab_size(&other_model, cx), Some(2.into()));
+    cx.update(|cx| documents.update(cx, |documents, cx| documents.remove(other, cx)));
+    assert_eq!(tab_size(&other_model, cx), Some(4.into()));
+    assert_eq!(tab_size(&model, cx), Some(8.into()));
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}

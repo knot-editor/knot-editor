@@ -76,10 +76,13 @@ line commands compute every edit first and commit them as one batch that
 records the view's selection before and after, so each command is one undo
 step that restores the selection it started from. Commands that act on lines
 take every line the selection touches, except a last line it reaches only at
-column 0. The indentation unit is a tab or `editor.tabSize` spaces: a document
-entering the collection from a resource detects tabs or spaces from its
-leading lines, and a document without a clear style, or without a resource,
-follows `editor.insertSpaces`. Backspace in leading spaces deletes back to
+column 0. The indentation unit is a tab or `editor.tabSize` spaces, resolved
+from `editor.insertSpaces` in the view's scope, which includes its document:
+a document entering the collection from a resource writes the style its
+leading lines show as its own document-scoped value, and any later write to
+that scope replaces it. The two Convert Indentation commands rewrite every
+line's leading whitespace as one undo step and write the same value.
+Backspace in leading spaces deletes back to
 the previous tab stop. Comment
 toggling reads the editing data of the language at the selection start,
 including an injected one such as a Markdown code fence's

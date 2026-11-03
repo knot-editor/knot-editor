@@ -1108,9 +1108,9 @@ function settingKey(value) {
   return value;
 }
 function settingsScope(value) {
-  if (value == null) return [null, null];
+  if (value == null) return [null, null, null];
   record(value, "settings scope must be an object");
-  return [optionalText(value.language), optionalText(value.view)];
+  return [optionalText(value.language), optionalText(value.view), optionalText(value.document)];
 }
 export async function defineSetting(definition) {
   const value = record(definition, "settings.define requires a definition object");

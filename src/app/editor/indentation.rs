@@ -241,6 +241,39 @@ impl EditorView {
         self.commit_line_edits(edits, cx);
     }
 
+    /// Rewrite the leading whitespace of every line with tabs or spaces at
+    /// the same columns, as one undo step, and make that the document's
+    /// indentation style.
+    pub(super) fn convert_indentation(&mut self, tabs: bool, cx: &mut Context<Self>) {
+        let model = self.model.read(cx);
+        if !model.is_editable() {
+            return;
+        }
+        let unit = IndentUnit {
+            tabs,
+            ..self.indent_unit(model, cx)
+        };
+        let edits = (0..model.line_count())
+            .filter_map(|line| {
+                let text = line_text(model, line);
+                let current = leading_whitespace(&text);
+                let indent = unit.whitespace(unit.width(current));
+                (indent != current).then(|| {
+                    let start = to_flat_byte(model, line, 0);
+                    (start..start + current.len(), indent)
+                })
+            })
+            .collect::<Vec<_>>();
+        let document = model.document();
+        if !edits.is_empty() {
+            self.commit_line_edits(edits, cx);
+        }
+        if let Some(document) = document {
+            settings::set_document_insert_spaces(document, !tabs, cx);
+            crate::app::application_observation::changed(cx);
+        }
+    }
+
     /// The range Backspace deletes when only spaces precede the caret on its
     /// line: back to the previous tab stop.
     pub(super) fn tab_stop_deletion_range(

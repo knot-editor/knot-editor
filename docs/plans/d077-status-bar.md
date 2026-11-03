@@ -1,0 +1,156 @@
+# D077 — Status bar
+
+Status: 🚧 approved; checkpoint 1 implemented, awaiting review. Item of the [editor API](editor-api.md)
+plan; depends on D109 (done). Follows its brief; this file holds the design.
+
+## Goal
+
+Every product window shows a status bar below the workbench. Extensions fill
+it through a public API, and the built-in items are an ordinary bundled
+package, `@knot/status-bar`, so personal config can hide or replace any of
+them. The bar is the first consumer of editor handles, selection observation,
+and document facts, ahead of the Vim mode indicator (D058).
+
+## Design
+
+- **Native bar, extension items.** The shell renders a fixed-height bar with
+  a left and a right group. Items sort by priority within a side. An item has
+  text, an optional tooltip, an optional command with JSON arguments
+  (clicking runs it through the captured-window command route, as tree row
+  actions do), and an optional theme color key.
+- **`workbench.registerStatusItem(id, options)`** returns a lifecycle-owned
+  handle: `update(options)` changes the application-wide value, and
+  `update(options, { window })` sets or clears a per-window override.
+  Teardown removes the item. Latest registration of an ID wins and disposal
+  reveals the previous one, as for languages and themes.
+- **The bar follows settings.** `statusBar.visible` (default true) with a
+  native Toggle Status Bar command, and `statusBar.hiddenItems`, a list of
+  item IDs the bar skips. Hidden items still exist, so a package keeps
+  running; personal config hides a bundled item or registers its own.
+- **Which editor the bar describes** follows VS Code: the focused editor,
+  else the last focused editor while its tab stays visible; a focused
+  terminal clears the editor items. Native code owns this rule because the
+  shell already tracks focus, and exposes the result as a `statusTarget` fact
+  on `WindowInfo`, published like `currentTarget`. The package follows one
+  value per window and never reimplements focus rules.
+- **A `document` settings fact.** `SettingsScope` gains a `document` fact
+  holding the document's UUID, beside `language` and `view`, in the native
+  store, the extension API, and `knot.d.ts`. The existing rule applies
+  unchanged: the match with the most facts wins and ties go to the latest
+  write, so a document value beats a language value, and D089's future `path`
+  fact extends the same rule. Views and the effective-indentation lookups
+  supply their document in the read context; a view with no document, such as
+  a contributed text frame, leaves the fact absent and so matches only scopes
+  without one.
+- **Document-scoped values belong to the document.** Settings values
+  otherwise belong to nobody. Entries carrying a `document` fact are dropped
+  when the document is released (`ApplicationDocuments::remove`), so closed
+  documents leak nothing. Nothing is persisted: a restore detects again, as
+  explicit languages and other view state already do.
+- **Indentation through settings.** The per-document `indent_style` field on
+  `BufferModel` goes away. When a document enters from a resource, detection
+  writes `editor.insertSpaces` scoped to the document, as today's detection
+  does once from the first 10,000 lines; it writes nothing when the file has
+  no clear style. Any later write to the same scope wins by the ordinary
+  rule. "Indent using spaces/tabs" and "change tab size" from the bar are
+  ordinary document-scoped writes of `editor.insertSpaces` and
+  `editor.tabSize`, available to any extension. Detection still beats
+  language and global values, as it does today, because it is the narrower
+  scope.
+- **Document facts.** `DocumentInfo` gains the effective indentation (style
+  and size) resolved for the document. A write changes the store and the
+  snapshot comparison publishes `documentChanged`, so the status item needs no
+  settings observer. Line ending is not part of this item; it is D149.
+- **Convert Indentation** to Spaces and to Tabs are native commands that
+  rewrite every line's leading indentation as one undo step.
+- **Built-in items** in `@knot/status-bar`, following VS Code: position and
+  selection size (click: Go to Line), indentation (click: a picker offering
+  indent using spaces or tabs, change tab size, convert indentation), and
+  language (click: Set Language Mode). Columns count characters with a tab as
+  one, as Go to Line reads them. No dirty, encoding, or line-ending item.
+  The position item attaches a handle to `statusTarget` and updates from
+  `onDidChangeSelection`.
+
+## Exclusions
+
+- Line ending in `DocumentInfo`, its item, and conversion (D149).
+- Non-modal notices and progress (D117), tooltips richer than text, and
+  item-level context menus.
+- The `path` scope fact and EditorConfig (D089, D090), and persisting
+  document-scoped values across restarts.
+
+## Deferred decisions
+
+- Whether the bar later gains a middle group or click-and-drag resizing. Two
+  groups until a consumer asks.
+
+## Checkpoints
+
+### 1. Document settings scope and indentation ✅
+
+Implemented, awaiting the review gate. The buffer carries a `document` UUID
+stamp set when its document is created; views put it in the settings read
+context, so no lookup happens per painted line, and a buffer without a document
+(a contributed text frame) matches only scopes without the fact. Entries with a
+`document` fact are dropped in `DocumentCollection::remove`. Detection and the
+two Convert Indentation commands (which also write the document's
+`editor.insertSpaces`) share `set_document_insert_spaces`. `DocumentInfo` gains
+`indentation: { style, size }`, and every settings write or reset recompares
+the snapshot. Review point: under the
+fact-count rule a `{ language, view }` value (two facts) beats a `document`
+value (one fact), so a personal `editor.insertSpaces` scoped to both now
+overrides detection, which previously beat every setting.
+
+### 2. Active editor per window
+
+- Deliverables: `WindowInfo.statusTarget` computed natively by the focused or
+  last-focused-visible rule, cleared by a focused terminal, published as a
+  change when it moves.
+- Validation: gpui product tests for focus between editors, a terminal, a
+  tool, and a closed or hidden last-focused tab.
+- **Implementation context:** focus observation in `src/app/product.rs`
+  (`observe_application_focus`) and the window snapshot code feeding
+  `src/app/application_observation.rs`; `WindowInfo` in
+  `src/host/protocol.rs` and its marshaling. Existing observation tests in
+  `src/app/product/tests/observation.rs` show the pattern.
+- Review gate: confirm the rule against VS Code on real windows.
+
+### 3. Native bar and item API
+
+- Deliverables: the bar rendered below the workbench; `registerStatusItem`
+  with application-wide values, per-window overrides, priority ordering, and
+  lifecycle teardown; click dispatch; `statusBar.visible`,
+  `statusBar.hiddenItems`, and Toggle Status Bar; colors for the bar in the
+  native color table.
+- Validation: host handler tests for registration, override, replacement and
+  teardown; product tests for rendering, hidden items, toggling, and a click
+  running its command in the right window; a `node:test` case on the fake host.
+- **Implementation context:** a sibling child after the workbench row in
+  `ProductShell::render` (`src/app/product/render.rs`); item state is an
+  application-owned gpui `Global` like `ApplicationExtensionHost`, declared in
+  `src/app/mod.rs`. Registration mirrors `register_tree_provider` and
+  `register_command` in `src/app/extensions/host/handlers.rs` and their
+  lifecycle cleanup in `src/app/extensions/host.rs`. Settings definitions
+  follow `src/app/settings.rs`; the toggle command follows
+  `src/app/product/commands.rs`. Color keys live in `src/app/theme.rs`.
+  Update `docs/extension-api.md` and `docs/schemas/knot.schema.json` if the
+  API surfaces there.
+- Review gate: confirm the look, item ordering, and the per-window override
+  API before the package depends on them.
+
+### 4. `@knot/status-bar` package
+
+- Deliverables: the position, indentation, and language items, their click
+  pickers and commands, tab-size and indent-style changes as document-scoped settings writes,
+  and bundling; docs and decisions updated, with the plan reduced to a
+  completion note and then removed per the editor API plan's rule.
+- Validation: `node:test` package tests on the fake host for each item and
+  picker; a Rust product test through the real host showing the caret item
+  follows selection and `statusTarget`.
+- **Implementation context:** mirror `extensions/@knot/go-to-line`
+  (`knot.jsonc`, `src/extension.ts`, `src/main.ts`, `test/`), register in
+  `src/app/extensions/bundled.rs`, and rely on `build.rs` to compile it.
+  Document the behavior in `docs/architecture/workbench-and-lifecycle.md` and
+  `docs/architecture/extension-host.md`, and record rationale in
+  `docs/decisions.md`; update `docs/architecture.md` only if boundaries move.
+- Review gate: daily-use pass over the bar before D058 builds on it.

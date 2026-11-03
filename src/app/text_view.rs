@@ -154,6 +154,7 @@ mod tests {
             let scope = SettingsScope {
                 language: None,
                 view: Some("example.log".into()),
+                document: None,
             };
             settings.0.set(EDITOR_TAB_SIZE, 2.into(), scope).unwrap();
             cx.set_global(settings);
@@ -166,6 +167,37 @@ mod tests {
             assert_eq!(frame.editor.read(cx).tab_size(frame.model.read(cx), cx), 2);
             let document = document.read(cx);
             assert_eq!(document.tab_size(document.model().read(cx), cx), 4);
+        });
+    }
+
+    #[gpui::test]
+    fn the_frame_editor_ignores_document_scoped_values(cx: &mut TestAppContext) {
+        use crate::app::{
+            documents::DocumentCollection,
+            editor::EditorView,
+            model::BufferModel,
+            settings::{ApplicationSettings, EDITOR_TAB_SIZE, SettingsScope},
+        };
+        cx.update(|cx| {
+            let mut settings = ApplicationSettings::default();
+            let model = cx.new(|_| BufferModel::from_text(""));
+            let documents = cx.new(|_| DocumentCollection::new());
+            documents.update(cx, |documents, cx| {
+                documents.create_untitled("Untitled", model.clone(), cx)
+            });
+            let scope = SettingsScope {
+                document: model.read(cx).document().map(|id| id.to_string()),
+                ..Default::default()
+            };
+            settings.0.set(EDITOR_TAB_SIZE, 2.into(), scope).unwrap();
+            cx.set_global(settings);
+            let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+            assert_eq!(editor.read(cx).tab_size(model.read(cx), cx), 2);
+        });
+        let frame = cx.new(|cx| TextView::new("example.log", "1", cx));
+        cx.read(|cx| {
+            let frame = frame.read(cx);
+            assert_eq!(frame.editor.read(cx).tab_size(frame.model.read(cx), cx), 4);
         });
     }
 }

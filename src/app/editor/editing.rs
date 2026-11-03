@@ -95,6 +95,14 @@ impl EditorView {
                 self.reindent_lines(cx);
                 return true;
             }
+            commands::CONVERT_INDENTATION_TO_SPACES_COMMAND
+            | commands::CONVERT_INDENTATION_TO_TABS_COMMAND => {
+                self.convert_indentation(
+                    command == commands::CONVERT_INDENTATION_TO_TABS_COMMAND,
+                    cx,
+                );
+                return true;
+            }
             commands::COPY_LINES_UP_COMMAND | commands::COPY_LINES_DOWN_COMMAND => {
                 self.copy_lines(command == commands::COPY_LINES_DOWN_COMMAND, cx);
                 return true;

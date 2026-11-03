@@ -278,8 +278,11 @@ Tabs or spaces are detected once, when a document enters from a resource,
 from its first 10,000 lines: a style wins when it indents at least twice as
 many lines as the other, so a mixed file falls back to `editor.insertSpaces`
 instead of guessing. One-space indents are alignment and ` *` lines are
-block-comment continuations, so neither counts. The size always comes from
-`editor.tabSize`; detecting it, and EditorConfig, are D090.
+block-comment continuations, so neither counts. Detection writes
+`editor.insertSpaces` scoped to the document, rather than keeping a field on
+the buffer, so the indentation of a document is one resolved setting that the
+status bar and any extension change with an ordinary write. The size always
+comes from `editor.tabSize`; detecting it, and EditorConfig, are D090.
 
 Words split at VS Code's default separators rather than at Unicode word
 boundaries alone. UAX #29 is designed for prose and keeps `some.thing`,
@@ -820,6 +823,15 @@ language and a view kind, with a file path to come for project settings
 a scoped value beats an unscoped one however late that is written, as an
 Emacs buffer-local value beats `setq-default`. Ranking by fact count keeps one
 rule that a `path` fact extends without new precedence.
+
+A `document` fact, the document's UUID, scopes a value to one document, such
+as its detected or chosen indentation. Values otherwise belong to nobody, but
+these are state of a document that exists only while it does, so releasing the
+document drops them rather than leaking one entry per file ever opened. They
+are not persisted: a restore detects again, as other view state does. The
+buffer carries its document's identity as a stamp rather than views looking
+it up, because tab size is read for every painted line; the stamp is not
+resource identity, which stays with the document.
 
 Definitions follow `defcustom`: a key gets a type, a default, and a
 description that a future settings UI lists. Values may precede their

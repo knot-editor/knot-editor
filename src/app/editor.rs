@@ -44,7 +44,7 @@ use super::{
     CompletionAccept, CompletionDismiss, CompletionNext, CompletionPrevious, EDITOR_KEY_CONTEXT,
     completion::{CompletionController, CompletionProviderRegistration, CompletionSurface},
     history::{EditGroupKind, EditGrouping, HistoryViewChange, HistoryViewState},
-    indentation::{IndentStyle, IndentUnit, leading_whitespace},
+    indentation::{IndentUnit, leading_whitespace},
     languages,
     model::{BufferModel, ContributionSource, ResolvedEditorContribution, decoration_precedence},
     settings::{self, ApplicationSettings, SettingsScope},

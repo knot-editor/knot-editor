@@ -22,6 +22,7 @@ fn set_line_numbers(cx: &mut VisualTestContext, value: &str, view: Option<&str>)
                 SettingsScope {
                     language: None,
                     view: view.map(Into::into),
+                    document: None,
                 },
             )
             .unwrap();

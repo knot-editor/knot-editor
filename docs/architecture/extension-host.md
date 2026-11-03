@@ -265,6 +265,15 @@ definition belongs to the lifecycle that made it, and teardown removes it
 together with that lifecycle's observers, leaving the values for a restarted
 package to define again. Native keys are defined when the store is created.
 
+A scope's `document` fact holds a document's UUID. Entries carrying it belong
+to that document: `ApplicationDocuments::remove` drops them when the document
+is released. The buffer is stamped with its document's identity when the
+document is created, and a view reads that stamp into its read context; a
+buffer no document owns, such as a contributed text frame's, has none and so
+matches only scopes without the fact. `DocumentInfo.indentation` resolves
+`editor.insertSpaces` and `editor.tabSize` for the document, and every write
+or reset recompares the snapshot, so a change publishes `documentChanged`.
+
 A definition validates the values already written for its key and drops those
 of the wrong type; each drop is a warning in the startup report, which
 outlives package restarts. After a write or reset, the host queues every

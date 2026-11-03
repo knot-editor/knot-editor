@@ -356,6 +356,7 @@ fn tab_stops_follow_the_settings_for_each_open_view(cx: &mut TestAppContext) {
                     SettingsScope {
                         language: language.map(Into::into),
                         view: None,
+                        document: None,
                     },
                 )
                 .unwrap();

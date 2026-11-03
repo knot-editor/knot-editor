@@ -2547,7 +2547,13 @@ fn application_document_info(
     cx: &App,
 ) -> crate::host::protocol::DocumentInfo {
     use crate::app::documents::DocumentState;
-    use crate::host::protocol::{DocumentInfo, DocumentKind};
+    use crate::host::protocol::{DocumentInfo, DocumentKind, IndentationInfo, IndentationStyle};
+    let language = crate::app::languages::effective_language(document.model().read(cx), cx);
+    let scope = crate::app::settings::SettingsScope {
+        language: Some(language.clone()),
+        view: Some("editor".into()),
+        document: Some(document.identity().to_string()),
+    };
     DocumentInfo {
         id: document.identity().to_string(),
         title: document.title().to_string(),
@@ -2560,7 +2566,15 @@ fn application_document_info(
         dirty: document.is_dirty(cx),
         revision: document.model().read(cx).revision(),
         buffer,
-        language: crate::app::languages::effective_language(document.model().read(cx), cx),
+        language,
+        indentation: IndentationInfo {
+            style: if crate::app::settings::editor_insert_spaces(&scope, cx) {
+                IndentationStyle::Spaces
+            } else {
+                IndentationStyle::Tabs
+            },
+            size: crate::app::settings::editor_tab_size(&scope, cx),
+        },
     }
 }
 

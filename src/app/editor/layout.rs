@@ -45,6 +45,7 @@ impl EditorView {
         SettingsScope {
             language: Some(languages::effective_language(model, cx)),
             view: Some(self.view_kind.to_string()),
+            document: model.document().map(|document| document.to_string()),
         }
     }
 
@@ -53,15 +54,12 @@ impl EditorView {
         settings::editor_tab_size(&self.settings_scope(model, cx), cx)
     }
 
-    /// One indentation level: the buffer's detected style, else the
-    /// `editor.insertSpaces` setting, with the view's tab size.
+    /// One indentation level from the `editor.insertSpaces` and
+    /// `editor.tabSize` settings in this view's scope.
     pub(super) fn indent_unit(&self, model: &BufferModel, cx: &App) -> IndentUnit {
         let scope = self.settings_scope(model, cx);
         IndentUnit {
-            tabs: match model.indent_style() {
-                Some(style) => style == IndentStyle::Tabs,
-                None => !settings::editor_insert_spaces(&scope, cx),
-            },
+            tabs: !settings::editor_insert_spaces(&scope, cx),
             size: settings::editor_tab_size(&scope, cx),
         }
     }

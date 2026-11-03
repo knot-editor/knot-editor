@@ -536,6 +536,22 @@ pub struct DocumentInfo {
     /// The document's registered language ID, explicit or detected, or
     /// `plaintext`.
     pub language: String,
+    /// The indentation the document's settings resolve to.
+    pub indentation: IndentationInfo,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum IndentationStyle {
+    Spaces,
+    Tabs,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndentationInfo {
+    pub style: IndentationStyle,
+    pub size: usize,
 }
 
 /// A registered language as extensions see it.

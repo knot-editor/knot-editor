@@ -59,6 +59,9 @@ declare module "knot" {
      * kept explicit ID reappears once something registers it. Changes
      * publish documentChanged. */
     readonly language: string;
+    /** The indentation `editor.insertSpaces` and `editor.tabSize` resolve to
+     * for this document. Writes to either publish documentChanged. */
+    readonly indentation: { readonly style: "spaces" | "tabs"; readonly size: number };
   }
   export interface PresentationInfo {
     readonly target: ViewTarget;
@@ -304,11 +307,13 @@ declare module "knot" {
    * Facts that must all match where a value applies, or that describe the
    * context of a read. `language` is a document's effective language ID;
    * `view` is a native surface kind ("editor", "terminal") or a contributed
-   * view ID, as for keybindings.
+   * view ID, as for keybindings; `document` is a document's ID, whose values
+   * the application drops when the document closes.
    */
   export interface SettingsScope {
     readonly language?: string | null;
     readonly view?: string | null;
+    readonly document?: DocumentId | null;
   }
   /**
    * One application-wide store of settings shared by personal config and every

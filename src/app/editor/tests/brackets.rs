@@ -213,6 +213,7 @@ fn set(cx: &mut VisualTestContext, key: &str, value: bool) {
                 SettingsScope {
                     language: Some("rust".into()),
                     view: None,
+                    document: None,
                 },
             )
             .unwrap();

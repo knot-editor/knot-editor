@@ -41,6 +41,8 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 #[command("editor.insert-tab", title = "Insert Tab", palette = false, id = INSERT_TAB_COMMAND, participant = Editor)]
 #[command("editor.indent-lines", title = "Indent Lines", description = "Indent the selected lines by one level.", id = INDENT_LINES_COMMAND, participant = Editor)]
 #[command("editor.reindent-lines", title = "Reindent Lines", description = "Indent the selected lines from the language's syntax.", id = REINDENT_LINES_COMMAND, participant = Editor)]
+#[command("editor.convert-indentation-to-spaces", title = "Convert Indentation to Spaces", description = "Rewrite the indentation of every line with spaces, and indent with spaces from now on.", id = CONVERT_INDENTATION_TO_SPACES_COMMAND, participant = Editor)]
+#[command("editor.convert-indentation-to-tabs", title = "Convert Indentation to Tabs", description = "Rewrite the indentation of every line with tabs, and indent with tabs from now on.", id = CONVERT_INDENTATION_TO_TABS_COMMAND, participant = Editor)]
 #[command("editor.outdent-lines", title = "Outdent Lines", description = "Outdent the selected lines by one level.", id = OUTDENT_LINES_COMMAND, participant = Editor)]
 #[command("editor.copy-lines-up", title = "Copy Lines Up", description = "Duplicate the selected lines above them.", id = COPY_LINES_UP_COMMAND, participant = Editor)]
 #[command("editor.copy-lines-down", title = "Copy Lines Down", description = "Duplicate the selected lines below them.", id = COPY_LINES_DOWN_COMMAND, participant = Editor)]
