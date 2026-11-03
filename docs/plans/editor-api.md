@@ -101,20 +101,16 @@ D077 moved here from the daily-driver plan.
 
 ## Phase 2 — Editor handles and the status bar
 
-- **D109 — Editor handles and selection observation** (absorbs D080's
-  observation API)
-  - An editor handle that outlives its command: extensions find the editor
-    a window currently presents and hold its handle while the tab lives.
-    Decide how a handle is obtained outside a command and when it expires.
-  - D110's `setKeyContext` works on long-lived handles, so a mode enters its
-    context in editors it did not get from a command.
-  - Coalesced selection and caret observation: native code marks a view's
-    selection changed and keeps at most one pending notification per
-    listener, which then reads the current state, as picker highlight
-    previews are pulled. A busy extension falls behind without a queue, and
-    painting never waits on JavaScript.
-  - One selection per view; several and rectangular selections are D142.
-  - 🚧 [Plan](d109-editor-handles.md)
+- **D109 — Editor handles and selection observation** ✅
+  - Complete: `workbench.editor(target)` returns a long-lived handle bound
+    to the exact document tab, with key contexts, `onDidClose`, and coalesced
+    payload-free `onDidChangeSelection`. Behavior in
+    [commands](../architecture/commands.md#extension-execution) and
+    [extension host](../architecture/extension-host.md#editor-handle-notifications),
+    rationale in [decisions](../decisions.md#editor-handles), and a small
+    follower in `examples/extensions/@example/modal`, to be removed when D058
+    lands. One selection per view; several and rectangular selections are
+    D142.
 
 - **D077 — Status bar** (depends on D109)
   - A native per-window bar below the workbench, and a
