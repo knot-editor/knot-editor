@@ -79,7 +79,7 @@ The product test asserts only the first visible line and the caret, since
 painting re-measures the viewport. Checked by hand on a large file: the reported
 lines matched the reveals.
 
-### 3. Marks ✅ (review gate pending)
+### 3. Marks ✅
 
 `buffer.createMark(offset)` is a zero-width anchored range owned by the calling
 lifecycle (`src/app/model.rs`, bridged in `src/app/extensions/buffers.rs`).
@@ -92,9 +92,6 @@ is in the [extension guide](../extension-api.md) and
 (edits around, inside, undo and redo, lifecycle removal, offset validation), the
 extension path, and the fake host; buffer closure and lifecycle teardown through
 the product host are covered only by the model test.
-- **Review gate:** the stability semantics above, especially moving past text
-  inserted at the mark and not surviving a deletion, are agreed.
-
 ### 4. Clipboard read, modal example, and docs ⏳
 
 - Deliver `workbench.readClipboardText`, extend the modal example with the four
