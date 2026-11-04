@@ -218,6 +218,7 @@ to be rebuilt later:
     D031, D078, and D080.
 
 - **D078 — Zoom, font size, and soft wrap** (depends on D070)
+  - 🚧 [Plan](d078-zoom-font-size-soft-wrap.md)
   - ⌘+ / ⌘- / ⌘0 zoom the current view or every view (decide which). The base
     font size comes from settings.
   - Toggle Soft Wrap, plus a setting for its default. Wrapping changes vertical
