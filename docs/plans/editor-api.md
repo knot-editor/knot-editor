@@ -1,6 +1,6 @@
 # Editor API and Vim mode
 
-Status: 🚧 phase 1 (D110) and D111 complete. Promotes D058, D066 (folding), D077, D109,
+Status: 🚧 phase 1 (D110), D111, and D141 complete. Promotes D058, D066 (folding), D077, D109,
 D110, D111, D112, and D114 (decoration styles) from the
 [roadmap](../roadmap.md) and adds D141–D143. Vim features left for later are
 D113, D142, D144, and D146.
@@ -134,12 +134,20 @@ D077 moved here from the daily-driver plan.
     [decisions](../decisions.md#editor-handles), and a change command in
     `examples/extensions/@example/modal`, to be removed when D058 lands.
 
-- **D141 — Editor view controls**
-  - 🚧 [Plan](d141-editor-view-controls.md)
-  - Extend the D109 handle with what modal editing needs: cursor style,
-    the visible line range, scrolling without moving the caret, a reveal at
-    the top or bottom (Vim's `zt`, `zb`), undecorated anchored positions
-    for marks, and clipboard read.
+- **D141 — Editor view controls** ✅
+  - Complete: the editor handle sets a per-lifecycle caret style, reports the
+    wholly visible lines, scrolls by lines without moving the caret, and
+    reveals the caret's line at the top or bottom; `buffer.createMark` gives
+    lifecycle-owned positions that follow edits; `workbench.readClipboardText`
+    reads the clipboard. Behavior in the
+    [extension guide](../extension-api.md),
+    [commands](../architecture/commands.md#key-contexts),
+    [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views),
+    and [core and buffers](../architecture/core-and-buffers.md), rationale in
+    [decisions](../decisions.md#editor-handles), and a demonstration in
+    `examples/extensions/@example/modal`, to be removed when D058 lands.
+    `reveal: "center"` still recenters only when the line is off screen, so
+    Vim's `zz` needs an always-centering option when D058 reaches it.
 
 - **D114 — Decoration styles**
   - Contribution decorations choose a style beside their color key:
