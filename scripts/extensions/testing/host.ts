@@ -109,6 +109,7 @@ function emptyState() {
     languages: [] as Knot.LanguageDefinition[],
     associations: [] as { id: string; patterns: Knot.LanguagePatterns }[],
     settingDefinitions: new Map<string, Knot.SettingDefinition>([
+      ["font.size", { key: "font.size", type: "number", default: 14, description: "Text size in pixels" }],
       ["editor.tabSize", { key: "editor.tabSize", type: "integer", default: 4, description: "Columns per tab stop in editor views" }],
       ["editor.insertSpaces", { key: "editor.insertSpaces", type: "boolean", default: true, description: "Indent with spaces rather than tabs; a document whose text shows a clear style gets its own value" }],
       ["editor.autoClosingBrackets", { key: "editor.autoClosingBrackets", type: "boolean", default: true, description: "Insert the closer of a typed bracket or quote where the language allows, and step over or delete it with the opener" }],

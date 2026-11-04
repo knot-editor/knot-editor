@@ -278,6 +278,11 @@ declare module "knot" {
    * `declare module "knot" { interface Settings { "lsp.timeout.launch": number } }`.
    */
   export interface Settings {
+    /** Text size in pixels of editors and text frames, and of terminals
+     * when read in the { view: "terminal" } scope, so a terminal-scoped
+     * value sizes terminals separately. Line height follows it. Native
+     * default 14; views use at least 6 and at most 72. */
+    "font.size": number;
     /** Columns per tab stop in editor views. Native default 4; editors use
      * at least 1 and at most 32. */
     "editor.tabSize": number;
