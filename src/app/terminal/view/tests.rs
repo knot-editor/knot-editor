@@ -161,3 +161,37 @@ fn terminal_font_size_resizes_the_grid(cx: &mut TestAppContext) {
     assert_eq!(font_size, px(28.));
     assert!(larger_columns < columns && larger_lines < lines);
 }
+
+#[cfg(unix)]
+#[gpui::test]
+fn zoom_scales_the_terminal_font_size(cx: &mut TestAppContext) {
+    use super::*;
+    use alacritty_terminal::tty;
+
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let session = cx.new(|cx| {
+        TerminalSession::new_with_options(
+            tty::Options {
+                shell: Some(tty::Shell::new(
+                    "/bin/sh".into(),
+                    vec!["-c".into(), "read line".into()],
+                )),
+                ..Default::default()
+            },
+            cx,
+        )
+    });
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
+    cx.simulate_resize(size(px(600.), px(400.)));
+    cx.refresh().unwrap();
+    let columns = cx.read(|cx| session.read(cx).size().columns);
+    cx.update(|_, cx| crate::app::zoom::set_level(2, cx));
+    cx.run_until_parked();
+    cx.refresh().unwrap();
+    cx.read(|cx| {
+        let font_size = f32::from(view.read(cx).layout.unwrap().font_size);
+        assert!((font_size - 14. * 1.44).abs() < 1e-3);
+        assert!(session.read(cx).size().columns < columns);
+    });
+    cx.update(|_, cx| session.update(cx, |session, cx| session.close(cx)));
+}

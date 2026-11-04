@@ -3,6 +3,7 @@
 use super::*;
 use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Theme, color, theme};
+use crate::app::zoom;
 
 impl ProductShell {
     pub(super) fn render_layout(
@@ -98,7 +99,7 @@ impl ProductShell {
             .when(horizontal, |element| {
                 element
                     .flex_row()
-                    .w(px(9.))
+                    .w(zoom::rems(9.))
                     .h_full()
                     .justify_center()
                     .cursor(CursorStyle::ResizeLeftRight)
@@ -106,7 +107,7 @@ impl ProductShell {
             .when(!horizontal, |element| {
                 element
                     .flex_col()
-                    .h(px(9.))
+                    .h(zoom::rems(9.))
                     .w_full()
                     .items_center()
                     .cursor(CursorStyle::ResizeUpDown)
@@ -293,7 +294,7 @@ impl ProductShell {
                     .flex()
                     .flex_row()
                     .flex_none()
-                    .h(px(30.))
+                    .h(zoom::rems(30.))
                     .relative()
                     .debug_selector(move || format!("tab-bar-{}", pane_id.value()))
                     .child(self.tab_bar_drag_geometry(pane_id))
@@ -344,7 +345,7 @@ impl ProductShell {
                 .flex_none()
                 .flex_row()
                 .items_center()
-                .h(px(22.))
+                .h(zoom::rems(22.))
                 .px_1()
                 .text_xs()
                 .border_t_1()
@@ -427,6 +428,7 @@ impl Render for StatusTooltip {
 impl Render for ProductShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.observe_application_focus(window, cx);
+        window.set_rem_size(px(zoom::BASE_REM * zoom::factor(cx)));
         tab_drag::coordinator(cx);
         self.tab_drag.borrow_mut().begin_frame();
         let layout = match self.maximized_pane(cx) {
@@ -495,7 +497,7 @@ impl Render for ProductShell {
                         .flex()
                         .items_start()
                         .justify_center()
-                        .pt(px(80.))
+                        .pt(zoom::rems(80.))
                         .bg(scrim)
                         .on_mouse_down(MouseButton::Left, dismiss_transient)
                         .child(transient),
@@ -509,7 +511,7 @@ impl Render for ProductShell {
                         .flex()
                         .items_start()
                         .justify_center()
-                        .pt(px(80.))
+                        .pt(zoom::rems(80.))
                         .bg(scrim)
                         .child(palette),
                 )

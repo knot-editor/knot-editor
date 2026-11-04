@@ -47,6 +47,7 @@ mod window_sessions;
 mod workbench;
 mod workspace;
 mod workspace_tree;
+mod zoom;
 
 use command_palette::CommandPalette;
 

@@ -133,7 +133,7 @@ impl Render for InputView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .id("extension-input")
-            .w(px(PANEL_WIDTH))
+            .w(crate::app::zoom::rems(PANEL_WIDTH))
             .flex()
             .flex_col()
             .rounded_md()

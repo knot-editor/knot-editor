@@ -125,9 +125,11 @@ impl EditorView {
                 + x_for_index_dir(&shaped, self.cursor_col, &text, self.tab_size(model, cx))
         };
         let y = px((line + 1) as f32 * self.metrics.line_height - self.scroll);
+        // Keep the popup, with a margin, inside the view.
+        let popup = |pixels| crate::app::zoom::scaled(pixels, cx);
         point(
-            x.min((self.bounds.size.width - px(380.)).max(px(0.))),
-            y.min((self.bounds.size.height - px(230.)).max(px(0.))),
+            x.min((self.bounds.size.width - popup(380.)).max(px(0.))),
+            y.min((self.bounds.size.height - popup(230.)).max(px(0.))),
         )
     }
 

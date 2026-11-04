@@ -1,6 +1,6 @@
 # D078 — Zoom, font size, and soft wrap
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Item of the
+Status: 🚧 checkpoint 1 complete; checkpoint 2 implemented, awaiting review. Item of the
 [daily-driver plan](daily-driver.md), scheduled by the
 [editor API plan](editor-api.md) before D112.
 
@@ -126,15 +126,26 @@ cells are measured for the resolved size, so a change resizes the PTY grid.
 Tab titles and other chrome deliberately ignore `font.size`; zoom scales
 them (checkpoint 2).
 
-## Checkpoint 2 — Application zoom
+## Checkpoint 2 — Application zoom 🔍
 
 Deliverables:
-- The zoom `Global`, Zoom In / Zoom Out / Reset Zoom commands, and their
+- ✅ The zoom `Global`, Zoom In / Zoom Out / Reset Zoom commands, and their
   preset bindings on all three platforms.
-- Per-window rem size and zoom-scaled pixel constants on every custom-painted
+- ✅ Per-window rem size and zoom-scaled pixel constants on every custom-painted
   surface; a zoom change refreshes all windows.
-- The `zoom` record in the state database, restored before the first window
+- ✅ The `zoom` record in the state database, restored before the first window
   and flushed at quit.
+
+Implemented in `src/app/zoom.rs`: levels −4 to +6 (about 48% to 300%), the
+commands `workbench.zoom-in`, `workbench.zoom-out`, and `workbench.reset-zoom`,
+also in the View menu. Chrome sizes given in pixels at 100% become rems
+(`zoom::rems`), painting that measures in pixels multiplies by the factor
+(`zoom::scaled`), and editors and terminals multiply `font.size` by it. Scope
+decisions: dock sizes stay absolute window pixels, as they do when the window
+resizes, so a zoomed dock keeps its width and the user resizes it; hairlines
+(carets, underlines, dividers' 1 px line) keep their pixel widths. The
+architecture and workbench references still describe zoom as view state until
+checkpoint 4's documentation step.
 
 Validation: command tests for stepping and clamping; gpui tests that a window
 renders with the scaled rem size and an editor and terminal with scaled text;

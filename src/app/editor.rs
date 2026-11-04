@@ -288,6 +288,7 @@ pub struct EditorView {
     _model_subscription: Subscription,
     _release_subscription: Subscription,
     _settings_subscription: Subscription,
+    _zoom_subscription: Subscription,
 }
 
 impl EditorView {
@@ -660,6 +661,11 @@ impl EditorView {
             this.update_metrics(cx);
             cx.notify();
         });
+        let zoom_subscription =
+            cx.observe_global::<crate::app::zoom::ApplicationZoom>(|this, cx| {
+                this.update_metrics(cx);
+                cx.notify();
+            });
         let release_subscription = cx.on_release(|this, cx| {
             this.model.update(cx, |model, _| {
                 model.remove_view_position(this.position_range);
@@ -719,6 +725,7 @@ impl EditorView {
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
             _settings_subscription: settings_subscription,
+            _zoom_subscription: zoom_subscription,
         };
         view.update_metrics(cx);
         view

@@ -440,6 +440,7 @@ pub(crate) fn run(initial_request: Option<OpenRequest>) {
         cx.set_global(crate::app::command_history::ApplicationCommandHistory(
             crate::app::command_history::CommandHistory::open(&state),
         ));
+        cx.set_global(crate::app::zoom::ApplicationZoom::open(&state));
         cx.set_global(crate::app::record_store::ApplicationState(state));
         cx.set_global(ApplicationLaunchGate(RefCell::new(LaunchGate::Pending(
             Vec::new(),
@@ -534,6 +535,10 @@ fn product_menus() -> Vec<Menu> {
                     "Split Down",
                     ProductCommandSource::new(SPLIT_VERTICAL_COMMAND),
                 ),
+                MenuItem::separator(),
+                MenuItem::action("Zoom In", ProductCommandSource::new(ZOOM_IN_COMMAND)),
+                MenuItem::action("Zoom Out", ProductCommandSource::new(ZOOM_OUT_COMMAND)),
+                MenuItem::action("Reset Zoom", ProductCommandSource::new(RESET_ZOOM_COMMAND)),
             ],
         },
     ]

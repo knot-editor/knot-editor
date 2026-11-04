@@ -37,6 +37,7 @@ mod transient;
 mod window_restore;
 mod workbench;
 mod workspaces;
+mod zoom;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 

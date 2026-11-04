@@ -12,6 +12,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::theme::{color, theme};
 use super::typography::{TEXT_SIZE as FONT_SIZE, text_font};
+use super::zoom;
 
 const INPUT_LINE_HEIGHT: f32 = 22.;
 
@@ -215,7 +216,7 @@ impl TextInput {
             .sum()
     }
 
-    fn shape(&self, window: &Window) -> ShapedLine {
+    fn shape(&self, window: &Window, cx: &App) -> ShapedLine {
         let run = TextRun {
             len: self.text.len(),
             font: text_font(false, false),
@@ -227,17 +228,17 @@ impl TextInput {
         };
         window.text_system().shape_line(
             SharedString::from(self.text.clone()),
-            px(FONT_SIZE),
+            zoom::scaled(FONT_SIZE, cx),
             &[run],
             None,
         )
     }
 
-    fn index_for_position(&self, window: &Window, x: Pixels) -> usize {
+    fn index_for_position(&self, window: &Window, x: Pixels, cx: &App) -> usize {
         let Some(bounds) = self.bounds else {
             return Self::utf16_for_byte(&self.text, self.text.len());
         };
-        let shaped = self.shape(window);
+        let shaped = self.shape(window, cx);
         let byte = shaped.closest_index_for_x(x - bounds.origin.x);
         Self::utf16_for_byte(&self.text, byte.min(self.text.len()))
     }
@@ -294,7 +295,7 @@ impl TextInput {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let offset = self.index_for_position(window, event.position.x);
+        let offset = self.index_for_position(window, event.position.x, cx);
         self.set_caret(offset, false);
         cx.notify();
         cx.stop_propagation();
@@ -309,7 +310,7 @@ impl TextInput {
         if event.pressed_button != Some(MouseButton::Left) {
             return;
         }
-        let offset = self.index_for_position(window, event.position.x);
+        let offset = self.index_for_position(window, event.position.x, cx);
         self.set_caret(offset, true);
         cx.notify();
     }
@@ -434,9 +435,9 @@ impl EntityInputHandler for TextInput {
         range_utf16: Range<usize>,
         element_bounds: Bounds<Pixels>,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        let shaped = self.shape(window);
+        let shaped = self.shape(window, cx);
         let start = Self::byte_for_utf16(&self.text, range_utf16.start);
         let end = Self::byte_for_utf16(&self.text, range_utf16.end);
         let x0 = shaped.x_for_index(start);
@@ -448,7 +449,7 @@ impl EntityInputHandler for TextInput {
         };
         Some(Bounds {
             origin: point(element_bounds.origin.x + x, element_bounds.origin.y),
-            size: size(width, px(INPUT_LINE_HEIGHT)),
+            size: size(width, zoom::scaled(INPUT_LINE_HEIGHT, cx)),
         })
     }
 
@@ -456,9 +457,9 @@ impl EntityInputHandler for TextInput {
         &mut self,
         point: Point<Pixels>,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<usize> {
-        Some(self.index_for_position(window, point.x))
+        Some(self.index_for_position(window, point.x, cx))
     }
 }
 
@@ -476,9 +477,11 @@ impl Render for TextInput {
         let selection_color = theme(cx).color(color::EDITOR_SELECTION);
         let marked_color = theme(cx).color(color::EDITOR_MARKED_TEXT);
         let caret_color = theme(cx).color(color::EDITOR_CURSOR);
+        let line_height = zoom::scaled(INPUT_LINE_HEIGHT, cx);
+        let font_size = zoom::scaled(FONT_SIZE, cx);
         div()
             .id("text-input")
-            .h(px(INPUT_LINE_HEIGHT))
+            .h(line_height)
             .w_full()
             .overflow_hidden()
             .cursor(CursorStyle::IBeam)
@@ -505,7 +508,7 @@ impl Render for TextInput {
                         }];
                         let shaped = window.text_system().shape_line(
                             SharedString::from(text.clone()),
-                            px(FONT_SIZE),
+                            font_size,
                             &runs,
                             None,
                         );
@@ -517,14 +520,12 @@ impl Render for TextInput {
                             window.paint_quad(fill(
                                 Bounds {
                                     origin: point(origin.x + left, origin.y),
-                                    size: size((x0 - x1).abs(), px(INPUT_LINE_HEIGHT)),
+                                    size: size((x0 - x1).abs(), line_height),
                                 },
                                 selection_color,
                             ));
                         }
-                        shaped
-                            .paint(bounds.origin, px(INPUT_LINE_HEIGHT), window, cx)
-                            .ok();
+                        shaped.paint(bounds.origin, line_height, window, cx).ok();
                         if let Some(marked) = marked {
                             let start = TextInput::byte_for_utf16(&text, marked.start);
                             let end = TextInput::byte_for_utf16(&text, marked.end);
@@ -535,7 +536,7 @@ impl Render for TextInput {
                                 Bounds {
                                     origin: point(
                                         bounds.origin.x + left,
-                                        bounds.origin.y + px(INPUT_LINE_HEIGHT) - px(1.5),
+                                        bounds.origin.y + line_height - px(1.5),
                                     ),
                                     size: size((x0 - x1).abs().max(px(2.)), px(1.5)),
                                 },
@@ -547,7 +548,7 @@ impl Render for TextInput {
                             window.paint_quad(fill(
                                 Bounds {
                                     origin: point(bounds.origin.x + x, bounds.origin.y),
-                                    size: size(px(1.5), px(INPUT_LINE_HEIGHT)),
+                                    size: size(px(1.5), line_height),
                                 },
                                 caret_color,
                             ));

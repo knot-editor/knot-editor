@@ -24,7 +24,8 @@ use crate::app::{
     typography::text_font,
 };
 
-/// The terminal's text size, from `font.size` in the `terminal` view scope.
+/// The terminal's text size, from `font.size` in the `terminal` view scope
+/// and the application zoom.
 fn font_size(cx: &App) -> f32 {
     settings::font_size(
         &SettingsScope {
@@ -32,7 +33,7 @@ fn font_size(cx: &App) -> f32 {
             ..Default::default()
         },
         cx,
-    )
+    ) * crate::app::zoom::factor(cx)
 }
 
 type LinkOpener = Rc<dyn Fn(&str, &mut App)>;
@@ -695,7 +696,7 @@ impl Render for TerminalView {
             .occlude()
             .child(
                 div()
-                    .h(px(22.))
+                    .h(crate::app::zoom::rems(22.))
                     .flex_none()
                     .flex()
                     .items_center()

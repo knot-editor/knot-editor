@@ -540,7 +540,7 @@ impl Render for WorkspaceTree {
                             return div()
                                 .id(("workspace-tree-status", index))
                                 .w_full()
-                                .pl(px(22. + *depth as f32 * 14.))
+                                .pl(crate::app::zoom::rems(22. + *depth as f32 * 14.))
                                 .py_1()
                                 .text_sm()
                                 .text_color(theme.color(if *error {
@@ -559,7 +559,7 @@ impl Render for WorkspaceTree {
                         .id(("workspace-tree-row", index))
                         .debug_selector(move || format!("workspace-tree-row-{index}"))
                         .w_full()
-                        .pl(px(8. + depth as f32 * 14.))
+                        .pl(crate::app::zoom::rems(8. + depth as f32 * 14.))
                         .pr_2()
                         .py_1()
                         .flex()

@@ -714,3 +714,29 @@ pub(crate) async fn reset_layout(context: CommandContext, (): ()) -> Result<(), 
         })
         .await
 }
+
+/// Change the application zoom level by `delta` steps, or reset it.
+async fn zoom(context: &CommandContext, delta: Option<i32>) -> Result<(), CommandOutcome> {
+    context
+        .foreground(move |_, _, cx| {
+            let level = delta.map_or(0, |delta| crate::app::zoom::level(cx) + delta);
+            crate::app::zoom::set_level(level, cx);
+            Ok(())
+        })
+        .await
+}
+
+#[command("workbench.zoom-in", title = "Zoom In", description = "Make text and every surface larger in all windows.", id = ZOOM_IN_COMMAND, participant = Application)]
+pub(crate) async fn zoom_in(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    zoom(&context, Some(1)).await
+}
+
+#[command("workbench.zoom-out", title = "Zoom Out", description = "Make text and every surface smaller in all windows.", id = ZOOM_OUT_COMMAND, participant = Application)]
+pub(crate) async fn zoom_out(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    zoom(&context, Some(-1)).await
+}
+
+#[command("workbench.reset-zoom", title = "Reset Zoom", description = "Return every window to 100% zoom.", id = RESET_ZOOM_COMMAND, participant = Application)]
+pub(crate) async fn reset_zoom(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    zoom(&context, None).await
+}

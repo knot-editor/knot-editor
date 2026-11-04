@@ -4,7 +4,7 @@
 use super::*;
 
 /// The text size and line height one view lays out with, from the
-/// `font.size` setting in its scope.
+/// `font.size` setting in its scope and the application zoom.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EditorMetrics {
     pub(crate) font_size: f32,
@@ -32,13 +32,11 @@ impl EditorView {
         self.metrics
     }
 
-    /// Resolve the metrics for the current settings. Keeps the same line at
-    /// the top of the viewport when the line height changes.
+    /// Resolve the metrics for the current settings and zoom. Keeps the
+    /// same line at the top of the viewport when the line height changes.
     pub(super) fn update_metrics(&mut self, cx: &App) {
-        let metrics = EditorMetrics::new(settings::font_size(
-            &self.settings_scope(self.model.read(cx), cx),
-            cx,
-        ));
+        let font_size = settings::font_size(&self.settings_scope(self.model.read(cx), cx), cx);
+        let metrics = EditorMetrics::new(font_size * crate::app::zoom::factor(cx));
         if metrics != self.metrics {
             self.scroll *= metrics.line_height / self.metrics.line_height;
             self.metrics = metrics;

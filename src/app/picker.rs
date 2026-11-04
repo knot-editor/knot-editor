@@ -289,9 +289,10 @@ impl Render for Picker {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity();
         let has_detail = self.entries.iter().any(|entry| entry.detail.is_some());
-        let row_height = LINE_HEIGHT * if has_detail { 2. } else { 1. } + ROW_PADDING;
+        let zoom = crate::app::zoom::factor(cx);
+        let row_height = (LINE_HEIGHT * if has_detail { 2. } else { 1. } + ROW_PADDING) * zoom;
         let rows = self.matches.len();
-        let list_height = (rows as f32 * row_height).min(PANEL_MAX_HEIGHT);
+        let list_height = (rows as f32 * row_height).min(PANEL_MAX_HEIGHT * zoom);
         let list = uniform_list("picker-rows", rows, move |range, _, cx| {
             let picker = entity.read(cx);
             let theme = theme(cx);
@@ -364,7 +365,7 @@ impl Render for Picker {
 
         div()
             .id("picker")
-            .w(px(PANEL_WIDTH))
+            .w(px(PANEL_WIDTH * zoom))
             .flex()
             .flex_col()
             .rounded_md()

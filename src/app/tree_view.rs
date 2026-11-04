@@ -792,7 +792,7 @@ impl Render for TreeView {
                             .debug_selector(move || format!("extension-tree-row-{index}"))
                             .w_full()
                             .overflow_hidden()
-                            .pl(px(8. + *depth as f32 * 14.))
+                            .pl(crate::app::zoom::rems(8. + *depth as f32 * 14.))
                             .pr_2()
                             .py_1()
                             .flex()
@@ -834,7 +834,7 @@ impl Render for TreeView {
                         if let Some(badge) = &item.badge {
                             row = row.child(
                                 div()
-                                    .size(px(6.0))
+                                    .size(crate::app::zoom::rems(6.0))
                                     .flex_shrink_0()
                                     .rounded_full()
                                     .bg(theme.color(badge)),
@@ -889,7 +889,7 @@ impl Render for TreeView {
                     } => div()
                         .id(("extension-tree-status", index))
                         .w_full()
-                        .pl(px(22. + *depth as f32 * 14.))
+                        .pl(crate::app::zoom::rems(22. + *depth as f32 * 14.))
                         .py_1()
                         .text_sm()
                         .text_color(theme.color(if *error {

@@ -1289,3 +1289,40 @@ fn text_binding_batches_validate_scope_and_command() {
     );
     assert!(registry.resolve_text("editor", &[]).is_some());
 }
+
+#[test]
+fn every_preset_binds_zoom_and_pc_terminals_leave_it_to_the_shell() {
+    for platform in PLATFORMS {
+        let registry = preset_registry(platform);
+        let secondary = if platform == Platform::MacOs {
+            "cmd"
+        } else {
+            "ctrl"
+        };
+        for (key, command_name) in [
+            ("=", ZOOM_IN_COMMAND),
+            ("+", ZOOM_IN_COMMAND),
+            ("-", ZOOM_OUT_COMMAND),
+            ("0", RESET_ZOOM_COMMAND),
+        ] {
+            let key = format!("{secondary}-{key}");
+            for view in [None, Some("editor")] {
+                assert_eq!(
+                    resolved(&registry, &key, view).as_deref(),
+                    Some(command_name),
+                    "{platform:?}: {key} in {view:?}"
+                );
+            }
+            let in_terminal = if platform == Platform::MacOs {
+                command_name
+            } else {
+                "<unbound>"
+            };
+            assert_eq!(
+                resolved(&registry, &key, Some("terminal")).as_deref(),
+                Some(in_terminal),
+                "{platform:?}: {key} in a terminal"
+            );
+        }
+    }
+}

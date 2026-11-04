@@ -406,6 +406,11 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("secondary-v", PASTE_COMMAND, None),
     ("secondary-a", SELECT_ALL_COMMAND, None),
     ("secondary-q", QUIT_COMMAND, None),
+    ("secondary-=", ZOOM_IN_COMMAND, None),
+    // Keyboards report the shifted `=` as `+`.
+    ("secondary-+", ZOOM_IN_COMMAND, None),
+    ("secondary--", ZOOM_OUT_COMMAND, None),
+    ("secondary-0", RESET_ZOOM_COMMAND, None),
 ];
 
 /// macOS word, line, and document movement, the Emacs-style keys that every
