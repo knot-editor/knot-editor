@@ -483,8 +483,8 @@ fn contribution_ownership_rejects_stale_lifecycles_and_cleans_up() {
         Err(ContributionError::NotFound)
     );
     assert_eq!(model.resolved_contributions().len(), 1);
-    assert!(!model.remove_contribution_lifecycle(extension, ExtensionLifecycleId::new(2)));
-    assert!(model.remove_contribution_lifecycle(extension, ExtensionLifecycleId::new(3)));
+    assert!(!model.remove_lifecycle_state(extension, ExtensionLifecycleId::new(2)));
+    assert!(model.remove_lifecycle_state(extension, ExtensionLifecycleId::new(3)));
     assert!(model.resolved_contributions().is_empty());
 }
 
@@ -1062,4 +1062,70 @@ fn undo_group_rules_for_ownership_emptiness_and_replay() {
     assert!(model.begin_undo_group(owner));
     model.close();
     assert!(!model.end_undo_group(owner));
+}
+
+#[test]
+fn marks_follow_edits_and_vanish_with_their_text() {
+    let mut model = BufferModel::from_text("hello world");
+    let source = ContributionSource::fixture();
+    let other = ContributionSource {
+        extension: ExtensionId::new(2),
+        lifecycle: ExtensionLifecycleId::new(1),
+    };
+    let mark = model.create_mark(source, 6).unwrap();
+    assert_eq!(model.mark_position(source, mark), Some(6));
+    // Another lifecycle cannot read or remove it.
+    assert_eq!(model.mark_position(other, mark), None);
+    model.dispose_mark(other, mark);
+    assert_eq!(model.mark_position(source, mark), Some(6));
+
+    // It stays with the character after it: text inserted before or at it
+    // moves it, text inserted after does not.
+    assert!(model.replace(0..0, ">> ").unwrap());
+    assert_eq!(model.mark_position(source, mark), Some(9));
+    assert!(model.replace(9..9, "big ").unwrap());
+    assert_eq!(model.mark_position(source, mark), Some(13));
+    assert!(model.replace(14..14, "!").unwrap());
+    assert_eq!(model.mark_position(source, mark), Some(13));
+
+    // A deletion before it moves it back; undo restores it with the text.
+    assert!(model.replace(0..3, "").unwrap());
+    assert_eq!(model.mark_position(source, mark), Some(10));
+    model.undo().unwrap();
+    assert_eq!(model.mark_position(source, mark), Some(13));
+    model.redo().unwrap();
+
+    // Deleting the text it sat in removes it.
+    let end = model.len();
+    assert!(model.replace(0..end, "").unwrap());
+    assert_eq!(model.mark_position(source, mark), None);
+}
+
+#[test]
+fn marks_validate_offsets_and_end_with_disposal_or_their_lifecycle() {
+    let mut model = BufferModel::from_text("aé");
+    let source = ContributionSource::fixture();
+    assert_eq!(
+        model.create_mark(source, 2),
+        Err(ContributionError::InvalidRange)
+    );
+    assert_eq!(
+        model.create_mark(source, 4),
+        Err(ContributionError::InvalidRange)
+    );
+    let first = model.create_mark(source, 0).unwrap();
+    let second = model.create_mark(source, 3).unwrap();
+    model.dispose_mark(source, first);
+    assert_eq!(model.mark_position(source, first), None);
+    model.dispose_mark(source, first);
+    assert_eq!(model.mark_position(source, second), Some(3));
+    assert!(!model.remove_lifecycle_state(source.extension, source.lifecycle));
+    assert_eq!(model.mark_position(source, second), None);
+
+    // An empty buffer has no text to mark.
+    let mut empty = BufferModel::from_text("");
+    assert_eq!(
+        empty.create_mark(source, 0),
+        Err(ContributionError::InvalidRange)
+    );
 }

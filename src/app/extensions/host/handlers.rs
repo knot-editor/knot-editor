@@ -822,6 +822,83 @@ pub(crate) async fn line_at(
     })?
 }
 
+/// A position that follows edits, or `None` once its text is gone.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MarkPosition(pub Option<u64>);
+impl HostSuccess for MarkPosition {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self.0)
+    }
+}
+
+/// Create a lifecycle-owned mark at a byte offset on a character boundary.
+#[host_operation("createMark")]
+pub(crate) async fn create_mark(
+    context: HostContext,
+    arguments: LineArguments,
+) -> Result<u64, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        let offset = usize::try_from(arguments.value).map_err(|_| BufferError::InvalidRange)?;
+        host.buffers.create_mark(
+            &request,
+            arguments.buffer,
+            offset,
+            || commands.is_cancelled(request.invocation),
+            cx,
+        )
+    })?
+}
+
+/// The current byte offset of a mark, or null once its text was deleted.
+#[host_operation("markPosition")]
+pub(crate) async fn mark_position(
+    context: HostContext,
+    arguments: LineArguments,
+) -> Result<MarkPosition, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        let source = crate::app::model::ContributionSource {
+            extension: request.extension,
+            lifecycle: request.lifecycle,
+        };
+        host.buffers.read_model(
+            &request,
+            arguments.buffer,
+            || commands.is_cancelled(request.invocation),
+            cx,
+            |model| {
+                Ok(MarkPosition(
+                    model
+                        .mark_position(source, arguments.value)
+                        .map(|offset| offset as u64),
+                ))
+            },
+        )
+    })?
+}
+
+/// Remove a mark; one already gone is not an error.
+#[host_operation("disposeMark")]
+pub(crate) async fn dispose_mark(
+    context: HostContext,
+    arguments: LineArguments,
+) -> Result<(), BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        host.buffers.dispose_mark(
+            &request,
+            arguments.buffer,
+            arguments.value,
+            || commands.is_cancelled(request.invocation),
+            cx,
+        )
+    })?
+}
+
 #[host_operation("applyEdits")]
 pub(crate) async fn apply_edits(
     context: HostContext,

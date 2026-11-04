@@ -870,6 +870,15 @@ declare module "knot" {
      */
     replace(items: readonly EditorContribution[], options: RevisionOptions): Promise<void>;
   }
+  /** A position in a buffer's text that follows edits. */
+  export interface Mark extends Disposable {
+    /**
+     * The mark's byte offset now, or null once a deletion removed the text it
+     * sat in (undo does not bring it back) or it was disposed.
+     * @throws HostError with BufferClosed or Cancelled on teardown.
+     */
+    position(): Promise<number | null>;
+  }
   /**
    * Opaque live text-buffer proxy. Each operation uses this buffer, never focus.
    * May be retained for asynchronous work within the extension lifecycle.
@@ -919,6 +928,17 @@ declare module "knot" {
      * end or splitting a UTF-8 scalar, or Cancelled on teardown.
      */
     lineAt(offset: number): Promise<number>;
+    /**
+     * Mark a byte offset. The mark stays with the character after it as edits
+     * move that character, so text inserted before or at the mark moves it, and
+     * undo and redo restore it with the text. It belongs to the caller's
+     * lifecycle, ends with it, and is not persisted; names, listing, and
+     * storage across restarts are the caller's.
+     * @throws HostError with BufferClosed, or InvalidRange for an offset past
+     * the end, splitting a UTF-8 scalar, or in an empty buffer; or Cancelled on
+     * teardown.
+     */
+    createMark(offset: number): Promise<Mark>;
     /** Lifecycle-owned semantic data; disposing it does not dispose this buffer. */
     readonly contributions: EditorContributions;
   }

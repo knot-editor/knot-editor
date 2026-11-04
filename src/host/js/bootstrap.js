@@ -316,6 +316,14 @@ function bufferFor(handle) {
       return Object.freeze({ startByteOffset: range.startByteOffset, endByteOffset: range.endByteOffset });
     },
     lineAt: (offset) => request("lineAt", handle, safeInteger(offset)),
+    async createMark(offset) {
+      const id = await request("createMark", handle, safeInteger(offset));
+      const owned = ownership(() => {}, () => request("disposeMark", handle, id));
+      return Object.freeze({
+        position: () => request("markPosition", handle, id),
+        dispose: () => owned.dispose(),
+      });
+    },
     async onDidChange(listener) {
       if (typeof listener !== "function") {
         throw new TypeError("onDidChange requires a listener");

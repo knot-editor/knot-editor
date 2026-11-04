@@ -140,6 +140,32 @@ test("reveal top and bottom put the caret's line at that edge of the viewport", 
   assert.deepEqual(await editor.visibleLines(), { first: 21, last: 30 });
 });
 
+test("marks follow edits and end when their text is deleted or they are disposed", async () => {
+  const document = host.addDocument({ text: "hello world" });
+  host.openWindow({ documents: [document] });
+  const buffer = (await capture()).buffer!;
+  const mark = await buffer.createMark(6);
+  const edit = async (startByteOffset: number, endByteOffset: number, text: string) => {
+    const { revision } = await buffer.snapshot();
+    await buffer.applyEdits([{ range: { startByteOffset, endByteOffset }, text }], { ifRevision: revision });
+  };
+  assert.equal(await mark.position(), 6);
+  await edit(0, 0, ">> ");
+  assert.equal(await mark.position(), 9);
+  await edit(9, 9, "big ");
+  assert.equal(await mark.position(), 13);
+  await edit(14, 14, "!");
+  assert.equal(await mark.position(), 13);
+  await edit(0, 3, "");
+  assert.equal(await mark.position(), 10);
+  await assert.rejects(buffer.createMark(1_000), { code: "InvalidRange" });
+  const doomed = await buffer.createMark(5);
+  await edit(3, 8, "");
+  assert.equal(await doomed.position(), null);
+  await mark.dispose();
+  assert.equal(await mark.position(), null);
+});
+
 test("a disposed handle stops listening and acting", async () => {
   const document = host.addDocument({ text: "x" });
   const window = host.openWindow({ documents: [document] });

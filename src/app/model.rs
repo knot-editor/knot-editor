@@ -79,6 +79,13 @@ pub(crate) enum ContributionError {
     NotFound,
 }
 
+/// A lifecycle-owned position that follows edits.
+struct Mark {
+    source: ContributionSource,
+    /// A zero-width anchored range; the mark is its start.
+    range: AnchoredRangeId,
+}
+
 /// Whether foreground-owned text mutations are permitted for a buffer.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum BufferAccessPolicy {
@@ -122,6 +129,8 @@ pub struct BufferModel {
     access_policy: BufferAccessPolicy,
     anchored_ranges: AnchoredRangeStore,
     contributions: ContributionRegistry,
+    marks: HashMap<u64, Mark>,
+    next_mark: u64,
     revision: u64,
     content_state: u64,
     next_content_state: u64,
@@ -205,6 +214,8 @@ impl BufferModel {
             access_policy,
             anchored_ranges: AnchoredRangeStore::new(),
             contributions: ContributionRegistry::new(),
+            marks: HashMap::new(),
+            next_mark: 1,
             revision: 0,
             content_state: 0,
             next_content_state: 1,
@@ -394,6 +405,57 @@ impl BufferModel {
         Ok(())
     }
 
+    /// Create a mark at `offset` for `source`. It stays with the character
+    /// after it across edits, so text inserted at it moves it, and is gone
+    /// once a deletion removes the text it sat in. An empty buffer has no text
+    /// to mark.
+    pub(crate) fn create_mark(
+        &mut self,
+        source: ContributionSource,
+        offset: usize,
+    ) -> Result<u64, ContributionError> {
+        let range = self
+            .checked_range(ByteRange {
+                start_byte_offset: offset,
+                end_byte_offset: offset,
+            })
+            .map_err(|error| match error {
+                BufferAccessError::Closed => ContributionError::Closed,
+                _ => ContributionError::InvalidRange,
+            })?;
+        if self.buffer.is_empty() {
+            return Err(ContributionError::InvalidRange);
+        }
+        let range = self
+            .anchored_ranges
+            .add(&self.buffer, range.start, range.end);
+        let id = self.next_mark;
+        self.next_mark += 1;
+        self.marks.insert(id, Mark { source, range });
+        Ok(id)
+    }
+
+    /// The offset of `source`'s mark `id`, or `None` once it was disposed or
+    /// its text was deleted.
+    pub(crate) fn mark_position(&self, source: ContributionSource, id: u64) -> Option<usize> {
+        let mark = self.marks.get(&id).filter(|mark| mark.source == source)?;
+        self.anchored_ranges
+            .resolve(&self.buffer, mark.range)
+            .map(|range| range.start)
+    }
+
+    /// Remove `source`'s mark `id`; a mark already gone is not an error.
+    pub(crate) fn dispose_mark(&mut self, source: ContributionSource, id: u64) {
+        if self
+            .marks
+            .get(&id)
+            .is_some_and(|mark| mark.source == source)
+            && let Some(mark) = self.marks.remove(&id)
+        {
+            self.anchored_ranges.remove(mark.range);
+        }
+    }
+
     pub(crate) fn dispose_contributions(
         &mut self,
         source: ContributionSource,
@@ -408,11 +470,26 @@ impl BufferModel {
         Ok(())
     }
 
-    pub(crate) fn remove_contribution_lifecycle(
+    /// Remove everything one lifecycle owns in this buffer; true when
+    /// contributions were removed, which are the only part painted.
+    pub(crate) fn remove_lifecycle_state(
         &mut self,
         extension: ExtensionId,
         lifecycle: ExtensionLifecycleId,
     ) -> bool {
+        let owner = ContributionSource {
+            extension,
+            lifecycle,
+        };
+        let owned = self
+            .marks
+            .iter()
+            .filter(|(_, mark)| mark.source == owner)
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+        for id in owned {
+            self.dispose_mark(owner, id);
+        }
         let sources: Vec<_> = self
             .contributions
             .sets
@@ -459,6 +536,7 @@ impl BufferModel {
         }
 
         let consumed = consumed.into_iter().collect::<HashSet<_>>();
+        self.marks.retain(|_, mark| !consumed.contains(&mark.range));
         self.contributions
             .metadata
             .retain(|id, _| !consumed.contains(id));
@@ -1254,7 +1332,7 @@ impl BufferRegistry {
     ) {
         for model in self.buffers.values().filter_map(WeakEntity::upgrade) {
             let _ = model.update(cx, |model, cx| {
-                if model.remove_contribution_lifecycle(extension, lifecycle) {
+                if model.remove_lifecycle_state(extension, lifecycle) {
                     cx.notify();
                 }
             });

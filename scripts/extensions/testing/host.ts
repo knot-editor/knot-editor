@@ -262,6 +262,30 @@ function snapshot(text: string, range: Knot.ByteRange, revision: number): Knot.T
   };
 }
 
+type FakeMark = { offset: number | null };
+
+/** The live marks of each document. Edits move them, as in the host. */
+const marks = new WeakMap<FakeDocument, Set<FakeMark>>();
+
+function marksOf(document: FakeDocument): Set<FakeMark> {
+  let set = marks.get(document);
+  if (set === undefined) marks.set(document, (set = new Set()));
+  return set;
+}
+
+// A mark stays with the character after it: an edit ending at or before it
+// shifts it, one that deletes the text it sat in removes it, and one that
+// ends after it leaves it alone.
+function moveMarks(document: FakeDocument, edit: Knot.TextEdit) {
+  const { startByteOffset: start, endByteOffset: end } = edit.range;
+  const delta = byteLength(edit.text) - (end - start);
+  for (const mark of marksOf(document)) {
+    if (mark.offset === null) continue;
+    if (mark.offset >= end) mark.offset += delta;
+    else if (mark.offset > start) mark.offset = null;
+  }
+}
+
 // The fake buffer reads and edits text; change listeners and contributions are
 // not faked. Edits leave view offsets alone.
 function buffer(document: FakeDocument): Knot.Buffer {
@@ -282,6 +306,7 @@ function buffer(document: FakeDocument): Knot.Buffer {
         const next = text.slice(0, start) + edit.text + text.slice(end);
         changed ||= next !== text;
         text = next;
+        moveMarks(document, edit);
       }
       if (changed) {
         document.text = text;
@@ -300,6 +325,20 @@ function buffer(document: FakeDocument): Knot.Buffer {
       const index = utf16AtByte(document.text, offset);
       if (index === undefined) throw hostError("InvalidRange");
       return document.text.slice(0, index).split("\n").length - 1;
+    },
+    createMark: async (offset) => {
+      if (document.text === "" || utf16AtByte(document.text, offset) === undefined) {
+        throw hostError("InvalidRange");
+      }
+      const mark: FakeMark = { offset };
+      marksOf(document).add(mark);
+      return {
+        position: async () => mark.offset,
+        dispose: async () => {
+          marksOf(document).delete(mark);
+          mark.offset = null;
+        },
+      };
     },
     contributions: {
       replace: notFaked("Buffer.contributions.replace"),

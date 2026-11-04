@@ -79,19 +79,21 @@ The product test asserts only the first visible line and the caret, since
 painting re-measures the viewport. Checked by hand on a large file: the reported
 lines matched the reveals.
 
-### 3. Marks ⏳
+### 3. Marks ✅ (review gate pending)
 
-- Deliver `buffer.createMark`, `Mark.position`, and disposal. The fake host
-  moves marks with the edits it already applies, so its tests stay policy-level.
-- Validation: `node:test` cases for the fake (edits around a mark, deletion
-  gives `null`, disposal); model tests for edits before, inside, and after a mark, deletion,
-  undo, and disposal; product tests for lifecycle teardown and buffer closure.
-- **Implementation context:** `ContributionRegistry`/`ContributionSource` in
-  `src/app/model.rs` and `AnchoredRangeStore` in `src/core/anchored_range.rs`
-  (reuse `add`/`resolve`/`remove`); buffer operations in
-  `src/app/extensions/buffers.rs` and `handlers.rs`; owners released with the
-  lifecycle as contributions are.
-- **Review gate:** stability semantics at replaced spans and undo are agreed.
+`buffer.createMark(offset)` is a zero-width anchored range owned by the calling
+lifecycle (`src/app/model.rs`, bridged in `src/app/extensions/buffers.rs`).
+Semantics found in the anchored-range store rather than chosen: a mark stays with
+the character after it, so text inserted at it moves it; a deletion of the text
+it sat in consumes it and undo does not revive it (`position()` stays `null`);
+an empty buffer cannot hold one (`InvalidRange`), as for contributions. Behavior
+is in the [extension guide](../extension-api.md) and
+[core and buffers](../architecture/core-and-buffers.md). Tests cover the model
+(edits around, inside, undo and redo, lifecycle removal, offset validation), the
+extension path, and the fake host; buffer closure and lifecycle teardown through
+the product host are covered only by the model test.
+- **Review gate:** the stability semantics above, especially moving past text
+  inserted at the mark and not surviving a deletion, are agreed.
 
 ### 4. Clipboard read, modal example, and docs ⏳
 

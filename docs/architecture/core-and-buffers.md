@@ -89,6 +89,9 @@ by stale views. Disposal, cancellation, and host release follow the shared
   affected endpoints; untouched ranges retain stable tokens.
 - A fully consumed anchored range is removed. Undoing text does not revive it;
   provider-derived state may be republished under a new ID.
+- An extension mark is a zero-width anchored range owned by one extension
+  lifecycle and addressed by a model-local ID; it resolves to the range's start,
+  is gone once consumed, and is released with its lifecycle or on request.
 
 ## Syntax state
 

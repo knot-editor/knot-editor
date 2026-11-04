@@ -183,6 +183,57 @@ impl ExtensionBufferBridge {
         })
     }
 
+    pub(crate) fn create_mark(
+        &mut self,
+        request: &RequestContext,
+        buffer: BufferHandle,
+        offset: usize,
+        mut cancelled: impl FnMut() -> bool,
+        cx: &mut App,
+    ) -> Result<u64, BufferError> {
+        self.validate(request, &mut cancelled)?;
+        let model = self
+            .buffers
+            .resolve(buffer, cx)
+            .map_err(|_| BufferError::BufferClosed)?;
+        model
+            .update(cx, |model, _| {
+                model.create_mark(
+                    ContributionSource {
+                        extension: request.extension,
+                        lifecycle: request.lifecycle,
+                    },
+                    offset,
+                )
+            })
+            .map_err(map_contribution_error)
+    }
+
+    pub(crate) fn dispose_mark(
+        &mut self,
+        request: &RequestContext,
+        buffer: BufferHandle,
+        mark: u64,
+        mut cancelled: impl FnMut() -> bool,
+        cx: &mut App,
+    ) -> Result<(), BufferError> {
+        self.validate(request, &mut cancelled)?;
+        let model = self
+            .buffers
+            .resolve(buffer, cx)
+            .map_err(|_| BufferError::BufferClosed)?;
+        model.update(cx, |model, _| {
+            model.dispose_mark(
+                ContributionSource {
+                    extension: request.extension,
+                    lifecycle: request.lifecycle,
+                },
+                mark,
+            );
+        });
+        Ok(())
+    }
+
     pub(crate) fn subscribe_buffer_changes(
         &mut self,
         request: &RequestContext,

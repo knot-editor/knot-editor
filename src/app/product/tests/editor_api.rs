@@ -24,6 +24,21 @@ await commands.register("api.lines", async ({ buffer }) => {
   const snapshot = await buffer.snapshot(await buffer.lineRange(1));
   check(snapshot.text === "é😀" && snapshot.byteOffsetAtUtf16(1) === 2, "line snapshot");
 });
+await commands.register("api.marks", async ({ buffer }) => {
+  // "a\r\n" then "é😀": offset 3 is the start of "é".
+  const { revision } = await buffer.snapshot();
+  const mark = await buffer.createMark(3);
+  check(await mark.position() === 3, "initial mark position");
+  await buffer.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 0 }, text: "xx" }], { ifRevision: revision });
+  check(await mark.position() === 5, "mark follows an insertion before it");
+  await expectCode(() => buffer.createMark(6), "InvalidRange");
+  await expectCode(() => buffer.createMark(1_000_000), "InvalidRange");
+  const other = await buffer.createMark(0);
+  await other.dispose();
+  check(await other.position() === null, "disposed mark");
+  await mark.dispose();
+  check(await mark.position() === null, "disposed mark stays gone");
+});
 let saved;
 await commands.register("api.editor", async ({ editor, buffer }) => {
   const selection = await editor.selection();
@@ -106,6 +121,19 @@ fn buffer_line_lookups_handle_crlf_and_multibyte_text(cx: &mut TestAppContext) {
     });
     let (shell, window) = product_window(document, model, cx);
     let execution = dispatch_product_command(&shell, window, "api.lines", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn buffer_marks_follow_edits_and_validate_offsets(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    load(cx);
+    let model = cx.new(|_| BufferModel::from_text("a\r\né😀\nthird"));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Marks", model.clone(), cx)
+    });
+    let (shell, window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&shell, window, "api.marks", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 

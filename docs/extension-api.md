@@ -102,6 +102,14 @@ Buffers answer line lookups from their line index: `lineCount()`,
 are 0-based like every other coordinate; snapshot one line's range to work with
 its text, so a large file never crosses the boundary whole.
 
+`buffer.createMark(offset)` returns a mark that follows edits: it stays with the
+character after it, so text inserted before or at it moves it, and
+`mark.position()` reads its current offset. Once a deletion removes the text it
+sat in, `position()` is `null` for good, and an empty buffer has nothing to
+mark. A mark belongs to the package, ends with it or with `dispose()`, and is
+not persisted, named, or listed: a package that wants Vim's lettered marks or
+bookmarks keeps those in its own storage and creates marks as documents open.
+
 A command run in a document editor also receives `context.editor`, a handle on
 that editor; it is null for terminals, trees, and text frames. It reads and
 moves the selection and saves and restores the view:
