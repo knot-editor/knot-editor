@@ -288,7 +288,15 @@ function moveMarks(document: FakeDocument, edit: Knot.TextEdit) {
 
 // The fake buffer reads and edits text; change listeners and contributions are
 // not faked. Edits leave view offsets alone.
+const buffers = new WeakMap<FakeDocument, Knot.Buffer>();
+
 function buffer(document: FakeDocument): Knot.Buffer {
+  let proxy = buffers.get(document);
+  if (proxy === undefined) buffers.set(document, (proxy = createBuffer(document)));
+  return proxy;
+}
+
+function createBuffer(document: FakeDocument): Knot.Buffer {
   const fake: Omit<Knot.Buffer, keyof Knot.Buffer & symbol> = {
     snapshot: async (range) => {
       const whole = { startByteOffset: 0, endByteOffset: byteLength(document.text) };
@@ -1400,6 +1408,7 @@ export const api: KnotApi = {
       };
     },
     selectedText: async () => state.selectedText,
+    readClipboardText: async () => state.clipboard,
     writeClipboardText: async (text) => {
       state.clipboard = text;
     },

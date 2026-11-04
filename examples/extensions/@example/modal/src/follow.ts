@@ -3,6 +3,7 @@
 // selected, so typing replaces the selection.
 import { workbench } from "knot";
 import type { Disposable, EditorHandle, ViewTarget } from "knot";
+import { setMode } from "./mode.js";
 
 export async function follow(): Promise<Disposable> {
   const handles = new Map<ViewTarget, EditorHandle>();
@@ -23,9 +24,12 @@ export async function follow(): Promise<Disposable> {
     });
     await handle.onDidChangeSelection(async () => {
       const { anchor, caret } = await handle.selection();
-      if (anchor !== caret) await handle.setKeyContext("modal", false);
+      if (anchor !== caret) {
+        await handle.setKeyContext("modal", false);
+        await handle.setCursorStyle(null);
+      }
     });
-    await handle.setKeyContext("modal", true);
+    await setMode(handle, "modal");
   };
   const observation = await workbench.observe(async (event) => {
     if (event.type === "activeTargetChanged" && event.activeTarget !== null) {
@@ -37,7 +41,7 @@ export async function follow(): Promise<Disposable> {
     async dispose() {
       await observation.dispose();
       await Promise.all([...handles.values()].map(async (handle) => {
-        await handle.setKeyContext("modal", false);
+        await setMode(handle, null);
         await handle.dispose();
       }));
       handles.clear();

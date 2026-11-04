@@ -476,6 +476,22 @@ per buffer and no nesting: nothing needs a counter, and a second open is a
 typed error. Undo ends the group first rather than rejecting, which keeps Undo
 usable while a mode is in a bad state.
 
+A mode also changes how the editor looks and what it shows. The caret style is
+lifecycle-owned view state like key contexts, with the latest lifecycle's
+choice winning and clearing revealing the previous, because a scoped setting
+would be a settings write per view on every mode change and would outlive a
+stuck package. Scrolling and the visible range are in whole lines and a reveal
+aligns a line with the top or bottom edge, so a mode needs no shaping or pixel
+data and soft wrap can refine the same units later. A mark is a native
+zero-width anchored range rather than offsets an extension remaps, because
+remapping from asynchronous change events would lag typing, while the store
+already repairs positions synchronously in each commit. Its meaning is the
+store's: it stays with the character after it, and a deletion of that text
+removes it for good, since undo does not revive consumed ranges. Names,
+persistence, and bookmark lists stay in extensions, which keep their own
+records and recreate marks as documents open. The clipboard can be read like it
+can be written, with no entitlement until D087 gates both.
+
 Reference: [extension host](architecture/extension-host.md#editor-handle-notifications).
 
 ## Handler declarations

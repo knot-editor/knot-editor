@@ -574,8 +574,12 @@ context beats a plain editor binding, and the latest write breaks ties.
 binds as a key, so `$` arrives as `$` on any layout; without it, the context
 types natively. Keys typed while a key-invoked extension command runs wait
 for it and then apply in order, so a mode switch is in effect for the next
-key however fast it is typed. The
-[modal example](../examples/extensions/@example/modal/) is a complete package.
+key however fast it is typed. A mode usually also sets
+`editor.setCursorStyle("block")` and clears it on leaving, and may read the
+clipboard with `workbench.readClipboardText()`, which resolves to `null` when it
+holds no text. The
+[modal example](../examples/extensions/@example/modal/) is a complete package:
+it also shows reveals (`zt`, `zb`), a mark (`m`, `'`), and paste (`p`).
 
 
 A preset is a named set of default bindings that replaces Knot's when the

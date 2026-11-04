@@ -24,6 +24,10 @@ fn install_modal(extensions: &Path) {
                 include_str!(concat!(env!("OUT_DIR"), "/examples/modal/dist/follow.js")),
             ),
             (
+                "dist/mode.js",
+                include_str!(concat!(env!("OUT_DIR"), "/examples/modal/dist/mode.js")),
+            ),
+            (
                 "dist/motion.js",
                 include_str!(concat!(env!("OUT_DIR"), "/examples/modal/dist/motion.js")),
             ),

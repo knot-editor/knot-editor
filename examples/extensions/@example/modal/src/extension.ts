@@ -4,18 +4,21 @@
 // context, stays native. `c` changes the word at the caret: it deletes the
 // word and enters the `inserting` context, where typing is native, and Escape
 // returns to modal mode. The deletion and everything typed meanwhile are one
-// undo step.
-import { commands, keymaps } from "knot";
-import type { Buffer, Disposable, Editor, JsonValue } from "knot";
+// undo step. The caret is a block in modal mode. `zt` and `zb` put the caret's
+// line at the top or bottom of the window, `m` marks the caret's place and `'`
+// returns to it however the text changed, and `p` pastes the clipboard.
+import { commands, keymaps, workbench } from "knot";
+import type { Buffer, Disposable, Editor, JsonValue, Mark } from "knot";
 import { follow } from "./follow.js";
-import { column, type Direction, wordBounds } from "./motion.js";
+import { setMode } from "./mode.js";
+import { column, type Direction, utf8Length, wordBounds } from "./motion.js";
 
 const modal = { view: "editor", context: "modal" } as const;
 const inserting = { view: "editor", context: "inserting" } as const;
 
 export async function start() {
   await commands.register("example.modal.enter", async ({ editor }) => {
-    await editor?.setKeyContext("modal", true);
+    if (editor !== null) await setMode(editor, "modal");
   }, { title: "Example: Enter Modal Mode" });
   let following: Disposable | null = null;
   await commands.register("example.modal.follow", async () => {
@@ -28,7 +31,7 @@ export async function start() {
     }
   }, { title: "Example: Toggle Modal Mode in Every Editor" });
   await commands.register("example.modal.leave", async ({ editor }) => {
-    await editor?.setKeyContext("modal", false);
+    if (editor !== null) await setMode(editor, null);
   }, { palette: false });
   await commands.register("example.modal.move", async ({ editor, buffer, arguments: args }) => {
     const direction = directionArgument(args);
@@ -44,15 +47,48 @@ export async function start() {
     if (editor === null || buffer === null || group !== null) return;
     group = await editor.beginUndoGroup();
     await changeWord(editor, buffer);
-    await editor.setKeyContext("modal", false);
-    await editor.setKeyContext("inserting", true);
+    await setMode(editor, "inserting");
   }, { palette: false });
   await commands.register("example.modal.finish", async ({ editor }) => {
     const ended = group;
     group = null;
     await ended?.dispose();
-    await editor?.setKeyContext("inserting", false);
-    await editor?.setKeyContext("modal", true);
+    if (editor !== null) await setMode(editor, "modal");
+  }, { palette: false });
+
+  await commands.register("example.modal.reveal", async ({ editor, arguments: args }) => {
+    const edge = edgeArgument(args);
+    if (edge === null) return commands.invalidArguments("expected { edge }");
+    if (editor === null) return;
+    await editor.setSelection(await editor.selection(), { reveal: edge });
+  }, { palette: false });
+
+  // One mark, in the buffer it was set in: a mark follows edits, so jumping
+  // back lands on the same text.
+  let marked: { buffer: Buffer; mark: Mark } | null = null;
+  await commands.register("example.modal.mark", async ({ editor, buffer }) => {
+    if (editor === null || buffer === null) return;
+    const previous = marked;
+    const { caret } = await editor.selection();
+    marked = { buffer, mark: await buffer.createMark(caret) };
+    await previous?.mark.dispose();
+  }, { palette: false });
+  await commands.register("example.modal.jump", async ({ editor, buffer }) => {
+    if (editor === null || marked === null || marked.buffer !== buffer) return;
+    const offset = await marked.mark.position();
+    if (offset !== null) await editor.setSelection({ anchor: offset, caret: offset }, { reveal: "center" });
+  }, { palette: false });
+
+  await commands.register("example.modal.paste", async ({ editor, buffer }) => {
+    const text = await workbench.readClipboardText();
+    if (editor === null || buffer === null || text === null || text === "") return;
+    const { caret } = await editor.selection();
+    const { revision } = await buffer.snapshot({ startByteOffset: caret, endByteOffset: caret });
+    await buffer.applyEdits([{ range: { startByteOffset: caret, endByteOffset: caret }, text }], {
+      ifRevision: revision,
+    });
+    const end = caret + utf8Length(text);
+    await editor.setSelection({ anchor: end, caret: end });
   }, { palette: false });
 
   const keys: [string, Direction][] = [["h", "left"], ["j", "down"], ["k", "up"], ["l", "right"]];
@@ -60,6 +96,11 @@ export async function start() {
     keymaps.bind(key, { name: "example.modal.move", arguments: { direction } }, modal);
   }
   keymaps.bind("c", "example.modal.change", modal);
+  keymaps.bind("z t", { name: "example.modal.reveal", arguments: { edge: "top" } }, modal);
+  keymaps.bind("z b", { name: "example.modal.reveal", arguments: { edge: "bottom" } }, modal);
+  keymaps.bind("m", "example.modal.mark", modal);
+  keymaps.bind("'", "example.modal.jump", modal);
+  keymaps.bind("p", "example.modal.paste", modal);
   keymaps.bind("escape", "example.modal.leave", modal);
   keymaps.bind("escape", "example.modal.finish", inserting);
   keymaps.bindText("example.modal.ignore", modal);
@@ -89,6 +130,12 @@ async function changeWord(editor: Editor, buffer: Buffer) {
     ifRevision: line.revision,
   });
   await editor.setSelection({ anchor: from, caret: from });
+}
+
+function edgeArgument(value: JsonValue): "top" | "bottom" | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const edge = (value as { readonly [key: string]: JsonValue }).edge;
+  return edge === "top" || edge === "bottom" ? edge : null;
 }
 
 function directionArgument(value: JsonValue): Direction | null {

@@ -39,6 +39,11 @@ await commands.register("api.marks", async ({ buffer }) => {
   await mark.dispose();
   check(await mark.position() === null, "disposed mark stays gone");
 });
+await commands.register("api.clipboard", async () => {
+  check(await workbench.readClipboardText() === null, "empty clipboard");
+  await workbench.writeClipboardText("héllo");
+  check(await workbench.readClipboardText() === "héllo", "read after write");
+});
 let saved;
 await commands.register("api.editor", async ({ editor, buffer }) => {
   const selection = await editor.selection();
@@ -121,6 +126,19 @@ fn buffer_line_lookups_handle_crlf_and_multibyte_text(cx: &mut TestAppContext) {
     });
     let (shell, window) = product_window(document, model, cx);
     let execution = dispatch_product_command(&shell, window, "api.lines", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn clipboard_text_reads_back_what_was_written(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    load(cx);
+    let model = cx.new(|_| BufferModel::from_text("text"));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Clipboard", model.clone(), cx)
+    });
+    let (shell, window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&shell, window, "api.clipboard", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 

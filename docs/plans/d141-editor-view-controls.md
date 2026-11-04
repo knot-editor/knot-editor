@@ -92,15 +92,16 @@ is in the [extension guide](../extension-api.md) and
 (edits around, inside, undo and redo, lifecycle removal, offset validation), the
 extension path, and the fake host; buffer closure and lifecycle teardown through
 the product host are covered only by the model test.
-### 4. Clipboard read, modal example, and docs ⏳
+### 4. Clipboard read, modal example, and docs ✅ (review gate pending)
 
-- Deliver `workbench.readClipboardText`, extend the modal example with the four
-  consumers, and update the extension guide, [commands](../architecture/commands.md#extension-execution),
-  and [decisions](../decisions.md#editor-handles); then remove this plan and mark
-  D141 complete in the index plan.
-- Validation: product test for read after write and `null` for nontext; the
-  fake reads the clipboard state `writeClipboardText` already fills, and the
-  example's `node:test` cases run against it.
-- **Implementation context:** `writeClipboardText` handler and its `cx`
-  clipboard calls; `examples/extensions/@example/modal/src` and `test`.
-- **Review gate:** the example exercises every primitive end to end.
+Delivered: `workbench.readClipboardText()`; the modal example's block caret
+(`mode.ts`), `zt`/`zb`, `m`/`'` (one mark, jumping back after edits move it), and
+`p`; and the extension guide and [decisions](../decisions.md#editor-handles)
+text. `null` is tested only for an empty clipboard, not an image or file.
+The example's key sequences (`z t`) are checked for registration by the product
+test but not typed by it.
+
+- **Review gate:** the example exercises every primitive end to end in a real
+  window. After approval, preserve nothing further (the durable behavior is
+  already in the docs above), remove this plan in a separate commit, and mark D141
+  complete in the [index plan](editor-api.md).

@@ -46,3 +46,13 @@ export function wordBounds(text: string, from: number): [number, number] {
   const length = (count: number) => chars.slice(0, count).join("").length;
   return [length(start), length(end)];
 }
+
+/** The length of `text` in UTF-8 bytes, the unit of buffer offsets. */
+export function utf8Length(text: string): number {
+  let length = 0;
+  for (const character of text) {
+    const code = character.codePointAt(0)!;
+    length += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  }
+  return length;
+}

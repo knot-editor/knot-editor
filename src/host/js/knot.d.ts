@@ -1617,6 +1617,13 @@ declare module "knot" {
      * clipboard write. TypeError for nontext; HostError on cancellation/teardown.
      */
     writeClipboardText(text: string): Promise<void>;
+    /**
+     * Read the application clipboard's text, or null when it holds none.
+     * Like the write, it needs no window or selection and is valid during
+     * activation and callbacks.
+     * @throws HostError on cancellation or teardown.
+     */
+    readClipboardText(): Promise<string | null>;
   }>;
   /**
    * Optional focused view scope; omission/null means application-wide. A

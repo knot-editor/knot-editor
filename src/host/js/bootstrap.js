@@ -527,6 +527,10 @@ export async function writeClipboardText(text) {
   await request("writeClipboardText", text);
 }
 
+export function readClipboardText() {
+  return request("readClipboardText");
+}
+
 function pickerItem(value) {
   record(value, "picker item must be an object");
   return {

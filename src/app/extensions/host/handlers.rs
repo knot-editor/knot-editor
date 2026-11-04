@@ -181,6 +181,12 @@ async fn write_clipboard(
         .foreground(|_, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(arguments.text)))
 }
 
+/// The application clipboard's text, or `None` when it holds none.
+#[host_operation("readClipboardText")]
+async fn read_clipboard(context: HostContext, _: ()) -> Result<Option<String>, AccessError> {
+    context.foreground(|_, cx| cx.read_from_clipboard().and_then(|item| item.text()))
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct OpenArguments {
     uri: String,
