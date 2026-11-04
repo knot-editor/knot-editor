@@ -87,6 +87,14 @@ updated. Use ✅ and other emoji to mark executed steps.
   it is done and verified, before starting the next one. Never accumulate
   several steps of work and try to split them into commits at the end.
 - Don't use conventional commits.
+- Whenever the user needs to verify something in the real app, such as a
+  manual review gate, write a personal-config `post-init.js` that registers
+  `try.*` commands (palette titles starting with `Try:`) exercising the
+  change, and tell the user which commands to run. The config directory is
+  the one `user_config_root` in `src/app/personal_config.rs` selects
+  (`~/Library/Application Support/Knot` on macOS unless `~/.config/knot`
+  exists). Look at the existing file first; replace it only when it tests
+  finished work.
 - Run `cargo fmt` once at the end of Rust work, before committing. Do not use
   `cargo fmt --check` or manually format individual files.
 - Keep the design simple. Let's not build overly complex abstractions "just in
