@@ -7,7 +7,7 @@ use gpui::{
 
 use super::super::{
     BufferModel, ContributionSource, EditorContributionAction, EditorView, GutterLayout,
-    LINE_HEIGHT, gutter::GutterLane,
+    gutter::GutterLane,
 };
 use crate::app::settings::{ApplicationSettings, EDITOR_LINE_NUMBERS, LineNumbers, SettingsScope};
 use crate::host::protocol::{ByteRange, EditorContribution};
@@ -158,7 +158,7 @@ fn lane_point(
         };
         point(
             bounds.origin.x + px(x),
-            bounds.origin.y + px(line as f32 * LINE_HEIGHT + 5.),
+            bounds.origin.y + px(line as f32 * view.metrics.line_height + 5.),
         )
     })
 }

@@ -42,7 +42,7 @@ fn measured_layout_drives_grid_and_unicode_selection(cx: &mut TestAppContext) {
     let (layout, bounds) = cx.update(|window, cx| {
         let view = view.read(cx);
         let layout = view.layout.unwrap();
-        let measured = TerminalLayout::measure(window);
+        let measured = TerminalLayout::measure(window, px(14.));
         assert_eq!(layout.cell_width, measured.cell_width);
         assert_eq!(layout.cell_height, measured.cell_height);
         assert_eq!(
@@ -100,4 +100,64 @@ fn measured_layout_drives_grid_and_unicode_selection(cx: &mut TestAppContext) {
         );
     });
     cx.update(|_, cx| session.update(cx, |session, cx| session.close(cx)));
+}
+
+#[cfg(unix)]
+#[gpui::test]
+fn terminal_font_size_resizes_the_grid(cx: &mut TestAppContext) {
+    use super::*;
+    use crate::app::settings::FONT_SIZE;
+    use alacritty_terminal::tty;
+
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let session = cx.new(|cx| {
+        TerminalSession::new_with_options(
+            tty::Options {
+                shell: Some(tty::Shell::new(
+                    "/bin/sh".into(),
+                    vec!["-c".into(), "read line".into()],
+                )),
+                ..Default::default()
+            },
+            cx,
+        )
+    });
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
+    cx.simulate_resize(size(px(600.), px(400.)));
+    cx.refresh().unwrap();
+    let grid = |cx: &mut VisualTestContext| {
+        cx.read(|cx| {
+            let size = session.read(cx).size();
+            (
+                view.read(cx).layout.unwrap().font_size,
+                size.columns,
+                size.lines,
+            )
+        })
+    };
+    let (font_size, columns, lines) = grid(cx);
+    assert_eq!(font_size, px(14.));
+
+    // An editor-wide size leaves a terminal-scoped one in charge.
+    cx.update(|_, cx| {
+        let store = &mut cx.global_mut::<ApplicationSettings>().0;
+        store
+            .set(
+                FONT_SIZE,
+                28.into(),
+                SettingsScope {
+                    view: Some("terminal".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        store
+            .set(FONT_SIZE, 10.into(), SettingsScope::default())
+            .unwrap();
+    });
+    cx.run_until_parked();
+    cx.refresh().unwrap();
+    let (font_size, larger_columns, larger_lines) = grid(cx);
+    assert_eq!(font_size, px(28.));
+    assert!(larger_columns < columns && larger_lines < lines);
 }

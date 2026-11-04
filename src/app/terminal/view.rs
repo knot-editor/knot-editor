@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use crate::app::{
     TERMINAL_KEY_CONTEXT,
+    settings::{self, ApplicationSettings, SettingsScope},
     terminal::colors::{TerminalPalette, dim, resolve_color},
     terminal::input::terminal_key_bytes,
     terminal::layout::TerminalLayout,
@@ -20,8 +21,19 @@ use crate::app::{
     },
     terminal::session::{TerminalAttachment, TerminalSession, TerminalSize, TerminalStatus},
     theme::{color, theme},
-    typography::{TEXT_SIZE, text_font},
+    typography::text_font,
 };
+
+/// The terminal's text size, from `font.size` in the `terminal` view scope.
+fn font_size(cx: &App) -> f32 {
+    settings::font_size(
+        &SettingsScope {
+            view: Some(TERMINAL_KEY_CONTEXT.into()),
+            ..Default::default()
+        },
+        cx,
+    )
+}
 
 type LinkOpener = Rc<dyn Fn(&str, &mut App)>;
 
@@ -30,6 +42,7 @@ pub(crate) struct TerminalView {
     session: Entity<TerminalSession>,
     attachment: Option<TerminalAttachment>,
     _session_subscription: Subscription,
+    _settings_subscription: Subscription,
     focus: FocusHandle,
     pointer: PointerState,
     pointer_epoch: Option<(u64, u64, TermMode)>,
@@ -130,6 +143,9 @@ impl TerminalView {
             this.sync_pointer(cx);
             cx.notify();
         });
+        // Cells are measured during layout, so a settings change only needs
+        // a repaint, which resizes the grid when the cells change.
+        let settings_subscription = cx.observe_global::<ApplicationSettings>(|_, cx| cx.notify());
         cx.on_release(|view, cx| {
             view.cancel_pointer(cx);
             view.release_focus(cx);
@@ -139,6 +155,7 @@ impl TerminalView {
             session,
             attachment: Some(attachment),
             _session_subscription: subscription,
+            _settings_subscription: settings_subscription,
             focus: cx.focus_handle(),
             pointer: PointerState::default(),
             pointer_epoch: None,
@@ -862,7 +879,7 @@ impl Element for TerminalElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
-        let layout = TerminalLayout::measure(window);
+        let layout = TerminalLayout::measure(window, px(font_size(cx)));
         let size = layout.grid_size(bounds);
         self.entity.update(cx, |terminal, cx| {
             if terminal.interaction_bounds != bounds || terminal.layout != Some(layout) {
@@ -1053,7 +1070,7 @@ impl Element for TerminalElement {
                 };
                 let shaped = window.text_system().shape_line(
                     SharedString::from(cell.text.clone()),
-                    px(TEXT_SIZE),
+                    layout.font_size,
                     &[run],
                     None,
                 );

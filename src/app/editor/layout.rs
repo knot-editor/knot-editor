@@ -3,7 +3,49 @@
 
 use super::*;
 
+/// The text size and line height one view lays out with, from the
+/// `font.size` setting in its scope.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct EditorMetrics {
+    pub(crate) font_size: f32,
+    /// Whole pixels, so rows never land between device pixels.
+    pub(crate) line_height: f32,
+}
+
+impl EditorMetrics {
+    pub(super) fn new(font_size: f32) -> Self {
+        Self {
+            font_size,
+            line_height: (font_size * 20. / 14.).round().max(1.),
+        }
+    }
+
+    /// The size relative to the default text, for chrome drawn beside it.
+    pub(super) fn scale(self) -> f32 {
+        self.font_size / crate::app::typography::TEXT_SIZE
+    }
+}
+
 impl EditorView {
+    #[cfg(test)]
+    pub(crate) fn metrics(&self) -> EditorMetrics {
+        self.metrics
+    }
+
+    /// Resolve the metrics for the current settings. Keeps the same line at
+    /// the top of the viewport when the line height changes.
+    pub(super) fn update_metrics(&mut self, cx: &App) {
+        let metrics = EditorMetrics::new(settings::font_size(
+            &self.settings_scope(self.model.read(cx), cx),
+            cx,
+        ));
+        if metrics != self.metrics {
+            self.scroll *= metrics.line_height / self.metrics.line_height;
+            self.metrics = metrics;
+            self.max_line_width = 0.;
+        }
+    }
+
     /// Text runs for `line`, whose content is `text`, from the view's
     /// highlight layers: syntax, then decorations.
     pub(super) fn line_runs(
@@ -34,7 +76,7 @@ impl EditorView {
         shape_editor_line(
             window,
             text.to_owned().into(),
-            px(FONT_SIZE),
+            px(self.metrics.font_size),
             &runs,
             self.tab_size(model, cx),
         )

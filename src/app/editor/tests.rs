@@ -5,7 +5,7 @@ use gpui::{
 
 use super::{
     BufferModel, CaretShape, ContributionSource, EditorRenderingOptions, EditorView,
-    EditorViewState, LINE_HEIGHT, ResolvedEditorContribution, Reveal, flat_utf16_to_position,
+    EditorViewState, ResolvedEditorContribution, Reveal, flat_utf16_to_position,
     layout::{HighlightSpan, runs_for, shape_editor_line, x_for_index_dir},
     project_contributions, to_flat_utf16,
 };
@@ -15,7 +15,9 @@ use crate::{
     app::{
         completion::CompletionProviderRegistry,
         languages::{self, LanguageDefinition, LanguageOwner},
-        settings::{ApplicationSettings, EDITOR_INSERT_SPACES, EDITOR_TAB_SIZE, SettingsScope},
+        settings::{
+            ApplicationSettings, EDITOR_INSERT_SPACES, EDITOR_TAB_SIZE, FONT_SIZE, SettingsScope,
+        },
         syntax::{SyntaxLanguage, SyntaxState},
         theme::{Appearance, Highlight, Theme, color, native_color_definitions, theme},
     },
@@ -210,6 +212,97 @@ fn a_newer_edit_invalidates_an_unobserved_history_view_restore(cx: &mut TestAppC
 }
 
 #[gpui::test]
+fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let text = (0..100)
+        .map(|line| format!("line {line}\n"))
+        .collect::<String>();
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    let measure = |cx: &mut gpui::VisualTestContext| {
+        cx.update(|window, cx| {
+            editor.update(cx, |view, cx| {
+                let model = view.model.read(cx);
+                let origin = view.text_bounds().origin;
+                let hit = view.hit_test(
+                    model,
+                    point(
+                        origin.x + px(1.),
+                        origin.y + px(3.5 * view.metrics.line_height),
+                    ),
+                    window,
+                    cx,
+                );
+                (
+                    view.metrics,
+                    view.fully_visible_lines(),
+                    hit,
+                    view.gutter.width,
+                )
+            })
+        })
+    };
+    let (small, small_lines, small_hit, small_gutter) = measure(cx);
+    assert_eq!((small.font_size, small.line_height), (14., 20.));
+    assert_eq!(small_hit.0, 3);
+
+    // A setting for another view kind leaves documents alone.
+    let set = |cx: &mut gpui::VisualTestContext, view: Option<&str>| {
+        cx.update(|_, cx| {
+            cx.global_mut::<ApplicationSettings>()
+                .0
+                .set(
+                    FONT_SIZE,
+                    28.into(),
+                    SettingsScope {
+                        view: view.map(Into::into),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        });
+        cx.run_until_parked();
+    };
+    set(cx, Some("terminal"));
+    assert_eq!(measure(cx).0, small);
+
+    set(cx, None);
+    let (large, large_lines, large_hit, large_gutter) = measure(cx);
+    assert_eq!((large.font_size, large.line_height), (28., 40.));
+    assert_eq!(large_hit.0, 3);
+    let count = |(first, last): (usize, usize)| last + 1 - first;
+    assert_eq!(count(large_lines), count(small_lines) / 2);
+    assert!(large_gutter > small_gutter);
+}
+
+#[gpui::test]
+fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let text = (0..100)
+        .map(|line| format!("line {line}\n"))
+        .collect::<String>();
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let editor = cx.new(|cx| EditorView::new(model, cx));
+    editor.update(cx, |editor, _| {
+        editor.viewport_h = 10. * editor.metrics.line_height;
+        editor.scroll = 30. * editor.metrics.line_height;
+    });
+    cx.update(|cx| {
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .set(FONT_SIZE, 21.into(), SettingsScope::default())
+            .unwrap();
+    });
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let editor = editor.read(cx);
+        assert_eq!(editor.metrics.line_height, 30.);
+        assert_eq!(editor.scroll, 30. * 30.);
+    });
+}
+
+#[gpui::test]
 fn movement_uses_visual_columns_graphemes_and_pane_height(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("éééx\na\nabcde\nword next\nlast"));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
@@ -222,7 +315,7 @@ fn movement_uses_visual_columns_graphemes_and_pane_height(cx: &mut TestAppContex
             view.execute_editing_command("editor.move-down", window, cx);
             assert_eq!((view.cursor_line, view.cursor_col), (2, 3));
             view.execute_editing_command("editor.move-document-start", window, cx);
-            view.viewport_h = 2. * super::LINE_HEIGHT;
+            view.viewport_h = 2. * view.metrics.line_height;
             view.execute_editing_command("editor.select-page-down", window, cx);
             assert_eq!(view.selected_byte_range(cx), Some(0..10));
             view.execute_editing_command("editor.move-document-end", window, cx);
@@ -955,23 +1048,23 @@ fn set_selection_reveals_nearest_or_centers_an_offscreen_caret(cx: &mut TestAppC
         line_start(90),
     );
     editor.update(cx, |editor, cx| {
-        editor.viewport_h = 10. * LINE_HEIGHT;
+        editor.viewport_h = 10. * editor.metrics.line_height;
 
         // Nearest scrolls just enough to show the caret's line at the bottom.
         editor.set_selection(line_50, line_50 + 2, Reveal::Nearest, cx);
-        assert_eq!(editor.scroll, 41. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 41. * editor.metrics.line_height);
         assert_eq!(editor.selection(cx), (line_50, line_50 + 2));
         assert_eq!(editor.selected_byte_range(cx), Some(line_50..line_50 + 2));
 
         // Center keeps the scroll while the caret's line is visible...
         editor.set_selection(line_10, line_10, Reveal::Nearest, cx);
-        assert_eq!(editor.scroll, 10. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 10. * editor.metrics.line_height);
         editor.set_selection(line_15, line_15, Reveal::Center, cx);
-        assert_eq!(editor.scroll, 10. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 10. * editor.metrics.line_height);
 
         // ...and centers it when the line is outside the viewport.
         editor.set_selection(line_90, line_90, Reveal::Center, cx);
-        assert_eq!(editor.scroll, 85.5 * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 85.5 * editor.metrics.line_height);
         assert_eq!(editor.selected_byte_range(cx), None);
     });
 }
@@ -988,32 +1081,32 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret(cx: &mut TestApp
     editor.update(cx, |editor, cx| {
         // Before layout there is a single visible line.
         assert_eq!(editor.fully_visible_lines(), (0, 0));
-        editor.viewport_h = 10. * LINE_HEIGHT;
+        editor.viewport_h = 10. * editor.metrics.line_height;
         assert_eq!(editor.fully_visible_lines(), (0, 9));
 
         editor.set_selection(line_50, line_50, Reveal::Top, cx);
-        assert_eq!(editor.scroll, 50. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 50. * editor.metrics.line_height);
         assert_eq!(editor.fully_visible_lines(), (50, 59));
         editor.set_selection(line_50, line_50, Reveal::Bottom, cx);
-        assert_eq!(editor.scroll, 41. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 41. * editor.metrics.line_height);
         assert_eq!(editor.fully_visible_lines(), (41, 50));
 
         // Both stop at the ends of the text.
         editor.set_selection(line_5, line_5, Reveal::Bottom, cx);
         assert_eq!(editor.scroll, 0.);
         editor.set_selection(line_100, line_100, Reveal::Top, cx);
-        assert_eq!(editor.scroll, 91. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 91. * editor.metrics.line_height);
         assert_eq!(editor.fully_visible_lines(), (91, 100));
 
         // Scrolling moves neither the caret nor the reveal-on-paint flag.
         editor.scroll_by_lines(-30., cx);
-        assert_eq!(editor.scroll, 61. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 61. * editor.metrics.line_height);
         assert_eq!(editor.selection(cx), (line_100, line_100));
         assert!(!editor.reveal_caret);
         editor.scroll_by_lines(-1000., cx);
         assert_eq!(editor.scroll, 0.);
         editor.scroll_by_lines(1000., cx);
-        assert_eq!(editor.scroll, 91. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 91. * editor.metrics.line_height);
     });
 }
 
@@ -1032,7 +1125,7 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
         let editor = editor.read(cx);
         assert_eq!(editor.view_state(cx), state);
         assert_eq!(editor.selected_byte_range(cx), Some(4..9));
-        assert_eq!(editor.scroll, 2. * LINE_HEIGHT);
+        assert_eq!(editor.scroll, 2. * editor.metrics.line_height);
     });
 
     // Offsets past the end clamp, and offsets inside a scalar snap back.
@@ -1486,7 +1579,7 @@ fn caret_geometry_and_painting_share_one_syntax_query(cx: &mut TestAppContext) {
 
     // Scrolling by a line stays within the overscan.
     editor.update(cx, |view, cx| {
-        view.scroll += LINE_HEIGHT;
+        view.scroll += view.metrics.line_height;
         cx.notify();
     });
     cx.run_until_parked();
@@ -1657,7 +1750,7 @@ fn dragging_after_a_double_or_triple_click_extends_by_words_or_lines(cx: &mut Te
                     view.cursor_col = col;
                     point(
                         view.text_bounds().origin.x + view.caret_x(view.model.read(cx), window, cx),
-                        view.bounds.origin.y + px(5. + LINE_HEIGHT * line as f32),
+                        view.bounds.origin.y + px(5. + view.metrics.line_height * line as f32),
                     )
                 });
 

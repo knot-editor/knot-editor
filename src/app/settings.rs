@@ -21,6 +21,8 @@ use serde_json::Value;
 
 use crate::host::protocol::{ExtensionId, ExtensionLifecycleId};
 
+/// Base text size in pixels of editors, text frames, and terminals.
+pub(crate) const FONT_SIZE: &str = "font.size";
 /// Columns per tab stop in editor views.
 pub(crate) const EDITOR_TAB_SIZE: &str = "editor.tabSize";
 /// Whether indenting inserts spaces rather than a tab, unless the document's
@@ -191,6 +193,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
         description: description.into(),
     };
     vec![
+        SettingDefinition {
+            key: FONT_SIZE.into(),
+            value_type: SettingType::Number,
+            default: 14.into(),
+            description: "Text size in pixels; scope it to { view: \"terminal\" } to size terminals separately".into(),
+        },
         SettingDefinition {
             key: EDITOR_TAB_SIZE.into(),
             value_type: SettingType::Integer,
@@ -438,6 +446,13 @@ pub(crate) fn release_document(document: uuid::Uuid, cx: &mut App) {
             .0
             .release_document(&document.to_string());
     }
+}
+
+/// The text size in pixels for a view in `context`, within a legible range.
+pub(crate) fn font_size(context: &SettingsScope, cx: &App) -> f32 {
+    resolve(FONT_SIZE, context, cx, Value::as_f64)
+        .expect("font.size is a native number setting")
+        .clamp(6., 72.) as f32
 }
 
 /// Columns per tab stop for an editor in `context`, within a sane range.

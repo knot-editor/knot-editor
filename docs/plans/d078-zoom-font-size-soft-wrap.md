@@ -1,6 +1,6 @@
 # D078 — Zoom, font size, and soft wrap
 
-Status: 🚧 designed, not started. Item of the
+Status: 🚧 checkpoint 1 implemented, awaiting review. Item of the
 [daily-driver plan](daily-driver.md), scheduled by the
 [editor API plan](editor-api.md) before D112.
 
@@ -116,13 +116,18 @@ Status: 🚧 designed, not started. Item of the
 
 ## Checkpoint 1 — Font size and scalable metrics
 
+Status: ✅ implemented; 👀 awaiting review.
+
 Deliverables:
-- `font.size` setting; editors and text frames resolve it in their scope,
-  terminals under `{ view: "terminal" }`.
-- Editor metrics (font size, line height, gutter widths) computed per view
+- ✅ `font.size` setting; editors and text frames resolve it in their scope,
+  terminals under `{ view: "terminal" }`. Values clamp to 6–72.
+- ✅ Editor metrics (font size, line height, gutter widths) computed per view
   from the resolved size instead of the `FONT_SIZE` and `LINE_HEIGHT`
-  constants; terminal cell metrics from its resolved size.
-- Changing the setting re-lays out open editors and terminals.
+  constants; terminal cell metrics from its resolved size. The gutter's
+  fixed lane widths and marker size scale with the text, so zoom
+  (checkpoint 2) scales them through the same metrics.
+- ✅ Changing the setting re-lays out open editors and terminals. An editor
+  keeps the same line at the top of its viewport across the change.
 
 Validation: settings resolution tests for both scopes; editor view tests that
 a larger size changes line height, visible lines, hit testing, and the

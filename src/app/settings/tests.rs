@@ -324,3 +324,22 @@ fn releasing_a_document_drops_only_its_values() {
     assert_eq!(store.get(KEY, &document("a")), Some(&json!(8)));
     assert_eq!(store.get(KEY, &document("b")), Some(&json!(5)));
 }
+
+#[test]
+fn terminals_resolve_their_own_font_size() {
+    let mut store = SettingsStore::default();
+    let terminal = scope(None, Some("terminal"));
+    assert_eq!(store.get(FONT_SIZE, &terminal), Some(&json!(14)));
+    store
+        .set(FONT_SIZE, json!(16.5), SettingsScope::default())
+        .unwrap();
+    store.set(FONT_SIZE, json!(12), terminal.clone()).unwrap();
+    assert_eq!(store.get(FONT_SIZE, &rust_editor()), Some(&json!(16.5)));
+    assert_eq!(store.get(FONT_SIZE, &terminal), Some(&json!(12)));
+    assert_eq!(
+        store.check(FONT_SIZE, &json!("large")),
+        Err(SettingsError::TypeMismatch {
+            expected: SettingType::Number
+        })
+    );
+}

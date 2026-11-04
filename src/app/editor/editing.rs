@@ -240,7 +240,7 @@ impl EditorView {
             }
             "up" | "down" | "page-up" | "page-down" => {
                 let rows = if movement.starts_with("page-") {
-                    (self.viewport_h / LINE_HEIGHT).floor().max(1.) as usize
+                    (self.viewport_h / self.metrics.line_height).floor().max(1.) as usize
                 } else {
                     1
                 };

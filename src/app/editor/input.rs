@@ -160,7 +160,8 @@ impl EditorView {
     ) -> (usize, usize) {
         let text_bounds = self.text_bounds();
         let origin = text_bounds.origin;
-        let line = ((f32::from(p.y - origin.y) + self.scroll) / LINE_HEIGHT).floor() as usize;
+        let line =
+            ((f32::from(p.y - origin.y) + self.scroll) / self.metrics.line_height).floor() as usize;
         let line = line.min(self.line_count - 1);
         let text = line_text(model, line);
         if text.is_empty() {
@@ -370,12 +371,13 @@ impl EntityInputHandler for EditorView {
         let (end_line, end_col) = flat_utf16_to_position(model, range_utf16.end);
         let line = start_line;
         let line_str = line_text(model, line);
-        let top = element_bounds.origin.y + px(line as f32 * LINE_HEIGHT) - px(self.scroll);
+        let top =
+            element_bounds.origin.y + px(line as f32 * self.metrics.line_height) - px(self.scroll);
 
         if line_str.is_empty() {
             return Some(Bounds {
                 origin: point(element_bounds.origin.x, top),
-                size: size(px(1.), px(LINE_HEIGHT)),
+                size: size(px(1.), px(self.metrics.line_height)),
             });
         }
 
@@ -395,7 +397,7 @@ impl EntityInputHandler for EditorView {
         let x_off = self.line_x_offset(&line_str, shaped.width, element_bounds.size.width);
         Some(Bounds {
             origin: point(element_bounds.origin.x + x_off + origin_x, top),
-            size: size(width, px(LINE_HEIGHT)),
+            size: size(width, px(self.metrics.line_height)),
         })
     }
 

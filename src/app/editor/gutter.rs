@@ -33,23 +33,31 @@ pub(super) struct GutterLayout {
 }
 
 impl GutterLayout {
-    /// The lanes for `line_count` lines, with digits `digit_width` wide.
-    pub(super) fn new(line_numbers: LineNumbers, line_count: usize, digit_width: f32) -> Self {
+    /// The lanes for `line_count` lines, with digits `digit_width` wide and
+    /// fixed widths multiplied by `scale`, the text's size relative to the
+    /// default.
+    pub(super) fn new(
+        line_numbers: LineNumbers,
+        line_count: usize,
+        digit_width: f32,
+        scale: f32,
+    ) -> Self {
+        let markers_width = MARKER_LANE_WIDTH * scale;
         let numbers_end = match line_numbers {
             LineNumbers::Off => 0.,
             LineNumbers::On | LineNumbers::Relative => {
                 let digits = line_count.max(1).ilog10() as usize + 1;
-                MARKER_LANE_WIDTH + digits.max(MIN_NUMBER_DIGITS) as f32 * digit_width
+                markers_width + digits.max(MIN_NUMBER_DIGITS) as f32 * digit_width
             }
         };
         Self {
             line_numbers,
-            markers_width: MARKER_LANE_WIDTH,
+            markers_width,
             numbers_end,
             width: if numbers_end > 0. {
-                numbers_end + NUMBER_LANE_PADDING
+                numbers_end + NUMBER_LANE_PADDING * scale
             } else {
-                MARKER_LANE_WIDTH
+                markers_width
             },
         }
     }
@@ -85,14 +93,20 @@ impl EditorView {
         let model = self.model.read(cx);
         let line_numbers = settings::editor_line_numbers(&self.settings_scope(model, cx), cx);
         let text = window.text_system();
+        let font_size = self.metrics.font_size;
         let digit_width = text
             .advance(
                 text.resolve_font(&make_font(false, false)),
-                px(FONT_SIZE),
+                px(font_size),
                 '0',
             )
-            .map_or(FONT_SIZE * 0.6, |advance| f32::from(advance.width));
-        self.gutter = GutterLayout::new(line_numbers, self.line_count, digit_width);
+            .map_or(font_size * 0.6, |advance| f32::from(advance.width));
+        self.gutter = GutterLayout::new(
+            line_numbers,
+            self.line_count,
+            digit_width,
+            self.metrics.scale(),
+        );
     }
 
     /// The gutter lane under a window position.
@@ -169,26 +183,32 @@ mod tests {
 
     #[test]
     fn number_lane_fits_the_digits_of_the_line_count() {
-        let width = |lines| GutterLayout::new(LineNumbers::On, lines, 10.).width;
+        let width = |lines| GutterLayout::new(LineNumbers::On, lines, 10., 1.).width;
         assert_eq!(width(1), width(99));
         assert_eq!(width(100) - width(99), 10.);
         assert_eq!(width(999), width(100));
         assert_eq!(width(1000) - width(999), 10.);
         assert_eq!(width(9), MARKER_LANE_WIDTH + 20. + NUMBER_LANE_PADDING);
         assert_eq!(
-            GutterLayout::new(LineNumbers::Relative, 100, 10.).width,
+            GutterLayout::new(LineNumbers::Relative, 100, 10., 1.).width,
             width(100)
         );
         assert_eq!(
-            GutterLayout::new(LineNumbers::Off, 100, 10.).width,
+            GutterLayout::new(LineNumbers::Off, 100, 10., 1.).width,
             MARKER_LANE_WIDTH
+        );
+        let larger = GutterLayout::new(LineNumbers::On, 9, 15., 1.5);
+        assert_eq!(larger.markers_width, MARKER_LANE_WIDTH * 1.5);
+        assert_eq!(
+            larger.width,
+            (MARKER_LANE_WIDTH + NUMBER_LANE_PADDING) * 1.5 + 30.
         );
     }
 
     #[test]
     fn labels_follow_the_line_number_mode() {
         let labels = |mode| {
-            let layout = GutterLayout::new(mode, 5, 10.);
+            let layout = GutterLayout::new(mode, 5, 10., 1.);
             (0..5).map(|line| layout.label(line, 2)).collect::<Vec<_>>()
         };
         assert_eq!(

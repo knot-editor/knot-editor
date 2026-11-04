@@ -171,6 +171,31 @@ mod tests {
     }
 
     #[gpui::test]
+    fn the_frame_editor_resolves_its_font_size_for_its_view_id(cx: &mut TestAppContext) {
+        use crate::app::{
+            editor::EditorView,
+            model::BufferModel,
+            settings::{ApplicationSettings, FONT_SIZE, SettingsScope},
+        };
+        cx.update(|cx| {
+            let mut settings = ApplicationSettings::default();
+            let scope = SettingsScope {
+                view: Some("example.log".into()),
+                ..Default::default()
+            };
+            settings.0.set(FONT_SIZE, 18.into(), scope).unwrap();
+            cx.set_global(settings);
+        });
+        let frame = cx.new(|cx| TextView::new("example.log", "1", cx));
+        let document = cx.new(|_| BufferModel::from_text(""));
+        let document = cx.new(|cx| EditorView::new(document, cx));
+        cx.read(|cx| {
+            assert_eq!(frame.read(cx).editor.read(cx).metrics().font_size, 18.);
+            assert_eq!(document.read(cx).metrics().font_size, 14.);
+        });
+    }
+
+    #[gpui::test]
     fn the_frame_editor_ignores_document_scoped_values(cx: &mut TestAppContext) {
         use crate::app::{
             documents::DocumentCollection,

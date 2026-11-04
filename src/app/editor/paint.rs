@@ -47,7 +47,10 @@ impl Render for EditorView {
             .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _, cx| {
                 let (dx, dy) = match ev.delta {
                     ScrollDelta::Pixels(p) => (f32::from(p.x), f32::from(p.y)),
-                    ScrollDelta::Lines(p) => (p.x * LINE_HEIGHT, p.y * LINE_HEIGHT),
+                    ScrollDelta::Lines(p) => (
+                        p.x * this.metrics.line_height,
+                        p.y * this.metrics.line_height,
+                    ),
                 };
                 this.scroll -= dy;
                 this.scroll_x = (this.scroll_x - dx).clamp(
@@ -113,8 +116,10 @@ impl Element for EditorElement {
         cx: &mut App,
     ) -> Self::PrepaintState {
         let (gutter, markers) = self.entity.update(cx, |view, cx| {
+            view.update_metrics(cx);
             view.update_gutter_layout(window, cx);
             let lines = view.visible_lines();
+            let line_height = view.metrics.line_height;
             let markers = view
                 .gutter_markers
                 .iter()
@@ -122,9 +127,9 @@ impl Element for EditorElement {
                 .map(|marker| Bounds {
                     origin: point(
                         bounds.origin.x,
-                        bounds.origin.y + px(marker.line as f32 * LINE_HEIGHT - view.scroll),
+                        bounds.origin.y + px(marker.line as f32 * line_height - view.scroll),
                     ),
-                    size: size(px(view.gutter.markers_width), px(LINE_HEIGHT)),
+                    size: size(px(view.gutter.markers_width), px(line_height)),
                 })
                 .collect::<Vec<_>>();
             (view.gutter, markers)
@@ -192,7 +197,10 @@ impl Element for EditorElement {
                 release_listener(event, window, cx);
             }
         });
-        let scroll_x = self.entity.read(cx).scroll_x;
+        let (scroll_x, metrics) = {
+            let view = self.entity.read(cx);
+            (view.scroll_x, view.metrics)
+        };
         // Read the view state, compute the visible range, then read just the
         // visible lines and their runs out of the model before painting:
         // `ShapedLine::paint` takes `cx: &mut App`, but `entity.read(cx)`
@@ -217,7 +225,7 @@ impl Element for EditorElement {
             let view = self.entity.read(cx);
             let model = view.model.read(cx);
             let theme = theme(cx);
-            let max = (view.line_count as f32) * LINE_HEIGHT;
+            let max = (view.line_count as f32) * metrics.line_height;
             let Range {
                 start: first,
                 end: last,
@@ -329,8 +337,8 @@ impl Element for EditorElement {
             window.handle_input(&focus_handle, ElementInputHandler::new(bounds, entity), cx);
         }
 
-        let font_size = px(FONT_SIZE);
-        let line_height = px(LINE_HEIGHT);
+        let font_size = px(metrics.font_size);
+        let line_height = px(metrics.line_height);
         let focused = focus_handle.is_focused(window);
 
         // Clip to viewport so paint below the last line / outside horizontal
@@ -369,7 +377,7 @@ impl Element for EditorElement {
 
             // The cursor line's background, behind everything else.
             if let Some(line) = line_highlight {
-                let top = bounds.origin.y + px(line as f32 * LINE_HEIGHT) - px(scroll);
+                let top = bounds.origin.y + px(line as f32 * metrics.line_height) - px(scroll);
                 let rect = Bounds {
                     origin: point(bounds.origin.x, top),
                     size: size(pane_w, line_height),
@@ -413,7 +421,7 @@ impl Element for EditorElement {
                     } else {
                         (px(0.), pane_w)
                     };
-                    let top = bounds.origin.y + px(*ix as f32 * LINE_HEIGHT) - px(scroll);
+                    let top = bounds.origin.y + px(*ix as f32 * metrics.line_height) - px(scroll);
                     let rect = Bounds {
                         origin: point(bounds.origin.x + *x_off + rx, top),
                         size: size(rw, line_height),
@@ -425,7 +433,8 @@ impl Element for EditorElement {
                 // across blank lines.
                 for (ix, line, _) in &vis {
                     if line.is_empty() && *ix > start.0 && *ix < end.0 {
-                        let top = bounds.origin.y + px(*ix as f32 * LINE_HEIGHT) - px(scroll);
+                        let top =
+                            bounds.origin.y + px(*ix as f32 * metrics.line_height) - px(scroll);
                         let rect = Bounds {
                             origin: point(bounds.origin.x, top),
                             size: size(pane_w, line_height),
@@ -444,7 +453,7 @@ impl Element for EditorElement {
                 let x0 = x_for_index_dir(s, *start, line_str, tab_size);
                 let x1 = x_for_index_dir(s, *end, line_str, tab_size);
                 let (lo, hi) = if x0 <= x1 { (x0, x1) } else { (x1, x0) };
-                let top = bounds.origin.y + px(*line as f32 * LINE_HEIGHT) - px(scroll);
+                let top = bounds.origin.y + px(*line as f32 * metrics.line_height) - px(scroll);
                 let rect = Bounds {
                     origin: point(bounds.origin.x + *x_off + lo, top),
                     size: size(hi - lo, line_height),
@@ -456,7 +465,7 @@ impl Element for EditorElement {
             for (ix, s, x_off, _line_str) in &shaped {
                 let origin = point(
                     bounds.origin.x + *x_off,
-                    bounds.origin.y + px(*ix as f32 * LINE_HEIGHT) - px(scroll),
+                    bounds.origin.y + px(*ix as f32 * metrics.line_height) - px(scroll),
                 );
                 let _ = s.paint(origin, line_height, window, cx);
             }
@@ -497,7 +506,7 @@ impl Element for EditorElement {
                     } else {
                         (px(0.), pane_w)
                     };
-                    let top = bounds.origin.y + px(*ix as f32 * LINE_HEIGHT) - px(scroll)
+                    let top = bounds.origin.y + px(*ix as f32 * metrics.line_height) - px(scroll)
                         + line_height
                         - underline_h;
                     let rect = Bounds {
@@ -539,7 +548,7 @@ impl Element for EditorElement {
                         (x, *x_off, width)
                     })
                     .unwrap_or((px(0.), px(0.), line_height / 2.));
-                let top = bounds.origin.y + px(line_ix as f32 * LINE_HEIGHT) - px(scroll);
+                let top = bounds.origin.y + px(line_ix as f32 * metrics.line_height) - px(scroll);
                 let left = bounds.origin.x + x_off + caret_x;
                 let (origin, extent) = match shape {
                     CaretShape::Bar => (point(left, top), size(px(2.), line_height)),
@@ -585,11 +594,15 @@ impl Element for EditorElement {
                 |window| {
                     window.paint_quad(fill(gutter_bounds, gutter.background));
                     for (line, color) in &gutter.markers {
-                        let top =
-                            gutter_bounds.origin.y + px(*line as f32 * LINE_HEIGHT) - px(scroll);
+                        let top = gutter_bounds.origin.y + px(*line as f32 * metrics.line_height)
+                            - px(scroll);
+                        let side = px(7. * metrics.scale());
                         let marker_bounds = Bounds {
-                            origin: point(gutter_bounds.origin.x + px(4.), top + px(6.)),
-                            size: size(px(7.), px(7.)),
+                            origin: point(
+                                gutter_bounds.origin.x + px(4. * metrics.scale()),
+                                top + (line_height - side) / 2.,
+                            ),
+                            size: size(side, side),
                         };
                         window.paint_quad(fill(marker_bounds, *color));
                     }
@@ -612,7 +625,8 @@ impl Element for EditorElement {
                                 .shape_line(label.clone(), font_size, &[run], None);
                         let origin = point(
                             gutter_bounds.origin.x + px(gutter.layout.numbers_end) - shaped.width,
-                            gutter_bounds.origin.y + px(*line as f32 * LINE_HEIGHT) - px(scroll),
+                            gutter_bounds.origin.y + px(*line as f32 * metrics.line_height)
+                                - px(scroll),
                         );
                         let _ = shaped.paint(origin, line_height, window, cx);
                     }

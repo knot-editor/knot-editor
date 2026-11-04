@@ -38,7 +38,7 @@ use crate::host::protocol::{
 };
 
 use super::commands::dispatch as commands;
-use super::typography::{TEXT_SIZE as FONT_SIZE, text_font as make_font};
+use super::typography::text_font as make_font;
 
 use super::{
     CompletionAccept, CompletionDismiss, CompletionNext, CompletionPrevious, EDITOR_KEY_CONTEXT,
@@ -204,6 +204,8 @@ pub struct EditorView {
     line_count: usize,
     /// The model revision this view last refreshed from.
     seen_revision: u64,
+    /// Text size and line height from the settings in this view's scope.
+    metrics: EditorMetrics,
     /// Widest line width shaped since the text last changed. Bounds horizontal
     /// scrolling without shaping lines that were never displayed.
     max_line_width: f32,
@@ -380,7 +382,7 @@ impl EditorView {
     pub(crate) fn view_state(&self, cx: &App) -> EditorViewState {
         let model = self.model.read(cx);
         let state = self.history_view_state(model);
-        let top_line = ((self.scroll / LINE_HEIGHT) as usize).min(self.line_count - 1);
+        let top_line = ((self.scroll / self.metrics.line_height) as usize).min(self.line_count - 1);
         EditorViewState {
             anchor: state.anchor,
             caret: state.caret,
@@ -405,7 +407,8 @@ impl EditorView {
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, snap(state.anchor));
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, snap(state.caret));
         self.has_selection = snap(state.anchor) != snap(state.caret);
-        self.scroll = flat_byte_to_position(model, snap(state.top)).0 as f32 * LINE_HEIGHT;
+        self.scroll =
+            flat_byte_to_position(model, snap(state.top)).0 as f32 * self.metrics.line_height;
         self.scroll_x = state.scroll_x.max(0.);
         self.preferred_x = None;
         self.reveal_caret = false;
@@ -535,17 +538,20 @@ impl EditorView {
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
         self.has_selection = anchor != caret;
         if reveal == Reveal::Center && self.viewport_h > 0. {
-            let line_top = self.cursor_line as f32 * LINE_HEIGHT;
-            if line_top < self.scroll || line_top + LINE_HEIGHT > self.scroll + self.viewport_h {
-                self.scroll = line_top + LINE_HEIGHT / 2. - self.viewport_h / 2.;
+            let line_top = self.cursor_line as f32 * self.metrics.line_height;
+            if line_top < self.scroll
+                || line_top + self.metrics.line_height > self.scroll + self.viewport_h
+            {
+                self.scroll = line_top + self.metrics.line_height / 2. - self.viewport_h / 2.;
             }
         }
         match reveal {
             Reveal::Top if self.viewport_h > 0. => {
-                self.scroll = self.cursor_line as f32 * LINE_HEIGHT;
+                self.scroll = self.cursor_line as f32 * self.metrics.line_height;
             }
             Reveal::Bottom if self.viewport_h > 0. => {
-                self.scroll = (self.cursor_line + 1) as f32 * LINE_HEIGHT - self.viewport_h;
+                self.scroll =
+                    (self.cursor_line + 1) as f32 * self.metrics.line_height - self.viewport_h;
             }
             _ => {}
         }
@@ -556,16 +562,16 @@ impl EditorView {
     /// layout; always at least one line.
     pub(crate) fn fully_visible_lines(&self) -> (usize, usize) {
         let last_line = self.line_count.saturating_sub(1);
-        let first = ((self.scroll / LINE_HEIGHT).ceil() as usize).min(last_line);
-        let end =
-            (((self.scroll + self.viewport_h) / LINE_HEIGHT).floor() as usize).min(self.line_count);
+        let first = ((self.scroll / self.metrics.line_height).ceil() as usize).min(last_line);
+        let end = (((self.scroll + self.viewport_h) / self.metrics.line_height).floor() as usize)
+            .min(self.line_count);
         (first, end.saturating_sub(1).max(first))
     }
 
     /// Scroll by `lines`, negative upward, without moving the caret or
     /// revealing it; the scroll stays within the text.
     pub(crate) fn scroll_by_lines(&mut self, lines: f64, cx: &mut Context<Self>) {
-        self.scroll += lines as f32 * LINE_HEIGHT;
+        self.scroll += lines as f32 * self.metrics.line_height;
         self.reveal_caret = false;
         self.clamp_scroll();
         cx.notify();
@@ -583,10 +589,12 @@ impl EditorView {
         kind: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self {
+        let mut view = Self {
             view_kind: kind.into(),
             ..Self::with_rendering(model, 0, EditorRenderingOptions { show_gutter: false }, cx)
-        }
+        };
+        view.update_metrics(cx);
+        view
     }
 
     /// Show or hide the gutter of markers and line numbers.
@@ -645,9 +653,11 @@ impl EditorView {
             this.apply_pending_indent(cx);
             cx.notify();
         });
-        // Settings resolve during layout, so any change only needs a repaint.
+        // Settings resolve during layout, so any change only needs a repaint
+        // once the metrics follow it.
         let settings_subscription = cx.observe_global::<ApplicationSettings>(|this, cx| {
             this.max_line_width = 0.;
+            this.update_metrics(cx);
             cx.notify();
         });
         let release_subscription = cx.on_release(|this, cx| {
@@ -658,13 +668,14 @@ impl EditorView {
             this.release_auto_closed(pairs, cx);
         });
 
-        Self {
+        let mut view = Self {
             element_id,
             rendering,
             view_kind: EDITOR_KEY_CONTEXT.into(),
             model,
             line_count,
             seen_revision,
+            metrics: EditorMetrics::new(crate::app::typography::TEXT_SIZE),
             max_line_width: 0.,
             decorations,
             gutter_markers,
@@ -708,7 +719,9 @@ impl EditorView {
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
             _settings_subscription: settings_subscription,
-        }
+        };
+        view.update_metrics(cx);
+        view
     }
 
     /// Restart blinking with the caret shown when the caret, selection, text,
@@ -845,8 +858,9 @@ impl EditorView {
     /// The lines the last measured viewport shows at the current scroll,
     /// including a partly visible last line.
     pub(super) fn visible_lines(&self) -> Range<usize> {
-        let first = ((self.scroll / LINE_HEIGHT).floor() as usize).min(self.line_count);
-        let rows = (self.viewport_h / LINE_HEIGHT).ceil() as usize + 1;
+        let first =
+            ((self.scroll / self.metrics.line_height).floor() as usize).min(self.line_count);
+        let rows = (self.viewport_h / self.metrics.line_height).ceil() as usize + 1;
         first..(first + rows).min(self.line_count)
     }
 
@@ -854,7 +868,7 @@ impl EditorView {
         if self.scroll < 0. {
             self.scroll = 0.;
         }
-        let max = ((self.line_count as f32) * LINE_HEIGHT - self.viewport_h).max(0.);
+        let max = ((self.line_count as f32) * self.metrics.line_height - self.viewport_h).max(0.);
         if self.scroll > max {
             self.scroll = max;
         }
@@ -867,8 +881,8 @@ impl EditorView {
         if viewport_h <= 0. {
             return;
         }
-        let line_top = self.cursor_line as f32 * LINE_HEIGHT;
-        let line_bottom = line_top + LINE_HEIGHT;
+        let line_top = self.cursor_line as f32 * self.metrics.line_height;
+        let line_bottom = line_top + self.metrics.line_height;
         if line_top < self.scroll {
             self.scroll = line_top;
         } else if line_bottom > self.scroll + viewport_h {
@@ -1134,7 +1148,6 @@ impl Focusable for EditorView {
 
 impl EventEmitter<EditorContributionAction> for EditorView {}
 
-const LINE_HEIGHT: f32 = 20.0;
 /// Lines a syntax highlight query covers beyond the requested ones on each
 /// side.
 const SYNTAX_OVERSCAN: usize = 16;
