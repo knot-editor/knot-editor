@@ -66,24 +66,18 @@ are half a line height wide at a line's end. Behavior is in
 checked by eye in a real window. Shape resolution, the host operation, and the
 fake host are covered by tests.
 
-### 2. Visible lines, scrolling, and reveal ✅ (review gate pending)
+### 2. Visible lines, scrolling, and reveal ✅
 
-- Deliver `visibleLines`, `scrollBy`, and `reveal: "top" | "bottom"`, with the
-  fake host modelling a configurable viewport and scroll position.
-- Validation: `node:test` cases for the fake (clamping, caret untouched, reveal
-  placement); editor tests beside the reveal tests (`src/app/editor/tests.rs`,
-  around the `Reveal` cases) for clamping at both ends and caret untouched;
-  product tests for the operations and `InvalidTarget`.
-- **Implementation context:** `scroll`, `viewport_h`, `ensure_cursor_visible`,
-  and `clamp_scroll` on `EditorView`; extend the `Reveal` enum decoded in
-  `editor_set_selection`; same host-operation wiring as checkpoint 1.
-- **Completion note:** the operations are documented in the
-  [extension guide](../extension-api.md) and
-  [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views).
-  `visibleLines` counts only wholly visible lines and is never empty; `scrollBy`
-  takes whole lines. The product test asserts only the first line and caret,
-  since painting re-measures the viewport.
-- **Review gate:** the visible range agrees with what is painted.
+`visibleLines` counts only wholly visible lines and is never empty; `scrollBy`
+takes whole lines and leaves the caret alone; `reveal: "top" | "bottom"` always
+aligns the caret's line with that edge of the viewport, as far as the text
+allows. `"center"` keeps its Go to Line meaning of recentering only when the
+line is off screen, so a Vim `zz` needs an always-centering option when D058
+reaches it. Behavior is in the [extension guide](../extension-api.md) and
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views).
+The product test asserts only the first visible line and the caret, since
+painting re-measures the viewport. Checked by hand on a large file: the reported
+lines matched the reveals.
 
 ### 3. Marks ⏳
 
