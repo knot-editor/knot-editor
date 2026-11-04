@@ -1,6 +1,6 @@
 # D078 — Zoom, font size, and soft wrap
 
-Status: 🚧 checkpoint 1 implemented, awaiting review. Item of the
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Item of the
 [daily-driver plan](daily-driver.md), scheduled by the
 [editor API plan](editor-api.md) before D112.
 
@@ -114,36 +114,17 @@ Status: 🚧 checkpoint 1 implemented, awaiting review. Item of the
 - Visual-row units in the editor handle API (D112).
 - Line-ending facts (D149) and any status bar item for wrap or zoom.
 
-## Checkpoint 1 — Font size and scalable metrics
+## Checkpoint 1 — Font size and scalable metrics ✅
 
-Status: ✅ implemented; 👀 awaiting review.
-
-Deliverables:
-- ✅ `font.size` setting; editors and text frames resolve it in their scope,
-  terminals under `{ view: "terminal" }`. Values clamp to 6–72.
-- ✅ Editor metrics (font size, line height, gutter widths) computed per view
-  from the resolved size instead of the `FONT_SIZE` and `LINE_HEIGHT`
-  constants; terminal cell metrics from its resolved size. The gutter's
-  fixed lane widths and marker size scale with the text, so zoom
-  (checkpoint 2) scales them through the same metrics.
-- ✅ Changing the setting re-lays out open editors and terminals. An editor
-  keeps the same line at the top of its viewport across the change.
-
-Validation: settings resolution tests for both scopes; editor view tests that
-a larger size changes line height, visible lines, hit testing, and the
-gutter; a terminal test that a size change resizes the grid.
-
-Review gate: metrics are one per-view value threaded through geometry, with
-no remaining `LINE_HEIGHT` constant in the editor.
-
-**Implementation context:** constants live in `src/app/typography.rs`
-(`TEXT_SIZE`) and `src/app/editor.rs` (`LINE_HEIGHT`, used across
-`editor.rs`, `editor/paint.rs`, `layout.rs`, `input.rs`, `completion.rs`,
-`editing.rs`). Define the setting beside `EDITOR_TAB_SIZE` in
-`src/app/settings.rs` with an accessor like `editor_tab_size`, and resolve it
-through `EditorView::settings_scope` as `tab_size` does. Terminal metrics are
-in `src/app/terminal/layout.rs` and `terminal/view.rs`. Update tests in
-`src/app/editor/tests.rs` that use `LINE_HEIGHT` to read the view's metrics.
+Reviewed. `font.size` (default 14, clamped 6–72) is resolved per view:
+editors and text frames in their own scope, terminals under
+`{ view: "terminal" }`. Each editor keeps one `EditorMetrics` value
+(`src/app/editor/layout.rs`) that all of its geometry uses. Line height is
+the size × 20/14, rounded to whole pixels. The gutter's lanes and marker
+scale with the text, and a change keeps the top line in place. Terminal
+cells are measured for the resolved size, so a change resizes the PTY grid.
+Tab titles and other chrome deliberately ignore `font.size`; zoom scales
+them (checkpoint 2).
 
 ## Checkpoint 2 — Application zoom
 
