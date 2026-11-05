@@ -1,7 +1,6 @@
 # D078 — Zoom, font size, and soft wrap
 
-Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 implemented, awaiting
-review. Item of the
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 next. Item of the
 [daily-driver plan](daily-driver.md), scheduled by the
 [editor API plan](editor-api.md) before D112.
 
@@ -140,59 +139,24 @@ Dock sizes stay absolute window pixels, as on window resize, and hairlines keep
 their pixel widths. The architecture and workbench references still describe
 zoom as view state until checkpoint 4's documentation step.
 
-## Checkpoint 3 — Soft wrap rendering 🔍
+## Checkpoint 3 — Soft wrap rendering ✅
 
-Deliverables:
-- ✅ `editor.softWrap` setting, Toggle Soft Wrap writing a document-scoped
-  value, and the Markdown package's scoped default.
-- ✅ The per-view wrap map with incremental rebuilds, and every geometry path
-  listed above on rows; horizontal scroll off while wrapping.
-- ✅ Existing movement keeps logical-line behavior in this checkpoint.
-
-Scope decisions:
-- The model records each recent revision's changed line range
-  (`LineChange`, 64 revisions); a view composes the ranges since its last
-  sync and rewraps those lines, or every line when it fell further behind.
-- Whitespace may hang past the right edge instead of starting a row, as in
-  VS Code, so a row never starts with the spaces that ended the one before.
-  Tabs advance from the start of their row, matching per-row shaping.
-- Continuation rows keep the first row's indentation when that leaves at
-  least half the row.
-- A caret at a break shows at the start of the next row; a click past a
-  row's end that is not the line's end lands before its last character.
-- The cursor line highlight covers every row of the line, like its number.
-- A width, font, zoom, or tab-size change keeps the top row's text at the
-  top; a restore before the first layout keeps its row.
-- Logical Up and Down land on the target line's first row until checkpoint 4.
-- Toggle Soft Wrap has no default key.
-- Checkpoint 4's documentation step also covers the line change log in
-  `docs/architecture/core-and-buffers.md`.
-
-Validation: wrap map unit tests (whitespace breaks, long words, wide
-characters, tabs, continuation indent, incremental rebuild matching a full
-rebuild); editor view tests for caret and selection rows, hit testing, IME
-bounds, gutter numbering on first rows, scroll clamping, and view state
-restore mid-line; a toggle test that every view of the document follows; a
-`node:test` case for the Markdown package's scoped write.
-
-Review gate: wrapping Markdown and a long code file in the real app paints,
-selects, clicks, and types correctly, and resizing rewraps. 🔍 Pending: the
-personal config registers Try: Wrapped Markdown and Try: Long Rust Lines.
-
-**Implementation context:** add `src/app/editor/wrap.rs` and the
-`unicode-width` dependency. Rows rebuild from `EditorView::refresh`
-(`src/app/editor.rs`, which already refreshes `line_count`) for the commit's
-changed lines, and fully when `paint.rs` measures a new width (where
-`viewport_h` is set). Replace row arithmetic in `visible_lines`,
-`fully_visible_lines`, `clamp_scroll`, `ensure_cursor_visible`, `view_state`,
-`restore_view_state`, `set_selection`; painting in `editor/paint.rs`;
-hit testing in `editor/input.rs` (including `bounds_for_range` and
-`character_index_for_point`); `editor/completion.rs`; and
-`editor/gutter.rs`. Shape per row through `shape_line` in
-`editor/layout.rs`. Declare Toggle Soft Wrap in
-`src/app/editor/native_commands.rs`; the document-scoped write mirrors the
-indentation detection in `src/app/indentation.rs`. The Markdown default goes
-in `extensions/@knot/language-markdown/src/main.ts`.
+Reviewed. `editor.softWrap` (default off) wraps editor views at the text
+area's width; Toggle Soft Wrap writes the document's own value, and
+`@knot/language-markdown` sets it for Markdown. Each view keeps a wrap map
+(`src/app/editor/wrap.rs`) measured in monospace cells, and rewraps only the
+lines the model's per-revision `LineChange` log (64 revisions) reports, or
+every line when it fell further behind. Whitespace hangs past the edge
+instead of starting a row, tabs advance from their row's start, and
+continuation rows keep the first row's indentation when that leaves half the
+row. All geometry counts rows; a caret at a break shows on the next row, a
+click past a non-final row's end lands before its last character, and the
+cursor line highlight covers every row of its line. Nothing scrolls sideways
+while wrapping, and width, font, zoom, and tab-size changes keep the top
+row's text on top. Movement stays logical (Up and Down land on the target
+line's first row) until checkpoint 4, whose documentation step also covers
+the line change log in `docs/architecture/core-and-buffers.md`. Toggle Soft
+Wrap has no default key.
 
 ## Checkpoint 4 — Visual and logical movement, and docs
 
