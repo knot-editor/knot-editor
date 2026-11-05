@@ -2,8 +2,9 @@
 //!
 //! The behavior cases live beside the package in `test/cases.jsonc` and run
 //! here through the real editor, native commands, and ordered key delivery.
-//! A case starts from `before`, where `‸` marks the caret, types `keys`, and
-//! expects `after` with the caret at its marker and the editor in `mode`.
+//! A case starts from `before`, where `‸` marks the caret, or both ends of a
+//! selection, anchor first, types `keys`, and expects `after` with the caret
+//! or the selection at its markers and the editor in `mode`.
 //! In `keys`, characters are typed and `<name>` presses a named key:
 //! `<esc>`, `<cr>`, `<bs>`, `<del>`, `<tab>`, `<s-tab>`, `<lt>` for `<`, and
 //! `<c-x>` for ctrl with a letter. Keys are pressed without waiting between
@@ -56,6 +57,15 @@ struct Fixture {
 
 impl Fixture {
     fn open(text: &str, language: Option<&str>, caret: usize, cx: &mut TestAppContext) -> Self {
+        Self::open_selected(text, language, (caret, caret), cx)
+    }
+
+    fn open_selected(
+        text: &str,
+        language: Option<&str>,
+        (anchor, caret): (usize, usize),
+        cx: &mut TestAppContext,
+    ) -> Self {
         let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
         let model = cx.new(|_| BufferModel::from_text(text));
         let document = documents.update(cx, |documents, cx| {
@@ -69,7 +79,7 @@ impl Fixture {
         cx.update_window(window, |_, window, cx| {
             window.activate_window();
             editor.update(cx, |editor, cx| {
-                editor.set_selection(caret, caret, crate::app::editor::Reveal::Nearest, cx)
+                editor.set_selection(anchor, caret, crate::app::editor::Reveal::Nearest, cx)
             });
             shell.read(cx).focus_active_editor(window, cx)
         })
@@ -82,9 +92,11 @@ impl Fixture {
             model,
             document,
         };
-        // Entering normal mode sets the context and the caret separately.
+        // Entering normal mode sets the context and the caret separately,
+        // and a selection then enters visual mode.
+        let mode = if anchor == caret { "normal" } else { "visual" };
         wait_until(cx, "Vim to follow the editor", |cx| {
-            fixture.contexts(cx) == ["vim.normal"]
+            fixture.mode_in(cx) == mode
                 && fixture.editor.read(cx).caret_shape() == CaretShape::Block
         });
         fixture
@@ -135,10 +147,24 @@ impl Fixture {
         })
     }
 
+    /// The mode from the key context, and in normal mode's context from
+    /// the status bar, which names the visual modes.
     fn mode(&self, cx: &mut TestAppContext) -> String {
-        match cx.read(|cx| self.contexts(cx)).as_slice() {
+        cx.read(|cx| self.mode_in(cx))
+    }
+
+    fn mode_in(&self, cx: &gpui::App) -> String {
+        let mode = match self.contexts(cx).as_slice() {
             [context] => context.trim_start_matches("vim.").to_owned(),
-            other => format!("{other:?}"),
+            other => return format!("{other:?}"),
+        };
+        let (left, _) = self.status_in(cx);
+        if left.iter().any(|text| text == "-- VISUAL --") {
+            "visual".into()
+        } else if left.iter().any(|text| text == "-- VISUAL LINE --") {
+            "visual-line".into()
+        } else {
+            mode
         }
     }
 
@@ -148,14 +174,16 @@ impl Fixture {
 
     /// The window's status bar texts, left side then right side.
     fn status(&self, cx: &mut TestAppContext) -> (Vec<String>, Vec<String>) {
-        cx.read(|cx| {
-            let key = self.window.window_id().as_u64().to_string();
-            let items = cx.global::<ApplicationStatusBar>().0.items(&key, &[]);
-            let texts = |side: Vec<crate::app::status_bar::BarItem>| {
-                side.into_iter().map(|bar| bar.item.text).collect()
-            };
-            (texts(items.left), texts(items.right))
-        })
+        cx.read(|cx| self.status_in(cx))
+    }
+
+    fn status_in(&self, cx: &gpui::App) -> (Vec<String>, Vec<String>) {
+        let key = self.window.window_id().as_u64().to_string();
+        let items = cx.global::<ApplicationStatusBar>().0.items(&key, &[]);
+        let texts = |side: Vec<crate::app::status_bar::BarItem>| {
+            side.into_iter().map(|bar| bar.item.text).collect()
+        };
+        (texts(items.left), texts(items.right))
     }
 }
 
@@ -224,10 +252,10 @@ fn the_vim_cases_behave_as_listed(cx: &mut TestAppContext) {
         for case in cases.cases {
             count += 1;
             let (before, selection) = unmark(&case.before);
-            let Some((_, caret)) = selection else {
+            let Some(selection) = selection else {
                 panic!("{} marks no caret", case.name);
             };
-            let fixture = Fixture::open(&before, case.language.as_deref(), caret, cx);
+            let fixture = Fixture::open_selected(&before, case.language.as_deref(), selection, cx);
             fixture.press(&case.keys, cx);
             let expected = case.after.join("\n");
             let actual = fixture.marked(cx);
@@ -378,4 +406,54 @@ fn the_clipboard_pastes_linewise_only_while_it_holds_the_yanked_line(cx: &mut Te
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("x\n".into())));
     fixture.press("p", cx);
     assert_eq!(fixture.marked(cx), "one\no‸x\nne");
+}
+
+#[gpui::test]
+fn a_mouse_drag_enters_visual_mode_and_a_click_leaves_it(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let fixture = Fixture::open("one\ntwo\nthree", None, 0, cx);
+    let (bounds, text_bounds) = cx.read(|cx| {
+        let editor = fixture.editor.read(cx);
+        (editor.interaction_bounds(), editor.text_bounds())
+    });
+    let start = point(text_bounds.origin.x + px(1.), text_bounds.origin.y + px(5.));
+    let outside = point(
+        bounds.origin.x + bounds.size.width + px(20.),
+        bounds.origin.y + bounds.size.height + px(20.),
+    );
+    let drag = |cx: &mut TestAppContext| {
+        let mut window_cx = VisualTestContext::from_window(fixture.window, cx);
+        window_cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
+        window_cx.simulate_mouse_move(outside, MouseButton::Left, Modifiers::default());
+        window_cx.simulate_mouse_up(outside, MouseButton::Left, Modifiers::default());
+    };
+    let shows = |fixture: &Fixture, cx: &mut TestAppContext, text: &str| {
+        fixture.status(cx).0.iter().any(|item| item == text)
+    };
+
+    drag(cx);
+    wait_until(cx, "the drag to enter visual mode", |cx| {
+        fixture.mode_in(cx) == "visual"
+    });
+    assert!(shows(&fixture, cx, "-- VISUAL --"));
+    assert_eq!(fixture.marked(cx), "‸one\ntwo\nthree‸");
+
+    // A click leaves visual mode with the caret where it landed.
+    let mut window_cx = VisualTestContext::from_window(fixture.window, cx);
+    window_cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
+    window_cx.simulate_mouse_up(start, MouseButton::Left, Modifiers::default());
+    wait_until(cx, "the click to leave visual mode", |cx| {
+        fixture.mode_in(cx) == "normal"
+    });
+    assert!(!shows(&fixture, cx, "-- VISUAL --"));
+    assert_eq!(fixture.marked(cx), "‸one\ntwo\nthree");
+
+    // The dragged selection is what an operator takes.
+    drag(cx);
+    wait_until(cx, "the drag to enter visual mode", |cx| {
+        fixture.mode_in(cx) == "visual"
+    });
+    fixture.press("d", cx);
+    assert_eq!(fixture.marked(cx), "‸");
+    assert_eq!(fixture.mode(cx), "normal");
 }

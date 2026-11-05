@@ -1,13 +1,15 @@
 // Vim's modal editing for every editor where `vim.enabled` resolves true.
-// Each such editor is followed through a long-lived handle. Normal mode is
-// the `vim.normal` key context, where typed text and a few named keys feed a
-// parser and its commands run here; insert mode is the `vim.insert` context,
-// where typing is native and Escape returns to normal mode.
+// Each such editor is followed through a long-lived handle. Normal and
+// visual modes are the `vim.normal` key context, where typed text and a few
+// named keys feed a parser and its commands run here; insert mode is the
+// `vim.insert` context, where typing is native and Escape returns to normal
+// mode.
 import { commands, documents, keymaps, settings, storage, windows, workbench } from "knot";
 import type { CommandContext, DocumentId, EditorHandle, JsonValue, StatusItem, ViewTarget, WindowTarget } from "knot";
 import { EMPTY, feed, type Pending, pendingText } from "./keys.js";
-import { clampCaret, INSERT, leaveInsert, NORMAL, run, setMode, type Shared, type State } from "./normal.js";
+import { INSERT, isVisual, leaveInsert, type Mode, NORMAL, run, setMode, type Shared, type State } from "./normal.js";
 import { Registers } from "./registers.js";
+import { followSelection, runVisual } from "./visual.js";
 
 declare module "knot" {
   interface Settings {
@@ -184,29 +186,28 @@ class Vim {
     const state: Followed = {
       target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
       language: info.language, mode: "normal", pending: EMPTY, operatorShown: false,
-      want: null, caret: null, group: null, opened: false,
+      want: null, caret: null, group: null, opened: false, visual: null, selected: null, previous: null,
     };
     this.states.set(target, state);
     handle.onDidClose(() => {
       this.states.delete(target);
     });
     await handle.onDidChangeSelection(async () => {
-      if (this.states.get(target) !== state || state.mode !== "normal") return;
-      try {
-        await clampCaret(state);
-      } catch (error) {
-        // The tab may have closed since the change.
-        if ((error as { code?: string }).code !== "InvalidTarget") throw error;
-      }
+      if (this.states.get(target) !== state || state.mode === "insert") return;
+      const mode = state.mode;
+      await whileOpen(() => followSelection(state));
+      if (state.mode !== mode) await this.showStatus(target.window);
     });
     await setMode(state, "normal");
-    await clampCaret(state);
+    await whileOpen(() => followSelection(state));
     return state;
   }
 
   private async detach(state: Followed) {
     this.states.delete(state.target);
     await state.group?.dispose();
+    state.previous?.anchor.dispose();
+    state.previous?.caret.dispose();
     await state.handle.setKeyContext(NORMAL, false);
     await state.handle.setKeyContext(INSERT, false);
     await state.handle.setCursorStyle(null);
@@ -232,14 +233,21 @@ class Vim {
     const state = await this.stateOf(context);
     if (state === null) return;
     for (const key of keys) {
-      if (state.mode !== "normal") break;
-      const fed = feed(state.pending, key);
+      if (state.mode === "insert") break;
+      const visual = isVisual(state.mode);
+      const fed = feed(state.pending, key, visual);
       if ("pending" in fed) {
         state.pending = fed.pending;
       } else {
         state.pending = EMPTY;
         await showOperator(state, false);
-        if (fed.command !== null) await run(state, fed.command);
+        const command = fed.command;
+        if (command === null) continue;
+        if (visual || command.kind === "visual" || command.kind === "reselect") {
+          await runVisual(state, command);
+        } else {
+          await run(state, command);
+        }
       }
     }
     await showOperator(state, state.mode === "normal" && state.pending.operator !== null);
@@ -250,6 +258,8 @@ class Vim {
     const state = await this.stateOf(context);
     if (state === null || state.mode !== "insert") return;
     await leaveInsert(state);
+    // A selection made while inserting carries on in visual mode.
+    await followSelection(state);
     await this.showStatus(state.target.window);
   }
 
@@ -263,8 +273,23 @@ class Vim {
       await this.keysItem.update(null, { window });
       return;
     }
-    await this.modeItem.update({ text: state.mode === "insert" ? "-- INSERT --" : "", priority: 100 }, { window });
+    await this.modeItem.update({ text: MODE_TEXT[state.mode], priority: 100 }, { window });
     await this.keysItem.update({ text: pendingText(state.pending), side: "right", priority: 40 }, { window });
+  }
+}
+
+const MODE_TEXT: Readonly<Record<Mode, string>> = {
+  normal: "", insert: "-- INSERT --", visual: "-- VISUAL --", "visual-line": "-- VISUAL LINE --",
+};
+
+/** Runs `body`, ignoring the failure of an editor or document that closed
+ * meanwhile. */
+async function whileOpen(body: () => Promise<void>) {
+  try {
+    await body();
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code !== "InvalidTarget" && code !== "BufferClosed") throw error;
   }
 }
 

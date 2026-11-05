@@ -1,10 +1,13 @@
 // Vim behavior cases, run by a Rust product test through the real editor
 // with this package enabled. Lines join with "\n" and "‸" marks the caret,
-// which in normal mode sits on the character after it. `keys` types its
+// which in normal mode sits on the character after it. Two markers are a
+// selection, anchor first in `before`; in a visual mode the selection runs
+// through the character under Vim's caret, a line break included. `keys` types its
 // characters; `<name>` presses a named key: <esc>, <cr>, <bs>, <del>, <tab>,
 // <s-tab>, <lt> for "<", and <c-x> for ctrl with a letter. Keys arrive
 // without waiting for each other, as fast typing does. `mode` is the mode
-// afterwards, "normal" unless given; `language` sets the document's language.
+// afterwards, "normal" unless given, or "insert", "visual", or "visual-line";
+// `language` sets the document's language.
 {
   "cases": [
     // Character and line motions.
@@ -245,6 +248,90 @@
     { "name": "Escape cancels a pending count", "before": ["‸abc"], "keys": "2<esc>l", "after": ["a‸bc"] },
     { "name": "an unknown key cancels a pending count", "before": ["‸abc"], "keys": "2Ql", "after": ["a‸bc"] },
     { "name": "an unknown g key cancels it", "before": ["‸abc"], "keys": "gzl", "after": ["a‸bc"] },
+
+    // Visual mode.
+    { "name": "vl selects two characters", "before": ["‸abc"], "keys": "vl", "after": ["‸ab‸c"], "mode": "visual" },
+    { "name": "vh selects backwards", "before": ["ab‸c"], "keys": "vh", "after": ["a‸bc‸"], "mode": "visual" },
+    { "name": "a count moves the caret in visual mode", "before": ["‸abcdef"], "keys": "v3l", "after": ["‸abcd‸ef"], "mode": "visual" },
+    { "name": "vw selects through the next word's first character", "before": ["‸foo bar"], "keys": "vw", "after": ["‸foo b‸ar"], "mode": "visual" },
+    { "name": "ve selects to the word end", "before": ["‸foo bar"], "keys": "ve", "after": ["‸foo‸ bar"], "mode": "visual" },
+    { "name": "vb selects back to the word start", "before": ["foo ba‸r"], "keys": "vb", "after": ["foo ‸bar‸"], "mode": "visual" },
+    { "name": "v$ includes the line break", "before": ["‸ab", "cd"], "keys": "v$", "after": ["‸ab", "‸cd"], "mode": "visual" },
+    { "name": "v0 selects to the line start", "before": ["ab‸c"], "keys": "v0", "after": ["‸abc‸"], "mode": "visual" },
+    { "name": "vj keeps the column", "before": ["a‸bc", "def"], "keys": "vj", "after": ["a‸bc", "de‸f"], "mode": "visual" },
+    { "name": "vG selects to the last line", "before": ["a‸b", "c", "d"], "keys": "vG", "after": ["a‸b", "c", "d‸"], "mode": "visual" },
+    { "name": "vf selects through the character", "before": ["‸a.b"], "keys": "vf.", "after": ["‸a.‸b"], "mode": "visual" },
+    { "name": "v% selects to the matching bracket", "before": ["‸(a)b"], "keys": "v%", "after": ["‸(a)‸b"], "mode": "visual" },
+    { "name": "v} selects to the empty line", "before": ["a", "‸b", "", "c"], "keys": "v}", "after": ["a", "‸b", "", "‸c"], "mode": "visual" },
+    { "name": "o moves the caret to the other end", "before": ["a‸bcd"], "keys": "vlloh", "after": ["‸abcd‸"], "mode": "visual" },
+    { "name": "Escape leaves visual mode at the caret", "before": ["‸abc"], "keys": "vll<esc>", "after": ["ab‸c"] },
+    { "name": "Escape after v$ steps back onto the line", "before": ["‸ab", "cd"], "keys": "v$<esc>", "after": ["a‸b", "cd"] },
+    { "name": "v again leaves visual mode", "before": ["‸abc"], "keys": "vlv", "after": ["a‸bc"] },
+    { "name": "V from v switches to lines", "before": ["a‸b", "c"], "keys": "vV", "after": ["‸ab", "‸c"], "mode": "visual-line" },
+    { "name": "v from V switches to characters", "before": ["a‸b", "c"], "keys": "Vjv", "after": ["a‸b", "c‸"], "mode": "visual" },
+
+    // Visual-line mode.
+    { "name": "V selects the line", "before": ["a", "‸b", "c"], "keys": "V", "after": ["a", "‸b", "‸c"], "mode": "visual-line" },
+    { "name": "Vj selects two lines", "before": ["‸a", "b", "c"], "keys": "Vj", "after": ["‸a", "b", "‸c"], "mode": "visual-line" },
+    { "name": "Vk selects upwards to the end", "before": ["a", "‸b"], "keys": "Vk", "after": ["‸a", "b‸"], "mode": "visual-line" },
+    { "name": "V again leaves visual-line mode", "before": ["a‸b"], "keys": "VV", "after": ["a‸b"] },
+    { "name": "Escape leaves visual-line mode where the caret is", "before": ["a‸b", "cd"], "keys": "Vj<esc>", "after": ["ab", "c‸d"] },
+
+    // Operators on a selection.
+    { "name": "vd deletes the selection", "before": ["‸abc"], "keys": "vld", "after": ["‸c"] },
+    { "name": "vjd deletes across lines", "before": ["a‸b", "cd"], "keys": "vjd", "after": ["‸a"] },
+    { "name": "vx deletes the selection", "before": ["‸abc"], "keys": "vlx", "after": ["‸c"] },
+    { "name": "Vd deletes the line", "before": ["a", "‸b", "c"], "keys": "Vd", "after": ["a", "‸c"] },
+    { "name": "Vjd deletes two lines", "before": ["‸a", "b", "c"], "keys": "Vjd", "after": ["‸c"] },
+    { "name": "vD deletes whole lines", "before": ["a‸b", "c"], "keys": "vD", "after": ["‸c"] },
+    { "name": "a visual delete undoes as one step", "before": ["‸abc"], "keys": "vldu", "after": ["‸abc"] },
+    { "name": "vc changes the selection", "before": ["‸abc"], "keys": "vlcx<esc>", "after": ["‸xc"] },
+    { "name": "Vc keeps the indentation", "before": ["  a‸b", "c"], "keys": "Vcx<esc>", "after": ["  ‸x", "c"] },
+    { "name": "vc…<Esc> undoes as one step", "before": ["‸abc"], "keys": "vlcxy<esc>u", "after": ["‸abc"] },
+    { "name": "vy yanks and goes to the start", "before": ["ab‸cd"], "keys": "vhy", "after": ["a‸bcd"] },
+    { "name": "vy then p puts the text", "before": ["ab‸cd"], "keys": "vhy$p", "after": ["abcdb‸c"] },
+    { "name": "Vy then p puts the line", "before": ["‸a", "b"], "keys": "Vyjp", "after": ["a", "b", "‸a"] },
+    { "name": "vY yanks whole lines", "before": ["a‸b", "c"], "keys": "vYjp", "after": ["ab", "c", "‸ab"] },
+    { "name": "a register names a visual yank", "before": ["‸ab", "x"], "keys": "v\"ayj\"ap", "after": ["ab", "x‸a"] },
+    { "name": "vj> indents both lines", "before": ["‸a", "b"], "keys": "vj>", "after": ["    ‸a", "    b"] },
+    { "name": "a count on > shifts several times", "before": ["‸a"], "keys": "V2>", "after": ["        ‸a"] },
+    { "name": "V< outdents", "before": ["    ‸a"], "keys": "V<lt>", "after": ["‸a"] },
+    { "name": "V= reindents a Rust line", "language": "rust", "before": ["fn f() {", "‸a();", "}"], "keys": "V=", "after": ["fn f() {", "    ‸a();", "}"] },
+    { "name": "vU uppercases", "before": ["‸abc"], "keys": "vlU", "after": ["‸ABc"] },
+    { "name": "vu lowercases", "before": ["‸ABC"], "keys": "vlu", "after": ["‸abC"] },
+    { "name": "v~ switches case", "before": ["‸aBc"], "keys": "vl~", "after": ["‸Abc"] },
+    { "name": "vgU uppercases", "before": ["‸ab"], "keys": "vgU", "after": ["‸Ab"] },
+    { "name": "vJ joins the selected lines", "before": ["‸a", "b", "c"], "keys": "vjjJ", "after": ["a b‸ c"] },
+    { "name": "vJ on one line joins two", "before": ["‸a", "b"], "keys": "vJ", "after": ["a‸ b"] },
+    { "name": "vr replaces every character but line breaks", "before": ["‸abc", "de"], "keys": "vjrx", "after": ["‸xxx", "xe"] },
+
+    // Putting over a selection.
+    { "name": "vp replaces the selection", "before": ["‸foo bar"], "keys": "yiwwvep", "after": ["foo fo‸o"] },
+    { "name": "vp keeps the replaced text", "before": ["‸foo bar"], "keys": "yiwwvep0vep", "after": ["ba‸r foo"] },
+    { "name": "vP leaves the registers", "before": ["‸foo bar"], "keys": "yiwwveP0veP", "after": ["fo‸o foo"] },
+    { "name": "Vp replaces the line", "before": ["‸a", "b"], "keys": "yyjVp", "after": ["a", "‸a"] },
+    { "name": "vp with a line puts it on a line of its own", "before": ["‸a", "xyz"], "keys": "yyjlvp", "after": ["a", "x", "‸a", "z"] },
+
+    // Text objects in visual mode.
+    { "name": "viw selects the word", "before": ["foo b‸ar baz"], "keys": "viw", "after": ["foo ‸bar‸ baz"], "mode": "visual" },
+    { "name": "vawaw extends by the next word", "before": ["‸a b c"], "keys": "vawaw", "after": ["‸a b ‸c"], "mode": "visual" },
+    { "name": "vi( selects inside the parentheses", "before": ["f(a, ‸b)"], "keys": "vi(", "after": ["f(‸a, b‸)"], "mode": "visual" },
+    { "name": "vip switches to lines", "before": ["a", "‸b", "", "c"], "keys": "vip", "after": ["‸a", "b", "‸", "c"], "mode": "visual-line" },
+    { "name": "vi{d deletes a block's lines", "before": ["fn f() {", "    a‸();", "}"], "keys": "vi{d", "after": ["fn f() {", "‸}"] },
+    { "name": "viwc changes the word", "before": ["foo b‸ar"], "keys": "viwcx<esc>", "after": ["foo ‸x"] },
+
+    // gv.
+    { "name": "gv selects the previous area", "before": ["‸abc"], "keys": "vl<esc>$gv", "after": ["‸ab‸c"], "mode": "visual" },
+    { "name": "gv selects previous lines in visual-line mode", "before": ["‸a", "b", "c"], "keys": "Vj<esc>Ggv", "after": ["‸a", "b", "‸c"], "mode": "visual-line" },
+    { "name": "gv in visual mode swaps with the previous area", "before": ["‸ab", "cd"], "keys": "vl<esc>jVgv", "after": ["‸ab‸", "cd"], "mode": "visual" },
+    { "name": "gv after a delete of its text does nothing", "before": ["‸abc"], "keys": "vld<esc>gv", "after": ["‸c"] },
+
+    // Selections made outside Vim.
+    { "name": "a selection enters visual mode", "before": ["‸ab‸c"], "keys": "", "after": ["‸ab‸c"], "mode": "visual" },
+    { "name": "a motion extends an outside selection", "before": ["‸ab‸c"], "keys": "l", "after": ["‸abc‸"], "mode": "visual" },
+    { "name": "Escape leaves an outside selection on its last character", "before": ["‸ab‸c"], "keys": "<esc>", "after": ["a‸bc"] },
+    { "name": "an outside selection ending with a line break deletes it", "before": ["‸ab", "‸cd"], "keys": "d", "after": ["‸cd"] },
+    { "name": "V on an outside selection takes its lines", "before": ["a‸b", "c‸d"], "keys": "V", "after": ["‸ab", "cd‸"], "mode": "visual-line" },
 
     // Insert mode.
     { "name": "i inserts before the caret and Escape steps back", "before": ["a‸b"], "keys": "ix<esc>", "after": ["a‸xb"] },

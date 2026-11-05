@@ -1,6 +1,6 @@
-// Parses normal-mode keys into commands. Each key is one typed character or
-// a named key such as "<esc>"; `feed` takes the input pending so far and
-// returns either more pending input or a complete command.
+// Parses normal- and visual-mode keys into commands. Each key is one typed
+// character or a named key such as "<esc>"; `feed` takes the input pending
+// so far and returns either more pending input or a complete command.
 
 export type SimpleMotion =
   | "left" | "right" | "left-wrap" | "right-wrap" | "up" | "down" | "row-up" | "row-down"
@@ -19,12 +19,14 @@ export type TextObject =
   | "word" | "WORD" | "paren" | "brace" | "bracket" | "angle"
   | "dquote" | "squote" | "backtick" | "paragraph";
 
-/** What an operator applies to: a motion, a text object, or whole lines
- * from a doubled operator such as `dd`. */
+/** What an operator applies to: a motion, a text object, whole lines from
+ * a doubled operator such as `dd`, or the visual selection, taken as whole
+ * lines by `D`, `X`, `Y`, `C`, `S`, and `R`. */
 export type Target =
   | { readonly kind: "motion"; readonly motion: Motion }
   | { readonly kind: "object"; readonly object: TextObject; readonly around: boolean }
-  | { readonly kind: "line" };
+  | { readonly kind: "line" }
+  | { readonly kind: "selection"; readonly linewise: boolean };
 
 export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O";
 
@@ -40,7 +42,16 @@ export type Command =
   | { readonly kind: "join"; readonly count: number }
   | { readonly kind: "insert"; readonly at: InsertAt }
   | { readonly kind: "undo"; readonly count: number }
-  | { readonly kind: "redo"; readonly count: number };
+  | { readonly kind: "redo"; readonly count: number }
+  /** `v` or `V`: enters, switches, or leaves visual mode. */
+  | { readonly kind: "visual"; readonly linewise: boolean }
+  /** `gv`: selects the previous visual area again. */
+  | { readonly kind: "reselect" }
+  /** `o` in visual mode: moves the caret to the selection's other end. */
+  | { readonly kind: "swap-ends" }
+  | { readonly kind: "leave-visual" }
+  /** A text object typed in visual mode, which selects it. */
+  | { readonly kind: "select-object"; readonly object: TextObject; readonly around: boolean; readonly count: number };
 
 /** Input typed so far: a register, a count, an operator with its own count,
  * a key prefix such as "g" or "f", and the keys as typed, for display. */
@@ -104,6 +115,14 @@ const SHORTHANDS: Readonly<Record<string, readonly [Operator, Target]>> = {
   Y: ["y", { kind: "line" }],
 };
 
+/** Visual-mode shorthands for an operator over the selection. */
+const VISUAL_SHORTHANDS: Readonly<Record<string, readonly [Operator, boolean]>> = {
+  x: ["d", false], X: ["d", true], D: ["d", true],
+  s: ["c", false], S: ["c", true], C: ["c", true], R: ["c", true],
+  Y: ["y", true],
+  u: ["gu", false], U: ["gU", false], "~": ["g~", false],
+};
+
 const INSERTS = new Set<string>(["i", "a", "I", "A", "o", "O"]);
 
 /** Registers a `"` prefix may name: `"` itself is the unnamed register. */
@@ -121,9 +140,11 @@ function characterOf(key: string): string | null {
   return key.length > 1 && key.startsWith("<") ? null : key;
 }
 
-export function feed(pending: Pending, key: string): Fed {
+/** Parses one key; `visual` is whether a visual mode is active, where
+ * operators apply to the selection at once. */
+export function feed(pending: Pending, key: string, visual = false): Fed {
   const done = (command: Command | null): Fed => ({ command });
-  if (key === "<esc>") return done(null);
+  if (key === "<esc>") return done(visual ? { kind: "leave-visual" } : null);
   const next = (changes: Partial<Pending>): Fed => ({
     pending: { ...pending, ...changes, typed: pending.typed + displayed(key) },
   });
@@ -135,6 +156,8 @@ export function feed(pending: Pending, key: string): Fed {
   const motion = (motion: Motion): Fed => operator === null
     ? done({ kind: "motion", motion, count })
     : target({ kind: "motion", motion });
+  const selection = (operator: Operator, linewise: boolean): Fed =>
+    done({ kind: "operator", operator, register, count, target: { kind: "selection", linewise } });
 
   switch (pending.prefix) {
     case '"':
@@ -150,14 +173,17 @@ export function feed(pending: Pending, key: string): Fed {
     }
     case "i": case "a": {
       const object = OBJECTS[key];
-      return object === undefined
-        ? done(null)
-        : target({ kind: "object", object, around: pending.prefix === "a" });
+      const around = pending.prefix === "a";
+      if (object === undefined) return done(null);
+      if (visual) return done({ kind: "select-object", object, around, count: count ?? 1 });
+      return target({ kind: "object", object, around });
     }
     case "g": {
       if (operator !== null && DOUBLING[operator] === key) return target({ kind: "line" });
+      if (key === "v") return done({ kind: "reselect" });
       const gOperator = G_OPERATORS[key];
       if (gOperator !== undefined) {
+        if (visual) return selection(gOperator, false);
         if (operator === null) return next({ operator: gOperator, prefix: "" });
         return done(null);
       }
@@ -174,6 +200,7 @@ export function feed(pending: Pending, key: string): Fed {
   if (key === "g") return next({ prefix: "g" });
   if (key === "f" || key === "F" || key === "t" || key === "T") return next({ prefix: key });
   if (OPERATORS.has(key)) {
+    if (visual) return selection(key as Operator, false);
     if (operator === null) return next({ operator: key as Operator });
     return operator === key ? target({ kind: "line" }) : done(null);
   }
@@ -185,6 +212,16 @@ export function feed(pending: Pending, key: string): Fed {
   }
   if (key === '"') return next({ prefix: '"' });
   if (key === "r") return next({ prefix: "r" });
+  if (key === "v" || key === "V") return done({ kind: "visual", linewise: key === "V" });
+  if (visual) {
+    if (key === "i" || key === "a") return next({ prefix: key });
+    if (key === "o" || key === "O") return done({ kind: "swap-ends" });
+    const shorthand = VISUAL_SHORTHANDS[key];
+    if (shorthand !== undefined) return selection(shorthand[0], shorthand[1]);
+    if (key === "p" || key === "P") return done({ kind: "put", before: key === "P", register, count: count ?? 1 });
+    if (key === "J") return done({ kind: "join", count: count ?? 1 });
+    return done(null);
+  }
   const shorthand = SHORTHANDS[key];
   if (shorthand !== undefined) {
     return done({ kind: "operator", operator: shorthand[0], register, count, target: shorthand[1] });

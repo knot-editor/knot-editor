@@ -3,7 +3,7 @@
 // Text math is done here over line snapshots; indentation, joining, bracket
 // matching, and visual-row movement are the native editor commands.
 import { commands, documents, languages, settings, workbench } from "knot";
-import type { Buffer, Disposable, DocumentId, EditorHandle, ViewTarget } from "knot";
+import type { Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, Mark, ViewTarget } from "knot";
 import type { Command, FindKind, InsertAt, Motion, Operator, Target } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import {
@@ -19,7 +19,11 @@ import {
 export const NORMAL = "vim.normal";
 export const INSERT = "vim.insert";
 
-export type Mode = "normal" | "insert";
+export type Mode = "normal" | "insert" | "visual" | "visual-line";
+
+export function isVisual(mode: Mode): mode is "visual" | "visual-line" {
+  return mode === "visual" || mode === "visual-line";
+}
 
 /** State every followed editor shares. */
 export type Shared = {
@@ -48,13 +52,28 @@ export type State = {
   /** Whether insert mode began on a line of its own, from `o`, `O`, or a
    * linewise change, whose indentation alone is removed again on Escape. */
   opened: boolean;
+  /** In a visual mode, the byte offsets of the characters where the
+   * selection began and where its caret is; both are inside it. */
+  visual: { anchor: number; caret: number } | null;
+  /** The editor selection visual mode last set, so a different one is
+   * known to come from elsewhere. */
+  selected: EditorSelection | null;
+  /** The previous visual area, which `gv` selects again. */
+  previous: { readonly anchor: Mark; readonly caret: Mark; readonly linewise: boolean } | null;
 };
 
 export async function setMode(state: State, mode: Mode) {
+  const was = state.mode;
   state.mode = mode;
-  await state.handle.setKeyContext(NORMAL, mode === "normal");
+  if (!isVisual(mode)) {
+    state.visual = null;
+    state.selected = null;
+  }
+  // Visual modes share normal mode's keys, context, and caret.
+  if ((was === "insert") === (mode === "insert") && was !== mode) return;
+  await state.handle.setKeyContext(NORMAL, mode !== "insert");
   await state.handle.setKeyContext(INSERT, mode === "insert");
-  await state.handle.setCursorStyle(mode === "normal" ? "block" : null);
+  await state.handle.setCursorStyle(mode === "insert" ? null : "block");
 }
 
 /** Puts a caret that sits past its line's last character back on it, as
@@ -68,7 +87,7 @@ export async function clampCaret(state: State) {
   if (position.col > last) await moveTo(state, lines, { line: position.line, col: last });
 }
 
-async function moveTo(
+export async function moveTo(
   state: State,
   lines: BufferLines,
   position: Position,
@@ -80,7 +99,7 @@ async function moveTo(
 }
 
 /** Moves to `position`, or the line's last character when it is past it. */
-async function moveOnto(state: State, lines: BufferLines, position: Position) {
+export async function moveOnto(state: State, lines: BufferLines, position: Position) {
   const text = await lines.text(position.line);
   await moveTo(state, lines, { line: position.line, col: Math.min(position.col, lastColumn(text)) });
 }
@@ -138,7 +157,7 @@ type Moved = {
 /** Resolves a motion from `from`, or null when it fails, as `j` on the last
  * line or `fx` without an x does. With an operator, motions follow Vim's
  * operator-pending forms: `l` may reach the line's end and `w` stops there. */
-async function resolve(
+export async function resolve(
   state: State,
   lines: BufferLines,
   from: Position,
@@ -179,6 +198,9 @@ async function resolve(
     case "row-up":
     case "row-down": {
       const native = name === "row-up" ? "editor.move-up" : "editor.move-down";
+      // In visual mode the editor's caret is not on the character.
+      const caret = await lines.offset(from);
+      await state.handle.setSelection({ anchor: caret, caret });
       for (let step = 0; step < n; step++) await commands.invoke(native);
       const fresh = new BufferLines(state.buffer);
       return { to: await fresh.position((await state.handle.selection()).caret), type: "exclusive" };
@@ -323,7 +345,7 @@ function empty(region: Region): boolean {
 }
 
 /** The register text of a region. */
-async function regionText(lines: BufferLines, region: Region): Promise<Register> {
+export async function regionText(lines: BufferLines, region: Region): Promise<Register> {
   if (region.linewise) {
     const texts: string[] = [];
     for (let line = region.start.line; line <= region.end.line; line++) texts.push(await lines.text(line));
@@ -348,7 +370,7 @@ async function deletedRange(lines: BufferLines, region: Region): Promise<[number
   return [await lines.offset({ line: first - 1, col: (await lines.text(first - 1)).length }), end];
 }
 
-async function replace(state: State, start: number, end: number, text: string) {
+export async function replace(state: State, start: number, end: number, text: string) {
   const { revision } = await state.buffer.snapshot({ startByteOffset: start, endByteOffset: start });
   await state.buffer.applyEdits([{ range: { startByteOffset: start, endByteOffset: end }, text }], {
     ifRevision: revision,
@@ -367,7 +389,7 @@ async function openGroup(state: State): Promise<Disposable | null> {
   }
 }
 
-async function grouped(state: State, body: () => Promise<void>) {
+export async function grouped(state: State, body: () => Promise<void>) {
   const group = await openGroup(state);
   try {
     await body();
@@ -377,7 +399,7 @@ async function grouped(state: State, body: () => Promise<void>) {
 }
 
 /** Records a yank or delete in the registers and the clipboard. */
-async function record(
+export async function record(
   state: State,
   register: string | null,
   value: Register,
@@ -401,6 +423,8 @@ async function operate(
   let region: Region | null;
   let big = false;
   switch (target.kind) {
+    case "selection":
+      return;
     case "line": {
       const last = Math.min((await lines.count()) - 1, from.line + (count ?? 1) - 1);
       region = { start: { line: from.line, col: 0 }, end: { line: last, col: 0 }, linewise: true };
@@ -421,7 +445,22 @@ async function operate(
     await moveTo(state, lines, from);
     return;
   }
-  region = await adjust(lines, region, operator);
+  await applyOperator(state, lines, operator, register, await adjust(lines, region, operator), from, big);
+}
+
+/** Applies an operator to a region, from the caret at `from`. `big` makes a
+ * small delete shift the numbered registers, as some motions' deletes do,
+ * and `shifts` is how many times `>` and `<` indent. */
+export async function applyOperator(
+  state: State,
+  lines: BufferLines,
+  operator: Operator,
+  register: string | null,
+  region: Region,
+  from: Position,
+  big: boolean,
+  shifts = 1,
+) {
   state.want = null;
   switch (operator) {
     case "y": {
@@ -456,7 +495,7 @@ async function operate(
         const anchor = await lines.offset({ line: first, col: 0 });
         const caret = await lines.offset({ line: last, col: (await lines.text(last)).length });
         await state.handle.setSelection({ anchor, caret });
-        await commands.invoke(native);
+        for (let n = 0; n < shifts; n++) await commands.invoke(native);
       });
       const fresh = new BufferLines(state.buffer);
       await moveTo(state, fresh, await lineStart(fresh, first));
@@ -509,7 +548,7 @@ async function change(state: State, lines: BufferLines, region: Region, register
 
 const lower = (text: string) => text.toLowerCase();
 const upper = (text: string) => text.toUpperCase();
-function swapCase(text: string): string {
+export function swapCase(text: string): string {
   let swapped = "";
   for (const character of text) {
     const up = character.toUpperCase();
@@ -558,7 +597,7 @@ async function put(state: State, register: string | null, count: number, before:
 }
 
 /** A register's text for a put, or null when it holds none. */
-async function readRegister(state: State, register: string | null): Promise<Register | null> {
+export async function readRegister(state: State, register: string | null): Promise<Register | null> {
   if (register === null || register === "+" || register === "*") {
     const text = await workbench.readClipboardText();
     return text === null ? null : state.shared.registers.fromClipboard(text);
@@ -611,7 +650,7 @@ async function toggleCase(state: State, count: number) {
 
 /** `J`: joins count lines, at least two, with the native Join Lines, which
  * leaves the caret where the last two lines met. */
-async function join(state: State, count: number) {
+export async function join(state: State, count: number) {
   const lines = new BufferLines(state.buffer);
   const { caret } = await state.handle.selection();
   const line = (await lines.position(caret)).line;
