@@ -109,7 +109,10 @@ until that command finishes: key-downs are intercepted before keybindings and
 text insertion, and the held editor queues its committed text, in one queue.
 Release replays the queue in order through gpui's keystroke dispatch and the
 editor's input path, so each key sees the state its predecessor committed, as
-native commands already do by finishing in the dispatch turn. A replayed key or
+native commands already do by finishing in the dispatch turn. Dispatched
+commands run deferred to the end of the effect cycle while typed text inserts
+at once, so release replays one input per deferred step, letting a replayed
+Enter or Backspace commit before the text typed after it. A replayed key or
 text that starts another extension command holds the rest of the queue. The
 hold also releases on the first key after focus leaves the held view, such as
 a command awaiting a picker, and after one second, so a stuck extension never

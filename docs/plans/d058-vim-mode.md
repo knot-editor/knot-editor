@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 📝 proposed. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoint 1 at its review gate. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -79,7 +79,7 @@ during implementation gets its entry when it is found.
 
 The package defines `vim.enabled` and observes it. While the setting resolves
 true for an editor, the package follows that editor through a long-lived
-handle, as `@example/modal`'s `follow.ts` does:
+handle:
 
 - It attaches on `activeTargetChanged` and keeps per-editor state keyed by the
   handle: mode, pending input, visual anchor, jumplist, and buffer marks.
@@ -111,11 +111,20 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 - **Undo:** entering insert opens an undo group and leaving it closes the
   group. Each insert session, and each change (`ciw…<Esc>`), is therefore one
   undo step. Multi-batch operators open their own group.
-- **`j` and `k`** delegate to native `editor.move-down-logical` and
-  `move-up-logical` through `commands.invoke`, and `gj`/`gk` to the row
-  commands. Native code keeps the sticky column, shaping, and soft wrap. When
-  an operator uses them, the range is computed by buffer lines, since the
+- **`j` and `k`** move by buffer lines in JavaScript toward a wanted screen
+  column, with tabs reaching the next stop, and `$` makes the wanted column
+  the line end, as Vim's `curswant` does. Native logical movement could not
+  keep it: every caret clamp resets the native goal column. `gj`/`gk` invoke
+  the native row commands, so shaping and soft wrap stay native. When an
+  operator uses `j`/`k`, the range is computed by buffer lines, since the
   operation is linewise.
+- **`o` and `O`** break the line with native `editor.insert-newline`, so a
+  language's indent query places the new line. Where the language has no
+  indent query, and above the first line, `O` copies the current line's
+  indentation instead, as Vim's autoindent does. Escape on an opened line
+  left blank removes its indentation.
+- **Redo** keeps the native caret, after the redone change, where Vim puts
+  it at the change's start; the range is not available to extensions.
 - **`%`** uses native `editor.jump-to-matching-bracket`, which is
   syntax-aware.
 - **`>`, `<`, `=`, and `J`** select their range and invoke the native
@@ -169,61 +178,62 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
   stays a closure that cannot lose text silently: unsaved-document recovery
   still holds the text until the close commits.
 
+## Testing
+
+The package's behavior is tested end to end through the real editor, as
+native editing is. `extensions/@knot/vim/test/cases.jsonc` holds the cases: a
+marked starting text, the keys in Vim notation, the expected text and caret,
+and the mode. `src/app/product/tests/vim.rs` runs every case in a product
+window with the bundled package enabled from `post-init.js`, pressing real
+keystrokes without settling between them, so ordered key delivery, native
+commands, undo groups, and indent queries all take part. Behavior that cases
+cannot express, such as the status bar, caret shapes, soft wrap, and
+enablement, gets its own product test there. `node:test` covers only pure
+modules (motions, text math, the parser); fake-host tests that stub native
+commands are not used.
+
 ## Checkpoints
 
-### 1. Package, modes, and basic movement 📝
+### 1. Package, modes, and basic movement 🚧 review gate
 
 Deliverables:
 
-- `extensions/@knot/vim` with `vim.enabled`, editor following, the two
+- ✅ `extensions/@knot/vim` with `vim.enabled`, editor following, the two
   contexts, and the state machine with counts and pending-key display.
-- Normal ↔ insert through `i a I A o O` and `escape`, with an undo group per
-  insert session and caret clamping. `u` and `ctrl-r` invoke native undo and
-  redo.
-- Motions `h j k l gj gk w W b B e E ge gE 0 ^ $ gg G`.
-- Caret styles and the mode status item.
-- `@example/modal`, its product test, and its documentation are removed.
-  Nothing else lives under `examples/extensions`, so the example build
-  wiring in `build.rs` and `scripts/extensions/tasks.mjs`, the `just`
-  install target, and the repository-map and extension-guide references go
-  too.
+- ✅ Normal ↔ insert through `i a I A o O` and `escape`, with an undo group
+  per insert session and caret clamping. `u` and `ctrl-r` invoke native undo
+  and redo.
+- ✅ Motions `h j k l gj gk w W b B e E ge gE 0 ^ $ gg G`, plus `+ - Enter`,
+  Backspace, and Space. Editing keys (Delete, Tab, ctrl-d/h/j/k) do nothing in
+  normal mode instead of editing natively.
+- ✅ Caret styles and the mode status item.
+- ✅ `@example/modal`, its product test, and its documentation are removed,
+  with the example build, test-runner, and install wiring.
+- ✅ Found by the cases: held input replayed every key in one turn, so typed
+  text overtook a held Enter or Backspace, whose commands run deferred.
+  Release now replays one input per deferred step
+  ([ordered delivery](../architecture/commands.md#ordered-delivery)), with a
+  focused test in `key_hold.rs`.
 
 Validation:
 
-- `node:test` unit tests for the motion and word modules and the
-  state-machine parser.
-- Fake-host flow tests for following, mode switching, enabling and disabling,
-  and scoped disabling.
-- A Rust product test that drives real keys and typed text through an editor
-  view: counts, insert entry and exit as one undo step, the caret clamp, and
-  `j` across soft-wrapped rows.
-- The bundled-package load test lists `@knot/vim`.
+- ✅ `node:test` unit tests for the motion, text, and parser modules.
+- ✅ 68 behavior cases in `test/cases.jsonc` through the real editor, and
+  product tests for the status bar and caret shapes, `gj` and `j` under soft
+  wrap, and enablement by the setting and a language-scoped value.
+- ✅ The bundled-package load test lists `@knot/vim`. Test startups now bind
+  product keys before packages start, as product startup does.
 
 Review gate: dogfood through `Try:` commands in `post-init.js` that enable
 Vim globally and disable it for Markdown.
 
 Implementation context:
 
-- Mirror `extensions/@knot/status-bar` and `go-to-line` for the manifest,
-  `tsconfig.json`, `src/main.ts` → `start()`, and `test/`. `build.rs` embeds
-  every directory under `extensions/@knot` automatically.
-- Port `examples/extensions/@example/modal/src/{follow,mode,motion}.ts` as
-  the seed. Port `src/app/product/tests/modal_example.rs` to
-  `src/app/product/tests/vim.rs`, loading the bundled package as
-  `go_to_line.rs` and `status_bar_package.rs` do. Add the package to
-  `bundled_packages_load_with_product_discovery` in
-  `src/app/extensions/host.rs`.
-- APIs:
-  - `settings.define`, `settings.get`, and `settings.observe`
-  - `workbench.editor`, `workbench.observe`, and `registerStatusItem`
-  - `keymaps.bind` and `bindText` with `{ view: "editor", context }`
-  - `commands.invoke`, plus `beginUndoGroup`, `setKeyContext`, and
-    `setCursorStyle` on the editor handle
-- The fake host is `scripts/extensions/testing/`. It already covers editors,
-  settings, and status items (`editor.test.ts`, `settings.test.ts`,
-  `status.test.ts`). Extend it only where a `not faked` failure demands it.
-- Check that native `escape` bindings in the editor context (completion
-  dismissal) still win when they apply.
+- `src/extension.ts` follows editors and runs commands; `keys.ts` parses,
+  `motions.ts` and `text.ts` are pure, and `lines.ts` reads buffer lines
+  once per key.
+- The editor has no Escape handling of its own, and pickers and inputs take
+  focus, so Vim's Escape bindings compete with nothing.
 
 ### 2. Operators, text objects, and registers 📝
 
@@ -238,16 +248,17 @@ Deliverables:
 Validation:
 
 - Unit tests for every text object and the delete-register shifting rules.
-- Flow tests for register persistence across a package restart in the fake
-  host, and for clipboard linewise detection.
-- A product test for `ciw…<Esc>` as one undo step, `dd` then `p`, and `>`
-  through the native indent.
+- Cases for every operator over motions and text objects, `ciw…<Esc>` as one
+  undo step, `dd` then `p`, registers, and `>` and `=` through the native
+  commands on Rust and TypeScript.
+- Product tests for register persistence across a package restart and for
+  clipboard linewise detection.
 
 Review gate: a dogfooding session on Rust and TypeScript files.
 
 Implementation context:
 
-- Pure modules for text objects and registers beside `motion.ts`.
+- Pure modules for text objects and registers beside `motions.ts`.
 - `storage` from `knot.d.ts` holds the register record.
 - `workbench.readClipboardText` and the clipboard write API.
 - Native `editor.indent-lines`, `outdent-lines`, `reindent-selected-lines`,
@@ -265,8 +276,9 @@ Deliverables:
 
 Validation:
 
-- Flow tests for anchor and inclusive-caret mapping and for entering visual
-  mode from an outside selection.
+- Cases for every motion and operator in `v` and `V`, `o`, and `gv`; the
+  runner learns to expect a selection, which the two-marker notation already
+  writes.
 - A product test for a mouse drag entering visual mode and `Vjd`.
 
 Review gate: dogfooding.
@@ -295,9 +307,9 @@ Deliverables:
 
 Validation:
 
-- Flow tests for marks across edits and documents, the jumplist, Ex parsing,
-  and `:set` writes.
-- A product test for `:w`, `:q!`, `:e`, and `zz`.
+- Cases for marks across edits, the jumplist, scrolling, and `:<line>`.
+- Product tests for global marks across documents, `:w`, `:q!`, `:e`, `:set`
+  writes, `zz`, and `ctrl-w`.
 - A Rust test for the close primitive.
 
 Review gate: a final dogfooding pass with every `Try:` command, then remove
