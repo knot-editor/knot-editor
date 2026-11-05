@@ -150,6 +150,7 @@ D077 moved here from the daily-driver plan.
     Vim's `zz` needs an always-centering option when D058 reaches it.
 
 - **D114 — Decoration styles**
+  - 🚧 [Plan](d114-decoration-styles.md)
   - Contribution decorations choose a style beside their color key:
     background, straight underline, or today's wavy underline. Find (D031),
     word occurrences (D080), Vim search, and visual-mode feedback consume
