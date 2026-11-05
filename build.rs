@@ -1,8 +1,6 @@
 //! Compiles the TypeScript extension packages with the lockfile-pinned compiler
 //! in `scripts/extensions`. Bundled packages under `extensions/@knot` are
-//! embedded through a generated table that `src/app/extensions/bundled.rs` includes;
-//! examples under `examples/extensions/@example` are compiled to
-//! `$OUT_DIR/examples/<name>/dist` for the product tests that install them.
+//! embedded through a generated table that `src/app/extensions/bundled.rs` includes.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -16,7 +14,6 @@ fn main() {
     let bundled = root.join("extensions/@knot");
 
     println!("cargo::rerun-if-changed=extensions/@knot");
-    println!("cargo::rerun-if-changed=examples/extensions/@example");
     println!("cargo::rerun-if-changed=scripts/extensions/package-lock.json");
     println!("cargo::rerun-if-changed=scripts/extensions/tsconfig.base.json");
     println!("cargo::rerun-if-changed=src/host/js/knot.d.ts");
@@ -53,18 +50,6 @@ fn main() {
     }
     table.push_str("];\n");
     fs::write(out.join("bundled_packages.rs"), table).unwrap();
-
-    for example in sorted_entries(&root.join("examples/extensions/@example"))
-        .into_iter()
-        .filter(|path| path.join("tsconfig.json").exists())
-    {
-        let name = example.file_name().unwrap().to_str().unwrap();
-        compile(
-            &tools,
-            &example,
-            &out.join("examples").join(name).join("dist"),
-        );
-    }
 }
 
 /// Installs the pinned toolchain when it is missing or older than the lockfile.

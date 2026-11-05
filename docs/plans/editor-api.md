@@ -97,9 +97,7 @@ D077 moved here from the daily-driver plan.
     contexts, and ordered delivery of keys after key-invoked extension
     commands. Behavior in [commands](../architecture/commands.md#key-contexts),
     rationale and latency in
-    [decisions](../decisions.md#commands-and-keymaps), and a small modal
-    package in `examples/extensions/@example/modal`, to be removed when
-    D058 lands.
+    [decisions](../decisions.md#commands-and-keymaps).
 
 ## Phase 2 — Editor handles and the status bar
 
@@ -109,9 +107,7 @@ D077 moved here from the daily-driver plan.
     payload-free `onDidChangeSelection`. Behavior in
     [commands](../architecture/commands.md#extension-execution) and
     [extension host](../architecture/extension-host.md#editor-handle-notifications),
-    rationale in [decisions](../decisions.md#editor-handles), and a small
-    follower in `examples/extensions/@example/modal`, to be removed when D058
-    lands. One selection per view; several and rectangular selections are
+    rationale in [decisions](../decisions.md#editor-handles). One selection per view; several and rectangular selections are
     D142.
 
 - **D077 — Status bar** (depends on D109) ✅
@@ -133,8 +129,7 @@ D077 moved here from the daily-driver plan.
     undo step. Behavior in
     [core and buffers](../architecture/core-and-buffers.md) and
     [commands](../architecture/commands.md#extension-execution), rationale in
-    [decisions](../decisions.md#editor-handles), and a change command in
-    `examples/extensions/@example/modal`, to be removed when D058 lands.
+    [decisions](../decisions.md#editor-handles).
 
 - **D141 — Editor view controls** ✅
   - Complete: the editor handle sets a per-lifecycle caret style, reports the
@@ -146,8 +141,7 @@ D077 moved here from the daily-driver plan.
     [commands](../architecture/commands.md#key-contexts),
     [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views),
     and [core and buffers](../architecture/core-and-buffers.md), rationale in
-    [decisions](../decisions.md#editor-handles), and a demonstration in
-    `examples/extensions/@example/modal`, to be removed when D058 lands.
+    [decisions](../decisions.md#editor-handles).
     `reveal: "center"` still recenters only when the line is off screen, so
     Vim's `zz` needs an always-centering option when D058 reaches it.
 

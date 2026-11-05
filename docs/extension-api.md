@@ -20,7 +20,7 @@ the platform's local application-data `Knot/extensions` root. For example:
 ```
 
 Use the [manifest schema](schemas/knot.schema.json) for tooling and the
-[installed examples](../examples/extensions/) for directory layout. The host
+[bundled packages](../extensions/@knot/) for directory layout. The host
 accepts API version 1 before evaluation; package version and dependency ordering
 are separate. Static relative imports stay inside captured package sources;
 dynamic imports reject. Startup diagnostics report rejected or failed packages
@@ -593,9 +593,8 @@ for it and then apply in order, so a mode switch is in effect for the next
 key however fast it is typed. A mode usually also sets
 `editor.setCursorStyle("block")` and clears it on leaving, and may read the
 clipboard with `workbench.readClipboardText()`, which resolves to `null` when it
-holds no text. The
-[modal example](../examples/extensions/@example/modal/) is a complete package:
-it also shows reveals (`zt`, `zb`), a mark (`m`, `'`), and paste (`p`).
+holds no text. The bundled [Vim package](../extensions/@knot/vim/) is a
+complete modal editor on these primitives.
 
 
 A preset is a named set of default bindings that replaces Knot's when the

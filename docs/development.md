@@ -38,8 +38,7 @@ weekly.
 Building Knot requires Node.js and npm. `build.rs` installs the lockfile-pinned
 TypeScript compiler in `scripts/extensions` when it is missing or older than the
 lockfile, compiles every bundled package under `extensions/@knot` into Cargo's
-output directory, and embeds the emitted modules. It also compiles the TypeScript
-examples for the product tests that install them. CI installs a pinned Node in
+output directory, and embeds the emitted modules. CI installs a pinned Node in
 every job that builds Rust. On macOS, release builds also need the Metal
 Toolchain, because gpui precompiles its shaders outside debug builds:
 `xcodebuild -downloadComponent MetalToolchain`.

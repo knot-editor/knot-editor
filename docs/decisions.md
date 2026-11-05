@@ -619,7 +619,7 @@ Reference: [extension host](architecture/extension-host.md#package-admission-and
 
 ## Extension authoring and tests
 
-Write bundled packages and examples in full TypeScript, compiled per file without
+Write bundled packages in full TypeScript, compiled per file without
 a bundler, so the runtime keeps loading ordinary captured modules and readable
 stack traces need no source maps (D032). Compiling in `build.rs` makes Node a
 build requirement; that was preferred over committing generated `dist/`, a Rust

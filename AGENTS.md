@@ -48,7 +48,7 @@ canonical source before reading broadly.
 | Extension runtime, scheduling, lifecycle, records | [extension host](docs/architecture/extension-host.md) | `src/host/`, `src/app/extensions/` |
 | Contributed UI, trees, completion, generated text | [semantic UI](docs/architecture/semantic-ui.md) | `src/app/extensions/semantics.rs`, `src/app/tree_view.rs`, `src/app/completion.rs` |
 | Syntax highlighting, languages, theme | [semantic UI](docs/architecture/semantic-ui.md#syntax-highlighting-and-languages), [core and buffers](docs/architecture/core-and-buffers.md#syntax-state) | `src/app/syntax.rs`, `src/app/languages.rs`, `src/app/theme.rs`, `src/app/themes.rs`, `extensions/@knot/language-*/`, `extensions/@knot/themes/` |
-| Extension public contract | `src/host/js/knot.d.ts`, [extension guide](docs/extension-api.md) | `docs/schemas/knot.schema.json`, `examples/extensions/` |
+| Extension public contract | `src/host/js/knot.d.ts`, [extension guide](docs/extension-api.md) | `docs/schemas/knot.schema.json`, `scripts/extensions/examples/` |
 | Bundled extensions, authoring toolchain, extension tests | [extension guide](docs/extension-api.md#write-and-test-in-typescript), [development](docs/development.md) | `extensions/@knot/`, `scripts/extensions/`, `build.rs` |
 | Application-owned SQLite stores | [automatic tool-layout memory](docs/architecture/workbench-and-lifecycle.md#automatic-tool-layout-memory) | `src/app/tool_layout.rs` |
 

@@ -13,7 +13,6 @@ mod language_brackets;
 mod language_editing;
 mod language_indents;
 mod languages;
-mod modal_example;
 mod navigation;
 mod observation;
 mod operations;
