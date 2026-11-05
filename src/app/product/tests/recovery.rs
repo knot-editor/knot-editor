@@ -825,7 +825,7 @@ async fn launch_requests_open_alongside_recovery_when_an_extension_fails(cx: &mu
     cx.update(|cx| super::super::dispatch_launch_request(Some(other), cx));
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )

@@ -61,7 +61,7 @@ fn personal_config_gates_product_windows_and_keeps_extension_failures_independen
     assert!(cx.windows().is_empty());
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -125,7 +125,7 @@ fn queued_file_open_runs_only_after_configured_startup(cx: &mut TestAppContext) 
     assert!(cx.windows().is_empty());
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -179,7 +179,7 @@ fn pre_init_failure_skips_extensions_and_opens_only_the_error_window(cx: &mut Te
     assert!(cx.windows().is_empty());
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -221,7 +221,7 @@ fn invalid_config_import_prevents_extension_discovery(cx: &mut TestAppContext) {
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -263,7 +263,7 @@ fn post_init_failure_unloads_config_and_installed_extensions(cx: &mut TestAppCon
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -316,7 +316,7 @@ fn post_init_validation_failure_waits_for_installed_extensions(cx: &mut TestAppC
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )

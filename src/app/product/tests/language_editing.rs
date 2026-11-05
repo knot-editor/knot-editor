@@ -64,7 +64,7 @@ pub(super) fn start_bundled_packages(cx: &mut TestAppContext) {
     let host = cx.update(crate::app::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )

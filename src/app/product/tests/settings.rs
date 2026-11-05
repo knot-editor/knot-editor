@@ -82,7 +82,7 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     let host = cx.update(crate::app::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -237,7 +237,7 @@ fn personal_config_associates_an_extension_and_open_documents_redetect(cx: &mut 
     let host = cx.update(crate::app::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )

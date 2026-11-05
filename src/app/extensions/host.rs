@@ -1011,17 +1011,14 @@ impl ProductExtensionHost {
 
     pub(crate) fn start_product_startup(
         &mut self,
-        config_root: Option<PathBuf>,
+        config_root: Result<PathBuf, String>,
         extensions_root: Result<PathBuf, String>,
         cx: &mut Context<Self>,
     ) {
         let capture = cx.background_executor().spawn(async move {
-            let root = match config_root {
-                Some(root) => root,
-                None => personal_config::user_config_root().map_err(|cause| {
-                    ConfigDiagnostic::new(None, &PathBuf::from("<user configuration>"), cause)
-                })?,
-            };
+            let root = config_root.map_err(|cause| {
+                ConfigDiagnostic::new(None, &PathBuf::from("<user configuration>"), cause)
+            })?;
             personal_config::capture(&root).map(|sources| (root, sources))
         });
         self._personal_startup_task = Some(cx.spawn(async move |this, cx| {

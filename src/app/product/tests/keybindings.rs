@@ -57,7 +57,7 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -212,7 +212,7 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -356,7 +356,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -463,7 +463,7 @@ fn invalid_config_keybinding_batch_rolls_back_before_product_readiness(cx: &mut 
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -479,6 +479,7 @@ fn invalid_config_keybinding_batch_rolls_back_before_product_readiness(cx: &mut 
 
 #[gpui::test]
 fn invalid_extension_keybinding_batch_does_not_block_other_extensions(cx: &mut TestAppContext) {
+    let config = tempfile::tempdir().unwrap();
     let extensions = tempfile::tempdir().unwrap();
     install_extension(
         extensions.path(),
@@ -503,7 +504,11 @@ fn invalid_extension_keybinding_batch_does_not_block_other_extensions(cx: &mut T
     install_launch_gate(cx);
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
-        host.start_product_startup(None, Ok(extensions.path().to_path_buf()), cx)
+        host.start_product_startup(
+            Ok(config.path().to_path_buf()),
+            Ok(extensions.path().to_path_buf()),
+            cx,
+        )
     });
     assert!(wait_for_product_startup(cx));
     let report = cx
@@ -815,7 +820,7 @@ fn personal_config_ctrl_shift_p_opens_command_palette(cx: &mut TestAppContext) {
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -913,7 +918,7 @@ fn selected_contributed_preset_replaces_knot_beneath_extension_bindings(cx: &mut
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )

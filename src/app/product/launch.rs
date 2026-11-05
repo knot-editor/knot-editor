@@ -467,9 +467,10 @@ pub(crate) fn run(initial_request: Option<OpenRequest>) {
             }
         })
         .detach();
+        let config_root = crate::app::personal_config::user_config_root();
         let extensions_root = crate::app::extensions::package::user_extensions_root();
         extension_host.update(cx, |host, cx| {
-            host.start_product_startup(None, extensions_root, cx)
+            host.start_product_startup(config_root, extensions_root, cx)
         });
     });
 }

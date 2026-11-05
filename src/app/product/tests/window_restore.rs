@@ -558,7 +558,7 @@ fn a_failed_config_launch_never_records_windows(cx: &mut TestAppContext) {
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
@@ -586,6 +586,7 @@ fn native_windows_and_recovery_restore_when_an_extension_fails_at_startup(cx: &m
     wait(recorded, cx).unwrap();
 
     launch.reset(cx);
+    let config = tempfile::tempdir().unwrap();
     let extensions = tempfile::tempdir().unwrap();
     install_extension(
         extensions.path(),
@@ -596,7 +597,11 @@ fn native_windows_and_recovery_restore_when_an_extension_fails_at_startup(cx: &m
     install_launch_gate(cx);
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
-        host.start_product_startup(None, Ok(extensions.path().to_path_buf()), cx)
+        host.start_product_startup(
+            Ok(config.path().to_path_buf()),
+            Ok(extensions.path().to_path_buf()),
+            cx,
+        )
     });
     assert!(wait_for_product_startup(cx));
     cx.run_until_parked();
@@ -666,7 +671,7 @@ await languages.register({
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         host.start_product_startup(
-            Some(config.path().to_path_buf()),
+            Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
             cx,
         )
