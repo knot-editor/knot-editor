@@ -1,6 +1,7 @@
 # D078 — Zoom, font size, and soft wrap
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 next. Item of the
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 implemented, awaiting
+review. Item of the
 [daily-driver plan](daily-driver.md), scheduled by the
 [editor API plan](editor-api.md) before D112.
 
@@ -158,24 +159,36 @@ line's first row) until checkpoint 4, whose documentation step also covers
 the line change log in `docs/architecture/core-and-buffers.md`. Toggle Soft
 Wrap has no default key.
 
-## Checkpoint 4 — Visual and logical movement, and docs
+## Checkpoint 4 — Visual and logical movement, and docs 🔍
 
 Deliverables:
-- Visual-row behavior for the existing movement and selection commands and
-  the `-logical` twins, unbound in the preset.
-- Documentation: the zoom invariant in `docs/architecture.md`; editor views
+- ✅ Visual-row behavior for the existing movement and selection commands and
+  the `-logical` twins, unbound in the preset except as below.
+- ✅ Documentation: the zoom invariant in `docs/architecture.md`; editor views
   in `docs/architecture/workbench-and-lifecycle.md`; the settings in the
   extension guide; rationale (global zoom, cell measurement, document-scoped
   toggle, paired commands) in `docs/decisions.md`; D112's brief in
-  `docs/plans/editor-api.md` reduced to what remains; D078 marked ✅ in
-  `docs/plans/daily-driver.md` and this plan removed.
+  `docs/plans/editor-api.md` reduced to what remains.
+- After the review gate: D078 marked ✅ in `docs/plans/daily-driver.md` and
+  `docs/plans/editor-api.md`, and this plan removed.
+
+Scope decisions:
+- The macOS preset binds ctrl-A and ctrl-E to the logical twins, because
+  Cocoa defines them as paragraph movement; every other key binds the row
+  commands.
+- End on a row that does not end its line stops before its last character,
+  usually the space it broke after, since a caret at the break shows on the
+  next row.
+- Smart Home on a continuation row goes to the row's start.
+- Logical Up and Down land on the target line's first row.
 
 Validation: editor view tests for each command pair on wrapped and unwrapped
 text, preferred x across rows, and paging by rows; keymap tests that the
 preset binds the visual commands.
 
 Review gate: both behaviors are reachable from the keymap and the defaults
-feel right in daily editing.
+feel right in daily editing. 🔍 Pending: the personal config binds the
+logical twins on ctrl-alt with the arrow, Home, End, and page keys.
 
 **Implementation context:** command declarations in
 `src/app/editor/native_commands.rs`, movement in `src/app/editor/editing.rs`
