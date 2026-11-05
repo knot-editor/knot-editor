@@ -1,7 +1,6 @@
 # D114 — Decoration styles
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 implemented, awaiting its
-review gate. Item of the
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Item of the
 [editor API plan](editor-api.md); its first consumer is D080, word occurrence
 highlighting ([daily-driver plan](daily-driver.md)), planned separately and
 right after this item. Find (D031) and Vim search (D058) consume it later.
@@ -73,38 +72,16 @@ follows the theme through its color key.
   key and style, and `background` and `line` are stored but not yet painted.
   The extension guide's example uses the object form.
 
-### 2. Background and line painting 🚧
+### 2. Background and line painting ✅
 
-- ✅ Implemented: the projection gives a `line` decoration one entry per
-  line it covers (the column-0 rule applies there), and `decoration_fills`
-  in `src/app/editor/layout.rs` turns them and the painted rows into bands
-  and per-row spans, which `paint.rs` draws after the cursor-line highlight.
-  Tests in `src/app/editor/tests/decorations.rs`. ⏳ Review gate pending.
-- `background` paints per-row text spans and `line` paints full-width bands,
-  in the paint order above, on wrapped, RTL, and blank lines.
-- **Validation:** unit tests on a pure function that turns a view's rendered
-  decorations and rows into background rectangles, in the style of the
-  existing selection and bracket geometry tests: a span across a wrap
-  boundary yields one rectangle per row ending at the text, a line decoration
-  covers every row of its lines and includes blank lines, a range ending at
-  column 0 excludes that line, an empty `line` range paints its line, an
-  empty `background` paints nothing, and severity keys sort last.
-- **Review gate:** a personal-config `post-init.js` registers `try.*`
-  commands that, on the active editor's buffer, contribute backgrounds on
-  every occurrence of the selected word, line bands over a few lines
-  including a blank one with a theme-defined `try.diffAdd` key, straight and
-  wavy underlines overlapping a background, and one that clears them; the
-  user checks selection over backgrounds, soft-wrapped Markdown, and both
-  appearances.
-- **Implementation context:**
-  - `src/app/editor/paint.rs`: add the two passes between the cursor-line
-    quad and the selection pass (around lines 432–455), reusing the `span`
-    closure for backgrounds and the `line_highlight` rect logic for bands.
-  - Extract the rectangle computation beside the existing row-span helpers so
-    `src/app/editor/tests/` (new `decorations.rs`, registered like
-    `gutter.rs`) can test it without painting.
-  - Personal config at `user_config_root` in
-    `src/app/personal_config.rs`; look at the existing `post-init.js` first.
+- Complete and approved: `line` decorations paint full-width bands over
+  every row of the lines they cover, `background` decorations paint per-row
+  spans that end at the text, both after the cursor-line highlight and
+  beneath the selection. `decoration_fills` in `src/app/editor/layout.rs`
+  computes them, tested in `src/app/editor/tests/decorations.rs`; the
+  column-0 rule lives in the contribution projection in
+  `src/app/editor.rs`. Reviewed in the app on soft-wrapped Markdown, blank
+  and RTL lines, and both appearances.
 
 ### 3. Documentation and completion
 
