@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  left, lineStart, linesOf, type Position, right, wordBackward, wordEnd, wordEndBackward, wordForward,
+  bracketFrom, findInLine, left, lineStart, linesOf, matchBracketText, paragraph, type Position, right,
+  wordBackward, wordEnd, wordEndBackward, wordForward,
 } from "../src/motions.js";
 import { columnAtByte, columnAtScreen, firstNonBlank, lastColumn, screenColumn, utf8Length } from "../src/text.js";
 
@@ -104,4 +105,46 @@ test("columns convert to UTF-8 bytes and back on surrogate pairs", () => {
   assert.equal(columnAtByte("é😀a", 6), 3);
   assert.equal(lastColumn("a😀"), 1);
   assert.equal(firstNonBlank("  \t"), 2);
+});
+
+test("f and t find on the line, and repeating t moves past an adjacent match", () => {
+  assert.equal(findInLine("a.b.c", 0, "f", ".", 1), 1);
+  assert.equal(findInLine("a.b.c", 0, "f", ".", 2), 3);
+  assert.equal(findInLine("a.b.c", 0, "f", ".", 3), null);
+  assert.equal(findInLine("a.b.c", 4, "F", ".", 1), 3);
+  assert.equal(findInLine("a.b.c", 0, "t", ".", 1), 0);
+  assert.equal(findInLine("a.b.c", 0, "t", ".", 1, true), 2);
+  assert.equal(findInLine("a.b.c", 4, "T", ".", 1), 4);
+  assert.equal(findInLine("a.b.c", 4, "T", ".", 1, true), 2);
+});
+
+test("{ and } stop at empty lines, not blank ones", async () => {
+  const lines = linesOf("a\n \nb\n\nc");
+  assert.deepEqual(await paragraph(lines, { line: 0, col: 0 }, 1, true), { position: { line: 3, col: 0 }, inclusive: false });
+  assert.deepEqual(await paragraph(lines, { line: 3, col: 0 }, 1, true), { position: { line: 4, col: 0 }, inclusive: true });
+  assert.equal(await paragraph(lines, { line: 0, col: 0 }, 3, true), null);
+  assert.deepEqual(await paragraph(lines, { line: 4, col: 0 }, 1, false), { position: { line: 3, col: 0 }, inclusive: false });
+  assert.deepEqual(await paragraph(lines, { line: 2, col: 0 }, 1, false), { position: { line: 0, col: 0 }, inclusive: false });
+});
+
+test("brackets are matched by counting when there is no syntax", async () => {
+  const lines = linesOf("f(a, (b),\n  c)");
+  assert.equal(bracketFrom("x = f(a)", 0), 5);
+  assert.deepEqual(await matchBracketText(lines, { line: 0, col: 1 }), { line: 1, col: 3 });
+  assert.deepEqual(await matchBracketText(lines, { line: 1, col: 3 }), { line: 0, col: 1 });
+  assert.equal(await matchBracketText(linesOf("(("), { line: 0, col: 0 }), null);
+});
+
+test("w under an operator stops at the end of the line's last word", async () => {
+  const lines = linesOf("foo bar\nbaz");
+  assert.deepEqual(await wordForward(lines, { line: 0, col: 4 }, 1, false), { line: 1, col: 0 });
+  assert.deepEqual(await wordForward(lines, { line: 0, col: 4 }, 1, false, true), { line: 0, col: 7 });
+  assert.deepEqual(await wordForward(lines, { line: 0, col: 0 }, 2, false, true), { line: 0, col: 7 });
+});
+
+test("e with stop keeps a word end the caret is on", async () => {
+  const lines = linesOf("foo bar");
+  assert.deepEqual(await wordEnd(lines, { line: 0, col: 2 }, 1, false), { line: 0, col: 6 });
+  assert.deepEqual(await wordEnd(lines, { line: 0, col: 2 }, 1, false, true), { line: 0, col: 2 });
+  assert.deepEqual(await wordEnd(lines, { line: 0, col: 0 }, 1, false, true), { line: 0, col: 2 });
 });

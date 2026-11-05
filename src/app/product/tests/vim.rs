@@ -90,10 +90,14 @@ impl Fixture {
         fixture
     }
 
-    /// Close the window, so later cases do not pay for it.
+    /// Close the window and release its document, so later cases do not
+    /// pay for them.
     fn close(&self, cx: &mut TestAppContext) {
         cx.update_window(self.window, |_, window, _| window.remove_window())
             .unwrap();
+        let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
+        documents.update(cx, |documents, cx| documents.remove(self.document, cx));
+        cx.update(crate::app::application_observation::changed);
         cx.run_until_parked();
     }
 
@@ -325,4 +329,53 @@ await settings.set("vim.enabled", false, { language: "markdown" });
         crate::app::application_observation::changed(cx);
     });
     wait_for_api_condition(cx, |cx| fixture.contexts(cx) == ["vim.normal"]);
+}
+
+#[gpui::test]
+fn registers_persist_across_a_package_restart(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let fixture = Fixture::open("one\ntwo", None, 0, cx);
+    fixture.press("\"ayy\"byw", cx);
+
+    let restarted = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let result = restarted.clone();
+    cx.update(|cx| {
+        let host = crate::app::extensions::host::entity(cx).unwrap();
+        host.update(cx, |host, cx| {
+            let task = host.restart_package("@knot/vim".into(), cx);
+            cx.spawn(async move |_, _| *result.lock().unwrap() = Some(task.await))
+                .detach();
+        })
+    });
+    wait_for_api_condition(cx, |_| restarted.lock().unwrap().is_some());
+    let entry = restarted.lock().unwrap().take().unwrap();
+    assert_eq!(
+        entry.result,
+        crate::app::extensions::load::LoadResult::Loaded
+    );
+    wait_until(cx, "the restarted package to follow the editor", |cx| {
+        fixture.contexts(cx) == ["vim.normal"]
+    });
+
+    // Linewise text stays linewise, and characterwise text characterwise.
+    fixture.press("j\"ap\"bP", cx);
+    assert_eq!(fixture.marked(cx), "one\ntwo\non‸eone");
+}
+
+#[gpui::test]
+fn the_clipboard_pastes_linewise_only_while_it_holds_the_yanked_line(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let fixture = Fixture::open("one", None, 0, cx);
+    fixture.press("yy", cx);
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
+        "one\n"
+    );
+    fixture.press("p", cx);
+    assert_eq!(fixture.marked(cx), "one\n‸one");
+
+    // Text copied elsewhere pastes characterwise, even with a line break.
+    cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("x\n".into())));
+    fixture.press("p", cx);
+    assert_eq!(fixture.marked(cx), "one\no‸x\nne");
 }
