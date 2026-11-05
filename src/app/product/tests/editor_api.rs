@@ -432,7 +432,6 @@ fn editor_handle_scrolls_and_reports_visible_lines(cx: &mut TestAppContext) {
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
     cx.update(|cx| {
         model.update(cx, |model, cx| {
             model.replace(0..0, &"line\n".repeat(100)).unwrap();
