@@ -393,7 +393,9 @@ mod tests {
 
     use gpui::{AppContext, TestAppContext};
 
-    use crate::host::protocol::{ByteRange, EditorContribution, RequestId, TextEdit};
+    use crate::host::protocol::{
+        ByteRange, Decoration, DecorationStyle, EditorContribution, RequestId, TextEdit,
+    };
 
     use super::*;
 
@@ -578,7 +580,7 @@ mod tests {
                                     start_byte_offset: 0,
                                     end_byte_offset: 1
                                 },
-                                decoration: Some("info".to_owned()),
+                                decoration: Some(Decoration::new("info", DecorationStyle::Wavy)),
                                 gutter: None,
                                 command: None,
                             }],
@@ -654,7 +656,7 @@ mod tests {
                             start_byte_offset: 1,
                             end_byte_offset: 3,
                         },
-                        decoration: Some("warning".to_owned()),
+                        decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
                         gutter: Some("info".to_owned()),
                         command: Some("fixture.action".into()),
                     }],
@@ -704,7 +706,7 @@ mod tests {
                     start_byte_offset: 0,
                     end_byte_offset: 1,
                 },
-                decoration: Some("error".to_owned()),
+                decoration: Some(Decoration::new("error", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             };
@@ -723,7 +725,7 @@ mod tests {
                 model.read_with(cx, |model, _| model.resolved_contributions()[0]
                     .decoration
                     .clone()),
-                Some("error".to_owned())
+                Some(Decoration::new("error", DecorationStyle::Wavy))
             );
 
             for id in 6..=7 {

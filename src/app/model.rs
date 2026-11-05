@@ -17,7 +17,7 @@ use crate::{
     },
     host::lifecycle::ExtensionKey,
     host::protocol::{
-        BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, ExtensionId,
+        BufferHandle, BufferSubscriptionId, ByteRange, Decoration, EditorContribution, ExtensionId,
         ExtensionLifecycleId, SnapshotText,
     },
 };
@@ -66,7 +66,7 @@ pub(crate) fn decoration_precedence(key: &str) -> u8 {
 pub(crate) struct ResolvedEditorContribution {
     pub range: ByteRange,
     pub source: ContributionSource,
-    pub decoration: Option<String>,
+    pub decoration: Option<Decoration>,
     pub gutter: Option<String>,
     pub command: Option<String>,
 }
@@ -100,7 +100,7 @@ struct ContributionSet {
 #[derive(Clone)]
 struct ContributionMetadata {
     source: ContributionSource,
-    decoration: Option<String>,
+    decoration: Option<Decoration>,
     gutter: Option<String>,
     command: Option<String>,
 }
@@ -650,8 +650,8 @@ impl BufferModel {
             (
                 metadata
                     .decoration
-                    .as_deref()
-                    .map_or(0, decoration_precedence),
+                    .as_ref()
+                    .map_or(0, |decoration| decoration_precedence(&decoration.color)),
                 *id,
             )
         });

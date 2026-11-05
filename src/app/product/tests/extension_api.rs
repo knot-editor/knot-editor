@@ -360,7 +360,7 @@ let saved;
 await commands.register("closure.setup", async ({ buffer }) => {
   saved = buffer;
   const snapshot = await buffer.snapshot();
-  await buffer.contributions.replace([{ range: { startByteOffset: 0, endByteOffset: 1 }, decoration: "info" }], { ifRevision: snapshot.revision });
+  await buffer.contributions.replace([{ range: { startByteOffset: 0, endByteOffset: 1 }, decoration: { color: "info", style: "wavy" } }], { ifRevision: snapshot.revision });
   await buffer.onDidChange(() => {});
 });
 await commands.register("closure.live", async () => {
@@ -446,7 +446,7 @@ let owned;
 keymaps.bind("cmd-alt-o", "api.owned");
 await commands.register("api.owned-setup", async ({ buffer }) => {
   const snapshot = await buffer.snapshot();
-  await buffer.contributions.replace([{ range: { startByteOffset: 0, endByteOffset: 1 }, decoration: "info" }], { ifRevision: snapshot.revision });
+  await buffer.contributions.replace([{ range: { startByteOffset: 0, endByteOffset: 1 }, decoration: { color: "info", style: "wavy" } }], { ifRevision: snapshot.revision });
   owned = [
 buffer.contributions,
 await buffer.onDidChange(() => workbench.writeClipboardText("leaked listener")),

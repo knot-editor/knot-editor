@@ -152,8 +152,16 @@ await editor.registerCompletionProvider("bad", { provideCompletions: () => [{ la
 await workbench.registerView({ id: "check.bad", title: "Bad", content: { kind: "tree" } });
 // @ts-expect-error tree item requires collapsibleState
 await workbench.registerView({ id: "check.bad", title: "Bad", content: { kind: "tree", provider: { getChildren: () => [{ id: "bad", label: "bad" }] } } });
-// @ts-expect-error decorations name a color key
-const token: import("knot").EditorContribution = { range: { startByteOffset: 0, endByteOffset: 1 }, decoration: 4 };
+// @ts-expect-error decorations are objects, not bare color keys
+const token: import("knot").EditorContribution = { range: { startByteOffset: 0, endByteOffset: 1 }, decoration: "error" };
+// @ts-expect-error decorations need a style
+const unstyled: import("knot").EditorContribution = { range: { startByteOffset: 0, endByteOffset: 1 }, decoration: { color: "error" } };
+// @ts-expect-error decoration styles are a closed set
+const dotted: import("knot").EditorContribution = { range: { startByteOffset: 0, endByteOffset: 1 }, decoration: { color: "error", style: "dotted" } };
+const styled: import("knot").EditorContribution[] = (["background", "line", "underline", "wavy"] as const).map((style) => ({
+  range: { startByteOffset: 0, endByteOffset: 1 },
+  decoration: { color: "diff.add", style },
+}));
 // @ts-expect-error clipboard requires text
 await workbench.writeClipboardText(null);
 // @ts-expect-error contextual targets cannot be null
@@ -460,7 +468,7 @@ if (sourceWindow && openDocument) {
 commands.invalidArguments(1);
 // @ts-expect-error no application namespace is declared
 import { application } from "knot";
-void [token, application];
+void [token, unstyled, dotted, styled, application];
 
 function handleError(error: HostError) {
   const code: HostErrorCode = error.code;

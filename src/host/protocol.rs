@@ -292,9 +292,38 @@ pub struct TextEdit {
 #[serde(rename_all = "camelCase")]
 pub struct EditorContribution {
     pub range: ByteRange,
-    pub decoration: Option<String>,
+    pub decoration: Option<Decoration>,
     pub gutter: Option<String>,
     pub command: Option<String>,
+}
+
+/// How a contribution paints its range, in the color of a theme key.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Decoration {
+    pub color: String,
+    pub style: DecorationStyle,
+}
+
+#[cfg(test)]
+impl Decoration {
+    pub fn new(color: &str, style: DecorationStyle) -> Self {
+        Self {
+            color: color.to_owned(),
+            style,
+        }
+    }
+}
+
+/// What a decoration draws: a background behind its text, a band across its
+/// whole lines, a straight underline, or a wavy one.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DecorationStyle {
+    Background,
+    Line,
+    Underline,
+    Wavy,
 }
 
 /// Theme-aware icon tokens supported by native tree views.

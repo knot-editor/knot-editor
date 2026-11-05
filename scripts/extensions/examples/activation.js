@@ -16,7 +16,7 @@ const command = await commands.register("guide.annotate", async (context) => {
   const endByteOffset = snapshot.byteOffsetAtUtf16(snapshot.text.length);
   await buffer.contributions.replace(endByteOffset === 0 ? [] : [{
     range: { startByteOffset: 0, endByteOffset },
-    decoration: "info",
+    decoration: { color: "info", style: "wavy" },
     gutter: "info",
     command: "guide.annotate",
   }], { ifRevision: snapshot.revision });

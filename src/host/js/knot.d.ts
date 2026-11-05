@@ -854,13 +854,29 @@ declare module "knot" {
     readonly edits: readonly TextEdit[];
   }
   /**
+   * What a decoration draws: `background` behind the range's text on each
+   * row, `line` as a band across every line the range touches (a range ending
+   * at column 0 of a later line leaves that line out, and an empty range
+   * paints its own line), or a straight `underline` or `wavy` underline.
+   */
+  export type DecorationStyle = "background" | "line" | "underline" | "wavy";
+  /** How a contribution paints its range, in the color of a theme key. */
+  export interface Decoration {
+    readonly color: ColorKey;
+    readonly style: DecorationStyle;
+  }
+  /**
    * Anchored semantic range. Optional decoration, gutter and command may be null.
    * Edits stabilize its anchors. Command is a name, not structured arguments.
    */
   export interface EditorContribution {
     readonly range: ByteRange;
-    /** Underlines the range with a wavy line in this key's color. */
-    readonly decoration?: ColorKey | null;
+    /**
+     * Paints the range. Where decorations overlap, `error`, `warning`, and
+     * `info` paint above other keys, the most severe on top; backgrounds paint
+     * beneath the selection.
+     */
+    readonly decoration?: Decoration | null;
     /** Marks the range's first line in the gutter in this key's color. */
     readonly gutter?: ColorKey | null;
     readonly command?: string | null;

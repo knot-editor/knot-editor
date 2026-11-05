@@ -558,8 +558,8 @@ then by the latest; clicking it runs that contribution's command:
 
 ```js
 await buffer.contributions.replace([
-  { range, decoration: "diff.add", gutter: "diff.add" },
-  { range: problem, decoration: "error" },
+  { range, decoration: { color: "diff.add", style: "line" }, gutter: "diff.add" },
+  { range: problem, decoration: { color: "error", style: "wavy" } },
 ], { ifRevision: revision });
 ```
 

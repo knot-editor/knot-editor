@@ -115,11 +115,18 @@ function token(value, allowed) {
   if (!allowed.includes(value)) throw new TypeError("invalid semantic token");
   return value;
 }
+function decoration(value) {
+  if (value == null) return null;
+  record(value, "decoration must be an object");
+  const style = token(value.style, ["background", "line", "underline", "wavy"]);
+  if (style === null) throw new TypeError("decoration needs a style");
+  return { color: string(value.color, "decoration color must be text"), style };
+}
 function contribution(value) {
   record(value, "contribution must be an object");
   return {
     range: byteRange(value.range),
-    decoration: optionalText(value.decoration),
+    decoration: decoration(value.decoration),
     gutter: optionalText(value.gutter),
     command: optionalText(value.command),
   };

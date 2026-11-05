@@ -1,6 +1,6 @@
 # D114 — Decoration styles
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 checkpoint 1 ready for review. Item of the
 [editor API plan](editor-api.md); its first consumer is D080, word occurrence
 highlighting ([daily-driver plan](daily-driver.md)), planned separately and
 right after this item. Find (D031) and Vim search (D058) consume it later.
@@ -64,7 +64,7 @@ follows the theme through its color key.
 
 ## Checkpoints
 
-### 1. Typed decoration contract and underline styles
+### 1. Typed decoration contract and underline styles ✅ (review pending)
 
 - `decoration` carries `{ color, style }` end to end: declarations,
   bootstrap validation, V8 decoding, protocol, model metadata, and the
@@ -78,6 +78,9 @@ follows the theme through its color key.
   underline, and that severity precedence still orders layers; the existing
   extension API product tests pass with the object form.
 - **Review gate:** contract shape and the style names.
+- ✅ Implemented: `Decoration` and `DecorationStyle` in the protocol and
+  declarations, validated in bootstrap and decoded in the marshaller; the
+  extension guide's example uses the object form.
 - **Implementation context:**
   - `src/host/js/knot.d.ts` (`EditorContribution`, new `Decoration` and
     `DecorationStyle`), `scripts/extensions/contract.test.ts:155`,

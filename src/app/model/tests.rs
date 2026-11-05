@@ -1,4 +1,4 @@
-use crate::host::protocol::TextEdit;
+use crate::host::protocol::{DecorationStyle, TextEdit};
 
 use super::*;
 
@@ -265,7 +265,7 @@ fn read_only_models_keep_non_text_operations_available() {
                     start_byte_offset: 0,
                     end_byte_offset: 9,
                 },
-                decoration: Some("info".to_owned()),
+                decoration: Some(Decoration::new("info", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             }],
@@ -298,7 +298,7 @@ fn contribution_sets_stabilize_and_replace_atomically() {
                     start_byte_offset: 4,
                     end_byte_offset: 7,
                 },
-                decoration: Some("warning".to_owned()),
+                decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             }],
@@ -315,7 +315,7 @@ fn contribution_sets_stabilize_and_replace_atomically() {
                 end_byte_offset: 9,
             },
             source,
-            decoration: Some("warning".to_owned()),
+            decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
             gutter: None,
             command: None,
         }]
@@ -334,7 +334,7 @@ fn contribution_sets_stabilize_and_replace_atomically() {
                     start_byte_offset: 7,
                     end_byte_offset: 99,
                 },
-                decoration: Some("error".to_owned()),
+                decoration: Some(Decoration::new("error", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             }],
@@ -358,8 +358,8 @@ fn replacing_one_contribution_source_preserves_other_sources() {
         lifecycle: ExtensionLifecycleId::new(3),
     };
     for (source, range, decoration) in [
-        (ContributionSource::fixture(), 0..2, "info".to_owned()),
-        (extension_source, 2..4, "warning".to_owned()),
+        (ContributionSource::fixture(), 0..2, "info"),
+        (extension_source, 2..4, "warning"),
     ] {
         model
             .replace_contributions(
@@ -369,7 +369,7 @@ fn replacing_one_contribution_source_preserves_other_sources() {
                         start_byte_offset: range.start,
                         end_byte_offset: range.end,
                     },
-                    decoration: Some(decoration),
+                    decoration: Some(Decoration::new(decoration, DecorationStyle::Wavy)),
                     gutter: None,
                     command: None,
                 }],
@@ -386,7 +386,7 @@ fn replacing_one_contribution_source_preserves_other_sources() {
                     start_byte_offset: 4,
                     end_byte_offset: 6,
                 },
-                decoration: Some("error".to_owned()),
+                decoration: Some(Decoration::new("error", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             }],
@@ -406,7 +406,7 @@ fn replacing_one_contribution_source_preserves_other_sources() {
                     end_byte_offset: 2,
                 },
                 source: ContributionSource::fixture(),
-                decoration: Some("info".to_owned()),
+                decoration: Some(Decoration::new("info", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             },
@@ -416,7 +416,7 @@ fn replacing_one_contribution_source_preserves_other_sources() {
                     end_byte_offset: 6,
                 },
                 source: extension_source,
-                decoration: Some("error".to_owned()),
+                decoration: Some(Decoration::new("error", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             },
@@ -437,7 +437,7 @@ fn empty_buffer_contributions_are_rejected_recoverably() {
                     start_byte_offset: 0,
                     end_byte_offset: 0,
                 },
-                decoration: Some("info".to_owned()),
+                decoration: Some(Decoration::new("info", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             }],
@@ -470,7 +470,7 @@ fn contribution_ownership_rejects_stale_lifecycles_and_cleans_up() {
                     start_byte_offset: 0,
                     end_byte_offset: 3,
                 },
-                decoration: Some("error".to_owned()),
+                decoration: Some(Decoration::new("error", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             }],
@@ -500,7 +500,7 @@ fn stabilization_prunes_consumed_contribution_metadata() {
                     start_byte_offset: 5,
                     end_byte_offset: 6,
                 },
-                decoration: Some("warning".to_owned()),
+                decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
                 gutter: None,
                 command: None,
             }],
@@ -520,20 +520,20 @@ fn stabilization_prunes_consumed_contribution_metadata() {
 fn decoration_precedence_is_application_owned_and_deterministic() {
     let mut model = BufferModel::from_text("abc");
     for (source, decoration) in [
-        (ContributionSource::fixture(), "warning".to_owned()),
+        (ContributionSource::fixture(), "warning"),
         (
             ContributionSource {
                 extension: ExtensionId::new(7),
                 lifecycle: ExtensionLifecycleId::new(3),
             },
-            "info".to_owned(),
+            "info",
         ),
         (
             ContributionSource {
                 extension: ExtensionId::new(8),
                 lifecycle: ExtensionLifecycleId::new(1),
             },
-            "diff.add".to_owned(),
+            "diff.add",
         ),
     ] {
         model
@@ -544,7 +544,7 @@ fn decoration_precedence_is_application_owned_and_deterministic() {
                         start_byte_offset: 0,
                         end_byte_offset: 3,
                     },
-                    decoration: Some(decoration),
+                    decoration: Some(Decoration::new(decoration, DecorationStyle::Wavy)),
                     gutter: None,
                     command: None,
                 }],
@@ -557,7 +557,7 @@ fn decoration_precedence_is_application_owned_and_deterministic() {
         model
             .resolved_contributions()
             .into_iter()
-            .filter_map(|contribution| contribution.decoration)
+            .filter_map(|contribution| contribution.decoration.map(|decoration| decoration.color))
             .collect::<Vec<_>>(),
         ["diff.add", "info", "warning"]
     );

@@ -20,6 +20,8 @@ use gpui::{
     px, rgb, rgba,
 };
 
+use crate::host::protocol::DecorationStyle;
+
 /// Every name a syntax capture or semantic token can resolve to.
 pub(crate) const CAPTURE_NAMES: &[&str] = &[
     "attribute",
@@ -454,14 +456,22 @@ impl Theme {
         self.highlights[highlight.0 as usize]
     }
 
-    /// How an editor decoration naming color `key` paints: a wavy underline
-    /// in that color.
-    pub(crate) fn decoration(&self, key: &str) -> HighlightStyle {
+    /// The text style of an underline decoration naming color `key`: a
+    /// straight or wavy underline in that color. Background styles paint
+    /// behind the text instead and add nothing here.
+    pub(crate) fn decoration(&self, key: &str, style: DecorationStyle) -> HighlightStyle {
+        let (thickness, wavy) = match style {
+            DecorationStyle::Underline => (px(1.), false),
+            DecorationStyle::Wavy => (px(1.5), true),
+            DecorationStyle::Background | DecorationStyle::Line => {
+                return HighlightStyle::default();
+            }
+        };
         HighlightStyle {
             underline: Some(UnderlineStyle {
-                thickness: px(1.5),
+                thickness,
                 color: Some(self.color(key)),
-                wavy: true,
+                wavy,
             }),
             ..Default::default()
         }
@@ -690,7 +700,14 @@ mod tests {
         for appearance in [Appearance::Dark, Appearance::Light] {
             let theme = Theme::defaults(appearance, &definitions);
             assert_eq!(theme.appearance, appearance);
-            let underline = |key| theme.decoration(key).underline.unwrap().color.unwrap();
+            let underline = |key| {
+                theme
+                    .decoration(key, DecorationStyle::Wavy)
+                    .underline
+                    .unwrap()
+                    .color
+                    .unwrap()
+            };
             assert_eq!(underline(color::ERROR), theme.color(color::ERROR));
             assert_eq!(underline("diff.add"), theme.color("diff.add"));
             assert_ne!(underline("diff.add"), theme.color(color::TEXT));

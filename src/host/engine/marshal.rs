@@ -618,7 +618,25 @@ pub(super) fn editor_contributions(
         let range_value = property(scope, object, "range", error)?;
         let range = byte_range(scope, range_value)?;
         let decoration_value = property(scope, object, "decoration", error)?;
-        let decoration = optional_string(scope, decoration_value, error)?;
+        let decoration = if decoration_value.is_null_or_undefined() {
+            None
+        } else {
+            let decoration =
+                v8::Local::<v8::Object>::try_from(decoration_value).map_err(|_| error)?;
+            let color_value = property(scope, decoration, "color", error)?;
+            let style_value = property(scope, decoration, "style", error)?;
+            let style = match required_string(scope, style_value, error)?.as_str() {
+                "background" => DecorationStyle::Background,
+                "line" => DecorationStyle::Line,
+                "underline" => DecorationStyle::Underline,
+                "wavy" => DecorationStyle::Wavy,
+                _ => return Err(error.into()),
+            };
+            Some(Decoration {
+                color: required_string(scope, color_value, error)?,
+                style,
+            })
+        };
         let gutter_value = property(scope, object, "gutter", error)?;
         let gutter = optional_string(scope, gutter_value, error)?;
         let command_value = property(scope, object, "command", error)?;

@@ -35,7 +35,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::core::anchored_range::AnchoredRangeId;
 use crate::host::protocol::{
     BufferHandle, ByteRange, CompletionProviderRegistrationId, CompletionRequest,
-    CompletionResponse, TextEdit,
+    CompletionResponse, DecorationStyle, TextEdit,
 };
 
 use super::commands::dispatch as commands;
@@ -68,14 +68,15 @@ struct CaretBlink {
     _task: Option<Task<()>>,
 }
 
-/// One contributed decoration segment, painted in the color of `key`.
-/// `start` and `end` are byte columns within `line`.
+/// One contributed decoration segment, painted in `style` and the color of
+/// `key`. `start` and `end` are byte columns within `line`.
 #[derive(Clone)]
 struct RenderedDecoration {
     line: usize,
     start: usize,
     end: usize,
     key: String,
+    style: DecorationStyle,
 }
 
 /// Syntax highlights queried for a range of whole lines.
@@ -1174,14 +1175,15 @@ fn project_contributions(
             let segment_start = start.max(line_start);
             let segment_end = end.min(line_end);
 
-            if let Some(key) = &contribution.decoration
+            if let Some(decoration) = &contribution.decoration
                 && segment_start < segment_end
             {
                 decorations.push(RenderedDecoration {
                     line,
                     start: segment_start - line_start,
                     end: segment_end - line_start,
-                    key: key.clone(),
+                    key: decoration.color.clone(),
+                    style: decoration.style,
                 });
             }
 

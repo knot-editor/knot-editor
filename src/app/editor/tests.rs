@@ -22,8 +22,8 @@ use crate::{
         theme::{Appearance, Highlight, Theme, color, native_color_definitions, theme},
     },
     host::protocol::{
-        BufferHandle, ByteRange, CompletionResponse, CompletionResultItem, EditorContribution,
-        ExtensionId, ExtensionLifecycleId, LanguageInfo,
+        BufferHandle, ByteRange, CompletionResponse, CompletionResultItem, Decoration,
+        DecorationStyle, EditorContribution, ExtensionId, ExtensionLifecycleId, LanguageInfo,
     },
 };
 
@@ -929,7 +929,7 @@ fn contribution_projection_indexes_multiline_ranges() {
                 end_byte_offset: 9,
             },
             source: ContributionSource::fixture(),
-            decoration: Some("warning".to_owned()),
+            decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
             gutter: Some("warning".to_owned()),
             command: Some("fixture.action".into()),
         }],
@@ -1194,7 +1194,7 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
                         start_byte_offset: 0,
                         end_byte_offset: 6,
                     },
-                    decoration: Some("warning".to_owned()),
+                    decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
                     gutter: Some("warning".to_owned()),
                     command: None,
                 }],
@@ -1311,7 +1311,7 @@ fn layered_runs_apply_layers_in_order_and_fill_gaps() {
     let semantic = [span(0..3, "type")];
     let decorations = [HighlightSpan {
         range: 6..11,
-        style: theme.decoration(color::ERROR),
+        style: theme.decoration(color::ERROR, DecorationStyle::Wavy),
     }];
 
     let runs = runs_for(text, &[&syntax, &semantic, &decorations], &theme);
@@ -1405,7 +1405,7 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
             start_byte_offset: range.start,
             end_byte_offset: range.end,
         },
-        decoration: Some(token),
+        decoration: Some(Decoration::new(token, DecorationStyle::Wavy)),
         gutter: None,
         command: None,
     };
@@ -1414,9 +1414,9 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
             .replace_contributions(
                 ContributionSource::fixture(),
                 &[
-                    decoration(0..4, "warning".to_owned()),
-                    decoration(1..3, "warning".to_owned()),
-                    decoration(2..6, "error".to_owned()),
+                    decoration(0..4, "warning"),
+                    decoration(1..3, "warning"),
+                    decoration(2..6, "error"),
                 ],
                 model.revision(),
             )
@@ -1435,6 +1435,57 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
                 (2, fg, underline(color::WARNING)),
                 (4, fg, underline(color::ERROR)),
                 (2, fg, None),
+            ]
+        );
+    });
+}
+
+#[gpui::test]
+fn underline_styles_paint_as_separate_layers(cx: &mut TestAppContext) {
+    let model = cx.new(|_| BufferModel::from_text("abcdefgh"));
+    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let decoration = |range: std::ops::Range<usize>, key, style| EditorContribution {
+        range: ByteRange {
+            start_byte_offset: range.start,
+            end_byte_offset: range.end,
+        },
+        decoration: Some(Decoration::new(key, style)),
+        gutter: None,
+        command: None,
+    };
+    model.update(cx, |model, cx| {
+        model
+            .replace_contributions(
+                ContributionSource::fixture(),
+                &[
+                    decoration(0..4, "diff.add", DecorationStyle::Underline),
+                    decoration(2..6, "diff.add", DecorationStyle::Wavy),
+                    decoration(6..8, "diff.add", DecorationStyle::Background),
+                    decoration(0..8, "diff.add", DecorationStyle::Line),
+                ],
+                model.revision(),
+            )
+            .unwrap();
+        cx.notify();
+    });
+    cx.run_until_parked();
+
+    cx.read(|cx| {
+        let color = Some(theme(cx).color("diff.add"));
+        let runs = editor.read(cx).line_runs(model.read(cx), 0, "abcdefgh", cx);
+        let underlines = runs
+            .iter()
+            .map(|run| {
+                let underline = run.underline.map(|u| (u.color, u.wavy, u.thickness));
+                (run.len, underline)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            underlines,
+            [
+                (2, Some((color, false, px(1.)))),
+                (4, Some((color, true, px(1.5)))),
+                (2, None),
             ]
         );
     });
@@ -1490,7 +1541,7 @@ fn syntax_highlights_paint_beneath_decorations(cx: &mut TestAppContext) {
                 start_byte_offset: 0,
                 end_byte_offset: 5,
             },
-            decoration: Some("warning".to_owned()),
+            decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
             gutter: None,
             command: None,
         };

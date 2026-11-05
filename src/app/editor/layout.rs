@@ -320,20 +320,30 @@ impl EditorView {
             .collect()
     }
 
-    /// The decorations on `line`, one layer per color key in the order the
-    /// model paints them, so a later key's underline wins where they overlap.
+    /// The underline decorations on `line`, one layer per color key and
+    /// style in the order the model paints them, so a later layer's
+    /// underline wins where they overlap. Backgrounds paint as quads.
     fn decoration_layers(&self, line: usize, theme: &Theme) -> Vec<Vec<HighlightSpan>> {
-        let mut keys: Vec<&str> = Vec::new();
-        for decoration in self.decorations.iter().filter(|d| d.line == line) {
-            keys.retain(|key| *key != decoration.key);
-            keys.push(&decoration.key);
+        let underlines = || {
+            self.decorations.iter().filter(move |decoration| {
+                decoration.line == line
+                    && matches!(
+                        decoration.style,
+                        DecorationStyle::Underline | DecorationStyle::Wavy
+                    )
+            })
+        };
+        let mut layers: Vec<(&str, DecorationStyle)> = Vec::new();
+        for decoration in underlines() {
+            let layer = (decoration.key.as_str(), decoration.style);
+            layers.retain(|existing| *existing != layer);
+            layers.push(layer);
         }
-        keys.into_iter()
-            .map(|key| {
-                let mut ranges: Vec<Range<usize>> = self
-                    .decorations
-                    .iter()
-                    .filter(|decoration| decoration.line == line && decoration.key == key)
+        layers
+            .into_iter()
+            .map(|(key, style)| {
+                let mut ranges: Vec<Range<usize>> = underlines()
+                    .filter(|decoration| decoration.key == key && decoration.style == style)
                     .map(|decoration| decoration.start..decoration.end)
                     .collect();
                 ranges.sort_unstable_by_key(|range| range.start);
@@ -344,7 +354,7 @@ impl EditorView {
                         _ => merged.push(range),
                     }
                 }
-                let style = theme.decoration(key);
+                let style = theme.decoration(key, style);
                 merged
                     .into_iter()
                     .map(|range| HighlightSpan { range, style })

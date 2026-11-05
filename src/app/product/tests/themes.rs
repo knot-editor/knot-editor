@@ -159,8 +159,8 @@ await themes.register({ name: "Green", appearance: "dark", colors: { "diff.add":
 await commands.register("decorate", async ({ buffer }) => {
   const { revision } = await buffer.snapshot();
   await buffer.contributions.replace([
-    { range: { startByteOffset: 0, endByteOffset: 2 }, decoration: "diff.add", gutter: "diff.add" },
-    { range: { startByteOffset: 2, endByteOffset: 4 }, decoration: "made.up" },
+    { range: { startByteOffset: 0, endByteOffset: 2 }, decoration: { color: "diff.add", style: "wavy" }, gutter: "diff.add" },
+    { range: { startByteOffset: 2, endByteOffset: 4 }, decoration: { color: "made.up", style: "wavy" } },
   ], { ifRevision: revision });
 });
 await commands.register("green", async () => { await settings.set("theme.dark", "Green"); });
