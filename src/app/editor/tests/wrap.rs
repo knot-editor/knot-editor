@@ -250,3 +250,194 @@ fn toggle_soft_wrap_writes_the_document_value_every_view_follows(cx: &mut TestAp
             .unwrap()
     );
 }
+
+/// Run the movement `command` from the caret position `from`.
+fn run(
+    view: &mut EditorView,
+    from: (usize, usize),
+    command: &str,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<EditorView>,
+) -> (usize, usize) {
+    (view.cursor_line, view.cursor_col) = from;
+    view.has_selection = false;
+    view.preferred_x = None;
+    assert!(
+        view.execute_editing_command(command, window, cx),
+        "{command}"
+    );
+    (view.cursor_line, view.cursor_col)
+}
+
+#[gpui::test]
+fn visual_movement_follows_rows_and_logical_twins_follow_lines(cx: &mut TestAppContext) {
+    wrap_everything(cx);
+    let long = words(60);
+    let text = format!("{long}\nshort\n{}", [long.as_str(); 11].join("\n"));
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.simulate_resize(size(px(400.), px(300.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            let model = view.model.read(cx);
+            let rows = view.wrap.rows(0).len();
+            let [first, second, third, last] =
+                [0, 1, 2, rows - 1].map(|index| view.row(model, index));
+            let end = line_end(model, 0);
+            let page = (view.viewport_h / view.metrics.line_height).floor() as usize;
+            let last_line = model.line_count() - 1;
+            let late_row = view.wrap.first_row(last_line);
+            let on_second = (0, second.range.start + 16);
+
+            // Up and Down keep the caret's x across rows; the twins move by
+            // lines and land on the target line's first row.
+            assert_eq!(run(view, on_second, "editor.move-up", window, cx), (0, 16));
+            assert_eq!(
+                run(view, on_second, "editor.move-down", window, cx),
+                (0, third.range.start + 16)
+            );
+            assert_eq!(
+                run(view, on_second, "editor.move-down-logical", window, cx),
+                (1, 5)
+            );
+            assert_eq!(
+                run(view, (1, 2), "editor.move-up", window, cx),
+                (0, last.range.start + 2)
+            );
+            assert_eq!(
+                run(view, (1, 2), "editor.move-up-logical", window, cx),
+                (0, 2)
+            );
+            assert_eq!(run(view, (2, 4), "editor.move-up", window, cx).0, 1);
+            // The preferred x survives the short line on the way down.
+            run(view, on_second, "editor.move-down", window, cx);
+            for _ in 1..rows {
+                view.execute_editing_command("editor.move-down", window, cx);
+            }
+            assert_eq!((view.cursor_line, view.cursor_col), (2, 16));
+
+            // Home and End reach the caret's row edges; a row that does not
+            // end its line ends before the space its break follows.
+            assert_eq!(
+                run(view, on_second, "editor.move-line-start", window, cx),
+                (0, second.range.start)
+            );
+            assert_eq!(
+                run(view, on_second, "editor.move-smart-home", window, cx),
+                (0, second.range.start)
+            );
+            assert_eq!(
+                run(view, on_second, "editor.move-line-end", window, cx),
+                (0, second.range.end - 1)
+            );
+            assert_eq!(
+                run(view, (0, 4), "editor.move-line-end", window, cx),
+                (0, first.range.end - 1)
+            );
+            assert_eq!(
+                run(
+                    view,
+                    (0, last.range.start),
+                    "editor.move-line-end",
+                    window,
+                    cx
+                ),
+                (0, end)
+            );
+            assert_eq!(
+                run(
+                    view,
+                    on_second,
+                    "editor.move-line-start-logical",
+                    window,
+                    cx
+                ),
+                (0, 0)
+            );
+            assert_eq!(
+                run(
+                    view,
+                    on_second,
+                    "editor.move-smart-home-logical",
+                    window,
+                    cx
+                ),
+                (0, 0)
+            );
+            assert_eq!(
+                run(view, on_second, "editor.move-line-end-logical", window, cx),
+                (0, end)
+            );
+            run(view, on_second, "editor.select-line-end", window, cx);
+            assert_eq!(
+                view.selected_byte_range(cx),
+                Some(on_second.1..second.range.end - 1)
+            );
+
+            // Pages count rows, and the twins count lines.
+            run(view, (0, 0), "editor.move-page-down", window, cx);
+            assert_eq!(view.caret_row(), page);
+            assert_eq!(
+                run(view, (0, 0), "editor.move-page-down-logical", window, cx).0,
+                page.min(last_line)
+            );
+            run(view, (last_line, 0), "editor.move-page-up", window, cx);
+            assert_eq!(view.caret_row(), late_row - page);
+            assert_eq!(
+                run(
+                    view,
+                    (last_line, 0),
+                    "editor.move-page-up-logical",
+                    window,
+                    cx
+                )
+                .0,
+                last_line.saturating_sub(page)
+            );
+        })
+    });
+}
+
+#[gpui::test]
+fn without_wrapping_each_movement_and_its_twin_agree(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let text = (0..60)
+        .map(|line| format!("    line {line} {}", words(line % 7)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.simulate_resize(size(px(400.), px(300.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            assert_eq!(view.wrap.width(), None);
+            for movement in [
+                "up",
+                "down",
+                "line-start",
+                "smart-home",
+                "line-end",
+                "page-up",
+                "page-down",
+            ] {
+                for prefix in ["move", "select"] {
+                    let mut results = Vec::new();
+                    for suffix in ["", "-logical"] {
+                        (view.cursor_line, view.cursor_col) = (30, 6);
+                        view.has_selection = false;
+                        view.preferred_x = None;
+                        let command = format!("editor.{prefix}-{movement}{suffix}");
+                        assert!(
+                            view.execute_editing_command(&command, window, cx),
+                            "{command}"
+                        );
+                        results.push(view.selection(cx));
+                    }
+                    assert_eq!(results[0], results[1], "{prefix}-{movement}");
+                }
+            }
+        })
+    });
+}

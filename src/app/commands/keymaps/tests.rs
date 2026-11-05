@@ -174,8 +174,8 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
         ("cmd-shift-z", REDO_COMMAND),
         ("alt-left", MOVE_WORD_LEFT_COMMAND),
         ("cmd-up", MOVE_DOCUMENT_START_COMMAND),
-        ("ctrl-a", MOVE_LINE_START_COMMAND),
-        ("ctrl-e", MOVE_LINE_END_COMMAND),
+        ("ctrl-a", MOVE_LINE_START_LOGICAL_COMMAND),
+        ("ctrl-e", MOVE_LINE_END_LOGICAL_COMMAND),
         ("ctrl-f", MOVE_RIGHT_COMMAND),
         ("ctrl-b", MOVE_LEFT_COMMAND),
         ("ctrl-n", MOVE_DOWN_COMMAND),
@@ -215,6 +215,51 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
     }
     for key in ["ctrl-a", "ctrl-c", "ctrl-k", "ctrl-y"] {
         assert_eq!(resolved(&registry, key, Some("terminal")), None, "{key}");
+    }
+}
+
+#[test]
+fn movement_keys_move_by_visual_row_and_only_cocoa_paragraph_keys_ignore_wrapping() {
+    for platform in PLATFORMS {
+        let registry = preset_registry(platform);
+        for (key, command_name) in [
+            ("up", MOVE_UP_COMMAND),
+            ("shift-up", SELECT_UP_COMMAND),
+            ("down", MOVE_DOWN_COMMAND),
+            ("shift-down", SELECT_DOWN_COMMAND),
+            ("home", MOVE_SMART_HOME_COMMAND),
+            ("shift-home", SELECT_SMART_HOME_COMMAND),
+            ("end", MOVE_LINE_END_COMMAND),
+            ("shift-end", SELECT_LINE_END_COMMAND),
+            ("pageup", MOVE_PAGE_UP_COMMAND),
+            ("shift-pageup", SELECT_PAGE_UP_COMMAND),
+            ("pagedown", MOVE_PAGE_DOWN_COMMAND),
+            ("shift-pagedown", SELECT_PAGE_DOWN_COMMAND),
+        ] {
+            assert_eq!(
+                resolved(&registry, key, Some("editor")).as_deref(),
+                Some(command_name),
+                "{platform:?}: {key}"
+            );
+        }
+        let mut logical = knot_preset(platform)
+            .into_iter()
+            .filter_map(|binding| {
+                let command = binding.command?;
+                let name = command.name.to_string();
+                name.ends_with("-logical").then_some((binding.key, name))
+            })
+            .collect::<Vec<_>>();
+        logical.sort();
+        let expected: Vec<(String, String)> = if platform == Platform::MacOs {
+            vec![
+                ("ctrl-a".into(), MOVE_LINE_START_LOGICAL_COMMAND.into()),
+                ("ctrl-e".into(), MOVE_LINE_END_LOGICAL_COMMAND.into()),
+            ]
+        } else {
+            Vec::new()
+        };
+        assert_eq!(logical, expected, "{platform:?}");
     }
 }
 

@@ -436,8 +436,9 @@ const MACOS_BINDINGS: &[PresetEntry] = &[
         SELECT_DOCUMENT_END_COMMAND,
         Some("editor"),
     ),
-    ("ctrl-a", MOVE_LINE_START_COMMAND, Some("editor")),
-    ("ctrl-e", MOVE_LINE_END_COMMAND, Some("editor")),
+    // Cocoa's ctrl-a and ctrl-e reach the paragraph's edges, past wrapping.
+    ("ctrl-a", MOVE_LINE_START_LOGICAL_COMMAND, Some("editor")),
+    ("ctrl-e", MOVE_LINE_END_LOGICAL_COMMAND, Some("editor")),
     ("ctrl-f", MOVE_RIGHT_COMMAND, Some("editor")),
     ("ctrl-b", MOVE_LEFT_COMMAND, Some("editor")),
     ("ctrl-n", MOVE_DOWN_COMMAND, Some("editor")),

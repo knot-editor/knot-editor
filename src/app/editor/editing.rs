@@ -197,10 +197,17 @@ impl EditorView {
             } else {
                 return false;
             };
+        // A `-logical` twin moves by buffer lines; the plain command moves by
+        // the rows wrapping shows, which are the lines while nothing wraps.
+        let (movement, logical) = match movement.strip_suffix("-logical") {
+            Some(movement) => (movement, true),
+            None => (movement, false),
+        };
         self.break_history_group(cx);
         self.marked_range_utf16 = None;
         let model = self.model.read(cx);
         let last = self.line_count - 1;
+        let row = self.row(model, self.caret_row());
         let forward = matches!(
             movement,
             "right" | "down" | "word-right" | "line-end" | "page-down" | "document-end"
@@ -221,6 +228,9 @@ impl EditorView {
             ),
             "right" if self.cursor_line < last => (self.cursor_line + 1, 0),
             "right" => (last, line_end(model, last)),
+            "line-start" | "smart-home" if !logical && row.range.start > 0 => {
+                (self.cursor_line, row.range.start)
+            }
             "line-start" => (self.cursor_line, 0),
             "smart-home" => {
                 let first = leading_whitespace(&line_text(model, self.cursor_line)).len();
@@ -229,6 +239,12 @@ impl EditorView {
                     if self.cursor_col == first { 0 } else { first },
                 )
             }
+            // A row that does not end its line ends before its last
+            // character, since its end offset shows on the next row.
+            "line-end" if !logical && !row.last => (
+                self.cursor_line,
+                prev_boundary(model, self.cursor_line, row.range.end),
+            ),
             "line-end" => (self.cursor_line, line_end(model, self.cursor_line)),
             "document-start" => (0, 0),
             "document-end" => (last, line_end(model, last)),
@@ -245,16 +261,23 @@ impl EditorView {
                 } else {
                     1
                 };
-                let line = if forward {
-                    self.cursor_line.saturating_add(rows).min(last)
+                let step = |from: usize, last: usize| {
+                    if forward {
+                        from.saturating_add(rows).min(last)
+                    } else {
+                        from.saturating_sub(rows)
+                    }
+                };
+                let target = if logical {
+                    self.wrap.first_row(step(self.cursor_line, last))
                 } else {
-                    self.cursor_line.saturating_sub(rows)
+                    step(row.index, self.wrap.row_count() - 1)
                 };
                 let x = self
                     .preferred_x
                     .unwrap_or_else(|| self.caret_x(model, window, cx));
                 self.preferred_x = Some(x);
-                self.column_for_x(model, self.wrap.first_row(line), x, window, cx)
+                self.column_for_x(model, target, x, window, cx)
             }
             _ => return false,
         };
