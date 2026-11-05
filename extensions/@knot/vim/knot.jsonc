@@ -1,0 +1,11 @@
+{
+  // Bundled Vim mode, off until the vim.enabled setting turns it on.
+  "name": "@knot/vim",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "displayName": "Vim",
+  "description": "Vim's modal editing in editors where the vim.enabled setting is true.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}

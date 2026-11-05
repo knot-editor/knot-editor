@@ -2943,6 +2943,7 @@ mod tests {
                 "@knot/language-toml",
                 "@knot/language-typescript",
                 "@knot/themes",
+                "@knot/vim",
             ] {
                 let entry = report
                     .report
@@ -3020,6 +3021,7 @@ mod tests {
         let host = cx.update(|cx| {
             let commands = cx.new(crate::app::commands::dispatch::ProductCommandDispatcher::new);
             cx.set_global(ApplicationProductCommands(commands));
+            crate::app::commands::keymaps::install(cx);
             let host = install(cx);
             host.update(cx, |host, cx| {
                 host.set_test_storage_root(root.path().join("storage"), cx)

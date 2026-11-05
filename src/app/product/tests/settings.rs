@@ -78,6 +78,8 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
         &[("main.js", PACKAGE)],
     );
     install_globals(cx);
+    // Product startup binds keys before packages start, so they can bind theirs.
+    cx.update(super::super::launch::bind_product_keys);
     install_launch_gate(cx);
     let host = cx.update(crate::app::extensions::host::install);
     host.update(cx, |host, cx| {
@@ -168,9 +170,10 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     });
     assert_eq!(painted_tab(rust, cx), 8);
     assert_eq!(painted_tab(cx.new(|_| BufferModel::from_text("")), cx), 3);
+    // The package's observer, and the bundled Vim package's of vim.enabled.
     assert_eq!(
         cx.read(crate::app::extensions::host::setting_observer_count),
-        1
+        2
     );
 
     // Restart keeps every value: the fresh lifecycle defines its keys again
@@ -202,7 +205,7 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     // Teardown removed the old lifecycle's observer; the new one replaced it.
     assert_eq!(
         cx.read(crate::app::extensions::host::setting_observer_count),
-        1
+        2
     );
 }
 

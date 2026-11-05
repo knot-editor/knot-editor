@@ -1,0 +1,92 @@
+// Vim behavior cases, run by a Rust product test through the real editor
+// with this package enabled. Lines join with "\n" and "‸" marks the caret,
+// which in normal mode sits on the character after it. `keys` types its
+// characters; `<name>` presses a named key: <esc>, <cr>, <bs>, <del>, <tab>,
+// <s-tab>, <lt> for "<", and <c-x> for ctrl with a letter. Keys arrive
+// without waiting for each other, as fast typing does. `mode` is the mode
+// afterwards, "normal" unless given; `language` sets the document's language.
+{
+  "cases": [
+    // Character and line motions.
+    { "name": "l stops on the last character", "before": ["‸abc"], "keys": "5l", "after": ["ab‸c"] },
+    { "name": "h stops at the line start", "before": ["a‸bc"], "keys": "5h", "after": ["‸abc"] },
+    { "name": "l steps over a surrogate pair", "before": ["‸😀a"], "keys": "l", "after": ["😀‸a"] },
+    { "name": "a count of ten moves ten characters", "before": ["‸abcdefghijkl"], "keys": "10l", "after": ["abcdefghij‸kl"] },
+    { "name": "Backspace moves left onto the previous line", "before": ["ab", "‸cd"], "keys": "<bs>", "after": ["a‸b", "cd"] },
+    { "name": "Space moves right onto the next line", "before": ["a‸b", "cd"], "keys": " ", "after": ["ab", "‸cd"] },
+    { "name": "0 goes to the line start", "before": ["  fo‸o"], "keys": "0", "after": ["‸  foo"] },
+    { "name": "^ goes to the first non-blank", "before": ["‸  foo"], "keys": "^", "after": ["  ‸foo"] },
+    { "name": "$ goes to the last character", "before": ["‸  foo"], "keys": "$", "after": ["  fo‸o"] },
+    { "name": "2$ goes to the end of the next line", "before": ["‸ab", "cd"], "keys": "2$", "after": ["ab", "c‸d"] },
+    { "name": "Enter goes to the next line's first non-blank", "before": ["‸a", "  b", "c"], "keys": "<cr>", "after": ["a", "  ‸b", "c"] },
+    { "name": "+ with a count skips lines", "before": ["‸a", "b", "  c"], "keys": "2+", "after": ["a", "b", "  ‸c"] },
+    { "name": "- goes to the previous line's first non-blank", "before": ["a", "  b", "‸c"], "keys": "-", "after": ["a", "  ‸b", "c"] },
+    { "name": "gg goes to the first line's first non-blank", "before": ["  one", "two", "th‸ree"], "keys": "gg", "after": ["  ‸one", "two", "three"] },
+    { "name": "G goes to the last line", "before": ["‸one", "two", "  three"], "keys": "G", "after": ["one", "two", "  ‸three"] },
+    { "name": "a count before G names the line", "before": ["‸one", "  two", "three"], "keys": "2G", "after": ["one", "  ‸two", "three"] },
+    { "name": "a count before gg names the line", "before": ["‸one", "two", "three"], "keys": "3gg", "after": ["one", "two", "‸three"] },
+
+    // j and k.
+    { "name": "j keeps the wanted column across short and empty lines", "before": ["abc‸def", "ab", "", "abcdefgh"], "keys": "jjj", "after": ["abcdef", "ab", "", "abc‸defgh"] },
+    { "name": "j clamps to a short line's last character", "before": ["abc‸def", "ab"], "keys": "j", "after": ["abcdef", "a‸b"] },
+    { "name": "k keeps the wanted column", "before": ["abcdef", "", "abc‸d"], "keys": "kk", "after": ["abc‸def", "", "abcd"] },
+    { "name": "after $, j stays at line ends", "before": ["a‸b", "abcd", "x"], "keys": "$jj", "after": ["ab", "abcd", "‸x"] },
+    { "name": "after $, j lands on a longer line's end", "before": ["a‸b", "abcd"], "keys": "$j", "after": ["ab", "abc‸d"] },
+    { "name": "j counts a tab as reaching the next tab stop", "before": ["abcd‸e", "\tx"], "keys": "j", "after": ["abcde", "\t‸x"] },
+    { "name": "j inside a tab lands on the tab", "before": ["a‸bcde", "\tx"], "keys": "j", "after": ["abcde", "‸\tx"] },
+    { "name": "a count of j past the end stops on the last line", "before": ["‸a", "b", "c"], "keys": "5j", "after": ["a", "b", "‸c"] },
+    { "name": "k on the first line stays", "before": ["a‸b"], "keys": "k", "after": ["a‸b"] },
+
+    // Word motions.
+    { "name": "w stops at punctuation and words", "before": ["‸foo.bar baz"], "keys": "w", "after": ["foo‸.bar baz"] },
+    { "name": "3w moves three words", "before": ["‸foo.bar baz"], "keys": "3w", "after": ["foo.bar ‸baz"] },
+    { "name": "w crosses lines and stops on an empty line", "before": ["foo ‸bar", "", "baz"], "keys": "w", "after": ["foo bar", "‸", "baz"] },
+    { "name": "w after an empty line goes to the next word", "before": ["foo ‸bar", "", "  baz"], "keys": "ww", "after": ["foo bar", "", "  ‸baz"] },
+    { "name": "w on the last word goes to the last character", "before": ["foo ‸bar"], "keys": "w", "after": ["foo ba‸r"] },
+    { "name": "w separates letters from emoji", "before": ["‸é😀 x"], "keys": "w", "after": ["é‸😀 x"] },
+    { "name": "W skips punctuation", "before": ["‸a.b c"], "keys": "W", "after": ["a.b ‸c"] },
+    { "name": "b goes to the previous word start", "before": ["foo ba‸r"], "keys": "b", "after": ["foo ‸bar"] },
+    { "name": "2b goes back two words", "before": ["foo ba‸r"], "keys": "2b", "after": ["‸foo bar"] },
+    { "name": "b crosses lines", "before": ["foo", "  ‸bar"], "keys": "b", "after": ["‸foo", "  bar"] },
+    { "name": "B skips punctuation", "before": ["a.b ‸c"], "keys": "B", "after": ["‸a.b c"] },
+    { "name": "e goes to the word end", "before": ["‸foo bar"], "keys": "e", "after": ["fo‸o bar"] },
+    { "name": "e from a word end goes to the next one", "before": ["fo‸o bar"], "keys": "e", "after": ["foo ba‸r"] },
+    { "name": "e skips empty lines", "before": ["fo‸o", "", "bar"], "keys": "e", "after": ["foo", "", "ba‸r"] },
+    { "name": "E skips punctuation", "before": ["‸a.b c"], "keys": "E", "after": ["a.‸b c"] },
+    { "name": "ge goes to the previous word end", "before": ["foo b‸ar"], "keys": "ge", "after": ["fo‸o bar"] },
+    { "name": "gE skips punctuation", "before": ["a.b ‸c"], "keys": "gE", "after": ["a.‸b c"] },
+
+    // Keys that mean nothing in normal mode.
+    { "name": "typed text that names no command is swallowed", "before": ["a‸b"], "keys": "QZ", "after": ["a‸b"] },
+    { "name": "editing keys do not edit in normal mode", "before": ["a‸b"], "keys": "<del><tab><s-tab><c-d><c-k><c-j>", "after": ["a‸b"] },
+    { "name": "Escape cancels a pending count", "before": ["‸abc"], "keys": "2<esc>l", "after": ["a‸bc"] },
+    { "name": "an unknown key cancels a pending count", "before": ["‸abc"], "keys": "2Ql", "after": ["a‸bc"] },
+    { "name": "an unknown g key cancels it", "before": ["‸abc"], "keys": "gzl", "after": ["a‸bc"] },
+
+    // Insert mode.
+    { "name": "i inserts before the caret and Escape steps back", "before": ["a‸b"], "keys": "ix<esc>", "after": ["a‸xb"] },
+    { "name": "a inserts after the caret", "before": ["a‸b"], "keys": "ax<esc>", "after": ["ab‸x"] },
+    { "name": "a on an empty line inserts there", "before": ["‸"], "keys": "ax<esc>", "after": ["‸x"] },
+    { "name": "I inserts at the first non-blank", "before": ["  fo‸o"], "keys": "Ix<esc>", "after": ["  ‸xfoo"] },
+    { "name": "A appends at the line end", "before": ["f‸oo"], "keys": "Ax<esc>", "after": ["foo‸x"] },
+    { "name": "Escape at the line start stays there", "before": ["‸ab"], "keys": "i<esc>", "after": ["‸ab"] },
+    { "name": "insert mode stays until Escape", "before": ["a‸b"], "keys": "i", "after": ["a‸b"], "mode": "insert" },
+    { "name": "keys typed right after A reach insert mode in order", "before": ["o‸ne", "two"], "keys": "A!x<cr>y<esc>", "after": ["one!x", "‸y", "two"] },
+    { "name": "Backspace deletes in insert mode", "before": ["ab‸c"], "keys": "a<bs><bs>x<esc>", "after": ["a‸x"] },
+    { "name": "o opens a line below with the indentation", "before": ["  a‸b", "c"], "keys": "ox<esc>", "after": ["  ab", "  ‸x", "c"] },
+    { "name": "O opens a line above with the current line's indentation", "before": ["x", "  a‸b"], "keys": "Oy<esc>", "after": ["x", "  ‸y", "  ab"] },
+    { "name": "O on the first line opens above it", "before": ["  a‸b"], "keys": "Oy<esc>", "after": ["  ‸y", "  ab"] },
+    { "name": "an opened line left empty keeps no indentation", "before": ["  a‸b"], "keys": "o<esc>", "after": ["  ab", "‸"] },
+    { "name": "o indents from the language's indent query", "language": "rust", "before": ["fn f() ‸{", "}"], "keys": "ox<esc>", "after": ["fn f() {", "    ‸x", "}"] },
+    { "name": "O indents from the language's indent query", "language": "rust", "before": ["fn f() {", "    a();", "‸}"], "keys": "Ob<esc>", "after": ["fn f() {", "    a();", "    ‸b", "}"] },
+
+    // Undo and redo.
+    { "name": "an insert session undoes as one step", "before": ["a‸b"], "keys": "ixyz<esc>u", "after": ["a‸b"] },
+    { "name": "A with a line break undoes as one step", "before": ["o‸ne", "two"], "keys": "Ax<cr>y<esc>u", "after": ["on‸e", "two"] },
+    { "name": "o undoes as one step", "before": ["a‸b"], "keys": "ox<esc>u", "after": ["a‸b"] },
+    { "name": "a count undoes several sessions", "before": ["‸a"], "keys": "ix<esc>iy<esc>2u", "after": ["‸a"] },
+    // Redo restores the caret from after the change, as native redo does,
+    // where Vim puts it at the change's start.
+    { "name": "ctrl-r redoes", "before": ["‸a"], "keys": "ix<esc>iy<esc>2u<c-r>", "after": ["x‸a"] }
+  ]
+}

@@ -57,9 +57,23 @@ fn read_cases(path: &Path) -> CommentCases {
 /// Start every bundled package with an empty personal config and no
 /// installed packages, and require that each one loaded.
 pub(super) fn start_bundled_packages(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(None, cx);
+}
+
+/// Start the bundled packages under a personal config whose `post-init.js`
+/// is `post_init`, when given.
+pub(super) fn start_bundled_packages_with_post_init(
+    post_init: Option<&str>,
+    cx: &mut TestAppContext,
+) {
     let config = tempfile::tempdir().unwrap();
+    if let Some(source) = post_init {
+        std::fs::write(config.path().join("post-init.js"), source).unwrap();
+    }
     let extensions = tempfile::tempdir().unwrap();
     install_globals(cx);
+    // Product startup binds keys before packages start, so they can bind theirs.
+    cx.update(super::super::launch::bind_product_keys);
     install_launch_gate(cx);
     let host = cx.update(crate::app::extensions::host::install);
     host.update(cx, |host, cx| {

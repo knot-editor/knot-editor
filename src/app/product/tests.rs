@@ -34,6 +34,7 @@ mod themes;
 mod tool_layout;
 mod tools;
 mod transient;
+mod vim;
 mod window_restore;
 mod workbench;
 mod workspaces;

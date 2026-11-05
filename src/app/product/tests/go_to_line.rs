@@ -5,7 +5,6 @@ use super::*;
 #[gpui::test]
 fn ctrl_g_previews_and_keeps_a_typed_line_in_the_editor(cx: &mut TestAppContext) {
     start_bundled_packages(cx);
-    cx.update(super::super::launch::bind_product_keys);
     let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
     let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree é\nfour\n"));
     let document = documents.update(cx, |documents, cx| {

@@ -119,6 +119,8 @@ fn queued_file_open_runs_only_after_configured_startup(cx: &mut TestAppContext) 
     let request = OpenRequest::from_path(&file, config.path()).unwrap();
     let uri = request.uri().clone();
     let documents = install_globals(cx);
+    // Product startup binds keys before packages start, so they can bind theirs.
+    cx.update(super::super::launch::bind_product_keys);
     install_launch_gate(cx);
     let host = cx.update(super::super::super::extensions::host::install);
     cx.update(|cx| super::super::dispatch_launch_request(Some(request), cx));
