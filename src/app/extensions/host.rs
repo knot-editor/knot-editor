@@ -544,6 +544,8 @@ struct EditorHandle {
 struct UndoGroup {
     owner: ExtensionKey,
     model: gpui::WeakEntity<crate::app::model::BufferModel>,
+    /// The view that opened the group, whose selection the step restores.
+    editor: gpui::WeakEntity<crate::app::editor::EditorView>,
     handle: Option<u64>,
 }
 
@@ -1513,7 +1515,8 @@ impl ProductExtensionHost {
         cx: &mut App,
     ) -> Option<u64> {
         let model = editor.read(cx).model().clone();
-        if !model.update(cx, |model, _| model.begin_undo_group(owner)) {
+        let view = editor.read(cx).history_view_state(model.read(cx));
+        if !model.update(cx, |model, _| model.begin_undo_group(owner, Some(view))) {
             return None;
         }
         self.next_undo_group += 1;
@@ -1527,6 +1530,7 @@ impl ProductExtensionHost {
             UndoGroup {
                 owner,
                 model: model.downgrade(),
+                editor: editor.downgrade(),
                 handle,
             },
         );
@@ -1569,8 +1573,13 @@ impl ProductExtensionHost {
 
     fn finish_undo_group(group: &UndoGroup, cx: &mut App) {
         if let Some(model) = group.model.upgrade() {
+            let view = group
+                .editor
+                .upgrade()
+                .filter(|editor| editor.read(cx).model() == &model)
+                .map(|editor| editor.read(cx).history_view_state(model.read(cx)));
             model.update(cx, |model, _| {
-                model.end_undo_group(group.owner);
+                model.end_undo_group(group.owner, view);
             });
         }
     }

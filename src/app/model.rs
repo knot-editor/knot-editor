@@ -1197,14 +1197,25 @@ impl BufferModel {
 
     /// Make every commit until the group ends one undo step. `false` when a
     /// group is already open.
-    pub(crate) fn begin_undo_group(&mut self, owner: ExtensionKey) -> bool {
+    /// `view` is the selection of the view opening the group, which undoing
+    /// the step restores.
+    pub(crate) fn begin_undo_group(
+        &mut self,
+        owner: ExtensionKey,
+        view: Option<HistoryViewState>,
+    ) -> bool {
         assert!(self.open, "cannot edit a closed buffer");
-        self.history.begin_open_group(owner)
+        self.history.begin_open_group(owner, view)
     }
 
-    /// End the open undo group if `owner` holds it.
-    pub(crate) fn end_undo_group(&mut self, owner: ExtensionKey) -> bool {
-        self.history.end_open_group(owner)
+    /// End the open undo group if `owner` holds it, with `view_after` the
+    /// opening view's selection now, which redoing the step restores.
+    pub(crate) fn end_undo_group(
+        &mut self,
+        owner: ExtensionKey,
+        view_after: Option<HistoryViewState>,
+    ) -> bool {
+        self.history.end_open_group(owner, view_after)
     }
 
     pub(crate) fn undo(&mut self) -> Result<bool, BufferAccessError> {

@@ -69,11 +69,14 @@ pub(crate) struct EditHistory {
 }
 
 /// An undo group an extension holds open: every commit joins one entry.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct OpenGroup {
     owner: ExtensionKey,
     /// Whether the group's entry exists, as the last undo entry.
     started: bool,
+    /// The selection of the view that opened the group, when it opened,
+    /// which undoing the step restores whatever its commits recorded.
+    view: Option<HistoryViewState>,
 }
 
 impl EditHistory {
@@ -160,8 +163,15 @@ impl EditHistory {
     }
 
     /// Hold an undo group open for `owner`, so that every commit until it
-    /// ends joins one entry. `false` when a group is open.
-    pub(crate) fn begin_open_group(&mut self, owner: ExtensionKey) -> bool {
+    /// ends joins one entry. `false` when a group is open. With `view`, the selection of
+    /// the view opening it, the step restores that view's selection from
+    /// when the group opens to when it ends, so commits that record no view,
+    /// such as an extension's edit batches, still restore the caret.
+    pub(crate) fn begin_open_group(
+        &mut self,
+        owner: ExtensionKey,
+        view: Option<HistoryViewState>,
+    ) -> bool {
         if self.open.is_some() {
             return false;
         }
@@ -169,15 +179,20 @@ impl EditHistory {
         self.open = Some(OpenGroup {
             owner,
             started: false,
+            view,
         });
         true
     }
 
-    /// End the open group if `owner` holds it.
-    pub(crate) fn end_open_group(&mut self, owner: ExtensionKey) -> bool {
-        if self.open.is_some_and(|open| open.owner == owner) {
-            self.open = None;
-            self.break_group();
+    /// End the open group if `owner` holds it, with `view_after` the opening
+    /// view's selection now.
+    pub(crate) fn end_open_group(
+        &mut self,
+        owner: ExtensionKey,
+        view_after: Option<HistoryViewState>,
+    ) -> bool {
+        if self.open.as_ref().is_some_and(|open| open.owner == owner) {
+            self.finish_open_group(view_after);
             return true;
         }
         false
@@ -185,13 +200,27 @@ impl EditHistory {
 
     /// End the open group whoever holds it.
     pub(crate) fn end_any_open_group(&mut self) {
-        if self.open.take().is_some() {
-            self.break_group();
+        if self.open.is_some() {
+            self.finish_open_group(None);
         }
     }
 
+    fn finish_open_group(&mut self, view_after: Option<HistoryViewState>) {
+        let open = self.open.take().expect("an open group");
+        if open.started
+            && let (Some(before), Some(entry)) = (open.view, self.undo.last_mut())
+        {
+            let after = view_after
+                .or_else(|| entry.view.as_ref().map(|view| view.after.clone()))
+                .filter(|after| after.context == before.context)
+                .unwrap_or_else(|| before.clone());
+            entry.view = Some(HistoryViewChange { before, after });
+        }
+        self.break_group();
+    }
+
     fn joins_open_group(&self) -> bool {
-        self.open.is_some_and(|open| open.started) && !self.undo.is_empty()
+        self.open.as_ref().is_some_and(|open| open.started) && !self.undo.is_empty()
     }
 
     fn start_open_group(&mut self) {

@@ -167,8 +167,9 @@ handles without notifying. Explicit buffer access remains independent
 of presentation lifetime; clipboard access is application-scoped.
 
 An editor can open an undo group on its buffer, owned by the calling lifecycle.
-The host records each open group with its owner and, when opened through a
-handle, that handle. Disposal, lifecycle teardown, and the handle's release or
+The host records each open group with its owner, the opening editor, whose
+selection at the group's end it hands to the history, and, when opened through
+a handle, that handle. Disposal, lifecycle teardown, and the handle's release or
 stale tab end it; a group opened through a command's editor is bounded by
 disposal, teardown, or buffer closure, since the command's end must not close
 a mode the next command finishes.

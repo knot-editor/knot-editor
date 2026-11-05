@@ -858,7 +858,7 @@ impl EditorView {
         self.clamp_scroll();
     }
 
-    fn history_view_state(&self, model: &BufferModel) -> HistoryViewState {
+    pub(crate) fn history_view_state(&self, model: &BufferModel) -> HistoryViewState {
         let caret = to_flat_byte(model, self.cursor_line, self.cursor_col);
         let anchor = if self.has_selection {
             to_flat_byte(model, self.anchor_line, self.anchor_col)
