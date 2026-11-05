@@ -1,6 +1,7 @@
 # D078 — Zoom, font size, and soft wrap
 
-Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Item of the
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 implemented, awaiting
+review. Item of the
 [daily-driver plan](daily-driver.md), scheduled by the
 [editor API plan](editor-api.md) before D112.
 
@@ -139,14 +140,33 @@ Dock sizes stay absolute window pixels, as on window resize, and hairlines keep
 their pixel widths. The architecture and workbench references still describe
 zoom as view state until checkpoint 4's documentation step.
 
-## Checkpoint 3 — Soft wrap rendering
+## Checkpoint 3 — Soft wrap rendering 🔍
 
 Deliverables:
-- `editor.softWrap` setting, Toggle Soft Wrap writing a document-scoped
+- ✅ `editor.softWrap` setting, Toggle Soft Wrap writing a document-scoped
   value, and the Markdown package's scoped default.
-- The per-view wrap map with incremental rebuilds, and every geometry path
+- ✅ The per-view wrap map with incremental rebuilds, and every geometry path
   listed above on rows; horizontal scroll off while wrapping.
-- Existing movement keeps logical-line behavior in this checkpoint.
+- ✅ Existing movement keeps logical-line behavior in this checkpoint.
+
+Scope decisions:
+- The model records each recent revision's changed line range
+  (`LineChange`, 64 revisions); a view composes the ranges since its last
+  sync and rewraps those lines, or every line when it fell further behind.
+- Whitespace may hang past the right edge instead of starting a row, as in
+  VS Code, so a row never starts with the spaces that ended the one before.
+  Tabs advance from the start of their row, matching per-row shaping.
+- Continuation rows keep the first row's indentation when that leaves at
+  least half the row.
+- A caret at a break shows at the start of the next row; a click past a
+  row's end that is not the line's end lands before its last character.
+- The cursor line highlight covers every row of the line, like its number.
+- A width, font, zoom, or tab-size change keeps the top row's text at the
+  top; a restore before the first layout keeps its row.
+- Logical Up and Down land on the target line's first row until checkpoint 4.
+- Toggle Soft Wrap has no default key.
+- Checkpoint 4's documentation step also covers the line change log in
+  `docs/architecture/core-and-buffers.md`.
 
 Validation: wrap map unit tests (whitespace breaks, long words, wide
 characters, tabs, continuation indent, incremental rebuild matching a full
@@ -156,7 +176,8 @@ restore mid-line; a toggle test that every view of the document follows; a
 `node:test` case for the Markdown package's scoped write.
 
 Review gate: wrapping Markdown and a long code file in the real app paints,
-selects, clicks, and types correctly, and resizing rewraps.
+selects, clicks, and types correctly, and resizing rewraps. 🔍 Pending: the
+personal config registers Try: Wrapped Markdown and Try: Long Rust Lines.
 
 **Implementation context:** add `src/app/editor/wrap.rs` and the
 `unicode-width` dependency. Rows rebuild from `EditorView::refresh`
