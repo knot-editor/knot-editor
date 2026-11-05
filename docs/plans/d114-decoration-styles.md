@@ -1,6 +1,7 @@
 # D114 — Decoration styles
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Item of the
+Status: 🚧 checkpoint 1 complete; checkpoint 2 implemented, awaiting its
+review gate. Item of the
 [editor API plan](editor-api.md); its first consumer is D080, word occurrence
 highlighting ([daily-driver plan](daily-driver.md)), planned separately and
 right after this item. Find (D031) and Vim search (D058) consume it later.
@@ -72,8 +73,13 @@ follows the theme through its color key.
   key and style, and `background` and `line` are stored but not yet painted.
   The extension guide's example uses the object form.
 
-### 2. Background and line painting
+### 2. Background and line painting 🚧
 
+- ✅ Implemented: the projection gives a `line` decoration one entry per
+  line it covers (the column-0 rule applies there), and `decoration_fills`
+  in `src/app/editor/layout.rs` turns them and the painted rows into bands
+  and per-row spans, which `paint.rs` draws after the cursor-line highlight.
+  Tests in `src/app/editor/tests/decorations.rs`. ⏳ Review gate pending.
 - `background` paints per-row text spans and `line` paints full-width bands,
   in the paint order above, on wrapped, RTL, and blank lines.
 - **Validation:** unit tests on a pure function that turns a view's rendered

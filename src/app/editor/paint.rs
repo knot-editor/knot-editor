@@ -234,6 +234,7 @@ impl Element for EditorElement {
             selection,
             marked,
             brackets,
+            fills,
             gutter,
             line_highlight,
             colors,
@@ -286,6 +287,10 @@ impl Element for EditorElement {
                 })
                 .filter(|(line, ..)| lines.contains(line))
                 .collect();
+            let fills = decoration_fills(&view.decorations, vis.iter().map(|row| &row.row))
+                .into_iter()
+                .map(|fill| (fill.row, fill.columns, theme.color(fill.key)))
+                .collect();
             // Numbers and markers show on each line's first row.
             let first_row =
                 |line: usize| Some(view.wrap.first_row(line)).filter(|row| rows.contains(row));
@@ -324,6 +329,7 @@ impl Element for EditorElement {
                 view.selection_range(),
                 marked,
                 brackets,
+                fills,
                 gutter,
                 line_highlight,
                 PaintColors {
@@ -436,6 +442,25 @@ impl Element for EditorElement {
                     size: size(pane_w, line_height * rows.len() as f32),
                 };
                 window.paint_quad(fill(rect, colors.line_highlight));
+            }
+
+            // Decoration backgrounds: line bands across the text area, then
+            // spans behind the decorated text of each row.
+            for (position, columns, color) in &fills {
+                let (row, s, x_off) = &shaped[*position];
+                let (lo, hi) = match columns {
+                    None => (px(0.), pane_w),
+                    Some(columns) => {
+                        let x0 = x_at(row, s, columns.start);
+                        let x1 = x_at(row, s, columns.end);
+                        (*x_off + x0.min(x1), *x_off + x0.max(x1))
+                    }
+                };
+                let rect = Bounds {
+                    origin: point(bounds.origin.x + lo, top(row.row.index)),
+                    size: size(hi - lo, line_height),
+                };
+                window.paint_quad(fill(rect, *color));
             }
 
             // Selection highlight, painted BEHIND the text: the selected span
@@ -635,6 +660,7 @@ pub(super) type EditorPaintState = (
     Option<((usize, usize), (usize, usize))>,
     Option<((usize, usize), (usize, usize))>,
     Vec<(usize, usize, usize)>,
+    Vec<(usize, Option<Range<usize>>, Hsla)>,
     GutterPaint,
     Option<Range<usize>>,
     PaintColors,

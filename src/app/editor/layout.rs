@@ -53,6 +53,65 @@ impl Row {
     }
 }
 
+/// A background one decoration paints on one row.
+#[derive(Debug, PartialEq)]
+pub(super) struct DecorationFill<'a> {
+    /// The row's position among the rows painted.
+    pub(super) row: usize,
+    /// The byte columns of the row's line it covers, or `None` for a band
+    /// across the whole text area.
+    pub(super) columns: Option<Range<usize>>,
+    pub(super) key: &'a str,
+}
+
+/// The backgrounds `decorations` paint on `rows`, in paint order: `line`
+/// bands, then `background` spans that end at the text on each row, each
+/// group with the most severe keys last so they land on top.
+pub(super) fn decoration_fills<'a, 'r>(
+    decorations: &'a [RenderedDecoration],
+    rows: impl IntoIterator<Item = &'r Row>,
+) -> Vec<DecorationFill<'a>> {
+    let rows: Vec<&Row> = rows.into_iter().collect();
+    let (Some(first), Some(last)) = (rows.first(), rows.last()) else {
+        return Vec::new();
+    };
+    let lines = first.line..=last.line;
+    let mut fills = Vec::new();
+    for style in [DecorationStyle::Line, DecorationStyle::Background] {
+        let mut painted: Vec<&RenderedDecoration> = decorations
+            .iter()
+            .filter(|decoration| decoration.style == style && lines.contains(&decoration.line))
+            .collect();
+        painted.sort_by_key(|decoration| decoration_precedence(&decoration.key));
+        for decoration in painted {
+            for (position, row) in rows.iter().enumerate() {
+                if row.line != decoration.line {
+                    continue;
+                }
+                let columns = if style == DecorationStyle::Line {
+                    None
+                } else {
+                    let start = (decoration.line, decoration.start);
+                    let end = (decoration.line, decoration.end);
+                    let Some((begins, ends)) = row.span(start, end) else {
+                        continue;
+                    };
+                    Some(begins.unwrap_or(row.range.start)..ends.unwrap_or(row.range.end))
+                        .filter(|columns| !columns.is_empty())
+                };
+                if style == DecorationStyle::Line || columns.is_some() {
+                    fills.push(DecorationFill {
+                        row: position,
+                        columns,
+                        key: &decoration.key,
+                    });
+                }
+            }
+        }
+    }
+    fills
+}
+
 /// The text size and line height one view lays out with, from the
 /// `font.size` setting in its scope and the application zoom.
 #[derive(Clone, Copy, Debug, PartialEq)]

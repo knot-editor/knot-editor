@@ -1740,6 +1740,7 @@ pub(super) fn check(
 
 mod brackets;
 mod comments;
+mod decorations;
 mod gutter;
 mod indentation;
 mod lines;

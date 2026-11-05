@@ -69,7 +69,8 @@ struct CaretBlink {
 }
 
 /// One contributed decoration segment, painted in `style` and the color of
-/// `key`. `start` and `end` are byte columns within `line`.
+/// `key`. `start` and `end` are byte columns within `line`; a `line`
+/// decoration covers its whole line and leaves them at 0.
 #[derive(Clone)]
 struct RenderedDecoration {
     line: usize,
@@ -1176,6 +1177,20 @@ fn project_contributions(
             let segment_end = end.min(line_end);
 
             if let Some(decoration) = &contribution.decoration
+                && decoration.style == DecorationStyle::Line
+            {
+                // A range ending at column 0 of a later line leaves that
+                // line out, as indenting a selection does.
+                if line == first_line || end > line_start {
+                    decorations.push(RenderedDecoration {
+                        line,
+                        start: 0,
+                        end: 0,
+                        key: decoration.color.clone(),
+                        style: decoration.style,
+                    });
+                }
+            } else if let Some(decoration) = &contribution.decoration
                 && segment_start < segment_end
             {
                 decorations.push(RenderedDecoration {
