@@ -19,7 +19,11 @@ const SOURCE: &str = r#"
     keymaps.bind("f7", "hold.enter");
     keymaps.bind("h", "hold.left", { view: "editor", context: "modal" });
     const typed = [];
-    await commands.register("hold.text", ({ arguments: args }) => { typed.push(args.text); });
+    // Typing "i" leaves the context, so later keys type natively.
+    await commands.register("hold.text", async ({ editor, arguments: args }) => {
+      typed.push(args.text);
+      if (args.text === "i") await editor.setKeyContext("modal", false);
+    });
     await commands.register("hold.report", () => workbench.writeClipboardText(typed.join(",")));
     keymaps.bindText("hold.text", { view: "editor", context: "modal" });
 "#;
@@ -189,6 +193,22 @@ fn a_key_after_focus_leaves_the_view_releases_the_held_keys(cx: &mut TestAppCont
         .host
         .update(cx, |host, cx| host.release_view_requests(cx));
     cx.run_until_parked();
+}
+
+/// Named keys and text held behind a text-bound command replay in the order
+/// they were pressed, once the command has left the context that claimed them.
+#[gpui::test]
+fn held_keys_and_text_after_a_text_command_replay_in_order(cx: &mut TestAppContext) {
+    let fixture = fixture("", cx);
+    cx.simulate_keystrokes(fixture.window, "f7");
+    fixture.settle(cx);
+    cx.simulate_input(fixture.window, "ix");
+    cx.simulate_keystrokes(fixture.window, "enter");
+    cx.simulate_input(fixture.window, "y");
+    cx.simulate_keystrokes(fixture.window, "backspace");
+    cx.simulate_input(fixture.window, "z");
+    fixture.settle(cx);
+    assert_eq!(fixture.text(cx), "x\nz");
 }
 
 #[gpui::test]

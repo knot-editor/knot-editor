@@ -195,23 +195,44 @@ fn release_key_hold(
     if let Some(editor) = &editor {
         editor.update(cx, |editor, _| editor.set_held_input(None));
     }
-    let mut pending = hold.queue.take();
-    while let Some(input) = pending.pop_front() {
-        match input {
-            HeldInput::Key(keystroke) => {
-                window.dispatch_keystroke(keystroke, cx);
-            }
-            HeldInput::Text(text) => {
-                if let Some(editor) = &editor {
-                    editor.update(cx, |editor, cx| {
-                        editor.replace_text_in_range(None, &text, window, cx)
-                    });
-                }
-            }
+    replay(&shell, editor, hold.queue.take(), window, cx);
+}
+
+/// Replay the first of `pending`, then the rest once the effects it started
+/// have run. Commands a key dispatches run deferred, so replaying every input
+/// in one turn would insert later text before an earlier key's command. A
+/// replayed key that starts another hold takes whatever is still queued.
+fn replay(
+    shell: &Entity<ProductShell>,
+    editor: Option<Entity<EditorView>>,
+    mut pending: std::collections::VecDeque<HeldInput>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if let Some(next) = &shell.read(cx).key_hold {
+        next.queue.prepend(pending);
+        return;
+    }
+    let Some(input) = pending.pop_front() else {
+        return;
+    };
+    match input {
+        HeldInput::Key(keystroke) => {
+            window.dispatch_keystroke(keystroke, cx);
         }
-        if let Some(next) = &shell.read(cx).key_hold {
-            next.queue.prepend(pending);
-            return;
+        HeldInput::Text(text) => {
+            if let Some(editor) = &editor {
+                editor.update(cx, |editor, cx| {
+                    editor.replace_text_in_range(None, &text, window, cx)
+                });
+            }
         }
     }
+    if pending.is_empty() {
+        return;
+    }
+    let shell = shell.clone();
+    window.defer(cx, move |window, cx| {
+        replay(&shell, editor, pending, window, cx)
+    });
 }
