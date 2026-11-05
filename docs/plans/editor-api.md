@@ -3,7 +3,7 @@
 Status: 🚧 phase 1 (D110), D111, and D141 complete. Promotes D058, D066 (folding), D077, D109,
 D110, D111, D112, and D114 (decoration styles) from the
 [roadmap](../roadmap.md) and adds D141–D143. Vim features left for later are
-D113, D142, D144, and D146.
+D113, D142, D144, D146, D150, and D151.
 
 ## Goal
 

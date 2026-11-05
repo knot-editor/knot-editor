@@ -67,6 +67,8 @@ These stay deferred:
   - tree-sitter text objects (D144)
   - the broad Ex set (D146)
   - Ex completion (D143)
+  - smaller Vim commands outside this scope, such as `r<cr>`, sentence and
+    tag motions and objects, and `gJ` (D151)
 - **Line numbers:** relative numbers are `editor.lineNumbers: "relative"` in
   personal config, so the package does not set them.
 
@@ -157,7 +159,7 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 - Named and numbered registers are one storage record, written when they
   change.
 - `"%` reads the document's path, or its URI outside the local
-  filesystem, and `":` holds the last Ex command line once checkpoint 4 adds
+  filesystem, and `":` holds the last Ex command line once checkpoint 6 adds
   the Ex line.
 
 ### Marks and the jumplist
@@ -179,7 +181,7 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 - `:e` resolves a relative path against the document's directory, or the
   window's first root for an untitled document.
 - `:q!` closes the tab without the Save prompt. No public API does that
-  today, so checkpoint 4 adds the smallest generic primitive for it. It
+  today, so checkpoint 6 adds the smallest generic primitive for it. It
   stays a closure that cannot lose text silently: unsaved-document recovery
   still holds the text until the close commits.
 
@@ -228,8 +230,8 @@ group opened through a handle restored no caret, because extension edit
 batches record no view; the group now records the editor's selection when
 it opens and closes ([core and buffers](../architecture/core-and-buffers.md)).
 The case runner releases each case's document, which every later case
-otherwise paid for, until cases outran the key hold's timeout. Left out:
-`r<cr>`, and Vim's `J` rule of no space before `)`.
+otherwise paid for, until cases outran the key hold's timeout. Left out
+(D151): `r<cr>`, and Vim's `J` rule of no space before `)`.
 
 ### 3. Visual modes 📝
 
@@ -255,31 +257,53 @@ Implementation context:
   package's own `setSelection` calls from outside changes by comparing with
   the selection it last set.
 
-### 4. Marks, scrolling, windows, and the Ex line 📝
+### 4. Marks and the jumplist 📝
 
 Deliverables:
 
-- Buffer and global marks, `''`, and the jumplist.
-- `ctrl-d ctrl-u ctrl-f ctrl-b ctrl-e ctrl-y`, `zz zt zb`, and `H M L`.
-- `ctrl-w` commands.
-- The Ex line and its commands, with the `:q!` primitive.
-- Finishing work:
-  - architecture and decision updates
-  - the extension guide mentions the package
-  - roadmap entries for any open decision below that was deferred instead
-    of settled
-  - the index plan marks D058 complete
-  - this plan is removed
+- `m{a-z}` buffer marks and `m{A-Z}` global marks, with `'` and `` ` `` jumps
+  as motions and as operator targets (`d'a`, ``y`a``).
+- `''` and ``` `` ``` to the last jump, and the per-editor jumplist on
+  `ctrl-o` and `ctrl-i`, recording the jumps that exist so far (`G`, `gg`,
+  `%`, `{ }`, and mark jumps); later checkpoints record theirs.
+- Whether global marks persist across restarts is settled or given a
+  roadmap entry.
 
 Validation:
 
-- Cases for marks across edits, the jumplist, scrolling, and `:<line>`.
-- Product tests for global marks across documents, `:w`, `:q!`, `:e`, `:set`
-  writes, `zz`, and `ctrl-w`.
-- A Rust test for the close primitive.
+- Unit tests for the jumplist's insertion, truncation, and limit.
+- Cases for marks across edits above and below them, a mark whose text was
+  deleted, `''`, `ctrl-o` and `ctrl-i`, and marks as operator targets.
+- A product test for a global mark jumping to another open document.
 
-Review gate: a final dogfooding pass with every `Try:` command, then remove
-the plan.
+Review gate: dogfooding.
+
+Implementation context:
+
+- `buffer.createMark` and `Mark.position()`; a mark deleted with its text
+  reports null, and the jump fails as Vim's does for an unset mark.
+- `workbench.present` opens the document of a global mark.
+- Vim treats Tab and `ctrl-i` as one key, so both jump forward; Tab is
+  already bound in `vim.normal`, and `ctrl-i` gets its own binding.
+
+### 5. Scrolling 📝
+
+Deliverables:
+
+- `ctrl-d ctrl-u ctrl-f ctrl-b ctrl-e ctrl-y` with counts.
+- `zz zt zb`, and `z<cr> z. z-`, which also move to the first non-blank.
+- `H M L` with counts, as motions and operator targets, recorded in the
+  jumplist.
+
+Validation:
+
+- Cases for the caret after each scroll and `H M L` where the case's view
+  height makes them deterministic; the runner learns to set the visible
+  height or skip line expectations that depend on it.
+- Product tests for `zz` centering whatever the caret's distance from the
+  middle, `zt` and `zb`, and `ctrl-d` keeping the caret's screen offset.
+
+Review gate: dogfooding.
 
 Implementation context:
 
@@ -287,18 +311,88 @@ Implementation context:
   by the caret's offset from the middle of `visibleLines()`, so it always
   centers. `H M L` count buffer lines, so they are approximate under soft
   wrap until D112.
-- `ctrl-w` maps to `workbench.focus-pane-*`, `split-horizontal`,
-  `split-vertical`, `close-pane`, the commands closest to `only`, and
-  `next-recent-tab`, resolved against the catalog at implementation.
-- `workbench.showInput`, `workbench.open`, and `workbench.present`.
+- `ctrl-d` and `ctrl-u` scroll half the visible lines and move the caret by
+  the same amount, as Vim's default `scroll` does.
+
+### 6. Ex line 📝
+
+Deliverables:
+
+- `:` opens an input, and `:w`, `:q`, `:q!`, `:wq`, `:x`, `:e <path>`,
+  `:<line>`, and `:set` for `number`, `relativenumber`, `wrap`, `tabstop`,
+  `shiftwidth`, and `expandtab` with their `no` forms.
+- The `":` register holds the last command line.
+- The `:q!` primitive: closing a tab without the Save prompt, with the exact
+  primitive settled here.
+- `:<line>` is recorded in the jumplist.
+
+Validation:
+
+- Unit tests for parsing command lines and `:set` arguments.
+- Cases for `:<line>` and `":p`.
+- Product tests for `:w`, `:q` on a dirty document prompting, `:q!`, `:e`
+  with a relative path and from an untitled document, and `:set` writes.
+- A Rust test for the close primitive, including that recovery still holds
+  the text until the close commits.
+
+Review gate: dogfooding.
+
+Implementation context:
+
+- `workbench.showInput`, `workbench.open`, `file.save`, and
+  `workbench.close-tab`.
+- `:set` writes document-scoped settings, as the status bar's indentation
+  picker does; `number` and `relativenumber` write `editor.lineNumbers`.
 - The close primitive belongs to protected closure in `src/app/product/`
   (`closure.rs`); see
   [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
 
+### 7. Window commands 📝
+
+Deliverables:
+
+- `ctrl-w` followed by `h j k l`, `s`, `v`, `c`, `o`, and `w`, also with
+  ctrl held on the second key (`ctrl-w ctrl-h`), and the pending `^W` shown
+  in the status bar.
+
+Validation:
+
+- A product test for each `ctrl-w` command over a split window, and that a
+  `ctrl-w` left pending does not swallow the next key's meaning.
+
+Review gate: dogfooding.
+
+Implementation context:
+
+- `ctrl-w` maps to `workbench.focus-pane-*`, `split-horizontal`,
+  `split-vertical`, `close-pane`, the commands closest to `only`, and
+  `next-recent-tab`, resolved against the catalog at implementation. A
+  command with no counterpart gets a roadmap entry rather than native work
+  here.
+
+### 8. Documentation and plan removal 📝
+
+Deliverables:
+
+- Architecture and decision updates for the package and the primitives it
+  added or changed.
+- The extension guide mentions the package.
+- Roadmap entries for any deferred decision below that was deferred instead
+  of settled, and a check that every exclusion and left-out has one.
+- The index plan marks D058 complete, and this plan is removed.
+
+Validation:
+
+- `just check`, and the docs' links resolve.
+
+Review gate: a final dogfooding pass with every `Try:` command, then remove
+the plan.
+
 ## Deferred decisions
 
-- Whether global marks persist across restarts by URI and offset.
+- Whether global marks persist across restarts by URI and offset, settled
+  at checkpoint 4.
 - The exact `:q!` primitive, either a discard option on closing a tab or a
-  separate command, chosen at checkpoint 4.
+  separate command, chosen at checkpoint 6.
 - Whether `ctrl-v` stays native paste in normal mode or is reserved for
-  visual-block mode (D142). Until then it stays native.
+  visual-block mode. D142 settles it; until then it stays native.

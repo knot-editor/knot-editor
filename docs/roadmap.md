@@ -61,7 +61,7 @@ groups, view controls, decoration styles, visual-line movement, and folding,
 proven by a bundled JavaScript Vim mode. It promotes D058, D066's folding,
 D077, D109, D110, D111, D112, and D114's decoration styles, schedules the
 daily-driver items D031, D078, and D080, and adds D141–D143. Vim features
-left for later are D113, D142, D144, D146, and D150. Language servers
+left for later are D113, D142, D144, D146, D150, and D151. Language servers
 (D067) follow it.
 
 The [package manager](plans/package-manager.md) initiative is selected: extension
@@ -90,8 +90,8 @@ complete list for that item.
   - D134 → D135, D136
   - D077 → D149
   - D073, D074, D075 → D130; D074 → D131; D073 → D132
-  - D066 → D144
-  - D058 → D150, D146; D031, D092 → D150
+  - D066 → D144 → D151
+  - D058 → D150, D146, D151; D031, D092 → D150
   - D092 → D142, D001, D067
 - **Extension presentation and language tooling:**
   - D114 → D145 → D067 → D022
@@ -569,7 +569,8 @@ Kakoune mode could use it too. The
   - Reconsider: Visual-block mode or multi-cursor editing is selected. Then
     let views and the editor handle hold an ordered selection set, with
     rectangular selection as one way to create it, and apply edits across
-    the set as one batch.
+    the set as one batch. Decide then whether `ctrl-v` in Vim's normal mode
+    stays native paste or starts visual-block mode.
   - Order: after D109 and D092.
 
 - **D144 — Syntax-tree queries and text objects**
@@ -581,7 +582,7 @@ Kakoune mode could use it too. The
     selection is selected. Then add per-language `textobjects` queries beside
     `folds` and `indents`, and expose node queries through the extension API
     without exposing tree-sitter objects.
-  - Order: after D066.
+  - Order: after D066; before D151's tag objects.
 
 - **D146 — Broad Ex command set**
   - Deferred: The first Vim mode (D058) implements a core Ex set: `:w`,
@@ -607,6 +608,18 @@ Kakoune mode could use it too. The
     how Vim's regex syntax maps onto the engine Find uses, and add
     substitution as one batch in one undo step.
   - Order: after D058 and D031; substitution after D092, as bulk edits are.
+
+- **D151 — Smaller Vim commands**
+  - Deferred: The first Vim mode (D058) covers the commands of its scope.
+    Commands outside it that daily editing may reach for are missing:
+    `r<cr>` replacing characters with a line break; `J` leaving out the
+    space before a `)`; `gJ` joining without spaces; sentence motions and
+    objects (`( )`, `is`, `as`); tag objects (`it`, `at`); `gp`, `gP`, and
+    `]p`; `_` and `|`; `gi`; and `ga`.
+  - Reconsider: Daily Vim use reaches for one of them. Then add it inside
+    the Vim package over existing primitives, with cases beside the others;
+    tag objects may wait for D144's syntax-tree queries.
+  - Order: after D058; tag objects with or after D144.
 
 - **D145 — Virtual text and anchored floating panels**
   - Deferred: D114 adds decoration styles. Extensions still cannot draw
