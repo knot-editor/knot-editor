@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoint 1 complete; checkpoint 2 implemented, at its review gate. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -123,8 +123,9 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
   indent query, and above the first line, `O` copies the current line's
   indentation instead, as Vim's autoindent does. Escape on an opened line
   left blank removes its indentation.
-- **Redo** keeps the native caret, after the redone change, where Vim puts
-  it at the change's start; the range is not available to extensions.
+- **Undo and redo** restore the caret from when the change's undo group
+  opened and closed, which the editor handle records, where Vim puts it at
+  the change's start; the range is not available to extensions.
 - **`%`** uses native `editor.jump-to-matching-bracket`, which is
   syntax-aware.
 - **`>`, `<`, `=`, and `J`** select their range and invoke the native
@@ -143,7 +144,9 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 
 ### Registers
 
-- The unnamed register, `"+`, and `"*` read and write the clipboard.
+- The unnamed register, `"+`, and `"*` read and write the clipboard, as
+  Vim's `clipboard=unnamedplus` does, so a named yank leaves the clipboard
+  alone.
 - Each yank or delete remembers its text and whether it was linewise. When the
   clipboard still holds that exact text, `p` pastes linewise; otherwise it
   pastes characterwise.
@@ -153,7 +156,9 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
   - yanks go to `"0`
 - Named and numbered registers are one storage record, written when they
   change.
-- `"%` reads the document's URI and `":` holds the last Ex command line.
+- `"%` reads the document's path, or its URI outside the local
+  filesystem, and `":` holds the last Ex command line once checkpoint 4 adds
+  the Ex line.
 
 ### Marks and the jumplist
 
@@ -208,26 +213,45 @@ release now replays one input per deferred step
 package lives in `extensions/@knot/vim`: `extension.ts` follows editors and
 runs commands, `keys.ts` parses, and `motions.ts` and `text.ts` are pure.
 
-### 2. Operators, text objects, and registers 📝
+### 2. Operators, text objects, and registers 🔍
 
 Deliverables:
 
-- Operator-pending mode for `d c y > < = gu gU g~` over every motion and
-  over the text objects, plus their doubled linewise forms.
-- `x X s S D C Y r ~ J`, `f F t T ; ,`, `%`, and `{ }`.
-- The register model, its clipboard and linewise rules, persistence, and `p`
-  and `P` with counts.
+- ✅ Operator-pending mode for `d c y > < = gu gU g~` over every motion and
+  over the text objects, plus their doubled linewise forms, with an
+  underline caret while an operator waits.
+- ✅ `x X s S D C Y r ~ J`, `f F t T ; ,`, `%` (with a count, that percentage
+  of the lines), and `{ }`.
+- ✅ The register model, its clipboard and linewise rules, persistence, and
+  `p` and `P` with counts.
 
 Validation:
 
-- Unit tests for every text object and the delete-register shifting rules.
-- Cases for every operator over motions and text objects, `ciw…<Esc>` as one
-  undo step, `dd` then `p`, registers, and `>` and `=` through the native
+- ✅ Unit tests for every text object and the delete-register shifting rules.
+- ✅ Cases for every operator over motions and text objects, `ciw…<Esc>` as
+  one undo step, `dd` then `p`, registers, and `>` and `=` through the native
   commands on Rust and TypeScript.
-- Product tests for register persistence across a package restart and for
+- ✅ Product tests for register persistence across a package restart and for
   clipboard linewise detection.
 
-Review gate: a dogfooding session on Rust and TypeScript files.
+Review gate: a dogfooding session on Rust and TypeScript files. ⏳
+
+Implementation notes:
+
+- `normal.ts` runs commands; `objects.ts` and `registers.ts` are pure. Text
+  objects match brackets and quotes by counting text, as Vim does, while `%`
+  uses the syntax-aware native jump and counts text only where it finds no
+  partner. Operators follow Vim's operator-pending forms: `cw` changes to the
+  word's end, `dw` stops at the line's end, and characterwise text ending at
+  a line's start becomes linewise from the indentation, so `d}` and `ci{`
+  take whole lines. `cc` and `S` keep the first line's indentation.
+- An undo group opened through a handle restored no caret, since extension
+  edit batches record no view; the group now records the editor's selection
+  when it opens and closes ([core and
+  buffers](../architecture/core-and-buffers.md)).
+- The case runner releases each case's document; without it every later case
+  slowed down, past the key hold's timeout after about 150 cases.
+- Left out: `r<cr>`, and Vim's `J` rule of no space before `)`.
 
 Implementation context:
 
