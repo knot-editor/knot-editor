@@ -39,17 +39,19 @@ Nothing that exists today is a constraint; Knot has no users.
 
 In scope for the Vim mode: normal, insert, visual, and visual-line modes;
 operators with counts and motions; plain text objects (`iw`, `i(`, `ip`, and
-the like); registers backed by the clipboard; marks; `/`, `?`, `n`, `N`, `*`,
-`#` with search highlights; folding commands; relative line numbers; a mode
-indicator in the status bar; a cursor style per mode; and the core Ex set
-(`:w`, `:q`, `:wq`, `:e`, `:s` and `:%s` with ranges, `:<line>`, `:noh`, and
-`:set` for a few options).
+the like); registers backed by the clipboard; marks; relative line numbers; a mode
+indicator in the status bar; a cursor style per mode; and a core Ex set
+(`:w`, `:q`, `:wq`, `:e`, `:<line>`, and `:set` for a few options). The
+[D058 plan](d058-vim-mode.md) owns the exact set and starts before D112,
+D066, and D143.
 
 Excluded, and staying deferred in the roadmap:
 
 - Visual-block mode and multiple or rectangular selections (D142), which need
   the piece-tree buffer (D092).
-- `.` repeat and `q` macros (D113).
+- `.` repeat, `q` macros, the `".` register, and insert counts (D113).
+- Search and substitution (D150), after Find (D031) and D092.
+- Folding commands, which D066 adds to the Vim package when it lands.
 - Tree-sitter text objects and the public syntax-tree query API (D144).
 - Language servers (D067) and the presentation and hook items that would be
   designed against a real server: virtual text and floating panels (D145),
@@ -176,7 +178,9 @@ D077 moved here from the daily-driver plan.
   - Per-language `folds` queries in language registrations beside
     `indents`, native fold state per view, a fold lane in the gutter, and
     Fold, Unfold, and Toggle Fold commands. The editor handle folds and
-    unfolds arbitrary ranges, so Vim's `zf` creates manual folds.
+    unfolds arbitrary ranges, so Vim's `zf` creates manual folds. D058
+    ships first, so D066 also adds `zf`, `zo`, `zc`, `za`, `zR`, and `zM`
+    to `@knot/vim`.
   - Movement, search, and editing treat folded lines as VS Code does.
     Restorable view state records folds.
   - The public syntax-tree query API and text objects are D144.
@@ -188,7 +192,8 @@ D077 moved here from the daily-driver plan.
     through the pulled input session `onChange` already uses, for the Ex
     command line.
 
-- **D058 — Vim mode** (depends on every item above)
+- **D058 — Vim mode** (depends on the items above except D112, D066, and D143)
+  - 🚧 [Plan](d058-vim-mode.md)
   - A bundled `@knot/vim` package implementing the scope above on public
     APIs only. A `vim.enabled` setting, off by default, turns it on and off
     at runtime, and scoped values can turn it off for a language or view. Any gap it finds is

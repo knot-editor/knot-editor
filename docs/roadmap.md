@@ -61,7 +61,7 @@ groups, view controls, decoration styles, visual-line movement, and folding,
 proven by a bundled JavaScript Vim mode. It promotes D058, D066's folding,
 D077, D109, D110, D111, D112, and D114's decoration styles, schedules the
 daily-driver items D031, D078, and D080, and adds D141–D143. Vim features
-left for later are D113, D142, D144, and D146. Language servers
+left for later are D113, D142, D144, D146, and D150. Language servers
 (D067) follow it.
 
 The [package manager](plans/package-manager.md) initiative is selected: extension
@@ -91,6 +91,7 @@ complete list for that item.
   - D077 → D149
   - D073, D074, D075 → D130; D074 → D131; D073 → D132
   - D066 → D144
+  - D058 → D150, D146; D031, D092 → D150
   - D092 → D142, D001, D067
 - **Extension presentation and language tooling:**
   - D114 → D145 → D067 → D022
@@ -102,7 +103,7 @@ complete list for that item.
   - D077 → D117 → D067
   - D071 → D118 → D067, D082
   - D053 → D119
-- **Find:** D031 → D001, with or after D092.
+- **Find:** D031 → D001, with or after D092; D031 → D150.
 - **Package manager:** D087 → D101 → D102 → D103 → D104 → D106;
   D064, D071, D103 → D105 → D106; D106 → D107, D108; D103 → D116.
 - **Settings:** D070 → D089 → D090; D008, D122 → D090; D122 → D089;
@@ -552,10 +553,13 @@ Kakoune mode could use it too. The
   - Deferred: Nothing can observe the stream of invoked commands together
     with the text typed between them, so neither repeat nor macros can be
     built. Absorbs user macros and repetition from D020. The first Vim mode
-    (D058) ships without `.` and `q`.
-  - Reconsider: Daily Vim use misses `.` or `q`, or a user macro workflow is
-    selected. Then record a view's invoked commands with arguments plus its
-    typed text as edits, and replay the recording through ordinary dispatch.
+    (D058) ships without `.`, `q`, the `".` register (the last inserted
+    text), and counts on insert commands such as `3ihi<Esc>`, which all need
+    the text typed in insert mode.
+  - Reconsider: Daily Vim use misses `.`, `q`, `".`, or insert counts, or a
+    user macro workflow is selected. Then record a view's invoked commands
+    with arguments plus its typed text as edits, and replay the recording
+    through ordinary dispatch.
   - Order: after D109 and D110.
 
 - **D142 — Multiple and rectangular selections**
@@ -580,16 +584,29 @@ Kakoune mode could use it too. The
   - Order: after D066.
 
 - **D146 — Broad Ex command set**
-  - Deferred: The first Vim mode (D058) implements the core Ex set: `:w`,
-    `:q`, `:wq`, `:e`, `:s` and `:%s` with ranges, `:<line>`, `:noh`, and
-    `:set` for a few options. `:g` and `:v`, `:normal`, `:sort`, `:d`, `:m`,
+  - Deferred: The first Vim mode (D058) implements a core Ex set: `:w`,
+    `:q`, `:q!`, `:wq`, `:x`, `:e`, `:<line>`, and `:set` for a few options.
+    Substitution and `:noh` are D150. `:g` and `:v`, `:normal`, `:sort`, `:d`, `:m`,
     `:t` and other range commands, `:reg` and `:marks`, `:map` and its
     variants, and user-defined Ex commands are missing.
   - Reconsider: Daily Vim use reaches for one of them. Then add it inside
     the Vim package over existing primitives; `:normal` and `:g` with a
     normal-mode command also need replaying keys through the mode, which
     D113's recording provides.
-  - Order: after D058; `:normal` after D113.
+  - Order: after D058; `:normal` after D113; `:g` and `:v` with D150's
+    pattern matching.
+
+- **D150 — Vim search and substitution**
+  - Deferred: The first Vim mode (D058) ships without search, so that Vim
+    search reuses current-file Find's (D031) match layer instead of a
+    second engine, and without substitution, a whole-buffer edit.
+    Missing: `/`, `?`, `n`, `N`, `*`, `#` with match highlights, `:noh`,
+    and `:s` and `:%s` with ranges and flags.
+  - Reconsider: D031 lands, or daily Vim use misses search. Then build
+    search inside the Vim package on Find's matching and highlights, decide
+    how Vim's regex syntax maps onto the engine Find uses, and add
+    substitution as one batch in one undo step.
+  - Order: after D058 and D031; substitution after D092, as bulk edits are.
 
 - **D145 — Virtual text and anchored floating panels**
   - Deferred: D114 adds decoration styles. Extensions still cannot draw
