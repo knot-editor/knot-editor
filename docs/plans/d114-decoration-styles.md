@@ -1,6 +1,6 @@
 # D114 — Decoration styles
 
-Status: 🚧 checkpoint 1 ready for review. Item of the
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Item of the
 [editor API plan](editor-api.md); its first consumer is D080, word occurrence
 highlighting ([daily-driver plan](daily-driver.md)), planned separately and
 right after this item. Find (D031) and Vim search (D058) consume it later.
@@ -64,45 +64,13 @@ follows the theme through its color key.
 
 ## Checkpoints
 
-### 1. Typed decoration contract and underline styles ✅ (review pending)
+### 1. Typed decoration contract and underline styles ✅
 
-- `decoration` carries `{ color, style }` end to end: declarations,
-  bootstrap validation, V8 decoding, protocol, model metadata, and the
-  view's rendered decorations. `underline` and `wavy` paint;
-  `background` and `line` are accepted and stored but not yet painted.
-- Every existing caller and test moves to the object form.
-- **Validation:** marshal and bootstrap reject a missing or unknown style
-  and a non-string color with the existing contribution errors; the contract
-  type test covers the new shape; editor layout tests check that a straight
-  and a wavy decoration of one key produce separate layers with the right
-  underline, and that severity precedence still orders layers; the existing
-  extension API product tests pass with the object form.
-- **Review gate:** contract shape and the style names.
-- ✅ Implemented: `Decoration` and `DecorationStyle` in the protocol and
-  declarations, validated in bootstrap and decoded in the marshaller; the
-  extension guide's example uses the object form.
-- **Implementation context:**
-  - `src/host/js/knot.d.ts` (`EditorContribution`, new `Decoration` and
-    `DecorationStyle`), `scripts/extensions/contract.test.ts:155`,
-    `docs/schemas/knot.schema.json` if it lists contributions.
-  - `src/host/js/bootstrap.js` `contribution()` validates the object and
-    style, like `token()` validates allowed strings.
-  - `src/host/engine/marshal.rs` `editor_contributions` decodes the nested
-    object; `src/host/protocol.rs` `EditorContribution.decoration` becomes
-    `Option<Decoration>` with a `DecorationStyle` enum (serde camelCase).
-  - `src/app/model.rs` `ContributionMetadata` and
-    `ResolvedEditorContribution` carry the decoration; `decoration_precedence`
-    takes its key.
-  - `src/app/editor.rs` `RenderedDecoration` gains `style`;
-    `rendered_contributions` (around line 1140) fills it.
-  - `src/app/editor/layout.rs` `decoration_layers` groups by (key, style)
-    and skips `background` and `line`; `src/app/theme.rs` `Theme::decoration`
-    takes the style.
-  - Call sites in `src/app/extensions/buffers.rs` tests,
-    `src/app/product/tests/extension_api.rs`, `src/app/product/tests/themes.rs`,
-    `src/app/model/tests.rs`, `src/app/editor/tests/gutter.rs`,
-    `src/host/engine/tests.rs`, and any `extensions/@knot` or
-    `examples/extensions` package that contributes decorations.
+- Complete and approved: `decoration` is `{ color, style }` from the
+  declarations through bootstrap validation, V8 decoding, the protocol, and
+  the model to the view; `underline` and `wavy` paint as separate layers per
+  key and style, and `background` and `line` are stored but not yet painted.
+  The extension guide's example uses the object form.
 
 ### 2. Background and line painting
 
