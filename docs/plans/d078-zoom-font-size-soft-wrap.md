@@ -188,7 +188,7 @@ preset binds the visual commands.
 
 Review gate: both behaviors are reachable from the keymap and the defaults
 feel right in daily editing. 🔍 Pending: the personal config binds the
-logical twins on ctrl-alt with the arrow, Home, End, and page keys.
+logical twins on ctrl-cmd with the arrow, Home, End, and page keys.
 
 **Implementation context:** command declarations in
 `src/app/editor/native_commands.rs`, movement in `src/app/editor/editing.rs`
