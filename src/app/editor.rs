@@ -155,7 +155,7 @@ impl Default for EditorRenderingOptions {
 }
 
 /// Restorable editor presentation state. Offsets are absolute UTF-8 byte
-/// positions in the shared buffer; `top` is the start of the first visible line.
+/// positions in the shared buffer; `top` is the start of the first visible row.
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EditorViewState {
@@ -207,6 +207,14 @@ pub struct EditorView {
     seen_revision: u64,
     /// Text size and line height from the settings in this view's scope.
     metrics: EditorMetrics,
+    /// Where each line breaks into rows, as of `wrap_revision`.
+    wrap: wrap::WrapMap,
+    wrap_revision: u64,
+    /// Width of one monospace cell, which wrapping measures rows in.
+    cell_width: f32,
+    /// The top of a restored view state, kept until the next layout so a
+    /// restore before lines first wrap still shows the same row.
+    restored_top: Option<usize>,
     /// Widest line width shaped since the text last changed. Bounds horizontal
     /// scrolling without shaping lines that were never displayed.
     max_line_width: f32,
@@ -384,11 +392,10 @@ impl EditorView {
     pub(crate) fn view_state(&self, cx: &App) -> EditorViewState {
         let model = self.model.read(cx);
         let state = self.history_view_state(model);
-        let top_line = ((self.scroll / self.metrics.line_height) as usize).min(self.line_count - 1);
         EditorViewState {
             anchor: state.anchor,
             caret: state.caret,
-            top: model.line_range(top_line).start,
+            top: self.top_offset(model),
             scroll_x: self.scroll_x,
         }
     }
@@ -409,8 +416,9 @@ impl EditorView {
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, snap(state.anchor));
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, snap(state.caret));
         self.has_selection = snap(state.anchor) != snap(state.caret);
-        self.scroll =
-            flat_byte_to_position(model, snap(state.top)).0 as f32 * self.metrics.line_height;
+        let (top_line, top_col) = flat_byte_to_position(model, snap(state.top));
+        self.scroll = self.wrap.row_of(top_line, top_col) as f32 * self.metrics.line_height;
+        self.restored_top = Some(snap(state.top));
         self.scroll_x = state.scroll_x.max(0.);
         self.preferred_x = None;
         self.reveal_caret = false;
@@ -539,41 +547,57 @@ impl EditorView {
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
         self.has_selection = anchor != caret;
+        let line_height = self.metrics.line_height;
         if reveal == Reveal::Center && self.viewport_h > 0. {
-            let line_top = self.cursor_line as f32 * self.metrics.line_height;
-            if line_top < self.scroll
-                || line_top + self.metrics.line_height > self.scroll + self.viewport_h
-            {
-                self.scroll = line_top + self.metrics.line_height / 2. - self.viewport_h / 2.;
+            let row_top = self.caret_row() as f32 * line_height;
+            if row_top < self.scroll || row_top + line_height > self.scroll + self.viewport_h {
+                self.scroll = row_top + line_height / 2. - self.viewport_h / 2.;
             }
         }
+        let rows = self.wrap.rows(self.cursor_line);
         match reveal {
             Reveal::Top if self.viewport_h > 0. => {
-                self.scroll = self.cursor_line as f32 * self.metrics.line_height;
+                self.scroll = rows.start as f32 * line_height;
             }
             Reveal::Bottom if self.viewport_h > 0. => {
-                self.scroll =
-                    (self.cursor_line + 1) as f32 * self.metrics.line_height - self.viewport_h;
+                self.scroll = rows.end as f32 * line_height - self.viewport_h;
             }
             _ => {}
         }
         self.finish_position_change(cx);
     }
 
-    /// The first and last lines wholly inside the viewport, from the last
-    /// layout; always at least one line.
+    /// The first and last lines whose rows are all inside the viewport, from
+    /// the last layout; always at least one line.
     pub(crate) fn fully_visible_lines(&self) -> (usize, usize) {
-        let last_line = self.line_count.saturating_sub(1);
-        let first = ((self.scroll / self.metrics.line_height).ceil() as usize).min(last_line);
-        let end = (((self.scroll + self.viewport_h) / self.metrics.line_height).floor() as usize)
-            .min(self.line_count);
-        (first, end.saturating_sub(1).max(first))
+        let last_row = self.wrap.row_count().saturating_sub(1);
+        let first_row = ((self.scroll / self.metrics.line_height).ceil() as usize).min(last_row);
+        let end_row = (((self.scroll + self.viewport_h) / self.metrics.line_height).floor()
+            as usize)
+            .min(self.wrap.row_count());
+        let (first, sub) = self.wrap.position(first_row);
+        let first = if sub > 0 { first + 1 } else { first };
+        let (last, sub) = self.wrap.position(end_row.saturating_sub(1).max(first_row));
+        let last = if sub + 1 < self.wrap.rows(last).len() {
+            last.saturating_sub(1)
+        } else {
+            last
+        };
+        let first = first.min(self.line_count.saturating_sub(1));
+        (first, last.max(first))
     }
 
-    /// Scroll by `lines`, negative upward, without moving the caret or
-    /// revealing it; the scroll stays within the text.
+    /// Scroll by `lines` buffer lines, negative upward, without moving the
+    /// caret or revealing it; the scroll stays within the text.
     pub(crate) fn scroll_by_lines(&mut self, lines: f64, cx: &mut Context<Self>) {
-        self.scroll += lines as f32 * self.metrics.line_height;
+        let line_height = self.metrics.line_height;
+        if self.wrap.width().is_some() {
+            let (top, _) = self.wrap.position((self.scroll / line_height) as usize);
+            let line = (top as f64 + lines.round()).clamp(0., self.line_count as f64 - 1.);
+            self.scroll = self.wrap.first_row(line as usize) as f32 * line_height;
+        } else {
+            self.scroll += lines as f32 * line_height;
+        }
         self.reveal_caret = false;
         self.clamp_scroll();
         cx.notify();
@@ -683,6 +707,10 @@ impl EditorView {
             line_count,
             seen_revision,
             metrics: EditorMetrics::new(crate::app::typography::TEXT_SIZE),
+            wrap: wrap::WrapMap::new(line_count),
+            wrap_revision: seen_revision,
+            cell_width: 0.,
+            restored_top: None,
             max_line_width: 0.,
             decorations,
             gutter_markers,
@@ -774,6 +802,7 @@ impl EditorView {
     /// selection to the model's anchored view position.
     fn refresh(&mut self, model: &BufferModel, position: Option<Range<usize>>) {
         self.line_count = model.line_count();
+        self.sync_wrap(model);
         (
             self.decorations,
             self.gutter_markers,
@@ -863,20 +892,56 @@ impl EditorView {
         self.clamp_scroll();
     }
 
-    /// The lines the last measured viewport shows at the current scroll,
-    /// including a partly visible last line.
-    pub(super) fn visible_lines(&self) -> Range<usize> {
-        let first =
-            ((self.scroll / self.metrics.line_height).floor() as usize).min(self.line_count);
+    /// The rows the last measured viewport shows at the current scroll,
+    /// including a partly visible last row.
+    pub(super) fn visible_rows(&self) -> Range<usize> {
+        let count = self.wrap.row_count();
+        let first = ((self.scroll / self.metrics.line_height).floor() as usize).min(count);
         let rows = (self.viewport_h / self.metrics.line_height).ceil() as usize + 1;
-        first..(first + rows).min(self.line_count)
+        first..(first + rows).min(count)
+    }
+
+    /// The lines with a row in [`Self::visible_rows`].
+    pub(super) fn visible_lines(&self) -> Range<usize> {
+        let rows = self.visible_rows();
+        if rows.is_empty() {
+            return self.line_count..self.line_count;
+        }
+        self.wrap.position(rows.start).0..self.wrap.position(rows.end - 1).0 + 1
+    }
+
+    /// The row the caret shows on.
+    pub(super) fn caret_row(&self) -> usize {
+        self.wrap.row_of(self.cursor_line, self.cursor_col)
+    }
+
+    /// The start of the top visible row, as a byte offset.
+    fn top_offset(&self, model: &BufferModel) -> usize {
+        let (line, sub) = self
+            .wrap
+            .position((self.scroll / self.metrics.line_height) as usize);
+        let start = self.wrap.row_range(line, sub, line_end(model, line)).start;
+        to_flat_byte(model, line, start)
+    }
+
+    /// Bring the wrap map up to the model's revision, rewrapping the lines
+    /// that changed since it last followed it.
+    fn sync_wrap(&mut self, model: &BufferModel) {
+        if self.wrap_revision == model.revision() {
+            return;
+        }
+        let change = model.line_changes_since(self.wrap_revision);
+        self.wrap
+            .edit(model.line_count(), change, |line| line_text(model, line));
+        self.wrap_revision = model.revision();
     }
 
     fn clamp_scroll(&mut self) {
         if self.scroll < 0. {
             self.scroll = 0.;
         }
-        let max = ((self.line_count as f32) * self.metrics.line_height - self.viewport_h).max(0.);
+        let max =
+            ((self.wrap.row_count() as f32) * self.metrics.line_height - self.viewport_h).max(0.);
         if self.scroll > max {
             self.scroll = max;
         }
@@ -889,12 +954,12 @@ impl EditorView {
         if viewport_h <= 0. {
             return;
         }
-        let line_top = self.cursor_line as f32 * self.metrics.line_height;
-        let line_bottom = line_top + self.metrics.line_height;
-        if line_top < self.scroll {
-            self.scroll = line_top;
-        } else if line_bottom > self.scroll + viewport_h {
-            self.scroll = line_bottom - viewport_h;
+        let row_top = self.caret_row() as f32 * self.metrics.line_height;
+        let row_bottom = row_top + self.metrics.line_height;
+        if row_top < self.scroll {
+            self.scroll = row_top;
+        } else if row_bottom > self.scroll + viewport_h {
+            self.scroll = row_bottom - viewport_h;
         }
     }
 

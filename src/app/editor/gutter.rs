@@ -159,13 +159,20 @@ impl EditorView {
         self.finish_position_change(cx);
     }
 
-    /// Each line in `lines` with the number the gutter shows beside it and
-    /// whether it is the cursor's line.
-    pub(super) fn gutter_numbers(&self, lines: Range<usize>) -> Vec<(usize, usize, bool)> {
+    /// The first row of each line that starts in `rows`, with the number the
+    /// gutter shows beside it and whether it is the cursor's line. A wrapped
+    /// line shows its number on its first row only.
+    pub(super) fn gutter_numbers(&self, rows: Range<usize>) -> Vec<(usize, usize, bool)> {
+        if rows.is_empty() {
+            return Vec::new();
+        }
+        let lines = self.wrap.position(rows.start).0..self.wrap.position(rows.end - 1).0 + 1;
         lines
             .filter_map(|line| {
+                let row = self.wrap.first_row(line);
                 let label = self.gutter.label(line, self.cursor_line)?;
-                Some((line, label, line == self.cursor_line))
+                rows.contains(&row)
+                    .then_some((row, label, line == self.cursor_line))
             })
             .collect()
     }

@@ -355,7 +355,8 @@ mod tests {
             BufferModel::from_text("alpha beta gamma\n\tdelta\nepsilon zeta eta\ntheta");
         let mut map = WrapMap::new(model.line_count());
         map.set_width(Some(width), model.line_count(), |at| line(&model, at));
-        let edits: [(fn(&BufferModel) -> std::ops::Range<usize>, &str); 7] = [
+        type Edit = (fn(&BufferModel) -> Range<usize>, &'static str);
+        let edits: [Edit; 7] = [
             (|_| 6..6, "and more words "),
             (
                 |model| model.line_range(1).start..model.line_range(2).end,

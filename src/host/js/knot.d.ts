@@ -298,6 +298,10 @@ declare module "knot" {
     /** Whether typing an opening bracket or quote over a selection wraps the
      * selection in the pair. Native default true. */
     "editor.autoSurround": boolean;
+    /** Whether editor views wrap long lines at the viewport width. Toggle
+     * Soft Wrap writes it scoped to one document, and the bundled Markdown
+     * package sets it for { language: "markdown" }. Native default false. */
+    "editor.softWrap": boolean;
     /** Line numbers in the editor gutter: "on", "off", or "relative", which
      * numbers other lines by their distance from the cursor's line. Native
      * default "on"; other text means "on". */

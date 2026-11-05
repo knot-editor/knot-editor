@@ -1,0 +1,252 @@
+use gpui::{
+    AppContext, EntityInputHandler, ScrollDelta, ScrollWheelEvent, TestAppContext, point, px, size,
+};
+
+use super::super::{BufferModel, EditorView, EditorViewState, layout::Row, line_end, to_flat_byte};
+use crate::app::settings::{self, ApplicationSettings, EDITOR_SOFT_WRAP, SettingsScope};
+
+fn wrap_everything(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        let mut settings = ApplicationSettings::default();
+        settings
+            .0
+            .set(EDITOR_SOFT_WRAP, true.into(), SettingsScope::default())
+            .unwrap();
+        cx.set_global(settings);
+    });
+}
+
+/// `count` words, `w00 w01 …`, which take four bytes with their space
+/// below a hundred.
+fn words(count: usize) -> String {
+    (0..count)
+        .map(|word| format!("w{word:02}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[test]
+fn a_row_shows_the_part_of_a_span_between_its_positions() {
+    let row = |range, last| Row {
+        index: 0,
+        line: 1,
+        range,
+        last,
+        indent: px(0.),
+    };
+    let middle = row(4..8, false);
+    assert_eq!(middle.span((1, 5), (1, 6)), Some((Some(5), Some(6))));
+    assert_eq!(middle.span((0, 0), (2, 0)), Some((None, None)));
+    // A span ending where the next row starts covers this row to its end.
+    assert_eq!(middle.span((1, 2), (1, 8)), Some((None, None)));
+    assert_eq!(middle.span((1, 8), (2, 0)), None);
+    assert_eq!(middle.span((1, 0), (1, 4)), None);
+    assert!(middle.holds((1, 4)) && !middle.holds((1, 8)));
+    let last = row(8..12, true);
+    assert_eq!(last.span((1, 8), (1, 12)), Some((Some(8), Some(12))));
+    assert_eq!(last.span((1, 12), (2, 0)), Some((Some(12), None)));
+    assert!(last.holds((1, 12)));
+}
+
+#[gpui::test]
+fn wrapped_rows_place_the_caret_clicks_ime_bounds_and_line_numbers(cx: &mut TestAppContext) {
+    wrap_everything(cx);
+    let model = cx.new(|_| BufferModel::from_text(format!("{}\nshort\n{}", words(60), words(60))));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.simulate_resize(size(px(400.), px(300.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            let width = view.wrap.width().expect("the view wraps");
+            let rows = view.wrap.rows(0).len();
+            assert!(rows > 2);
+            assert_eq!(view.wrap.rows(1).len(), 1);
+            assert_eq!(view.wrap.row_count(), 2 * rows + 1);
+            let model = view.model.read(cx);
+            let (first, second) = (view.row(model, 0), view.row(model, 1));
+            // Rows break after whole words and their space.
+            assert_eq!(first.range.end, second.range.start);
+            assert_eq!(first.range.len() % 4, 0);
+            assert!(first.range.len() <= width.columns + 1);
+            assert!(first.range.len() + 3 > width.columns);
+
+            view.cursor_col = second.range.start;
+            assert_eq!(view.caret_row(), 1);
+            assert_eq!(view.caret_x(model, window, cx), px(0.));
+
+            let text = view.text_bounds();
+            let line_height = view.metrics.line_height;
+            let y = |row: usize| text.origin.y + px((row as f32 + 0.5) * line_height);
+            let hit = |x, row| view.hit_test(model, point(text.origin.x + x, y(row)), window, cx);
+            assert_eq!(hit(px(1.), 1), (0, second.range.start));
+            // Past a row's end stays on it, before the position the next row
+            // starts with.
+            assert_eq!(
+                hit(text.size.width - px(1.), 0),
+                (0, second.range.start - 1)
+            );
+            assert_eq!(hit(px(1.), rows), (1, 0));
+            assert_eq!(hit(text.size.width - px(1.), rows), (1, 5));
+            assert_eq!(hit(px(1.), rows + 1), (2, 0));
+
+            let caret = second.range.start;
+            let bounds = view
+                .bounds_for_range(caret..caret + 3, text, window, cx)
+                .unwrap();
+            assert_eq!(bounds.origin.y, text.origin.y + px(line_height));
+            assert_eq!(bounds.origin.x, text.origin.x);
+            assert!(bounds.size.width > px(0.));
+
+            let numbers = view.gutter_numbers(0..view.wrap.row_count());
+            let numbers = numbers
+                .iter()
+                .map(|(row, label, _)| (*row, *label))
+                .collect::<Vec<_>>();
+            assert_eq!(numbers, [(0, 1), (rows, 2), (rows + 1, 3)]);
+            assert!(view.gutter_numbers(1..rows).is_empty());
+        })
+    });
+}
+
+#[gpui::test]
+fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppContext) {
+    wrap_everything(cx);
+    let text = vec![words(60); 40].join("\n");
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.simulate_resize(size(px(400.), px(300.)));
+    cx.run_until_parked();
+    let top = editor.update(cx, |view, cx| {
+        let line_height = view.metrics.line_height;
+        let rows = view.wrap.rows(0).len();
+        view.scroll = 1e9;
+        view.clamp_scroll();
+        assert_eq!(
+            view.scroll,
+            view.wrap.row_count() as f32 * line_height - view.viewport_h
+        );
+        assert_eq!(view.visible_rows().end, view.wrap.row_count());
+
+        // The view state's top is the start of the top row, mid-line.
+        view.scroll = (3 * rows + 2) as f32 * line_height;
+        let model = view.model.read(cx);
+        let start = view.wrap.row_range(3, 2, line_end(model, 3)).start;
+        let top = to_flat_byte(model, 3, start);
+        // A resize keeps the caret visible, so park it on the top row.
+        (view.cursor_line, view.cursor_col) = (3, start);
+        assert_eq!(view.view_state(cx).top, top);
+        assert_eq!(view.fully_visible_lines().0, 4);
+        top
+    });
+
+    // Sideways scrolling stays off while rows fit the width.
+    cx.simulate_event(ScrollWheelEvent {
+        position: cx.read(|cx| editor.read(cx).interaction_bounds().center()),
+        delta: ScrollDelta::Pixels(point(px(-200.), px(0.))),
+        ..Default::default()
+    });
+    cx.run_until_parked();
+    assert_eq!(cx.read(|cx| editor.read(cx).scroll_x), 0.);
+
+    // Narrowing rewraps into more rows and keeps the top row's text on top.
+    let rows = cx.read(|cx| editor.read(cx).wrap.row_count());
+    cx.simulate_resize(size(px(250.), px(300.)));
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let view = editor.read(cx);
+        assert!(view.wrap.row_count() > rows);
+        let model = view.model.read(cx);
+        let (line, sub) = view.wrap.position(view.visible_rows().start);
+        let range = view.wrap.row_range(line, sub, line_end(model, line));
+        assert_eq!(line, 3);
+        assert!((range.start..range.end).contains(&(top - to_flat_byte(model, 3, 0))));
+    });
+}
+
+#[gpui::test]
+fn a_state_restored_before_the_first_layout_keeps_its_row(cx: &mut TestAppContext) {
+    wrap_everything(cx);
+    let text = vec![words(400); 30].join("\n");
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let (measured, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
+    cx.run_until_parked();
+    let state = measured.update(cx, |view, cx| {
+        assert!(view.wrap.rows(0).len() > 2);
+        view.scroll = (view.wrap.first_row(5) + 2) as f32 * view.metrics.line_height;
+        EditorViewState {
+            anchor: 0,
+            caret: 0,
+            ..view.view_state(cx)
+        }
+    });
+    let (restored, cx) = cx.add_window_view(|_, cx| {
+        let mut view = EditorView::new(model, cx);
+        view.restore_view_state(state, cx);
+        view
+    });
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let view = restored.read(cx);
+        assert_eq!(view.view_state(cx).top, state.top);
+        assert_eq!(view.visible_rows().start, view.wrap.first_row(5) + 2);
+    });
+}
+
+#[gpui::test]
+fn toggle_soft_wrap_writes_the_document_value_every_view_follows(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let document = uuid::Uuid::new_v4();
+    let model = cx.new(|_| {
+        let mut model = BufferModel::from_text(words(400));
+        model.set_document(document);
+        model
+    });
+    let first = cx.add_window(|_, cx| EditorView::new(model.clone(), cx));
+    let second = cx.add_window(|_, cx| EditorView::new(model.clone(), cx));
+    let other =
+        cx.add_window(|_, cx| EditorView::new(cx.new(|_| BufferModel::from_text(words(400))), cx));
+    cx.run_until_parked();
+    let wraps = |cx: &mut TestAppContext| {
+        [first, second, other].map(|window| {
+            window
+                .read_with(cx, |view, _| view.wrap.width().is_some())
+                .unwrap()
+        })
+    };
+    assert_eq!(wraps(cx), [false; 3]);
+
+    let toggle = |cx: &mut TestAppContext| {
+        first
+            .update(cx, |view, window, cx| {
+                view.execute_editing_command("editor.toggle-soft-wrap", window, cx)
+            })
+            .unwrap()
+    };
+    assert!(toggle(cx));
+    cx.run_until_parked();
+    assert_eq!(wraps(cx), [true, true, false]);
+    assert!(toggle(cx));
+    cx.run_until_parked();
+    assert_eq!(wraps(cx), [false; 3]);
+
+    // Releasing the document drops its value.
+    assert!(toggle(cx));
+    cx.update(|cx| settings::release_document(document, cx));
+    let scope = SettingsScope {
+        document: Some(document.to_string()),
+        ..Default::default()
+    };
+    assert!(!cx.read(|cx| settings::editor_soft_wrap(&scope, cx)));
+
+    // A view without a document has nothing to write the value for.
+    let frame = cx.add_window(|_, cx| {
+        EditorView::for_contributed_view(cx.new(|_| BufferModel::from_text("a")), "frame", cx)
+    });
+    assert!(
+        !frame
+            .update(cx, |view, window, cx| {
+                view.execute_editing_command("editor.toggle-soft-wrap", window, cx)
+            })
+            .unwrap()
+    );
+}

@@ -1692,6 +1692,7 @@ mod comments;
 mod gutter;
 mod indentation;
 mod lines;
+mod wrap;
 
 fn press(
     view: &mut EditorView,

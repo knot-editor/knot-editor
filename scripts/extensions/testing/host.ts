@@ -114,6 +114,7 @@ function emptyState() {
       ["editor.insertSpaces", { key: "editor.insertSpaces", type: "boolean", default: true, description: "Indent with spaces rather than tabs; a document whose text shows a clear style gets its own value" }],
       ["editor.autoClosingBrackets", { key: "editor.autoClosingBrackets", type: "boolean", default: true, description: "Insert the closer of a typed bracket or quote where the language allows, and step over or delete it with the opener" }],
       ["editor.autoSurround", { key: "editor.autoSurround", type: "boolean", default: true, description: "Wrap the selection when typing an opening bracket or quote over it" }],
+      ["editor.softWrap", { key: "editor.softWrap", type: "boolean", default: false, description: "Wrap long lines at the viewport width" }],
       ["editor.lineNumbers", { key: "editor.lineNumbers", type: "string", default: "on", description: "Line numbers in the editor gutter" }],
       ["theme.mode", { key: "theme.mode", type: "string", default: "dark", description: "Which theme applies" }],
       ["theme.dark", { key: "theme.dark", type: "string", default: "One Dark", description: "The theme used in dark mode" }],

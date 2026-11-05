@@ -55,6 +55,7 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 #[command("editor.jump-to-matching-bracket", title = "Jump to Matching Bracket", description = "Move to the bracket matching the one at the cursor, or to the closing bracket around it.", id = JUMP_TO_MATCHING_BRACKET_COMMAND, participant = Editor)]
 #[command("editor.toggle-line-comment", title = "Toggle Line Comment", description = "Comment or uncomment the selected lines.", id = TOGGLE_LINE_COMMENT_COMMAND, participant = Editor)]
 #[command("editor.toggle-block-comment", title = "Toggle Block Comment", description = "Wrap the selection in a block comment, or unwrap it.", id = TOGGLE_BLOCK_COMMENT_COMMAND, participant = Editor)]
+#[command("editor.toggle-soft-wrap", title = "Toggle Soft Wrap", description = "Wrap the document's long lines at the window's width, or stop wrapping them.", id = TOGGLE_SOFT_WRAP_COMMAND, participant = Editor)]
 #[command("editor.delete-backward", title = "Delete Backward", palette = false, id = DELETE_BACKWARD_COMMAND, participant = Editor)]
 #[command("editor.delete-forward", title = "Delete Forward", palette = false, id = DELETE_FORWARD_COMMAND, participant = Editor)]
 #[command("editor.delete-to-line-end", title = "Delete to Line End", palette = false, id = DELETE_TO_LINE_END_COMMAND, participant = Editor)]

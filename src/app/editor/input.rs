@@ -158,29 +158,11 @@ impl EditorView {
         window: &Window,
         cx: &App,
     ) -> (usize, usize) {
-        let text_bounds = self.text_bounds();
-        let origin = text_bounds.origin;
-        let line =
-            ((f32::from(p.y - origin.y) + self.scroll) / self.metrics.line_height).floor() as usize;
-        let line = line.min(self.line_count - 1);
-        let text = line_text(model, line);
-        if text.is_empty() {
-            return (line, 0);
-        }
-        let shaped = self.shape_line(model, line, &text, window, cx);
-        let tab_size = self.tab_size(model, cx);
-        let x = p.x - origin.x - self.line_x_offset(&text, shaped.width, text_bounds.size.width);
-        let col = text
-            .grapheme_indices(true)
-            .map(|(start, _)| start)
-            .chain(std::iter::once(text.len()))
-            .min_by(|a, b| {
-                let distance =
-                    |index| f32::from((x_for_index_dir(&shaped, index, &text, tab_size) - x).abs());
-                distance(*a).total_cmp(&distance(*b))
-            })
-            .unwrap_or(0);
-        (line, col)
+        let origin = self.text_bounds().origin;
+        let row = ((f32::from(p.y - origin.y) + self.scroll) / self.metrics.line_height)
+            .floor()
+            .max(0.) as usize;
+        self.column_for_x(model, row, p.x - origin.x + px(self.scroll_x), window, cx)
     }
 }
 impl EntityInputHandler for EditorView {
@@ -367,36 +349,24 @@ impl EntityInputHandler for EditorView {
         cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         let model = self.model.read(cx);
-        let (start_line, start_col) = flat_utf16_to_position(model, range_utf16.start);
-        let (end_line, end_col) = flat_utf16_to_position(model, range_utf16.end);
-        let line = start_line;
-        let line_str = line_text(model, line);
-        let top =
-            element_bounds.origin.y + px(line as f32 * self.metrics.line_height) - px(self.scroll);
-
-        if line_str.is_empty() {
-            return Some(Bounds {
-                origin: point(element_bounds.origin.x, top),
-                size: size(px(1.), px(self.metrics.line_height)),
-            });
-        }
-
-        let shaped = self.shape_line(model, line, &line_str, window, cx);
-        let tab_size = self.tab_size(model, cx);
-        let x0 = x_for_index_dir(&shaped, start_col, &line_str, tab_size);
-        let x1 = if start_line == end_line {
-            x_for_index_dir(&shaped, end_col, &line_str, tab_size)
+        let start = flat_utf16_to_position(model, range_utf16.start);
+        let end = flat_utf16_to_position(model, range_utf16.end);
+        let row = self.row(model, self.wrap.row_of(start.0, start.1));
+        let top = element_bounds.origin.y + px(row.index as f32 * self.metrics.line_height)
+            - px(self.scroll);
+        let x0 = self.x_in_row(model, &row, start.1, window, cx);
+        let x1 = if row.holds(end) {
+            self.x_in_row(model, &row, end.1, window, cx)
         } else {
             element_bounds.size.width
         };
-        let (origin_x, width) = if start_line == end_line && x0 > x1 {
+        let (origin_x, width) = if x0 > x1 {
             (x1, (x0 - x1).max(px(1.)))
         } else {
             (x0, (x1 - x0).max(px(1.)))
         };
-        let x_off = self.line_x_offset(&line_str, shaped.width, element_bounds.size.width);
         Some(Bounds {
-            origin: point(element_bounds.origin.x + x_off + origin_x, top),
+            origin: point(element_bounds.origin.x + origin_x, top),
             size: size(width, px(self.metrics.line_height)),
         })
     }

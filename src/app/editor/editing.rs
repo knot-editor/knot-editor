@@ -135,6 +135,7 @@ impl EditorView {
                 self.toggle_block_comment(cx);
                 return true;
             }
+            commands::TOGGLE_SOFT_WRAP_COMMAND => return self.toggle_soft_wrap(cx),
             _ => {}
         }
         if matches!(
@@ -253,7 +254,7 @@ impl EditorView {
                     .preferred_x
                     .unwrap_or_else(|| self.caret_x(model, window, cx));
                 self.preferred_x = Some(x);
-                (line, self.column_for_x(model, line, x, window, cx))
+                self.column_for_x(model, self.wrap.first_row(line), x, window, cx)
             }
             _ => return false,
         };
@@ -304,6 +305,18 @@ impl EditorView {
         } else {
             caret..caret
         }
+    }
+
+    /// Write the opposite of the resolved `editor.softWrap` for this view's
+    /// document, so every view of it follows. `false` without a document.
+    fn toggle_soft_wrap(&mut self, cx: &mut Context<Self>) -> bool {
+        let model = self.model.read(cx);
+        let Some(document) = model.document() else {
+            return false;
+        };
+        let wrap = settings::editor_soft_wrap(&self.settings_scope(model, cx), cx);
+        settings::set_document_soft_wrap(document, !wrap, cx);
+        true
     }
 
     pub(crate) fn has_selection(&self) -> bool {

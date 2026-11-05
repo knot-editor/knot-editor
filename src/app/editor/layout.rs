@@ -1,7 +1,57 @@
-//! Line shaping and the horizontal geometry shared by caret, selection,
-//! hit testing, and painting.
+//! Row shaping and the geometry shared by caret, selection, hit testing,
+//! and painting.
 
+use super::wrap::WrapWidth;
 use super::*;
+
+/// Pixels a wrapped row leaves free at the right edge, for the caret and the
+/// scrollbar.
+const WRAP_MARGIN: f32 = 8.;
+
+/// One visual row: the bytes of a buffer line that it shows.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Row {
+    pub(super) index: usize,
+    pub(super) line: usize,
+    /// Bytes of the line's content.
+    pub(super) range: Range<usize>,
+    /// Whether the row ends its line, so it also shows the line's end.
+    pub(super) last: bool,
+    /// How far right of the text area's edge the row's text starts.
+    pub(super) indent: Pixels,
+}
+
+impl Row {
+    /// Whether the caret at byte `col` of `line` shows on this row.
+    pub(super) fn holds(&self, (line, col): (usize, usize)) -> bool {
+        self.line == line && self.range.start <= col && (col < self.range.end || self.last)
+    }
+
+    /// The first position after this row's positions.
+    fn after(&self) -> (usize, usize) {
+        if self.last {
+            (self.line + 1, 0)
+        } else {
+            (self.line, self.range.end)
+        }
+    }
+
+    /// The part of `start..end` that this row shows: whether it begins and
+    /// ends here, or `None` when the row shows none of it.
+    pub(super) fn span(
+        &self,
+        start: (usize, usize),
+        end: (usize, usize),
+    ) -> Option<(Option<usize>, Option<usize>)> {
+        let first = (self.line, self.range.start);
+        (start < self.after() && end > first).then(|| {
+            (
+                (start >= first).then_some(start.1),
+                (end < self.after()).then_some(end.1),
+            )
+        })
+    }
+}
 
 /// The text size and line height one view lays out with, from the
 /// `font.size` setting in its scope and the application zoom.
@@ -44,6 +94,98 @@ impl EditorView {
         }
     }
 
+    /// Wrap lines to the text area's `width` when `editor.softWrap` is on,
+    /// keeping the top row's text at the top when the rows change.
+    pub(super) fn update_wrap(&mut self, width: Pixels, window: &Window, cx: &App) {
+        let model = self.model.read(cx);
+        let scope = self.settings_scope(model, cx);
+        let font_size = self.metrics.font_size;
+        let text = window.text_system();
+        self.cell_width = text
+            .advance(
+                text.resolve_font(&make_font(false, false)),
+                px(font_size),
+                '0',
+            )
+            .map_or(font_size * 0.6, |advance| f32::from(advance.width));
+        let wrap = settings::editor_soft_wrap(&scope, cx).then(|| WrapWidth {
+            columns: ((f32::from(width) - WRAP_MARGIN) / self.cell_width).max(1.) as usize,
+            tab_size: settings::editor_tab_size(&scope, cx),
+        });
+        let restored = self.restored_top.take();
+        if wrap == self.wrap.width() {
+            return;
+        }
+        self.sync_wrap(model);
+        let top = restored.unwrap_or_else(|| self.top_offset(model));
+        self.wrap
+            .set_width(wrap, model.line_count(), |line| line_text(model, line));
+        let (line, col) = flat_byte_to_position(model, top);
+        self.scroll = self.wrap.row_of(line, col) as f32 * self.metrics.line_height;
+        if wrap.is_some() {
+            self.scroll_x = 0.;
+        }
+    }
+
+    /// Visual row `index`, clamped to the last row.
+    pub(super) fn row(&self, model: &BufferModel, index: usize) -> Row {
+        let (line, sub) = self.wrap.position(index);
+        let rows = self.wrap.rows(line);
+        Row {
+            index: rows.start + sub,
+            line,
+            range: self.wrap.row_range(line, sub, line_end(model, line)),
+            last: rows.start + sub + 1 == rows.end,
+            indent: px(self.wrap.indent(line, sub) as f32 * self.cell_width),
+        }
+    }
+
+    /// Shape `row`, whose line's content is `text`, with its highlight runs.
+    pub(super) fn shape_row(
+        &self,
+        model: &BufferModel,
+        row: &Row,
+        text: &str,
+        window: &Window,
+        cx: &App,
+    ) -> ShapedLine {
+        let runs = slice_runs(
+            &self.line_runs(model, row.line, text, cx),
+            row.range.clone(),
+        );
+        shape_editor_line(
+            window,
+            text[row.range.clone()].to_owned().into(),
+            px(self.metrics.font_size),
+            &runs,
+            self.tab_size(model, cx),
+        )
+    }
+
+    /// Where `row`'s text starts in the text area, after horizontal scroll,
+    /// for row text `text` shaped `shaped_w` wide.
+    pub(super) fn row_x(&self, row: &Row, text: &str, shaped_w: Pixels) -> Pixels {
+        row.indent + self.line_x_offset(text, shaped_w, self.text_bounds().size.width)
+    }
+
+    /// The x of byte `col` of `row`'s line within the text area, after
+    /// horizontal scroll.
+    pub(super) fn x_in_row(
+        &self,
+        model: &BufferModel,
+        row: &Row,
+        col: usize,
+        window: &Window,
+        cx: &App,
+    ) -> Pixels {
+        let text = line_text(model, row.line);
+        let shaped = self.shape_row(model, row, &text, window, cx);
+        let row_text = &text[row.range.clone()];
+        let col = col.clamp(row.range.start, row.range.end) - row.range.start;
+        x_for_index_dir(&shaped, col, row_text, self.tab_size(model, cx))
+            + self.row_x(row, row_text, shaped.width)
+    }
+
     /// Text runs for `line`, whose content is `text`, from the view's
     /// highlight layers: syntax, then decorations.
     pub(super) fn line_runs(
@@ -62,6 +204,7 @@ impl EditorView {
     }
 
     /// Shape `line`, whose content is `text`, with its highlight runs.
+    #[cfg(test)]
     pub(super) fn shape_line(
         &self,
         model: &BufferModel,
@@ -210,37 +353,46 @@ impl EditorView {
             .collect()
     }
 
+    /// The caret's x within the text area, before horizontal scroll.
     pub(super) fn caret_x(&self, model: &BufferModel, window: &Window, cx: &App) -> Pixels {
-        let text = line_text(model, self.cursor_line);
-        let shaped = self.shape_line(model, self.cursor_line, &text, window, cx);
-        x_for_index_dir(&shaped, self.cursor_col, &text, self.tab_size(model, cx))
-            + self.line_x_offset(&text, shaped.width, self.text_bounds().size.width)
-            + px(self.scroll_x)
+        let row = self.row(model, self.caret_row());
+        self.x_in_row(model, &row, self.cursor_col, window, cx) + px(self.scroll_x)
     }
 
+    /// The caret position on row `index` nearest `x`, measured within the
+    /// text area before horizontal scroll. A row that does not end its line
+    /// leaves its end to the next row.
     pub(super) fn column_for_x(
         &self,
         model: &BufferModel,
-        line: usize,
+        index: usize,
         x: Pixels,
         window: &Window,
         cx: &App,
-    ) -> usize {
-        let text = line_text(model, line);
-        let shaped = self.shape_line(model, line, &text, window, cx);
+    ) -> (usize, usize) {
+        let row = self.row(model, index);
+        if row.range.is_empty() {
+            return (row.line, row.range.start);
+        }
+        let text = line_text(model, row.line);
+        let shaped = self.shape_row(model, &row, &text, window, cx);
+        let row_text = &text[row.range.clone()];
         let tab_size = self.tab_size(model, cx);
-        let offset = self.line_x_offset(&text, shaped.width, self.text_bounds().size.width)
-            + px(self.scroll_x);
-        text.grapheme_indices(true)
+        let offset = self.row_x(&row, row_text, shaped.width) + px(self.scroll_x);
+        let col = row_text
+            .grapheme_indices(true)
             .map(|(i, _)| i)
-            .chain(std::iter::once(text.len()))
+            .chain(row.last.then_some(row_text.len()))
             .min_by(|a, b| {
                 let distance = |index| {
-                    f32::from((x_for_index_dir(&shaped, index, &text, tab_size) + offset - x).abs())
+                    f32::from(
+                        (x_for_index_dir(&shaped, index, row_text, tab_size) + offset - x).abs(),
+                    )
                 };
                 distance(*a).total_cmp(&distance(*b))
             })
-            .unwrap_or(0)
+            .unwrap_or(0);
+        (row.line, row.range.start + col)
     }
 
     /// Per-line horizontal offset for RTL lines: right-align the line within
@@ -257,6 +409,22 @@ impl EditorView {
         }) - px(self.scroll_x)
     }
 }
+/// The runs covering `range` of the text `runs` cover, shortened to it.
+pub(super) fn slice_runs(runs: &[TextRun], range: Range<usize>) -> Vec<TextRun> {
+    let mut start = 0;
+    runs.iter()
+        .filter_map(|run| {
+            let run_range = start..start + run.len;
+            start = run_range.end;
+            let len = run_range
+                .end
+                .min(range.end)
+                .saturating_sub(run_range.start.max(range.start));
+            (len > 0).then(|| TextRun { len, ..run.clone() })
+        })
+        .collect()
+}
+
 /// Tab stops every `tab_size` columns are a rendering projection; source byte
 /// offsets stay intact.
 pub(super) fn expand_tabs(text: &str, tab_size: usize) -> String {

@@ -33,6 +33,8 @@ pub(crate) const EDITOR_INSERT_SPACES: &str = "editor.insertSpaces";
 pub(crate) const EDITOR_AUTO_CLOSING_BRACKETS: &str = "editor.autoClosingBrackets";
 /// Whether typing an opening bracket or quote over a selection wraps it.
 pub(crate) const EDITOR_AUTO_SURROUND: &str = "editor.autoSurround";
+/// Whether editor views wrap long lines at the viewport width.
+pub(crate) const EDITOR_SOFT_WRAP: &str = "editor.softWrap";
 /// Line numbers in the editor gutter: `on`, `off`, or `relative`.
 pub(crate) const EDITOR_LINE_NUMBERS: &str = "editor.lineNumbers";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
@@ -222,6 +224,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: true.into(),
             description: "Wrap the selection when typing an opening bracket or quote over it".into(),
+        },
+        SettingDefinition {
+            key: EDITOR_SOFT_WRAP.into(),
+            value_type: SettingType::Boolean,
+            default: false.into(),
+            description: "Wrap long lines at the viewport width; Toggle Soft Wrap sets it for one document".into(),
         },
         text(
             EDITOR_LINE_NUMBERS,
@@ -427,6 +435,22 @@ pub(crate) fn set_document_insert_spaces(document: uuid::Uuid, spaces: bool, cx:
         .expect("editor.insertSpaces is a native boolean setting");
 }
 
+/// Write a document's own `editor.softWrap` value, which beats language and
+/// global values.
+pub(crate) fn set_document_soft_wrap(document: uuid::Uuid, wrap: bool, cx: &mut App) {
+    cx.default_global::<ApplicationSettings>()
+        .0
+        .set(
+            EDITOR_SOFT_WRAP,
+            Value::Bool(wrap),
+            SettingsScope {
+                document: Some(document.to_string()),
+                ..Default::default()
+            },
+        )
+        .expect("editor.softWrap is a native boolean setting");
+}
+
 /// Drop a document's own indentation values, so its style and size follow the
 /// language and global settings again.
 pub(crate) fn reset_document_indentation(document: uuid::Uuid, cx: &mut App) {
@@ -478,6 +502,12 @@ pub(crate) fn editor_auto_closing_brackets(context: &SettingsScope, cx: &App) ->
 pub(crate) fn editor_auto_surround(context: &SettingsScope, cx: &App) -> bool {
     resolve(EDITOR_AUTO_SURROUND, context, cx, Value::as_bool)
         .expect("editor.autoSurround is a native boolean setting")
+}
+
+/// Whether an editor in `context` wraps long lines.
+pub(crate) fn editor_soft_wrap(context: &SettingsScope, cx: &App) -> bool {
+    resolve(EDITOR_SOFT_WRAP, context, cx, Value::as_bool)
+        .expect("editor.softWrap is a native boolean setting")
 }
 
 /// How an editor in `context` numbers its lines.

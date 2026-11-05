@@ -113,18 +113,10 @@ impl EditorView {
         window: &mut Window,
         cx: &App,
     ) -> Point<Pixels> {
-        let line = self.cursor_line;
-        let text = line_text(model, line);
-        let x = if text.is_empty() {
-            px(0.)
-        } else {
-            let shaped = self.shape_line(model, line, &text, window, cx);
-            let text_bounds = self.text_bounds();
-            text_bounds.origin.x - self.bounds.origin.x
-                + self.line_x_offset(&text, shaped.width, text_bounds.size.width)
-                + x_for_index_dir(&shaped, self.cursor_col, &text, self.tab_size(model, cx))
-        };
-        let y = px((line + 1) as f32 * self.metrics.line_height - self.scroll);
+        let row = self.row(model, self.caret_row());
+        let x = self.text_bounds().origin.x - self.bounds.origin.x
+            + self.x_in_row(model, &row, self.cursor_col, window, cx);
+        let y = px((row.index + 1) as f32 * self.metrics.line_height - self.scroll);
         // Keep the popup, with a margin, inside the view.
         let popup = |pixels| crate::app::zoom::scaled(pixels, cx);
         point(
