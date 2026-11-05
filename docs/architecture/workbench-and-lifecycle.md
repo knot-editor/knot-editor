@@ -19,7 +19,8 @@ When a package failed to start, each launch window opens the extension startup
 report once; windows opened later do not.
 `ApplicationSnapshot.launched` and a one-time `launched` event then tell
 extensions that startup windows exist; extensions activate before any window
-does. A reopen after launch opens an empty window and restores nothing. Fatal
+does. A reopen after launch opens an empty window and restores nothing. The
+[zoom level](#zoom) is read before the first window opens. Fatal
 config failure discards the queue and opens a focused diagnostic window with
 Copy and Quit; product windows remain unavailable for that launch, and nothing
 is recorded.
@@ -30,9 +31,20 @@ transfer window, reports it through a native warning prompt that needs no
 answer. Successful and in-progress operations show only their effect.
 Extension calls receive the failure as their result instead of a prompt.
 
+## Zoom
+
+The application owns one zoom level in `src/app/zoom.rs`, from −4 to +6 steps
+of 1.2, which Zoom In, Zoom Out, and Reset Zoom change for every window at once
+and which persists as the `zoom` record of the state database. Each product
+window sets its rem size from it, so chrome styled in rems scales, and surfaces
+that measure in pixels multiply by the same factor: editors and terminals size
+their text as `font.size` times the factor, and pixel chrome such as tabs, the
+picker, and text inputs scales its constants. Dock sizes stay window pixels, as
+on a window resize.
+
 ## Editor views
 
-Each `EditorView` owns cursor, selection, scroll, focus, IME, rendering policy,
+Each `EditorView` owns cursor, selection, scroll, wrapping, focus, IME, rendering policy,
 and its completion controller/surface. Multiple views share a model while
 retaining independent presentation state. Completion ownership is detailed in
 [semantic UI](semantic-ui.md#completion-ownership-and-aggregation).
@@ -59,7 +71,34 @@ source text; expanded tabs are only a rendering projection. Tab stops follow
 `editor.tabSize`, which the view resolves while laying out for its scope: its
 document's effective language and the `editor` view kind, or a contributed
 text frame's view ID. Views observe the settings store and repaint on any
-change. A view's own edit
+change. Text size is `font.size` in the same scope times the zoom factor, and
+line height follows it at 20/14, rounded to whole pixels; a size change keeps
+the top line in place.
+
+With `editor.softWrap` resolved true for its scope, a view lays each line out
+as rows that fit the text area, measured in monospace cells rather than shaped
+(`src/app/editor/wrap.rs`). Every geometry path counts rows: scrolling and
+clamping, painting, the caret, selections, hit testing, IME bounds, the
+completion popup, and the gutter, which shows a line's number and marker on
+its first row. Each row is shaped as its own slice of the line, and nothing
+scrolls sideways while wrapping. The view rewraps only the lines the model
+reports changed since it last followed it
+([core and buffers](core-and-buffers.md#application-buffer-ownership)), and
+every line when the width, text size, zoom, or tab size changes, keeping the
+top row's text at the top. A caret at an offset where a row breaks shows at
+the start of the next row. Toggle Soft Wrap writes the opposite of the
+resolved value scoped to the view's document, so every view of the document
+follows and the value ends with it; a view without a document reports the
+command unavailable.
+
+Up, Down, Page Up and Down, Home, smart Home, and End move and select by row,
+keeping the caret's x across rows; End on a row that does not end its line
+stops before its last character, whose end shows on the next row. Each has a
+`-logical` twin, such as `editor.move-up-logical`, that moves by buffer lines
+and, for vertical movement, lands on the target line's first row. Without
+wrapping the two agree. The macOS preset binds Cocoa's ctrl-A and ctrl-E to
+the twins, as they reach a paragraph's edges; other keys use the row
+commands. A view's own edit
 refreshes its derived state synchronously before resolving the resulting caret.
 Other views update through their persistent positions.
 
@@ -69,8 +108,9 @@ selection and saves and restores its view state. Moving the selection ends
 the typing undo group as other caret moves do; a centered reveal recenters
 the caret's line only when it lies outside the viewport, and otherwise
 behaves like ordinary movement; top and bottom reveals always align it with
-that edge. The handle also reports the wholly visible lines from the last
-layout, which may lag a scroll by a frame, and scrolls by lines without moving
+that edge. Its units stay buffer lines while wrapping: a top reveal shows a
+line's first row and a bottom reveal its last. The handle also reports the
+lines whose rows are wholly visible in the last layout, which may lag a scroll by a frame, and scrolls by lines without moving
 the caret or asking the next paint to reveal it. Go to Line is the bundled `@knot/go-to-line`
 package built on that handle, bound to ctrl-G in the Knot preset.
 
@@ -148,11 +188,13 @@ have the gutter, while a contributed text frame has none unless its
 registration asks for one.
 
 Restorable view state is the anchor and caret as byte offsets, the start of the
-top visible line as a byte offset, and horizontal scroll in pixels. Applying it
+top visible row as a byte offset, and horizontal scroll in pixels. Applying it
 clamps each offset to the current text and snaps back to a character boundary,
 so a changed or shorter file never yields an invalid position, and keeps the
-restored scroll instead of revealing the caret. Folding and zoom do not exist
-yet and are not recorded.
+restored scroll instead of revealing the caret; a state restored before the
+view first wraps its lines keeps its row once they wrap. Folding does not
+exist yet. Zoom is application state and wrapping follows settings, so
+neither is recorded.
 
 ## Status bar
 
@@ -491,7 +533,9 @@ visible and restartable. Protected closure removes affected registry entries and
 stops their sessions after document decisions succeed.
 
 Measured view geometry supplies drawing, baseline, cell hit testing, viewport
-size, and PTY pixel dimensions at the destination window's scale. Fallback glyphs
+size, and PTY pixel dimensions at the destination window's scale. Cells are
+measured for `font.size` resolved under `{ view: "terminal" }` times the zoom
+factor, so a change resizes the PTY grid. Fallback glyphs
 stay within emulator cell allocations. Selection uses scrollback grid coordinates;
 application mouse reports use viewport cells. Geometry is remeasured after resize
 or attachment handoff. Typography, bootstrap metrics, and encoding rules live in

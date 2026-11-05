@@ -464,6 +464,19 @@ an unscoped value however late that one was written. Among equally specific
 values the latest write wins, whoever made it, so personal overrides belong in
 `post-init`.
 
+Native keys are declared in the `Settings` interface of `knot.d.ts`. The text
+size and wrapping of editors are scoped like any other value: `post-init` can
+size terminals apart from editors and wrap prose, for example:
+
+```ts
+await settings.set("font.size", 13, { view: "terminal" });
+await settings.set("editor.softWrap", true, { language: "plaintext" });
+```
+
+The bundled Markdown package wraps `{ language: "markdown" }` this way, and
+Toggle Soft Wrap writes `editor.softWrap` scoped to one document. Zoom is not a
+setting: it scales every size and is remembered by the application.
+
 Values may be written before their key is defined, which lets `pre-init`
 configure a package that starts later. Definition drops a value of the wrong
 type and notes it in the extension report; after definition, a mismatching

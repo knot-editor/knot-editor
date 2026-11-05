@@ -296,6 +296,45 @@ characters, such as `-` in CSS, are D131.
 References: [editor views](architecture/workbench-and-lifecycle.md#editor-views)
 and [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages).
 
+## Zoom, text size, and soft wrap
+
+Zoom is one application level, as VS Code's window zoom is, rather than per
+view or per window: someone zooming wants everything larger, chrome included,
+and one level keeps every window consistent. It is not a setting, because
+settings are rebuilt from code on every launch while a level chosen with a
+key must survive restarts, so it is a record of the application state
+database, read before the first window. `font.size` is the setting, resolved
+per view scope, so terminals can differ from editors while zoom scales both.
+
+Wrapped rows are measured in monospace cells with `unicode-width` rather than
+shaped. Shaping every line of a file whenever the width changes would cost a
+shaping pass per line on resize, while cells cost a scan, and Knot's text is
+monospace; proportional fallback glyphs may make a row slightly longer or
+shorter than the viewport. Whitespace hangs past the edge instead of starting
+a row and continuation rows keep the first row's indentation, as VS Code's
+defaults do. Views rewrap only the lines each commit changed, from a bounded
+per-revision log on the model, because the model's pending change queue
+belongs to extension delivery and one view's consumption would hide changes
+from the next.
+
+Toggle Soft Wrap writes a document-scoped `editor.softWrap`, as the
+indentation picker writes `editor.insertSpaces`, so every view of a document
+agrees and the choice ends with the document, while languages and personal
+config set the default; the Markdown package wraps prose.
+
+Movement that wrapping changes exists twice, as Emacs pairs `next-line` under
+`line-move-visual` with `next-logical-line`: the plain commands move by row,
+as VS Code and Zed do by default, and `-logical` twins move by buffer line, so
+a keymap such as a Vim mode chooses per key. The Knot preset binds the row
+commands except macOS's ctrl-A and ctrl-E, which Cocoa defines as paragraph
+movement. Without an affinity for positions at a break, End on a row that does
+not end its line stops before its last character, usually the space the row
+broke after, and a caret at a break shows at the start of the next row.
+
+References: [editor views](architecture/workbench-and-lifecycle.md#editor-views),
+[zoom](architecture/workbench-and-lifecycle.md#zoom), and
+[core and buffers](architecture/core-and-buffers.md#application-buffer-ownership).
+
 ## Go to Line and the editor handle
 
 Go to Line is the bundled `@knot/go-to-line` package rather than native code,

@@ -66,8 +66,8 @@ briefs and plans there:
   use a decoration style.
 - D080, Word occurrence highlighting, after D109 here, which supplies the
   cursor observation it asks for, and D114.
-- D078, Zoom, font size, and soft wrap, before D112 here, which moves by its
-  visual lines.
+- ✅ D078, Zoom, font size, and soft wrap, before D112 here, which builds on
+  its visual rows.
 
 D077 moved here from the daily-driver plan.
 
@@ -83,8 +83,8 @@ D077 moved here from the daily-driver plan.
   them.
 - **Decoration styles before Find, occurrences, and Vim search.** All three
   paint match highlights.
-- **Soft wrap before visual-line movement.** D112 moves by the visual lines
-  D078 defines.
+- **Soft wrap before screen movement.** D112 builds on the visual rows D078
+  defines.
 - **Vim last.** It is the acceptance test for everything above it.
 
 ## Phase 1 — Key input
@@ -159,10 +159,14 @@ D077 moved here from the daily-driver plan.
 
 D078 from the daily-driver plan lands before this phase.
 
-- **D112 — Visual-line movement and layout queries** (depends on D078, D109)
-  - Native movement as parameterized commands: by visual line, by page,
-    and to screen positions, so Vim's `j`/`k`, `gj`/`gk`, `H`/`M`/`L`,
-    and `zz` need no shaping data.
+- **D112 — Screen movement and layout queries** (depends on D078, D109)
+  - D078 delivered movement by visual row with `-logical` twins
+    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views)),
+    which Vim's `gj`/`gk` and `j`/`k` bind.
+  - Remaining: movement to screen positions and an always-centering reveal,
+    so `H`/`M`/`L` and `zz` need no shaping data, and visual-row units in
+    the editor handle, whose visible lines, scrolling, and reveals count
+    buffer lines.
 
 - **D066 — Folding** (depends on D109)
   - Per-language `folds` queries in language registrations beside

@@ -44,7 +44,11 @@ Each `BufferModel` owns:
 
 Presentation metadata stays in `app` and refers to core range IDs. A model
 commit advances the public revision once, invalidates the snapshot cache, and
-notifies every observing view. All text mutation paths enforce the model's
+notifies every observing view. The model also records the line range each of
+its recent revisions replaced, as a `LineChange`, so a view that lays lines
+out, such as a wrapping editor, composes the changes since the revision it
+last followed and updates only those lines, or every line when it fell behind
+the retained history. All text mutation paths enforce the model's
 access policy; read-only models still permit snapshots, view anchors,
 contributions, and closure. `core::TextBuffer` remains unconditionally mutable.
 
