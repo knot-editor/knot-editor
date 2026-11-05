@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 implemented, at its review gate. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -213,54 +213,23 @@ release now replays one input per deferred step
 package lives in `extensions/@knot/vim`: `extension.ts` follows editors and
 runs commands, `keys.ts` parses, and `motions.ts` and `text.ts` are pure.
 
-### 2. Operators, text objects, and registers 🔍
+### 2. Operators, text objects, and registers ✅
 
-Deliverables:
-
-- ✅ Operator-pending mode for `d c y > < = gu gU g~` over every motion and
-  over the text objects, plus their doubled linewise forms, with an
-  underline caret while an operator waits.
-- ✅ `x X s S D C Y r ~ J`, `f F t T ; ,`, `%` (with a count, that percentage
-  of the lines), and `{ }`.
-- ✅ The register model, its clipboard and linewise rules, persistence, and
-  `p` and `P` with counts.
-
-Validation:
-
-- ✅ Unit tests for every text object and the delete-register shifting rules.
-- ✅ Cases for every operator over motions and text objects, `ciw…<Esc>` as
-  one undo step, `dd` then `p`, registers, and `>` and `=` through the native
-  commands on Rust and TypeScript.
-- ✅ Product tests for register persistence across a package restart and for
-  clipboard linewise detection.
-
-Review gate: a dogfooding session on Rust and TypeScript files. ⏳
-
-Implementation notes:
-
-- `normal.ts` runs commands; `objects.ts` and `registers.ts` are pure. Text
-  objects match brackets and quotes by counting text, as Vim does, while `%`
-  uses the syntax-aware native jump and counts text only where it finds no
-  partner. Operators follow Vim's operator-pending forms: `cw` changes to the
-  word's end, `dw` stops at the line's end, and characterwise text ending at
-  a line's start becomes linewise from the indentation, so `d}` and `ci{`
-  take whole lines. `cc` and `S` keep the first line's indentation.
-- An undo group opened through a handle restored no caret, since extension
-  edit batches record no view; the group now records the editor's selection
-  when it opens and closes ([core and
-  buffers](../architecture/core-and-buffers.md)).
-- The case runner releases each case's document; without it every later case
-  slowed down, past the key hold's timeout after about 150 cases.
-- Left out: `r<cr>`, and Vim's `J` rule of no space before `)`.
-
-Implementation context:
-
-- Pure modules for text objects and registers beside `motions.ts`.
-- `storage` from `knot.d.ts` holds the register record.
-- `workbench.readClipboardText` and the clipboard write API.
-- Native `editor.indent-lines`, `outdent-lines`, `reindent-selected-lines`,
-  `join-lines`, and `jump-to-matching-bracket` are invoked on a selection set
-  by the package.
+Complete and approved after dogfooding: operator-pending mode for `d c y > <
+= gu gU g~` over motions, text objects, and doubled lines, with an underline
+caret while an operator waits; `x X s S D C Y r ~ J`, `f F t T ; ,`, `%`, and
+`{ }`; and the register model with clipboard linewise detection and
+persistence. `normal.ts` runs commands, and `objects.ts` and `registers.ts`
+are pure. Text objects count brackets and quotes in the text, as Vim does,
+while `%` uses the syntax-aware native jump and counts text only where it
+finds no partner. Characterwise text ending at a line's start becomes
+linewise from the indentation, so `d}` and `ci{` take whole lines. An undo
+group opened through a handle restored no caret, because extension edit
+batches record no view; the group now records the editor's selection when
+it opens and closes ([core and buffers](../architecture/core-and-buffers.md)).
+The case runner releases each case's document, which every later case
+otherwise paid for, until cases outran the key hold's timeout. Left out:
+`r<cr>`, and Vim's `J` rule of no space before `)`.
 
 ### 3. Visual modes 📝
 
