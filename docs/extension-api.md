@@ -551,8 +551,11 @@ teardown removes your definitions.
 Editor decorations and gutter markers and tree badges name the color key they
 paint with, native or defined, so a contribution looks right under every
 theme. A key nobody has defined paints as interface text until its definition
-arrives. Where decorations overlap, `error`, `warning`, and `info` paint above
-other keys, the most severe on top. A gutter marker shows as a dot on the
+arrives. A decoration's style is `background` behind its text, `line`
+across its whole lines, as for a diff, or a straight or `wavy` underline;
+backgrounds and lines paint beneath the selection. A range that wants two
+styles is two contributions. Where decorations overlap, `error`, `warning`,
+and `info` paint above other keys, the most severe on top. A gutter marker shows as a dot on the
 range's first line, and a line shows one marker, chosen by the same order and
 then by the latest; clicking it runs that contribution's command:
 

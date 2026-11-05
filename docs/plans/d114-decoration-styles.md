@@ -1,6 +1,7 @@
 # D114 — Decoration styles
 
-Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Item of the
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3's documentation
+written, awaiting review. Item of the
 [editor API plan](editor-api.md); its first consumer is D080, word occurrence
 highlighting ([daily-driver plan](daily-driver.md)), planned separately and
 right after this item. Find (D031) and Vim search (D058) consume it later.
@@ -83,7 +84,11 @@ follows the theme through its color key.
   `src/app/editor.rs`. Reviewed in the app on soft-wrapped Markdown, blank
   and RTL lines, and both appearances.
 
-### 3. Documentation and completion
+### 3. Documentation and completion 🚧
+
+- ✅ Semantic UI, the extension guide, decisions (Decoration styles, and the
+  gutter's note), the editor API plan, and the extensibility report are
+  updated. ⏳ Documentation review, then removal of this plan.
 
 - [Semantic UI](../architecture/semantic-ui.md) describes the styles, the
   two paint paths, and the order; the

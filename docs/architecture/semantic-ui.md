@@ -37,9 +37,20 @@ layers of line-relative `(byte range, style)` spans; a later layer overrides an
 earlier one's color and font and adds its underline. Syntax sources resolve
 into nvim-treesitter's standard capture names by longest dotted prefix, and the
 `Theme` global maps each capture to a style. A decoration or gutter marker
-names a color key instead, so a query can never draw one: decorations form one
-wavy-underline layer per key in the model's paint order, which puts `error`,
-`warning`, and `info` above other keys with the most severe on top. Gutter
+names a color key instead, so a query can never draw one.
+
+A decoration also names one style, which picks its paint path. `underline`
+and `wavy` are text-run layers, one per key and style in the model's paint
+order, which puts `error`, `warning`, and `info` above other keys with the
+most severe on top. `background` and `line` paint as quads behind the text:
+a background covers the decorated text of each visual row and stops at the
+text, while a line decoration bands the whole text area across every row of
+the lines it covers, blank ones included, leaving out a final line its range
+only reaches at column 0. Behind the text, the cursor-line highlight paints
+first, then line bands, backgrounds in the same severity order, the
+selection, and the bracket match, so the selection stays readable over match
+highlights. Decorations belong to the buffer, so every view of it shows
+them. Gutter
 markers share one lane, which shows the most severe marker of each line, the
 latest among equals, and runs that contribution's command when clicked
 ([editor views](workbench-and-lifecycle.md#editor-views)).
@@ -73,7 +84,7 @@ storage and writes them again at start, as any settings UI does, so personal
 ## Syntax highlighting and languages
 
 Highlight layers compose in a fixed order: syntax, then contribution
-decorations, then selection painted as before. Semantic tokens from a future
+underlines; selection and decoration backgrounds paint beneath the text. Semantic tokens from a future
 language client (D067) slot in above syntax. Syntax highlights are derived and
 never stored as anchored ranges: each view queries its visible lines, with some
 overscan, once per [syntax generation](core-and-buffers.md#syntax-state), and

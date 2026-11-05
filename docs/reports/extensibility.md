@@ -51,8 +51,9 @@ What an extension can do today, from `knot.d.ts`:
 
 - **Buffers:** snapshot text at a revision, apply edit batches under
   `ifRevision`, and observe committed changes. Offsets are UTF-8 bytes.
-- **Contributions:** anchored ranges with an `info` / `warning` / `error`
-  decoration or gutter token and an optional command.
+- **Contributions:** anchored ranges with a decoration (a color key and a
+  background, line, underline, or wavy style), a gutter marker, and an
+  optional command.
 - **Commands:** register global commands, handle a command for one contributed
   view, and compose child commands under the captured target.
 - **Keymaps:** bind gpui key sequences, globally or for one view kind. The
@@ -98,7 +99,7 @@ What is missing for editing-level extensibility:
 | `.` repeat, `q` macros | Record commands with arguments plus typed text; replay through dispatch | Not possible | D113 |
 | Registers | Extension state plus clipboard read and write | Write only | D109 |
 | Marks, jumplist | Anchored positions without decoration | Only decorated contributions | D109 |
-| `/` search highlights, visual feedback | Decoration styles | Wavy underlines in any color key | D114 |
+| `/` search highlights, visual feedback | Decoration styles | `background`, `line`, `underline`, and `wavy` in any color key | D114 |
 | `:s` | Regex over snapshots and an edit batch | Possible in JS; bulk edits need D092 | D092 |
 | Ex command line | Transient input with completion | `showInput` without completion | D058 |
 | Folds | Fold state and commands | None | D066 |
@@ -115,8 +116,7 @@ Neovim-level extensibility also includes things Vim emulation barely uses:
   change, and wrap or replace a native command (D115). Today an extension
   observes metadata changes after they commit.
 - **Presentation that extensions own:** virtual text, inlay hints, floating
-  panels anchored to a position, and decoration styles beyond a wavy
-  underline (D114).
+  panels anchored to a position (D145).
 - **Interactive generated buffers:** magit- or oil-style text with semantic
   actions per range (D027).
 - **Settings per buffer and language:** D070 already scopes values by language
@@ -190,5 +190,5 @@ presets, and D068 and D077 surfaces. Then:
 5. D066 syntax-tree queries, folds, and text objects, and D114's decoration
    styles, which Vim's search and mode highlights need.
 6. D058 Vim mode as a bundled or installed extension.
-7. The rest of D114 (virtual text, floating panels) and D115 alongside the
+7. D145 (virtual text, floating panels) and D115 alongside the
    first language client (D067), which drives them harder than Vim does.

@@ -235,8 +235,8 @@ never shifts sideways when a diagnostic appears or clears; the number lane
 sizes to the line count's digits instead, which changes only when the count
 gains a digit. A line shows one marker, chosen by decoration severity and
 then by the latest, so a click runs the command of what is painted.
-Multi-line bars and marker tooltips wait for extension-owned decoration
-styles (D114).
+Line decorations leave the gutter alone, so markers stay the gutter's only
+signal; multi-line bars and marker tooltips wait for a consumer.
 
 `editor.lineNumbers` takes `"relative"` beside `"on"` and `"off"`, because it
 costs one subtraction and a Vim mode (D058) needs it. The cursor line's
@@ -399,6 +399,31 @@ Tokyo Night Light rather than tokyonight.nvim's Day, which is Apache-2.0.
 
 References: [semantic UI](architecture/semantic-ui.md#themes-and-color-keys)
 and [extension guide](extension-api.md#register-a-theme-and-define-colors).
+
+## Decoration styles
+
+A decoration names a color key and exactly one style: `background`, `line`,
+`underline`, or `wavy`. The style is required, so no contribution relies on
+a default that a later consumer would want changed, and a range that wants
+two, such as a background and an underline, is two overlapping
+contributions, which the store already allows, rather than a list of styles
+on one. Themes change a key's color but never its style, because the style
+is what the contributor means, as a diff band or a match highlight.
+
+Backgrounds and line bands paint as quads behind the text rather than as
+text-run backgrounds, which gpui paints over the selection quad and would
+hide the selection under every match highlight; VS Code also keeps the
+selection readable over find matches. Quads reuse the selection's row-span
+geometry, so wrapped and right-to-left rows need nothing new. Backgrounds
+stop at the text on each row rather than reaching the pane edge, so
+occurrence highlights read as words, while a line band covers whole rows,
+blank lines included, so diff hunks read as blocks. A line range ending at
+column 0 of a later line leaves that line out, as indenting a selection
+does, so `lineRange(a).start` to `lineRange(b + 1).start` covers lines `a`
+through `b`, and an empty range bands its own line so a one-line marker
+needs no length.
+
+Reference: [semantic UI](architecture/semantic-ui.md).
 
 ## Anchored ranges and contributions
 

@@ -149,12 +149,15 @@ D077 moved here from the daily-driver plan.
     `reveal: "center"` still recenters only when the line is off screen, so
     Vim's `zz` needs an always-centering option when D058 reaches it.
 
-- **D114 — Decoration styles**
-  - 🚧 [Plan](d114-decoration-styles.md)
-  - Contribution decorations choose a style beside their color key:
-    background, straight underline, or today's wavy underline. Find (D031),
-    word occurrences (D080), Vim search, and visual-mode feedback consume
-    it. Virtual text and anchored floating panels are D145.
+- **D114 — Decoration styles** ✅
+  - Complete: a contribution's decoration is `{ color, style }`, painting a
+    `background` behind its text, a `line` band across its lines, or a
+    straight or `wavy` underline. Behavior in
+    [semantic UI](../architecture/semantic-ui.md), rationale in
+    [decisions](../decisions.md#decoration-styles), and the contract in the
+    [extension guide](../extension-api.md#register-a-theme-and-define-colors).
+    Find (D031), word occurrences (D080), Vim search, and visual-mode
+    feedback consume it. Virtual text and anchored floating panels are D145.
 
 ## Phase 4 — Layout and folding
 
