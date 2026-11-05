@@ -217,13 +217,14 @@ to be rebuilt later:
   - ✅ Moved to the [editor API](editor-api.md) plan, which also schedules
     D031, D078, and D080.
 
-- **D078 — Zoom, font size, and soft wrap** (depends on D070)
-  - 🚧 [Plan](d078-zoom-font-size-soft-wrap.md)
-  - ⌘+ / ⌘- / ⌘0 zoom the current view or every view (decide which). The base
-    font size comes from settings.
-  - Toggle Soft Wrap, plus a setting for its default. Wrapping changes vertical
-    movement, scroll geometry, IME positioning, and gutter numbering, so define
-    visual lines in the view's line model.
+- ✅ **D078 — Zoom, font size, and soft wrap** (depends on D070)
+  - ⌘= / ⌘- / ⌘0 zoom the whole application, remembered across restarts;
+    `font.size` sets the text size per view scope; `editor.softWrap`, on for
+    Markdown and toggled per document by Toggle Soft Wrap, wraps at the
+    viewport width, and movement goes by wrapped row with `-logical` twins
+    ([zoom](../architecture/workbench-and-lifecycle.md#zoom),
+    [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
+    [decisions](../decisions.md#zoom-text-size-and-soft-wrap)).
 
 - **D079 — Save hygiene** (depends on D070)
   - Trim trailing whitespace and ensure a final newline on save, both

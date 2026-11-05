@@ -66,7 +66,7 @@ briefs and plans there:
   use a decoration style.
 - D080, Word occurrence highlighting, after D109 here, which supplies the
   cursor observation it asks for, and D114.
-- D078, Zoom, font size, and soft wrap, before D112 here, which builds on
+- ✅ D078, Zoom, font size, and soft wrap, before D112 here, which builds on
   its visual rows.
 
 D077 moved here from the daily-driver plan.
@@ -157,7 +157,7 @@ D077 moved here from the daily-driver plan.
 
 ## Phase 4 — Layout and folding
 
-D078 from the daily-driver plan lands before this phase.
+✅ D078 from the daily-driver plan landed before this phase.
 
 - **D112 — Screen movement and layout queries** (depends on D078, D109)
   - D078 delivered movement by visual row with `-logical` twins
