@@ -18,6 +18,7 @@ mod lines;
 pub(super) mod native_commands;
 mod paint;
 mod text;
+mod wrap;
 
 use gutter::GutterLayout;
 use layout::*;

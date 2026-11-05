@@ -24,6 +24,7 @@ semver = "1"
 tokio = { version = "1.53", features = ["sync"] }
 tempfile = "3"
 unicode-segmentation = "1"
+unicode-width = "0.2"
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 v8 = "152.2"

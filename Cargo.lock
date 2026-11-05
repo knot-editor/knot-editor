@@ -3163,6 +3163,7 @@ dependencies = [
  "tree-sitter-typescript",
  "tree-sitter-yaml",
  "unicode-segmentation",
+ "unicode-width",
  "url",
  "uuid",
  "v8",

@@ -137,6 +137,12 @@ pub struct BufferModel {
     revision_content_states: Vec<u64>,
     open: bool,
     pending_changes: VecDeque<CommittedBufferChange>,
+    /// The lines each recent revision changed, for views that lay lines out
+    /// incrementally; the oldest entries drop first.
+    line_changes: VecDeque<(u64, LineChange)>,
+    /// The lines the commit in progress changed, recorded under its
+    /// revision once that is assigned.
+    committing_lines: Option<LineChange>,
     snapshot_cache: RefCell<Option<CachedSnapshot>>,
     history: EditHistory,
     history_replay_generation: u64,
@@ -175,6 +181,70 @@ struct CachedSnapshot {
     revision: u64,
     range: ByteRange,
     text: Arc<[u16]>,
+}
+
+/// How many recent revisions [`BufferModel::line_changes_since`] covers.
+const LINE_CHANGE_HISTORY: usize = 64;
+
+/// Lines one or more commits replaced: lines `first..old_end` before them
+/// are lines `first..new_end` after them. It may cover unchanged lines.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LineChange {
+    pub(crate) first: usize,
+    pub(crate) old_end: usize,
+    pub(crate) new_end: usize,
+}
+
+impl LineChange {
+    fn of_edit(edit: &BufferEdit) -> Self {
+        match edit {
+            BufferEdit::Insert {
+                at_point,
+                end_point,
+                ..
+            } => Self {
+                first: at_point.line,
+                old_end: at_point.line + 1,
+                new_end: end_point.line + 1,
+            },
+            BufferEdit::Delete {
+                start_point,
+                end_point,
+                ..
+            } => Self {
+                first: start_point.line,
+                old_end: end_point.line + 1,
+                new_end: start_point.line + 1,
+            },
+        }
+    }
+
+    /// One change covering this one followed by `next`, whose lines are
+    /// numbered after this one.
+    pub(crate) fn then(self, next: Self) -> Self {
+        let shift = |line: usize, by: isize| line.saturating_add_signed(by);
+        let delta = self.new_end as isize - self.old_end as isize;
+        let next_delta = next.new_end as isize - next.old_end as isize;
+        let next_old_end = if next.old_end <= self.first {
+            next.old_end
+        } else if next.old_end >= self.new_end {
+            shift(next.old_end, -delta)
+        } else {
+            self.old_end
+        };
+        let new_end = if self.new_end <= next.first {
+            self.new_end
+        } else if self.new_end >= next.old_end {
+            shift(self.new_end, next_delta)
+        } else {
+            next.new_end
+        };
+        Self {
+            first: self.first.min(next.first),
+            old_end: self.old_end.max(next_old_end),
+            new_end: new_end.max(next.new_end),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -222,6 +292,8 @@ impl BufferModel {
             revision_content_states: vec![0],
             open: true,
             pending_changes: VecDeque::new(),
+            line_changes: VecDeque::new(),
+            committing_lines: None,
             snapshot_cache: RefCell::new(None),
             history: EditHistory::default(),
             history_replay_generation: 0,
@@ -323,6 +395,18 @@ impl BufferModel {
 
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// The lines every commit after `revision` changed, as one change; `None`
+    /// when `revision` is current or older than the retained history.
+    pub(crate) fn line_changes_since(&self, revision: u64) -> Option<LineChange> {
+        let first = self
+            .line_changes
+            .partition_point(|(changed, _)| *changed <= revision);
+        let mut changes = self.line_changes.range(first..);
+        let (next, change) = changes.next()?;
+        (*next == revision + 1)
+            .then(|| changes.fold(*change, |covered, (_, change)| covered.then(*change)))
     }
 
     pub(crate) fn content_matches_revision(&self, revision: u64) -> bool {
@@ -523,6 +607,12 @@ impl BufferModel {
     /// Feed a commit's primitive edits to every edit-log observer, then
     /// discard them.
     fn observe_committed_edits(&mut self, seq: usize) {
+        self.committing_lines = self
+            .buffer
+            .edits_since(seq)
+            .iter()
+            .map(LineChange::of_edit)
+            .reduce(LineChange::then);
         if let Some(syntax) = &mut self.syntax {
             syntax.edit(self.buffer.edits_since(seq));
             if syntax.needs_parse() {
@@ -1181,6 +1271,12 @@ impl BufferModel {
             .checked_add(1)
             .expect("public buffer revision overflowed");
         self.revision_content_states.push(self.content_state);
+        if let Some(change) = self.committing_lines.take() {
+            if self.line_changes.len() == LINE_CHANGE_HISTORY {
+                self.line_changes.pop_front();
+            }
+            self.line_changes.push_back((self.revision, change));
+        }
     }
 
     fn allocate_content_state(&mut self) -> u64 {
