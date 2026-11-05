@@ -1,6 +1,6 @@
 # D078 — Zoom, font size, and soft wrap
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 implemented, awaiting review. Item of the
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Item of the
 [daily-driver plan](daily-driver.md), scheduled by the
 [editor API plan](editor-api.md) before D112.
 
@@ -126,45 +126,18 @@ cells are measured for the resolved size, so a change resizes the PTY grid.
 Tab titles and other chrome deliberately ignore `font.size`; zoom scales
 them (checkpoint 2).
 
-## Checkpoint 2 — Application zoom 🔍
+## Checkpoint 2 — Application zoom ✅
 
-Deliverables:
-- ✅ The zoom `Global`, Zoom In / Zoom Out / Reset Zoom commands, and their
-  preset bindings on all three platforms.
-- ✅ Per-window rem size and zoom-scaled pixel constants on every custom-painted
-  surface; a zoom change refreshes all windows.
-- ✅ The `zoom` record in the state database, restored before the first window
-  and flushed at quit.
-
-Implemented in `src/app/zoom.rs`: levels −4 to +6 (about 48% to 300%), the
-commands `workbench.zoom-in`, `workbench.zoom-out`, and `workbench.reset-zoom`,
-also in the View menu. Chrome sizes given in pixels at 100% become rems
-(`zoom::rems`), painting that measures in pixels multiplies by the factor
-(`zoom::scaled`), and editors and terminals multiply `font.size` by it. Scope
-decisions: dock sizes stay absolute window pixels, as they do when the window
-resizes, so a zoomed dock keeps its width and the user resizes it; hairlines
-(carets, underlines, dividers' 1 px line) keep their pixel widths. The
-architecture and workbench references still describe zoom as view state until
-checkpoint 4's documentation step.
-
-Validation: command tests for stepping and clamping; gpui tests that a window
-renders with the scaled rem size and an editor and terminal with scaled text;
-a record round-trip test like `command_history`'s; preset tests for the
-bindings on macOS, Windows, and Linux.
-
-Review gate: zoom in the real app scales the whole window consistently,
-including the palette, picker, and status bar, and survives a restart.
-
-**Implementation context:** mirror `src/app/command_history.rs` over
-`src/app/record_store.rs` for persistence and register the global as
-`ApplicationToolLayout` is (see `AGENTS.md`, *Registering an application
-subsystem*); flush from `extensions::host::quit_after_storage`. Declare the
-commands with the `#[command]` pattern in `src/app/product/commands.rs` and
-bind them in `src/app/commands/keymaps/presets.rs`. Set rem size in
-`impl Render for ProductShell` (`src/app/product/render.rs`). Pixel constants
-to scale: `src/app/picker.rs` (`LINE_HEIGHT`), `src/app/text_input.rs`
-(`INPUT_LINE_HEIGHT`, `FONT_SIZE`), `src/app/product/render.rs`,
-`src/app/product/tab_drag.rs`, and the metrics from checkpoint 1.
+Reviewed. One application zoom level (`src/app/zoom.rs`), −4 to +6 in steps
+of 1.2 (about 48% to 300%), persisted as the `zoom` record in the state
+database and restored before the first window. Zoom In, Zoom Out, and Reset
+Zoom (`workbench.zoom-*`) are in the palette and View menu and bound on all
+three presets. Product windows set their rem size from the zoom; chrome sizes
+written in pixels at 100% use `zoom::rems`, pixel-measured painting uses
+`zoom::scaled`, and editors and terminals multiply `font.size` by the factor.
+Dock sizes stay absolute window pixels, as on window resize, and hairlines keep
+their pixel widths. The architecture and workbench references still describe
+zoom as view state until checkpoint 4's documentation step.
 
 ## Checkpoint 3 — Soft wrap rendering
 
