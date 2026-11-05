@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 at its review gate. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -68,7 +68,8 @@ These stay deferred:
   - the broad Ex set (D146)
   - Ex completion (D143)
   - smaller Vim commands outside this scope, such as `r<cr>`, sentence and
-    tag motions and objects, and `gJ` (D151)
+    tag motions and objects, `gJ`, and a repeated `i(` growing a visual
+    selection to the enclosing pair (D151)
 - **Line numbers:** relative numbers are `editor.lineNumbers: "relative"` in
   personal config, so the package does not set them.
 
@@ -233,29 +234,41 @@ The case runner releases each case's document, which every later case
 otherwise paid for, until cases outran the key hold's timeout. Left out
 (D151): `r<cr>`, and Vim's `J` rule of no space before `)`.
 
-### 3. Visual modes 📝
+### 3. Visual modes 🔍
 
 Deliverables:
 
-- `v` and `V` with every motion, `o` to swap ends, `gv`, operators on the
+- ✅ `v` and `V` with every motion, `o` to swap ends, `gv`, operators on the
   selection, and `escape` back to normal mode.
-- Outside selections enter visual mode, and switching between `v` and `V`
+- ✅ Outside selections enter visual mode, and switching between `v` and `V`
   works.
 
 Validation:
 
-- Cases for every motion and operator in `v` and `V`, `o`, and `gv`; the
-  runner learns to expect a selection, which the two-marker notation already
-  writes.
-- A product test for a mouse drag entering visual mode and `Vjd`.
+- ✅ Cases for every motion and operator in `v` and `V`, `o`, and `gv`; the
+  runner starts from a marked selection and reads the visual modes from the
+  status bar.
+- ✅ A product test for a mouse drag entering visual mode, a click leaving
+  it, and an operator on the dragged selection; `Vjd` is a case.
 
-Review gate: dogfooding.
+Review gate: dogfooding, with the `Try:` commands in personal config.
 
-Implementation context:
+Implementation notes:
 
-- The `onDidChangeSelection` listener in the follower distinguishes the
-  package's own `setSelection` calls from outside changes by comparing with
-  the selection it last set.
+- `visual.ts` keeps the selection's ends as the characters where it began
+  and where its caret is, and shows them as an editor selection through the
+  character under the caret, or through whole lines with their line breaks.
+  Operators reuse normal mode's operator code over that region.
+- The `onDidChangeSelection` listener tells the package's own selections from
+  outside ones by comparing with the selection it last set. A selection left
+  when insert mode ends carries on in visual mode.
+- Also in scope, since daily use reaches for them: text objects select or
+  extend (`viw`, `vawaw`, `vi{`; `vip` switches to lines); `u U ~ J r` and
+  the linewise `D X Y C S R`; a count on `>` and `<` shifts that many times;
+  `p` replaces the selection and keeps the replaced text, while `P` leaves
+  the registers. `v$` takes the line break, as Vim's does. `gv` uses
+  `buffer.createMark`, so it does nothing once the area's text is deleted.
+- `I` and `A` in visual mode are visual-block commands and wait for D142.
 
 ### 4. Marks and the jumplist 📝
 

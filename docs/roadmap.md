@@ -613,7 +613,8 @@ Kakoune mode could use it too. The
   - Deferred: The first Vim mode (D058) covers the commands of its scope.
     Commands outside it that daily editing may reach for are missing:
     `r<cr>` replacing characters with a line break; `J` leaving out the
-    space before a `)`; `gJ` joining without spaces; sentence motions and
+    space before a `)`; `gJ` joining without spaces; a repeated `i(` or
+    `a(` in visual mode growing the selection to the enclosing pair; sentence motions and
     objects (`( )`, `is`, `as`); tag objects (`it`, `at`); `gp`, `gP`, and
     `]p`; `_` and `|`; `gi`; and `ga`.
   - Reconsider: Daily Vim use reaches for one of them. Then add it inside
