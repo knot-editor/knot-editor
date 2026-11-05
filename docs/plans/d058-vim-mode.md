@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoint 1 at its review gate. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -194,46 +194,19 @@ commands are not used.
 
 ## Checkpoints
 
-### 1. Package, modes, and basic movement 🚧 review gate
+### 1. Package, modes, and basic movement ✅
 
-Deliverables:
-
-- ✅ `extensions/@knot/vim` with `vim.enabled`, editor following, the two
-  contexts, and the state machine with counts and pending-key display.
-- ✅ Normal ↔ insert through `i a I A o O` and `escape`, with an undo group
-  per insert session and caret clamping. `u` and `ctrl-r` invoke native undo
-  and redo.
-- ✅ Motions `h j k l gj gk w W b B e E ge gE 0 ^ $ gg G`, plus `+ - Enter`,
-  Backspace, and Space. Editing keys (Delete, Tab, ctrl-d/h/j/k) do nothing in
-  normal mode instead of editing natively.
-- ✅ Caret styles and the mode status item.
-- ✅ `@example/modal`, its product test, and its documentation are removed,
-  with the example build, test-runner, and install wiring.
-- ✅ Found by the cases: held input replayed every key in one turn, so typed
-  text overtook a held Enter or Backspace, whose commands run deferred.
-  Release now replays one input per deferred step
-  ([ordered delivery](../architecture/commands.md#ordered-delivery)), with a
-  focused test in `key_hold.rs`.
-
-Validation:
-
-- ✅ `node:test` unit tests for the motion, text, and parser modules.
-- ✅ 68 behavior cases in `test/cases.jsonc` through the real editor, and
-  product tests for the status bar and caret shapes, `gj` and `j` under soft
-  wrap, and enablement by the setting and a language-scoped value.
-- ✅ The bundled-package load test lists `@knot/vim`. Test startups now bind
-  product keys before packages start, as product startup does.
-
-Review gate: dogfood through `Try:` commands in `post-init.js` that enable
-Vim globally and disable it for Markdown.
-
-Implementation context:
-
-- `src/extension.ts` follows editors and runs commands; `keys.ts` parses,
-  `motions.ts` and `text.ts` are pure, and `lines.ts` reads buffer lines
-  once per key.
-- The editor has no Escape handling of its own, and pickers and inputs take
-  focus, so Vim's Escape bindings compete with nothing.
+Complete and approved after dogfooding: `vim.enabled` with language-scoped
+values, editor following, normal and insert modes with counts and
+pending-key display, the motions `h j k l gj gk w W b B e E ge gE 0 ^ $ gg G
++ -` with Enter, Backspace, and Space, `i a I A o O` with one undo group per
+insert session, `u` and `ctrl-r`, caret styles, and the mode status item.
+Editing keys do nothing in normal mode. The modal example and its wiring are
+removed. The cases found that held input overtook a held Enter or Backspace;
+release now replays one input per deferred step
+([ordered delivery](../architecture/commands.md#ordered-delivery)). The
+package lives in `extensions/@knot/vim`: `extension.ts` follows editors and
+runs commands, `keys.ts` parses, and `motions.ts` and `text.ts` are pure.
 
 ### 2. Operators, text objects, and registers 📝
 
