@@ -678,6 +678,16 @@ impl RuntimePool {
         self.scheduler_handle.diagnostics()
     }
 
+    #[cfg(test)]
+    pub(crate) fn activity(&self) -> crate::host::scheduler::Activity {
+        self.scheduler_handle.activity()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn wait_for_turn(&self, finished: u64, timeout: std::time::Duration) -> bool {
+        self.scheduler_handle.wait_for_turn(finished, timeout)
+    }
+
     pub(crate) fn termination_handle(
         &self,
         key: ExtensionKey,

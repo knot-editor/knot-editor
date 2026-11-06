@@ -247,6 +247,18 @@ impl ExtensionPool {
         self.engine.diagnostics()
     }
 
+    #[cfg(test)]
+    pub(crate) fn activity(&self) -> super::scheduler::Activity {
+        self.engine.activity()
+    }
+
+    /// Block until more than `finished` turns have finished, or `timeout`
+    /// passes; false on timeout.
+    #[cfg(test)]
+    pub(crate) fn wait_for_turn(&self, finished: u64, timeout: std::time::Duration) -> bool {
+        self.engine.wait_for_turn(finished, timeout)
+    }
+
     #[allow(
         dead_code,
         reason = "per-turn timeouts (D019) issue it; Restart Extension unloads instead"

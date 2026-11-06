@@ -118,6 +118,16 @@ pub struct SchedulerDiagnostics {
     pub extensions: Vec<ExtensionDiagnostics>,
 }
 
+/// Whether any extension has work in progress, and how many turns have
+/// finished, so a test can tell when the pool has gone quiet.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Activity {
+    /// Some extension is loading, queued, running, or awaiting host work.
+    pub busy: bool,
+    pub finished_turns: u64,
+}
+
 /// Errors returned before work is accepted or a state transition is applied.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SchedulerError {
@@ -239,6 +249,8 @@ pub struct StateMachine<W> {
     turn_count: u64,
     worker_movements: u64,
     max_enqueue_to_start_lag: Duration,
+    #[cfg(test)]
+    finished_turns: u64,
 }
 
 impl<W> Default for StateMachine<W> {
@@ -253,6 +265,8 @@ impl<W> Default for StateMachine<W> {
             turn_count: 0,
             worker_movements: 0,
             max_enqueue_to_start_lag: Duration::ZERO,
+            #[cfg(test)]
+            finished_turns: 0,
         }
     }
 }
@@ -458,6 +472,10 @@ impl<W> StateMachine<W> {
         turn: TurnId,
         outcome: TurnOutcome,
     ) -> Result<(), SchedulerError> {
+        #[cfg(test)]
+        {
+            self.finished_turns += 1;
+        }
         let extension = self.extension_mut(key)?;
         let Some(running) = extension.running.take() else {
             return Err(SchedulerError::DuplicateOrStaleTurn(turn));
@@ -555,6 +573,22 @@ impl<W> StateMachine<W> {
 
     pub fn is_shutting_down(&self) -> bool {
         self.shutting_down
+    }
+
+    #[cfg(test)]
+    fn activity(&self) -> Activity {
+        Activity {
+            busy: self.extensions.values().any(|extension| {
+                matches!(
+                    extension.state,
+                    ExtensionState::Loading
+                        | ExtensionState::Queued
+                        | ExtensionState::Running
+                        | ExtensionState::AwaitingHostWork
+                )
+            }),
+            finished_turns: self.finished_turns,
+        }
     }
 
     #[cfg(test)]
@@ -695,6 +729,10 @@ fn settle_roots<W>(roots: &mut VecDeque<Root<W>>, outcome: CompletionOutcome) {
 struct Shared<W> {
     state: Mutex<StateMachine<W>>,
     ready: Condvar,
+    /// Signalled after every finished turn, apart from `ready` so a waiting
+    /// test never takes a wakeup meant for a worker.
+    #[cfg(test)]
+    turn_finished: Condvar,
     #[cfg(test)]
     worker_count: usize,
 }
@@ -768,6 +806,24 @@ impl<W> SchedulerHandle<W> {
     }
 
     #[cfg(test)]
+    pub fn activity(&self) -> Activity {
+        self.shared.state.lock().unwrap().activity()
+    }
+
+    /// Block until more than `finished` turns have finished, or `timeout`
+    /// passes; false on timeout.
+    #[cfg(test)]
+    pub fn wait_for_turn(&self, finished: u64, timeout: Duration) -> bool {
+        let state = self.shared.state.lock().unwrap();
+        let (_state, result) = self
+            .shared
+            .turn_finished
+            .wait_timeout_while(state, timeout, |state| state.finished_turns <= finished)
+            .unwrap();
+        !result.timed_out()
+    }
+
+    #[cfg(test)]
     pub fn diagnostics(&self) -> SchedulerDiagnostics {
         self.shared
             .state
@@ -794,6 +850,8 @@ impl<W: Send + 'static> SchedulerPool<W> {
         let shared = Arc::new(Shared {
             state: Mutex::new(StateMachine::default()),
             ready: Condvar::new(),
+            #[cfg(test)]
+            turn_finished: Condvar::new(),
             #[cfg(test)]
             worker_count: config.workers().get(),
         });
@@ -886,6 +944,8 @@ fn worker_loop<W: Send + 'static>(
         }
         drop(state);
         shared.ready.notify_all();
+        #[cfg(test)]
+        shared.turn_finished.notify_all();
     }
 }
 
