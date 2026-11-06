@@ -220,19 +220,26 @@ Done:
   finishes. `src/app/product/tests/harness.rs` settles by running the
   foreground, then waiting on a finished turn while a package is busy, until
   no hold remains and no turn finished during a foreground run.
-- ✅ The harness starts the bundled packages, opens a windowless session per
-  case with its editor laid out at 40 rows by 100 cells, and presses keys in
-  the case notation. The Vim cases and bespoke tests run on it, except the
-  mouse drag and the per-key draw count, which stay windowed. The indent and
-  bracket runners use an `Editor` without a window; the comment runner never
-  had one.
+- ✅ The harness starts the bundled packages and closes the window launch
+  opens, which redrew on every change. One windowless session shows every
+  Vim case in turn, each in a fresh workbench over a fresh document laid out
+  at 40 rows by 100 cells, and presses keys in the case notation. The Vim
+  bespoke tests run on it too, except the mouse drag and the per-key draw
+  count, which stay windowed. The indent and bracket runners use an `Editor`
+  without a window; the comment runner never had one.
+- ✅ Status bar and settings changes redraw a window without notifying its
+  session, so they no longer rebuild the application snapshot extensions
+  observe.
 
 On Apple M1 Pro/macOS debug builds, the 364 Vim cases went from 6.4 s in a
-window to 3.5–3.7 s headless, about 10 ms per case including opening and
-closing a session; the test takes about 4.2 s with package startup. The
-comment, indent, and bracket tests take about 0.7 s each, nearly all of it
-package startup. The full suite takes about 16 s, with the Vim cases still
-its longest test until checkpoint 9 splits them by topic.
+window to 1.7 s, about 4.7 ms per case; the test takes about 2.3 s with
+package startup. Most of that is the package's round trips: the foreground
+waits on extension turns for about a third of it, half of each turn is our
+own unoptimized glue rather than V8, which ships as a release library, and
+writing the persisted register record with full synchronization to its
+temporary SQLite file takes about an eighth. The comment, indent, and
+bracket tests take about 0.7 s each, nearly all of it package startup. The
+full suite takes about 14 s.
 
 ### 9. Shared case harness and topic files
 

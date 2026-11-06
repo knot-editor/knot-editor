@@ -65,8 +65,9 @@ A language package's `test/comments.jsonc` lists comment toggling cases, which
 cases, which `language_indents.rs` and `language_brackets.rs` beside it run
 through an editor without a window. `@knot/vim` keeps `test/cases.jsonc`, which
 `vim.rs` runs through the headless harness in `harness.rs`: the bundled
-packages start without a window, each case types keys through a windowless
-session's router, and a run settles once the session holds no keys and the
+packages start without a window, one windowless session shows each case in
+a fresh workbench and types its keys through the session's router, and a run
+settles once the session holds no keys and the
 extension pool is quiet. Windowed product tests remain for rendering, IME,
 pointer input, and the window adapter.
 
