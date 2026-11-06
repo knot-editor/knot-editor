@@ -3,11 +3,11 @@
 Knot is a modern text editor, inspired in philosophy by Emacs, but built with
 modern technologies and paradigms. It is implemented in Rust.
 
-Use @docs/architecture.md for current boundaries and @docs/decisions.md for
-validated choices and rationale. Load the linked @docs/architecture subsystem
-references only when the task needs their runtime flows or behavioral constraints.
-Read @docs/design.md only when product vision is relevant,
-and @docs/roadmap.md for product sequencing and deferred work. Active execution
+Use @docs/architecture.md for current boundaries. Load the linked
+`docs/architecture/` subsystem references only when the task needs their runtime
+flows or behavioral constraints. Read `docs/decisions.md` only when a task
+revisits or adds a design choice, `docs/design.md` only when product vision is
+relevant, and `docs/roadmap.md` for product sequencing and deferred work. Active execution
 plans live under @docs/plans. Remove completed plans after preserving durable
 behavior, rationale, and essential evidence in the current docs; Git retains
 the execution history.
@@ -75,9 +75,10 @@ canonical source before reading broadly.
 updated. Use ✅ and other emoji to mark executed steps.
 - Keep @docs/architecture.md up-to-date when a change alters architectural
   boundaries, ownership, or dependency direction. Update the relevant
-  @docs/architecture subsystem reference when runtime flows or behavioral
-  constraints change. Keep rationale in @docs/decisions.md and implementation
-  details and API contracts in the code.
+  `docs/architecture/` subsystem reference when runtime flows or behavioral
+  constraints change. Keep rationale in `docs/decisions.md`, within the entry
+  rules and word budget of [its guide](docs/README.md#decisions), and
+  implementation details and API contracts in the code.
 - Follow @docs/README.md for documentation ownership. Link to authoritative
   contracts rather than duplicating them; repeat only enough context for orientation.
 - Code comments and module documentation must describe the current design and
