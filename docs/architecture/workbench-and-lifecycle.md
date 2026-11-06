@@ -31,6 +31,34 @@ transfer window, reports it through a native warning prompt that needs no
 answer. Successful and in-progress operations show only their effect.
 Extension calls receive the failure as their result instead of a prompt.
 
+## Product sessions
+
+A product session (`ProductShell`) is what a window shows: it owns the
+workbench, Knot-side focus, the transient interaction and palette, the key
+hold, and the key router, and runs without a window. Every product window
+renders one session. The application keeps a registry of open sessions in
+`src/app/product.rs` that records each session's workbench and, once
+attached, its window, so command targets and other sessions can ask without
+reading a session that may be updating. A session opens when it is created
+and ends when its window closes. Launch, restoration, tab transfer to a new
+window, and [session replacement](#session-replacement) build the session
+first and then open a window for it. Extensions see a session's ID as
+`WindowTarget.window`. "Session" alone in the rest of this reference may also
+mean a project's or a terminal's session; the context says which.
+
+Focus is session state, by identity: the focused pane's active surface, the
+palette, or the transient interaction, over the workbench's focused pane. An
+attached window focuses the matching gpui handle once the current update
+ends, and reports a click that moves gpui focus back to the session. A blur
+leaves the session's focus alone.
+
+Native prompts go through the session, which asks its window; a session
+without a window answers nothing, which callers treat as cancellation.
+The window stays an adapter for raw input: key-downs and typed text reach the
+session's router through it (see [keymaps](commands.md#keymaps)), tab drags
+and dock resizing are pointer input, and commands that shape text run in the
+session's window.
+
 ## Zoom
 
 The application owns one zoom level in `src/app/zoom.rs`, from −4 to +6 steps
@@ -227,7 +255,7 @@ drives it through the real host.
 
 ## Workbench and protected closure
 
-`Workbench` owns a window-local binary split tree, stable pane/tab identities,
+`Workbench` owns a session's binary split tree, stable pane/tab identities,
 ordered tabs, and focused pane. A document tab strongly owns one `EditorView`
 of an application-owned document. A terminal tab owns the sole attached view of
 an application-owned session, with no document model. A tool tab attaches a
@@ -260,8 +288,8 @@ is shell render state that lasts while its pane stays focused.
 One application-level coordinator protects tab, pane, window, and quit
 closure; Close Other Tabs covers a pane's unpinned tabs but the origin, and
 Close Pane every tab of the pane, hiding tools in a dock. It
-captures exact window, workbench, tab, surface, and presentation identities,
-counts live document views across windows, and deduplicates dirty documents
+captures exact session, workbench, tab, surface, and presentation identities,
+counts live document views across sessions, and deduplicates dirty documents
 losing their final view. Native Save / Don't Save / Cancel prompts run serially;
 Save reuses the ordinary persistence path. Quit is a hot exit: it first commits
 every dirty document to [durable
@@ -275,8 +303,8 @@ intact. An already accepted save remains committed if closure later cancels.
 Terminal sessions stop only after the scope transition succeeds. Native close
 requests are vetoed until authorized; Quit uses the same flow.
 
-Workbench transitions remain independent of dialogs and document removal. A weak
-shell-wide registry counts views in live windows without retaining windows or
+Workbench transitions remain independent of dialogs and document removal. The weak
+session registry counts views in open sessions without retaining sessions or
 workbenches. Final application document removal explicitly closes its model,
 invalidating transport access even if a stale view retains the entity. Nonfinal
 view closure leaves the shared document open. An empty surviving product
@@ -394,8 +422,8 @@ longer exist are dropped. Unsaved text keeps its own recovery path.
 
 ## Tab relocation
 
-`Workbench` owns typed reorder, insertion, and edge-split transitions. The product
-shell coordinates transfers across workbenches on the foreground. Captures
+`Workbench` owns typed reorder, insertion, and edge-split transitions. Product
+sessions coordinate transfers across workbenches on the foreground. Captures
 include pane, tab, surface, and exact presentation; destinations retain a live
 insertion/split anchor. Both endpoints and document/session ownership are checked
 before mutation. Capturing or abandoning a move changes neither ownership nor
@@ -419,7 +447,7 @@ ratio, leaving each side a minimum size.
 
 Transfers do not enter protected closure or remove documents/sessions. An emptied
 source receives ordinary untitled replacement. New-window transfer creates and
-validates an empty destination before removing the source; failure preserves the
+validates an empty destination session and its window before removing the source; failure preserves the
 source and removes an unused new destination. The destination activates and
 focuses the moved tab. On macOS a new terminal window is laid out before showing.
 

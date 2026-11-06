@@ -46,7 +46,10 @@ its language and syntax state. Extensions contribute language definitions and
 themes; native code owns grammars, parsing, and the defaults of the color keys
 it paints with, and the application theme maps color keys and highlight names
 to styles.
-Each window owns a workbench whose split panes contain typed document, terminal, or native tool tabs.
+Each product session owns a workbench whose split panes contain typed
+document, terminal, or native tool tabs, along with Knot-side focus and key
+routing; the application keeps the registry of open sessions, and a window
+renders one session and forwards raw input to it.
 The workbench retains native tool definitions independently of visible tab
 attachments, including dock placement and hide/reopen state. The application
 owns one SQLite state database of UI-state records: a versioned tool-only
@@ -56,8 +59,8 @@ startup restores before extensions see `launched`; the palette's recently
 used commands; and the zoom level. It also owns a separate recovery database that protects dirty
 document text independently of extension health. Views own presentation and interaction; terminal sessions own
 PTYs, processes, and emulator state independently of their sole attached view.
-The workbench owns layout transitions; the product shell coordinates windows,
-tab transfers, application-wide protected closure, and session replacement.
+The workbench owns layout transitions; product sessions coordinate tab
+transfers, application-wide protected closure, and session replacement.
 
 Extension runtimes retain JavaScript state in persistent isolates. Host workers
 enter one turn at a time and yield while awaiting native work. The application
@@ -65,9 +68,9 @@ owns foreground protocol routing and resource cleanup; the host owns scheduling
 and runtime disposal. Lifecycle teardown and host release share foreground
 cleanup so registrations and contributions cannot outlive their host.
 
-Application queries derive metadata from existing document and window owners.
+Application queries derive metadata from existing document and session owners.
 Observation retains a comparison baseline and lifecycle-scoped subscriptions,
-not a second ownership catalog. Each window owns its native semantic surfaces;
+not a second ownership catalog. Each session owns its native semantic surfaces;
 extensions supply asynchronous content rather than rendering callbacks.
 
 ## Invariants
@@ -98,7 +101,8 @@ extensions supply asynchronous content rather than rendering callbacks.
 - [Documents and persistence](architecture/documents-and-persistence.md):
   identity, dirty state, resource providers, workspaces, Open, and Save.
 - [Workbench and lifecycle](architecture/workbench-and-lifecycle.md): startup,
-  windows, panes, tabs, protected closure, relocation, and terminal ownership.
+  sessions, windows, panes, tabs, protected closure, relocation, and terminal
+  ownership.
 - [Commands](architecture/commands.md): captured targets, focus routing,
   composition, cancellation, and keymaps.
 - [Extension host](architecture/extension-host.md): runtime isolation, transport,

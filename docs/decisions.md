@@ -1025,6 +1025,14 @@ native explorer stays a shell-owned tool until a bundled JavaScript extension
 replaces it (D053), so its workspace providers and file actions are shaped by the
 project registry and multi-root semantics rather than by this plan's internals.
 
+A window renders a product session rather than owning the workbench, focus,
+and key routing itself, so commands, focus, and key handling run without a
+window and package behavior tests need none (D154). Focus is kept as Knot
+identities and the window follows it, because gpui reports focus only for an
+active window and a session without one still needs a focused pane. The
+session type keeps the name `ProductShell`: "session" already names project
+and terminal sessions, so the docs say product session where the type is meant.
+
 Reference: [workbench and lifecycle](architecture/workbench-and-lifecycle.md).
 
 

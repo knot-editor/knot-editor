@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–4 complete; checkpoint 5 in progress (see its progress notes). Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 awaits its review gate. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -168,7 +168,7 @@ and 15 `ProductCommandTarget`), `src/app/workbench/`,
 Review gate: ownership reads correctly in the architecture docs and the app
 behaves unchanged.
 
-Progress (🚧, resume here):
+Progress (⏸ at the review gate):
 
 - ✅ Knot-side focus (`51d9cf6`). `ProductShell.focus` is a `Focus` layer
   (`Workbench`, `Palette`, `Transient`) over the workbench's focused pane.
@@ -197,25 +197,18 @@ Progress (🚧, resume here):
   - `launch::show_session` opens a window for an existing session, so launch,
     tab transfer, and session replacement are session-first.
   - `commands_run_in_a_session_without_a_window` covers the validation.
-- Left:
-  - Check remaining window-shaped code. `ProductShell::window` is still a
-    field set by attachment, and key routing, the key hold replay, tab drag,
-    and `CommandContext::in_window` stay window adapters until checkpoints
-    6–8. `cancel_source_window` and `tab_drag` still match windows, which is
-    correct for pointer input.
-  - Decide whether the type keeps the name `ProductShell`. "Session" already
-    names project sessions (`sessions.rs`, `replaceWindows`), so the docs
-    may call it the window's session while the type stays.
-  - Update [workbench and lifecycle](../architecture/workbench-and-lifecycle.md),
-    [commands](../architecture/commands.md) (captured targets: session plus
-    identities, `focused` instead of a focus handle, the prompt seam), and
-    [architecture](../architecture.md) ownership (the application owns the
-    session registry; a window renders a session).
-  - Write `try.*` commands in personal `post-init.js` for the review gate:
-    focus moving between panes and tools by click and keys, the palette and
-    pickers restoring focus, prompts (save on close, open), tab relocation
-    across windows, and project switching.
-  - Commit the docs, then stop at the review gate.
+- ✅ Remaining window-shaped code checked. The window stays an adapter for
+  raw input until checkpoints 6–8: key-downs and typed text reach the
+  router and key hold through the window, `CommandContext::in_window` runs
+  the three text-shaping commands, and tab drags, gutter marker clicks, and
+  tree row actions carry the window because they come from the pointer.
+- ✅ The type keeps the name `ProductShell`; the docs call it a product
+  session, since "session" alone also names project and terminal sessions
+  (recorded in the workbench layout decision).
+- ✅ [Workbench and lifecycle](../architecture/workbench-and-lifecycle.md#product-sessions),
+  [commands](../architecture/commands.md#dispatch), and
+  [architecture](../architecture.md) ownership updated.
+- ⏸ Review gate: `try.*` commands in personal `post-init.js`.
 
 ### 6. Editor state and view
 
