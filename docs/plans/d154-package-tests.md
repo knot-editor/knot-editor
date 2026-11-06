@@ -1,7 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 implemented, awaiting
-its review gate. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1, 2, and 3 complete; checkpoint 4 next. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -114,59 +113,24 @@ cases went from 93 s to 22 s (open 13 ms, one key 14 ms), the same as
 optimizing every dependency, so the font stack stays unoptimized; level 1
 gave 27 s and gpui alone 25 s. The full suite went from 110 s to 35 s.
 
-### 3. Fewer redraws and round trips per key — 🔍 review
+### 3. Fewer redraws and round trips per key — ✅
 
-✅ Done:
+Host requests no longer notify the extension host entity, which every
+product shell observes, so a request, read-only ones included, no longer
+redraws every window. A status update that repeats its value changes
+nothing ([status bar](../architecture/workbench-and-lifecycle.md#status-bar)),
+and `@knot/vim` and `@knot/status-bar` send only changed items and skip
+redundant reads. `src/app/work_counts.rs` counts draws and host requests
+under test, and `a_key_costs_few_draws_and_requests` guards them per key.
 
-- Every host request notified the extension host entity, which every product
-  shell observes, so each request redrew every window before it ran,
-  read-only ones included. Requests no longer notify; the mutations shells
-  depend on (views, lifecycles, startup reports) notify on their own.
-- An update that repeats a status item's value changes nothing and notifies
-  nothing (`StatusRegistry::holds`).
-- `@knot/vim` sends its mode and keys items only when their text changes and
-  reads nothing more when a selection change lands on the caret it put down.
-  `@knot/status-bar` sends items only when their text changes, uses the
-  `documentChanged` event's document, and lists languages only when the
-  language changes.
-- `src/app/work_counts.rs` counts shell draws and host requests under test;
-  `a_key_costs_few_draws_and_requests` in the Vim tests guards them per key
-  and `an_unchanged_update_redraws_nothing` the status bar.
-
-Draws and host requests per key on a two-line document, settled after each
-key (before → after):
-
-| Key | Draws | Requests |
-| --- | --- | --- |
-| `w` (motion) | 51 → 3 | 22 → 16 |
-| `d` `w` (operator) | 13 + 83 → 3 + 7 | 4 + 35 → 3 + 26 |
-| a typed character in insert mode | 29 → 3 | 11 → 7 |
-| `<esc>` leaving insert mode | 66 → 6 | 29 → 20 |
-
-On Apple M1 Pro/macOS debug builds the Vim cases went from 22 s to 9 s and
-the full suite from 35 s to 17 s. What remains per motion is the package's
-own reads and caret write, the window lookup that finds the focused editor,
-the tab size, two selection notifications, and the status bar package's
-position, which reads the caret's line again in its own isolate.
-
-Deliverables: an equal status bar value changes nothing and notifies
-nothing; `@knot/vim` and `@knot/status-bar` skip unchanged updates and
-repeated reads per key; a test-only count of draws and host requests per key
-that guards the result.
-
-Validation: counts per key before and after for a motion, an operator, and
-insert-mode typing; a product test that an unchanged status update causes no
-redraw.
-
-Implementation context: `ApplicationStatusBar::update` in
-`src/app/status_bar.rs` (returns true even when equal; it is reached through
-`cx.default_global` in `update_status_item`,
-`src/app/extensions/host/handlers.rs`), `extensions/@knot/vim/src/extension.ts`
-(mode and keys items updated after every key),
-`extensions/@knot/status-bar/src/extension.ts`, and the Vim motion path in
-`extensions/@knot/vim/src/normal.ts` and `motions.ts`.
-
-Review gate: per-key draws and round trips are as low as the behavior allows.
+On a two-line document, a motion went from 51 draws and 22 requests to 3
+and 16, a typed character in insert mode from 29 and 11 to 3 and 7. On
+Apple M1 Pro/macOS debug builds the Vim cases went from 22 s to 9 s and the
+full suite from 35 s to 17 s. The remaining requests per motion are the
+package's own reads and caret write, the window lookup for the focused
+editor, the tab size, two selection notifications, and the status bar
+package reading the caret's line in its own isolate; removing the lookup
+needs the view in the command context, which checkpoints 4 and 5 reshape.
 
 ### 4. Knot-owned key matching
 
