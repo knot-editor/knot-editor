@@ -1,7 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–7 complete; checkpoint 8 is implemented and awaits
-review. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–8 complete; checkpoint 9 is next. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -194,57 +193,30 @@ and [semantic UI](../architecture/semantic-ui.md#extension-transient-interaction
 session. Without a window, keys after an extension command are not held yet;
 that moves into the session in checkpoint 8.
 
-### 8. Headless harness — 🔍 awaiting review
+### 8. Headless harness — ✅
 
-Deliverables: a harness that starts the application, packages, and sessions
-without a window, types keys and text, and settles without polling; the Vim,
-comment, indent, and bracket runners on it; windowed tests kept only for
-rendering, IME, pointer input, and the adapter.
+The session owns the key hold and text-binding routing, with or without a
+window ([ordered delivery](../architecture/commands.md#ordered-delivery)), and
+a windowless session joins application observation and becomes active once
+activated ([product sessions](../architecture/workbench-and-lifecycle.md#product-sessions)).
+`src/app/product/tests/harness.rs` starts the bundled packages without a
+window and shows each Vim case in one windowless session, in a fresh
+workbench laid out at 40 rows by 100 cells. It settles by waiting on the
+extension pool's finished turns rather than polling, until no package is
+busy and no keys are held. The indent and bracket runners use an `Editor`
+without a window. Only the mouse drag and per-key draw count stay windowed.
+Status bar and settings changes redraw a window without notifying its
+session, so they no longer rebuild the application snapshot. Product tests
+keep their databases in memory unless they reopen one as a restart would.
+See [development](../development.md).
 
-Validation: the case suites pass and their per-case times are recorded here.
-
-Review gate: cases take milliseconds.
-
-Done:
-
-- ✅ The session owns the key hold and text-binding routing, with or without
-  a window: keys queue before matching, a window's editor offers committed
-  text to its session, and release replays through the window when there is
-  one and through the session otherwise
-  ([ordered delivery](../architecture/commands.md#ordered-delivery)).
-- ✅ A windowless session joins application observation and becomes the
-  active session once activated while no window is active, so packages
-  follow its editor.
-- ✅ The extension pool reports, under test, whether any package has work in
-  progress and how many turns have finished, and blocks until the next turn
-  finishes. `src/app/product/tests/harness.rs` settles by running the
-  foreground, then waiting on a finished turn while a package is busy, until
-  no hold remains and no turn finished during a foreground run.
-- ✅ The harness starts the bundled packages and closes the window launch
-  opens, which redrew on every change. One windowless session shows every
-  Vim case in turn, each in a fresh workbench over a fresh document laid out
-  at 40 rows by 100 cells, and presses keys in the case notation. The Vim
-  bespoke tests run on it too, except the mouse drag and the per-key draw
-  count, which stay windowed. The indent and bracket runners use an `Editor`
-  without a window; the comment runner never had one.
-- ✅ Status bar and settings changes redraw a window without notifying its
-  session, so they no longer rebuild the application snapshot extensions
-  observe.
-
-On Apple M1 Pro/macOS debug builds, the 364 Vim cases went from 6.4 s in a
-window to 1.7 s, about 4.7 ms per case; the test takes about 2.3 s with
-package startup. Most of that is the package's round trips: the foreground
-waits on extension turns for about a third of it, half of each turn is our
-own unoptimized glue rather than V8, which ships as a release library.
-Product tests keep extension storage, recovery, and the state database in
-memory, so each test starts empty and drops everything with its app; only
-tests that reopen a store as a restart would, and the stores' own tests,
-use files. The register writes that took about an eighth of the test
-thread with full synchronization to a temporary file overlapped the
-package's turns, so moving them into memory left the per-case time
-unchanged. The comment, indent, and
-bracket tests take about 0.7 s each, nearly all of it package startup. The
-full suite takes about 14 s.
+On Apple M1 Pro/macOS debug builds the 364 Vim cases went from 6.4 s in a
+window to 1.7 s, about 4.7 ms per case, and the full suite from 16 s to 14 s.
+The window launch opened had cost about 40% of each case by redrawing. What
+remains is mostly the package's round trips per key: the test thread waits
+on extension turns for about 40% of the run, and half of each turn is the
+debug-built host glue rather than V8, which ships as a release library.
+Fewer round trips per key is D156.
 
 ### 9. Shared case harness and topic files
 

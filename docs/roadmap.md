@@ -400,6 +400,22 @@ complete list for that item.
     flags for small isolates, then a startup snapshot, and design sharing or
     unloading only if those fall short.
 
+- **D156 — Fewer host round trips per key**
+  - Deferred: Found by D154. A key bound to an extension command costs
+    several foreground requests, each a turn on an extension worker and a
+    response back: a Vim motion reads the selection, a line, and the tab
+    size, writes the caret, and looks up the focused editor's window, and
+    the selection notification and the status bar package read again.
+    Headless Vim cases take about 4.7 ms each on Apple M1 Pro/macOS debug
+    builds, about 40% of it waiting on those turns, and half of each turn
+    is the debug-built host glue.
+  - Reconsider: Package cases grow slow enough to matter again, or typing
+    latency in a modal package is noticeable in the release app. Then give
+    the command context the editor so the window lookup goes, let an editor
+    handle read what a motion needs in one request, and measure whether
+    building the host glue optimized in debug, as a crate of its own, is
+    worth it.
+
 - **D032 — Extension source maps**
   - Deferred: D018 can load built JavaScript and report generated source
     locations without mapping them back to authoring files.
