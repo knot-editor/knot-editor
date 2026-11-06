@@ -4,7 +4,9 @@
 //! here through the real editor, native commands, and ordered key delivery.
 //! A case starts from `before`, where `‸` marks the caret, or both ends of a
 //! selection, anchor first, types `keys`, and expects `after` with the caret
-//! or the selection at its markers and the editor in `mode`.
+//! or the selection at its markers and the editor in `mode`. A `view`
+//! sizes the editor to show exactly `lines` lines, scrolls `top` to its
+//! first line before the keys, and expects `afterTop` there afterwards.
 //! In `keys`, characters are typed and `<name>` presses a named key:
 //! `<esc>`, `<cr>`, `<bs>`, `<del>`, `<tab>`, `<s-tab>`, `<lt>` for `<`, and
 //! `<c-x>` for ctrl with a letter. Keys are pressed without waiting between
@@ -40,6 +42,18 @@ struct Case {
     after: Vec<String>,
     #[serde(default = "normal")]
     mode: String,
+    #[serde(default)]
+    view: Option<View>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct View {
+    lines: usize,
+    #[serde(default)]
+    top: usize,
+    #[serde(default)]
+    after_top: Option<usize>,
 }
 
 fn normal() -> String {
@@ -111,6 +125,43 @@ impl Fixture {
         documents.update(cx, |documents, cx| documents.remove(self.document, cx));
         cx.update(crate::app::application_observation::changed);
         cx.run_until_parked();
+    }
+
+    /// Resize the window so the editor shows exactly `lines` whole lines,
+    /// then scroll line `top` to the top.
+    fn show_lines(&self, lines: usize, top: usize, cx: &mut TestAppContext) {
+        let (window_height, editor_height, line_height) = cx
+            .update_window(self.window, |_, window, cx| {
+                let editor = self.editor.read(cx);
+                (
+                    f32::from(window.viewport_size().height),
+                    f32::from(editor.interaction_bounds().size.height),
+                    editor.line_height(),
+                )
+            })
+            .unwrap();
+        let width = cx
+            .update_window(self.window, |_, window, _| window.viewport_size().width)
+            .unwrap();
+        // Half a line more, so a partly visible row never counts.
+        let height = window_height - editor_height + (lines as f32 + 0.5) * line_height;
+        VisualTestContext::from_window(self.window, cx)
+            .simulate_resize(gpui::size(width, px(height)));
+        cx.refresh().unwrap();
+        cx.run_until_parked();
+        self.editor.update(cx, |editor, cx| {
+            editor.scroll_by_lines(-1e9, cx);
+            editor.scroll_by_lines(top as f64, cx);
+        });
+        cx.refresh().unwrap();
+        cx.run_until_parked();
+        let visible = self.top_line(cx);
+        assert_eq!(visible, top, "the view starts at line {top}");
+    }
+
+    /// The first line wholly in view.
+    fn top_line(&self, cx: &mut TestAppContext) -> usize {
+        cx.read(|cx| self.editor.read(cx).fully_visible_lines().0)
     }
 
     fn contexts(&self, cx: &gpui::App) -> Vec<String> {
@@ -246,25 +297,45 @@ fn the_vim_cases_behave_as_listed(cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(Some(ENABLE), cx);
     let mut failures = Vec::new();
     let mut count = 0;
+    // KNOT_CASES runs only the cases whose names contain it.
+    let filter = std::env::var("KNOT_CASES").ok();
     for path in case_files("cases.jsonc") {
         let text = std::fs::read_to_string(&path).unwrap();
         let cases: Cases = jsonc_parser::parse_to_serde_value(&text, &Default::default())
             .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         for case in cases.cases {
+            if filter
+                .as_ref()
+                .is_some_and(|filter| !case.name.contains(filter.as_str()))
+            {
+                continue;
+            }
             count += 1;
             let (before, selection) = unmark(&case.before);
             let Some(selection) = selection else {
                 panic!("{} marks no caret", case.name);
             };
             let fixture = Fixture::open_selected(&before, case.language.as_deref(), selection, cx);
+            if let Some(view) = &case.view {
+                fixture.show_lines(view.lines, view.top, cx);
+            }
             fixture.press(&case.keys, cx);
             let expected = case.after.join("\n");
             let actual = fixture.marked(cx);
             let mode = fixture.mode(cx);
+            let top = fixture.top_line(cx);
             fixture.close(cx);
-            if actual != expected || mode != case.mode {
+            let expected_top = case.view.as_ref().and_then(|view| view.after_top);
+            if actual != expected
+                || mode != case.mode
+                || expected_top.is_some_and(|line| line != top)
+            {
+                let top = match expected_top {
+                    Some(line) => format!("\n  top line: expected {line}, actual {top}"),
+                    None => String::new(),
+                };
                 failures.push(format!(
-                    "{} (keys {:?})\n  expected ({}):\n{expected}\n  actual ({mode}):\n{actual}",
+                    "{} (keys {:?})\n  expected ({}):\n{expected}\n  actual ({mode}):\n{actual}{top}",
                     case.name, case.keys, case.mode
                 ));
             }

@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–4 complete. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 at its review gate. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -270,33 +270,29 @@ step back rather than truncating, and the list holds a line once, so
 deletes take the line break before their lines. Global marks end with their
 document and do not persist (D152).
 
-### 5. Scrolling 📝
+### 5. Scrolling 🔍
 
-Deliverables:
+At its review gate: `ctrl-d ctrl-u ctrl-f ctrl-b ctrl-e ctrl-y` with
+counts, in normal and visual mode; `zt zz zb` and `z<cr> z. z-` with a line
+count; and `H M L` with counts as jump motions, operator targets, and visual
+motions. As Vim's `startofline` does, and as `gg` and `G` already did, the
+half-view and page scrolls and `H M L` land on the first non-blank, while
+`ctrl-e` and `ctrl-y` keep the column `j` and `k` aim for. A count on
+`ctrl-d` or `ctrl-u` sets how far later ones scroll, per editor, as Vim's
+`scroll` option. Page scrolls keep two lines of the previous view and go to
+the last or first line when the view cannot scroll. `zt` and `zb` use the
+exact `top` and `bottom` reveals in normal mode and scroll by lines in visual
+mode, where the editor's caret can sit on the next line; `zz` always scrolls
+by the caret's offset from the middle of `visibleLines()`. Lines are buffer
+lines, so all of these are approximate under soft wrap until D112.
 
-- `ctrl-d ctrl-u ctrl-f ctrl-b ctrl-e ctrl-y` with counts.
-- `zz zt zb`, and `z<cr> z. z-`, which also move to the first non-blank.
-- `H M L` with counts, as motions and operator targets, recorded in the
-  jumplist.
-
-Validation:
-
-- Cases for the caret after each scroll and `H M L` where the case's view
-  height makes them deterministic; the runner learns to set the visible
-  height or skip line expectations that depend on it.
-- Product tests for `zz` centering whatever the caret's distance from the
-  middle, `zt` and `zb`, and `ctrl-d` keeping the caret's screen offset.
+The case runner sizes the window so a case's `view` shows exactly `lines`
+lines, scrolls it to `top`, and checks `afterTop`, so the cases cover the
+scroll position as well as the caret, including `zz`, `zt`, `zb`, and
+`ctrl-d` keeping the caret's screen offset; no separate product test was
+needed. `KNOT_CASES` runs only the cases whose names contain it.
 
 Review gate: dogfooding.
-
-Implementation context:
-
-- `editor.visibleLines`, `scrollBy`, and `setSelection` reveal. `zz` scrolls
-  by the caret's offset from the middle of `visibleLines()`, so it always
-  centers. `H M L` count buffer lines, so they are approximate under soft
-  wrap until D112.
-- `ctrl-d` and `ctrl-u` scroll half the visible lines and move the caret by
-  the same amount, as Vim's default `scroll` does.
 
 ### 6. Ex line 📝
 
