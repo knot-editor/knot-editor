@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–4 complete; checkpoint 5 next. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 in progress (see its progress notes). Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -167,6 +167,55 @@ and 15 `ProductCommandTarget`), `src/app/workbench/`,
 
 Review gate: ownership reads correctly in the architecture docs and the app
 behaves unchanged.
+
+Progress (🚧, resume here):
+
+- ✅ Knot-side focus (`51d9cf6`). `ProductShell.focus` is a `Focus` layer
+  (`Workbench`, `Palette`, `Transient`) over the workbench's focused pane.
+  `set_focus` and `follow_focus` have the attached window focus the matching
+  handle once the current update ends. The window reports a click through
+  gpui focus events (`observe_application_focus` → `focus_view`). gpui only
+  reports focus for an active window, so tests move focus with
+  `tests::focus_view`. `ProductCommandTarget.focused` replaces the focus
+  handle, and the key hold and router compare `FocusTarget` identities. A
+  native blur no longer clears the active target. A blinking caret no longer
+  restarts the view-state debounce.
+- ✅ Sessions instead of windows (`48e7833`).
+  - `ApplicationSessions` in `src/app/product.rs` registers each shell when
+    `ProductShell::new(workbench, cx)` runs, with its workbench and, once
+    attached, its window. `attach_window` is called from `render` and
+    `observe_extension_host`. Closing the window calls `end`.
+  - Targets name `shell`; `session_is_live` and `session_window` read only
+    the registry. `WindowTarget.window` is `session_id`, the shell's entity
+    ID. Tests map windows to it with `test_session_id`.
+  - `CommandContext::foreground` and `shell` are window-free;
+    `in_window` (three editor, terminal, and tree commands) is unavailable
+    without a window. Transients, presentation, session replacement, and
+    the snapshot iterate `sessions(cx)`.
+  - The prompt seam is `ProductShell::prompt` and the free `prompt`, which
+    defer to the attached window and resolve to nothing without one.
+  - `launch::show_session` opens a window for an existing session, so launch,
+    tab transfer, and session replacement are session-first.
+  - `commands_run_in_a_session_without_a_window` covers the validation.
+- Left:
+  - Check remaining window-shaped code. `ProductShell::window` is still a
+    field set by attachment, and key routing, the key hold replay, tab drag,
+    and `CommandContext::in_window` stay window adapters until checkpoints
+    6–8. `cancel_source_window` and `tab_drag` still match windows, which is
+    correct for pointer input.
+  - Decide whether the type keeps the name `ProductShell`. "Session" already
+    names project sessions (`sessions.rs`, `replaceWindows`), so the docs
+    may call it the window's session while the type stays.
+  - Update [workbench and lifecycle](../architecture/workbench-and-lifecycle.md),
+    [commands](../architecture/commands.md) (captured targets: session plus
+    identities, `focused` instead of a focus handle, the prompt seam), and
+    [architecture](../architecture.md) ownership (the application owns the
+    session registry; a window renders a session).
+  - Write `try.*` commands in personal `post-init.js` for the review gate:
+    focus moving between panes and tools by click and keys, the palette and
+    pickers restoring focus, prompts (save on close, open), tab relocation
+    across windows, and project switching.
+  - Commit the docs, then stop at the review gate.
 
 ### 6. Editor state and view
 
