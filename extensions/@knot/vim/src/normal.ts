@@ -4,7 +4,8 @@
 // matching, and visual-row movement are the native editor commands.
 import { commands, documents, languages, settings, workbench } from "knot";
 import type { Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, Mark, ViewTarget } from "knot";
-import type { Command, FindKind, InsertAt, Motion, Operator, Target } from "./keys.js";
+import { JumpList, type LineOf } from "./jumps.js";
+import type { Command, FindKind, InsertAt, MarkMotion, Motion, Operator, Target } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import {
   bracketFrom, findInLine, left, lineStart, matchBracketText, paragraph, type Position, right,
@@ -32,7 +33,16 @@ export type Shared = {
   lastFind: { readonly kind: FindKind; readonly char: string } | null;
   /** Persists the registers after they change. */
   saveRegisters(): void;
+  /** Buffer marks `a`–`z`, by document. */
+  readonly marks: Map<DocumentId, Map<string, Mark>>;
+  /** Global marks `A`–`Z`, each in some open document. */
+  readonly globalMarks: Map<string, GlobalMark>;
+  /** Shows a document's editor in the command's window with the caret at
+   * `offset`, or at its line's first non-blank unless `exact`. */
+  jumpToDocument(document: DocumentId, offset: number, exact: boolean): Promise<void>;
 };
+
+export type GlobalMark = Readonly<{ document: DocumentId; mark: Mark }>;
 
 /** One followed editor. */
 export type State = {
@@ -60,6 +70,10 @@ export type State = {
   selected: EditorSelection | null;
   /** The previous visual area, which `gv` selects again. */
   previous: { readonly anchor: Mark; readonly caret: Mark; readonly linewise: boolean } | null;
+  /** The positions jumps left, which `ctrl-o` and `ctrl-i` step through. */
+  readonly jumps: JumpList<Mark>;
+  /** The position before the latest jump, which `''` returns to. */
+  context: Mark | null;
 };
 
 export async function setMode(state: State, mode: Mode) {
@@ -127,6 +141,12 @@ export async function run(state: State, command: Command) {
     case "insert":
       await enterInsert(state, command.at);
       break;
+    case "set-mark":
+      await setMark(state, command.name);
+      break;
+    case "jump":
+      await stepJumps(state, command.count);
+      break;
     case "undo":
     case "redo": {
       for (let n = 0; n < command.count; n++) await commands.invoke(`editor.${command.kind}`);
@@ -152,6 +172,8 @@ type Moved = {
    * motion sets one other than where it lands. */
   readonly want?: number;
   readonly reveal?: "nearest" | "center";
+  /** Whether the motion is a jump, which the jumplist records. */
+  readonly jump?: boolean;
 };
 
 /** Resolves a motion from `from`, or null when it fails, as `j` on the last
@@ -168,6 +190,7 @@ export async function resolve(
   const n = count ?? 1;
   const total = await lines.count();
   const text = await lines.text(from.line);
+  if (typeof name !== "string" && "mark" in name) return markMotion(state, lines, name);
   if (typeof name !== "string") {
     state.shared.lastFind = { kind: name.find, char: name.char };
     return find(text, from, name.find, name.char, n, false);
@@ -233,24 +256,29 @@ export async function resolve(
       return { to: await lineStart(lines, line), type: "linewise" };
     }
     case "first-line":
-      return { to: await lineStart(lines, count === null ? 0 : count - 1), type: "linewise", reveal: "center" };
+      return {
+        to: await lineStart(lines, count === null ? 0 : count - 1), type: "linewise", reveal: "center", jump: true,
+      };
     case "last-line":
       return {
         to: await lineStart(lines, count === null ? total - 1 : count - 1), type: "linewise", reveal: "center",
+        jump: true,
       };
     case "match-pair": {
       if (count !== null) {
         if (count > 100) return null;
         const line = Math.ceil((count * total) / 100) - 1;
-        return { to: await lineStart(lines, line), type: "linewise", reveal: "center" };
+        return { to: await lineStart(lines, line), type: "linewise", reveal: "center", jump: true };
       }
       const to = await matchingBracket(state, lines, from);
-      return to === null ? null : { to, type: "inclusive", reveal: "center" };
+      return to === null ? null : { to, type: "inclusive", reveal: "center", jump: true };
     }
     case "paragraph-forward":
     case "paragraph-back": {
       const found = await paragraph(lines, from, n, name === "paragraph-forward");
-      return found === null ? null : { to: found.position, type: found.inclusive ? "inclusive" : "exclusive" };
+      return found === null
+        ? null
+        : { to: found.position, type: found.inclusive ? "inclusive" : "exclusive", jump: true };
     }
     case "repeat-find":
     case "repeat-find-reverse": {
@@ -268,6 +296,95 @@ function find(text: string, from: Position, kind: FindKind, char: string, count:
   const col = findInLine(text, from.col, kind, char, count, repeat);
   if (col === null) return null;
   return { to: { line: from.line, col }, type: kind === "f" || kind === "t" ? "inclusive" : "exclusive" };
+}
+
+/** `'` and `` ` ``: to a mark in this buffer, or null when it is unset, in
+ * another document, or its text was deleted. */
+async function markMotion(state: State, lines: BufferLines, motion: MarkMotion): Promise<Moved | null> {
+  const offset = await markOffset(state, motion.mark);
+  if (offset === null) return null;
+  const to = await lines.position(offset);
+  if (motion.exact) return { to, type: "exclusive", jump: true };
+  return { to: await lineStart(lines, to.line), type: "linewise", jump: true };
+}
+
+async function markOffset(state: State, name: string): Promise<number | null> {
+  let mark: Mark | undefined;
+  if (name === "'" || name === "`") {
+    mark = state.context ?? undefined;
+  } else if (name === name.toLowerCase()) {
+    mark = state.shared.marks.get(state.document)?.get(name);
+  } else {
+    const global = state.shared.globalMarks.get(name);
+    if (global?.document === state.document) mark = global.mark;
+  }
+  return mark === undefined ? null : mark.position();
+}
+
+/** A mark at `offset`, or null in an empty buffer, which holds none. */
+async function markAt(state: State, offset: number): Promise<Mark | null> {
+  try {
+    return await state.buffer.createMark(offset);
+  } catch (error) {
+    if ((error as { code?: string }).code === "InvalidRange") return null;
+    throw error;
+  }
+}
+
+/** `m`: sets a buffer or global mark at the caret, or with `'` or `` ` ``
+ * records the caret as a jump, which `''` then returns to. */
+async function setMark(state: State, name: string) {
+  const { caret } = await state.handle.selection();
+  if (name === "'" || name === "`") return recordJump(state, caret);
+  const mark = await markAt(state, caret);
+  if (mark === null) return;
+  const { marks, globalMarks } = state.shared;
+  if (name === name.toLowerCase()) {
+    let buffer = marks.get(state.document);
+    if (buffer === undefined) marks.set(state.document, buffer = new Map());
+    buffer.get(name)?.dispose();
+    buffer.set(name, mark);
+  } else {
+    globalMarks.get(name)?.mark.dispose();
+    globalMarks.set(name, { document: state.document, mark });
+  }
+}
+
+/** Records a jump from `offset` in the jumplist, and as the position `''`
+ * returns to. */
+export async function recordJump(state: State, offset: number) {
+  const entry = await markAt(state, offset);
+  if (entry === null) return;
+  state.context?.dispose();
+  state.context = await markAt(state, offset);
+  const line = await state.buffer.lineAt(offset);
+  for (const removed of state.jumps.push(entry, line, await linesOf(state))) removed.dispose();
+}
+
+/** `ctrl-o` and `ctrl-i`: goes to the jumplist's entry `count` away. */
+async function stepJumps(state: State, count: number) {
+  const { caret } = await state.handle.selection();
+  const current = await markAt(state, caret);
+  if (current === null) return;
+  const line = await state.buffer.lineAt(caret);
+  const { target, removed } = state.jumps.step(count, current, line, await linesOf(state));
+  for (const mark of removed) mark.dispose();
+  const offset = target === null ? null : await target.position();
+  if (offset === null) return;
+  const lines = new BufferLines(state.buffer);
+  state.want = null;
+  await moveOnto(state, lines, await lines.position(offset));
+}
+
+/** The line of each jumplist entry now, or null once its text is gone. */
+async function linesOf(state: State): Promise<LineOf<Mark>> {
+  const entries = state.jumps.entries;
+  const lines = await Promise.all(entries.map(async (mark) => {
+    const offset = await mark.position();
+    return offset === null ? null : state.buffer.lineAt(offset);
+  }));
+  const byMark = new Map(entries.map((mark, index) => [mark, lines[index]!]));
+  return (mark) => byMark.get(mark) ?? null;
 }
 
 /** `%`: the partner of the first bracket at or after the caret on its line.
@@ -294,13 +411,25 @@ async function matchingBracket(state: State, lines: BufferLines, from: Position)
 
 async function motion(state: State, name: Motion, count: number | null) {
   const lines = new BufferLines(state.buffer);
-  const from = await lines.position((await state.handle.selection()).caret);
+  const { caret } = await state.handle.selection();
+  const from = await lines.position(caret);
+  if (typeof name !== "string" && "mark" in name) {
+    const global = state.shared.globalMarks.get(name.mark);
+    if (global !== undefined && global.document !== state.document) {
+      const offset = await global.mark.position();
+      if (offset === null) return;
+      await recordJump(state, caret);
+      await state.shared.jumpToDocument(global.document, offset, name.exact);
+      return;
+    }
+  }
   const moved = await resolve(state, lines, from, name, count, null);
   if (moved === null) {
     // A failed `%` may have moved the native caret.
     await moveTo(state, lines, from);
     return;
   }
+  if (moved.jump === true) await recordJump(state, caret);
   const text = await lines.text(moved.to.line);
   const to = { line: moved.to.line, col: Math.min(moved.to.col, lastColumn(text)) };
   await moveTo(state, lines, to, moved.reveal);
@@ -358,16 +487,15 @@ export async function regionText(lines: BufferLines, region: Region): Promise<Re
 }
 
 /** The byte range a delete of a region removes: whole lines take one line
- * break with them, the one after, or before the last line. */
+ * break with them, the one before, or after the first line. Starting before
+ * the first line removes a mark at its start, which Vim's line marks lose. */
 async function deletedRange(lines: BufferLines, region: Region): Promise<[number, number]> {
   if (!region.linewise) return [await lines.offset(region.start), await lines.offset(region.end)];
   const { start: { line: first }, end: { line: last } } = region;
-  if (last + 1 < (await lines.count())) {
-    return [await lines.offset({ line: first, col: 0 }), await lines.offset({ line: last + 1, col: 0 })];
-  }
   const end = await lines.offset({ line: last, col: (await lines.text(last)).length });
-  if (first === 0) return [0, end];
-  return [await lines.offset({ line: first - 1, col: (await lines.text(first - 1)).length }), end];
+  if (first > 0) return [await lines.offset({ line: first - 1, col: (await lines.text(first - 1)).length }), end];
+  if (last + 1 < (await lines.count())) return [0, await lines.offset({ line: last + 1, col: 0 })];
+  return [0, end];
 }
 
 export async function replace(state: State, start: number, end: number, text: string) {
@@ -437,7 +565,8 @@ async function operate(
       const moved = await resolve(state, lines, from, target.motion, count, operator);
       region = moved === null ? null : await motionRegion(lines, from, moved);
       big = target.motion === "match-pair" || target.motion === "paragraph-forward"
-        || target.motion === "paragraph-back";
+        || target.motion === "paragraph-back" || (typeof target.motion !== "string" && "mark" in target.motion
+          && target.motion.exact);
       break;
     }
   }

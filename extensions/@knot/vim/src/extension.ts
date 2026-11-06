@@ -6,8 +6,13 @@
 // mode.
 import { commands, documents, keymaps, settings, storage, windows, workbench } from "knot";
 import type { CommandContext, DocumentId, EditorHandle, JsonValue, StatusItem, ViewTarget, WindowTarget } from "knot";
+import { JumpList } from "./jumps.js";
 import { EMPTY, feed, type Pending, pendingText } from "./keys.js";
-import { INSERT, isVisual, leaveInsert, type Mode, NORMAL, run, setMode, type Shared, type State } from "./normal.js";
+import { BufferLines } from "./lines.js";
+import { lineStart } from "./motions.js";
+import {
+  INSERT, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, run, setMode, type Shared, type State,
+} from "./normal.js";
 import { Registers } from "./registers.js";
 import { followSelection, runVisual } from "./visual.js";
 
@@ -39,6 +44,9 @@ const NAMED_KEYS: readonly (readonly [string, string])[] = [
   ["ctrl-h", "<bs>"],
   ["ctrl-j", "<c-j>"],
   ["ctrl-k", "<c-k>"],
+  ["ctrl-o", "<c-o>"],
+  // Vim takes ctrl-i and Tab as one key.
+  ["ctrl-i", "<tab>"],
   ["left", "<left>"],
   ["right", "<right>"],
   ["up", "<up>"],
@@ -76,6 +84,9 @@ export async function start() {
       const value = registers.toJson();
       saving = saving.then(() => storage.write(REGISTERS, value)).catch(() => {});
     },
+    marks: new Map(),
+    globalMarks: new Map(),
+    jumpToDocument: (document, offset, exact) => vim.jumpToDocument(document, offset, exact),
   };
   const vim = new Vim(
     shared,
@@ -114,6 +125,9 @@ export async function start() {
         break;
       case "documentChanged":
         await vim.languageMayHaveChanged(event.document.id, event.document.language);
+        break;
+      case "documentClosed":
+        forgetMarks(shared, event.document);
         break;
     }
   });
@@ -193,10 +207,12 @@ class Vim {
       target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
       language: info.language, mode: "normal", pending: EMPTY, operatorShown: false,
       want: null, caret: null, group: null, opened: false, visual: null, selected: null, previous: null,
+      jumps: new JumpList(), context: null,
     };
     this.states.set(target, state);
     handle.onDidClose(() => {
       this.states.delete(target);
+      disposeMarks(state);
     });
     await handle.onDidChangeSelection(async () => {
       if (this.states.get(target) !== state || state.mode === "insert") return;
@@ -212,8 +228,7 @@ class Vim {
   private async detach(state: Followed) {
     this.states.delete(state.target);
     await state.group?.dispose();
-    state.previous?.anchor.dispose();
-    state.previous?.caret.dispose();
+    disposeMarks(state);
     await state.handle.setKeyContext(NORMAL, false);
     await state.handle.setKeyContext(INSERT, false);
     await state.handle.setCursorStyle(null);
@@ -233,6 +248,22 @@ class Vim {
     const attached = await this.attach(active);
     await this.showStatus(window);
     return attached;
+  }
+
+  /** Shows `document` in the command's window, as a global mark in another
+   * document jumps, with the caret at `offset` or its line's first non-blank. */
+  async jumpToDocument(document: DocumentId, offset: number, exact: boolean) {
+    const { presentation } = await documents.present(document);
+    const active: Active = { target: presentation.target, document: null, language: null };
+    this.active.set(presentation.target.window, active);
+    const state = await this.attach(active);
+    if (state !== null) {
+      const lines = new BufferLines(state.buffer);
+      const position = await lines.position(offset);
+      state.want = null;
+      await moveOnto(state, lines, exact ? position : await lineStart(lines, position.line));
+    }
+    await this.showStatus(presentation.target.window);
   }
 
   async keys(context: CommandContext, keys: readonly string[]) {
@@ -281,6 +312,21 @@ class Vim {
     }
     await this.modeItem.update({ text: MODE_TEXT[state.mode], priority: 100 }, { window });
     await this.keysItem.update({ text: pendingText(state.pending), side: "right", priority: 40 }, { window });
+  }
+}
+
+/** Disposes the marks an editor's state holds for itself, which a closed
+ * buffer already dropped. */
+function disposeMarks(state: State) {
+  const marks = [state.previous?.anchor, state.previous?.caret, state.context, ...state.jumps.entries];
+  for (const mark of marks) mark?.dispose().catch(() => {});
+}
+
+/** Drops the marks of a closed document, whose buffer holds them no more. */
+function forgetMarks(shared: Shared, document: DocumentId) {
+  shared.marks.delete(document);
+  for (const [name, global] of shared.globalMarks) {
+    if (global.document === document) shared.globalMarks.delete(name);
   }
 }
 

@@ -133,3 +133,20 @@ test("visual mode keys: motions, objects, ends, and leaving", () => {
   assert.deepEqual(visual("r", "x"), { kind: "replace", char: "x", count: 1 });
   assert.equal(visual("I"), null, "inserting keys mean nothing in visual mode");
 });
+
+test("m sets a mark, and ' and ` jump to one as motions and operator targets", () => {
+  assert.deepEqual(parse("m", "a").command, { kind: "set-mark", name: "a" });
+  assert.equal(parse("m", "1").command, null, "digits are not marks");
+  assert.deepEqual(parse("'", "A").command, { kind: "motion", motion: { mark: "A", exact: false }, count: null });
+  assert.deepEqual(parse("`", "`").command, { kind: "motion", motion: { mark: "`", exact: true }, count: null });
+  assert.deepEqual(parse("d", "'", "a").command, {
+    kind: "operator", operator: "d", register: null, count: null,
+    target: { kind: "motion", motion: { mark: "a", exact: false } },
+  });
+  assert.deepEqual(visual("`", "b"), { kind: "motion", motion: { mark: "b", exact: true }, count: null });
+});
+
+test("ctrl-o steps back through the jumplist and Tab forward, with counts", () => {
+  assert.deepEqual(parse("<c-o>").command, { kind: "jump", count: -1 });
+  assert.deepEqual(parse("3", "<tab>").command, { kind: "jump", count: 3 });
+});

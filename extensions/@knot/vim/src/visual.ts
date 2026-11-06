@@ -7,8 +7,8 @@ import type { Command, TextObject } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import { lineStart, type Position } from "./motions.js";
 import {
-  applyOperator, clampCaret, grouped, isVisual, join, moveOnto, moveTo, readRegister, record, regionText, replace,
-  resolve, setMode, type State, tabSizeOf,
+  applyOperator, clampCaret, grouped, isVisual, join, moveOnto, moveTo, readRegister, record, recordJump, regionText,
+  replace, resolve, setMode, type State, tabSizeOf,
 } from "./normal.js";
 import { type Region, textObject } from "./objects.js";
 import { lastColumn, nextColumn, previousColumn, screenColumn, utf8Length } from "./text.js";
@@ -42,6 +42,7 @@ export async function runVisual(state: State, command: Command) {
         await show(state, lines);
         return;
       }
+      if (moved.jump === true) await recordJump(state, visual.caret);
       const text = await lines.text(moved.to.line);
       // After `$` the caret sits on the line break, which the selection
       // then includes, as Vim's does.

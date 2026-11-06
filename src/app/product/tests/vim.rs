@@ -458,3 +458,40 @@ fn a_mouse_drag_enters_visual_mode_and_a_click_leaves_it(cx: &mut TestAppContext
     assert_eq!(fixture.marked(cx), "‸");
     assert_eq!(fixture.mode(cx), "normal");
 }
+
+#[gpui::test]
+fn a_global_mark_jumps_to_another_open_document(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let fixture = Fixture::open("one\ntwo", None, 0, cx);
+    fixture.press("jmA", cx);
+    cx.update_window(fixture.window, |_, window, cx| {
+        fixture
+            .shell
+            .update(cx, |shell, cx| shell.new_tab(window, cx))
+    })
+    .unwrap();
+    let other = active_editor(&fixture.shell, cx);
+    assert_ne!(other.entity_id(), fixture.editor.entity_id());
+    wait_until(cx, "Vim to follow the new tab", |cx| {
+        other.read(cx).key_contexts() == ["vim.normal"]
+    });
+
+    fixture.press("'A", cx);
+    wait_until(cx, "the jump to show the marked document", |cx| {
+        let active = fixture
+            .shell
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane()
+            .unwrap()
+            .active_tab()
+            .editor()
+            .map(|editor| editor.entity_id());
+        active == Some(fixture.editor.entity_id())
+    });
+    assert_eq!(fixture.marked(cx), "one\n‸two");
+    // The marked document's editor has the keys now.
+    fixture.press("k", cx);
+    assert_eq!(fixture.marked(cx), "‸one\ntwo");
+}

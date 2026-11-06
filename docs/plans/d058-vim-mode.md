@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–3 complete. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 at its review gate. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -67,6 +67,7 @@ These stay deferred:
   - tree-sitter text objects (D144)
   - the broad Ex set (D146)
   - Ex completion (D143)
+  - global marks across restarts and for closed files (D152)
   - smaller Vim commands outside this scope, such as `r<cr>`, sentence and
     tag motions and objects, `gJ`, and a repeated `i(` growing a visual
     selection to the enclosing pair (D151)
@@ -167,9 +168,11 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 
 - **Buffer marks** `a`–`z` are `buffer.createMark` marks keyed by document.
 - **Global marks** `A`–`Z` keep a document ID and a mark, and jump with
-  `workbench.present`. They last for the session only.
+  `documents.present`. They last while their document is open (D152).
 - **The jumplist** is per editor, holds up to 100 marks, and records the jumps
   Vim records (`G`, `gg`, `%`, `{ }`, `H M L`, mark jumps, and `:<line>`).
+  As with Vim's default `jumpoptions`, a jump appends at the end wherever
+  `ctrl-o` stepped back to, and a line is held once.
 
 ### Ex line
 
@@ -251,32 +254,42 @@ and End are now Vim motions outside insert mode. Visual `I` and `A` wait for
 D142. Cases cover the visual motions and operators, and a product test drags
 with the mouse.
 
-### 4. Marks and the jumplist 📝
+### 4. Marks and the jumplist 🔍
 
 Deliverables:
 
-- `m{a-z}` buffer marks and `m{A-Z}` global marks, with `'` and `` ` `` jumps
-  as motions and as operator targets (`d'a`, ``y`a``).
-- `''` and ``` `` ``` to the last jump, and the per-editor jumplist on
-  `ctrl-o` and `ctrl-i`, recording the jumps that exist so far (`G`, `gg`,
-  `%`, `{ }`, and mark jumps); later checkpoints record theirs.
-- Whether global marks persist across restarts is settled or given a
-  roadmap entry.
+- ✅ `m{a-z}` buffer marks and `m{A-Z}` global marks, with `'` and `` ` ``
+  jumps as motions, operator targets (`d'a`, ``y`a``), and visual motions.
+- ✅ `''` and ``` `` ``` to the last jump, `m'` and ``m` `` to record one, and
+  the per-editor jumplist on `ctrl-o` and `ctrl-i` (and Tab), recording `G`,
+  `gg`, `%`, `{ }`, and mark jumps, in visual mode too; later checkpoints
+  record theirs.
+- ✅ Global marks do not persist across restarts: D152 tracks it.
 
 Validation:
 
-- Unit tests for the jumplist's insertion, truncation, and limit.
-- Cases for marks across edits above and below them, a mark whose text was
-  deleted, `''`, `ctrl-o` and `ctrl-i`, and marks as operator targets.
-- A product test for a global mark jumping to another open document.
+- ✅ Unit tests for the jumplist's insertion, deduplication, limit, and
+  steps (`test/jumps.test.ts`). Vim's default keeps entries after a step
+  back rather than truncating them, so a jump appends at the end.
+- ✅ Cases for marks across edits above and below them, a mark whose text
+  was deleted, `''`, `ctrl-o` and `ctrl-i`, and marks as operator targets.
+- ✅ A product test for a global mark jumping to another open document.
 
 Review gate: dogfooding.
+
+Notes: a mark at a line's start survived `dd`, because a zero-width
+anchor at a deletion's start stays; linewise deletes now take the line
+break before their lines, so the mark is inside the deleted text. As in
+Vim, the jumplist holds a line once, so `ctrl-o` never returns along a
+line, as after a one-line `%`. A global mark in another document is only a
+plain motion; as an operator target or in visual mode it fails. `jumps.ts`
+is pure.
 
 Implementation context:
 
 - `buffer.createMark` and `Mark.position()`; a mark deleted with its text
   reports null, and the jump fails as Vim's does for an unset mark.
-- `workbench.present` opens the document of a global mark.
+- `documents.present` opens the document of a global mark.
 - Vim treats Tab and `ctrl-i` as one key, so both jump forward; Tab is
   already bound in `vim.normal`, and `ctrl-i` gets its own binding.
 
@@ -384,8 +397,6 @@ the plan.
 
 ## Deferred decisions
 
-- Whether global marks persist across restarts by URI and offset, settled
-  at checkpoint 4.
 - The exact `:q!` primitive, either a discard option on closing a tab or a
   separate command, chosen at checkpoint 6.
 - Whether `ctrl-v` stays native paste in normal mode or is reserved for

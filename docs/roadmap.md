@@ -61,7 +61,7 @@ groups, view controls, decoration styles, visual-line movement, and folding,
 proven by a bundled JavaScript Vim mode. It promotes D058, D066's folding,
 D077, D109, D110, D111, D112, and D114's decoration styles, schedules the
 daily-driver items D031, D078, and D080, and adds D141–D143. Vim features
-left for later are D113, D142, D144, D146, D150, and D151. Language servers
+left for later are D113, D142, D144, D146, D150, D151, and D152. Language servers
 (D067) follow it.
 
 The [package manager](plans/package-manager.md) initiative is selected: extension
@@ -91,7 +91,7 @@ complete list for that item.
   - D077 → D149
   - D073, D074, D075 → D130; D074 → D131; D073 → D132
   - D066 → D144 → D151
-  - D058 → D150, D146, D151; D031, D092 → D150
+  - D058 → D150, D146, D151, D152; D031, D092 → D150
   - D092 → D142, D001, D067
 - **Extension presentation and language tooling:**
   - D114 → D145 → D067 → D022
@@ -621,6 +621,19 @@ Kakoune mode could use it too. The
     the Vim package over existing primitives, with cases beside the others;
     tag objects may wait for D144's syntax-tree queries.
   - Order: after D058; tag objects with or after D144.
+
+- **D152 — Persistent Vim global marks**
+  - Deferred: The Vim mode's (D058) global marks `A`–`Z` hold a document
+    and a native mark, so they last while that document is open and end
+    when it closes. Vim's viminfo and Neovim's shada keep them across
+    restarts and for files no longer open, with the registers.
+  - Reconsider: Daily Vim use reaches for a global mark set in an earlier
+    session or in a closed file. Then keep each mark's URI and offset in
+    the package's storage beside the registers, recreate the native mark
+    when its document opens, open the file for a mark whose document is
+    closed, and clamp an offset past a changed file's end, as view state
+    does.
+  - Order: after D058.
 
 - **D145 — Virtual text and anchored floating panels**
   - Deferred: D114 adds decoration styles. Extensions still cannot draw

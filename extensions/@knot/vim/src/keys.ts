@@ -11,7 +11,12 @@ export type SimpleMotion =
 
 export type FindKind = "f" | "F" | "t" | "T";
 
-export type Motion = SimpleMotion | Readonly<{ find: FindKind; char: string }>;
+/** A mark motion: `'` goes to the mark's line, `` ` `` to the mark itself.
+ * The name is a letter, or `'` or `` ` `` for the position before the latest
+ * jump. */
+export type MarkMotion = Readonly<{ mark: string; exact: boolean }>;
+
+export type Motion = SimpleMotion | Readonly<{ find: FindKind; char: string }> | MarkMotion;
 
 export type Operator = "d" | "c" | "y" | ">" | "<" | "=" | "gu" | "gU" | "g~";
 
@@ -43,6 +48,10 @@ export type Command =
   | { readonly kind: "insert"; readonly at: InsertAt }
   | { readonly kind: "undo"; readonly count: number }
   | { readonly kind: "redo"; readonly count: number }
+  /** `m`: sets a mark at the caret. */
+  | { readonly kind: "set-mark"; readonly name: string }
+  /** `ctrl-o` (negative) and `ctrl-i`: steps through the jumplist. */
+  | { readonly kind: "jump"; readonly count: number }
   /** `v` or `V`: enters, switches, or leaves visual mode. */
   | { readonly kind: "visual"; readonly linewise: boolean }
   /** `gv`: selects the previous visual area again. */
@@ -130,6 +139,9 @@ const INSERTS = new Set<string>(["i", "a", "I", "A", "o", "O"]);
 /** Registers a `"` prefix may name: `"` itself is the unnamed register. */
 const REGISTER = /^[a-zA-Z0-9"+*_%:-]$/;
 
+/** Marks `'` and `` ` `` may jump to, and `m` may set. */
+const MARK = /^[a-zA-Z'`]$/;
+
 /** The text a status display shows for pending input. */
 export function pendingText(pending: Pending): string {
   return pending.typed;
@@ -169,6 +181,10 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
       const char = characterOf(key);
       return char === null ? done(null) : motion({ find: pending.prefix, char });
     }
+    case "'": case "`":
+      return MARK.test(key) ? motion({ mark: key, exact: pending.prefix === "`" }) : done(null);
+    case "m":
+      return MARK.test(key) ? done({ kind: "set-mark", name: key }) : done(null);
     case "r": {
       const char = characterOf(key);
       return char === null ? done(null) : done({ kind: "replace", char, count: count ?? 1 });
@@ -200,7 +216,9 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
       : next({ operatorCount: pending.operatorCount + key });
   }
   if (key === "g") return next({ prefix: "g" });
-  if (key === "f" || key === "F" || key === "t" || key === "T") return next({ prefix: key });
+  if (key === "f" || key === "F" || key === "t" || key === "T" || key === "'" || key === "`") {
+    return next({ prefix: key });
+  }
   if (OPERATORS.has(key)) {
     if (visual) return selection(key as Operator, false);
     if (operator === null) return next({ operator: key as Operator });
@@ -214,6 +232,10 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
   }
   if (key === '"') return next({ prefix: '"' });
   if (key === "r") return next({ prefix: "r" });
+  if (key === "m" && !visual) return next({ prefix: "m" });
+  if ((key === "<c-o>" || key === "<tab>") && !visual) {
+    return done({ kind: "jump", count: (key === "<c-o>" ? -1 : 1) * (count ?? 1) });
+  }
   if (key === "v" || key === "V") return done({ kind: "visual", linewise: key === "V" });
   if (visual) {
     if (key === "i" || key === "a") return next({ prefix: key });
