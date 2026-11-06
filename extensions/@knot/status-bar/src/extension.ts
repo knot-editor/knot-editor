@@ -4,8 +4,8 @@
 // windows show their own editors.
 import { commands, documents, languages, settings, workbench, windows } from "knot";
 import type {
-  Buffer, CommandContext, Disposable, DocumentId, EditorHandle, StatusItem, StatusItemOptions,
-  ViewTarget, WindowInfo, WindowTarget,
+  Buffer, CommandContext, Disposable, DocumentId, DocumentInfo, EditorHandle, StatusItem,
+  StatusItemOptions, ViewTarget, WindowInfo, WindowTarget,
 } from "knot";
 import {
   COUNT_LIMIT, columnAt, indentationText, languageText, positionText, selectionSize,
@@ -22,6 +22,11 @@ type Follow = {
   buffer: Buffer | null;
   handle: EditorHandle | null;
   selection: Disposable | null;
+  /** Each item's text as last shown, null when cleared, so an unchanged
+   * text sends nothing. */
+  shown: Partial<Record<ItemName, string | null>>;
+  /** The language ID whose registered name the language item shows. */
+  named: string | null;
 };
 
 /** The items, each shown only where a window sets its text. */
@@ -68,6 +73,11 @@ export async function start() {
   // Sets one item's text for a window, or clears the window's value so the
   // empty shared one hides the item.
   const show = async (name: ItemName, window: WindowTarget, text: string | null) => {
+    const shown = follows.get(window)?.shown;
+    if (shown !== undefined) {
+      if (name in shown && shown[name] === text) return;
+      shown[name] = text;
+    }
     if (text === null) await items[name].update(null, { window });
     else await items[name].update(options(name, text), { window });
   };
@@ -81,16 +91,24 @@ export async function start() {
     await show("position", window, await caretText(follow.handle, follow.buffer));
   };
 
-  const refreshDocument = async (window: WindowTarget) => {
+  // Shows the document's indentation and language, from `info` when the
+  // caller already has it.
+  const refreshDocument = async (window: WindowTarget, info?: DocumentInfo) => {
     const follow = follows.get(window);
-    const document = follow?.document == null ? null : await documents.get(follow.document);
-    if (document === null || document === undefined) {
+    const document = follow?.document == null ? null : info ?? await documents.get(follow.document);
+    if (follow === undefined || document === null || document === undefined) {
+      if (follow !== undefined) follow.named = null;
       await show("indentation", window, null);
       await show("language", window, null);
       return;
     }
     await show("indentation", window, indentationText(document.indentation));
-    await show("language", window, languageText(document.language, await languages.list()));
+    // Names change only with the language, short of a re-registration.
+    if (follow.named !== document.language) {
+      const text = languageText(document.language, await languages.list());
+      follow.named = text === document.language ? null : document.language;
+      await show("language", window, text);
+    }
   };
 
   const release = async (follow: Follow) => {
@@ -104,7 +122,9 @@ export async function start() {
     const window = info.target;
     let current = follows.get(window);
     if (current === undefined) {
-      current = { target: null, document: null, buffer: null, handle: null, selection: null };
+      current = {
+        target: null, document: null, buffer: null, handle: null, selection: null, shown: {}, named: null,
+      };
       follows.set(window, current);
     }
     if (current.target !== info.statusTarget) {
@@ -140,7 +160,7 @@ export async function start() {
       }
       case "documentChanged":
         for (const [window, current] of follows) {
-          if (current.document === event.document.id) await refreshDocument(window);
+          if (current.document === event.document.id) await refreshDocument(window, event.document);
         }
         break;
     }
