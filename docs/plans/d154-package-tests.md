@@ -235,9 +235,14 @@ On Apple M1 Pro/macOS debug builds, the 364 Vim cases went from 6.4 s in a
 window to 1.7 s, about 4.7 ms per case; the test takes about 2.3 s with
 package startup. Most of that is the package's round trips: the foreground
 waits on extension turns for about a third of it, half of each turn is our
-own unoptimized glue rather than V8, which ships as a release library, and
-writing the persisted register record with full synchronization to its
-temporary SQLite file takes about an eighth. The comment, indent, and
+own unoptimized glue rather than V8, which ships as a release library.
+Product tests keep extension storage, recovery, and the state database in
+memory, so each test starts empty and drops everything with its app; only
+tests that reopen a store as a restart would, and the stores' own tests,
+use files. The register writes that took about an eighth of the test
+thread with full synchronization to a temporary file overlapped the
+package's turns, so moving them into memory left the per-case time
+unchanged. The comment, indent, and
 bracket tests take about 0.7 s each, nearly all of it package startup. The
 full suite takes about 14 s.
 
