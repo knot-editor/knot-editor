@@ -39,6 +39,12 @@ const NAMED_KEYS: readonly (readonly [string, string])[] = [
   ["ctrl-h", "<bs>"],
   ["ctrl-j", "<c-j>"],
   ["ctrl-k", "<c-k>"],
+  ["left", "<left>"],
+  ["right", "<right>"],
+  ["up", "<up>"],
+  ["down", "<down>"],
+  ["home", "<home>"],
+  ["end", "<end>"],
 ];
 
 /** A followed editor and the normal-mode input pending in it. */

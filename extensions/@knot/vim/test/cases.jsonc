@@ -4,7 +4,8 @@
 // selection, anchor first in `before`; in a visual mode the selection runs
 // through the character under Vim's caret, a line break included. `keys` types its
 // characters; `<name>` presses a named key: <esc>, <cr>, <bs>, <del>, <tab>,
-// <s-tab>, <lt> for "<", and <c-x> for ctrl with a letter. Keys arrive
+// <s-tab>, <left>, <right>, <up>, <down>, <home>, <end>, <lt> for "<", and
+// <c-x> for ctrl with a letter. Keys arrive
 // without waiting for each other, as fast typing does. `mode` is the mode
 // afterwards, "normal" unless given, or "insert", "visual", or "visual-line";
 // `language` sets the document's language.
@@ -18,6 +19,9 @@
     { "name": "Backspace moves left onto the previous line", "before": ["ab", "‸cd"], "keys": "<bs>", "after": ["a‸b", "cd"] },
     { "name": "Space moves right onto the next line", "before": ["a‸b", "cd"], "keys": " ", "after": ["ab", "‸cd"] },
     { "name": "0 goes to the line start", "before": ["  fo‸o"], "keys": "0", "after": ["‸  foo"] },
+    { "name": "the arrows move as h, j, k, and l", "before": ["‸abc", "def"], "keys": "<right><down><right><up><left>", "after": ["a‸bc", "def"] },
+    { "name": "Home and End go to the line's ends", "before": ["a‸bc"], "keys": "<end>x<home>x", "after": ["‸b"] },
+    { "name": "d with Down deletes two lines", "before": ["‸a", "b", "c"], "keys": "d<down>", "after": ["‸c"] },
     { "name": "^ goes to the first non-blank", "before": ["‸  foo"], "keys": "^", "after": ["  ‸foo"] },
     { "name": "$ goes to the last character", "before": ["‸  foo"], "keys": "$", "after": ["  fo‸o"] },
     { "name": "2$ goes to the end of the next line", "before": ["‸ab", "cd"], "keys": "2$", "after": ["ab", "c‸d"] },
@@ -273,6 +277,9 @@
     // Visual-line mode.
     { "name": "V selects the line", "before": ["a", "‸b", "c"], "keys": "V", "after": ["a", "‸b", "‸c"], "mode": "visual-line" },
     { "name": "Vj selects two lines", "before": ["‸a", "b", "c"], "keys": "Vj", "after": ["‸a", "b", "‸c"], "mode": "visual-line" },
+    { "name": "Down extends a line selection", "before": ["‸a", "b", "c"], "keys": "V<down>", "after": ["‸a", "b", "‸c"], "mode": "visual-line" },
+    { "name": "Right and Up extend a character selection", "before": ["ab", "‸cd"], "keys": "v<right><up>", "after": ["a‸b", "c‸d"], "mode": "visual" },
+    { "name": "End extends a character selection", "before": ["a‸bc"], "keys": "v<end>", "after": ["a‸bc‸"], "mode": "visual" },
     { "name": "Vk selects upwards to the end", "before": ["a", "‸b"], "keys": "Vk", "after": ["‸a", "b‸"], "mode": "visual-line" },
     { "name": "V again leaves visual-line mode", "before": ["a‸b"], "keys": "VV", "after": ["a‸b"] },
     { "name": "Escape leaves visual-line mode where the caret is", "before": ["a‸b", "cd"], "keys": "Vj<esc>", "after": ["ab", "c‸d"] },

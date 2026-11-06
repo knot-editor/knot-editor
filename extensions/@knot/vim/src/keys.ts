@@ -82,6 +82,8 @@ const MOTIONS: Readonly<Record<string, SimpleMotion>> = {
   "+": "next-line-start", "<cr>": "next-line-start", "-": "previous-line-start",
   G: "last-line", "%": "match-pair", "}": "paragraph-forward", "{": "paragraph-back",
   ";": "repeat-find", ",": "repeat-find-reverse",
+  "<left>": "left", "<right>": "right", "<up>": "up", "<down>": "down",
+  "<home>": "line-start", "<end>": "line-end",
 };
 
 const G_MOTIONS: Readonly<Record<string, SimpleMotion>> = {

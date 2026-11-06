@@ -269,6 +269,9 @@ Implementation notes:
   the registers. `v$` takes the line break, as Vim's does. `gv` uses
   `buffer.createMark`, so it does nothing once the area's text is deleted.
 - `I` and `A` in visual mode are visual-block commands and wait for D142.
+- From dogfooding: the arrows, Home, and End are Vim motions (`h j k l`, `0`,
+  `$`) in normal and visual modes, so they extend a selection and serve as
+  operator targets; in insert mode they stay native.
 
 ### 4. Marks and the jumplist 📝
 

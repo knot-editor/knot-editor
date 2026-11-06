@@ -220,6 +220,7 @@ fn parse_keys(keys: &str) -> Vec<String> {
                 "tab" => "tab".to_owned(),
                 "s-tab" => "shift-tab".to_owned(),
                 "lt" => "<".to_owned(),
+                "left" | "right" | "up" | "down" | "home" | "end" => name.to_owned(),
                 _ => match name.strip_prefix("c-") {
                     Some(letter) => format!("ctrl-{letter}"),
                     None => panic!("unknown key <{name}>"),
