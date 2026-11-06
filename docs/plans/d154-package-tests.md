@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 awaiting review. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -105,26 +105,13 @@ processes on the CI runner exposed fixtures that assumed a fast machine: test
 polling deadlines are now 10 s, and a syntax-query count test sets an
 unbounded parse budget.
 
-### 2. Optimized gpui and taffy in debug builds — ✅ awaiting review
+### 2. Optimized gpui and taffy in debug builds — ✅
 
 `gpui` and `taffy` build at `opt-level = 3` in the dev profile, beside
-`tree-sitter`, in `Cargo.toml`.
-
-On Apple M1 Pro/macOS debug builds, the Vim suite's 364 cases measured:
-
-| Dev profile | Suite | Open | Key | Close |
-| --- | --- | --- | --- | --- |
-| tree-sitter only (baseline) | 93 s | 55 ms | 60 ms | 11 ms |
-| gpui and taffy at 1 | 27 s | 16 ms | 17 ms | 3 ms |
-| gpui alone at 3 | 25 s | 15 ms | 15 ms | 3 ms |
-| gpui and taffy at 3 | 22 s | 13 ms | 14 ms | 3 ms |
-| every dependency (earlier) | 22 s | 10 ms | 17 ms | — |
-
-The two crates capture the whole gain of optimizing every dependency, so the
-font stack stays unoptimized. The full `cargo nextest run --all-targets` went
-from 110 s to 35 s, with the Vim test still the longest at 25 s.
-
-Review gate: the narrowed profile captures most of the gain.
+`tree-sitter` in `Cargo.toml`. On Apple M1 Pro/macOS debug builds the Vim
+cases went from 93 s to 22 s (open 13 ms, one key 14 ms), the same as
+optimizing every dependency, so the font stack stays unoptimized; level 1
+gave 27 s and gpui alone 25 s. The full suite went from 110 s to 35 s.
 
 ### 3. Fewer redraws and round trips per key
 
