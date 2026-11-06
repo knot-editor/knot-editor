@@ -690,24 +690,6 @@ Kakoune mode could use it too. The
     matching facts rather than by an expression language.
   - Order: after D110.
 
-- **D153 — Context-scoped key sequences swallow keys outside their context**
-  - Deferred: Found while dogfooding D058. Knot resolves key contexts itself,
-    so `keymaps.rebuild` registers every binding with gpui by key and view
-    kind only. A sequence bound in one context, such as `z b` in a package's
-    `modal` context, therefore makes gpui hold its first key as pending in
-    every editor, and the completed sequence resolves to nothing where the
-    context is off. An installed example package's `z t` and `z b` made
-    Vim's `zb` do nothing and left keys pending; removing the package fixed
-    it.
-  - Reconsider: Before a second modal or chord-heavy package ships, or when
-    another binding collision appears. Then make a sequence hold its keys
-    only in views where some binding of it can resolve, for example by
-    registering context-scoped sequences with gpui only for views whose
-    live contexts match, or by replaying the held keys as typed text when
-    the sequence resolves to nothing, and cover it with a product test of
-    two packages.
-  - Order: after D110.
-
 ## Terminals and generated surfaces
 
 - **D040 — Physical application-keypad input**

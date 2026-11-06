@@ -285,8 +285,8 @@ and all three in visual mode, scroll by the line's offset from
 soft wrap until D112. A case's `view` sizes the window to a number of lines
 and checks the scroll position, so cases cover scrolling without separate
 product tests, and `KNOT_CASES` runs matching cases. Dogfooding found an
-installed package's context-scoped `z b` sequence swallowing Vim's `zb`
-(D153), and the growing cases showed slow, leaking tests (D154, which comes
+installed package's context-scoped `z b` sequence swallowing Vim's `zb`,
+fixed by D154's Knot-owned key matching, and the growing cases showed slow, leaking tests (D154, which comes
 before checkpoint 6).
 
 ### 6. Ex line 📝

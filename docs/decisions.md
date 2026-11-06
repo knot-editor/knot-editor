@@ -821,6 +821,17 @@ defaults beneath a last-write-wins stack. Retain owner slots so teardown reveals
 earlier bindings. Atomic per-turn JavaScript batches prevent partial keymaps
 and make startup readiness follow foreground state.
 
+Match keys in Knot too, rather than registering every binding with gpui.
+gpui can only match the contexts of the last rendered frame, so bindings were
+registered by key and view kind alone, and a sequence bound in one package's
+context then held its first key in every editor and resolved to nothing where
+the context was off: an installed package's `z b` swallowed Vim's `zb`. Knot's
+router holds a key only where some binding beginning with it resolves to a
+command, and delivers the keys of a sequence that stops matching as if
+unbound, as gpui did. Matching outside gpui also keeps key handling free of
+windows, which window-independent sessions and headless tests build on (D154).
+gpui keeps bindings only to label menus.
+
 Keybindings and languages do not rank writers by owner. Configuration is code
 that runs in order, as in Emacs and Neovim: packages start after `pre-init`
 and `post-init` runs after them, so the latest write wins and personal
@@ -854,9 +865,9 @@ accepts.
 Modal editing keeps its grammar in JavaScript and gets three generic
 primitives: lifecycle-owned key contexts on editor views, bindings scoped to
 a context, and text bindings that route typed text to a command. Counts,
-operators, and pending state cannot be native sequences, because gpui 0.2.2
-drops a pending sequence after one second and counts cannot be enumerated as
-bindings. A context is one more scope fact, so context bindings join the
+operators, and pending state cannot be native sequences, because a pending
+sequence times out after one second, as gpui's did, and counts cannot be
+enumerated as bindings. A context is one more scope fact, so context bindings join the
 settings rule of most facts, then latest write, rather than gpui's context
 depth. Knot resolves contexts against the view's live state, because gpui
 matches the last rendered frame and a context set by the previous key may not

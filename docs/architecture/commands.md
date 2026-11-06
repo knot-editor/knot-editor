@@ -69,22 +69,27 @@ setting changes; an unregistered name selects Knot, and installing a preset
 replaces the whole slot. A preset binding for an undeclared view kind is
 skipped.
 
-GPUI recognizes keys and scoped sequences, then one Knot action consults the map
-and enters command dispatch. Scoped prefixes remain local to their views; the
-palette retains its own input context. Menus and palette commands bypass keymaps.
-Fixed config-error bindings remain available independently of product windows.
+Knot matches keys itself. Every key-down in a product window passes one
+interceptor, ahead of view key handlers and text input, which hands it to the
+window's key router (`src/app/commands/key_router.rs`) with the focused view's
+kind and live key contexts. A key that begins a binding resolving to a command
+there waits for the rest of its sequence; a completed binding enters command
+dispatch; any other key propagates as if unbound. A sequence that stops
+matching runs its longest bound prefix, or delivers its first key natively,
+and routes the rest again, and a pending sequence flushes the same way after
+one second or ends when focus moves. Keys typed in the palette or a transient
+interaction go to them. Menus and palette commands bypass keymaps. gpui holds
+bindings only for menu key equivalents and the config-error window's Quit.
 
 ### Key contexts
 
 Extensions set named key contexts on editor views through the editor handle.
 The view keeps each context with the lifecycle that set it, so two packages'
 contexts of one name are independent and teardown clears its own; contexts are
-presentation state, never recorded in layouts. gpui matches its key contexts
-against the last rendered frame, which a context set by the previous key may
-not have reached, so Knot resolves contexts itself: gpui recognizes a
-context-scoped key anywhere in its view kind, and the Knot action resolves it
-against the view's live contexts, propagating a key that resolves to nothing as
-an unbound key. Menus and the palette ignore contexts, and a key that some
+presentation state, never recorded in layouts. The router resolves
+keys against the view's live contexts rather than a rendered frame's, which a
+context set by the previous key may not have reached, and a sequence bound in
+a context holds no key where that context is off. Menus and the palette ignore contexts, and a key that some
 context unbinds shows no menu key.
 
 An editor also takes a caret shape (`bar`, `block`, or `underline`) from an
@@ -95,7 +100,7 @@ line; the shape is presentation state and never recorded.
 
 A text binding routes committed text that an editor would insert to a command
 with `{ text }` as its arguments, scoped and resolved like key bindings but in
-its own slots, so it changes no gpui bindings. The editor resolves it in its
+its own slots. The editor resolves it in its
 text input handler, after keyboard layout and IME, and hands the text to a
 router the product shell installs: the editor is mid-update there and cannot
 capture a command target, so the router starts the key hold at once and
@@ -107,8 +112,8 @@ never touches the buffer and the IME's commit routes as text.
 A key that dispatches an extension command holds its window's later input
 until that command finishes: key-downs are intercepted before keybindings and
 text insertion, and the held editor queues its committed text, in one queue.
-Release replays the queue in order through gpui's keystroke dispatch and the
-editor's input path, so each key sees the state its predecessor committed, as
+Release replays the queue in order through the window's keystroke dispatch,
+and so the key router, and the editor's input path, so each key sees the state its predecessor committed, as
 native commands already do by finishing in the dispatch turn. Dispatched
 commands run deferred to the end of the effect cycle while typed text inserts
 at once, so release replays one input per deferred step, letting a replayed
