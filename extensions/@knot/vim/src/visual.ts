@@ -7,8 +7,8 @@ import type { Command, TextObject } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import { lineStart, type Position } from "./motions.js";
 import {
-  applyOperator, clampCaret, grouped, isVisual, join, moveOnto, moveTo, readRegister, record, recordJump, regionText,
-  replace, resolve, setMode, type State, tabSizeOf,
+  applyOperator, clampCaret, grouped, isVisual, join, type Moved, moveOnto, moveTo, readRegister, record, recordJump,
+  regionText, replace, reposition, resolve, scroll, setMode, type State, tabSizeOf, towardWant,
 } from "./normal.js";
 import { type Region, textObject } from "./objects.js";
 import { lastColumn, nextColumn, previousColumn, screenColumn, utf8Length } from "./text.js";
@@ -43,15 +43,24 @@ export async function runVisual(state: State, command: Command) {
         return;
       }
       if (moved.jump === true) await recordJump(state, visual.caret);
-      const text = await lines.text(moved.to.line);
-      // After `$` the caret sits on the line break, which the selection
-      // then includes, as Vim's does.
-      const col = moved.want === Infinity ? text.length : Math.min(moved.to.col, lastColumn(text));
-      const to = { line: moved.to.line, col };
-      visual.caret = await lines.offset(to);
-      state.caret = visual.caret;
-      state.want = moved.want ?? screenColumn(text, col, await tabSizeOf(state));
-      await show(state, lines, moved.reveal);
+      await land(state, lines, moved);
+      return;
+    }
+    case "scroll": {
+      const moved = await scroll(state, lines, await lines.position(visual.caret), command.scroll, command.count);
+      if (moved !== null) await land(state, lines, moved);
+      return;
+    }
+    case "reposition": {
+      const from = await lines.position(visual.caret);
+      let line = from.line;
+      if (command.count !== null || command.firstNonBlank) {
+        if (command.count !== null) line = Math.min((await lines.count()) - 1, command.count - 1);
+        await land(state, lines, command.firstNonBlank
+          ? { to: await lineStart(lines, line), type: "linewise" }
+          : await towardWant(state, lines, from, line));
+      }
+      await reposition(state, line, command.at);
       return;
     }
     case "select-object":
@@ -77,6 +86,20 @@ export async function runVisual(state: State, command: Command) {
       return;
     }
   }
+}
+
+/** Moves the visual caret where a motion went and shows the selection. */
+async function land(state: State, lines: BufferLines, moved: Moved) {
+  const visual = state.visual!;
+  const text = await lines.text(moved.to.line);
+  // After `$` the caret sits on the line break, which the selection then
+  // includes, as Vim's does.
+  const col = moved.want === Infinity ? text.length : Math.min(moved.to.col, lastColumn(text));
+  const to = { line: moved.to.line, col };
+  visual.caret = await lines.offset(to);
+  state.caret = visual.caret;
+  state.want = moved.want ?? screenColumn(text, col, await tabSizeOf(state));
+  await show(state, lines, moved.reveal);
 }
 
 /** Follows the editor's selection after it changed: a selection made

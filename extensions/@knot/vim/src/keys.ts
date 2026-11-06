@@ -7,7 +7,11 @@ export type SimpleMotion =
   | "word" | "WORD" | "back" | "BACK" | "end" | "END" | "back-end" | "BACK-END"
   | "line-start" | "first-non-blank" | "line-end" | "next-line-start" | "previous-line-start"
   | "first-line" | "last-line" | "match-pair" | "paragraph-forward" | "paragraph-back"
-  | "repeat-find" | "repeat-find-reverse";
+  | "repeat-find" | "repeat-find-reverse" | "window-top" | "window-middle" | "window-bottom";
+
+/** A scroll by half a view (`ctrl-d`, `ctrl-u`), a page (`ctrl-f`,
+ * `ctrl-b`), or lines (`ctrl-e`, `ctrl-y`). */
+export type Scroll = "half-down" | "half-up" | "page-down" | "page-up" | "line-down" | "line-up";
 
 export type FindKind = "f" | "F" | "t" | "T";
 
@@ -50,6 +54,13 @@ export type Command =
   | { readonly kind: "redo"; readonly count: number }
   /** `m`: sets a mark at the caret. */
   | { readonly kind: "set-mark"; readonly name: string }
+  | { readonly kind: "scroll"; readonly scroll: Scroll; readonly count: number | null }
+  /** `zt`, `zz`, `zb`, and with `firstNonBlank` `z<cr>`, `z.`, `z-`: scrolls
+   * the caret's line, or line `count`, to that place in the view. */
+  | {
+    readonly kind: "reposition"; readonly at: "top" | "center" | "bottom"; readonly firstNonBlank: boolean;
+    readonly count: number | null;
+  }
   /** `ctrl-o` (negative) and `ctrl-i`: steps through the jumplist. */
   | { readonly kind: "jump"; readonly count: number }
   /** `v` or `V`: enters, switches, or leaves visual mode. */
@@ -93,6 +104,18 @@ const MOTIONS: Readonly<Record<string, SimpleMotion>> = {
   ";": "repeat-find", ",": "repeat-find-reverse",
   "<left>": "left", "<right>": "right", "<up>": "up", "<down>": "down",
   "<home>": "line-start", "<end>": "line-end",
+  H: "window-top", M: "window-middle", L: "window-bottom",
+};
+
+const SCROLLS: Readonly<Record<string, Scroll>> = {
+  "<c-d>": "half-down", "<c-u>": "half-up", "<c-f>": "page-down", "<c-b>": "page-up",
+  "<c-e>": "line-down", "<c-y>": "line-up",
+};
+
+/** The keys after `z` and where each puts the line. */
+const REPOSITIONS: Readonly<Record<string, readonly ["top" | "center" | "bottom", boolean]>> = {
+  t: ["top", false], z: ["center", false], b: ["bottom", false],
+  "<cr>": ["top", true], ".": ["center", true], "-": ["bottom", true],
 };
 
 const G_MOTIONS: Readonly<Record<string, SimpleMotion>> = {
@@ -196,6 +219,11 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
       if (visual) return done({ kind: "select-object", object, around, count: count ?? 1 });
       return target({ kind: "object", object, around });
     }
+    case "z": {
+      const reposition = REPOSITIONS[key];
+      if (reposition === undefined) return done(null);
+      return done({ kind: "reposition", at: reposition[0], firstNonBlank: reposition[1], count });
+    }
     case "g": {
       if (operator !== null && DOUBLING[operator] === key) return target({ kind: "line" });
       if (key === "v") return done({ kind: "reselect" });
@@ -230,6 +258,9 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
   if (operator !== null) {
     return key === "i" || key === "a" ? next({ prefix: key }) : done(null);
   }
+  const scroll = SCROLLS[key];
+  if (scroll !== undefined) return done({ kind: "scroll", scroll, count });
+  if (key === "z") return next({ prefix: "z" });
   if (key === '"') return next({ prefix: '"' });
   if (key === "r") return next({ prefix: "r" });
   if (key === "m" && !visual) return next({ prefix: "m" });

@@ -5,7 +5,7 @@
 import { commands, documents, languages, settings, workbench } from "knot";
 import type { Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, Mark, ViewTarget } from "knot";
 import { JumpList, type LineOf } from "./jumps.js";
-import type { Command, FindKind, InsertAt, MarkMotion, Motion, Operator, Target } from "./keys.js";
+import type { Command, FindKind, InsertAt, MarkMotion, Motion, Operator, Scroll, Target } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import {
   bracketFrom, findInLine, left, lineStart, matchBracketText, paragraph, type Position, right,
@@ -74,6 +74,9 @@ export type State = {
   readonly jumps: JumpList<Mark>;
   /** The position before the latest jump, which `''` returns to. */
   context: Mark | null;
+  /** How many lines `ctrl-d` and `ctrl-u` scroll, once a count set it, as
+   * Vim's `scroll` option; half the view until then. */
+  scroll: number | null;
 };
 
 export async function setMode(state: State, mode: Mode) {
@@ -147,6 +150,26 @@ export async function run(state: State, command: Command) {
     case "jump":
       await stepJumps(state, command.count);
       break;
+    case "scroll": {
+      const lines = new BufferLines(state.buffer);
+      const from = await lines.position((await state.handle.selection()).caret);
+      const moved = await scroll(state, lines, from, command.scroll, command.count);
+      if (moved !== null) await land(state, lines, moved);
+      break;
+    }
+    case "reposition": {
+      const lines = new BufferLines(state.buffer);
+      const from = await lines.position((await state.handle.selection()).caret);
+      let line = from.line;
+      if (command.count !== null || command.firstNonBlank) {
+        if (command.count !== null) line = Math.min((await lines.count()) - 1, command.count - 1);
+        await land(state, lines, command.firstNonBlank
+          ? { to: await lineStart(lines, line), type: "linewise" }
+          : await towardWant(state, lines, from, line));
+      }
+      await reposition(state, line, command.at);
+      break;
+    }
     case "undo":
     case "redo": {
       for (let n = 0; n < command.count; n++) await commands.invoke(`editor.${command.kind}`);
@@ -165,7 +188,7 @@ export async function run(state: State, command: Command) {
 }
 
 /** Where a motion goes and how an operator takes the text it crosses. */
-type Moved = {
+export type Moved = {
   readonly to: Position;
   readonly type: "exclusive" | "inclusive" | "linewise";
   /** The screen column `j` and `k` keep aiming for afterwards, when the
@@ -209,14 +232,7 @@ export async function resolve(
     case "down": {
       const line = Math.max(0, Math.min(total - 1, from.line + (name === "up" ? -n : n)));
       if (operator !== null) return line === from.line ? null : { to: { line, col: 0 }, type: "linewise" };
-      const tabSize = await tabSizeOf(state);
-      const caret = await lines.offset(from);
-      const want = state.caret === caret && state.want !== null
-        ? state.want
-        : screenColumn(text, from.col, tabSize);
-      const target = await lines.text(line);
-      const col = want === Infinity ? lastColumn(target) : columnAtScreen(target, want, tabSize);
-      return { to: { line, col }, type: "linewise", want };
+      return towardWant(state, lines, from, line);
     }
     case "row-up":
     case "row-down": {
@@ -287,7 +303,103 @@ export async function resolve(
       const kind = name === "repeat-find" ? last.kind : REVERSED[last.kind];
       return find(text, from, kind, last.char, n, true);
     }
+    case "window-top":
+    case "window-middle":
+    case "window-bottom": {
+      // Buffer lines, so under soft wrap these miss the rows a long line
+      // takes.
+      const { first, last } = await state.handle.visibleLines();
+      const line = name === "window-top"
+        ? Math.min(last, first + n - 1)
+        : name === "window-bottom"
+        ? Math.max(first, last - n + 1)
+        : Math.floor((first + last) / 2);
+      return { to: await lineStart(lines, line), type: "linewise", jump: true };
+    }
   }
+}
+
+/** `j` and `k` landing on `line`: the column nearest the screen column the
+ * caret aims for, which they keep aiming for. */
+export async function towardWant(state: State, lines: BufferLines, from: Position, line: number): Promise<Moved> {
+  const tabSize = await tabSizeOf(state);
+  const caret = await lines.offset(from);
+  const want = state.caret === caret && state.want !== null
+    ? state.want
+    : screenColumn(await lines.text(from.line), from.col, tabSize);
+  const target = await lines.text(line);
+  const col = want === Infinity ? lastColumn(target) : columnAtScreen(target, want, tabSize);
+  return { to: { line, col }, type: "linewise", want };
+}
+
+/**
+ * Scrolls the view for `ctrl-d`, `ctrl-u`, `ctrl-f`, `ctrl-b`, `ctrl-e`, or
+ * `ctrl-y` and returns where the caret goes from `from`, or null when it
+ * stays. Half-view scrolls move the caret as many lines as the view, so it
+ * keeps its place on screen; page scrolls keep two lines of the previous
+ * view and move the caret into the new one; line scrolls move it only when
+ * it would leave the view. Lines are buffer lines, so soft wrap makes them
+ * approximate.
+ */
+export async function scroll(
+  state: State,
+  lines: BufferLines,
+  from: Position,
+  kind: Scroll,
+  count: number | null,
+): Promise<Moved | null> {
+  const total = await lines.count();
+  const before = await state.handle.visibleLines();
+  const height = before.last - before.first + 1;
+  switch (kind) {
+    case "half-down":
+    case "half-up": {
+      if (count !== null) state.scroll = count;
+      const n = state.scroll ?? Math.max(1, Math.floor(height / 2));
+      const step = kind === "half-down" ? n : -n;
+      const line = Math.max(0, Math.min(total - 1, from.line + step));
+      if (line === from.line) return null;
+      await state.handle.scrollBy(step);
+      return { to: await lineStart(lines, line), type: "linewise" };
+    }
+    case "page-down":
+    case "page-up": {
+      const down = kind === "page-down";
+      await state.handle.scrollBy((down ? 1 : -1) * Math.max(1, height - 2) * (count ?? 1));
+      const after = await state.handle.visibleLines();
+      // At the end of the text the view cannot scroll, so the caret goes
+      // there instead.
+      const line = after.first === before.first
+        ? (down ? total - 1 : 0)
+        : down
+        ? Math.max(from.line, after.first)
+        : Math.min(from.line, after.last);
+      if (line === from.line && after.first === before.first) return null;
+      return { to: await lineStart(lines, line), type: "linewise" };
+    }
+    case "line-down":
+    case "line-up": {
+      const n = count ?? 1;
+      await state.handle.scrollBy(kind === "line-down" ? n : -n);
+      const after = await state.handle.visibleLines();
+      if (from.line < after.first) return towardWant(state, lines, from, after.first);
+      if (from.line > after.last) return towardWant(state, lines, from, after.last);
+      return null;
+    }
+  }
+}
+
+/** Scrolls `line` to the top, middle, or bottom of the view. In normal
+ * mode the caret is on it, and the editor aligns its edges exactly. */
+export async function reposition(state: State, line: number, at: "top" | "center" | "bottom") {
+  if (at !== "center" && state.mode === "normal") {
+    const { caret } = await state.handle.selection();
+    await state.handle.setSelection({ anchor: caret, caret }, { reveal: at });
+    return;
+  }
+  const { first, last } = await state.handle.visibleLines();
+  const target = at === "top" ? first : at === "bottom" ? last : Math.floor((first + last) / 2);
+  if (line !== target) await state.handle.scrollBy(line - target);
 }
 
 const REVERSED: Readonly<Record<FindKind, FindKind>> = { f: "F", F: "f", t: "T", T: "t" };
@@ -430,6 +542,12 @@ async function motion(state: State, name: Motion, count: number | null) {
     return;
   }
   if (moved.jump === true) await recordJump(state, caret);
+  await land(state, lines, moved);
+}
+
+/** Moves the caret where a motion went, onto its line's last character at
+ * most, and sets the column `j` and `k` aim for. */
+async function land(state: State, lines: BufferLines, moved: Moved) {
   const text = await lines.text(moved.to.line);
   const to = { line: moved.to.line, col: Math.min(moved.to.col, lastColumn(text)) };
   await moveTo(state, lines, to, moved.reveal);

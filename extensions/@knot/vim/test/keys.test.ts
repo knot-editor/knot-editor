@@ -150,3 +150,30 @@ test("ctrl-o steps back through the jumplist and Tab forward, with counts", () =
   assert.deepEqual(parse("<c-o>").command, { kind: "jump", count: -1 });
   assert.deepEqual(parse("3", "<tab>").command, { kind: "jump", count: 3 });
 });
+
+test("ctrl keys scroll with counts, in normal and visual mode but not after an operator", () => {
+  assert.deepEqual(parse("<c-d>").command, { kind: "scroll", scroll: "half-down", count: null });
+  assert.deepEqual(parse("5", "<c-e>").command, { kind: "scroll", scroll: "line-down", count: 5 });
+  assert.deepEqual(visual("<c-b>"), { kind: "scroll", scroll: "page-up", count: null });
+  assert.equal(parse("d", "<c-d>").command, null);
+});
+
+test("z repositions the caret's line, or a counted line", () => {
+  const { pending } = parse("z");
+  assert.equal(pendingText(pending), "z");
+  assert.deepEqual(parse("z", "z").command, { kind: "reposition", at: "center", firstNonBlank: false, count: null });
+  assert.deepEqual(parse("1", "2", "z", "<cr>").command, {
+    kind: "reposition", at: "top", firstNonBlank: true, count: 12,
+  });
+  assert.deepEqual(parse("z", "-").command, { kind: "reposition", at: "bottom", firstNonBlank: true, count: null });
+  assert.equal(parse("z", "x").command, null);
+  assert.equal(parse("d", "z").command, null, "z is no operator target");
+});
+
+test("H, M, and L are motions and operator targets", () => {
+  assert.deepEqual(parse("3", "H").command, { kind: "motion", motion: "window-top", count: 3 });
+  assert.deepEqual(parse("d", "L").command, {
+    kind: "operator", operator: "d", register: null, count: null, target: { kind: "motion", motion: "window-bottom" },
+  });
+  assert.deepEqual(visual("M"), { kind: "motion", motion: "window-middle", count: null });
+});

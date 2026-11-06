@@ -41,6 +41,11 @@ const NAMED_KEYS: readonly (readonly [string, string])[] = [
   ["shift-tab", "<s-tab>"],
   ["ctrl-r", "<c-r>"],
   ["ctrl-d", "<c-d>"],
+  ["ctrl-u", "<c-u>"],
+  ["ctrl-f", "<c-f>"],
+  ["ctrl-b", "<c-b>"],
+  ["ctrl-e", "<c-e>"],
+  ["ctrl-y", "<c-y>"],
   ["ctrl-h", "<bs>"],
   ["ctrl-j", "<c-j>"],
   ["ctrl-k", "<c-k>"],
@@ -207,7 +212,7 @@ class Vim {
       target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
       language: info.language, mode: "normal", pending: EMPTY, operatorShown: false,
       want: null, caret: null, group: null, opened: false, visual: null, selected: null, previous: null,
-      jumps: new JumpList(), context: null,
+      jumps: new JumpList(), context: null, scroll: null,
     };
     this.states.set(target, state);
     handle.onDidClose(() => {
