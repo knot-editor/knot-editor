@@ -718,6 +718,16 @@ Kakoune mode could use it too. The
   - Reconsider: Restored terminal tabs, which start fresh shells in their last
     working directory (D127), need their processes or scrollback to continue.
 
+- **D155 — Word and line selection in terminals**
+  - Deferred: A terminal's local selection is always character by
+    character: double- and triple-click start a plain selection, unlike
+    editors and most terminal emulators.
+  - Reconsider: Selecting a path, URL, or line from terminal output by
+    dragging gets in the way. Then start the emulator's semantic selection
+    on a double click and its line selection on a triple click while mouse
+    reporting is off, so a drag afterwards extends by words or lines, with
+    the emulator's default word separators.
+
 - **D044 — Simultaneous terminal views**
   - Deferred: A sole attachment keeps input ownership and PTY resize authority
     unambiguous while supporting cross-window transfer.
