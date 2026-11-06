@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–5 complete; checkpoint 6 awaits its review gate. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–6 complete; checkpoint 7 is next. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -161,48 +161,21 @@ against a windowless session. The window remains the adapter for raw input:
 keys and typed text reach the router through it, and tab drags, gutter
 marker clicks, and tree row actions carry it as pointer input.
 
-### 6. Editor state and view
+### 6. Editor state and view — ✅
 
-Deliverables: an `Editor` entity with the state and native commands, an
-`EditorView` that renders it, cell-based vertical movement, a viewport in
-lines set by the view, and editor handles resolving to the `Editor`.
-
-Validation: editor, editing, wrap, and editor-handle tests pass at the
-model boundary; movement tests over tabs, CJK, and emoji in cells; the Vim
-and language cases pass.
-
-Implementation context: `src/app/editor/` (`layout.rs` `shape_row`,
-`x_for_index_dir`, and `fully_visible_lines`; `editing.rs`;
-`native_commands.rs`; `wrap.rs` already measures cells), the editor handle in
-`src/app/extensions/host/handlers.rs`. Update the views decision,
-[editor views](../architecture/workbench-and-lifecycle.md#editor-views), and
-the soft-wrap decision's movement paragraph.
-
-Review gate: editing in the app is unchanged except for the movement change.
-
-Progress (⏸ at the review gate):
-
-- ✅ Vertical movement by display cells (`35195d6`): `wrap::cells_before`
-  and `index_at_cells` measure a row as soft wrap does, and the wanted
-  column includes a continuation row's indentation.
-  `vertical_movement_keeps_the_display_cell_across_tabs_and_wide_characters`
-  covers tabs, CJK, and emoji.
-- ✅ Scroll and viewport in rows (`78f7cda`), so editor state needs no line
-  height.
-- ✅ `Editor` and `EditorView`. A document tab still owns the view, which
-  creates and owns its `Editor`; `CommandView::Editor` and
-  `WorkbenchTab::editor` keep returning the view, and callers reach state
-  through `EditorView::editor`. Native editing commands run through
-  `CommandContext::foreground`, so `in_window` is gone; editor handles,
-  selection watches, key contexts, caret shapes, undo groups, and completion
-  hold the `Editor`. The view keeps focus, metrics, the gutter layout, the
-  syntax cache, pointer gestures, and the input handler, which still routes
-  held input and text bindings, since `TextCommandRouter` and key-hold replay
-  work through the window until checkpoint 8. Editor unit tests that check
-  state now build an `Editor` without a window; geometry, pointer, and paint
-  tests keep a view. `commands_run_in_a_session_without_a_window` also runs
-  editing and movement commands.
-- ⏸ Review gate: `try.*` commands in personal `post-init.js`.
+An `Editor` entity holds one presentation's selection, scrolling and
+viewport in rows, wrapping, IME preedit, key contexts, caret shape, and
+completion, and runs the native editing and movement commands without a
+window; `EditorView` renders it and keeps focus, painting, pointer input,
+the platform input handler, shaped hit testing, and horizontal scrolling.
+Tabs own the view, which owns its editor; commands, editor handles, and
+completion reach the `Editor`. Vertical movement keeps a display column in
+`unicode-width` cells. See
+[editor views](../architecture/workbench-and-lifecycle.md#editor-views) and
+the views decision. Editor state tests build an `Editor` without a window,
+and `commands_run_in_a_session_without_a_window` edits and moves. Held input
+and text bindings still route through the view's input handler and the
+window until checkpoint 8.
 
 ### 7. The other surfaces
 
