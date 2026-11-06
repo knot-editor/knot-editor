@@ -115,11 +115,12 @@ export async function followSelection(state: State) {
     if (own !== null && own.anchor === selection.anchor && own.caret === selection.caret) return;
     if (bare) {
       await exit(state);
-      await clampCaret(state);
+      await clampCaret(state, selection);
       return;
     }
   } else if (bare) {
-    await clampCaret(state);
+    // A caret this package put down is already on a character.
+    if (selection.caret !== state.caret) await clampCaret(state, selection);
     return;
   }
   // The editor's selection ends after its last character, where Vim's

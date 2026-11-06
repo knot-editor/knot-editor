@@ -143,6 +143,9 @@ export async function start() {
 class Vim {
   private readonly states = new Map<ViewTarget, Followed>();
   private readonly active = new Map<WindowTarget, Active>();
+  /** The mode and keys texts each window shows, null when cleared, so an
+   * unchanged status sends nothing. */
+  private readonly shown = new Map<WindowTarget, { mode: string | null; keys: string | null }>();
 
   constructor(
     private readonly shared: Shared,
@@ -160,6 +163,7 @@ class Vim {
 
   closeWindow(window: WindowTarget) {
     this.active.delete(window);
+    this.shown.delete(window);
   }
 
   /** Rechecks every editor after `vim.enabled` changed. */
@@ -310,13 +314,16 @@ class Vim {
   private async showStatus(window: WindowTarget) {
     const target = this.active.get(window)?.target;
     const state = target === undefined ? undefined : this.states.get(target);
-    if (state === undefined) {
-      await this.modeItem.update(null, { window });
-      await this.keysItem.update(null, { window });
-      return;
+    const mode = state === undefined ? null : MODE_TEXT[state.mode];
+    const keys = state === undefined ? null : pendingText(state.pending);
+    const shown = this.shown.get(window);
+    this.shown.set(window, { mode, keys });
+    if (shown === undefined || shown.mode !== mode) {
+      await this.modeItem.update(mode === null ? null : { text: mode, priority: 100 }, { window });
     }
-    await this.modeItem.update({ text: MODE_TEXT[state.mode], priority: 100 }, { window });
-    await this.keysItem.update({ text: pendingText(state.pending), side: "right", priority: 40 }, { window });
+    if (shown === undefined || shown.keys !== keys) {
+      await this.keysItem.update(keys === null ? null : { text: keys, side: "right", priority: 40 }, { window });
+    }
   }
 }
 

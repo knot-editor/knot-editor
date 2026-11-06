@@ -95,8 +95,8 @@ export async function setMode(state: State, mode: Mode) {
 
 /** Puts a caret that sits past its line's last character back on it, as
  * normal mode never rests on a line's end. A selection is left alone. */
-export async function clampCaret(state: State) {
-  const { anchor, caret } = await state.handle.selection();
+export async function clampCaret(state: State, selection?: EditorSelection) {
+  const { anchor, caret } = selection ?? await state.handle.selection();
   if (anchor !== caret) return;
   const lines = new BufferLines(state.buffer);
   const position = await lines.position(caret);
