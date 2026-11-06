@@ -167,3 +167,36 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
     cx.run_until_parked();
     assert_eq!(texts(window, cx), (vec![], vec![]));
 }
+
+#[gpui::test]
+fn an_unchanged_update_redraws_nothing(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(971), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(None));
+    let result = loaded.clone();
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            *result.lock().unwrap() = Some(execution.await.map(|_| ()));
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
+    loaded.lock().unwrap().take().unwrap().unwrap();
+
+    for command in ["status.update", "status.override"] {
+        run(&shell, window, command, cx);
+        crate::app::work_counts::take();
+        run(&shell, window, command, cx);
+        let counts = crate::app::work_counts::take();
+        assert!(
+            counts.requests.contains(&"updateStatusItem"),
+            "{command}: {counts:?}"
+        );
+        assert_eq!(counts.draws, 0, "{command}: {counts:?}");
+    }
+}

@@ -146,3 +146,20 @@ fn items_decode_from_javascript_values() {
             .is_err()
     );
 }
+
+#[test]
+fn holds_tells_whether_an_update_would_change_nothing() {
+    let mut registry = StatusRegistry::default();
+    let id = registry.register(owner(1), "mode".into(), item("a", StatusSide::Left, 0));
+    let a = item("a", StatusSide::Left, 0);
+    let b = item("b", StatusSide::Left, 0);
+    assert!(registry.holds(owner(1), id, None, Some(&a)));
+    assert!(!registry.holds(owner(1), id, None, Some(&b)));
+    assert!(!registry.holds(owner(2), id, None, Some(&a)));
+    // No window value yet: clearing it changes nothing, setting one does.
+    assert!(registry.holds(owner(1), id, Some("w"), None));
+    assert!(!registry.holds(owner(1), id, Some("w"), Some(&a)));
+    registry.update(owner(1), id, Some("w".into()), Some(b.clone()));
+    assert!(registry.holds(owner(1), id, Some("w"), Some(&b)));
+    assert!(!registry.holds(owner(1), id, Some("w"), None));
+}

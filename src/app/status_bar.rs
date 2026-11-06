@@ -140,6 +140,29 @@ impl StatusRegistry {
         true
     }
 
+    /// Whether `update` with these arguments would leave the registration
+    /// as it is: the owner has it and already holds `value` there.
+    pub(crate) fn holds(
+        &self,
+        owner: StatusOwner,
+        id: u64,
+        window: Option<&str>,
+        value: Option<&StatusItem>,
+    ) -> bool {
+        let Some(registration) = self
+            .registrations
+            .iter()
+            .find(|registration| registration.id == id && registration.owner == owner)
+        else {
+            return false;
+        };
+        match (window, value) {
+            (None, Some(value)) => registration.value == *value,
+            (Some(window), value) => registration.windows.get(window) == value,
+            (None, None) => false,
+        }
+    }
+
     /// Remove an owned registration; false when it is not live.
     pub(crate) fn unregister(&mut self, owner: StatusOwner, id: u64) -> bool {
         let before = self.registrations.len();

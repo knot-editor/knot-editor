@@ -3711,6 +3711,19 @@ async fn update_status_item(
 ) -> Result<(), StatusItemError> {
     let owner = status_owner(&context);
     context.foreground(|_, cx| {
+        // An equal value changes nothing, so it must not notify the windows
+        // that observe the bar and redraw them.
+        let unchanged = cx.try_global::<ApplicationStatusBar>().is_some_and(|bar| {
+            bar.0.holds(
+                owner,
+                arguments.registration,
+                arguments.window.as_deref(),
+                arguments.item.as_ref(),
+            )
+        });
+        if unchanged {
+            return Ok(());
+        }
         if cx.default_global::<ApplicationStatusBar>().0.update(
             owner,
             arguments.registration,
