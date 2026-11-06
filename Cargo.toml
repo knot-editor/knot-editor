@@ -67,3 +67,11 @@ path = "src/main.rs"
 # compiler takes seconds, so debug builds and tests optimize the runtime.
 [profile.dev.package.tree-sitter]
 opt-level = 3
+
+# Tests draw every dirty window after each update, and unoptimized layout and
+# painting dominate product tests and the debug app.
+[profile.dev.package.gpui]
+opt-level = 3
+
+[profile.dev.package.taffy]
+opt-level = 3

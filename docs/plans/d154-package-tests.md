@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Comes before checkpoint 6 of the
+Status: 🚧 checkpoint 1 complete; checkpoint 2 awaiting review. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -85,8 +85,6 @@ crate-private, and its test platform uses `NoopTextSystem`, whose advance is
   items, once the tasks are settled.
 - How package state resets between cases: a fresh lifecycle or a reset hook,
   chosen by measured cost in checkpoint 10.
-- Whether the font stack joins gpui and taffy in the optimized profile,
-  decided by measurement in checkpoint 2.
 
 ## Checkpoints
 
@@ -107,19 +105,24 @@ processes on the CI runner exposed fixtures that assumed a fast machine: test
 polling deadlines are now 10 s, and a syntax-query count test sets an
 unbounded parse budget.
 
-### 2. Optimized gpui and taffy in debug builds
+### 2. Optimized gpui and taffy in debug builds — ✅ awaiting review
 
-Deliverables: `[profile.dev.package.gpui]` and `[profile.dev.package.taffy]`
-at an optimization level chosen by measurement, beside the existing
-`tree-sitter` entry.
+`gpui` and `taffy` build at `opt-level = 3` in the dev profile, beside
+`tree-sitter`, in `Cargo.toml`.
 
-Validation: Vim suite wall time and per-case open and key times, compared
-against all-dependency optimization (22 s) and the baseline (94 s).
+On Apple M1 Pro/macOS debug builds, the Vim suite's 364 cases measured:
 
-Implementation context: `Cargo.toml` `[profile.dev.package.tree-sitter]`.
-Time with temporary `Instant` prints around `Fixture::open_selected`,
-`press`, and `close` in `src/app/product/tests/vim.rs`; profile with
-`sample` on the test process.
+| Dev profile | Suite | Open | Key | Close |
+| --- | --- | --- | --- | --- |
+| tree-sitter only (baseline) | 93 s | 55 ms | 60 ms | 11 ms |
+| gpui and taffy at 1 | 27 s | 16 ms | 17 ms | 3 ms |
+| gpui alone at 3 | 25 s | 15 ms | 15 ms | 3 ms |
+| gpui and taffy at 3 | 22 s | 13 ms | 14 ms | 3 ms |
+| every dependency (earlier) | 22 s | 10 ms | 17 ms | — |
+
+The two crates capture the whole gain of optimizing every dependency, so the
+font stack stays unoptimized. The full `cargo nextest run --all-targets` went
+from 110 s to 35 s, with the Vim test still the longest at 25 s.
 
 Review gate: the narrowed profile captures most of the gain.
 
