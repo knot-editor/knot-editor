@@ -97,6 +97,8 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
         if cx.read(|cx| {
             editor
                 .read(cx)
+                .editor()
+                .read(cx)
                 .completion_state()
                 .is_some_and(|(items, pending, failures, _)| {
                     items == 2 && pending == 0 && failures == 0
@@ -535,7 +537,7 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let shell = cx.update(|cx| {
-        let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
+        let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
         cx.new(|cx| ProductShell::new(workbench, cx))
     });
     let run = |name: &'static str, cx: &mut TestAppContext| {
@@ -556,6 +558,32 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
         });
         wait_for_command(execution, cx)
     };
+
+    // Native editing and movement need no window either.
+    model.update(cx, |model, cx| {
+        model.replace(0..0, "one\ntwo").unwrap();
+        cx.notify();
+    });
+    for name in [
+        "editor.move-down",
+        "editor.move-line-end",
+        "editor.delete-backward",
+        "editor.move-up",
+        "editor.select-line-start",
+    ] {
+        assert_eq!(run(name, cx), CommandOutcome::Completed, "{name}");
+    }
+    cx.read(|cx| {
+        assert_eq!(model.read(cx).text(), "one\ntw");
+        let workbench = shell.read(cx).workbench.read(cx);
+        let view = workbench
+            .focused_pane()
+            .unwrap()
+            .active_tab()
+            .editor()
+            .unwrap();
+        assert_eq!(view.read(cx).editor().read(cx).selection(cx), (2, 0));
+    });
 
     assert_eq!(run(SPLIT_HORIZONTAL_COMMAND, cx), CommandOutcome::Completed);
     assert_eq!(run(NEW_COMMAND, cx), CommandOutcome::Completed);

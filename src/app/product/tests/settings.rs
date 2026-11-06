@@ -128,7 +128,11 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
             let plain = cx.new(|_| BufferModel::from_text("\tx"));
             [rust, plain].map(|model| {
                 let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
-                editor.read(cx).tab_size(model.read(cx), cx)
+                editor
+                    .read(cx)
+                    .editor()
+                    .read(cx)
+                    .tab_size(model.read(cx), cx)
             })
         })
     };

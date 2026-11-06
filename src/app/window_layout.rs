@@ -294,7 +294,7 @@ impl WindowLayout {
                         .map(ToString::to_string),
                     view: tab
                         .editor()
-                        .map(|editor| editor.read(cx).view_state(cx))
+                        .map(|editor| editor.read(cx).editor().read(cx).view_state(cx))
                         .unwrap_or_default(),
                     language: model
                         .filter(|model| model.language_is_explicit())

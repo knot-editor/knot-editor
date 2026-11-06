@@ -73,7 +73,12 @@ impl TextView {
     }
 
     pub(crate) fn selected_text(&self, cx: &App) -> Option<String> {
-        let range = self.editor.read(cx).selected_byte_range(cx)?;
+        let range = self
+            .editor
+            .read(cx)
+            .editor()
+            .read(cx)
+            .selected_byte_range(cx)?;
         if range.is_empty() {
             return None;
         }
@@ -164,9 +169,23 @@ mod tests {
         let document = cx.new(|cx| EditorView::new(document, cx));
         cx.read(|cx| {
             let frame = frame.read(cx);
-            assert_eq!(frame.editor.read(cx).tab_size(frame.model.read(cx), cx), 2);
+            assert_eq!(
+                frame
+                    .editor
+                    .read(cx)
+                    .editor()
+                    .read(cx)
+                    .tab_size(frame.model.read(cx), cx),
+                2
+            );
             let document = document.read(cx);
-            assert_eq!(document.tab_size(document.model().read(cx), cx), 4);
+            assert_eq!(
+                document
+                    .editor()
+                    .read(cx)
+                    .tab_size(document.model().read(cx), cx),
+                4
+            );
         });
     }
 
@@ -217,12 +236,27 @@ mod tests {
             settings.0.set(EDITOR_TAB_SIZE, 2.into(), scope).unwrap();
             cx.set_global(settings);
             let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
-            assert_eq!(editor.read(cx).tab_size(model.read(cx), cx), 2);
+            assert_eq!(
+                editor
+                    .read(cx)
+                    .editor()
+                    .read(cx)
+                    .tab_size(model.read(cx), cx),
+                2
+            );
         });
         let frame = cx.new(|cx| TextView::new("example.log", "1", cx));
         cx.read(|cx| {
             let frame = frame.read(cx);
-            assert_eq!(frame.editor.read(cx).tab_size(frame.model.read(cx), cx), 4);
+            assert_eq!(
+                frame
+                    .editor
+                    .read(cx)
+                    .editor()
+                    .read(cx)
+                    .tab_size(frame.model.read(cx), cx),
+                4
+            );
         });
     }
 }

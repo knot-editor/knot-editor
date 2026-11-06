@@ -92,7 +92,9 @@ fn focus_editor(
 ) {
     cx.update_window(window, |_, window, cx| {
         editor.update(cx, |editor, cx| {
-            editor.set_selection(caret, caret, Reveal::Nearest, cx);
+            editor.editor().clone().update(cx, |editor, cx| {
+                editor.set_selection(caret, caret, Reveal::Nearest, cx)
+            });
         });
         focus_view(&editor.focus_handle(cx), window, cx);
     })
@@ -130,7 +132,12 @@ fn a_held_key_resolves_in_the_context_the_command_set(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(fixture.window, "f7 h");
     fixture.settle(cx);
     assert_eq!(fixture.text(cx), "abc");
-    cx.read(|cx| assert_eq!(fixture.editor.read(cx).selection(cx), (2, 2)));
+    cx.read(|cx| {
+        assert_eq!(
+            fixture.editor.read(cx).editor().read(cx).selection(cx),
+            (2, 2)
+        )
+    });
 }
 
 #[gpui::test]
@@ -138,7 +145,12 @@ fn native_commands_do_not_hold_keys(cx: &mut TestAppContext) {
     let fixture = fixture("abc", cx);
     cx.simulate_keystrokes(fixture.window, "home");
     assert!(!fixture.holds_keys(cx));
-    cx.read(|cx| assert_eq!(fixture.editor.read(cx).selection(cx), (0, 0)));
+    cx.read(|cx| {
+        assert_eq!(
+            fixture.editor.read(cx).editor().read(cx).selection(cx),
+            (0, 0)
+        )
+    });
 }
 
 #[gpui::test]
@@ -232,7 +244,12 @@ fn a_text_binding_receives_typed_and_composed_text_in_order(cx: &mut TestAppCont
     cx.simulate_input(fixture.window, "e");
     fixture.settle(cx);
     assert_eq!(fixture.text(cx), "abcx");
-    cx.read(|cx| assert_eq!(fixture.editor.read(cx).selection(cx), (3, 3)));
+    cx.read(|cx| {
+        assert_eq!(
+            fixture.editor.read(cx).editor().read(cx).selection(cx),
+            (3, 3)
+        )
+    });
     assert_eq!(typed(cx), "a,b,c,e");
 
     // The preedit is not shown; the commit arrives as text.

@@ -332,15 +332,17 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                 let editor = tab.editor().unwrap().clone();
                 let document = tab.document_id().unwrap();
                 editor.update(cx, |editor, cx| {
-                    editor.restore_view_state(
-                        crate::app::editor::EditorViewState {
-                            anchor: 0,
-                            caret: 0,
-                            top: 0,
-                            scroll_x: 12.,
-                        },
-                        cx,
-                    )
+                    editor.editor().clone().update(cx, |editor, cx| {
+                        editor.restore_view_state(
+                            crate::app::editor::EditorViewState {
+                                anchor: 0,
+                                caret: 0,
+                                top: 0,
+                                scroll_x: 12.,
+                            },
+                            cx,
+                        )
+                    })
                 });
                 (document, editor, shell.capture_command_target(cx).unwrap())
             })
@@ -370,7 +372,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
             );
             assert!(editor.focus_handle(cx).is_focused(window));
             assert_eq!(
-                editor.read(cx).view_state(cx),
+                editor.read(cx).editor().read(cx).view_state(cx),
                 crate::app::editor::EditorViewState {
                     anchor: 0,
                     caret: 0,

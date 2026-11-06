@@ -1297,15 +1297,17 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     // Cursor moves inside the debounce restart it and report once settled.
     for caret in [5, 10, 15] {
         editor.update(cx, |editor, cx| {
-            editor.restore_view_state(
-                EditorViewState {
-                    anchor: caret,
-                    caret,
-                    top: 0,
-                    scroll_x: 0.,
-                },
-                cx,
-            )
+            editor.editor().clone().update(cx, |editor, cx| {
+                editor.restore_view_state(
+                    EditorViewState {
+                        anchor: caret,
+                        caret,
+                        top: 0,
+                        scroll_x: 0.,
+                    },
+                    cx,
+                )
+            })
         });
         cx.executor()
             .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE / 2);

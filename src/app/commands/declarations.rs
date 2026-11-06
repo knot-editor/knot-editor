@@ -33,7 +33,7 @@ use crate::app::commands::dispatch::{
 use crate::app::product::ProductShell;
 use crate::host::declarations::{AsyncHandler, HandlerFuture};
 use crate::host::protocol::{Command, CommandArgumentValue, CommandOutcome};
-use gpui::{App, AppContext, Context, Window};
+use gpui::{App, Context};
 
 /// Declares name/title, the routing participant, and a generated name constant.
 /// Repeated attributes share a typed async implementation. Optional claim
@@ -120,24 +120,6 @@ impl CommandContext {
             target.validate_tab(cx)?;
             target.validate_view(cx)?;
             access(&target, cx)
-        })
-        .await?
-    }
-
-    /// Run `access` in the session's window, for commands that lay out or
-    /// shape text; unavailable while the session has no window.
-    pub(crate) async fn in_window<R: 'static>(
-        &self,
-        access: impl FnOnce(&ProductCommandTarget, &mut Window, &mut App) -> Result<R, CommandOutcome>
-        + 'static,
-    ) -> Result<R, CommandOutcome> {
-        let target = self.target.clone();
-        self.application(move |cx| {
-            target.validate_tab(cx)?;
-            target.validate_view(cx)?;
-            let window = target.window(cx).ok_or(CommandOutcome::Unavailable)?;
-            cx.update_window(window, |_, window, cx| access(&target, window, cx))
-                .unwrap_or(Err(CommandOutcome::InvalidTarget))
         })
         .await?
     }

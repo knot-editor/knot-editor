@@ -5,32 +5,33 @@ use super::*;
 
 impl EditorView {
     /// Mouse-down hit-tests the click onto a (line, byte_col) caret and moves
-    /// it there. Uses `closest_index_for_x` on the shaped line — the public
-    /// `LineLayout` API — so the caret lands on the nearest glyph boundary
-    /// rather than a guessed byte offset. With shift held, the existing caret
-    /// becomes the selection anchor and the click position becomes the new
-    /// caret (extending the selection); without shift, any selection is
-    /// cleared and the caret jumps to the click.
+    /// it there, on the nearest grapheme boundary. With shift held, the
+    /// existing caret becomes the selection anchor and the click position
+    /// becomes the new caret (extending the selection); without shift, any
+    /// selection is cleared and the caret jumps to the click.
     pub(super) fn on_mouse_down(
         &mut self,
         ev: &MouseDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.break_history_group(cx);
         self.drag_anchor = None;
-        self.marked_range_utf16 = None;
-        let (line, col) = self.hit_test(self.model.read(cx), ev.position, window, cx);
+        self.model
+            .update(cx, |model, _| model.break_history_group());
+        let editor = self.editor.read(cx);
+        let (line, col) = self.hit_test(editor, ev.position, window, cx);
         let action = match self.gutter_lane_at(ev.position) {
-            Some(GutterLane::Markers) => self
+            Some(GutterLane::Markers) => editor
                 .gutter_marker(line)
                 .and_then(|marker| Some((marker.command.clone()?, marker.source, marker.range))),
             Some(GutterLane::Numbers) => {
                 self.suppress_drag_selection = false;
-                self.select_lines_from_gutter(line, ev.modifiers.shift, cx);
+                self.drag_anchor = Some(self.editor.update(cx, |editor, cx| {
+                    editor.select_lines_from_gutter(line, ev.modifiers.shift, cx)
+                }));
                 return;
             }
-            None => self
+            None => editor
                 .contribution_actions
                 .iter()
                 .rev()
@@ -60,7 +61,6 @@ impl EditorView {
             return;
         }
         self.suppress_drag_selection = false;
-        self.preferred_column = None;
         let unit = match ev.click_count {
             _ if ev.modifiers.shift => SelectionUnit::Character,
             0 | 1 => SelectionUnit::Character,
@@ -70,47 +70,32 @@ impl EditorView {
         if unit != SelectionUnit::Character {
             let (start, end) = unit_range(self.model.read(cx), unit, line, col);
             self.drag_anchor = Some(DragAnchor { unit, start, end });
-            (self.anchor_line, self.anchor_col) = start;
-            (self.cursor_line, self.cursor_col) = end;
-            self.has_selection = start != end;
-            self.finish_position_change(cx);
+            self.editor
+                .update(cx, |editor, cx| editor.select_from(start, end, cx));
             return;
         }
+        let editor = self.editor.read(cx);
+        let caret = (editor.cursor_line, editor.cursor_col);
         let anchor = if !ev.modifiers.shift {
             (line, col)
-        } else if self.has_selection {
-            (self.anchor_line, self.anchor_col)
+        } else if editor.has_selection {
+            (editor.anchor_line, editor.anchor_col)
         } else {
-            (self.cursor_line, self.cursor_col)
+            caret
         };
         self.drag_anchor = Some(DragAnchor {
             unit,
             start: anchor,
             end: anchor,
         });
-        if ev.modifiers.shift {
-            if !self.has_selection {
-                self.anchor_line = self.cursor_line;
-                self.anchor_col = self.cursor_col;
-            }
-            self.cursor_line = line;
-            self.cursor_col = col;
-            self.has_selection =
-                self.cursor_line != self.anchor_line || self.cursor_col != self.anchor_col;
-        } else {
-            self.cursor_line = line;
-            self.cursor_col = col;
-            self.has_selection = false;
-        }
-        self.finish_position_change(cx);
+        self.editor
+            .update(cx, |editor, cx| editor.select_from(anchor, (line, col), cx));
     }
 
     /// Mouse-move while the left button is held extends the selection from
     /// the anchor (the position, word, or line where the drag began) to the
-    /// position, word, or line under the pointer. `MouseMoveEvent::dragging()` is true
-    /// when the platform reports the left button as currently pressed, so we
-    /// don't need a separate mouse-up handler to know we're still dragging.
-    /// Window-level pointer listeners keep the gesture active outside the pane.
+    /// position, word, or line under the pointer. Window-level pointer
+    /// listeners keep the gesture active outside the pane.
     pub(super) fn on_mouse_move(
         &mut self,
         ev: &MouseMoveEvent,
@@ -128,22 +113,17 @@ impl EditorView {
         let Some(anchor) = self.drag_anchor else {
             return;
         };
-        let model = self.model.read(cx);
-        let (line, col) = self.hit_test(model, ev.position, window, cx);
+        let (line, col) = self.hit_test(self.editor.read(cx), ev.position, window, cx);
         // Extending by units keeps the clicked unit selected and reaches the
         // far edge of the unit under the pointer.
-        let (hovered_start, hovered_end) = unit_range(model, anchor.unit, line, col);
+        let (hovered_start, hovered_end) = unit_range(self.model.read(cx), anchor.unit, line, col);
         let (fixed, moving) = if hovered_start < anchor.start {
             (anchor.end, hovered_start)
         } else {
             (anchor.start, hovered_end.max(anchor.end))
         };
-        (self.anchor_line, self.anchor_col) = fixed;
-        (self.cursor_line, self.cursor_col) = moving;
-        self.preferred_column = None;
-        self.has_selection =
-            self.cursor_line != self.anchor_line || self.cursor_col != self.anchor_col;
-        self.finish_position_change(cx);
+        self.editor
+            .update(cx, |editor, cx| editor.select_from(fixed, moving, cx));
     }
 
     /// Map a window-space point to a (line, byte_col) caret position using the
@@ -153,119 +133,69 @@ impl EditorView {
     /// visible edge.
     pub(super) fn hit_test(
         &self,
-        model: &BufferModel,
+        editor: &Editor,
         p: Point<Pixels>,
         window: &Window,
         cx: &App,
     ) -> (usize, usize) {
         let origin = self.text_bounds().origin;
-        let row = (f32::from(p.y - origin.y) / self.metrics.line_height + self.scroll_top)
+        let row = (f32::from(p.y - origin.y) / self.metrics.line_height + editor.scroll_top)
             .floor()
             .max(0.) as usize;
-        self.column_for_x(model, row, p.x - origin.x + px(self.scroll_x), window, cx)
+        self.column_for_x(
+            editor,
+            row,
+            p.x - origin.x + px(editor.scroll_x),
+            window,
+            cx,
+        )
     }
 }
-impl EntityInputHandler for EditorView {
-    /// Return the text at the given document-wide UTF-16 range. Report
-    /// scalar-aligned offsets when a request splits a UTF-16 surrogate pair.
-    fn text_for_range(
-        &mut self,
-        range: Range<usize>,
-        adjusted: &mut Option<Range<usize>>,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<String> {
-        let model = self.model.read(cx);
-        let start = model.offset_of_utf16(range.start);
-        let end = model.offset_of_utf16(range.end);
-        if start > end {
-            return None;
-        }
-        *adjusted = Some(model.utf16_of_offset(start)..model.utf16_of_offset(end));
-        Some(model.read(start..end))
-    }
 
-    /// Return the current selection as a `UTF16Selection`. When there is no
-    /// selection (caret only), return a zero-length range at the caret
-    /// position. `reversed` is true when the caret (head) is before the
-    /// anchor (tail) in document order.
-    fn selected_text_range(
-        &mut self,
-        _ignore_disabled_input: bool,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<UTF16Selection> {
+impl Editor {
+    /// The selection as document-wide UTF-16 offsets, a caret-only range
+    /// without one. `reversed` when the caret is before the anchor.
+    fn selected_utf16(&self, cx: &App) -> UTF16Selection {
         let model = self.model.read(cx);
         let caret = to_flat_utf16(model, self.cursor_line, self.cursor_col);
-        if self.has_selection {
-            let anchor = to_flat_utf16(model, self.anchor_line, self.anchor_col);
-            let (start, end, reversed) = if anchor <= caret {
-                (anchor, caret, false)
-            } else {
-                (caret, anchor, true)
-            };
-            Some(UTF16Selection {
-                range: start..end,
-                reversed,
-            })
-        } else {
-            Some(UTF16Selection {
+        if !self.has_selection {
+            return UTF16Selection {
                 range: caret..caret,
                 reversed: false,
-            })
+            };
         }
-    }
-
-    fn marked_text_range(
-        &self,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Option<Range<usize>> {
-        self.marked_range_utf16.clone()
+        let anchor = to_flat_utf16(model, self.anchor_line, self.anchor_col);
+        if anchor <= caret {
+            UTF16Selection {
+                range: anchor..caret,
+                reversed: false,
+            }
+        } else {
+            UTF16Selection {
+                range: caret..anchor,
+                reversed: true,
+            }
+        }
     }
 
     /// Commit the preedit marking without changing its text or selection.
-    fn unmark_text(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn unmark_text(&mut self, cx: &mut Context<Self>) {
         if self.marked_range_utf16.take().is_some() {
             self.break_history_group(cx);
             cx.notify();
         }
     }
 
-    /// Replace text at the given UTF-16 range (or the current selection /
-    /// marked range if `range` is `None`) with `text`. This is the
-    /// `insertText:` callback — it commits text into the document. After
-    /// replacement the marked range is cleared and the caret moves to the
-    /// end of the inserted text.
-    fn replace_text_in_range(
+    /// Insert typed or committed `text` at a UTF-16 range, or over the
+    /// marked text, selection, or caret: a composition commits in its own
+    /// undo group, while typing groups with typing and may close a bracket
+    /// or outdent the line.
+    pub(crate) fn type_text(
         &mut self,
         range: Option<Range<usize>>,
         text: &str,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // A composition commits in place: its preedit is already in the text.
-        if self.marked_range_utf16.is_none()
-            && let Some(queue) = &self.held_input
-        {
-            queue.push(crate::app::commands::key_hold::HeldInput::Text(
-                text.to_owned(),
-            ));
-            return;
-        }
-        if self.marked_range_utf16.is_none()
-            && let Some(command) = self.text_command(cx)
-            && let Some(route) = cx
-                .try_global::<crate::app::commands::key_hold::TextCommandRouter>()
-                .map(|router| router.0)
-        {
-            let queue = crate::app::commands::key_hold::HeldInputQueue::default();
-            let editor = cx.entity().downgrade();
-            if route(editor, command, text.to_owned(), queue.clone(), window, cx) {
-                self.held_input = Some(queue);
-                return;
-            }
-        }
         let grouping = if self.marked_range_utf16.is_some() {
             EditGroupKind::Composition
         } else {
@@ -275,25 +205,22 @@ impl EntityInputHandler for EditorView {
         let bracket =
             grouping == EditGroupKind::Typing && self.type_bracket(range.clone(), text, cx);
         if !bracket {
-            self.replace_text_with_grouping(range, text, Some(grouping), window, cx);
+            self.replace_text_with_grouping(range, text, Some(grouping), cx);
         }
         if grouping == EditGroupKind::Typing && !text.contains(['\n', '\r']) {
             self.outdent_typed_line(cx);
         }
     }
 
-    /// Replace text at the given range (or current selection / marked range
-    /// if `None`) with `new_text`, and mark the result as IME composing text.
-    /// `new_selected_range` is relative to the start of the marked text (per
-    /// Apple's `setMarkedText:selectedRange:replacementRange:`). The caret
-    /// moves to the end of `new_selected_range`, and the anchor to its start,
-    /// giving a visible selection within the preedit string.
-    fn replace_and_mark_text_in_range(
+    /// Replace a UTF-16 range, or the marked text, selection, or caret,
+    /// with composing `new_text` and mark it; `new_selected_range`, relative
+    /// to the marked text, becomes the selection. Nothing changes where a
+    /// text binding claims typed text.
+    pub(super) fn mark_text(
         &mut self,
         range: Option<Range<usize>>,
         new_text: &str,
         new_selected_range: Option<Range<usize>>,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         // Text a binding claims never reaches the buffer, so neither does
@@ -335,12 +262,102 @@ impl EntityInputHandler for EditorView {
 
         self.finish_position_change(cx);
     }
+}
+
+impl EntityInputHandler for EditorView {
+    /// Return the text at the given document-wide UTF-16 range. Report
+    /// scalar-aligned offsets when a request splits a UTF-16 surrogate pair.
+    fn text_for_range(
+        &mut self,
+        range: Range<usize>,
+        adjusted: &mut Option<Range<usize>>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        let model = self.model.read(cx);
+        let start = model.offset_of_utf16(range.start);
+        let end = model.offset_of_utf16(range.end);
+        if start > end {
+            return None;
+        }
+        *adjusted = Some(model.utf16_of_offset(start)..model.utf16_of_offset(end));
+        Some(model.read(start..end))
+    }
+
+    fn selected_text_range(
+        &mut self,
+        _ignore_disabled_input: bool,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<UTF16Selection> {
+        Some(self.editor.read(cx).selected_utf16(cx))
+    }
+
+    fn marked_text_range(
+        &self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Range<usize>> {
+        self.editor.read(cx).marked_range_utf16.clone()
+    }
+
+    fn unmark_text(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.editor.update(cx, |editor, cx| editor.unmark_text(cx));
+    }
+
+    /// The `insertText:` callback, which commits text into the document,
+    /// unless the editor's input is held behind a command or a text binding
+    /// routes it to one.
+    fn replace_text_in_range(
+        &mut self,
+        range: Option<Range<usize>>,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let editor = self.editor.read(cx);
+        // A composition commits in place: its preedit is already in the text.
+        if editor.marked_range_utf16.is_none() {
+            if let Some(queue) = &editor.held_input {
+                queue.push(crate::app::commands::key_hold::HeldInput::Text(
+                    text.to_owned(),
+                ));
+                return;
+            }
+            if let Some(command) = editor.text_command(cx)
+                && let Some(route) = cx
+                    .try_global::<crate::app::commands::key_hold::TextCommandRouter>()
+                    .map(|router| router.0)
+            {
+                let queue = crate::app::commands::key_hold::HeldInputQueue::default();
+                let view = cx.entity().downgrade();
+                if route(view, command, text.to_owned(), queue.clone(), window, cx) {
+                    self.editor
+                        .update(cx, |editor, _| editor.set_held_input(Some(queue)));
+                    return;
+                }
+            }
+        }
+        self.editor
+            .update(cx, |editor, cx| editor.type_text(range, text, cx));
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        range: Option<Range<usize>>,
+        new_text: &str,
+        new_selected_range: Option<Range<usize>>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editor.update(cx, |editor, cx| {
+            editor.mark_text(range, new_text, new_selected_range, cx)
+        });
+    }
 
     /// Return the bounds (in window-local px) of the given UTF-16 range, used
-    /// by macOS to position the IME candidate window. We shape the line
-    /// containing the range start and return a rect spanning from the start
-    /// column's x to the end column's x (or at least the caret x if they
-    /// coincide), at the line's vertical position.
+    /// by macOS to position the IME candidate window: from the start
+    /// column's x to the end column's x on the start's row.
     fn bounds_for_range(
         &mut self,
         range_utf16: Range<usize>,
@@ -348,15 +365,16 @@ impl EntityInputHandler for EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
+        let editor = self.editor.read(cx);
         let model = self.model.read(cx);
         let start = flat_utf16_to_position(model, range_utf16.start);
         let end = flat_utf16_to_position(model, range_utf16.end);
-        let row = self.row(model, self.wrap.row_of(start.0, start.1));
+        let row = editor.row(model, editor.wrap.row_of(start.0, start.1));
         let top = element_bounds.origin.y
-            + px((row.index as f32 - self.scroll_top) * self.metrics.line_height);
-        let x0 = self.x_in_row(model, &row, start.1, window, cx);
+            + px((row.index as f32 - editor.scroll_top) * self.metrics.line_height);
+        let x0 = self.x_in_row(editor, &row, start.1, window, cx);
         let x1 = if row.holds(end) {
-            self.x_in_row(model, &row, end.1, window, cx)
+            self.x_in_row(editor, &row, end.1, window, cx)
         } else {
             element_bounds.size.width
         };
@@ -378,9 +396,8 @@ impl EntityInputHandler for EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<usize> {
-        let model = self.model.read(cx);
-        let (line, col) = self.hit_test(model, point, window, cx);
-        Some(to_flat_utf16(model, line, col))
+        let (line, col) = self.hit_test(self.editor.read(cx), point, window, cx);
+        Some(to_flat_utf16(self.model.read(cx), line, col))
     }
 }
 

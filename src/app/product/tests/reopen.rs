@@ -129,7 +129,12 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
             .editor()
             .unwrap()
             .clone();
-        editor.update(cx, |editor, cx| editor.restore_view_state(state, cx));
+        editor.update(cx, |editor, cx| {
+            editor
+                .editor()
+                .clone()
+                .update(cx, |editor, cx| editor.restore_view_state(state, cx))
+        });
     });
     let closed = active_document(&shell, cx).unwrap();
     assert_eq!(
@@ -168,7 +173,13 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
         let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
         assert_eq!(pane.active_tab_id(), pane.tabs()[2].id());
         assert_eq!(
-            pane.active_tab().editor().unwrap().read(cx).view_state(cx),
+            pane.active_tab()
+                .editor()
+                .unwrap()
+                .read(cx)
+                .editor()
+                .read(cx)
+                .view_state(cx),
             state
         );
     });

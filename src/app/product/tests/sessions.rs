@@ -1000,14 +1000,15 @@ fn arrangement(layout: &serde_json::Value) -> serde_json::Value {
 fn editors(
     shell: &Entity<ProductShell>,
     cx: &TestAppContext,
-) -> Vec<Entity<crate::app::editor::EditorView>> {
+) -> Vec<Entity<crate::app::editor::Editor>> {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         workbench
             .panes()
             .iter()
             .flat_map(|pane| pane.tabs())
-            .filter_map(|tab| tab.editor().cloned())
+            .filter_map(|tab| tab.editor())
+            .map(|view| view.read(cx).editor().clone())
             .collect()
     })
 }

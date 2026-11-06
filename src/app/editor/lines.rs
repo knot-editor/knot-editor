@@ -3,7 +3,7 @@
 
 use super::*;
 
-impl EditorView {
+impl Editor {
     /// Duplicate the selected lines below them, moving the selection to the
     /// copy, or above them, leaving it on the copy that now takes their place.
     pub(super) fn copy_lines(&mut self, down: bool, cx: &mut Context<Self>) {

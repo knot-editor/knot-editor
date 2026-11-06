@@ -17,8 +17,8 @@ pub(super) struct Row {
     pub(super) range: Range<usize>,
     /// Whether the row ends its line, so it also shows the line's end.
     pub(super) last: bool,
-    /// How far right of the text area's edge the row's text starts.
-    pub(super) indent: Pixels,
+    /// How many cells right of the text area's edge the row's text starts.
+    pub(super) indent: usize,
 }
 
 impl Row {
@@ -135,46 +135,15 @@ impl EditorMetrics {
     }
 }
 
-impl EditorView {
-    #[cfg(test)]
-    pub(crate) fn metrics(&self) -> EditorMetrics {
-        self.metrics
-    }
-
-    /// Resolve the metrics for the current settings and zoom. Scrolling is
-    /// in rows, so the same line stays at the top when the line height
-    /// changes.
-    pub(super) fn update_metrics(&mut self, cx: &App) {
-        let font_size = settings::font_size(&self.settings_scope(self.model.read(cx), cx), cx);
-        let metrics = EditorMetrics::new(font_size * crate::app::zoom::factor(cx));
-        if metrics != self.metrics {
-            self.metrics = metrics;
-            self.max_line_width = 0.;
-        }
-    }
-
-    /// Wrap lines to the text area's `width` when `editor.softWrap` is on,
-    /// keeping the top row's text at the top when the rows change.
-    pub(super) fn update_wrap(&mut self, width: Pixels, window: &Window, cx: &App) {
-        let model = self.model.read(cx);
-        let scope = self.settings_scope(model, cx);
-        let font_size = self.metrics.font_size;
-        let text = window.text_system();
-        self.cell_width = text
-            .advance(
-                text.resolve_font(&make_font(false, false)),
-                px(font_size),
-                '0',
-            )
-            .map_or(font_size * 0.6, |advance| f32::from(advance.width));
-        let wrap = settings::editor_soft_wrap(&scope, cx).then(|| WrapWidth {
-            columns: ((f32::from(width) - WRAP_MARGIN) / self.cell_width).max(1.) as usize,
-            tab_size: settings::editor_tab_size(&scope, cx),
-        });
+impl Editor {
+    /// Wrap lines to `wrap`, or stop wrapping with `None`, keeping the top
+    /// row's text at the top when the rows change.
+    pub(super) fn set_wrap(&mut self, wrap: Option<WrapWidth>, cx: &App) {
         let restored = self.restored_top.take();
         if wrap == self.wrap.width() {
             return;
         }
+        let model = self.model.read(cx);
         self.sync_wrap(model);
         let top = restored.unwrap_or_else(|| self.top_offset(model));
         self.wrap
@@ -195,21 +164,123 @@ impl EditorView {
             line,
             range: self.wrap.row_range(line, sub, line_end(model, line)),
             last: rows.start + sub + 1 == rows.end,
-            indent: px(self.wrap.indent(line, sub) as f32 * self.cell_width),
+            indent: self.wrap.indent(line, sub),
         }
+    }
+
+    /// The settings context of this editor's view kind and its buffer's
+    /// language.
+    pub(super) fn settings_scope(&self, model: &BufferModel, cx: &App) -> SettingsScope {
+        SettingsScope {
+            language: Some(languages::effective_language(model, cx)),
+            view: Some(self.view_kind.to_string()),
+            document: model.document().map(|document| document.to_string()),
+        }
+    }
+
+    /// Columns per tab stop for this editor's view kind and its buffer's
+    /// language.
+    pub(crate) fn tab_size(&self, model: &BufferModel, cx: &App) -> usize {
+        settings::editor_tab_size(&self.settings_scope(model, cx), cx)
+    }
+
+    /// One indentation level from the `editor.insertSpaces` and
+    /// `editor.tabSize` settings in this editor's scope.
+    pub(super) fn indent_unit(&self, model: &BufferModel, cx: &App) -> IndentUnit {
+        let scope = self.settings_scope(model, cx);
+        IndentUnit {
+            tabs: !settings::editor_insert_spaces(&scope, cx),
+            size: settings::editor_tab_size(&scope, cx),
+        }
+    }
+
+    /// The display cell the caret shows at: the caret's row's indentation
+    /// plus the cells of the row's text before it, with tabs expanded.
+    pub(super) fn caret_column(&self, model: &BufferModel, cx: &App) -> usize {
+        let row = self.row(model, self.caret_row());
+        let text = line_text(model, row.line);
+        let col = self.cursor_col.clamp(row.range.start, row.range.end);
+        row.indent + wrap::cells_before(&text[row.range.start..col], self.tab_size(model, cx))
+    }
+
+    /// The caret position on row `index` nearest display cell `column`. A
+    /// row that does not end its line leaves its end to the next row.
+    pub(super) fn position_at_column(
+        &self,
+        model: &BufferModel,
+        index: usize,
+        column: usize,
+        cx: &App,
+    ) -> (usize, usize) {
+        let row = self.row(model, index);
+        let text = line_text(model, row.line);
+        let col = wrap::index_at_cells(
+            &text[row.range.clone()],
+            column.saturating_sub(row.indent),
+            self.tab_size(model, cx),
+            row.last,
+        );
+        (row.line, row.range.start + col)
+    }
+}
+
+impl EditorView {
+    #[cfg(test)]
+    pub(crate) fn metrics(&self) -> EditorMetrics {
+        self.metrics
+    }
+
+    /// Resolve the metrics for the current settings and zoom. Scrolling is
+    /// in rows, so the same line stays at the top when the line height
+    /// changes.
+    pub(super) fn update_metrics(&mut self, cx: &App) {
+        let editor = self.editor.read(cx);
+        let font_size = settings::font_size(&editor.settings_scope(self.model.read(cx), cx), cx);
+        let metrics = EditorMetrics::new(font_size * crate::app::zoom::factor(cx));
+        if metrics != self.metrics {
+            self.metrics = metrics;
+            self.max_line_width = 0.;
+        }
+    }
+
+    /// Wrap the editor's lines to the text area's `width` when
+    /// `editor.softWrap` is on.
+    pub(super) fn update_wrap(&mut self, width: Pixels, window: &Window, cx: &mut App) {
+        let editor = self.editor.read(cx);
+        let scope = editor.settings_scope(self.model.read(cx), cx);
+        let font_size = self.metrics.font_size;
+        let text = window.text_system();
+        self.cell_width = text
+            .advance(
+                text.resolve_font(&make_font(false, false)),
+                px(font_size),
+                '0',
+            )
+            .map_or(font_size * 0.6, |advance| f32::from(advance.width));
+        let wrap = settings::editor_soft_wrap(&scope, cx).then(|| WrapWidth {
+            columns: ((f32::from(width) - WRAP_MARGIN) / self.cell_width).max(1.) as usize,
+            tab_size: settings::editor_tab_size(&scope, cx),
+        });
+        self.editor
+            .update(cx, |editor, cx| editor.set_wrap(wrap, cx));
+    }
+
+    /// How far right of the text area's edge `row`'s text starts.
+    pub(super) fn row_indent(&self, row: &Row) -> Pixels {
+        px(row.indent as f32 * self.cell_width)
     }
 
     /// Shape `row`, whose line's content is `text`, with its highlight runs.
     pub(super) fn shape_row(
         &self,
-        model: &BufferModel,
+        editor: &Editor,
         row: &Row,
         text: &str,
         window: &Window,
         cx: &App,
     ) -> ShapedLine {
         let runs = slice_runs(
-            &self.line_runs(model, row.line, text, cx),
+            &self.line_runs(editor, row.line, text, cx),
             row.range.clone(),
         );
         shape_editor_line(
@@ -217,46 +288,48 @@ impl EditorView {
             text[row.range.clone()].to_owned().into(),
             px(self.metrics.font_size),
             &runs,
-            self.tab_size(model, cx),
+            editor.tab_size(self.model.read(cx), cx),
         )
     }
 
     /// Where `row`'s text starts in the text area, after horizontal scroll,
     /// for row text `text` shaped `shaped_w` wide.
-    pub(super) fn row_x(&self, row: &Row, text: &str, shaped_w: Pixels) -> Pixels {
-        row.indent + self.line_x_offset(text, shaped_w, self.text_bounds().size.width)
+    pub(super) fn row_x(&self, editor: &Editor, row: &Row, text: &str, shaped_w: Pixels) -> Pixels {
+        self.row_indent(row)
+            + self.line_x_offset(editor, text, shaped_w, self.text_bounds().size.width)
     }
 
     /// The x of byte `col` of `row`'s line within the text area, after
     /// horizontal scroll.
     pub(super) fn x_in_row(
         &self,
-        model: &BufferModel,
+        editor: &Editor,
         row: &Row,
         col: usize,
         window: &Window,
         cx: &App,
     ) -> Pixels {
+        let model = self.model.read(cx);
         let text = line_text(model, row.line);
-        let shaped = self.shape_row(model, row, &text, window, cx);
+        let shaped = self.shape_row(editor, row, &text, window, cx);
         let row_text = &text[row.range.clone()];
         let col = col.clamp(row.range.start, row.range.end) - row.range.start;
-        x_for_index_dir(&shaped, col, row_text, self.tab_size(model, cx))
-            + self.row_x(row, row_text, shaped.width)
+        x_for_index_dir(&shaped, col, row_text, editor.tab_size(model, cx))
+            + self.row_x(editor, row, row_text, shaped.width)
     }
 
     /// Text runs for `line`, whose content is `text`, from the view's
     /// highlight layers: syntax, then decorations.
     pub(super) fn line_runs(
         &self,
-        model: &BufferModel,
+        editor: &Editor,
         line: usize,
         text: &str,
         cx: &App,
     ) -> Vec<TextRun> {
         let theme = theme(cx);
-        let syntax = self.syntax_layer(model, line, theme);
-        let decorations = self.decoration_layers(line, theme);
+        let syntax = self.syntax_layer(editor, self.model.read(cx), line, theme);
+        let decorations = decoration_layers(editor, line, theme);
         let mut layers = vec![syntax.as_slice()];
         layers.extend(decorations.iter().map(Vec::as_slice));
         runs_for(text, &layers, theme)
@@ -266,44 +339,20 @@ impl EditorView {
     #[cfg(test)]
     pub(super) fn shape_line(
         &self,
-        model: &BufferModel,
         line: usize,
         text: &str,
         window: &Window,
         cx: &App,
     ) -> ShapedLine {
-        let runs = self.line_runs(model, line, text, cx);
+        let editor = self.editor.read(cx);
+        let runs = self.line_runs(editor, line, text, cx);
         shape_editor_line(
             window,
             text.to_owned().into(),
             px(self.metrics.font_size),
             &runs,
-            self.tab_size(model, cx),
+            editor.tab_size(self.model.read(cx), cx),
         )
-    }
-
-    /// The settings context of this view's kind and its buffer's language.
-    pub(super) fn settings_scope(&self, model: &BufferModel, cx: &App) -> SettingsScope {
-        SettingsScope {
-            language: Some(languages::effective_language(model, cx)),
-            view: Some(self.view_kind.to_string()),
-            document: model.document().map(|document| document.to_string()),
-        }
-    }
-
-    /// Columns per tab stop for this view's kind and its buffer's language.
-    pub(crate) fn tab_size(&self, model: &BufferModel, cx: &App) -> usize {
-        settings::editor_tab_size(&self.settings_scope(model, cx), cx)
-    }
-
-    /// One indentation level from the `editor.insertSpaces` and
-    /// `editor.tabSize` settings in this view's scope.
-    pub(super) fn indent_unit(&self, model: &BufferModel, cx: &App) -> IndentUnit {
-        let scope = self.settings_scope(model, cx);
-        IndentUnit {
-            tabs: !settings::editor_insert_spaces(&scope, cx),
-            size: settings::editor_tab_size(&scope, cx),
-        }
     }
 
     /// Query the syntax highlights of `lines` at once, so painting and the
@@ -340,7 +389,13 @@ impl EditorView {
     }
 
     /// The syntax highlights on `line`, relative to its start.
-    fn syntax_layer(&self, model: &BufferModel, line: usize, theme: &Theme) -> Vec<HighlightSpan> {
+    fn syntax_layer(
+        &self,
+        editor: &Editor,
+        model: &BufferModel,
+        line: usize,
+        theme: &Theme,
+    ) -> Vec<HighlightSpan> {
         let Some(generation) = model.syntax_generation() else {
             return Vec::new();
         };
@@ -350,7 +405,7 @@ impl EditorView {
         }
         // Geometry runs between commits and paints; filling the visible
         // lines lets the next paint reuse its query.
-        let visible = self.visible_lines();
+        let visible = editor.visible_lines();
         self.cache_syntax(
             model,
             if visible.contains(&line) {
@@ -379,53 +434,10 @@ impl EditorView {
             .collect()
     }
 
-    /// The underline decorations on `line`, one layer per color key and
-    /// style in the order the model paints them, so a later layer's
-    /// underline wins where they overlap. Backgrounds paint as quads.
-    fn decoration_layers(&self, line: usize, theme: &Theme) -> Vec<Vec<HighlightSpan>> {
-        let underlines = || {
-            self.decorations.iter().filter(move |decoration| {
-                decoration.line == line
-                    && matches!(
-                        decoration.style,
-                        DecorationStyle::Underline | DecorationStyle::Wavy
-                    )
-            })
-        };
-        let mut layers: Vec<(&str, DecorationStyle)> = Vec::new();
-        for decoration in underlines() {
-            let layer = (decoration.key.as_str(), decoration.style);
-            layers.retain(|existing| *existing != layer);
-            layers.push(layer);
-        }
-        layers
-            .into_iter()
-            .map(|(key, style)| {
-                let mut ranges: Vec<Range<usize>> = underlines()
-                    .filter(|decoration| decoration.key == key && decoration.style == style)
-                    .map(|decoration| decoration.start..decoration.end)
-                    .collect();
-                ranges.sort_unstable_by_key(|range| range.start);
-                let mut merged: Vec<Range<usize>> = Vec::new();
-                for range in ranges {
-                    match merged.last_mut() {
-                        Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
-                        _ => merged.push(range),
-                    }
-                }
-                let style = theme.decoration(key, style);
-                merged
-                    .into_iter()
-                    .map(|range| HighlightSpan { range, style })
-                    .collect()
-            })
-            .collect()
-    }
-
     /// The caret's x within the text area, before horizontal scroll.
-    pub(super) fn caret_x(&self, model: &BufferModel, window: &Window, cx: &App) -> Pixels {
-        let row = self.row(model, self.caret_row());
-        self.x_in_row(model, &row, self.cursor_col, window, cx) + px(self.scroll_x)
+    pub(super) fn caret_x(&self, editor: &Editor, window: &Window, cx: &App) -> Pixels {
+        let row = editor.row(self.model.read(cx), editor.caret_row());
+        self.x_in_row(editor, &row, editor.cursor_col, window, cx) + px(editor.scroll_x)
     }
 
     /// The caret position on row `index` nearest `x`, measured within the
@@ -433,21 +445,22 @@ impl EditorView {
     /// leaves its end to the next row.
     pub(super) fn column_for_x(
         &self,
-        model: &BufferModel,
+        editor: &Editor,
         index: usize,
         x: Pixels,
         window: &Window,
         cx: &App,
     ) -> (usize, usize) {
-        let row = self.row(model, index);
+        let model = self.model.read(cx);
+        let row = editor.row(model, index);
         if row.range.is_empty() {
             return (row.line, row.range.start);
         }
         let text = line_text(model, row.line);
-        let shaped = self.shape_row(model, &row, &text, window, cx);
+        let shaped = self.shape_row(editor, &row, &text, window, cx);
         let row_text = &text[row.range.clone()];
-        let tab_size = self.tab_size(model, cx);
-        let offset = self.row_x(&row, row_text, shaped.width) + px(self.scroll_x);
+        let tab_size = editor.tab_size(model, cx);
+        let offset = self.row_x(editor, &row, row_text, shaped.width) + px(editor.scroll_x);
         let col = row_text
             .grapheme_indices(true)
             .map(|(i, _)| i)
@@ -464,51 +477,70 @@ impl EditorView {
         (row.line, row.range.start + col)
     }
 
-    /// The display cell the caret shows at: the caret's row's indentation
-    /// plus the cells of the row's text before it, with tabs expanded.
-    pub(super) fn caret_column(&self, model: &BufferModel, cx: &App) -> usize {
-        let (line, sub) = self.wrap.position(self.caret_row());
-        let range = self.wrap.row_range(line, sub, line_end(model, line));
-        let text = line_text(model, line);
-        let col = self.cursor_col.clamp(range.start, range.end);
-        self.wrap.indent(line, sub)
-            + wrap::cells_before(&text[range.start..col], self.tab_size(model, cx))
-    }
-
-    /// The caret position on row `index` nearest display cell `column`. A
-    /// row that does not end its line leaves its end to the next row.
-    pub(super) fn position_at_column(
-        &self,
-        model: &BufferModel,
-        index: usize,
-        column: usize,
-        cx: &App,
-    ) -> (usize, usize) {
-        let (line, sub) = self.wrap.position(index);
-        let range = self.wrap.row_range(line, sub, line_end(model, line));
-        let last = self.wrap.rows(line).end == self.wrap.first_row(line) + sub + 1;
-        let text = line_text(model, line);
-        let column = column.saturating_sub(self.wrap.indent(line, sub));
-        let col =
-            wrap::index_at_cells(&text[range.clone()], column, self.tab_size(model, cx), last);
-        (line, range.start + col)
-    }
-
     /// Per-line horizontal offset for RTL lines: right-align the line within
     /// the pane so a pure-Arabic line starts at the right edge instead of the
     /// left. Returns 0 for LTR lines, `(pane_w - shaped_w).max(0)` for RTL.
     /// The caret, selection, IME preedit, decoration, and hit-test all add
     /// this offset to their x computations so they stay consistent with the
     /// right-aligned text.
-    pub(super) fn line_x_offset(&self, text: &str, shaped_w: Pixels, pane_w: Pixels) -> Pixels {
+    pub(super) fn line_x_offset(
+        &self,
+        editor: &Editor,
+        text: &str,
+        shaped_w: Pixels,
+        pane_w: Pixels,
+    ) -> Pixels {
         (if is_rtl_line(text) {
             (pane_w - shaped_w).max(px(0.))
         } else {
             px(0.)
-        }) - px(self.scroll_x)
+        }) - px(editor.scroll_x)
     }
 }
-/// The runs covering `range` of the text `runs` cover, shortened to it.
+
+/// The underline decorations on `line`, one layer per color key and style
+/// in the order the model paints them, so a later layer's underline wins
+/// where they overlap. Backgrounds paint as quads.
+fn decoration_layers(editor: &Editor, line: usize, theme: &Theme) -> Vec<Vec<HighlightSpan>> {
+    let underlines = || {
+        editor.decorations.iter().filter(move |decoration| {
+            decoration.line == line
+                && matches!(
+                    decoration.style,
+                    DecorationStyle::Underline | DecorationStyle::Wavy
+                )
+        })
+    };
+    let mut layers: Vec<(&str, DecorationStyle)> = Vec::new();
+    for decoration in underlines() {
+        let layer = (decoration.key.as_str(), decoration.style);
+        layers.retain(|existing| *existing != layer);
+        layers.push(layer);
+    }
+    layers
+        .into_iter()
+        .map(|(key, style)| {
+            let mut ranges: Vec<Range<usize>> = underlines()
+                .filter(|decoration| decoration.key == key && decoration.style == style)
+                .map(|decoration| decoration.start..decoration.end)
+                .collect();
+            ranges.sort_unstable_by_key(|range| range.start);
+            let mut merged: Vec<Range<usize>> = Vec::new();
+            for range in ranges {
+                match merged.last_mut() {
+                    Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+                    _ => merged.push(range),
+                }
+            }
+            let style = theme.decoration(key, style);
+            merged
+                .into_iter()
+                .map(|range| HighlightSpan { range, style })
+                .collect()
+        })
+        .collect()
+}
+
 pub(super) fn slice_runs(runs: &[TextRun], range: Range<usize>) -> Vec<TextRun> {
     let mut start = 0;
     runs.iter()

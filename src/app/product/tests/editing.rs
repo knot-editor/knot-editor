@@ -117,7 +117,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
         no_selection.completion.await.unwrap(),
         CommandOutcome::Unavailable
     );
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         let editor = shell
             .read(cx)
             .workbench
@@ -129,7 +129,9 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
-            editor.execute_editing_command("editor.select-all", window, cx);
+            editor.editor().clone().update(cx, |editor, cx| {
+                editor.execute_editing_command("editor.select-all", cx)
+            });
         });
     })
     .unwrap();
@@ -393,9 +395,15 @@ fn product_editor_accepts_utf16_composition_and_grapheme_deletion(cx: &mut TestA
             assert_eq!(editor.marked_text_range(window, cx), Some(start..start + 2));
             editor.replace_text_in_range(None, "日本語", window, cx);
             assert_eq!(editor.marked_text_range(window, cx), None);
-            assert!(editor.execute_editing_command("editor.move-document-start", window, cx));
-            assert!(editor.execute_editing_command("editor.move-down", window, cx));
-            assert!(editor.execute_editing_command("editor.delete-forward", window, cx));
+            assert!(editor.editor().clone().update(cx, |editor, cx| {
+                editor.execute_editing_command("editor.move-document-start", cx)
+            }));
+            assert!(editor.editor().clone().update(cx, |editor, cx| {
+                editor.execute_editing_command("editor.move-down", cx)
+            }));
+            assert!(editor.editor().clone().update(cx, |editor, cx| {
+                editor.execute_editing_command("editor.delete-forward", cx)
+            }));
         });
     })
     .unwrap();
@@ -491,7 +499,10 @@ fn product_editor_captures_mouse_selection_outside_its_pane(cx: &mut TestAppCont
     window_cx.simulate_mouse_up(outside, MouseButton::Left, Modifiers::default());
 
     window_cx.read(|cx| {
-        assert_eq!(editor.read(cx).selected_byte_range(cx), Some(0..text.len()));
+        assert_eq!(
+            editor.read(cx).editor().read(cx).selected_byte_range(cx),
+            Some(0..text.len())
+        );
     });
 }
 

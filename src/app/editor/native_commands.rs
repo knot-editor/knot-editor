@@ -8,7 +8,7 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
     if command.name.as_ref() != COPY_COMMAND || command.arguments != CommandArgumentValue::Null {
         return true;
     }
-    matches!(target.command_view(cx), Some(crate::app::workbench::CommandView::Editor(editor)) if editor.read(cx).has_selection())
+    matches!(target.command_view(cx), Some(crate::app::workbench::CommandView::Editor(view)) if view.read(cx).editor().read(cx).has_selection())
 }
 
 #[command("editor.move-left", title = "Move left", palette = false, id = MOVE_LEFT_COMMAND, participant = Editor)]
@@ -82,14 +82,13 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     let name = context.name;
     context
-        .in_window(move |target, window, cx| {
-            let Some(crate::app::workbench::CommandView::Editor(editor)) = target.command_view(cx)
+        .foreground(move |target, cx| {
+            let Some(crate::app::workbench::CommandView::Editor(view)) = target.command_view(cx)
             else {
                 return Err(CommandOutcome::InvalidTarget);
             };
-            if editor.update(cx, |editor, cx| {
-                editor.execute_editing_command(name, window, cx)
-            }) {
+            let editor = view.read(cx).editor().clone();
+            if editor.update(cx, |editor, cx| editor.execute_editing_command(name, cx)) {
                 Ok(())
             } else {
                 Err(CommandOutcome::Unavailable)

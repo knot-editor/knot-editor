@@ -603,6 +603,8 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
     wait_for_api_condition(cx, |cx| {
         editor
             .read(cx)
+            .editor()
+            .read(cx)
             .completion_state()
             .is_some_and(|(items, pending, failures, _)| {
                 items == 1 && pending == 0 && failures == 0

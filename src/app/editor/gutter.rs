@@ -90,8 +90,9 @@ impl EditorView {
             self.gutter = GutterLayout::default();
             return;
         }
-        let model = self.model.read(cx);
-        let line_numbers = settings::editor_line_numbers(&self.settings_scope(model, cx), cx);
+        let editor = self.editor.read(cx);
+        let line_numbers =
+            settings::editor_line_numbers(&editor.settings_scope(self.model.read(cx), cx), cx);
         let text = window.text_system();
         let font_size = self.metrics.font_size;
         let digit_width = text
@@ -103,7 +104,7 @@ impl EditorView {
             .map_or(font_size * 0.6, |advance| f32::from(advance.width));
         self.gutter = GutterLayout::new(
             line_numbers,
-            self.line_count,
+            editor.line_count,
             digit_width,
             self.metrics.scale(),
         );
@@ -115,6 +116,31 @@ impl EditorView {
             .lane_at(f32::from(position.x - self.bounds.origin.x))
     }
 
+    /// The first row of each line that starts in `rows`, with the number the
+    /// gutter shows beside it and whether it is the cursor's line. A wrapped
+    /// line shows its number on its first row only.
+    pub(super) fn gutter_numbers(
+        &self,
+        editor: &Editor,
+        rows: Range<usize>,
+    ) -> Vec<(usize, usize, bool)> {
+        if rows.is_empty() {
+            return Vec::new();
+        }
+        let wrap = &editor.wrap;
+        let lines = wrap.position(rows.start).0..wrap.position(rows.end - 1).0 + 1;
+        lines
+            .filter_map(|line| {
+                let row = wrap.first_row(line);
+                let label = self.gutter.label(line, editor.cursor_line)?;
+                rows.contains(&row)
+                    .then_some((row, label, line == editor.cursor_line))
+            })
+            .collect()
+    }
+}
+
+impl Editor {
     /// The marker shown on `line`, if any.
     pub(super) fn gutter_marker(&self, line: usize) -> Option<&RenderedGutterMarker> {
         self.gutter_markers
@@ -123,14 +149,14 @@ impl EditorView {
     }
 
     /// Select whole lines from a click on the line numbers: the clicked line,
-    /// or with shift, from the selection's anchor through the clicked line.
-    /// A drag then extends by lines.
+    /// or with `extend`, from the selection's anchor through the clicked
+    /// line. Returns what a drag then extends from by lines.
     pub(super) fn select_lines_from_gutter(
         &mut self,
         line: usize,
         extend: bool,
         cx: &mut Context<Self>,
-    ) {
+    ) -> DragAnchor {
         let (start, end) = unit_range(self.model.read(cx), SelectionUnit::Line, line, 0);
         let (fixed_start, fixed_end) = if extend {
             let fixed = if self.has_selection {
@@ -142,39 +168,17 @@ impl EditorView {
         } else {
             (start, end)
         };
-        self.drag_anchor = Some(DragAnchor {
-            unit: SelectionUnit::Line,
-            start: fixed_start,
-            end: fixed_end,
-        });
         let (anchor, caret) = if start < fixed_start {
             (fixed_end, start)
         } else {
             (fixed_start, end.max(fixed_end))
         };
-        (self.anchor_line, self.anchor_col) = anchor;
-        (self.cursor_line, self.cursor_col) = caret;
-        self.has_selection = anchor != caret;
-        self.preferred_column = None;
-        self.finish_position_change(cx);
-    }
-
-    /// The first row of each line that starts in `rows`, with the number the
-    /// gutter shows beside it and whether it is the cursor's line. A wrapped
-    /// line shows its number on its first row only.
-    pub(super) fn gutter_numbers(&self, rows: Range<usize>) -> Vec<(usize, usize, bool)> {
-        if rows.is_empty() {
-            return Vec::new();
+        self.select_from(anchor, caret, cx);
+        DragAnchor {
+            unit: SelectionUnit::Line,
+            start: fixed_start,
+            end: fixed_end,
         }
-        let lines = self.wrap.position(rows.start).0..self.wrap.position(rows.end - 1).0 + 1;
-        lines
-            .filter_map(|line| {
-                let row = self.wrap.first_row(line);
-                let label = self.gutter.label(line, self.cursor_line)?;
-                rows.contains(&row)
-                    .then_some((row, label, line == self.cursor_line))
-            })
-            .collect()
     }
 
     /// The line whose background is highlighted: the cursor's, while nothing

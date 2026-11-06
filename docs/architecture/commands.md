@@ -30,9 +30,8 @@ An invocation captures the [product
 session](workbench-and-lifecycle.md#product-sessions), its focus by identity
 (layer, pane, and tab), workbench, tab, surface, and exact presentation, with
 no window or focus handle. Routing offers it to the captured focused view,
-then workbench, then application. Commands run against a session without a
-window, except the few that shape text, which run in the session's window and
-are unavailable without one.
+then workbench, then application. Commands, native editing and movement
+included, run against a session without a window.
 Participants synchronously claim/decline before starting typed async work; all
 declining produces unavailable. Raw text, IME, pointer, scroll, and terminal bytes
 remain view input protocols. Find commands currently report unavailable.

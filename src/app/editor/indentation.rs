@@ -17,13 +17,13 @@ pub(super) struct PendingIndent {
     typed: Option<usize>,
 }
 
-impl EditorView {
+impl Editor {
     /// Replace the selection with a line break followed by the indentation
     /// before it on its line, then let the indent query correct the new
     /// line once the tree covers the edit. Between a bracket pair that opens
     /// lines, the break opens an indented middle line with the closer below
     /// it. A line holding only whitespace keeps none of it.
-    pub(super) fn insert_newline(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn insert_newline(&mut self, cx: &mut Context<Self>) {
         let model = self.model.read(cx);
         if !model.is_editable() {
             return;
@@ -152,7 +152,7 @@ impl EditorView {
             return;
         }
         let model = self.model.read(cx);
-        self.text_changed(model);
+        self.seen_revision = model.revision();
         self.refresh(model, None);
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
@@ -163,7 +163,7 @@ impl EditorView {
 
     /// Indent the selected lines when the selection spans lines; otherwise
     /// replace the selection with one indentation unit.
-    pub(super) fn insert_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn insert_tab(&mut self, cx: &mut Context<Self>) {
         if self
             .selection_range()
             .is_some_and(|(start, end)| start.0 != end.0)
@@ -177,7 +177,7 @@ impl EditorView {
             .indent_unit(model, cx)
             .insertion(&text_before_on_line(model, range.start));
         self.break_history_group(cx);
-        self.replace_text_with_grouping(Some(range), &text, None, window, cx);
+        self.replace_text_with_grouping(Some(range), &text, None, cx);
     }
 
     /// Indent each selected line by one unit, skipping empty lines when there

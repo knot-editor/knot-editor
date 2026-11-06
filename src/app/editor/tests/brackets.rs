@@ -1,10 +1,10 @@
 //! The matched-bracket highlight, Jump to Matching Bracket, and typing
 //! bracket pairs.
 
-use gpui::{AppContext, Entity, EntityInputHandler, TestAppContext, VisualTestContext};
+use gpui::{AppContext, Entity, TestAppContext};
 
 use super::indentation::rust_editor;
-use super::{BufferModel, EditorView};
+use super::{BufferModel, Editor};
 use crate::app::languages::{
     self, LanguageDefinition, LanguageOwner, LanguageQueries,
     editing::{BracketPair, EditingDefinition, SyntaxFamily},
@@ -22,7 +22,7 @@ const SOURCE: &str = "fn f(a) { g(); }";
 #[gpui::test]
 fn the_bracket_at_the_caret_and_its_partner_are_highlighted(cx: &mut TestAppContext) {
     let (editor, _, cx) = rust_editor(cx, "", SOURCE, false);
-    cx.update(|_, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
             let mut at = |col| {
                 view.cursor_col = col;
@@ -42,7 +42,7 @@ fn the_bracket_at_the_caret_and_its_partner_are_highlighted(cx: &mut TestAppCont
 #[gpui::test]
 fn the_highlight_follows_edits(cx: &mut TestAppContext) {
     let (editor, _, cx) = rust_editor(cx, "", SOURCE, false);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
             view.cursor_col = 5;
             assert_eq!(
@@ -50,7 +50,7 @@ fn the_highlight_follows_edits(cx: &mut TestAppContext) {
                 Some([4..5, 6..7])
             );
             view.cursor_col = 0;
-            view.replace_text_with_grouping(None, "x", None, window, cx);
+            view.replace_text_with_grouping(None, "x", None, cx);
             view.cursor_col = 6;
             assert_eq!(
                 view.matched_brackets(view.model.read(cx)),
@@ -63,10 +63,10 @@ fn the_highlight_follows_edits(cx: &mut TestAppContext) {
 #[gpui::test]
 fn jump_moves_before_the_partner_and_back(cx: &mut TestAppContext) {
     let (editor, _, cx) = rust_editor(cx, "", SOURCE, false);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            let mut jump = |view: &mut EditorView| {
-                view.execute_editing_command(JUMP, window, cx);
+            let mut jump = |view: &mut Editor| {
+                view.execute_editing_command(JUMP, cx);
                 (view.cursor_line, view.cursor_col, view.has_selection)
             };
             view.cursor_col = 5;
@@ -92,12 +92,12 @@ fn jump_moves_before_the_partner_and_back(cx: &mut TestAppContext) {
 fn a_document_without_a_language_matches_nothing(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
     let model = cx.new(|_| BufferModel::from_text(SOURCE));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
             view.cursor_col = 5;
             assert_eq!(view.matched_brackets(view.model.read(cx)), None);
-            view.execute_editing_command(JUMP, window, cx);
+            view.execute_editing_command(JUMP, cx);
             assert_eq!((view.cursor_line, view.cursor_col), (0, 5));
         })
     });
@@ -110,7 +110,7 @@ fn pairs_editor<'a>(
     cx: &'a mut TestAppContext,
     text: &str,
     caret: usize,
-) -> (Entity<EditorView>, &'a mut VisualTestContext) {
+) -> (Entity<Editor>, &'a mut TestAppContext) {
     cx.update(|cx| {
         cx.set_global(ApplicationSettings::default());
         let pair = |open: &str, close: &str| BracketPair {
@@ -159,18 +159,18 @@ fn pairs_editor<'a>(
     });
     let model = cx.new(|_| BufferModel::from_text(text));
     cx.update(|cx| languages::set_language(&model, "rust".into(), cx));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    cx.update(|_, cx| editor.update(cx, |view, cx| move_to(view, caret, cx)));
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| editor.update(cx, |view, cx| move_to(view, caret, cx)));
     (editor, cx)
 }
 
-fn move_to(view: &mut EditorView, offset: usize, cx: &mut gpui::Context<EditorView>) {
+fn move_to(view: &mut Editor, offset: usize, cx: &mut gpui::Context<Editor>) {
     (view.cursor_line, view.cursor_col) = (0, offset);
     view.has_selection = false;
     view.finish_position_change(cx);
 }
 
-fn select(view: &mut EditorView, anchor: usize, caret: usize, cx: &mut gpui::Context<EditorView>) {
+fn select(view: &mut Editor, anchor: usize, caret: usize, cx: &mut gpui::Context<Editor>) {
     (view.anchor_line, view.anchor_col) = (0, anchor);
     (view.cursor_line, view.cursor_col) = (0, caret);
     view.has_selection = anchor != caret;
@@ -178,19 +178,14 @@ fn select(view: &mut EditorView, anchor: usize, caret: usize, cx: &mut gpui::Con
 }
 
 /// Type `text` one character at a time.
-fn type_text(
-    view: &mut EditorView,
-    text: &str,
-    window: &mut gpui::Window,
-    cx: &mut gpui::Context<EditorView>,
-) {
+fn type_text(view: &mut Editor, text: &str, cx: &mut gpui::Context<Editor>) {
     for character in text.chars() {
-        view.replace_text_in_range(None, &character.to_string(), window, cx);
+        view.type_text(None, &character.to_string(), cx);
     }
 }
 
 /// The text with `|` at the caret, or `[` and `]` around the selection.
-fn marked(view: &EditorView, cx: &gpui::App) -> String {
+fn marked(view: &Editor, cx: &gpui::App) -> String {
     let mut text = view.text(cx);
     let caret = view.cursor_col;
     if view.has_selection {
@@ -203,8 +198,8 @@ fn marked(view: &EditorView, cx: &gpui::App) -> String {
     text
 }
 
-fn set(cx: &mut VisualTestContext, key: &str, value: bool) {
-    cx.update(|_, cx| {
+fn set(cx: &mut TestAppContext, key: &str, value: bool) {
+    cx.update(|cx| {
         cx.global_mut::<ApplicationSettings>()
             .0
             .set(
@@ -223,15 +218,15 @@ fn set(cx: &mut VisualTestContext, key: &str, value: bool) {
 #[gpui::test]
 fn an_opener_inserts_its_closer_as_one_undo_step(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "", 0);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            type_text(view, "f(", window, cx);
+            type_text(view, "f(", cx);
             assert_eq!(marked(view, cx), "f(|)");
-            type_text(view, "{", window, cx);
+            type_text(view, "{", cx);
             assert_eq!(marked(view, cx), "f({|})");
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(marked(view, cx), "f(|)");
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(view.text(cx), "");
         })
     });
@@ -240,9 +235,9 @@ fn an_opener_inserts_its_closer_as_one_undo_step(cx: &mut TestAppContext) {
 #[gpui::test]
 fn an_opener_before_a_word_does_not_close(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "x", 0);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            type_text(view, "(", window, cx);
+            type_text(view, "(", cx);
             assert_eq!(marked(view, cx), "(|x");
         })
     });
@@ -251,15 +246,15 @@ fn an_opener_before_a_word_does_not_close(cx: &mut TestAppContext) {
 #[gpui::test]
 fn typing_a_tracked_closer_steps_over_it(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, ";", 0);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            type_text(view, "f((a", window, cx);
+            type_text(view, "f((a", cx);
             assert_eq!(marked(view, cx), "f((a|));");
-            type_text(view, ")", window, cx);
+            type_text(view, ")", cx);
             assert_eq!(marked(view, cx), "f((a)|);");
-            type_text(view, ")", window, cx);
+            type_text(view, ")", cx);
             assert_eq!(marked(view, cx), "f((a))|;");
-            type_text(view, ")", window, cx);
+            type_text(view, ")", cx);
             assert_eq!(marked(view, cx), "f((a)))|;");
         })
     });
@@ -268,9 +263,9 @@ fn typing_a_tracked_closer_steps_over_it(cx: &mut TestAppContext) {
 #[gpui::test]
 fn an_untracked_closer_is_typed(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "f()", 2);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            type_text(view, ")", window, cx);
+            type_text(view, ")", cx);
             assert_eq!(marked(view, cx), "f()|)");
         })
     });
@@ -279,19 +274,19 @@ fn an_untracked_closer_is_typed(cx: &mut TestAppContext) {
 #[gpui::test]
 fn leaving_the_pair_stops_tracking_it(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "", 0);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            type_text(view, "(", window, cx);
+            type_text(view, "(", cx);
             move_to(view, 0, cx);
             move_to(view, 1, cx);
-            type_text(view, ")", window, cx);
+            type_text(view, ")", cx);
             assert_eq!(marked(view, cx), "()|)");
             // A selection stops tracking too.
             move_to(view, 3, cx);
-            type_text(view, " (", window, cx);
+            type_text(view, " (", cx);
             select(view, 0, 4, cx);
             move_to(view, 5, cx);
-            type_text(view, ")", window, cx);
+            type_text(view, ")", cx);
             assert_eq!(marked(view, cx), "()) ()|)");
         })
     });
@@ -300,15 +295,15 @@ fn leaving_the_pair_stops_tracking_it(cx: &mut TestAppContext) {
 #[gpui::test]
 fn backspace_between_a_tracked_pair_deletes_both(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "", 0);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            type_text(view, "f(", window, cx);
-            view.execute_editing_command("editor.delete-backward", window, cx);
+            type_text(view, "f(", cx);
+            view.execute_editing_command("editor.delete-backward", cx);
             assert_eq!(marked(view, cx), "f|");
             // Once text was typed inside, the pair is no longer empty.
-            type_text(view, "(a", window, cx);
-            view.execute_editing_command("editor.delete-backward", window, cx);
-            view.execute_editing_command("editor.delete-backward", window, cx);
+            type_text(view, "(a", cx);
+            view.execute_editing_command("editor.delete-backward", cx);
+            view.execute_editing_command("editor.delete-backward", cx);
             assert_eq!(marked(view, cx), "f|");
         })
     });
@@ -317,9 +312,9 @@ fn backspace_between_a_tracked_pair_deletes_both(cx: &mut TestAppContext) {
 #[gpui::test]
 fn backspace_between_an_untracked_pair_deletes_one_character(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "()", 1);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            view.execute_editing_command("editor.delete-backward", window, cx);
+            view.execute_editing_command("editor.delete-backward", cx);
             assert_eq!(marked(view, cx), "|)");
         })
     });
@@ -328,19 +323,19 @@ fn backspace_between_an_untracked_pair_deletes_one_character(cx: &mut TestAppCon
 #[gpui::test]
 fn an_opener_wraps_the_selection_and_keeps_it_selected(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "a bc d", 0);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
             select(view, 2, 4, cx);
-            type_text(view, "(", window, cx);
+            type_text(view, "(", cx);
             assert_eq!(marked(view, cx), "a ([bc]) d");
             assert!(view.cursor_col > view.anchor_col);
             // A pair that does not auto-close still wraps, and a reversed
             // selection stays reversed.
             select(view, 4, 3, cx);
-            type_text(view, "'", window, cx);
+            type_text(view, "'", cx);
             assert_eq!(marked(view, cx), "a ('[b]'c) d");
             assert!(view.cursor_col < view.anchor_col);
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(marked(view, cx), "a ([b]c) d");
         })
     });
@@ -351,16 +346,16 @@ fn quotes_do_not_close_inside_strings_or_comments(cx: &mut TestAppContext) {
     let text = "fn f() { let s = \"a b\"; } // c";
     let inside_string = text.find("a b").unwrap() + 1;
     let (editor, cx) = pairs_editor(cx, text, inside_string);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            type_text(view, "\"", window, cx);
+            type_text(view, "\"", cx);
             assert_eq!(view.text(cx), "fn f() { let s = \"a\" b\"; } // c");
             let end = view.text(cx).len();
             move_to(view, end, cx);
-            type_text(view, "\"", window, cx);
+            type_text(view, "\"", cx);
             assert!(view.text(cx).ends_with("// c\""));
             move_to(view, 8, cx);
-            type_text(view, "\"", window, cx);
+            type_text(view, "\"", cx);
             assert!(view.text(cx).starts_with("fn f() {\"\" "));
         })
     });
@@ -371,12 +366,12 @@ fn the_settings_turn_closing_and_wrapping_off(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "ab", 0);
     set(cx, EDITOR_AUTO_CLOSING_BRACKETS, false);
     set(cx, EDITOR_AUTO_SURROUND, false);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            type_text(view, "(", window, cx);
+            type_text(view, "(", cx);
             assert_eq!(marked(view, cx), "(|ab");
             select(view, 1, 3, cx);
-            type_text(view, "(", window, cx);
+            type_text(view, "(", cx);
             assert_eq!(marked(view, cx), "((|");
         })
     });
@@ -385,10 +380,10 @@ fn the_settings_turn_closing_and_wrapping_off(cx: &mut TestAppContext) {
 #[gpui::test]
 fn composed_text_does_not_close(cx: &mut TestAppContext) {
     let (editor, cx) = pairs_editor(cx, "", 0);
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            view.replace_and_mark_text_in_range(None, "\"", None, window, cx);
-            view.replace_text_in_range(None, "\"", window, cx);
+            view.mark_text(None, "\"", None, cx);
+            view.type_text(None, "\"", cx);
             assert_eq!(marked(view, cx), "\"|");
         })
     });

@@ -310,9 +310,10 @@ Wrapped rows are measured in monospace cells with `unicode-width` rather than
 shaped. Shaping every line of a file whenever the width changes would cost a
 shaping pass per line on resize, while cells cost a scan, and Knot's text is
 monospace; proportional fallback glyphs may make a row slightly longer or
-shorter than the viewport. Whitespace hangs past the edge instead of starting
-a row and continuation rows keep the first row's indentation, as VS Code's
-defaults do. Views rewrap only the lines each commit changed, from a bounded
+shorter than the viewport. Vertical movement keeps its column in the same
+cells (see [views and extension UI](#views-and-extension-ui)). Whitespace
+hangs past the edge instead of starting a row and continuation rows keep the
+first row's indentation, as VS Code's defaults do. Views rewrap only the lines each commit changed, from a bounded
 per-revision log on the model, because the model's pending change queue
 belongs to extension delivery and one view's consumption would hide changes
 from the next.
@@ -519,7 +520,7 @@ picker highlight previews. Acknowledging when the listener turn starts, rather
 than when it ends, keeps a long listener from losing the change that arrived
 during it. Observing the editor entity covers every cause of a caret change
 without instrumenting each selection mutation, at the cost of comparing two
-offsets per repaint-triggering notification of a watched editor.
+offsets per notification of a watched editor.
 
 On Apple M1 Pro/macOS release builds under the gpui test dispatcher, a caret
 change reached a listener that read the selection and set a key context in

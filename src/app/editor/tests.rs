@@ -4,7 +4,7 @@ use gpui::{
 };
 
 use super::{
-    BufferModel, CaretShape, ContributionSource, EditorRenderingOptions, EditorView,
+    BufferModel, CaretShape, ContributionSource, Editor, EditorRenderingOptions, EditorView,
     EditorViewState, ResolvedEditorContribution, Reveal, flat_utf16_to_position,
     layout::{HighlightSpan, runs_for, shape_editor_line, x_for_index_dir},
     project_contributions, to_flat_utf16,
@@ -32,33 +32,33 @@ fn ordinary_editing_keeps_projection_clipboard_and_composition_synchronous(
     cx: &mut TestAppContext,
 ) {
     let model = cx.new(|_| BufferModel::from_text(""));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            view.replace_text_in_range(None, "a", window, cx);
-            view.replace_text_in_range(None, "👩‍💻", window, cx);
-            view.replace_text_in_range(None, "é", window, cx);
+            view.type_text(None, "a", cx);
+            view.type_text(None, "👩‍💻", cx);
+            view.type_text(None, "é", cx);
             assert_eq!(view.text(cx), "a👩‍💻é");
-            view.execute_editing_command("editor.delete-backward", window, cx);
+            view.execute_editing_command("editor.delete-backward", cx);
             assert_eq!(view.text(cx), "a👩‍💻");
-            view.execute_editing_command("editor.select-all", window, cx);
-            view.execute_editing_command("editor.cut", window, cx);
+            view.execute_editing_command("editor.select-all", cx);
+            view.execute_editing_command("editor.cut", cx);
             assert_eq!(view.text(cx), "");
-            view.execute_editing_command("editor.paste", window, cx);
+            view.execute_editing_command("editor.paste", cx);
             assert_eq!(view.text(cx), "a👩‍💻");
-            view.replace_and_mark_text_in_range(None, "に", Some(0..1), window, cx);
+            view.mark_text(None, "に", Some(0..1), cx);
             assert_eq!(view.marked_range_utf16, Some(6..7));
-            view.replace_and_mark_text_in_range(None, "日本", Some(2..2), window, cx);
+            view.mark_text(None, "日本", Some(2..2), cx);
             assert_eq!(view.text(cx), "a👩‍💻日本");
-            view.replace_text_in_range(None, "日本語", window, cx);
+            view.type_text(None, "日本語", cx);
             assert_eq!(view.text(cx), "a👩‍💻日本語");
             assert_eq!(view.marked_range_utf16, None);
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(view.text(cx), "a👩‍💻");
-            view.execute_editing_command("editor.redo", window, cx);
+            view.execute_editing_command("editor.redo", cx);
             assert_eq!(view.text(cx), "a👩‍💻日本語");
-            view.execute_editing_command("editor.select-all", window, cx);
-            view.replace_text_in_range(None, "one\r\ntwo\rthree", window, cx);
+            view.execute_editing_command("editor.select-all", cx);
+            view.type_text(None, "one\r\ntwo\rthree", cx);
             assert_eq!(view.text(cx), "one\ntwo\nthree");
         })
     });
@@ -67,35 +67,35 @@ fn ordinary_editing_keeps_projection_clipboard_and_composition_synchronous(
 #[gpui::test]
 fn typing_deletion_and_interaction_boundaries_form_practical_undo_steps(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text(""));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            view.replace_text_in_range(None, "a", window, cx);
-            view.replace_text_in_range(None, "β", window, cx);
-            view.replace_text_in_range(None, "c", window, cx);
-            view.execute_editing_command("editor.undo", window, cx);
+            view.type_text(None, "a", cx);
+            view.type_text(None, "β", cx);
+            view.type_text(None, "c", cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(view.text(cx), "");
-            view.execute_editing_command("editor.redo", window, cx);
+            view.execute_editing_command("editor.redo", cx);
             assert_eq!(view.text(cx), "aβc");
 
-            view.execute_editing_command("editor.move-document-end", window, cx);
-            view.execute_editing_command("editor.delete-backward", window, cx);
-            view.execute_editing_command("editor.delete-backward", window, cx);
+            view.execute_editing_command("editor.move-document-end", cx);
+            view.execute_editing_command("editor.delete-backward", cx);
+            view.execute_editing_command("editor.delete-backward", cx);
             assert_eq!(view.text(cx), "a");
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(view.text(cx), "aβc");
 
-            view.execute_editing_command("editor.move-document-end", window, cx);
-            view.execute_editing_command("editor.move-left", window, cx);
-            view.replace_text_in_range(None, "X", window, cx);
+            view.execute_editing_command("editor.move-document-end", cx);
+            view.execute_editing_command("editor.move-left", cx);
+            view.type_text(None, "X", cx);
             assert_eq!(view.text(cx), "aβXc");
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(view.text(cx), "aβc");
 
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(" pasted".into()));
-            view.execute_editing_command("editor.paste", window, cx);
+            view.execute_editing_command("editor.paste", cx);
             assert_eq!(view.text(cx), "aβ pastedc");
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(view.text(cx), "aβc");
         });
     });
@@ -104,22 +104,22 @@ fn typing_deletion_and_interaction_boundaries_form_practical_undo_steps(cx: &mut
 #[gpui::test]
 fn undo_and_redo_restore_the_originating_views_grouped_selection(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("abcdef"));
-    let (other, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
-    let origin = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let other = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    let origin = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         origin.update(cx, |view, cx| {
             view.anchor_col = 4;
             view.cursor_col = 1;
             view.has_selection = true;
             view.sync_view_position(cx);
-            view.replace_text_in_range(None, "X", window, cx);
-            view.replace_text_in_range(None, "Y", window, cx);
+            view.type_text(None, "X", cx);
+            view.type_text(None, "Y", cx);
         });
         other.update(cx, |view, cx| {
             view.cursor_col = 5;
             view.sync_view_position(cx);
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
         });
     });
     cx.run_until_parked();
@@ -135,9 +135,9 @@ fn undo_and_redo_restore_the_originating_views_grouped_selection(cx: &mut TestAp
         assert_ne!((other.cursor_line, other.cursor_col), (0, 1));
     });
 
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         other.update(cx, |view, cx| {
-            view.execute_editing_command("editor.redo", window, cx);
+            view.execute_editing_command("editor.redo", cx);
         });
     });
     cx.run_until_parked();
@@ -153,21 +153,21 @@ fn undo_and_redo_restore_the_originating_views_grouped_selection(cx: &mut TestAp
 #[gpui::test]
 fn replay_ignores_view_state_for_an_originating_view_that_was_dropped(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("text"));
-    let (survivor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
-    let origin = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let survivor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    let origin = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         origin.update(cx, |view, cx| {
-            view.execute_editing_command("editor.move-document-end", window, cx);
-            view.replace_text_in_range(None, "!", window, cx);
+            view.execute_editing_command("editor.move-document-end", cx);
+            view.type_text(None, "!", cx);
         });
     });
     drop(origin);
     cx.run_until_parked();
 
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         survivor.update(cx, |view, cx| {
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
         });
     });
     cx.run_until_parked();
@@ -182,19 +182,19 @@ fn replay_ignores_view_state_for_an_originating_view_that_was_dropped(cx: &mut T
 #[gpui::test]
 fn a_newer_edit_invalidates_an_unobserved_history_view_restore(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("abcdef"));
-    let (other, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
-    let origin = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let other = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    let origin = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         origin.update(cx, |view, cx| {
             view.anchor_col = 4;
             view.cursor_col = 1;
             view.has_selection = true;
             view.sync_view_position(cx);
-            view.replace_text_in_range(None, "X", window, cx);
+            view.type_text(None, "X", cx);
         });
         other.update(cx, |view, cx| {
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
         });
         model.update(cx, |model, cx| {
             assert!(model.replace(0..0, "z").unwrap());
@@ -223,10 +223,10 @@ fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut Test
     let measure = |cx: &mut gpui::VisualTestContext| {
         cx.update(|window, cx| {
             editor.update(cx, |view, cx| {
-                let model = view.model.read(cx);
+                let state = view.editor.read(cx);
                 let origin = view.text_bounds().origin;
                 let hit = view.hit_test(
-                    model,
+                    state,
                     point(
                         origin.x + px(1.),
                         origin.y + px(3.5 * view.metrics.line_height),
@@ -236,7 +236,7 @@ fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut Test
                 );
                 (
                     view.metrics,
-                    view.fully_visible_lines(),
+                    state.fully_visible_lines(),
                     hit,
                     view.gutter.width,
                 )
@@ -283,7 +283,8 @@ fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
         .map(|line| format!("line {line}\n"))
         .collect::<String>();
     let model = cx.new(|_| BufferModel::from_text(text));
-    let editor = cx.new(|cx| EditorView::new(model, cx));
+    let view = cx.new(|cx| EditorView::new(model, cx));
+    let editor = cx.read(|cx| view.read(cx).editor().clone());
     editor.update(cx, |editor, _| {
         editor.viewport_rows = 10.;
         editor.scroll_top = 30.;
@@ -296,33 +297,31 @@ fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
     cx.read(|cx| {
-        let editor = editor.read(cx);
-        assert_eq!(editor.metrics.line_height, 30.);
-        assert_eq!(editor.scroll_top, 30.);
+        assert_eq!(view.read(cx).metrics.line_height, 30.);
+        assert_eq!(editor.read(cx).scroll_top, 30.);
     });
 }
 
 #[gpui::test]
 fn movement_uses_visual_columns_graphemes_and_pane_height(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("éééx\na\nabcde\nword next\nlast"));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    cx.refresh().unwrap();
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
             view.cursor_col = "ééé".len();
-            view.execute_editing_command("editor.move-down", window, cx);
+            view.execute_editing_command("editor.move-down", cx);
             assert_eq!((view.cursor_line, view.cursor_col), (1, 1));
-            view.execute_editing_command("editor.move-down", window, cx);
+            view.execute_editing_command("editor.move-down", cx);
             assert_eq!((view.cursor_line, view.cursor_col), (2, 3));
-            view.execute_editing_command("editor.move-document-start", window, cx);
+            view.execute_editing_command("editor.move-document-start", cx);
             view.viewport_rows = 2.;
-            view.execute_editing_command("editor.select-page-down", window, cx);
+            view.execute_editing_command("editor.select-page-down", cx);
             assert_eq!(view.selected_byte_range(cx), Some(0..10));
-            view.execute_editing_command("editor.move-document-end", window, cx);
+            view.execute_editing_command("editor.move-document-end", cx);
             assert_eq!((view.cursor_line, view.cursor_col), (4, 4));
-            view.execute_editing_command("editor.move-word-left", window, cx);
+            view.execute_editing_command("editor.move-word-left", cx);
             assert_eq!((view.cursor_line, view.cursor_col), (4, 0));
-            view.execute_editing_command("editor.select-word-left", window, cx);
+            view.execute_editing_command("editor.select-word-left", cx);
             assert_eq!((view.cursor_line, view.cursor_col), (3, 5));
         })
     });
@@ -335,12 +334,11 @@ fn vertical_movement_keeps_the_display_cell_across_tabs_and_wide_characters(
     // Cells: a tab reaches the next stop of 4, CJK and emoji take two.
     let text = "abcdefgh\n\tx\n中文字\n😀😀z\nab\nabcdefgh";
     let model = cx.new(|_| BufferModel::from_text(text));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    cx.refresh().unwrap();
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            let mut down = |view: &mut EditorView| {
-                view.execute_editing_command("editor.move-down", window, cx);
+            let mut down = |view: &mut Editor| {
+                view.execute_editing_command("editor.move-down", cx);
                 (view.cursor_line, view.cursor_col)
             };
             view.cursor_col = 5;
@@ -363,15 +361,16 @@ fn tabs_hit_testing_and_horizontal_reveal_share_geometry(cx: &mut TestAppContext
     let model = cx.new(|_| BufferModel::from_text(format!("\tx{}", "z".repeat(300))));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
+    let state = cx.read(|cx| editor.read(cx).editor().clone());
+    state.update(cx, |state, _| state.cursor_col = 1);
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
-            view.cursor_col = 1;
-            let model = view.model.read(cx);
-            let tab_x = view.caret_x(model, window, cx);
+            let state = view.editor.read(cx);
+            let tab_x = view.caret_x(state, window, cx);
             assert!(f32::from(tab_x) > 20.);
             assert_eq!(
                 view.hit_test(
-                    model,
+                    state,
                     point(
                         view.text_bounds().origin.x + tab_x,
                         view.bounds.origin.y + px(5.)
@@ -381,18 +380,18 @@ fn tabs_hit_testing_and_horizontal_reveal_share_geometry(cx: &mut TestAppContext
                 ),
                 (0, 1)
             );
-            view.execute_editing_command("editor.move-line-end", window, cx);
         })
     });
-    cx.refresh().unwrap();
-    cx.read(|cx| assert!(editor.read(cx).scroll_x > 0.));
-    cx.update(|window, cx| {
-        editor.update(cx, |view, cx| {
-            view.execute_editing_command("editor.move-line-start", window, cx);
-        })
+    state.update(cx, |state, cx| {
+        state.execute_editing_command("editor.move-line-end", cx)
     });
     cx.refresh().unwrap();
-    cx.read(|cx| assert_eq!(editor.read(cx).scroll_x, 0.));
+    cx.read(|cx| assert!(state.read(cx).scroll_x > 0.));
+    state.update(cx, |state, cx| {
+        state.execute_editing_command("editor.move-line-start", cx)
+    });
+    cx.refresh().unwrap();
+    cx.read(|cx| assert_eq!(state.read(cx).scroll_x, 0.));
 }
 
 #[gpui::test]
@@ -440,14 +439,14 @@ fn tab_stops_follow_the_settings_for_each_open_view(cx: &mut TestAppContext) {
             let model = view.model.read(cx);
             let column = |col| {
                 f32::from(super::layout::x_for_index_dir(
-                    &view.shape_line(model, 0, text, window, cx),
+                    &view.shape_line(0, text, window, cx),
                     col,
                     text,
-                    view.tab_size(model, cx),
+                    view.editor.read(cx).tab_size(model, cx),
                 ))
             };
             let width = column(2) - column(1);
-            let shaped = view.shape_line(model, 0, text, window, cx).width;
+            let shaped = view.shape_line(0, text, window, cx).width;
             (
                 (column(1) / width).round() as usize,
                 (f32::from(shaped) / width).round() as usize,
@@ -457,11 +456,8 @@ fn tab_stops_follow_the_settings_for_each_open_view(cx: &mut TestAppContext) {
     let caret_columns = |cx: &mut gpui::VisualTestContext, editor: &gpui::Entity<EditorView>| {
         cx.update(|window, cx| {
             editor.update(cx, |view, cx| {
-                view.cursor_col = 1;
-                let model = view.model.read(cx);
-                let a = view.caret_x(model, window, cx);
-                view.cursor_col = 2;
-                let b = view.caret_x(model, window, cx);
+                let a = view.caret_x_at(1, window, cx);
+                let b = view.caret_x_at(2, window, cx);
                 (f32::from(a) / f32::from(b - a)).round() as usize
             })
         })
@@ -505,10 +501,9 @@ fn mouse_selection_keeps_press_anchor_across_reversal_and_ignores_foreign_drags(
     cx.refresh().unwrap();
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
-            let position = |view: &mut EditorView, col, cx: &gpui::App| {
-                view.cursor_col = col;
+            let position = |view: &mut EditorView, col, cx: &mut gpui::App| {
                 point(
-                    view.text_bounds().origin.x + view.caret_x(view.model.read(cx), window, cx),
+                    view.text_bounds().origin.x + view.caret_x_at(col, window, cx),
                     view.bounds.origin.y + px(5.),
                 )
             };
@@ -524,7 +519,7 @@ fn mouse_selection_keeps_press_anchor_across_reversal_and_ignores_foreign_drags(
                 window,
                 cx,
             );
-            assert!(!view.has_selection);
+            assert!(!view.editor.read(cx).has_selection);
             view.on_mouse_down(
                 &MouseDownEvent {
                     position: start,
@@ -547,7 +542,7 @@ fn mouse_selection_keeps_press_anchor_across_reversal_and_ignores_foreign_drags(
                     cx,
                 );
             }
-            assert_eq!(view.selected_byte_range(cx), Some(1..3));
+            assert_eq!(view.editor.read(cx).selected_byte_range(cx), Some(1..3));
             view.on_mouse_down(
                 &MouseDownEvent {
                     position: start,
@@ -559,7 +554,7 @@ fn mouse_selection_keeps_press_anchor_across_reversal_and_ignores_foreign_drags(
                 window,
                 cx,
             );
-            assert_eq!(view.selected_byte_range(cx), Some(0..5));
+            assert_eq!(view.editor.read(cx).selected_byte_range(cx), Some(0..5));
             view.on_mouse_down(
                 &MouseDownEvent {
                     position: start,
@@ -571,7 +566,7 @@ fn mouse_selection_keeps_press_anchor_across_reversal_and_ignores_foreign_drags(
                 window,
                 cx,
             );
-            assert_eq!(view.selected_byte_range(cx), Some(0..11));
+            assert_eq!(view.editor.read(cx).selected_byte_range(cx), Some(0..11));
         })
     });
 }
@@ -579,14 +574,14 @@ fn mouse_selection_keeps_press_anchor_across_reversal_and_ignores_foreign_drags(
 #[gpui::test]
 fn crlf_is_one_navigation_and_deletion_boundary(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("a\r\nb"));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            view.execute_editing_command("editor.move-line-end", window, cx);
+            view.execute_editing_command("editor.move-line-end", cx);
             assert_eq!((view.cursor_line, view.cursor_col), (0, 1));
-            view.execute_editing_command("editor.move-right", window, cx);
+            view.execute_editing_command("editor.move-right", cx);
             assert_eq!((view.cursor_line, view.cursor_col), (1, 0));
-            view.execute_editing_command("editor.delete-backward", window, cx);
+            view.execute_editing_command("editor.delete-backward", cx);
             assert_eq!(view.text(cx), "ab");
         })
     });
@@ -595,23 +590,23 @@ fn crlf_is_one_navigation_and_deletion_boundary(cx: &mut TestAppContext) {
 #[gpui::test]
 fn delete_to_line_end_removes_the_rest_of_the_line_then_its_break(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("hello world\r\nnext"));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            view.execute_editing_command("editor.move-word-right", window, cx);
-            view.execute_editing_command("editor.delete-to-line-end", window, cx);
+            view.execute_editing_command("editor.move-word-right", cx);
+            view.execute_editing_command("editor.delete-to-line-end", cx);
             assert_eq!(view.text(cx), "hello\r\nnext");
-            view.execute_editing_command("editor.delete-to-line-end", window, cx);
+            view.execute_editing_command("editor.delete-to-line-end", cx);
             assert_eq!(view.text(cx), "hellonext");
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(view.text(cx), "hello\r\nnext");
 
-            view.execute_editing_command("editor.select-left", window, cx);
-            view.execute_editing_command("editor.delete-to-line-end", window, cx);
+            view.execute_editing_command("editor.select-left", cx);
+            view.execute_editing_command("editor.delete-to-line-end", cx);
             assert_eq!(view.text(cx), "hell\r\nnext");
 
-            view.execute_editing_command("editor.move-document-end", window, cx);
-            assert!(view.execute_editing_command("editor.delete-to-line-end", window, cx));
+            view.execute_editing_command("editor.move-document-end", cx);
+            assert!(view.execute_editing_command("editor.delete-to-line-end", cx));
             assert_eq!(view.text(cx), "hell\r\nnext");
         })
     });
@@ -620,24 +615,24 @@ fn delete_to_line_end_removes_the_rest_of_the_line_then_its_break(cx: &mut TestA
 #[gpui::test]
 fn inserted_newlines_follow_a_crlf_buffer(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("a\r\nb"));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            view.execute_editing_command("editor.move-line-end", window, cx);
-            view.execute_editing_command("editor.insert-newline", window, cx);
+            view.execute_editing_command("editor.move-line-end", cx);
+            view.execute_editing_command("editor.insert-newline", cx);
             assert_eq!(view.text(cx), "a\r\n\r\nb");
             assert_eq!((view.cursor_line, view.cursor_col), (1, 0));
 
             cx.write_to_clipboard(ClipboardItem::new_string("1\n2\r\n3".into()));
-            view.execute_editing_command("editor.paste", window, cx);
+            view.execute_editing_command("editor.paste", cx);
             assert_eq!(view.text(cx), "a\r\n1\r\n2\r\n3\r\nb");
             assert_eq!((view.cursor_line, view.cursor_col), (3, 1));
 
-            view.replace_text_in_range(None, "\n", window, cx);
+            view.type_text(None, "\n", cx);
             assert_eq!(view.text(cx), "a\r\n1\r\n2\r\n3\r\n\r\nb");
 
-            view.execute_editing_command("editor.delete-backward", window, cx);
-            view.execute_editing_command("editor.delete-forward", window, cx);
+            view.execute_editing_command("editor.delete-backward", cx);
+            view.execute_editing_command("editor.delete-forward", cx);
             assert_eq!(view.text(cx), "a\r\n1\r\n2\r\n3b");
         })
     });
@@ -646,26 +641,19 @@ fn inserted_newlines_follow_a_crlf_buffer(cx: &mut TestAppContext) {
 #[gpui::test]
 fn composition_is_cleared_by_navigation_and_external_edits(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("abc"));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
-    cx.update(|window, cx| {
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
-            view.replace_and_mark_text_in_range(None, "に", Some(1..1), window, cx);
-            view.execute_editing_command("editor.move-right", window, cx);
+            view.mark_text(None, "に", Some(1..1), cx);
+            view.execute_editing_command("editor.move-right", cx);
             assert_eq!(view.marked_range_utf16, None);
-            view.replace_and_mark_text_in_range(None, "本", Some(1..1), window, cx);
-            view.execute_editing_command("editor.select-all", window, cx);
+            view.mark_text(None, "本", Some(1..1), cx);
+            view.execute_editing_command("editor.select-all", cx);
             assert_eq!(view.marked_range_utf16, None);
-            view.replace_and_mark_text_in_range(None, "日", Some(1..1), window, cx);
-            view.select_reveal_and_focus(
-                ByteRange {
-                    start_byte_offset: 0,
-                    end_byte_offset: "日".len(),
-                },
-                window,
-                cx,
-            );
+            view.mark_text(None, "日", Some(1..1), cx);
+            view.set_selection(0, "日".len(), Reveal::Nearest, cx);
             assert_eq!(view.marked_range_utf16, None);
-            view.replace_and_mark_text_in_range(None, "語", Some(1..1), window, cx);
+            view.mark_text(None, "語", Some(1..1), cx);
             assert!(view.marked_range_utf16.is_some());
         })
     });
@@ -690,15 +678,18 @@ fn editing_a_large_buffer_never_reads_the_whole_text(cx: &mut TestAppContext) {
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
             view.focus.focus(window);
-            view.restore_view_state(
-                EditorViewState {
-                    anchor: 50_000,
-                    caret: 50_000,
-                    top: 49_000,
-                    scroll_x: 0.,
-                },
-                cx,
-            );
+            let state = view.editor.clone();
+            state.update(cx, |state, cx| {
+                state.restore_view_state(
+                    EditorViewState {
+                        anchor: 50_000,
+                        caret: 50_000,
+                        top: 49_000,
+                        scroll_x: 0.,
+                    },
+                    cx,
+                )
+            });
             for command in [
                 "editor.move-word-right",
                 "editor.move-word-left",
@@ -714,7 +705,7 @@ fn editing_a_large_buffer_never_reads_the_whole_text(cx: &mut TestAppContext) {
                 "editor.redo",
             ] {
                 assert!(
-                    view.execute_editing_command(command, window, cx),
+                    state.update(cx, |state, cx| state.execute_editing_command(command, cx)),
                     "{command}"
                 );
             }
@@ -754,7 +745,7 @@ fn horizontal_scroll_is_bounded_by_the_widest_shaped_line(cx: &mut TestAppContex
         let view = editor.read(cx);
         let limit = view.max_line_width + 2. - f32::from(view.text_bounds().size.width);
         assert!(limit > 0.);
-        assert_eq!(view.scroll_x, limit);
+        assert_eq!(view.editor.read(cx).scroll_x, limit);
         view.max_line_width
     });
 
@@ -770,20 +761,19 @@ fn horizontal_scroll_is_bounded_by_the_widest_shaped_line(cx: &mut TestAppContex
 #[gpui::test]
 fn constructs_from_arbitrary_buffer_text(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("generated\ntext"));
-    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
     cx.read(|cx| {
         let editor = editor.read(cx);
         assert_eq!(editor.model(), &model);
         assert_eq!(editor.line_count, 2);
-        assert!(editor.rendering.show_gutter);
     });
 }
 
 #[gpui::test]
 fn completion_acceptance_rechecks_the_captured_revision(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("fo"));
-    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let mut registry = CompletionProviderRegistry::new();
     registry.register(
         ExtensionId::new(1),
@@ -821,7 +811,7 @@ fn completion_acceptance_rechecks_the_captured_revision(cx: &mut TestAppContext)
     cx.read(|cx| assert_eq!(model.read(cx).text(), "xfo"));
 
     let model = cx.new(|_| BufferModel::from_text("fo"));
-    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let request = editor.update(cx, |editor, cx| {
         editor.cursor_col = 2;
         editor
@@ -899,7 +889,7 @@ fn action_click_pointer_jitter_does_not_start_text_selection(cx: &mut TestAppCon
                 window,
                 cx,
             );
-            assert_eq!(editor.selected_byte_range(cx), None);
+            assert_eq!(editor.editor.read(cx).selected_byte_range(cx), None);
         });
     });
 }
@@ -944,7 +934,7 @@ fn read_only_text_keeps_normal_selection_copy_and_scroll_behavior(cx: &mut TestA
     cx.read(|cx| {
         let editor = editor.read(cx);
         assert_eq!(editor.model().read(cx).text(), text);
-        assert!(editor.scroll_top > 0.);
+        assert!(editor.editor.read(cx).scroll_top > 0.);
     });
 }
 
@@ -1033,7 +1023,7 @@ async fn flat_utf16_offsets_round_trip_across_emoji_lines(cx: &mut TestAppContex
     let first_line = "a😀b";
     let second_line = format!("{family}z");
     let model = cx.new(|_| BufferModel::from_text(format!("{first_line}\n{second_line}")));
-    let editor = cx.new(|cx| EditorView::new(model, cx));
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
 
     cx.read(|cx| {
         let model = editor.read(cx).model.read(cx);
@@ -1069,7 +1059,7 @@ fn set_selection_reveals_nearest_or_centers_an_offscreen_caret(cx: &mut TestAppC
         .map(|line| format!("line {line}\n"))
         .collect::<String>();
     let model = cx.new(|_| BufferModel::from_text(text));
-    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let line_start = |line: usize| cx.read(|cx| model.read(cx).line_range(line).start);
     let (line_10, line_15, line_50, line_90) = (
         line_start(10),
@@ -1105,7 +1095,7 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret(cx: &mut TestApp
         .map(|line| format!("line {line}\n"))
         .collect::<String>();
     let model = cx.new(|_| BufferModel::from_text(text));
-    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let line_start = |line: usize| cx.read(|cx| model.read(cx).line_range(line).start);
     let (line_5, line_50, line_100) = (line_start(5), line_start(50), line_start(100));
     editor.update(cx, |editor, cx| {
@@ -1143,7 +1133,7 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret(cx: &mut TestApp
 #[gpui::test]
 fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree\nfour"));
-    let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let state = EditorViewState {
         anchor: 4,
         caret: 9,
@@ -1160,7 +1150,7 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
 
     // Offsets past the end clamp, and offsets inside a scalar snap back.
     let shorter = cx.new(|_| BufferModel::from_text("é😀\nb"));
-    let editor = cx.new(|cx| EditorView::new(shorter, cx));
+    let editor = cx.new(|cx| Editor::new(shorter, crate::app::EDITOR_KEY_CONTEXT, cx));
     editor.update(cx, |editor, cx| {
         editor.restore_view_state(
             EditorViewState {
@@ -1198,6 +1188,9 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
         )
     });
 
+    let views = (first.clone(), second.clone());
+    let first = cx.read(|cx| first.read(cx).editor().clone());
+    let second = cx.read(|cx| second.read(cx).editor().clone());
     first.update(cx, |view, cx| {
         view.cursor_line = 1;
         view.cursor_col = 2;
@@ -1251,6 +1244,7 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
         assert!(!second.has_selection);
         assert_eq!(first.scroll_top, 1.);
         assert_eq!(second.scroll_top, 2.);
+        let (first, second) = (views.0.read(cx), views.1.read(cx));
         assert!(first.rendering.show_gutter);
         assert!(!second.rendering.show_gutter);
         assert_ne!(first.focus, second.focus);
@@ -1260,8 +1254,8 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
 #[gpui::test]
 fn selection_tracks_a_deletion_from_another_view(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("0123456789"));
-    let first = cx.new(|cx| EditorView::new(model.clone(), cx));
-    let second = cx.new(|cx| EditorView::new(model.clone(), cx));
+    let first = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    let second = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
     second.update(cx, |view, cx| {
         view.anchor_col = 4;
@@ -1286,6 +1280,17 @@ fn selection_tracks_a_deletion_from_another_view(cx: &mut TestAppContext) {
 }
 
 /// `range` styled as `test_theme` styles capture `name`.
+/// The text runs `view` paints `text`, line `line`'s content, with.
+fn line_runs(
+    view: &gpui::Entity<EditorView>,
+    line: usize,
+    text: &str,
+    cx: &gpui::App,
+) -> Vec<gpui::TextRun> {
+    let view = view.read(cx);
+    view.line_runs(view.editor.read(cx), line, text, cx)
+}
+
 fn span(range: std::ops::Range<usize>, name: &str) -> HighlightSpan {
     HighlightSpan {
         range,
@@ -1460,7 +1465,7 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
         let underline = |key| Some(theme.color(key));
         let fg = theme.color(color::EDITOR_FOREGROUND);
         assert_eq!(
-            run_styles(&editor.read(cx).line_runs(model.read(cx), 0, "abcdefgh", cx)),
+            run_styles(&line_runs(&editor, 0, "abcdefgh", cx)),
             [
                 (2, fg, underline(color::WARNING)),
                 (4, fg, underline(color::ERROR)),
@@ -1502,7 +1507,7 @@ fn underline_styles_paint_as_separate_layers(cx: &mut TestAppContext) {
 
     cx.read(|cx| {
         let color = Some(theme(cx).color("diff.add"));
-        let runs = editor.read(cx).line_runs(model.read(cx), 0, "abcdefgh", cx);
+        let runs = line_runs(&editor, 0, "abcdefgh", cx);
         let underlines = runs
             .iter()
             .map(|run| {
@@ -1538,16 +1543,15 @@ fn the_gutter_reserves_its_lanes_beside_the_text(cx: &mut TestAppContext) {
                 assert_eq!(gutter == px(0.), !show_gutter);
                 assert_eq!(text.origin.x - bounds.origin.x, gutter);
                 assert_eq!(text.size.width, bounds.size.width - gutter);
-                view.cursor_col = 1;
-                let x = view.caret_x(view.model.read(cx), window, cx);
+                let x = view.caret_x_at(1, window, cx);
                 let y = bounds.origin.y + px(5.);
-                let model = view.model.read(cx);
+                let state = view.editor.read(cx);
                 assert_eq!(
-                    view.hit_test(model, point(text.origin.x + x, y), window, cx),
+                    view.hit_test(state, point(text.origin.x + x, y), window, cx),
                     (0, 1)
                 );
                 assert_eq!(
-                    view.hit_test(model, point(bounds.origin.x, y), window, cx),
+                    view.hit_test(state, point(bounds.origin.x, y), window, cx),
                     (0, 0)
                 );
             })
@@ -1587,7 +1591,12 @@ fn syntax_highlights_paint_beneath_decorations(cx: &mut TestAppContext) {
             let view = editor.read(cx);
             let model = model.read(cx);
             view.cache_syntax(model, 0..model.line_count());
-            run_styles(&view.line_runs(model, 0, &model.read(model.line_range(0)), cx))
+            run_styles(&view.line_runs(
+                view.editor.read(cx),
+                0,
+                &model.read(model.line_range(0)),
+                cx,
+            ))
         })
     };
     let (keyword, function, warning, fg) = cx.read(|cx| {
@@ -1653,17 +1662,17 @@ fn caret_geometry_and_painting_share_one_syntax_query(cx: &mut TestAppContext) {
             model.replace(0..0, "// ").unwrap();
             cx.notify();
         });
-        editor.update(cx, |view, cx| {
-            view.caret_x(view.model.read(cx), window, cx);
-        })
+        let view = editor.read(cx);
+        view.caret_x(view.editor.read(cx), window, cx);
     });
     cx.refresh().unwrap();
     cx.run_until_parked();
     assert_eq!(queries(cx), before + 1);
 
     // Scrolling by a line stays within the overscan.
-    editor.update(cx, |view, cx| {
-        view.scroll_top += 1.;
+    let state = cx.read(|cx| editor.read(cx).editor().clone());
+    state.update(cx, |state, cx| {
+        state.scroll_top += 1.;
         cx.notify();
     });
     cx.run_until_parked();
@@ -1729,8 +1738,8 @@ pub(super) fn check(
         cx.set_global(settings);
     });
     let model = cx.new(|_| BufferModel::from_text(text));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
-    let selection = |view: &EditorView| {
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
+    let selection = |view: &Editor| {
         let caret = (view.cursor_line, view.cursor_col);
         let anchor = if view.has_selection {
             (view.anchor_line, view.anchor_col)
@@ -1739,7 +1748,7 @@ pub(super) fn check(
         };
         (anchor, caret)
     };
-    cx.update(|window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |view, cx| {
             (view.anchor_line, view.anchor_col) = anchor;
             (view.cursor_line, view.cursor_col) = caret;
@@ -1747,7 +1756,7 @@ pub(super) fn check(
             view.sync_view_position(cx);
             let context = format!("{command} on {text:?} from {anchor:?} to {caret:?}");
 
-            assert!(view.execute_editing_command(command, window, cx));
+            assert!(view.execute_editing_command(command, cx));
             assert_eq!(view.text(cx), expected, "{context}");
             assert_eq!(
                 selection(view),
@@ -1755,11 +1764,11 @@ pub(super) fn check(
                 "{context}"
             );
 
-            view.execute_editing_command("editor.undo", window, cx);
+            view.execute_editing_command("editor.undo", cx);
             assert_eq!(view.text(cx), text, "undo of {context}");
             if expected != text {
                 assert_eq!(selection(view), (anchor, caret), "undo of {context}");
-                view.execute_editing_command("editor.redo", window, cx);
+                view.execute_editing_command("editor.redo", cx);
                 assert_eq!(view.text(cx), expected, "redo of {context}");
                 assert_eq!(
                     selection(view),
@@ -1816,10 +1825,11 @@ fn drag(
     );
 }
 
-fn selection(view: &EditorView) -> (Position, Position) {
+fn selection(view: &EditorView, cx: &gpui::App) -> (Position, Position) {
+    let editor = view.editor.read(cx);
     (
-        (view.anchor_line, view.anchor_col),
-        (view.cursor_line, view.cursor_col),
+        (editor.anchor_line, editor.anchor_col),
+        (editor.cursor_line, editor.cursor_col),
     )
 }
 
@@ -1832,10 +1842,12 @@ fn dragging_after_a_double_or_triple_click_extends_by_words_or_lines(cx: &mut Te
         editor.update(cx, |view, cx| {
             let [beta, gamma, alpha, inside, second, third, first] =
                 [(0, 7), (0, 13), (0, 2), (0, 8), (1, 3), (2, 1), (0, 4)].map(|(line, col)| {
-                    view.cursor_line = line;
-                    view.cursor_col = col;
+                    view.editor.update(cx, |editor, _| {
+                        (editor.cursor_line, editor.cursor_col) = (line, col)
+                    });
                     point(
-                        view.text_bounds().origin.x + view.caret_x(view.model.read(cx), window, cx),
+                        view.text_bounds().origin.x
+                            + view.caret_x(view.editor.read(cx), window, cx),
                         view.bounds.origin.y + px(5. + view.metrics.line_height * line as f32),
                     )
                 });
@@ -1843,26 +1855,26 @@ fn dragging_after_a_double_or_triple_click_extends_by_words_or_lines(cx: &mut Te
             // Words: forward to the end of the hovered word, back to the start
             // of one before, keeping "beta" selected.
             press(view, beta, 2, window, cx);
-            assert_eq!(selection(view), ((0, 6), (0, 10)));
+            assert_eq!(selection(view, cx), ((0, 6), (0, 10)));
             drag(view, gamma, window, cx);
-            assert_eq!(selection(view), ((0, 6), (0, 16)));
+            assert_eq!(selection(view, cx), ((0, 6), (0, 16)));
             drag(view, alpha, window, cx);
-            assert_eq!(selection(view), ((0, 10), (0, 0)));
+            assert_eq!(selection(view, cx), ((0, 10), (0, 0)));
             drag(view, inside, window, cx);
-            assert_eq!(selection(view), ((0, 6), (0, 10)));
+            assert_eq!(selection(view, cx), ((0, 6), (0, 10)));
 
             // Lines: whole lines in both directions from the clicked one.
             press(view, second, 3, window, cx);
-            assert_eq!(selection(view), ((1, 0), (2, 0)));
+            assert_eq!(selection(view, cx), ((1, 0), (2, 0)));
             drag(view, third, window, cx);
-            assert_eq!(selection(view), ((1, 0), (2, 5)));
+            assert_eq!(selection(view, cx), ((1, 0), (2, 5)));
             drag(view, first, window, cx);
-            assert_eq!(selection(view), ((2, 0), (0, 0)));
+            assert_eq!(selection(view, cx), ((2, 0), (0, 0)));
 
             // A single click drags by characters again.
             press(view, beta, 1, window, cx);
             drag(view, gamma, window, cx);
-            assert_eq!(selection(view), ((0, 7), (0, 13)));
+            assert_eq!(selection(view, cx), ((0, 7), (0, 13)));
         })
     });
 }
@@ -1897,29 +1909,31 @@ fn double_click_and_word_movement_stop_at_separators(cx: &mut TestAppContext) {
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
             let [inside, paren] = [5, 12].map(|col| {
-                view.cursor_col = col;
                 point(
-                    view.text_bounds().origin.x + view.caret_x(view.model.read(cx), window, cx),
+                    view.text_bounds().origin.x + view.caret_x_at(col, window, cx),
                     view.bounds.origin.y + px(5.),
                 )
             });
             press(view, inside, 2, window, cx);
-            assert_eq!(selection(view), ((0, 2), (0, 12)));
+            assert_eq!(selection(view, cx), ((0, 2), (0, 12)));
             press(view, paren, 2, window, cx);
-            assert_eq!(selection(view), ((0, 12), (0, 13)));
+            assert_eq!(selection(view, cx), ((0, 12), (0, 13)));
 
-            view.execute_editing_command("editor.move-document-start", window, cx);
-            let mut stops = Vec::new();
-            for _ in 0..7 {
-                view.execute_editing_command("editor.move-word-right", window, cx);
-                stops.push(view.cursor_col);
-            }
+            let editor = view.editor.clone();
+            let mut run = |command| {
+                editor.update(cx, |editor, cx| {
+                    editor.execute_editing_command(command, cx);
+                    editor.cursor_col
+                })
+            };
+            run("editor.move-document-start");
+            let stops = (0..7)
+                .map(|_| run("editor.move-word-right"))
+                .collect::<Vec<_>>();
             assert_eq!(stops, [1, 2, 12, 13, 14, 15, 20]);
-            let mut stops = Vec::new();
-            for _ in 0..7 {
-                view.execute_editing_command("editor.move-word-left", window, cx);
-                stops.push(view.cursor_col);
-            }
+            let stops = (0..7)
+                .map(|_| run("editor.move-word-left"))
+                .collect::<Vec<_>>();
             assert_eq!(stops, [17, 14, 13, 12, 2, 1, 0]);
         })
     });
@@ -1931,7 +1945,7 @@ fn caret_shape_is_the_latest_lifecycles_and_reverts_when_cleared(cx: &mut TestAp
     let first = ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
     let second = ExtensionKey::new(ExtensionId::new(2), ExtensionLifecycleId::new(1));
     let model = cx.new(|_| BufferModel::from_text("abc".to_string()));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     editor.update(cx, |view, cx| {
         assert_eq!(view.caret_shape(), CaretShape::Bar);
         view.set_caret_shape(first, Some(CaretShape::Block), cx);

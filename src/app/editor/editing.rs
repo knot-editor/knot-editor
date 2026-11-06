@@ -2,11 +2,12 @@
 
 use super::*;
 
-impl EditorView {
+impl Editor {
+    /// Run the native editing or movement command `command`; `false` when
+    /// it is not one or does not apply.
     pub(crate) fn execute_editing_command(
         &mut self,
         command: &str,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         if command == commands::UNDO_COMMAND || command == commands::REDO_COMMAND {
@@ -27,7 +28,7 @@ impl EditorView {
             });
             if changed {
                 let model = self.model.read(cx);
-                self.text_changed(model);
+                self.seen_revision = model.revision();
                 self.refresh(model, model.resolve_view_position(self.position_range));
                 if let Some(restore) = model.history_view_restore() {
                     self.apply_history_view_restore(model, restore.generation, &restore.state);
@@ -50,7 +51,7 @@ impl EditorView {
                 let text = self.model.read(cx).read(range);
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
                 if command == commands::CUT_COMMAND {
-                    self.replace_text_with_grouping(None, "", None, window, cx);
+                    self.replace_text_with_grouping(None, "", None, cx);
                 }
             }
             return true;
@@ -58,7 +59,7 @@ impl EditorView {
         if command == commands::PASTE_COMMAND {
             self.break_history_group(cx);
             if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                self.replace_text_with_grouping(None, &text, None, window, cx);
+                self.replace_text_with_grouping(None, &text, None, cx);
             }
             return true;
         }
@@ -76,11 +77,11 @@ impl EditorView {
         }
         match command {
             commands::INSERT_NEWLINE_COMMAND => {
-                self.insert_newline(window, cx);
+                self.insert_newline(cx);
                 return true;
             }
             commands::INSERT_TAB_COMMAND => {
-                self.insert_tab(window, cx);
+                self.insert_tab(cx);
                 return true;
             }
             commands::INDENT_LINES_COMMAND => {
@@ -143,7 +144,7 @@ impl EditorView {
             commands::DELETE_BACKWARD_COMMAND | commands::DELETE_FORWARD_COMMAND
         ) {
             if self.has_selection || self.marked_range_utf16.is_some() {
-                self.replace_text_with_grouping(None, "", None, window, cx);
+                self.replace_text_with_grouping(None, "", None, cx);
             } else {
                 let backward = command.ends_with("backward");
                 let model = self.model.read(cx);
@@ -163,7 +164,6 @@ impl EditorView {
                         } else {
                             EditGroupKind::DeleteForward
                         }),
-                        window,
                         cx,
                     );
                 }
@@ -172,7 +172,7 @@ impl EditorView {
         }
         if command == commands::DELETE_TO_LINE_END_COMMAND {
             if self.has_selection || self.marked_range_utf16.is_some() {
-                self.replace_text_with_grouping(None, "", None, window, cx);
+                self.replace_text_with_grouping(None, "", None, cx);
                 return true;
             }
             let model = self.model.read(cx);
@@ -185,7 +185,7 @@ impl EditorView {
             };
             if !range.is_empty() {
                 self.break_history_group(cx);
-                self.replace_text_with_grouping(Some(range), "", None, window, cx);
+                self.replace_text_with_grouping(Some(range), "", None, cx);
             }
             return true;
         }

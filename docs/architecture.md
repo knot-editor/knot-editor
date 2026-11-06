@@ -76,8 +76,10 @@ extensions supply asynchronous content rather than rendering callbacks.
 ## Invariants
 
 - Text and history are shared buffer state. Cursor, selection, folding,
-  scroll, and wrapping are view state; zoom is one application level that
-  every view scales by. A view need not have a text buffer.
+  scroll, and wrapping are per-editor state that runs without a window, and
+  the view that renders an editor owns focus, painting, and pointer and
+  platform input; zoom is one application level that every view scales by. A
+  view need not have a text buffer.
 - `BufferModel` owns editable text, never resource identity or persistence.
 - Stable positions and edit events form one contract. `AnchoredRangeStore` owns
   geometry; feature and presentation policy belong above `core`.

@@ -24,8 +24,10 @@ impl Workbench {
             } => WorkbenchTabPayload::Document {
                 document_id: document,
                 editor: cx.new(|cx| {
-                    let mut editor = EditorView::new(model, cx);
-                    editor.restore_view_state(view, cx);
+                    let editor = EditorView::new(model, cx);
+                    editor
+                        .editor()
+                        .update(cx, |editor, cx| editor.restore_view_state(view, cx));
                     editor
                 }),
             },

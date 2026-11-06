@@ -40,7 +40,13 @@ pub(super) struct BracketCache {
     matched: Option<[Range<usize>; 2]>,
 }
 
-impl EditorView {
+impl Editor {
+    /// The brackets highlighted at the caret.
+    #[cfg(test)]
+    pub(crate) fn matched_brackets_for_test(&self, cx: &App) -> Option<[Range<usize>; 2]> {
+        self.matched_brackets(self.model.read(cx))
+    }
+
     /// The byte ranges of the bracket touching the caret and its partner, as
     /// the highlight paints them.
     pub(super) fn matched_brackets(&self, model: &BufferModel) -> Option<[Range<usize>; 2]> {

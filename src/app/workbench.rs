@@ -1661,16 +1661,34 @@ mod tests {
                 scroll_x: 20.,
             };
             first_editor.update(cx, |editor, cx| {
-                editor.restore_view_state(state(1, 10.), cx)
+                editor.editor().clone().update(cx, |editor, cx| {
+                    editor.restore_view_state(state(1, 10.), cx)
+                })
             });
-            second_editor.update(cx, |editor, cx| editor.restore_view_state(selection, cx));
+            second_editor.update(cx, |editor, cx| {
+                editor
+                    .editor()
+                    .clone()
+                    .update(cx, |editor, cx| editor.restore_view_state(selection, cx))
+            });
             third_editor.update(cx, |editor, cx| {
-                editor.restore_view_state(state(9, 30.), cx)
+                editor.editor().clone().update(cx, |editor, cx| {
+                    editor.restore_view_state(state(9, 30.), cx)
+                })
             });
 
-            assert_eq!(first_editor.read(cx).view_state(cx), state(1, 10.));
-            assert_eq!(second_editor.read(cx).view_state(cx), selection);
-            assert_eq!(third_editor.read(cx).view_state(cx), state(9, 30.));
+            assert_eq!(
+                first_editor.read(cx).editor().read(cx).view_state(cx),
+                state(1, 10.)
+            );
+            assert_eq!(
+                second_editor.read(cx).editor().read(cx).view_state(cx),
+                selection
+            );
+            assert_eq!(
+                third_editor.read(cx).editor().read(cx).view_state(cx),
+                state(9, 30.)
+            );
         });
     }
 }

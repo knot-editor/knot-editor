@@ -98,7 +98,8 @@ fn load(cx: &mut TestAppContext) -> Entity<crate::app::extensions::host::Product
     host
 }
 
-pub(super) fn active_editor(
+/// The view of the focused pane's active editor.
+pub(super) fn active_editor_view(
     shell: &Entity<ProductShell>,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::editor::EditorView> {
@@ -112,6 +113,26 @@ pub(super) fn active_editor(
             .active_tab()
             .editor()
             .unwrap()
+            .clone()
+    })
+}
+
+pub(super) fn active_editor(
+    shell: &Entity<ProductShell>,
+    cx: &mut TestAppContext,
+) -> Entity<crate::app::editor::Editor> {
+    cx.read(|cx| {
+        shell
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane()
+            .unwrap()
+            .active_tab()
+            .editor()
+            .unwrap()
+            .read(cx)
+            .editor()
             .clone()
     })
 }
@@ -683,7 +704,7 @@ fn undo_group_fixture(
     crate::host::lifecycle::ExtensionKey,
     Entity<ProductShell>,
     gpui::AnyWindowHandle,
-    Entity<crate::app::editor::EditorView>,
+    Entity<crate::app::editor::Editor>,
     Entity<BufferModel>,
 ) {
     use crate::host::lifecycle::ExtensionKey;
@@ -724,24 +745,14 @@ fn run_group_command(
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 
-fn type_in(
-    editor: &Entity<crate::app::editor::EditorView>,
-    window: gpui::AnyWindowHandle,
-    text: &str,
-    cx: &mut TestAppContext,
-) {
-    cx.update_window(window, |_, window, cx| {
-        editor.update(cx, |view, cx| {
-            gpui::EntityInputHandler::replace_text_in_range(view, None, text, window, cx)
-        })
-    })
-    .unwrap();
+fn type_in(editor: &Entity<crate::app::editor::Editor>, text: &str, cx: &mut TestAppContext) {
+    editor.update(cx, |editor, cx| editor.type_text(None, text, cx));
 }
 
 #[gpui::test]
 fn an_undo_group_makes_edits_and_typing_across_commands_one_step(cx: &mut TestAppContext) {
     let (_host, _, shell, window, editor, model) = undo_group_fixture(cx);
-    type_in(&editor, window, "one two", cx);
+    type_in(&editor, "one two", cx);
     cx.update_window(window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
@@ -753,12 +764,12 @@ fn an_undo_group_makes_edits_and_typing_across_commands_one_step(cx: &mut TestAp
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
-    type_in(&editor, window, "X", cx);
+    type_in(&editor, "X", cx);
     cx.update_window(window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
-    type_in(&editor, window, "Y", cx);
+    type_in(&editor, "Y", cx);
     run_group_command(&shell, window, "group.end", cx);
     cx.read(|cx| assert_eq!(model.read(cx).text(), " twoXY"));
 
@@ -788,20 +799,20 @@ fn a_second_undo_group_is_rejected_until_the_first_ends(cx: &mut TestAppContext)
 #[gpui::test]
 fn an_undo_group_ends_with_its_lifecycle_or_its_tab(cx: &mut TestAppContext) {
     let (host, key, shell, window, editor, model) = undo_group_fixture(cx);
-    type_in(&editor, window, "ab", cx);
+    type_in(&editor, "ab", cx);
     cx.update_window(window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
     run_group_command(&shell, window, "group.begin", cx);
-    type_in(&editor, window, "c", cx);
+    type_in(&editor, "c", cx);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     // Typing after the lifecycle ended is a separate step.
     cx.update_window(window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
-    type_in(&editor, window, "d", cx);
+    type_in(&editor, "d", cx);
     model.update(cx, |model, _| assert!(model.undo().unwrap()));
     cx.read(|cx| assert_eq!(model.read(cx).text(), "abc"));
     host.read_with(cx, |host, _| assert_eq!(host.open_undo_group_count(), 0));

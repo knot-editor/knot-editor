@@ -23,7 +23,7 @@ fn ctrl_g_previews_and_keeps_a_typed_line_in_the_editor(cx: &mut TestAppContext)
             .unwrap()
             .clone()
     });
-    let caret = |cx: &gpui::App| editor.read(cx).view_state(cx).caret;
+    let caret = |cx: &gpui::App| editor.read(cx).editor().read(cx).view_state(cx).caret;
     cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })

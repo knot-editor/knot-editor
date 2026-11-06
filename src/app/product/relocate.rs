@@ -74,7 +74,7 @@ impl ProductShell {
             .and_then(|pane| pane.active_tab().editor())
             .cloned();
         if let Some(editor) = editor {
-            editor.update(cx, |editor, cx| {
+            editor.read(cx).editor().clone().update(cx, |editor, cx| {
                 editor.preserve_scroll_for_relocation();
                 cx.notify();
             });

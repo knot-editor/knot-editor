@@ -1,10 +1,14 @@
-//! Native editor presentation over an authoritative shared buffer model.
+//! Native editors over an authoritative shared buffer model.
 //!
-//! Caret and selection use byte positions backed by model anchors. Movement and
-//! pointer hit testing use grapheme boundaries and shaped visual coordinates.
-//! Views independently own scrolling, selection, completion, and IME preedit.
-//! A view keeps no copy of the text: it reads the lines it needs from the model
-//! and converts positions through the model's line index.
+//! An [`Editor`] holds one presentation's state and runs the native editing
+//! and movement commands without a window; an [`EditorView`] renders it and
+//! handles pointer and platform text input. Caret and selection use byte
+//! positions backed by model anchors. Movement steps by graphemes and, across
+//! rows, keeps a display column in monospace cells; pointer hit testing uses
+//! shaped coordinates. Each editor independently owns scrolling, selection,
+//! completion, and IME preedit. An editor keeps no copy of the text: it reads
+//! the lines it needs from the model and converts positions through the
+//! model's line index.
 
 mod brackets;
 mod comments;
@@ -18,7 +22,10 @@ mod lines;
 pub(super) mod native_commands;
 mod paint;
 mod text;
+mod view;
 mod wrap;
+
+pub use view::EditorView;
 
 use gutter::GutterLayout;
 use layout::*;
@@ -194,86 +201,63 @@ pub(crate) enum CaretShape {
     Underline,
 }
 
-pub struct EditorView {
-    element_id: usize,
-    rendering: EditorRenderingOptions,
+/// One editor's state over a shared buffer: selection, scrolling and the
+/// viewport in rows, key contexts, the caret shape, completion, and the
+/// native editing and movement commands. It needs no window: an
+/// [`EditorView`] renders it, handles pointer and platform text input, and
+/// reports the viewport's size and wrap width as it lays out.
+pub struct Editor {
     /// The `view` fact settings resolve for: `editor` for documents, or the
-    /// contributed view ID of the frame that embeds this view.
+    /// contributed view ID of the frame that embeds this editor.
     view_kind: SharedString,
-    /// Authoritative document state. Everything below is presentation state
-    /// or derived from the model's current revision.
+    /// Authoritative document state. Everything below is editor state or
+    /// derived from the model's current revision.
     model: Entity<BufferModel>,
     /// The model's line count as of the last refresh.
     line_count: usize,
-    /// The model revision this view last refreshed from.
+    /// The model revision this editor last refreshed from.
     seen_revision: u64,
-    /// Text size and line height from the settings in this view's scope.
-    metrics: EditorMetrics,
     /// Where each line breaks into rows, as of `wrap_revision`.
     wrap: wrap::WrapMap,
     wrap_revision: u64,
-    /// Width of one monospace cell, which wrapping measures rows in.
-    cell_width: f32,
-    /// The top of a restored view state, kept until the next layout so a
-    /// restore before lines first wrap still shows the same row.
+    /// The top of a restored view state, kept until the view next sets the
+    /// wrap width, so a restore before lines first wrap still shows the
+    /// same row.
     restored_top: Option<usize>,
-    /// Widest line width shaped since the text last changed. Bounds horizontal
-    /// scrolling without shaping lines that were never displayed.
-    max_line_width: f32,
-    /// Renderer-local projection of shared, anchored buffer contributions.
+    /// Projection of shared, anchored buffer contributions.
     decorations: Vec<RenderedDecoration>,
     gutter_markers: Vec<RenderedGutterMarker>,
-    /// The gutter's lanes as of the last paint.
-    gutter: GutterLayout,
     contribution_actions: Vec<RenderedContributionAction>,
-    /// Syntax highlights of the visible lines and some overscan, shared by
-    /// painting and the caret, hit-testing, and IME geometry on those lines.
-    syntax_cache: RefCell<Option<SyntaxCache>>,
-    /// The brackets matched at the caret, for painting.
+    /// The brackets matched at the caret.
     bracket_cache: RefCell<Option<brackets::BracketCache>>,
     /// Vertical scroll offset in rows, fractional while a wheel scroll
     /// stops between rows (0 = top of buffer).
     scroll_top: f32,
+    /// Horizontal scroll in pixels, which the view keeps from shaped text;
+    /// recorded with the view state.
+    scroll_x: f32,
+    /// The viewport's height in rows, fractional for a partly shown last
+    /// row; set by the view each layout, 0 until then.
+    viewport_rows: f32,
     /// Caret position: (line index, byte offset within that line).
     cursor_line: usize,
     cursor_col: usize,
     /// The display cell vertical movement aims for, kept across short lines.
     preferred_column: Option<usize>,
-    scroll_x: f32,
-    /// What a drag with the left button held extends from, from mouse-down
-    /// to mouse-up.
-    drag_anchor: Option<DragAnchor>,
+    /// Whether the next layout scrolls the caret into view.
     reveal_caret: bool,
     preserve_scroll_on_layout: bool,
-    /// The viewport's height in rows, fractional for a partly shown last
-    /// row; set by the view each layout, 0 until then.
-    viewport_rows: f32,
-    /// Last measured editor pane bounds; written by the element during paint
-    /// and read by the mouse-down handler so it can map a click position to a
-    /// (line, byte_col) caret.
-    bounds: Bounds<Pixels>,
     /// Selection anchor (the "other" end of the selection, opposite the
-    /// caret). Only meaningful while `has_selection` is true. Set when a
-    /// drag/shift-extend begins from the caret's pre-existing position; the
-    /// caret then tracks the moving end. Both anchor and caret use the same
-    /// (line, byte_col) coordinate space as the cursor fields above.
+    /// caret). Only meaningful while `has_selection` is true.
     anchor_line: usize,
     anchor_col: usize,
     has_selection: bool,
-    /// An action-region press owns the gesture through mouse-up; pointer
-    /// jitter must not turn it into a text drag from the old caret.
-    suppress_drag_selection: bool,
     position_range: Option<AnchoredRangeId>,
     selection_reversed: bool,
     /// IME preedit (marked) range as document-wide UTF-16 offsets. `None` =
-    /// no active composition. Set by `replace_and_mark_text_in_range`,
-    /// cleared by `replace_text_in_range` / `unmark_text`. The element paints
-    /// an underline over this span.
+    /// no active composition.
     marked_range_utf16: Option<Range<usize>>,
-    caret_blink: CaretBlink,
-    focus: FocusHandle,
     history_context: u64,
-    history_was_focused: bool,
     last_history_restore_generation: u64,
     completion: Option<CompletionController>,
     completion_surface: Option<CompletionSurface>,
@@ -291,76 +275,103 @@ pub struct EditorView {
     /// to its lifecycle. Presentation state, never recorded.
     caret_shapes: Vec<(crate::host::lifecycle::ExtensionKey, CaretShape)>,
     /// Where committed text input goes instead of the buffer while a
-    /// key-invoked extension command holds this view's input.
+    /// key-invoked extension command holds this editor's input.
     held_input: Option<crate::app::commands::key_hold::HeldInputQueue>,
-    #[cfg(test)]
-    paint_count: u64,
     _model_subscription: Subscription,
     _release_subscription: Subscription,
-    _settings_subscription: Subscription,
-    _zoom_subscription: Subscription,
 }
 
-impl EditorView {
-    pub(crate) fn model(&self) -> &Entity<BufferModel> {
-        &self.model
-    }
+impl Editor {
+    /// Build an editor over `model` whose settings resolve for view `kind`.
+    pub(crate) fn new(
+        model: Entity<BufferModel>,
+        kind: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let (line_count, seen_revision, (decorations, gutter_markers, contribution_actions)) = {
+            let model = model.read(cx);
+            (
+                model.line_count(),
+                model.revision(),
+                project_contributions(model, model.resolved_contributions()),
+            )
+        };
 
-    #[cfg(test)]
-    pub(crate) fn interaction_bounds(&self) -> Bounds<Pixels> {
-        self.bounds
-    }
+        let position_range = model.update(cx, |model, _| model.add_view_position(0..0));
+        let model_subscription = cx.observe(&model, |this, model, cx| {
+            let model = model.read(cx);
+            if this.completion.as_ref().is_some_and(|completion| {
+                completion.revision() != model.revision() || !model.is_open()
+            }) {
+                this.completion = None;
+                this.completion_surface = None;
+                this.completion_tasks.clear();
+            }
+            if this.seen_revision != model.revision() {
+                this.seen_revision = model.revision();
+                this.marked_range_utf16 = None;
+                this.preferred_column = None;
+            }
+            this.refresh(model, model.resolve_view_position(this.position_range));
+            if let Some(restore) = model.history_view_restore() {
+                this.apply_history_view_restore(model, restore.generation, &restore.state);
+            }
+            this.sync_view_position(cx);
+            this.apply_pending_indent(cx);
+            cx.notify();
+        });
+        let release_subscription = cx.on_release(|this, cx| {
+            this.model.update(cx, |model, _| {
+                model.remove_view_position(this.position_range);
+            });
+            let pairs = std::mem::take(&mut this.auto_closed);
+            this.release_auto_closed(pairs, cx);
+        });
 
-    #[cfg(test)]
-    pub(crate) fn line_height(&self) -> f32 {
-        self.metrics.line_height
-    }
-
-    /// The part of `bounds` that shows text: everything right of the gutter.
-    pub(crate) fn text_bounds(&self) -> Bounds<Pixels> {
-        let gutter = px(self.gutter.width).min(self.bounds.size.width);
-        Bounds {
-            origin: point(self.bounds.origin.x + gutter, self.bounds.origin.y),
-            size: size(self.bounds.size.width - gutter, self.bounds.size.height),
+        Self {
+            view_kind: kind.into(),
+            model,
+            line_count,
+            seen_revision,
+            wrap: wrap::WrapMap::new(line_count),
+            wrap_revision: seen_revision,
+            restored_top: None,
+            decorations,
+            gutter_markers,
+            contribution_actions,
+            bracket_cache: RefCell::default(),
+            scroll_top: 0.,
+            scroll_x: 0.,
+            viewport_rows: 0.,
+            cursor_line: 0,
+            cursor_col: 0,
+            preferred_column: None,
+            reveal_caret: true,
+            preserve_scroll_on_layout: false,
+            anchor_line: 0,
+            anchor_col: 0,
+            has_selection: false,
+            position_range,
+            selection_reversed: false,
+            marked_range_utf16: None,
+            history_context: NEXT_HISTORY_CONTEXT.fetch_add(1, Ordering::Relaxed),
+            last_history_restore_generation: 0,
+            completion: None,
+            completion_surface: None,
+            completion_tasks: Vec::new(),
+            next_completion_generation: 1,
+            pending_indent: None,
+            auto_closed: Vec::new(),
+            key_contexts: Vec::new(),
+            caret_shapes: Vec::new(),
+            held_input: None,
+            _model_subscription: model_subscription,
+            _release_subscription: release_subscription,
         }
     }
 
-    /// The caret's x position with the caret moved to `col` on the first line.
-    #[cfg(test)]
-    pub(crate) fn caret_x_at(&mut self, col: usize, window: &Window, cx: &App) -> Pixels {
-        (self.cursor_line, self.cursor_col) = (0, col);
-        self.caret_x(self.model.read(cx), window, cx)
-    }
-
-    /// Each text run on `line` as its length and underline color, as the
-    /// view paints them.
-    #[cfg(test)]
-    pub(crate) fn underline_colors_for_test(
-        &self,
-        line: usize,
-        cx: &App,
-    ) -> Vec<(usize, Option<Hsla>)> {
-        let model = self.model.read(cx);
-        let text = line_text(model, line);
-        self.line_runs(model, line, &text, cx)
-            .into_iter()
-            .map(|run| (run.len, run.underline.and_then(|underline| underline.color)))
-            .collect()
-    }
-
-    /// The brackets the view highlights at the caret.
-    #[cfg(test)]
-    pub(crate) fn matched_brackets_for_test(&self, cx: &App) -> Option<[Range<usize>; 2]> {
-        self.matched_brackets(self.model.read(cx))
-    }
-
-    /// Each gutter marker's line and color, as the view paints them.
-    #[cfg(test)]
-    pub(crate) fn gutter_colors_for_test(&self, cx: &App) -> Vec<(usize, Hsla)> {
-        self.gutter_markers
-            .iter()
-            .map(|marker| (marker.line, theme(cx).color(&marker.key)))
-            .collect()
+    pub(crate) fn model(&self) -> &Entity<BufferModel> {
+        &self.model
     }
 
     #[cfg(test)]
@@ -387,14 +398,14 @@ impl EditorView {
         })
     }
 
-    /// Retain deliberate scrolling when this view receives a relocated viewport.
-    /// Pending caret reveals from editing still take precedence.
+    /// Retain deliberate scrolling when this editor receives a relocated
+    /// viewport. Pending caret reveals from editing still take precedence.
     pub(crate) fn preserve_scroll_for_relocation(&mut self) {
         self.preserve_scroll_on_layout = true;
     }
 
     /// The restorable presentation state: selection ends and the top visible
-    /// line as byte offsets, and horizontal scroll in pixels.
+    /// row as byte offsets, and horizontal scroll in pixels.
     pub(crate) fn view_state(&self, cx: &App) -> EditorViewState {
         let model = self.model.read(cx);
         let state = self.history_view_state(model);
@@ -433,23 +444,6 @@ impl EditorView {
         cx.notify();
     }
 
-    #[cfg(test)]
-    /// Select a source byte range, reveal its caret, and transfer focus here.
-    pub(crate) fn select_reveal_and_focus(
-        &mut self,
-        range: ByteRange,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.focus.focus(window);
-        self.set_selection(
-            range.start_byte_offset,
-            range.end_byte_offset,
-            Reveal::Nearest,
-            cx,
-        );
-    }
-
     /// The selection's anchor and caret as byte offsets; equal without a
     /// selection.
     pub(crate) fn selection(&self, cx: &App) -> (usize, usize) {
@@ -457,7 +451,7 @@ impl EditorView {
         (state.anchor, state.caret)
     }
 
-    /// The key contexts some live lifecycle has set on this view.
+    /// The key contexts some live lifecycle has set on this editor.
     pub(crate) fn key_contexts(&self) -> Vec<&str> {
         let mut contexts = self
             .key_contexts
@@ -516,7 +510,7 @@ impl EditorView {
         self.held_input = queue;
     }
 
-    /// The command a text binding routes this view's typed text to.
+    /// The command a text binding routes this editor's typed text to.
     pub(crate) fn text_command(&self, cx: &App) -> Option<crate::host::protocol::CommandName> {
         cx.try_global::<crate::app::commands::keymaps::ApplicationKeymaps>()?
             .0
@@ -573,6 +567,22 @@ impl EditorView {
         self.finish_position_change(cx);
     }
 
+    /// Select from `anchor` to `caret`, a caret alone when they are equal,
+    /// as a click or drag does.
+    pub(super) fn select_from(
+        &mut self,
+        anchor: (usize, usize),
+        caret: (usize, usize),
+        cx: &mut Context<Self>,
+    ) {
+        (self.anchor_line, self.anchor_col) = anchor;
+        (self.cursor_line, self.cursor_col) = caret;
+        self.has_selection = anchor != caret;
+        self.marked_range_utf16 = None;
+        self.preferred_column = None;
+        self.finish_position_change(cx);
+    }
+
     /// The first and last lines whose rows are all inside the viewport, from
     /// the last layout; always at least one line.
     pub(crate) fn fully_visible_lines(&self) -> (usize, usize) {
@@ -607,199 +617,46 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Build an editor presenting `model`.
-    pub fn new(model: Entity<BufferModel>, cx: &mut Context<Self>) -> Self {
-        Self::with_rendering(model, 0, EditorRenderingOptions::default(), cx)
+    /// Scroll by `rows`, which may be fractional, and `x` pixels sideways
+    /// within `max_x`, without moving the caret, as the wheel does.
+    pub(super) fn scroll_by(&mut self, rows: f32, x: f32, max_x: f32, cx: &mut Context<Self>) {
+        self.scroll_top += rows;
+        self.scroll_x = (self.scroll_x + x).clamp(0., max_x.max(0.));
+        self.reveal_caret = false;
+        self.clamp_scroll();
+        cx.notify();
     }
 
-    /// Build an editor presenting `model` inside the contributed view `kind`,
-    /// without a gutter until the view asks for one.
-    pub(crate) fn for_contributed_view(
-        model: Entity<BufferModel>,
-        kind: impl Into<SharedString>,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let mut view = Self {
-            view_kind: kind.into(),
-            ..Self::with_rendering(model, 0, EditorRenderingOptions { show_gutter: false }, cx)
-        };
-        view.update_metrics(cx);
-        view
-    }
-
-    /// Show or hide the gutter of markers and line numbers.
-    pub(crate) fn set_show_gutter(&mut self, show: bool, cx: &mut Context<Self>) {
-        if self.rendering.show_gutter != show {
-            self.rendering.show_gutter = show;
-            cx.notify();
+    /// Record the viewport's height in rows, as the view laid it out, and
+    /// scroll the caret into view when it moved or the viewport resized
+    /// unless a relocation kept the scroll. Returns whether the caret is to
+    /// be revealed horizontally. Changes nothing the view paints from, so it
+    /// does not notify.
+    pub(super) fn lay_out(&mut self, viewport_rows: f32, resized: bool) -> bool {
+        self.viewport_rows = viewport_rows;
+        let reveal = self.reveal_caret || (resized && !self.preserve_scroll_on_layout);
+        if reveal {
+            self.ensure_cursor_visible();
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new_with_options(
-        model: Entity<BufferModel>,
-        element_id: usize,
-        rendering: EditorRenderingOptions,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        Self::with_rendering(model, element_id, rendering, cx)
-    }
-
-    fn with_rendering(
-        model: Entity<BufferModel>,
-        element_id: usize,
-        rendering: EditorRenderingOptions,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let (line_count, seen_revision, (decorations, gutter_markers, contribution_actions)) = {
-            let model = model.read(cx);
-            (
-                model.line_count(),
-                model.revision(),
-                project_contributions(model, model.resolved_contributions()),
-            )
-        };
-
-        let position_range = model.update(cx, |model, _| model.add_view_position(0..0));
-        let model_subscription = cx.observe(&model, |this, model, cx| {
-            let model = model.read(cx);
-            if this.completion.as_ref().is_some_and(|completion| {
-                completion.revision() != model.revision() || !model.is_open()
-            }) {
-                this.completion = None;
-                this.completion_surface = None;
-                this.completion_tasks.clear();
-            }
-            if this.seen_revision != model.revision() {
-                this.text_changed(model);
-                this.marked_range_utf16 = None;
-                this.preferred_column = None;
-            }
-            this.refresh(model, model.resolve_view_position(this.position_range));
-            if let Some(restore) = model.history_view_restore() {
-                this.apply_history_view_restore(model, restore.generation, &restore.state);
-            }
-            this.sync_view_position(cx);
-            this.apply_pending_indent(cx);
-            cx.notify();
-        });
-        // Settings resolve during layout, so any change only needs a repaint
-        // once the metrics follow it.
-        let settings_subscription = cx.observe_global::<ApplicationSettings>(|this, cx| {
-            this.max_line_width = 0.;
-            this.update_metrics(cx);
-            cx.notify();
-        });
-        let zoom_subscription =
-            cx.observe_global::<crate::app::zoom::ApplicationZoom>(|this, cx| {
-                this.update_metrics(cx);
-                cx.notify();
-            });
-        let release_subscription = cx.on_release(|this, cx| {
-            this.model.update(cx, |model, _| {
-                model.remove_view_position(this.position_range);
-            });
-            let pairs = std::mem::take(&mut this.auto_closed);
-            this.release_auto_closed(pairs, cx);
-        });
-
-        let mut view = Self {
-            element_id,
-            rendering,
-            view_kind: EDITOR_KEY_CONTEXT.into(),
-            model,
-            line_count,
-            seen_revision,
-            metrics: EditorMetrics::new(crate::app::typography::TEXT_SIZE),
-            wrap: wrap::WrapMap::new(line_count),
-            wrap_revision: seen_revision,
-            cell_width: 0.,
-            restored_top: None,
-            max_line_width: 0.,
-            decorations,
-            gutter_markers,
-            gutter: GutterLayout::default(),
-            contribution_actions,
-            syntax_cache: RefCell::default(),
-            bracket_cache: RefCell::default(),
-            scroll_top: 0.,
-            cursor_line: 0,
-            cursor_col: 0,
-            preferred_column: None,
-            scroll_x: 0.,
-            drag_anchor: None,
-            reveal_caret: true,
-            preserve_scroll_on_layout: false,
-            viewport_rows: 0.,
-            bounds: Bounds::default(),
-            anchor_line: 0,
-            anchor_col: 0,
-            has_selection: false,
-            suppress_drag_selection: false,
-            position_range,
-            selection_reversed: false,
-            marked_range_utf16: None,
-            caret_blink: CaretBlink::default(),
-            focus: cx.focus_handle(),
-            history_context: NEXT_HISTORY_CONTEXT.fetch_add(1, Ordering::Relaxed),
-            history_was_focused: false,
-            last_history_restore_generation: 0,
-            completion: None,
-            completion_surface: None,
-            completion_tasks: Vec::new(),
-            next_completion_generation: 1,
-            pending_indent: None,
-            auto_closed: Vec::new(),
-            key_contexts: Vec::new(),
-            caret_shapes: Vec::new(),
-            held_input: None,
-            #[cfg(test)]
-            paint_count: 0,
-            _model_subscription: model_subscription,
-            _release_subscription: release_subscription,
-            _settings_subscription: settings_subscription,
-            _zoom_subscription: zoom_subscription,
-        };
-        view.update_metrics(cx);
-        view
-    }
-
-    /// Restart blinking with the caret shown when the caret, selection, text,
-    /// or focus changed since the last render, and stop it while unfocused.
-    fn update_caret_blink(&mut self, focused: bool, cx: &mut Context<Self>) {
-        let key = focused.then_some((
-            self.cursor_line,
-            self.cursor_col,
-            self.has_selection,
-            self.seen_revision,
-        ));
-        if key == self.caret_blink.key {
-            return;
+        if self.wrap.width().is_some() {
+            // Wrapped rows fit the width, so nothing scrolls sideways.
+            self.scroll_x = 0.;
         }
-        self.caret_blink = CaretBlink {
-            key,
-            visible: true,
-            _task: key.map(|_| {
-                cx.spawn(async move |this, cx| {
-                    loop {
-                        cx.background_executor().timer(CARET_BLINK_INTERVAL).await;
-                        let toggled = this.update(cx, |view, cx| {
-                            view.caret_blink.visible = !view.caret_blink.visible;
-                            cx.notify();
-                        });
-                        if toggled.is_err() {
-                            break;
-                        }
-                    }
-                })
-            }),
-        };
+        self.reveal_caret = false;
+        self.preserve_scroll_on_layout = false;
+        self.clamp_scroll();
+        reveal && self.wrap.width().is_none()
     }
 
-    /// Record that the model text changed: shaped widths no longer apply.
-    fn text_changed(&mut self, model: &BufferModel) {
-        self.seen_revision = model.revision();
-        self.max_line_width = 0.;
+    /// Scroll sideways so the caret, `x` pixels into the text, shows in a
+    /// text area `width` pixels wide.
+    pub(super) fn reveal_x(&mut self, x: f32, width: f32) {
+        if x < self.scroll_x {
+            self.scroll_x = x.max(0.);
+        }
+        if x + 2. > self.scroll_x + width {
+            self.scroll_x = (x + 2. - width).max(0.);
+        }
     }
 
     /// Refresh state derived from the model and, when given, move the
@@ -837,7 +694,7 @@ impl EditorView {
         cx.notify();
     }
 
-    pub(crate) fn break_history_group(&self, cx: &mut Context<Self>) {
+    pub(crate) fn break_history_group(&self, cx: &mut App) {
         self.model
             .update(cx, |model, _| model.break_history_group());
     }
@@ -896,8 +753,8 @@ impl EditorView {
         self.clamp_scroll();
     }
 
-    /// The rows the last measured viewport shows at the current scroll,
-    /// including a partly visible last row.
+    /// The rows the viewport shows at the current scroll, including a partly
+    /// visible last row.
     pub(super) fn visible_rows(&self) -> Range<usize> {
         let count = self.wrap.row_count();
         let first = (self.scroll_top.floor() as usize).min(count);
@@ -959,9 +816,7 @@ impl EditorView {
     }
 
     /// Ordered (start, end) of the active selection, where start <= end in
-    /// (line, col) lexicographic order. Returns `None` when there is no
-    /// selection (caret-only). The caller uses this to decide which lines get
-    /// full-width highlight vs partial leading/trailing rects.
+    /// (line, col) lexicographic order, or `None` with only a caret.
     fn selection_range(&self) -> Option<((usize, usize), (usize, usize))> {
         if !self.has_selection {
             return None;
@@ -1003,7 +858,7 @@ impl EditorView {
             }
         });
         let model = model.read(cx);
-        self.text_changed(model);
+        self.seen_revision = model.revision();
         self.refresh(model, None);
     }
 
@@ -1042,7 +897,7 @@ impl EditorView {
             return;
         }
         let model = model.read(cx);
-        self.text_changed(model);
+        self.seen_revision = model.revision();
         self.refresh(model, None);
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
@@ -1069,7 +924,6 @@ impl EditorView {
         range: Option<Range<usize>>,
         text: &str,
         grouping: Option<EditGroupKind>,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if !self.model.read(cx).is_editable() {
@@ -1222,14 +1076,6 @@ fn project_contributions(
     gutter_markers.dedup_by_key(|marker| marker.line);
     (decorations, gutter_markers, actions)
 }
-
-impl Focusable for EditorView {
-    fn focus_handle(&self, _cx: &App) -> FocusHandle {
-        self.focus.clone()
-    }
-}
-
-impl EventEmitter<EditorContributionAction> for EditorView {}
 
 /// Lines a syntax highlight query covers beyond the requested ones on each
 /// side.

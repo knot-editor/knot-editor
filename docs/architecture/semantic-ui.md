@@ -210,7 +210,7 @@ fans requests out to independent extension runtimes.
 CompletionProviderRegistry snapshot
                  |
                  v
-EditorView -> CompletionController -> independent extension runtimes
+Editor -> CompletionController -> independent extension runtimes
    |                    ^                         |
    |                    +--- validated results ---+
    |                              |

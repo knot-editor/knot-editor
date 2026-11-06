@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl EditorView {
+impl Editor {
     pub(crate) fn start_completion(
         &mut self,
         buffer: BufferHandle,
@@ -107,55 +107,11 @@ impl EditorView {
         self.completion_tasks.clear();
     }
 
-    pub(super) fn completion_anchor(
-        &self,
-        model: &BufferModel,
-        window: &mut Window,
-        cx: &App,
-    ) -> Point<Pixels> {
-        let row = self.row(model, self.caret_row());
-        let x = self.text_bounds().origin.x - self.bounds.origin.x
-            + self.x_in_row(model, &row, self.cursor_col, window, cx);
-        let y = px((row.index as f32 + 1. - self.scroll_top) * self.metrics.line_height);
-        // Keep the popup, with a margin, inside the view.
-        let popup = |pixels| crate::app::zoom::scaled(pixels, cx);
-        point(
-            x.min((self.bounds.size.width - popup(380.)).max(px(0.))),
-            y.min((self.bounds.size.height - popup(230.)).max(px(0.))),
-        )
-    }
-
-    pub(super) fn completion_previous(
-        &mut self,
-        _: &CompletionPrevious,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn move_completion_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
         if let Some(surface) = self.completion_surface.as_mut() {
-            surface.move_selection(-1);
+            surface.move_selection(delta);
             cx.notify();
         }
-    }
-
-    pub(super) fn completion_next(
-        &mut self,
-        _: &CompletionNext,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(surface) = self.completion_surface.as_mut() {
-            surface.move_selection(1);
-            cx.notify();
-        }
-    }
-
-    pub(super) fn completion_accept(
-        &mut self,
-        _: &CompletionAccept,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.accept_selected_completion(cx);
     }
 
     pub(super) fn accept_selected_completion(&mut self, cx: &mut Context<Self>) {
@@ -190,6 +146,56 @@ impl EditorView {
             }
         });
     }
+}
+
+impl EditorView {
+    pub(super) fn completion_anchor(
+        &self,
+        editor: &Editor,
+        window: &mut Window,
+        cx: &App,
+    ) -> Point<Pixels> {
+        let row = editor.row(self.model.read(cx), editor.caret_row());
+        let x = self.text_bounds().origin.x - self.bounds.origin.x
+            + self.x_in_row(editor, &row, editor.cursor_col, window, cx);
+        let y = px((row.index as f32 + 1. - editor.scroll_top) * self.metrics.line_height);
+        // Keep the popup, with a margin, inside the view.
+        let popup = |pixels| crate::app::zoom::scaled(pixels, cx);
+        point(
+            x.min((self.bounds.size.width - popup(380.)).max(px(0.))),
+            y.min((self.bounds.size.height - popup(230.)).max(px(0.))),
+        )
+    }
+
+    pub(super) fn completion_previous(
+        &mut self,
+        _: &CompletionPrevious,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editor
+            .update(cx, |editor, cx| editor.move_completion_selection(-1, cx));
+    }
+
+    pub(super) fn completion_next(
+        &mut self,
+        _: &CompletionNext,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editor
+            .update(cx, |editor, cx| editor.move_completion_selection(1, cx));
+    }
+
+    pub(super) fn completion_accept(
+        &mut self,
+        _: &CompletionAccept,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editor
+            .update(cx, |editor, cx| editor.accept_selected_completion(cx));
+    }
 
     pub(super) fn completion_dismiss(
         &mut self,
@@ -197,7 +203,9 @@ impl EditorView {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.dismiss_completion();
-        cx.notify();
+        self.editor.update(cx, |editor, cx| {
+            editor.dismiss_completion();
+            cx.notify();
+        });
     }
 }

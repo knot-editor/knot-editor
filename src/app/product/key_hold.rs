@@ -40,7 +40,10 @@ impl ProductShell {
             return;
         };
         if let Some(editor) = &editor {
-            editor.update(cx, |editor, _| editor.set_held_input(Some(queue)));
+            editor.update(cx, |view, cx| {
+                view.editor()
+                    .update(cx, |editor, _| editor.set_held_input(Some(queue)))
+            });
         }
         self.release_key_hold_after(generation, completion, window, cx);
     }
@@ -191,7 +194,10 @@ fn release_key_hold(
     };
     let editor = hold.editor.as_ref().and_then(WeakEntity::upgrade);
     if let Some(editor) = &editor {
-        editor.update(cx, |editor, _| editor.set_held_input(None));
+        editor.update(cx, |view, cx| {
+            view.editor()
+                .update(cx, |editor, _| editor.set_held_input(None))
+        });
     }
     replay(&shell, editor, hold.queue.take(), window, cx);
 }

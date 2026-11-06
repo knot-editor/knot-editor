@@ -1,7 +1,5 @@
 use std::ops::Range;
 
-use gpui::px;
-
 use super::super::{
     BufferModel, ContributionSource, ResolvedEditorContribution,
     layout::{Row, decoration_fills},
@@ -17,7 +15,7 @@ fn row(line: usize, range: Range<usize>, last: bool) -> Row {
         line,
         range,
         last,
-        indent: px(0.),
+        indent: 0,
     }
 }
 

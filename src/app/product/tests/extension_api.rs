@@ -178,6 +178,8 @@ await commands.register("api.cross", async (context) => {
     wait_for_api_condition(cx, |cx| {
         editor
             .read(cx)
+            .editor()
+            .read(cx)
             .completion_state()
             .is_some_and(|(items, pending, failures, _)| {
                 items == 1 && pending == 0 && failures == 0
@@ -521,6 +523,8 @@ await commands.register("api.owned-cleanup", async () => {
         wait_for_api_condition(cx, |cx| {
             editor
                 .read(cx)
+                .editor()
+                .read(cx)
                 .completion_state()
                 .is_some_and(|(items, pending, _, _)| items == 1 && pending == 0)
         });
@@ -542,7 +546,12 @@ await commands.register("api.owned-cleanup", async () => {
                     .resolve("api.owned")
                     .is_err()
             );
-            let (items, pending, _, _) = editor.read(cx).completion_state().unwrap();
+            let (items, pending, _, _) = editor
+                .read(cx)
+                .editor()
+                .read(cx)
+                .completion_state()
+                .unwrap();
             assert_eq!((items, pending), (0, 0));
         });
         if explicit_cleanup {

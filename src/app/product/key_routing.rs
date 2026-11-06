@@ -111,6 +111,8 @@ impl ProductShell {
             .map(|editor| {
                 editor
                     .read(cx)
+                    .editor()
+                    .read(cx)
                     .key_contexts()
                     .into_iter()
                     .map(str::to_owned)

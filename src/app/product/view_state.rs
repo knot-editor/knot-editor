@@ -37,7 +37,8 @@ impl ProductShell {
             .panes()
             .iter()
             .flat_map(|pane| pane.tabs())
-            .filter_map(|tab| tab.editor().cloned())
+            .filter_map(|tab| tab.editor())
+            .map(|view| view.read(cx).editor().clone())
             .collect::<Vec<_>>();
         self.view_state
             .editors
@@ -51,7 +52,8 @@ impl ProductShell {
             {
                 continue;
             }
-            // Only a changed view state counts: a blinking caret notifies too.
+            // Only a changed view state counts: an editor notifies for other
+            // changes too, such as completion.
             let mut seen = editor.read(cx).view_state(cx);
             let subscription = cx.observe(&editor, move |this, editor, cx| {
                 this.promote_edited_previews(cx);

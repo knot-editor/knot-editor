@@ -545,7 +545,7 @@ struct UndoGroup {
     owner: ExtensionKey,
     model: gpui::WeakEntity<crate::app::model::BufferModel>,
     /// The view that opened the group, whose selection the step restores.
-    editor: gpui::WeakEntity<crate::app::editor::EditorView>,
+    editor: gpui::WeakEntity<crate::app::editor::Editor>,
     handle: Option<u64>,
 }
 
@@ -582,7 +582,7 @@ pub(crate) struct ProductExtensionHost {
     setting_warnings: Vec<String>,
     /// Editors each lifecycle set a key context or caret shape on, cleared at
     /// teardown.
-    owned_editors: HashMap<ExtensionKey, Vec<gpui::WeakEntity<crate::app::editor::EditorView>>>,
+    owned_editors: HashMap<ExtensionKey, Vec<gpui::WeakEntity<crate::app::editor::Editor>>>,
     /// Long-lived editor handles, each bound to one exact tab presentation.
     editor_handles: HashMap<u64, EditorHandle>,
     next_editor_handle: u64,
@@ -595,7 +595,7 @@ pub(crate) struct ProductExtensionHost {
     _application_signal: Subscription,
     buffer_observers: HashMap<crate::host::protocol::BufferHandle, Subscription>,
     commands: ExtensionCommandBridge,
-    completion_editors: Vec<gpui::WeakEntity<crate::app::editor::EditorView>>,
+    completion_editors: Vec<gpui::WeakEntity<crate::app::editor::Editor>>,
     command_targets: HashMap<CommandInvocationId, ProductCommandTarget>,
     view_command_handlers:
         HashMap<CommandInvocationId, (CommandTarget, crate::host::protocol::CommandName)>,
@@ -1380,7 +1380,7 @@ impl ProductExtensionHost {
         request: &crate::host::protocol::RequestContext,
         authority: handlers::EditorAuthority,
         cx: &App,
-    ) -> Result<Entity<crate::app::editor::EditorView>, handlers::AccessError> {
+    ) -> Result<Entity<crate::app::editor::Editor>, handlers::AccessError> {
         use handlers::{AccessError, EditorAuthority};
         match authority {
             EditorAuthority::Command(authority) => {
@@ -1388,7 +1388,9 @@ impl ProductExtensionHost {
                     .context_target(request, Some(authority), cx)?
                     .command_view(cx)
                 {
-                    Some(crate::app::workbench::CommandView::Editor(editor)) => Ok(editor),
+                    Some(crate::app::workbench::CommandView::Editor(view)) => {
+                        Ok(view.read(cx).editor().clone())
+                    }
                     _ => Err(AccessError::InvalidTarget),
                 }
             }
@@ -1455,7 +1457,7 @@ impl ProductExtensionHost {
     fn editor_selection_observed(
         &mut self,
         id: u64,
-        editor: &Entity<crate::app::editor::EditorView>,
+        editor: &Entity<crate::app::editor::Editor>,
         cx: &App,
     ) {
         let current = editor.read(cx).selection(cx);
@@ -1511,7 +1513,7 @@ impl ProductExtensionHost {
     pub(super) fn begin_undo_group(
         &mut self,
         owner: ExtensionKey,
-        editor: Entity<crate::app::editor::EditorView>,
+        editor: Entity<crate::app::editor::Editor>,
         authority: handlers::EditorAuthority,
         cx: &mut App,
     ) -> Option<u64> {
@@ -1609,7 +1611,7 @@ impl ProductExtensionHost {
     pub(super) fn set_editor_key_context(
         &mut self,
         owner: ExtensionKey,
-        editor: Entity<crate::app::editor::EditorView>,
+        editor: Entity<crate::app::editor::Editor>,
         name: &str,
         active: bool,
         cx: &mut App,
@@ -1623,7 +1625,7 @@ impl ProductExtensionHost {
     pub(super) fn set_editor_caret_shape(
         &mut self,
         owner: ExtensionKey,
-        editor: Entity<crate::app::editor::EditorView>,
+        editor: Entity<crate::app::editor::Editor>,
         shape: Option<crate::app::editor::CaretShape>,
         cx: &mut App,
     ) {
@@ -1634,7 +1636,7 @@ impl ProductExtensionHost {
     fn track_owned_editor(
         &mut self,
         owner: ExtensionKey,
-        editor: &Entity<crate::app::editor::EditorView>,
+        editor: &Entity<crate::app::editor::Editor>,
     ) {
         let editors = self.owned_editors.entry(owner).or_default();
         editors.retain(|weak| weak.upgrade().is_some());
@@ -2033,7 +2035,8 @@ impl ProductExtensionHost {
                     .iter()
                     .find(|tab| tab.id() == target.tab && tab.surface_id() == target.surface)
             })
-            .and_then(|tab| tab.editor().cloned())
+            .and_then(|tab| tab.editor())
+            .map(|view| view.read(cx).editor().clone())
         else {
             return crate::host::protocol::CommandOutcome::InvalidTarget;
         };

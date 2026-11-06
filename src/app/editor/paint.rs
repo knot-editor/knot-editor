@@ -6,18 +6,20 @@ impl Render for EditorView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focused = self.focus.is_focused(window);
         if focused != self.history_was_focused {
-            self.break_history_group(cx);
+            self.model
+                .update(cx, |model, _| model.break_history_group());
             self.history_was_focused = focused;
         }
         self.update_caret_blink(focused, cx);
         let entity = cx.entity();
+        let editor = self.editor.read(cx);
         let mut key_context = KeyContext::default();
         key_context.add(EDITOR_KEY_CONTEXT);
-        if self.completion.is_some() {
+        if editor.completion.is_some() {
             key_context.add("editor_completion");
         }
-        let completion = self.completion_surface.as_ref().map(|surface| {
-            let anchor = self.completion_anchor(self.model.read(cx), window, cx);
+        let completion = editor.completion_surface.as_ref().map(|surface| {
+            let anchor = self.completion_anchor(editor, window, cx);
             surface.render(anchor, theme(cx))
         });
         div()
@@ -52,26 +54,23 @@ impl Render for EditorView {
                         p.y * this.metrics.line_height,
                     ),
                 };
-                this.scroll_top -= dy / this.metrics.line_height;
-                let wide = if this.wrap.width().is_some() {
-                    0.
-                } else {
-                    this.max_line_width
-                };
-                this.scroll_x = (this.scroll_x - dx).clamp(
-                    0.,
-                    (wide + 2. - f32::from(this.text_bounds().size.width)).max(0.),
-                );
-                this.reveal_caret = false;
-                this.clamp_scroll();
-                cx.notify();
+                let rows = -dy / this.metrics.line_height;
+                let max_x = this.max_line_width + 2. - f32::from(this.text_bounds().size.width);
+                this.editor.update(cx, |editor, cx| {
+                    let max_x = if editor.wrap.width().is_some() {
+                        0.
+                    } else {
+                        max_x
+                    };
+                    editor.scroll_by(rows, -dx, max_x, cx)
+                });
             }))
             .child(EditorElement { entity })
             .children(completion)
     }
 }
 /// The custom `Element`. Owns no state itself; reads everything from the
-/// `EditorView` entity each layout/paint. Implements `Element` directly
+/// `EditorView` entity and its editor each layout/paint. Implements `Element` directly
 /// (not `RenderOnce`) per the `Element` module doc's recommendation for
 /// code editors.
 pub(super) struct EditorElement {
@@ -128,18 +127,19 @@ impl Element for EditorElement {
                 window,
                 cx,
             );
-            let rows = view.visible_rows();
+            let editor = view.editor.read(cx);
+            let rows = editor.visible_rows();
             let line_height = view.metrics.line_height;
-            let markers = view
+            let markers = editor
                 .gutter_markers
                 .iter()
                 .filter(|marker| marker.command.is_some())
-                .map(|marker| view.wrap.first_row(marker.line))
+                .map(|marker| editor.wrap.first_row(marker.line))
                 .filter(|row| rows.contains(row))
                 .map(|row| Bounds {
                     origin: point(
                         bounds.origin.x,
-                        bounds.origin.y + px((row as f32 - view.scroll_top) * line_height),
+                        bounds.origin.y + px((row as f32 - editor.scroll_top) * line_height),
                     ),
                     size: size(px(view.gutter.markers_width), px(line_height)),
                 })
@@ -179,27 +179,16 @@ impl Element for EditorElement {
         self.entity.update(cx, |view, cx| {
             let resized = view.bounds.size != bounds.size;
             view.bounds = bounds;
-            view.viewport_rows = f32::from(bounds.size.height) / view.metrics.line_height;
-            if view.reveal_caret || (resized && !view.preserve_scroll_on_layout) {
-                view.ensure_cursor_visible();
-            }
-            if view.wrap.width().is_some() {
-                // Wrapped rows fit the width, so nothing scrolls sideways.
-                view.scroll_x = 0.;
-                view.reveal_caret = false;
-            } else if view.reveal_caret || (resized && !view.preserve_scroll_on_layout) {
-                let x = f32::from(view.caret_x(view.model.read(cx), window, cx));
+            let rows = f32::from(bounds.size.height) / view.metrics.line_height;
+            let reveal_x = view
+                .editor
+                .update(cx, |editor, _| editor.lay_out(rows, resized));
+            if reveal_x {
+                let x = f32::from(view.caret_x(view.editor.read(cx), window, cx));
                 let width = f32::from(view.text_bounds().size.width);
-                if x < view.scroll_x {
-                    view.scroll_x = x.max(0.);
-                }
-                if x + 2. > view.scroll_x + width {
-                    view.scroll_x = (x + 2. - width).max(0.);
-                }
-                view.reveal_caret = false;
+                view.editor
+                    .update(cx, |editor, _| editor.reveal_x(x, width));
             }
-            view.preserve_scroll_on_layout = false;
-            view.clamp_scroll();
         });
         let drag_listener = window.listener_for(&self.entity, EditorView::on_mouse_move);
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
@@ -215,9 +204,9 @@ impl Element for EditorElement {
                 release_listener(event, window, cx);
             }
         });
-        let (scroll_x, metrics) = {
+        let (scroll_x, metrics, cell_width) = {
             let view = self.entity.read(cx);
-            (view.scroll_x, view.metrics)
+            (view.editor.read(cx).scroll_x, view.metrics, view.cell_width)
         };
         // Read the view state, compute the visible rows, then read just the
         // visible lines and their runs out of the model before painting:
@@ -242,20 +231,21 @@ impl Element for EditorElement {
             entity,
         ): EditorPaintState = {
             let view = self.entity.read(cx);
+            let editor = view.editor.read(cx);
             let model = view.model.read(cx);
             let theme = theme(cx);
-            let max = (view.wrap.row_count() as f32) * metrics.line_height;
-            let rows = view.visible_rows();
-            let lines = view.visible_lines();
+            let max = (editor.wrap.row_count() as f32) * metrics.line_height;
+            let rows = editor.visible_rows();
+            let lines = editor.visible_lines();
             view.cache_syntax(model, lines.clone());
             // Each line is read and highlighted once, then sliced per row.
             let mut vis: Vec<PaintRow> = Vec::new();
             let mut line: Option<(usize, String, Vec<TextRun>)> = None;
             for index in rows.clone() {
-                let row = view.row(model, index);
+                let row = editor.row(model, index);
                 if line.as_ref().is_none_or(|(at, ..)| *at != row.line) {
                     let text = line_text(model, row.line);
-                    let runs = view.line_runs(model, row.line, &text, cx);
+                    let runs = view.line_runs(editor, row.line, &text, cx);
                     line = Some((row.line, text, runs));
                 }
                 let (_, text, runs) = line.as_ref().expect("the row's line was just read");
@@ -268,16 +258,16 @@ impl Element for EditorElement {
             // Only paint the caret when it's shown in its blink cycle and on a
             // visible row; otherwise it is clipped anyway, so skip the
             // shaping cost.
-            let caret = (view.caret_blink.visible && rows.contains(&view.caret_row()))
-                .then(|| (view.cursor_line, view.cursor_col, view.caret_shape()));
+            let caret = (view.caret_blink.visible && rows.contains(&editor.caret_row()))
+                .then(|| (editor.cursor_line, editor.cursor_col, editor.caret_shape()));
             // Convert marked UTF-16 range to (line, byte_col) start/end for
             // underline painting.
-            let marked = view.marked_range_utf16.as_ref().map(|mr| {
+            let marked = editor.marked_range_utf16.as_ref().map(|mr| {
                 let s = flat_utf16_to_position(model, mr.start);
                 let e = flat_utf16_to_position(model, mr.end);
                 (s, e)
             });
-            let brackets = view
+            let brackets = editor
                 .matched_brackets(model)
                 .into_iter()
                 .flatten()
@@ -287,22 +277,23 @@ impl Element for EditorElement {
                 })
                 .filter(|(line, ..)| lines.contains(line))
                 .collect();
-            let fills = decoration_fills(&view.decorations, vis.iter().map(|row| &row.row))
+            let fills = decoration_fills(&editor.decorations, vis.iter().map(|row| &row.row))
                 .into_iter()
                 .map(|fill| (fill.row, fill.columns, theme.color(fill.key)))
                 .collect();
             // Numbers and markers show on each line's first row.
             let first_row =
-                |line: usize| Some(view.wrap.first_row(line)).filter(|row| rows.contains(row));
+                |line: usize| Some(editor.wrap.first_row(line)).filter(|row| rows.contains(row));
             let gutter = GutterPaint {
                 layout: view.gutter,
                 numbers: view
-                    .gutter_numbers(rows.clone())
+                    .gutter_numbers(editor, rows.clone())
                     .into_iter()
                     .map(|(row, label, active)| (row, label.to_string().into(), active))
                     .collect(),
                 markers: if view.rendering.show_gutter {
-                    view.gutter_markers
+                    editor
+                        .gutter_markers
                         .iter()
                         .filter_map(|marker| {
                             Some((first_row(marker.line)?, theme.color(&marker.key)))
@@ -315,18 +306,18 @@ impl Element for EditorElement {
                 number: theme.color(color::EDITOR_LINE_NUMBER),
                 active_number: theme.color(color::EDITOR_LINE_NUMBER_ACTIVE),
             };
-            let line_highlight = view
+            let line_highlight = editor
                 .highlighted_line()
-                .map(|line| view.wrap.rows(line))
+                .map(|line| editor.wrap.rows(line))
                 .map(|lit| lit.start.max(rows.start)..lit.end.min(rows.end))
                 .filter(|lit| !lit.is_empty());
             (
-                view.scroll_top * metrics.line_height,
+                editor.scroll_top * metrics.line_height,
                 max,
                 vis,
-                view.tab_size(model, cx),
+                editor.tab_size(model, cx),
                 caret,
-                view.selection_range(),
+                editor.selection_range(),
                 marked,
                 brackets,
                 fills,
@@ -345,13 +336,10 @@ impl Element for EditorElement {
             )
         };
 
-        // Write the measured viewport height back into the view so the key
-        // and scroll handlers can clamp against the real viewport. No
-        // notify: this must not trigger a re-render.
-        let viewport_rows = f32::from(bounds.size.height) / metrics.line_height;
+        // Record the painted bounds for pointer hit testing. No notify: this
+        // must not trigger a re-render.
         let full_bounds = bounds;
         let bounds = self.entity.update(cx, |view, _cx| {
-            view.viewport_rows = viewport_rows;
             view.bounds = full_bounds;
             #[cfg(test)]
             {
@@ -403,7 +391,11 @@ impl Element for EditorElement {
                     } else {
                         px(0.)
                     };
-                    (row, shaped, row.row.indent + rtl - px(scroll_x))
+                    (
+                        row,
+                        shaped,
+                        px(row.row.indent as f32 * cell_width) + rtl - px(scroll_x),
+                    )
                 })
                 .collect();
             // The x of byte `col` of a row's line, from the row's text start.

@@ -403,7 +403,9 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
             .clone();
         editor.update(cx, |editor, cx| {
             editor.replace_text_in_range(None, "Editor selection", window, cx);
-            editor.execute_editing_command("editor.select-all", window, cx);
+            editor.editor().clone().update(cx, |editor, cx| {
+                editor.execute_editing_command("editor.select-all", cx)
+            });
         });
         focus_view(&editor.focus_handle(cx), window, cx);
     })
@@ -1210,7 +1212,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
         let editor = editor.clone();
         wait(
             cx,
-            Box::new(move |cx| editor.read(cx).view_state(cx).caret == expected),
+            Box::new(move |cx| editor.read(cx).editor().read(cx).view_state(cx).caret == expected),
         );
         if index >= 50 {
             latencies.push(start.elapsed());
@@ -1227,15 +1229,17 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
             model.replace(0..length, "abc").unwrap();
         });
         editor.update(cx, |editor, cx| {
-            editor.restore_view_state(
-                crate::app::editor::EditorViewState {
-                    anchor: 3,
-                    caret: 3,
-                    top: 0,
-                    scroll_x: 0.,
-                },
-                cx,
-            )
+            editor.editor().clone().update(cx, |editor, cx| {
+                editor.restore_view_state(
+                    crate::app::editor::EditorViewState {
+                        anchor: 3,
+                        caret: 3,
+                        top: 0,
+                        scroll_x: 0.,
+                    },
+                    cx,
+                )
+            })
         });
         cx.simulate_keystrokes(window, "f8");
         cx.simulate_input(window, "x");
@@ -1244,7 +1248,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
             cx,
             Box::new(move |cx| {
                 let text = model_ref.read(cx).text();
-                let caret = editor_ref.read(cx).view_state(cx).caret;
+                let caret = editor_ref.read(cx).editor().read(cx).view_state(cx).caret;
                 (text == "abcx" && caret == 0) || (text == "xabc" && caret == 1)
             }),
         );
@@ -1307,28 +1311,34 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
             .clone()
     });
     editor.update(cx, |editor, cx| {
-        editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
+        editor.editor().clone().update(cx, |editor, cx| {
+            editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
+        })
     });
     cx.refresh().unwrap();
-    let in_modal = |cx: &gpui::App| editor.read(cx).key_contexts() == ["modal"];
+    let in_modal = |cx: &gpui::App| editor.read(cx).editor().read(cx).key_contexts() == ["modal"];
 
     cx.simulate_keystrokes(window, "f8");
     wait_for_api_condition(cx, in_modal);
     // No refresh: the context is not in any painted frame yet.
     cx.simulate_keystrokes(window, "h");
-    wait_for_api_condition(cx, |cx| editor.read(cx).selection(cx) == (2, 2));
+    wait_for_api_condition(cx, |cx| {
+        editor.read(cx).editor().read(cx).selection(cx) == (2, 2)
+    });
     cx.simulate_keystrokes(window, "x");
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxc");
 
     cx.simulate_keystrokes(window, "escape");
-    wait_for_api_condition(cx, |cx| editor.read(cx).key_contexts().is_empty());
+    wait_for_api_condition(cx, |cx| {
+        editor.read(cx).editor().read(cx).key_contexts().is_empty()
+    });
     cx.simulate_keystrokes(window, "h");
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhc");
 
     cx.simulate_keystrokes(window, "f8");
     wait_for_api_condition(cx, in_modal);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
-    cx.read(|cx| assert!(editor.read(cx).key_contexts().is_empty()));
+    cx.read(|cx| assert!(editor.read(cx).editor().read(cx).key_contexts().is_empty()));
     cx.simulate_keystrokes(window, "h");
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhhc");
 }
@@ -1359,7 +1369,9 @@ fn focused_editor_window(
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
-            editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
+            editor.editor().clone().update(cx, |editor, cx| {
+                editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
+            })
         });
         shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })

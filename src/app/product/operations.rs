@@ -254,7 +254,7 @@ pub(crate) struct EditorTab(OpenTarget);
 
 impl EditorTab {
     /// The tab's editor, while this exact presentation is live.
-    pub(crate) fn editor(&self, cx: &App) -> Option<Entity<crate::app::editor::EditorView>> {
+    pub(crate) fn editor(&self, cx: &App) -> Option<Entity<crate::app::editor::Editor>> {
         let target = &self.0;
         let workbench = target.workbench.upgrade()?;
         if !session_is_live(&target.shell, &workbench, cx)
@@ -269,7 +269,9 @@ impl EditorTab {
             .iter()
             .find(|tab| tab.id() == target.tab && tab.surface_id() == target.surface)?;
         match tab.command_view()? {
-            crate::app::workbench::CommandView::Editor(editor) => Some(editor),
+            crate::app::workbench::CommandView::Editor(view) => {
+                Some(view.read(cx).editor().clone())
+            }
             _ => None,
         }
     }

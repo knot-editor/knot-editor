@@ -97,12 +97,20 @@ fn numbers_and_the_line_highlight_follow_the_cursor(cx: &mut TestAppContext) {
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.run_until_parked();
     cx.update(|_, cx| {
-        editor.update(cx, |view, cx| {
-            view.cursor_line = 2;
-            view.sync_view_position(cx);
+        editor.read(cx).editor().clone().update(cx, |editor, cx| {
+            editor.cursor_line = 2;
+            editor.sync_view_position(cx);
         })
     });
-    let numbers = |cx: &mut VisualTestContext| cx.read(|cx| editor.read(cx).gutter_numbers(0..5));
+    let numbers = |cx: &mut VisualTestContext| {
+        cx.read(|cx| {
+            let view = editor.read(cx);
+            view.gutter_numbers(view.editor().read(cx), 0..5)
+        })
+    };
+    let highlighted = |cx: &mut VisualTestContext| {
+        cx.read(|cx| editor.read(cx).editor().read(cx).highlighted_line())
+    };
     assert_eq!(
         numbers(cx),
         [
@@ -113,7 +121,7 @@ fn numbers_and_the_line_highlight_follow_the_cursor(cx: &mut TestAppContext) {
             (4, 5, false)
         ]
     );
-    assert_eq!(cx.read(|cx| editor.read(cx).highlighted_line()), Some(2));
+    assert_eq!(highlighted(cx), Some(2));
 
     set_line_numbers(cx, "relative", None);
     assert_eq!(
@@ -129,13 +137,13 @@ fn numbers_and_the_line_highlight_follow_the_cursor(cx: &mut TestAppContext) {
 
     // A selection hides the line highlight but keeps the active number.
     cx.update(|_, cx| {
-        editor.update(cx, |view, cx| {
-            (view.anchor_line, view.anchor_col) = (1, 0);
-            view.has_selection = true;
-            view.sync_view_position(cx);
+        editor.read(cx).editor().clone().update(cx, |editor, cx| {
+            (editor.anchor_line, editor.anchor_col) = (1, 0);
+            editor.has_selection = true;
+            editor.sync_view_position(cx);
         })
     });
-    assert_eq!(cx.read(|cx| editor.read(cx).highlighted_line()), None);
+    assert_eq!(highlighted(cx), None);
     assert!(numbers(cx).contains(&(2, 3, true)));
 
     set_line_numbers(cx, "off", None);
@@ -185,7 +193,7 @@ fn press(
                 window,
                 cx,
             );
-            view.selected_byte_range(cx)
+            view.editor().read(cx).selected_byte_range(cx)
         })
     })
 }
@@ -206,7 +214,7 @@ fn drag_to(
                 window,
                 cx,
             );
-            view.selected_byte_range(cx)
+            view.editor().read(cx).selected_byte_range(cx)
         })
     })
 }

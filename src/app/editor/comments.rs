@@ -3,7 +3,7 @@
 
 use super::*;
 
-impl EditorView {
+impl Editor {
     /// Toggle line comments on the selected lines.
     pub(super) fn toggle_line_comment(&mut self, cx: &mut Context<Self>) {
         let model = self.model.read(cx);

@@ -13,7 +13,7 @@
 //! them, as fast typing arrives, and the run settles once at the end.
 use serde::Deserialize;
 
-use super::editor_api::active_editor;
+use super::editor_api::active_editor_view;
 use super::language_editing::start_bundled_packages_with_post_init;
 use super::language_indents::{CARET, case_files, unmark};
 use super::*;
@@ -89,11 +89,13 @@ impl Fixture {
             cx.update(|cx| crate::app::languages::set_language(&model, language.into(), cx));
         }
         let (shell, window) = product_window(document, model.clone(), cx);
-        let editor = active_editor(&shell, cx);
+        let editor = active_editor_view(&shell, cx);
         cx.update_window(window, |_, window, cx| {
             window.activate_window();
             editor.update(cx, |editor, cx| {
-                editor.set_selection(anchor, caret, crate::app::editor::Reveal::Nearest, cx)
+                editor.editor().clone().update(cx, |editor, cx| {
+                    editor.set_selection(anchor, caret, crate::app::editor::Reveal::Nearest, cx)
+                })
             });
             shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
         })
@@ -111,7 +113,7 @@ impl Fixture {
         let mode = if anchor == caret { "normal" } else { "visual" };
         wait_until(cx, "Vim to follow the editor", |cx| {
             fixture.mode_in(cx) == mode
-                && fixture.editor.read(cx).caret_shape() == CaretShape::Block
+                && fixture.editor.read(cx).editor().read(cx).caret_shape() == CaretShape::Block
         });
         fixture
     }
@@ -150,8 +152,14 @@ impl Fixture {
         cx.refresh().unwrap();
         cx.run_until_parked();
         self.editor.update(cx, |editor, cx| {
-            editor.scroll_by_lines(-1e9, cx);
-            editor.scroll_by_lines(top as f64, cx);
+            editor
+                .editor()
+                .clone()
+                .update(cx, |editor, cx| editor.scroll_by_lines(-1e9, cx));
+            editor
+                .editor()
+                .clone()
+                .update(cx, |editor, cx| editor.scroll_by_lines(top as f64, cx));
         });
         cx.refresh().unwrap();
         cx.run_until_parked();
@@ -161,11 +169,20 @@ impl Fixture {
 
     /// The first line wholly in view.
     fn top_line(&self, cx: &mut TestAppContext) -> usize {
-        cx.read(|cx| self.editor.read(cx).fully_visible_lines().0)
+        cx.read(|cx| {
+            self.editor
+                .read(cx)
+                .editor()
+                .read(cx)
+                .fully_visible_lines()
+                .0
+        })
     }
 
     fn contexts(&self, cx: &gpui::App) -> Vec<String> {
         self.editor
+            .read(cx)
+            .editor()
             .read(cx)
             .key_contexts()
             .into_iter()
@@ -189,7 +206,7 @@ impl Fixture {
     fn marked(&self, cx: &mut TestAppContext) -> String {
         cx.read(|cx| {
             let mut text = self.model.read(cx).text();
-            let (anchor, caret) = self.editor.read(cx).selection(cx);
+            let (anchor, caret) = self.editor.read(cx).editor().read(cx).selection(cx);
             text.insert(anchor.max(caret), CARET);
             if anchor != caret {
                 text.insert(anchor.min(caret), CARET);
@@ -220,7 +237,7 @@ impl Fixture {
     }
 
     fn caret_shape(&self, cx: &mut TestAppContext) -> CaretShape {
-        cx.read(|cx| self.editor.read(cx).caret_shape())
+        cx.read(|cx| self.editor.read(cx).editor().read(cx).caret_shape())
     }
 
     /// The window's status bar texts, left side then right side.
@@ -387,7 +404,9 @@ fn j_moves_by_buffer_line_and_gj_by_row_under_soft_wrap(cx: &mut TestAppContext)
     cx.update(|cx| crate::app::settings::set_document_soft_wrap(uuid, true, cx));
     cx.refresh().unwrap();
     cx.run_until_parked();
-    let caret = |cx: &mut TestAppContext| cx.read(|cx| fixture.editor.read(cx).selection(cx).1);
+    let caret = |cx: &mut TestAppContext| {
+        cx.read(|cx| fixture.editor.read(cx).editor().read(cx).selection(cx).1)
+    };
 
     fixture.press("gj", cx);
     let row = caret(cx);
@@ -539,10 +558,10 @@ fn a_global_mark_jumps_to_another_open_document(cx: &mut TestAppContext) {
         fixture.shell.update(cx, |shell, cx| shell.new_tab(cx))
     })
     .unwrap();
-    let other = active_editor(&fixture.shell, cx);
+    let other = active_editor_view(&fixture.shell, cx);
     assert_ne!(other.entity_id(), fixture.editor.entity_id());
     wait_until(cx, "Vim to follow the new tab", |cx| {
-        other.read(cx).key_contexts() == ["vim.normal"]
+        other.read(cx).editor().read(cx).key_contexts() == ["vim.normal"]
     });
 
     fixture.press("'A", cx);

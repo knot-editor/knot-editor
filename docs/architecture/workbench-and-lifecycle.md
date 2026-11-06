@@ -55,9 +55,8 @@ leaves the session's focus alone.
 Native prompts go through the session, which asks its window; a session
 without a window answers nothing, which callers treat as cancellation.
 The window stays an adapter for raw input: key-downs and typed text reach the
-session's router through it (see [keymaps](commands.md#keymaps)), tab drags
-and dock resizing are pointer input, and commands that shape text run in the
-session's window.
+session's router through it (see [keymaps](commands.md#keymaps)), and tab
+drags and dock resizing are pointer input.
 
 ## Zoom
 
@@ -72,10 +71,17 @@ on a window resize.
 
 ## Editor views
 
-Each `EditorView` owns cursor, selection, scroll, wrapping, focus, IME, rendering policy,
-and its completion controller/surface. Multiple views share a model while
-retaining independent presentation state. Completion ownership is detailed in
-[semantic UI](semantic-ui.md#completion-ownership-and-aggregation).
+An editor is two entities in `src/app/editor/`. The `Editor` owns one
+presentation's state: cursor and selection, scroll and the viewport in rows,
+wrapping, IME preedit, key contexts, the caret shape, and its completion
+controller, and it runs the native editing and movement commands without a
+window. The `EditorView` renders it: it owns focus, painting, pointer gestures,
+the platform input handler, shaped hit testing, and horizontal scrolling, and
+each layout tells the editor its viewport height in rows and its wrap width in
+cells. A document tab owns the view, which owns its editor; commands, editor
+handles, and completion reach the `Editor`. Multiple editors share a model
+while retaining independent presentation state. Completion ownership is
+detailed in [semantic UI](semantic-ui.md#completion-ownership-and-aggregation).
 
 A view keeps no copy of the text. It reads the lines it paints, measures, or
 edits from the model, and converts positions, including the platform's
@@ -121,7 +127,7 @@ follows and the value ends with it; a view without a document reports the
 command unavailable.
 
 Up, Down, Page Up and Down, Home, smart Home, and End move and select by row,
-keeping the caret's x across rows; End on a row that does not end its line
+keeping the caret's display cell across rows; End on a row that does not end its line
 stops before its last character, whose end shows on the next row. Each has a
 `-logical` twin, such as `editor.move-up-logical`, that moves by buffer lines
 and, for vertical movement, lands on the target line's first row. Without

@@ -151,23 +151,29 @@ pub(super) fn run(
     let (anchor, caret) = selection.unwrap_or((0, text.len()));
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
-            view.restore_view_state(
-                EditorViewState {
-                    anchor,
-                    caret,
-                    top: 0,
-                    scroll_x: 0.,
-                },
-                cx,
-            );
+            view.editor().clone().update(cx, |view, cx| {
+                view.restore_view_state(
+                    EditorViewState {
+                        anchor,
+                        caret,
+                        top: 0,
+                        scroll_x: 0.,
+                    },
+                    cx,
+                )
+            });
             match action {
                 Action::Command(command) => {
-                    view.execute_editing_command(command, window, cx);
+                    view.editor()
+                        .clone()
+                        .update(cx, |view, cx| view.execute_editing_command(command, cx));
                 }
                 Action::Type(text) => {
                     for character in text.chars() {
                         if character == BACKSPACE {
-                            view.execute_editing_command("editor.delete-backward", window, cx);
+                            view.editor().clone().update(cx, |view, cx| {
+                                view.execute_editing_command("editor.delete-backward", cx)
+                            });
                         } else {
                             view.replace_text_in_range(None, &character.to_string(), window, cx);
                         }
@@ -180,7 +186,10 @@ pub(super) fn run(
     cx.run_until_parked();
     let (state, matched) = cx.read(|cx| {
         let view = editor.read(cx);
-        (view.view_state(cx), view.matched_brackets_for_test(cx))
+        (
+            view.editor().read(cx).view_state(cx),
+            view.editor().read(cx).matched_brackets_for_test(cx),
+        )
     });
     Outcome {
         text: model.read_with(cx, |model, _| model.text()),
