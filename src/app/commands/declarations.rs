@@ -110,48 +110,56 @@ impl CommandContext {
         receiver.await.map_err(|_| CommandOutcome::Cancelled)
     }
 
+    /// Run `access` against the validated target.
     pub(crate) async fn foreground<R: 'static>(
+        &self,
+        access: impl FnOnce(&ProductCommandTarget, &mut App) -> Result<R, CommandOutcome> + 'static,
+    ) -> Result<R, CommandOutcome> {
+        let target = self.target.clone();
+        self.application(move |cx| {
+            target.validate_tab(cx)?;
+            target.validate_view(cx)?;
+            access(&target, cx)
+        })
+        .await?
+    }
+
+    /// Run `access` in the session's window, for commands that lay out or
+    /// shape text; unavailable while the session has no window.
+    pub(crate) async fn in_window<R: 'static>(
         &self,
         access: impl FnOnce(&ProductCommandTarget, &mut Window, &mut App) -> Result<R, CommandOutcome>
         + 'static,
     ) -> Result<R, CommandOutcome> {
         let target = self.target.clone();
         self.application(move |cx| {
-            cx.update_window(target.window, |_, window, cx| {
-                let shell = target
-                    .shell
-                    .upgrade()
-                    .ok_or(CommandOutcome::InvalidTarget)?;
-                if window.root::<ProductShell>().flatten().as_ref() != Some(&shell) {
-                    return Err(CommandOutcome::InvalidTarget);
-                }
-                target.validate_tab(cx)?;
-                target.validate_view(cx)?;
-                access(&target, window, cx)
-            })
-            .unwrap_or(Err(CommandOutcome::InvalidTarget))
+            target.validate_tab(cx)?;
+            target.validate_view(cx)?;
+            let window = target.window(cx).ok_or(CommandOutcome::Unavailable)?;
+            cx.update_window(window, |_, window, cx| access(&target, window, cx))
+                .unwrap_or(Err(CommandOutcome::InvalidTarget))
         })
         .await?
     }
 
+    /// Run `access` on the target's session.
     pub(crate) async fn shell<R: 'static>(
         &self,
         access: impl FnOnce(
             &mut ProductShell,
             &ProductCommandTarget,
-            &mut Window,
             &mut Context<ProductShell>,
         ) -> Result<R, CommandOutcome>
         + 'static,
     ) -> Result<R, CommandOutcome> {
-        self.foreground(move |target, window, cx| {
-            let shell = target
-                .shell
-                .upgrade()
-                .ok_or(CommandOutcome::InvalidTarget)?;
-            shell.update(cx, |shell, cx| access(shell, target, window, cx))
+        let target = self.target.clone();
+        self.application(move |cx| {
+            target.validate_tab(cx)?;
+            target.validate_view(cx)?;
+            let shell = target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
+            shell.update(cx, |shell, cx| access(shell, &target, cx))
         })
-        .await
+        .await?
     }
 
     pub(crate) async fn pending(

@@ -192,7 +192,7 @@ fn pre_init_failure_skips_extensions_and_opens_only_the_error_window(cx: &mut Te
         cx.read(super::super::super::extensions::host::startup_report)
             .is_none()
     );
-    assert!(cx.read(|cx| cx.global::<ApplicationWorkbenches>().0.borrow().is_empty()));
+    assert!(cx.read(|cx| cx.global::<ApplicationSessions>().0.borrow().is_empty()));
     assert_eq!(cx.read(|cx| host.read(cx).lifecycle_count()), 0);
     let names = cx.read(|cx| {
         cx.global::<ApplicationProductCommands>()
@@ -272,7 +272,7 @@ fn post_init_failure_unloads_config_and_installed_extensions(cx: &mut TestAppCon
     });
     assert!(!wait_for_product_startup(cx));
     assert_eq!(cx.windows().len(), 1);
-    assert!(cx.read(|cx| cx.global::<ApplicationWorkbenches>().0.borrow().is_empty()));
+    assert!(cx.read(|cx| cx.global::<ApplicationSessions>().0.borrow().is_empty()));
     let report = cx
         .read(super::super::super::extensions::host::startup_report)
         .unwrap();
@@ -332,7 +332,7 @@ fn post_init_validation_failure_waits_for_installed_extensions(cx: &mut TestAppC
         super::super::super::extensions::load::LoadResult::Loaded
     );
     assert_eq!(cx.read(|cx| host.read(cx).lifecycle_count()), 0);
-    assert!(cx.read(|cx| cx.global::<ApplicationWorkbenches>().0.borrow().is_empty()));
+    assert!(cx.read(|cx| cx.global::<ApplicationSessions>().0.borrow().is_empty()));
 }
 
 #[gpui::test]

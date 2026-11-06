@@ -284,7 +284,7 @@ fn settle(
 }
 
 fn window_id(window: gpui::AnyWindowHandle) -> String {
-    window.window_id().as_u64().to_string()
+    crate::app::product::test_session_id(window)
 }
 
 /// The shell of a window the replacement created.

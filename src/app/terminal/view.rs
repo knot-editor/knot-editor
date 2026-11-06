@@ -1146,7 +1146,7 @@ async fn execute_terminal(
     command: TerminalCommand,
 ) -> Result<(), CommandOutcome> {
     context
-        .foreground(move |target, _, cx| {
+        .foreground(move |target, cx| {
             let Some(crate::app::workbench::CommandView::Terminal(view)) = target.command_view(cx)
             else {
                 return Err(CommandOutcome::InvalidTarget);

@@ -53,7 +53,7 @@ use crate::host::protocol::{
 use super::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationLaunchGate, ApplicationOpenDialog,
     ApplicationProductCommands, ApplicationProtectedClosure, ApplicationSaveDialog,
-    ApplicationTerminalSessions, ApplicationWorkbenches, BufferModel, CLOSE_TAB_COMMAND,
+    ApplicationSessions, ApplicationTerminalSessions, BufferModel, CLOSE_TAB_COMMAND,
     CLOSE_WINDOW_COMMAND, DocumentCollection, Entity, LaunchGate, NEW_COMMAND,
     NEW_TERMINAL_COMMAND, OpenDialogFuture, OpenDialogOutcome, OpenRequest, OpenTarget,
     ProductCommandDispatcher, ProductCommandSource, ProductOpenDialog, ProductSaveDialog,
@@ -145,7 +145,7 @@ pub(super) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollect
         )),
     ));
     cx.set_global(TestRecoveryDir(recovery_dir));
-    cx.set_global(ApplicationWorkbenches(RefCell::new(Vec::new())));
+    cx.set_global(ApplicationSessions::default());
     cx.set_global(ApplicationProtectedClosure(RefCell::new(false)));
     cx.set_global(ApplicationTerminalSessions(RefCell::new(
         TerminalSessions::default(),
@@ -238,17 +238,13 @@ pub(super) fn product_window(
     model: Entity<super::BufferModel>,
     cx: &mut TestAppContext,
 ) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
-    let (shell, _) = cx.add_window_view(|window, cx| {
+    let mut window = None;
+    let (shell, _) = cx.add_window_view(|native, cx| {
+        window = Some(native.window_handle());
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        cx.global::<ApplicationWorkbenches>()
-            .register(&workbench, window.window_handle());
-        ProductShell::new(workbench)
+        ProductShell::new(workbench, cx)
     });
-    let window = cx.read(|cx| {
-        cx.global::<ApplicationWorkbenches>()
-            .window_for(&shell.read(cx).workbench)
-            .unwrap()
-    });
+    let window = window.unwrap();
     cx.update_window(window, |_, native_window, cx| {
         shell.update(cx, |shell, cx| {
             shell.observe_extension_host(native_window, cx)
@@ -319,14 +315,12 @@ fn memory_filesystems_with_provider() -> (
 }
 
 fn current_open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarget {
+    let session = shell.downgrade();
     let shell = shell.read(cx);
     let pane = shell.workbench.read(cx).focused_pane().unwrap();
     let tab = pane.active_tab();
     OpenTarget {
-        window: cx
-            .global::<ApplicationWorkbenches>()
-            .window_for(&shell.workbench)
-            .unwrap(),
+        shell: session,
         workbench: shell.workbench.downgrade(),
         pane: pane.id(),
         tab: tab.id(),

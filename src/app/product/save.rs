@@ -16,8 +16,7 @@ impl ProductShell {
     }
 
     pub(super) fn target_is_live(&self, target: &ProductCommandTarget, cx: &App) -> bool {
-        cx.windows().contains(&target.window)
-            && target.workbench.upgrade() == Some(self.workbench.clone())
+        target.workbench.upgrade() == Some(self.workbench.clone())
             && target.validate_tab(cx).is_ok()
             && target.validate_view(cx).is_ok()
     }
@@ -324,29 +323,20 @@ impl ProductShell {
             );
             return;
         }
-        let prompt = cx.update_window(target.window, |_, window, cx| {
-            window.prompt(
-                PromptLevel::Warning,
-                "The file changed outside Knot",
-                Some(
-                    "Reload the external version, choose another destination, or cancel the save.",
-                ),
-                &[
-                    PromptButton::new("Reload"),
-                    PromptButton::new("Save As…"),
-                    PromptButton::cancel("Cancel"),
-                ],
-                cx,
-            )
-        });
-        let Ok(prompt) = prompt else {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
-            return;
-        };
+        let prompt = self.prompt(
+            PromptLevel::Warning,
+            "The file changed outside Knot",
+            Some(
+                "Reload the external version, choose another destination, or cancel the save."
+                    .into(),
+            ),
+            vec![
+                PromptButton::new("Reload"),
+                PromptButton::new("Save As…"),
+                PromptButton::cancel("Cancel"),
+            ],
+            cx,
+        );
         cx.notify();
         let task = cx.spawn(async move |this, cx| {
             let answer = prompt.await.unwrap_or(2);

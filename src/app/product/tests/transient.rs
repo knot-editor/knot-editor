@@ -67,9 +67,9 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
         .update_window(window, |_, window, cx| window.focused(cx))
         .unwrap();
     let mut receiver = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, window, cx)
+                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
@@ -122,9 +122,9 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     );
 
     let mut rejected = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, window, cx)
+                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
@@ -133,7 +133,7 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     assert_eq!(settle(&mut rejected, cx), TransientOutcome::Dismissed);
 
     let mut confirmed = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.begin_confirmation(
                     owner(None),
@@ -143,7 +143,6 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
                     },
                     "Remove".into(),
                     "Cancel".into(),
-                    window,
                     cx,
                 )
             })
@@ -155,7 +154,7 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     assert_eq!(settle(&mut confirmed, cx), TransientOutcome::Confirmed);
 
     let mut cancelled = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.begin_confirmation(
                     owner(None),
@@ -165,7 +164,6 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
                     },
                     "Remove".into(),
                     "Cancel".into(),
-                    window,
                     cx,
                 )
             })
@@ -176,7 +174,7 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     assert_eq!(settle(&mut cancelled, cx), TransientOutcome::Dismissed);
 
     let mut message = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.begin_message(
                     owner(None),
@@ -184,7 +182,6 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
                         title: "Notice".into(),
                         message: None,
                     },
-                    window,
                     cx,
                 )
             })
@@ -252,31 +249,17 @@ fn cancellation_matches_the_owner_and_two_windows_stay_independent(cx: &mut Test
     let (second_shell, second_window) = empty_product_window(&documents, cx);
 
     let mut first = cx
-        .update_window(first_window, |_, window, cx| {
+        .update_window(first_window, |_, _, cx| {
             first_shell.update(cx, |shell, cx| {
-                shell.begin_picker(
-                    owner(None),
-                    "First".into(),
-                    picker_items(),
-                    None,
-                    window,
-                    cx,
-                )
+                shell.begin_picker(owner(None), "First".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
         .unwrap();
     let mut second = cx
-        .update_window(second_window, |_, window, cx| {
+        .update_window(second_window, |_, _, cx| {
             second_shell.update(cx, |shell, cx| {
-                shell.begin_picker(
-                    owner(None),
-                    "Second".into(),
-                    picker_items(),
-                    None,
-                    window,
-                    cx,
-                )
+                shell.begin_picker(owner(None), "Second".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
@@ -309,9 +292,9 @@ fn window_closure_releases_the_pending_interaction(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
     let mut receiver = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, window, cx)
+                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
             })
         })
         .unwrap()

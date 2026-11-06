@@ -12,7 +12,7 @@ pub(super) struct TabRelocationSource {
 
 #[derive(Clone)]
 pub(super) struct TabRelocationDestination {
-    pub(super) window: AnyWindowHandle,
+    pub(super) shell: WeakEntity<ProductShell>,
     pub(super) workbench: WeakEntity<Workbench>,
     pub(super) tab: TabMoveDestination,
 }
@@ -86,15 +86,13 @@ impl ProductShell {
         &mut self,
         source: &TabRelocationSource,
         destination: &TabRelocationDestination,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> CommandOutcome {
-        if window.root::<ProductShell>().flatten() != Some(cx.entity())
-            || !self.relocation_is_live(source, cx)
-        {
+        if !self.relocation_is_live(source, cx) {
             return CommandOutcome::InvalidTarget;
         }
-        if destination.window == window.window_handle() {
+        let this = cx.weak_entity();
+        if destination.shell == this {
             if destination.workbench.upgrade() != Some(self.workbench.clone()) {
                 return CommandOutcome::InvalidTarget;
             }
@@ -121,11 +119,14 @@ impl ProductShell {
         if destination.workbench.upgrade() == Some(self.workbench.clone()) {
             return CommandOutcome::InvalidTarget;
         }
-        let result = cx.update_window(destination.window, |_, destination_window, cx| {
-            let Some(shell) = destination_window.root::<ProductShell>().flatten() else {
-                return CommandOutcome::InvalidTarget;
-            };
-            shell.update(cx, |shell, cx| {
+        let Some(destination_shell) = destination.shell.upgrade().filter(|shell| {
+            cx.global::<ApplicationSessions>()
+                .is_open(shell.entity_id())
+        }) else {
+            return CommandOutcome::InvalidTarget;
+        };
+        let result = {
+            destination_shell.update(cx, |shell, cx| {
                 if destination.workbench.upgrade() != Some(shell.workbench.clone())
                     || !self.relocation_is_live(source, cx)
                 {
@@ -170,21 +171,17 @@ impl ProductShell {
                     return CommandOutcome::InvalidTarget;
                 };
                 if moved.source_is_empty {
-                    self.replace_empty_workbench(window.window_handle(), cx);
-                }
-                if matches!(destination.tab, TabMoveDestination::Empty) {
-                    cx.global::<ApplicationWorkbenches>()
-                        .register(&destination_workbench, destination_window.window_handle());
+                    self.replace_empty_workbench(this.clone(), cx);
                 }
                 shell.focus_relocated_surface(cx);
                 if !matches!(destination.tab, TabMoveDestination::Empty) {
-                    destination_window.activate_window();
+                    shell.activate_window(cx);
                 }
                 cx.notify();
                 CommandOutcome::Completed
             })
-        });
-        if !matches!(result, Ok(CommandOutcome::Completed)) {
+        };
+        if result != CommandOutcome::Completed {
             return CommandOutcome::InvalidTarget;
         }
         self.focus_active_surface(cx);
@@ -195,7 +192,6 @@ impl ProductShell {
     pub(super) fn relocate_tab_to_new_window_with(
         &mut self,
         source: &TabRelocationSource,
-        window: &mut Window,
         cx: &mut Context<Self>,
         create_destination: impl FnOnce(&mut App) -> anyhow::Result<WindowHandle<ProductShell>>,
     ) -> CommandOutcome {
@@ -221,19 +217,16 @@ impl ProductShell {
         if existing.contains(&destination_window) {
             return CommandOutcome::InvalidTarget;
         }
-        let workbench = destination
-            .read(cx)
-            .ok()
-            .map(|shell| shell.workbench.downgrade());
-        let outcome = if let Some(workbench) = workbench {
+        let shell = destination.entity(cx).ok();
+        let outcome = if let Some(shell) = shell {
+            let workbench = shell.read(cx).workbench.downgrade();
             self.relocate_tab_to(
                 source,
                 &TabRelocationDestination {
-                    window: destination_window,
+                    shell: shell.downgrade(),
                     workbench,
                     tab: TabMoveDestination::Empty,
                 },
-                window,
                 cx,
             )
         } else {

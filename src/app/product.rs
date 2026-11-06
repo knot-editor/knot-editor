@@ -90,9 +90,19 @@ use super::{
     },
 };
 
-struct ApplicationWorkbenches(RefCell<Vec<(AnyWindowHandle, WeakEntity<Workbench>)>>);
+/// Every open product session. A session opens when it is created and closes
+/// with its window. The registry answers which workbench and window a session
+/// has without reading the session, which may be updating.
+#[derive(Default)]
+struct ApplicationSessions(RefCell<Vec<OpenSession>>);
 
-impl Global for ApplicationWorkbenches {}
+struct OpenSession {
+    shell: WeakEntity<ProductShell>,
+    workbench: WeakEntity<Workbench>,
+    window: Option<AnyWindowHandle>,
+}
+
+impl Global for ApplicationSessions {}
 
 struct ApplicationProtectedClosure(RefCell<bool>);
 
@@ -182,7 +192,7 @@ struct ProtectedCloseRequest {
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 struct ProtectedViewKey {
-    window: AnyWindowHandle,
+    session: EntityId,
     workbench: EntityId,
     presentation: Option<EntityId>,
     pane: PaneId,
@@ -283,45 +293,156 @@ struct ApplicationSaveDialog(Arc<dyn ProductSaveDialog>);
 
 impl Global for ApplicationSaveDialog {}
 
-impl ApplicationWorkbenches {
-    fn register(&self, workbench: &Entity<Workbench>, window: AnyWindowHandle) {
-        let mut workbenches = self.0.borrow_mut();
-        workbenches.retain(|(registered, _)| *registered != window);
-        workbenches.push((window, workbench.downgrade()));
+impl ApplicationSessions {
+    /// Open `shell`, or record the workbench an open one now shows.
+    fn register(&self, shell: WeakEntity<ProductShell>, workbench: &Entity<Workbench>) {
+        let mut sessions = self.0.borrow_mut();
+        match sessions.iter_mut().find(|open| open.shell == shell) {
+            Some(open) => open.workbench = workbench.downgrade(),
+            None => sessions.push(OpenSession {
+                shell,
+                workbench: workbench.downgrade(),
+                window: None,
+            }),
+        }
     }
 
-    fn window_for(&self, workbench: &Entity<Workbench>) -> Option<AnyWindowHandle> {
-        self.0.borrow().iter().find_map(|(window, registered)| {
-            (registered.upgrade().as_ref() == Some(workbench)).then_some(*window)
+    /// Record the window an open session is shown in.
+    fn attach(&self, shell: EntityId, window: AnyWindowHandle) {
+        if let Some(open) = self
+            .0
+            .borrow_mut()
+            .iter_mut()
+            .find(|open| open.shell.entity_id() == shell)
+        {
+            open.window = Some(window);
+        }
+    }
+
+    fn close(&self, shell: EntityId) {
+        self.0
+            .borrow_mut()
+            .retain(|open| open.shell.entity_id() != shell);
+    }
+
+    fn is_open(&self, shell: EntityId) -> bool {
+        self.0
+            .borrow()
+            .iter()
+            .any(|open| open.shell.entity_id() == shell)
+    }
+
+    /// The open sessions, in the order they opened.
+    fn shells(&self) -> Vec<Entity<ProductShell>> {
+        let mut sessions = self.0.borrow_mut();
+        sessions.retain(|open| open.shell.upgrade().is_some());
+        sessions
+            .iter()
+            .filter_map(|open| open.shell.upgrade())
+            .collect()
+    }
+
+    /// The open session with the given public ID.
+    fn find(&self, id: &str) -> Option<Entity<ProductShell>> {
+        self.shells()
+            .into_iter()
+            .find(|shell| session_id(shell.entity_id()) == id)
+    }
+
+    /// The window an open session is shown in.
+    fn window(&self, shell: EntityId) -> Option<AnyWindowHandle> {
+        self.0
+            .borrow()
+            .iter()
+            .find(|open| open.shell.entity_id() == shell)
+            .and_then(|open| open.window)
+    }
+
+    /// The open session shown in `window`.
+    fn in_window(&self, window: AnyWindowHandle) -> Option<Entity<ProductShell>> {
+        self.0
+            .borrow()
+            .iter()
+            .find(|open| open.window == Some(window))
+            .and_then(|open| open.shell.upgrade())
+    }
+
+    /// The open session showing `workbench`.
+    fn session_for(&self, workbench: &Entity<Workbench>) -> Option<WeakEntity<ProductShell>> {
+        self.0.borrow().iter().find_map(|open| {
+            (open.workbench.upgrade().as_ref() == Some(workbench)).then(|| open.shell.clone())
         })
     }
 
     fn view_count(&self, document: DocumentId, cx: &App) -> usize {
-        let mut workbenches = self.0.borrow_mut();
-        let windows = cx.windows();
-        workbenches.retain(|(window, workbench)| {
-            windows.contains(window) && workbench.upgrade().is_some()
-        });
-        workbenches
+        let mut sessions = self.0.borrow_mut();
+        sessions
+            .retain(|open| open.shell.upgrade().is_some() && open.workbench.upgrade().is_some());
+        sessions
             .iter()
-            .filter_map(|(_, workbench)| workbench.upgrade())
+            .filter_map(|open| open.workbench.upgrade())
             .map(|workbench| workbench.read(cx).view_count(document))
             .sum()
     }
 }
 
-pub(super) fn workbench_is_live(
-    window: AnyWindowHandle,
+/// The public ID of the session `shell`: `WindowTarget.window` names it.
+pub(crate) fn session_id(shell: EntityId) -> String {
+    shell.as_u64().to_string()
+}
+
+/// Whether `shell` is open and shows `workbench`.
+pub(super) fn session_is_live(
+    shell: &WeakEntity<ProductShell>,
     workbench: &Entity<Workbench>,
     cx: &App,
 ) -> bool {
-    cx.windows().contains(&window)
-        && cx.global::<ApplicationWorkbenches>().window_for(workbench) == Some(window)
+    cx.global::<ApplicationSessions>()
+        .session_for(workbench)
+        .is_some_and(|open| open == *shell)
+}
+
+/// The open product sessions, in the order they opened.
+pub(crate) fn sessions(cx: &App) -> Vec<Entity<ProductShell>> {
+    cx.try_global::<ApplicationSessions>()
+        .map(ApplicationSessions::shells)
+        .unwrap_or_default()
+}
+
+/// The open session a public ID names.
+pub(crate) fn find_session(id: &str, cx: &App) -> Option<Entity<ProductShell>> {
+    cx.try_global::<ApplicationSessions>()?.find(id)
+}
+
+/// The session shown in `window`.
+pub(crate) fn session_in_window(window: AnyWindowHandle, cx: &App) -> Option<Entity<ProductShell>> {
+    cx.try_global::<ApplicationSessions>()?.in_window(window)
+}
+
+/// The session shown in the active window.
+pub(crate) fn active_session(cx: &App) -> Option<Entity<ProductShell>> {
+    session_in_window(cx.active_window()?, cx)
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_SESSION_IDS: RefCell<HashMap<u64, String>> = RefCell::default();
+}
+
+/// The public ID of the session last shown in `window`.
+#[cfg(test)]
+pub(crate) fn test_session_id(window: AnyWindowHandle) -> String {
+    TEST_SESSION_IDS.with_borrow(|ids| ids[&window.window_id().as_u64()].clone())
+}
+
+/// The window an open session is shown in, without reading the session.
+pub(crate) fn session_window(shell: EntityId, cx: &App) -> Option<AnyWindowHandle> {
+    cx.global::<ApplicationSessions>().window(shell)
 }
 
 #[derive(Clone)]
 struct OpenTarget {
-    window: AnyWindowHandle,
+    shell: WeakEntity<ProductShell>,
     workbench: WeakEntity<Workbench>,
     pane: PaneId,
     tab: TabId,
@@ -332,7 +453,7 @@ struct OpenTarget {
 impl OpenTarget {
     fn from_command(target: &ProductCommandTarget) -> Self {
         Self {
-            window: target.window,
+            shell: target.shell.clone(),
             workbench: target.workbench.clone(),
             pane: target.pane,
             tab: target.tab,
@@ -426,7 +547,7 @@ pub(crate) struct ProductShell {
     workspace_tree_subscription: Option<Subscription>,
     contributed_views: BTreeMap<String, ContributedView>,
     _contributed_view_release: Option<Subscription>,
-    _contributed_view_window_closed: Option<Subscription>,
+    _window_closed: Option<Subscription>,
     _extension_host_release: Option<Subscription>,
     open_generation: u64,
     tasks: Vec<Task<()>>,
@@ -532,7 +653,10 @@ struct SplitResizeDrag {
 const MIN_DRAGGED_PANE_SIZE: f32 = 120.;
 
 impl ProductShell {
-    fn new(workbench: Entity<Workbench>) -> Self {
+    /// Open a session showing `workbench`, without a window.
+    fn new(workbench: Entity<Workbench>, cx: &mut Context<Self>) -> Self {
+        cx.global::<ApplicationSessions>()
+            .register(cx.weak_entity(), &workbench);
         Self {
             workbench,
             window: None,
@@ -557,7 +681,7 @@ impl ProductShell {
             workspace_tree_subscription: None,
             contributed_views: BTreeMap::new(),
             _contributed_view_release: None,
-            _contributed_view_window_closed: None,
+            _window_closed: None,
             _extension_host_release: None,
             open_generation: 0,
             tasks: Vec::new(),
@@ -575,13 +699,96 @@ impl ProductShell {
         }
     }
 
+    /// Bring the session's window to the front once the current update ends.
+    fn activate_window(&self, cx: &mut App) {
+        let Some(window) = self.window else {
+            return;
+        };
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, window, _| window.activate_window());
+        });
+    }
+
+    /// The modifier keys held in the session's window; none without one.
+    fn modifiers(&self, cx: &mut App) -> Modifiers {
+        self.window
+            .and_then(|window| window.update(cx, |_, window, _| window.modifiers()).ok())
+            .unwrap_or_default()
+    }
+
+    /// Ask with a native prompt in the session's window once the current
+    /// update ends, so a caller may hold the session or the window.
+    pub(super) fn prompt(
+        &self,
+        level: PromptLevel,
+        title: impl Into<String>,
+        detail: Option<String>,
+        buttons: Vec<PromptButton>,
+        cx: &mut App,
+    ) -> PromptAnswer {
+        prompt(self.window, level, title.into(), detail, buttons, cx)
+    }
+
     /// Orders product windows by creation.
     pub(crate) fn creation_order(&self) -> u64 {
         self.created
     }
 
+    /// Show the session in `window`, which focuses what the session has
+    /// focused. Closing the window ends the session: its live frames and any
+    /// pending transient interaction go, while other sessions keep theirs.
+    pub(super) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.window.is_some() {
+            return;
+        }
+        let handle = window.window_handle();
+        self.window = Some(handle);
+        cx.global::<ApplicationSessions>()
+            .attach(cx.entity_id(), handle);
+        #[cfg(test)]
+        TEST_SESSION_IDS.with_borrow_mut(|ids| {
+            ids.insert(handle.window_id().as_u64(), session_id(cx.entity_id()))
+        });
+        let shell = cx.weak_entity();
+        self._window_closed = Some(cx.on_window_closed(move |cx| {
+            let shell = shell.clone();
+            cx.defer(move |cx| {
+                let Some(shell) = shell.upgrade() else { return };
+                if cx.windows().contains(&handle) {
+                    return;
+                }
+                shell.update(cx, |this, cx| this.end(cx));
+            });
+        }));
+        self.follow_focus(cx);
+    }
+
+    /// Close the session without its window.
+    fn end(&mut self, cx: &mut Context<Self>) {
+        cx.global::<ApplicationSessions>().close(cx.entity_id());
+        let ids = self.contributed_views.keys().cloned().collect::<Vec<_>>();
+        for id in ids {
+            self.detach_contributed_view(&id, cx);
+        }
+        self.finish_transient(TransientOutcome::Cancelled, cx);
+    }
+
+    /// Close the session's window, which ends the session, or end a session
+    /// without one.
+    fn close_window(&mut self, cx: &mut Context<Self>) -> Result<(), ProtectedCloseFailure> {
+        let Some(window) = self.window else {
+            self.end(cx);
+            return Ok(());
+        };
+        cx.update_window(window, |_, window, cx| {
+            tab_drag::cancel_source_window(window, cx);
+            window.remove_window();
+        })
+        .map_err(|_| ProtectedCloseFailure::InvalidTarget)
+    }
+
     fn observe_extension_host(&mut self, native_window: &mut Window, cx: &mut Context<Self>) {
-        self.window = Some(native_window.window_handle());
+        self.attach_window(native_window, cx);
         self.application_observer = Some(cx.observe(&cx.entity(), |this, _, cx| {
             super::extensions::host::application_changed(cx);
             this.schedule_view_state(cx);
@@ -599,26 +806,6 @@ impl ProductShell {
             cx.observe_global::<super::settings::ApplicationSettings>(|_, cx| cx.notify()),
         ];
         super::extensions::host::application_changed(cx);
-        // A closed window drops its live frames and any pending transient
-        // interaction; other windows keep theirs.
-        let shell = cx.weak_entity();
-        self._contributed_view_window_closed = Some(cx.on_window_closed(move |cx| {
-            let shell = shell.clone();
-            cx.defer(move |cx| {
-                let Some(shell) = shell.upgrade() else { return };
-                shell.update(cx, |this, cx| {
-                    let Some(window) = this.window else { return };
-                    if cx.windows().contains(&window) {
-                        return;
-                    }
-                    let ids = this.contributed_views.keys().cloned().collect::<Vec<_>>();
-                    for id in ids {
-                        this.detach_contributed_view(&id, cx);
-                    }
-                    this.finish_transient(TransientOutcome::Cancelled, cx);
-                });
-            });
-        }));
         if let Some(host) = super::extensions::host::entity(cx) {
             self.extension_report_subscription = Some(cx.observe(&host, |this, _, cx| {
                 this.sync_contributed_views(cx);
@@ -763,7 +950,7 @@ impl ProductShell {
 
     pub(crate) fn application_window(
         &self,
-        window: &Window,
+        session: EntityId,
         buffers: &std::collections::HashMap<DocumentId, crate::host::protocol::BufferHandle>,
         cx: &App,
     ) -> crate::host::protocol::WindowInfo {
@@ -772,7 +959,7 @@ impl ProductShell {
             WindowTarget,
         };
         let target = WindowTarget {
-            window: window.window_handle().window_id().as_u64().to_string(),
+            window: session_id(session),
         };
         let workbench = self.workbench.read(cx);
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
@@ -995,7 +1182,6 @@ impl ProductShell {
         &mut self,
         cx: &mut Context<Self>,
     ) -> Option<ProductCommandTarget> {
-        let window = self.window?;
         let workbench = self.workbench.read(cx);
         let pane = workbench.focused_pane()?;
         let tab = pane.active_tab();
@@ -1007,7 +1193,6 @@ impl ProductShell {
             _ => None,
         };
         Some(ProductCommandTarget {
-            window,
             shell: cx.entity().downgrade(),
             workbench: self.workbench.downgrade(),
             pane: pane.id(),
@@ -1183,7 +1368,6 @@ impl ProductShell {
         title: String,
         items: Vec<crate::host::protocol::PickerItem>,
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
-        _: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
         self.begin_owned_picker(Some(owner), title, items, highlights, cx)
@@ -1306,16 +1490,15 @@ impl ProductShell {
         text: PromptText,
         confirm_label: String,
         cancel_label: String,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
         self.transient_slot_free()?;
         let restore_focus = self.focus;
-        let prompt = window.prompt(
+        let prompt = self.prompt(
             PromptLevel::Warning,
-            &text.title,
-            text.message.as_deref(),
-            &[
+            text.title,
+            text.message,
+            vec![
                 PromptButton::new(confirm_label),
                 PromptButton::cancel(cancel_label),
             ],
@@ -1348,16 +1531,15 @@ impl ProductShell {
         &mut self,
         owner: TransientOwner,
         text: PromptText,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
         self.transient_slot_free()?;
         let restore_focus = self.focus;
-        let prompt = window.prompt(
+        let prompt = self.prompt(
             PromptLevel::Info,
-            &text.title,
-            text.message.as_deref(),
-            &[PromptButton::new("OK")],
+            text.title,
+            text.message,
+            vec![PromptButton::new("OK")],
             cx,
         );
         let (completion, receiver) = tokio::sync::oneshot::channel();
@@ -1471,7 +1653,6 @@ impl ProductShell {
         text: &str,
         cx: &mut Context<Self>,
     ) -> Option<(DocumentId, OpenTarget)> {
-        let window = self.window?;
         self.next_open_generation();
         self.workbench.read(cx).pane(pane)?;
         let documents = Self::documents(cx);
@@ -1504,7 +1685,7 @@ impl ProductShell {
         Some((
             document,
             OpenTarget {
-                window,
+                shell: cx.weak_entity(),
                 workbench: self.workbench.downgrade(),
                 pane,
                 tab,
@@ -1522,7 +1703,6 @@ impl ProductShell {
         directory: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) -> Option<OpenTarget> {
-        let window = self.window?;
         self.workbench.read(cx).pane(pane)?;
         let (id, view) = self.create_terminal_in(directory, cx);
         let presentation = view.entity_id();
@@ -1541,7 +1721,7 @@ impl ProductShell {
         self.focus_active_surface(cx);
         cx.notify();
         Some(OpenTarget {
-            window,
+            shell: cx.weak_entity(),
             workbench: self.workbench.downgrade(),
             pane,
             tab,
@@ -1617,7 +1797,9 @@ impl ProductShell {
         self.focus_active_surface(cx);
     }
 
-    fn replace_empty_workbench(&mut self, window: AnyWindowHandle, cx: &mut App) {
+    /// Give `shell`, this session, a fresh untitled document after its last
+    /// tab closed or moved away.
+    fn replace_empty_workbench(&mut self, shell: WeakEntity<Self>, cx: &mut App) {
         let documents = Self::documents(cx);
         let replacement = create_untitled_document(&documents, cx);
         let model = documents.read(cx).get(replacement).unwrap().model().clone();
@@ -1628,13 +1810,13 @@ impl ProductShell {
             return;
         }
         let workbench = cx.new(|cx| Workbench::new_for_document(replacement, model, cx));
-        cx.global::<ApplicationWorkbenches>()
-            .register(&workbench, window);
+        cx.global::<ApplicationSessions>()
+            .register(shell, &workbench);
         self.workbench = workbench;
     }
 
-    /// Report an outcome that has no other visible effect in this window. The
-    /// prompt needs no answer.
+    /// Report an outcome that has no other visible effect in this session.
+    /// The prompt needs no answer.
     pub(super) fn show_notice(
         &self,
         level: PromptLevel,
@@ -1642,9 +1824,7 @@ impl ProductShell {
         detail: Option<String>,
         cx: &mut App,
     ) {
-        if let Some(window) = self.window {
-            show_notice(window, level, title.into(), detail, cx);
-        }
+        show_notice(self.window, level, title.into(), detail, cx);
     }
 
     pub(crate) fn toggle_extension_report(&mut self, cx: &mut Context<Self>) {
@@ -1653,26 +1833,57 @@ impl ProductShell {
     }
 }
 
-/// Present a native prompt after the current update, so callers may hold the
-/// shell or the window.
+/// The index of the button a prompt was answered with; an error when the
+/// session has no window or it closed first.
+type PromptAnswer = tokio::sync::oneshot::Receiver<usize>;
+
+/// Ask with a native prompt in a session's `window` once the current update
+/// ends, so a caller may hold the session or the window.
+fn prompt(
+    window: Option<AnyWindowHandle>,
+    level: PromptLevel,
+    title: String,
+    detail: Option<String>,
+    buttons: Vec<PromptButton>,
+    cx: &mut App,
+) -> PromptAnswer {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    if let Some(window) = window {
+        cx.defer(move |cx| {
+            let Ok(answer) = window.update(cx, |_, window, cx| {
+                window.prompt(level, &title, detail.as_deref(), &buttons, cx)
+            }) else {
+                return;
+            };
+            cx.foreground_executor()
+                .spawn(async move {
+                    if let Ok(answer) = answer.await {
+                        let _ = sender.send(answer);
+                    }
+                })
+                .detach();
+        });
+    }
+    receiver
+}
+
+/// Report an outcome that has no other visible effect in a session shown in
+/// `window`. The prompt needs no answer.
 pub(super) fn show_notice(
-    window: AnyWindowHandle,
+    window: Option<AnyWindowHandle>,
     level: PromptLevel,
     title: String,
     detail: Option<String>,
     cx: &mut App,
 ) {
-    cx.defer(move |cx| {
-        let _ = cx.update_window(window, |_, window, cx| {
-            drop(window.prompt(
-                level,
-                &title,
-                detail.as_deref(),
-                &[PromptButton::new("OK")],
-                cx,
-            ));
-        });
-    });
+    drop(prompt(
+        window,
+        level,
+        title,
+        detail,
+        vec![PromptButton::new("OK")],
+        cx,
+    ));
 }
 
 fn create_untitled_document(documents: &Entity<DocumentCollection>, cx: &mut App) -> DocumentId {

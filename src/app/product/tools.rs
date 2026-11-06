@@ -34,10 +34,7 @@ impl ProductShell {
         definition: crate::app::extensions::semantics::ViewDefinition,
         cx: &mut Context<Self>,
     ) {
-        let Some(window) = self.window else {
-            return;
-        };
-        let window_id = window.window_id().as_u64().to_string();
+        let window_id = session_id(cx.entity_id());
         let (content, event, observer) = match definition.content {
             crate::host::protocol::ViewContentKind::Tree => {
                 let view = cx.new(|cx| {
@@ -557,10 +554,7 @@ impl ProductShell {
                 };
                 let capture = workbench.capture_tab_move(pane, tab).unwrap();
                 let target = OpenTarget {
-                    window: cx
-                        .global::<ApplicationWorkbenches>()
-                        .window_for(&self.workbench)
-                        .unwrap(),
+                    shell: cx.weak_entity(),
                     workbench: self.workbench.downgrade(),
                     pane,
                     tab,

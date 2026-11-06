@@ -113,7 +113,7 @@ impl Launch {
                 path, executor,
             )),
         ));
-        cx.set_global(ApplicationWorkbenches(RefCell::new(Vec::new())));
+        cx.set_global(ApplicationSessions::default());
         self.install_sessions(cx);
     }
 

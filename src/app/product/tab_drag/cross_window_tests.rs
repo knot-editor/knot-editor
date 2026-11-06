@@ -1,5 +1,5 @@
 use super::super::{
-    ApplicationProtectedClosure, ApplicationTerminalSessions, ApplicationWorkbenches, ProductShell,
+    ApplicationProtectedClosure, ApplicationSessions, ApplicationTerminalSessions, ProductShell,
     create_untitled_document, open_tab_tear_out_window,
 };
 use super::tests::start_drag;
@@ -43,7 +43,7 @@ fn pair(
                             ))),
                             ..Default::default()
                         },
-                        |window, cx| {
+                        |_, cx| {
                             let workbench = cx.new(|cx| {
                                 let mut workbench =
                                     Workbench::new_for_document(document, model.clone(), cx);
@@ -55,9 +55,7 @@ fn pair(
                                 }
                                 workbench
                             });
-                            cx.global::<ApplicationWorkbenches>()
-                                .register(&workbench, window.window_handle());
-                            let shell = cx.new(|_| ProductShell::new(workbench));
+                            let shell = cx.new(|cx| ProductShell::new(workbench, cx));
                             shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
                             shell
                         },
@@ -188,8 +186,7 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
                 );
             }
             assert_eq!(
-                cx.global::<ApplicationWorkbenches>()
-                    .view_count(document, cx),
+                cx.global::<ApplicationSessions>().view_count(document, cx),
                 3
             );
             assert!(
@@ -382,8 +379,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                 }
             );
             assert_eq!(
-                cx.global::<ApplicationWorkbenches>()
-                    .view_count(document, cx),
+                cx.global::<ApplicationSessions>().view_count(document, cx),
                 1
             );
             assert!(
@@ -452,7 +448,7 @@ fn failed_tear_out_and_stale_or_closed_drop_preserve_source(cx: &mut TestAppCont
                 .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
                 .unwrap();
             let action = DropAction::Target(super::TabRelocationDestination {
-                window: destination_window,
+                shell: destination.downgrade(),
                 workbench: destination_capture.workbench,
                 tab: TabMoveDestination::At {
                     anchor: destination_capture.tab,
@@ -656,7 +652,7 @@ fn source_window_closure_cancels_shared_drag_and_releases_geometry(cx: &mut Test
 
 #[gpui::test]
 fn hit_testing_respects_title_bar_occlusion_and_global_content_offsets(cx: &mut TestAppContext) {
-    let (source, source_window, _, destination_window) = pair(cx, 1);
+    let (source, source_window, destination, destination_window) = pair(cx, 1);
     let local = VisualTestContext::from_window(destination_window, cx)
         .debug_bounds("pane-1")
         .unwrap()
@@ -676,7 +672,7 @@ fn hit_testing_respects_title_bar_occlusion_and_global_content_offsets(cx: &mut 
         let state = cx.global::<ApplicationTabDrag>().0.borrow();
         let pointer = content.origin + local;
         let geometry = vec![WindowGeometry { window: destination_window, frame, content }];
-        assert!(matches!(state.action_at(pointer, &geometry, &document_source), DropAction::Target(destination) if destination.window == destination_window));
+        assert!(matches!(state.action_at(pointer, &geometry, &document_source), DropAction::Target(target) if target.shell == destination.downgrade()));
         let title = frame.origin + point(px(20.), px(10.));
         assert!(matches!(state.action_at(title, &geometry, &document_source), DropAction::Invalid));
         // A front window's non-content frame prevents dropping into the pane behind it.

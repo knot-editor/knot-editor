@@ -5,7 +5,7 @@ use super::*;
 use crate::app::status_bar::ApplicationStatusBar;
 
 fn right_texts(window: gpui::AnyWindowHandle, cx: &gpui::App) -> Vec<String> {
-    let key = window.window_id().as_u64().to_string();
+    let key = crate::app::product::test_session_id(window);
     cx.global::<ApplicationStatusBar>()
         .0
         .items(&key, &[])

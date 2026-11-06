@@ -20,7 +20,6 @@ impl ProductShell {
     pub(crate) fn start_move_tool(
         &mut self,
         target: &ProductCommandTarget,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         let TabSurfaceId::Tool(id) = target.surface else {
@@ -42,7 +41,6 @@ impl ProductShell {
             cx.notify();
             return Ok(());
         };
-        let handle = window.window_handle();
         let task = cx.spawn(async move |this, cx| {
             let Ok(TransientOutcome::Picker(choice)) = receiver.await else {
                 return;
@@ -54,9 +52,7 @@ impl ProductShell {
             else {
                 return;
             };
-            let _ = cx.update_window(handle, |_, _, cx| {
-                this.update(cx, |shell, cx| shell.place_tool(id, *placement, cx))
-            });
+            let _ = this.update(cx, |shell, cx| shell.place_tool(id, *placement, cx));
         });
         self.tasks.push(task);
         Ok(())

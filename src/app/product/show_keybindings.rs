@@ -18,7 +18,6 @@ impl ProductShell {
     pub(crate) fn start_show_keybindings(
         &mut self,
         target: ProductCommandTarget,
-        _: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let listing = cx

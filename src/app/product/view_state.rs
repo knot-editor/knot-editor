@@ -109,13 +109,13 @@ impl ProductShell {
     /// Record the settled layout and roots and report what changed.
     fn settle_view_state(&mut self, window: &Window, cx: &mut Context<Self>) -> Settled {
         let roots = self.root_uris().iter().map(ToString::to_string).collect();
-        let settled = (roots, self.capture_layout(window, cx));
+        let settled = (roots, self.capture_layout(Some(window), cx));
         let previous = self.view_state.published.replace(settled.clone());
         match previous {
             Some(previous) if previous == settled => Settled::Unchanged,
             Some((_, layout)) if layout == settled.1 => Settled::Roots,
             _ => Settled::Layout(crate::host::protocol::WindowTarget {
-                window: window.window_handle().window_id().as_u64().to_string(),
+                window: session_id(cx.entity_id()),
             }),
         }
     }

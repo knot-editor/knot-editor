@@ -124,34 +124,29 @@ enum Staged {
 
 struct CapturedWindow {
     shell: Entity<ProductShell>,
-    handle: AnyWindowHandle,
 }
 
 impl CapturedWindow {
-    fn is_live(&self, cx: &mut App) -> bool {
-        cx.windows().contains(&self.handle)
-            && cx
-                .update_window(self.handle, |root, _, _| {
-                    root.entity_id() == self.shell.entity_id()
-                })
-                .unwrap_or(false)
+    fn is_live(&self, cx: &App) -> bool {
+        cx.global::<ApplicationSessions>()
+            .is_open(self.shell.entity_id())
     }
 
     fn target(&self) -> WindowTarget {
         WindowTarget {
-            window: self.handle.window_id().as_u64().to_string(),
+            window: session_id(self.shell.entity_id()),
         }
     }
 }
 
 fn capture(window: &str, cx: &mut App) -> Result<CapturedWindow, AccessError> {
-    let (shell, handle) = operations::capture_window(
+    let shell = operations::capture_session(
         &WindowTarget {
             window: window.to_owned(),
         },
         cx,
     )?;
-    Ok(CapturedWindow { shell, handle })
+    Ok(CapturedWindow { shell })
 }
 
 fn parse_uri(uri: &str) -> Result<super::super::resource::ResourceUri, OpenError> {
@@ -459,7 +454,7 @@ fn commit(
         .flat_map(|window| &window.entries)
         .filter_map(|entry| live_document(entry, cx))
         .collect::<HashSet<_>>();
-    let workbenches = cx.global::<ApplicationWorkbenches>();
+    let workbenches = cx.global::<ApplicationSessions>();
     for document in &presented {
         let total = workbenches.view_count(*document, cx);
         if kept.contains(document) || source_view_count(&sources, *document, cx) < total {
@@ -495,10 +490,12 @@ fn commit(
             .and_then(|layout| layout.as_ref())
             .and_then(|layout| layout.geometry.as_ref());
         match launch::open_session_window(geometry, cx) {
-            Ok((shell, handle)) => destinations.push(CapturedWindow { shell, handle }),
+            Ok((shell, _)) => destinations.push(CapturedWindow { shell }),
             Err(_) => {
                 for window in destinations {
-                    let _ = cx.update_window(window.handle, |_, window, _| window.remove_window());
+                    window.shell.update(cx, |shell, cx| {
+                        let _ = shell.close_window(cx);
+                    });
                 }
                 return Err(AccessError::InvalidTarget.into());
             }
@@ -524,9 +521,8 @@ fn commit(
                 .collect::<Vec<_>>()
         });
         ProductShell::close_terminal_ids(terminals, cx);
-        let _ = cx.update_window(window.handle, |_, window, cx| {
-            tab_drag::cancel_source_window(window, cx);
-            window.remove_window();
+        window.shell.update(cx, |shell, cx| {
+            let _ = shell.close_window(cx);
         });
     }
 
@@ -545,7 +541,6 @@ fn commit(
             entries.push(outcome);
             resolved.push(document);
         }
-        let handle = window.handle;
         let outcome = window.shell.update(cx, |shell, cx| {
             shell.replace_workspace_roots(roots, cx);
             let outcome = match &layout {
@@ -576,7 +571,7 @@ fn commit(
             // A window left with only docks would let them fill it; give it
             // the ordinary untitled document in the normal group instead.
             if shell.workbench.read(cx).normal_pane().is_none() {
-                shell.replace_empty_workbench(handle, cx);
+                shell.replace_empty_workbench(cx.weak_entity(), cx);
             }
             cx.notify();
             outcome
@@ -588,7 +583,7 @@ fn commit(
         });
     }
 
-    let workbenches = cx.global::<ApplicationWorkbenches>();
+    let workbenches = cx.global::<ApplicationSessions>();
     let unpresented = presented
         .into_iter()
         .filter(|document| workbenches.view_count(*document, cx) == 0)
@@ -601,18 +596,12 @@ fn commit(
 
     for (index, window) in destinations.iter().enumerate() {
         let focused = request.focus == Some(index);
-        let shell = window.shell.clone();
-        let _ = cx.update_window(window.handle, |_, native, cx| {
-            if focused {
-                native.activate_window();
-            }
-            shell.update(cx, |shell, cx| {
-                if focused {
-                    shell.focus_active_surface(cx);
-                }
-                shell.observe_application_focus(native, cx);
+        if focused {
+            window.shell.update(cx, |shell, cx| {
+                shell.activate_window(cx);
+                shell.focus_active_surface(cx);
             });
-        });
+        }
     }
     Ok((
         ReplaceWindowsResult {
@@ -714,28 +703,29 @@ fn resolve(
 }
 
 impl ProductShell {
-    /// Capture this window's layout with its native geometry.
-    pub(crate) fn capture_layout(&self, window: &Window, cx: &App) -> WindowLayout {
-        use crate::app::window_layout::{WindowGeometry, WindowState};
-        let (state, bounds) = match window.window_bounds() {
-            WindowBounds::Windowed(bounds) => (WindowState::Windowed, bounds),
-            WindowBounds::Maximized(bounds) => (WindowState::Maximized, bounds),
-            WindowBounds::Fullscreen(bounds) => (WindowState::Fullscreen, bounds),
-        };
-        let geometry = WindowGeometry {
-            x: f32::from(bounds.origin.x),
-            y: f32::from(bounds.origin.y),
-            width: f32::from(bounds.size.width),
-            height: f32::from(bounds.size.height),
-            state,
-            display: window
-                .display(cx)
-                .and_then(|display| display.uuid().ok())
-                .map(|uuid| uuid.to_string()),
-        };
+    /// Capture this session's layout with the geometry of `window`, the
+    /// window it is shown in.
+    pub(crate) fn capture_layout(&self, window: Option<&Window>, cx: &App) -> WindowLayout {
         WindowLayout::capture(
             self.workbench.read(cx),
-            Some(geometry),
+            window.map(|window| window_geometry(window, cx)),
+            Self::documents(cx).read(cx),
+            &|id| Self::terminal_session_directory(id, cx),
+            cx,
+        )
+    }
+
+    /// Capture `shell`'s layout with its window's geometry.
+    pub(crate) fn capture_session_layout(shell: &Entity<Self>, cx: &mut App) -> WindowLayout {
+        let geometry = session_window(shell.entity_id(), cx).and_then(|window| {
+            window
+                .update(cx, |_, window, cx| window_geometry(window, cx))
+                .ok()
+        });
+        let shell = shell.read(cx);
+        WindowLayout::capture(
+            shell.workbench.read(cx),
+            geometry,
             Self::documents(cx).read(cx),
             &|id| Self::terminal_session_directory(id, cx),
             cx,
@@ -912,15 +902,21 @@ pub(crate) fn restore_windows(
 /// Open a blank product window, as New Blank Window does.
 pub(crate) fn open_window(cx: &mut App) -> WindowTarget {
     let handle = launch::open_product_window_with(None, None, cx);
+    let shell = cx
+        .global::<ApplicationSessions>()
+        .in_window(handle)
+        .expect("a product window shows a session");
     WindowTarget {
-        window: handle.window_id().as_u64().to_string(),
+        window: session_id(shell.entity_id()),
     }
 }
 
 /// Remove a window from `open_window` whose roots could not be applied.
 pub(crate) fn discard_window(target: &WindowTarget, cx: &mut App) {
-    if let Ok((_, handle)) = operations::capture_window(target, cx) {
-        let _ = cx.update_window(handle, |_, window, _| window.remove_window());
+    if let Ok(shell) = operations::capture_session(target, cx) {
+        shell.update(cx, |shell, cx| {
+            let _ = shell.close_window(cx);
+        });
     }
 }
 
@@ -929,19 +925,37 @@ pub(crate) fn capture_layout(
     target: &WindowTarget,
     cx: &mut App,
 ) -> Result<WindowLayout, AccessError> {
-    let (shell, handle) = operations::capture_window(target, cx)?;
-    cx.update_window(handle, |_, window, cx| {
-        shell.read(cx).capture_layout(window, cx)
-    })
-    .map_err(|_| AccessError::InvalidTarget)
+    let shell = operations::capture_session(target, cx)?;
+    Ok(ProductShell::capture_session_layout(&shell, cx))
 }
 
 /// Activate a product window and focus its active surface.
 pub(crate) fn focus_window(target: &WindowTarget, cx: &mut App) -> Result<(), AccessError> {
-    let (shell, handle) = operations::capture_window(target, cx)?;
-    cx.update_window(handle, |_, window, cx| {
-        window.activate_window();
-        shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
-    })
-    .map_err(|_| AccessError::InvalidTarget)
+    let shell = operations::capture_session(target, cx)?;
+    shell.update(cx, |shell, cx| {
+        shell.activate_window(cx);
+        shell.focus_active_surface(cx);
+    });
+    Ok(())
+}
+
+/// The bounds, state, and display of `window`, as a layout records them.
+fn window_geometry(window: &Window, cx: &App) -> crate::app::window_layout::WindowGeometry {
+    use crate::app::window_layout::{WindowGeometry, WindowState};
+    let (state, bounds) = match window.window_bounds() {
+        WindowBounds::Windowed(bounds) => (WindowState::Windowed, bounds),
+        WindowBounds::Maximized(bounds) => (WindowState::Maximized, bounds),
+        WindowBounds::Fullscreen(bounds) => (WindowState::Fullscreen, bounds),
+    };
+    WindowGeometry {
+        x: f32::from(bounds.origin.x),
+        y: f32::from(bounds.origin.y),
+        width: f32::from(bounds.size.width),
+        height: f32::from(bounds.size.height),
+        state,
+        display: window
+            .display(cx)
+            .and_then(|display| display.uuid().ok())
+            .map(|uuid| uuid.to_string()),
+    }
 }

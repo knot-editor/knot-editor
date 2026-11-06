@@ -15,7 +15,6 @@ impl ProductShell {
     pub(crate) fn start_language_mode(
         &mut self,
         target: &ProductCommandTarget,
-        _: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         let TabSurfaceId::Document(document) = target.surface else {

@@ -1705,7 +1705,7 @@ impl ProductExtensionHost {
                         invocation.capture = self.command_targets.get(&root).map(|target| {
                             crate::host::protocol::CommandCapture {
                                 authority: root,
-                                window: target.window.window_id().as_u64().to_string(),
+                                window: crate::app::product::session_id(target.shell.entity_id()),
                                 view: target.view.map(|view| format!("{view:?}")),
                                 tool: target.extension_tool_id(cx),
                                 editor: matches!(
@@ -1882,7 +1882,7 @@ impl ProductExtensionHost {
 
         target.validate_tab(cx)?;
         target.validate_view(cx)?;
-        if !cx.windows().contains(&target.window) || target.shell.upgrade().is_none() {
+        if target.session(cx).is_none() {
             return Err(CommandOutcome::InvalidTarget);
         }
         let name = command.name.clone();
@@ -1907,7 +1907,7 @@ impl ProductExtensionHost {
                 .unwrap_or(CommandOutcome::Cancelled);
             let outcome = cx
                 .update(|cx| {
-                    if !cx.windows().contains(&target.window) {
+                    if target.session(cx).is_none() {
                         return CommandOutcome::InvalidTarget;
                     }
                     if let Err(invalid) = target
@@ -2191,28 +2191,21 @@ impl ProductExtensionHost {
             .documents()
             .map(|document| application_document_info(document, buffers[&document.id()], cx))
             .collect();
-        let active = cx.active_window();
+        let active = crate::app::product::active_session(cx).map(|shell| shell.entity_id());
         let mut snapshot = ApplicationSnapshot {
             documents: document_infos,
             launched: cx.has_global::<ApplicationLaunched>(),
             ..Default::default()
         };
-        for handle in cx.windows() {
-            if handle.downcast::<ProductShell>().is_none() {
-                continue;
+        for shell in crate::app::product::sessions(cx) {
+            let info = shell
+                .read(cx)
+                .application_window(shell.entity_id(), &buffers, cx);
+            if active == Some(shell.entity_id()) {
+                snapshot.active_window = Some(info.target.clone());
+                snapshot.active_target = info.current_target.clone();
             }
-            if let Ok(info) = cx.update_window(handle, |root, window, cx| {
-                root.downcast::<ProductShell>()
-                    .unwrap()
-                    .read(cx)
-                    .application_window(window, &buffers, cx)
-            }) {
-                if active == Some(handle) {
-                    snapshot.active_window = Some(info.target.clone());
-                    snapshot.active_target = info.current_target.clone();
-                }
-                snapshot.windows.push(info);
-            }
+            snapshot.windows.push(info);
         }
         snapshot
             .windows
@@ -2326,7 +2319,7 @@ impl ProductExtensionHost {
     ) -> Result<crate::host::protocol::WindowTarget, handlers::AccessError> {
         use crate::host::protocol::WindowTarget;
         use handlers::AccessError;
-        let window = if let Some(invocation) = request.invocation {
+        let shell = if let Some(invocation) = request.invocation {
             let root = self
                 .commands
                 .root_of(invocation)
@@ -2334,15 +2327,15 @@ impl ProductExtensionHost {
             self.command_targets
                 .get(&root)
                 .ok_or(AccessError::InvalidTarget)?
-                .window
+                .shell
+                .entity_id()
         } else {
-            cx.active_window().ok_or(AccessError::ContextUnavailable)?
+            crate::app::product::active_session(cx)
+                .ok_or(AccessError::ContextUnavailable)?
+                .entity_id()
         };
-        if window.downcast::<ProductShell>().is_none() {
-            return Err(AccessError::ContextUnavailable);
-        }
         Ok(WindowTarget {
-            window: window.window_id().as_u64().to_string(),
+            window: crate::app::product::session_id(shell),
         })
     }
 
@@ -2437,12 +2430,12 @@ impl ProductExtensionHost {
         }
     }
 
-    fn transient_window(
+    fn transient_session(
         &self,
         request: &crate::host::protocol::RequestContext,
         explicit: Option<&str>,
         cx: &App,
-    ) -> Result<gpui::AnyWindowHandle, handlers::AccessError> {
+    ) -> Result<gpui::Entity<ProductShell>, handlers::AccessError> {
         let window = match (explicit, request.invocation) {
             (Some(window), _) => window.to_owned(),
             // An explicit target or an admitted command capture is required;
@@ -2450,29 +2443,22 @@ impl ProductExtensionHost {
             (None, Some(_)) => self.operation_window(request, cx)?.window,
             (None, None) => return Err(handlers::AccessError::ContextUnavailable),
         };
-        product_window_handle(&window, cx).ok_or(handlers::AccessError::InvalidTarget)
+        crate::app::product::find_session(&window, cx).ok_or(handlers::AccessError::InvalidTarget)
     }
 
-    /// Run one transient interaction install against the resolved product window.
+    /// Run one transient interaction install against the resolved session.
     fn with_transient_window<R>(
         &self,
         request: &crate::host::protocol::RequestContext,
         explicit: Option<&str>,
         access: impl FnOnce(
             &mut ProductShell,
-            &mut gpui::Window,
             &mut gpui::Context<ProductShell>,
         ) -> Result<R, handlers::TransientError>,
         cx: &mut Context<Self>,
     ) -> Result<R, handlers::TransientError> {
-        let handle = self.transient_window(request, explicit, cx)?;
-        cx.update_window(handle, |root, window, cx| {
-            let Ok(shell) = root.downcast::<ProductShell>() else {
-                return Err(handlers::TransientError::InvalidTarget);
-            };
-            shell.update(cx, |shell, cx| access(shell, window, cx))
-        })
-        .map_err(|_| handlers::TransientError::InvalidTarget)?
+        let shell = self.transient_session(request, explicit, cx)?;
+        shell.update(cx, |shell, cx| access(shell, cx))
     }
 
     /// Keep a previewing picker between pulls and return the number its
@@ -2511,17 +2497,8 @@ impl ProductExtensionHost {
             lifecycle,
             invocation,
         };
-        let handles = cx
-            .windows()
-            .into_iter()
-            .filter(|handle| handle.downcast::<ProductShell>().is_some())
-            .collect::<Vec<_>>();
-        for handle in handles {
-            let _ = cx.update_window(handle, |root, _window, cx| {
-                if let Ok(shell) = root.downcast::<ProductShell>() {
-                    shell.update(cx, |shell, cx| shell.cancel_transient(owner, cx));
-                }
-            });
+        for shell in crate::app::product::sessions(cx) {
+            shell.update(cx, |shell, cx| shell.cancel_transient(owner, cx));
         }
     }
 
@@ -2543,32 +2520,23 @@ impl ProductExtensionHost {
             return Err(AccessError::Cancelled.into());
         }
         let id = self.semantics.owned_kind(registration, request)?;
-        let handles = match window {
-            Some(window) => {
-                vec![product_window_handle(window, cx).ok_or(AccessError::InvalidTarget)?]
-            }
-            None => cx
-                .windows()
-                .into_iter()
-                .filter(|handle| handle.downcast::<ProductShell>().is_some())
-                .collect(),
+        let shells = match window {
+            Some(window) => vec![
+                crate::app::product::find_session(window, cx).ok_or(AccessError::InvalidTarget)?,
+            ],
+            None => crate::app::product::sessions(cx),
         };
-        for handle in handles {
-            let _ = cx.update_window(handle, |root, _, cx| {
-                let Ok(shell) = root.downcast::<ProductShell>() else {
-                    return;
-                };
-                shell.update(cx, |shell, cx| match action {
-                    crate::app::extensions::semantics::ViewPresentation::Show => {
-                        shell.set_contributed_view_visible(&id, true, cx);
-                    }
-                    crate::app::extensions::semantics::ViewPresentation::Hide => {
-                        shell.set_contributed_view_visible(&id, false, cx);
-                    }
-                    crate::app::extensions::semantics::ViewPresentation::Focus => {
-                        shell.focus_contributed_view(&id, cx);
-                    }
-                });
+        for shell in shells {
+            shell.update(cx, |shell, cx| match action {
+                crate::app::extensions::semantics::ViewPresentation::Show => {
+                    shell.set_contributed_view_visible(&id, true, cx);
+                }
+                crate::app::extensions::semantics::ViewPresentation::Hide => {
+                    shell.set_contributed_view_visible(&id, false, cx);
+                }
+                crate::app::extensions::semantics::ViewPresentation::Focus => {
+                    shell.focus_contributed_view(&id, cx);
+                }
             });
         }
         // A command-invoked presentation change is an explicit user arrangement,
@@ -2590,14 +2558,10 @@ impl ProductExtensionHost {
         let Ok(target) = self.operation_window(request, cx) else {
             return;
         };
-        let Some(handle) = product_window_handle(&target.window, cx) else {
+        let Some(shell) = crate::app::product::find_session(&target.window, cx) else {
             return;
         };
-        let _ = cx.update_window(handle, |root, _, cx| {
-            if let Ok(shell) = root.downcast::<ProductShell>() {
-                shell.update(cx, |shell, cx| shell.publish_tool_layout(cx));
-            }
-        });
+        shell.update(cx, |shell, cx| shell.publish_tool_layout(cx));
     }
 
     fn remove_lifecycle(&mut self, key: ExtensionKey, cx: &mut Context<Self>) {
@@ -2704,23 +2668,12 @@ fn application_document_info(
     }
 }
 
-fn product_window_handle(window: &str, cx: &App) -> Option<gpui::AnyWindowHandle> {
-    cx.windows().into_iter().find(|handle| {
-        handle.window_id().as_u64().to_string() == window
-            && handle.downcast::<ProductShell>().is_some()
-    })
-}
-
 fn capture_product_target(
     window_handle: gpui::AnyWindowHandle,
     cx: &mut App,
 ) -> Option<ProductCommandTarget> {
-    cx.update_window(window_handle, |_, window, cx| {
-        let shell = window.root::<ProductShell>().flatten()?;
-        shell.update(cx, |shell, cx| shell.capture_command_target(cx))
-    })
-    .ok()
-    .flatten()
+    crate::app::product::session_in_window(window_handle, cx)?
+        .update(cx, |shell, cx| shell.capture_command_target(cx))
 }
 
 #[cfg(test)]

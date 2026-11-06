@@ -528,3 +528,46 @@ fn closing_the_palette_returns_focus_to_its_origin(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "a"));
 }
+
+#[gpui::test]
+fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let shell = cx.update(|cx| {
+        let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
+        cx.new(|cx| ProductShell::new(workbench, cx))
+    });
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = cx.update(|cx| {
+            let target = shell
+                .update(cx, |shell, cx| shell.capture_command_target(cx))
+                .expect("a session without a window still has a target");
+            ProductShell::command_dispatcher(cx).update(cx, |dispatcher, cx| {
+                dispatcher.dispatch(
+                    Command {
+                        name: name.into(),
+                        arguments: CommandArgumentValue::Null,
+                    },
+                    target,
+                    cx,
+                )
+            })
+        });
+        wait_for_command(execution, cx)
+    };
+
+    assert_eq!(run(SPLIT_HORIZONTAL_COMMAND, cx), CommandOutcome::Completed);
+    assert_eq!(run(NEW_COMMAND, cx), CommandOutcome::Completed);
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        assert_eq!(workbench.panes().len(), 2);
+        assert_eq!(workbench.focused_pane().unwrap().tabs().len(), 2);
+    });
+    // Closing the last tab of a clean document needs no prompt.
+    assert_eq!(run(CLOSE_TAB_COMMAND, cx), CommandOutcome::Completed);
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        assert_eq!(workbench.focused_pane().unwrap().tabs().len(), 1);
+    });
+}

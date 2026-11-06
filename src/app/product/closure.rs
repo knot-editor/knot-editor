@@ -14,60 +14,47 @@ impl ProductShell {
 
     pub(super) fn collect_product_views(cx: &mut App) -> Vec<ProtectedView> {
         let mut views = Vec::new();
-        for window_handle in cx.windows() {
-            let window_views = cx
-                .update_window(window_handle, |_, window, cx| {
-                    let shell = window.root::<ProductShell>().flatten()?;
-                    let workbench = shell.read(cx).workbench.clone();
-                    let snapshots = workbench.read(cx).tab_snapshots();
-                    Some(
-                        snapshots
-                            .into_iter()
-                            .map(|snapshot| {
-                                let (editor, pinned) = {
-                                    let workbench = workbench.read(cx);
-                                    let tab = workbench.pane(snapshot.pane_id).and_then(|pane| {
-                                        pane.tabs().iter().find(|tab| tab.id() == snapshot.tab_id)
-                                    });
-                                    (
-                                        tab.and_then(|tab| tab.editor().cloned()),
-                                        tab.is_some_and(|tab| tab.is_pinned()),
-                                    )
-                                };
-                                ProtectedView {
-                                    key: ProtectedViewKey {
-                                        window: window_handle,
-                                        workbench: workbench.entity_id(),
-                                        presentation: workbench
-                                            .read(cx)
-                                            .capture_tab_move(snapshot.pane_id, snapshot.tab_id)
-                                            .unwrap()
-                                            .presentation,
-                                        pane: snapshot.pane_id,
-                                        tab: snapshot.tab_id,
-                                        surface: snapshot.surface,
-                                    },
-                                    pinned,
-                                    target: editor.map(|editor| ProductCommandTarget {
-                                        window: window_handle,
-                                        shell: shell.downgrade(),
-                                        workbench: workbench.downgrade(),
-                                        pane: snapshot.pane_id,
-                                        tab: snapshot.tab_id,
-                                        surface: snapshot.surface,
-                                        presentation: Some(editor.entity_id()),
-                                        focused: true,
-                                        view: None,
-                                    }),
-                                }
-                            })
-                            .collect::<Vec<_>>(),
+        for shell in cx.global::<ApplicationSessions>().shells() {
+            let session = shell.entity_id();
+            let workbench = shell.read(cx).workbench.clone();
+            let snapshots = workbench.read(cx).tab_snapshots();
+            views.extend(snapshots.into_iter().map(|snapshot| {
+                let (editor, pinned) = {
+                    let workbench = workbench.read(cx);
+                    let tab = workbench.pane(snapshot.pane_id).and_then(|pane| {
+                        pane.tabs().iter().find(|tab| tab.id() == snapshot.tab_id)
+                    });
+                    (
+                        tab.and_then(|tab| tab.editor().cloned()),
+                        tab.is_some_and(|tab| tab.is_pinned()),
                     )
-                })
-                .ok()
-                .flatten()
-                .unwrap_or_default();
-            views.extend(window_views);
+                };
+                ProtectedView {
+                    key: ProtectedViewKey {
+                        session,
+                        workbench: workbench.entity_id(),
+                        presentation: workbench
+                            .read(cx)
+                            .capture_tab_move(snapshot.pane_id, snapshot.tab_id)
+                            .unwrap()
+                            .presentation,
+                        pane: snapshot.pane_id,
+                        tab: snapshot.tab_id,
+                        surface: snapshot.surface,
+                    },
+                    pinned,
+                    target: editor.map(|editor| ProductCommandTarget {
+                        shell: shell.downgrade(),
+                        workbench: workbench.downgrade(),
+                        pane: snapshot.pane_id,
+                        tab: snapshot.tab_id,
+                        surface: snapshot.surface,
+                        presentation: Some(editor.entity_id()),
+                        focused: true,
+                        view: None,
+                    }),
+                }
+            }));
         }
         views
     }
@@ -82,7 +69,7 @@ impl ProductShell {
             .map_err(|_| ProtectedCloseFailure::InvalidTarget)?;
         let views = Self::collect_product_views(cx);
         let origin_key = ProtectedViewKey {
-            window: request.origin.window,
+            session: request.origin.shell.entity_id(),
             workbench: request.origin.workbench.entity_id(),
             presentation: request.origin.presentation,
             pane: request.origin.pane,
@@ -99,7 +86,7 @@ impl ProductShell {
                 ProtectedCloseKind::OtherTabs | ProtectedCloseKind::Pane => {
                     in_pane_scope(request.kind, &request.origin, view)
                 }
-                ProtectedCloseKind::Window => view.key.window == request.origin.window,
+                ProtectedCloseKind::Window => view.key.session == request.origin.shell.entity_id(),
                 ProtectedCloseKind::Quit => true,
             })
             .cloned()
@@ -199,7 +186,6 @@ impl ProductShell {
         &mut self,
         pane: PaneId,
         tab: TabId,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(tab) = self
@@ -218,7 +204,6 @@ impl ProductShell {
             return;
         }
         let target = ProductCommandTarget {
-            window: window.window_handle(),
             shell: cx.entity().downgrade(),
             workbench: self.workbench.downgrade(),
             pane,
@@ -332,23 +317,22 @@ impl ProductShell {
                     }
                     let title = document_state.title().clone();
                     let prompted_revision = document_state.model().read(cx).revision();
-                    cx.update_window(target.window, |_, window, cx| {
-                        Ok(Some((
-                            window.prompt(
-                                PromptLevel::Warning,
-                                &format!("Do you want to save the changes to “{title}”?"),
-                                Some("Your changes will be lost if you don't save them."),
-                                &[
-                                    PromptButton::new("Save"),
-                                    PromptButton::new("Don't Save"),
-                                    PromptButton::cancel("Cancel"),
-                                ],
-                                cx,
-                            ),
-                            prompted_revision,
-                        )))
-                    })
-                    .unwrap_or(Err(ProtectedCloseFailure::InvalidTarget))
+                    target
+                        .session(cx)
+                        .ok_or(ProtectedCloseFailure::InvalidTarget)?;
+                    let prompt = super::prompt(
+                        target.window(cx),
+                        PromptLevel::Warning,
+                        format!("Do you want to save the changes to “{title}”?"),
+                        Some("Your changes will be lost if you don't save them.".into()),
+                        vec![
+                            PromptButton::new("Save"),
+                            PromptButton::new("Don't Save"),
+                            PromptButton::cancel("Cancel"),
+                        ],
+                        cx,
+                    );
+                    Ok(Some((prompt, prompted_revision)))
                 });
                 let (prompt, prompted_revision) = match prompt {
                     Ok(Ok(Some(prompt))) => prompt,
@@ -373,26 +357,19 @@ impl ProductShell {
                             {
                                 return Err(ProtectedCloseFailure::Cancelled);
                             }
-                            let Some(shell) = target.shell.upgrade() else {
+                            let Some(shell) = target.session(cx) else {
                                 return Err(ProtectedCloseFailure::InvalidTarget);
                             };
                             let (save_completion, receiver) = CommandCompletion::new();
-                            let result = cx.update_window(target.window, |_, window, cx| {
-                                if window.root::<ProductShell>().flatten().as_ref() != Some(&shell)
-                                {
-                                    return Err(ProtectedCloseFailure::InvalidTarget);
-                                }
-                                shell.update(cx, |shell, cx| {
-                                    shell.start_save_command(
-                                        false,
-                                        target.clone(),
-                                        save_completion,
-                                        cx,
-                                    );
-                                });
-                                Ok(receiver)
+                            shell.update(cx, |shell, cx| {
+                                shell.start_save_command(
+                                    false,
+                                    target.clone(),
+                                    save_completion,
+                                    cx,
+                                );
                             });
-                            result.unwrap_or(Err(ProtectedCloseFailure::InvalidTarget))
+                            Ok(receiver)
                         });
                         let save_outcome = match save {
                             Ok(Ok(receiver)) => receiver.await.unwrap_or(CommandOutcome::Cancelled),
@@ -545,7 +522,7 @@ impl ProductShell {
             .iter()
             .filter(|view| match plan.request.kind {
                 ProtectedCloseKind::Tab => {
-                    view.key.window == plan.request.origin.window
+                    view.key.session == plan.request.origin.shell.entity_id()
                         && view.key.pane == plan.request.origin.pane
                         && view.key.tab == plan.request.origin.tab
                         && view.key.surface == plan.request.origin.surface
@@ -553,7 +530,9 @@ impl ProductShell {
                 ProtectedCloseKind::OtherTabs | ProtectedCloseKind::Pane => {
                     in_pane_scope(plan.request.kind, &plan.request.origin, view)
                 }
-                ProtectedCloseKind::Window => view.key.window == plan.request.origin.window,
+                ProtectedCloseKind::Window => {
+                    view.key.session == plan.request.origin.shell.entity_id()
+                }
                 ProtectedCloseKind::Quit => true,
             })
             .map(|view| view.key)
@@ -622,7 +601,6 @@ impl ProductShell {
 
         match plan.request.kind {
             ProtectedCloseKind::Tab => self.close_tab_after_approval(
-                plan.request.origin.window,
                 plan.request.origin.pane,
                 plan.request.origin.tab,
                 plan.request.origin.surface,
@@ -630,7 +608,7 @@ impl ProductShell {
             ),
             ProtectedCloseKind::OtherTabs | ProtectedCloseKind::Pane => {
                 for key in &current_scope {
-                    self.close_tab_after_approval(key.window, key.pane, key.tab, key.surface, cx)?;
+                    self.close_tab_after_approval(key.pane, key.tab, key.surface, cx)?;
                 }
                 if current_scope
                     .iter()
@@ -646,10 +624,7 @@ impl ProductShell {
                     .filter(|(document, count)| total_counts.get(document) == Some(count))
                     .map(|(document, _)| *document)
                     .collect::<Vec<_>>();
-                match cx.update_window(plan.request.origin.window, |_, window, cx| {
-                    tab_drag::cancel_source_window(window, cx);
-                    window.remove_window();
-                }) {
+                match self.close_window(cx) {
                     Ok(()) => {
                         documents.update(cx, |documents, cx| {
                             for document in final_documents {
@@ -688,7 +663,7 @@ impl ProductShell {
         pane: PaneId,
         tab: TabId,
         document: DocumentId,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut Context<Self>,
     ) -> crate::host::protocol::CommandOutcome {
         use crate::host::protocol::CommandOutcome;
@@ -696,9 +671,7 @@ impl ProductShell {
         if !self.workbench.read(cx).contains_tab(pane, tab, document) {
             return CommandOutcome::InvalidTarget;
         }
-        let open_view_count = cx
-            .global::<ApplicationWorkbenches>()
-            .view_count(document, cx);
+        let open_view_count = cx.global::<ApplicationSessions>().view_count(document, cx);
         let documents = Self::documents(cx);
         let document_is_dirty = documents.read(cx).get(document).unwrap().is_dirty(cx);
         let outcome = self.workbench.update(cx, |workbench, _cx| {
@@ -730,8 +703,8 @@ impl ProductShell {
             let replacement = create_untitled_document(&documents, cx);
             let model = documents.read(cx).get(replacement).unwrap().model().clone();
             let workbench = cx.new(|cx| Workbench::new_for_document(replacement, model, cx));
-            cx.global::<ApplicationWorkbenches>()
-                .register(&workbench, window.window_handle());
+            cx.global::<ApplicationSessions>()
+                .register(cx.weak_entity(), &workbench);
             self.workbench = workbench;
         }
         self.focus_active_editor(cx);
@@ -741,7 +714,6 @@ impl ProductShell {
 
     pub(super) fn close_tab_after_approval(
         &mut self,
-        window_handle: AnyWindowHandle,
         pane: PaneId,
         tab: TabId,
         surface: TabSurfaceId,
@@ -773,15 +745,13 @@ impl ProductShell {
             };
             self.close_terminal(session_id, cx);
             if transition.workbench_is_empty() {
-                self.replace_empty_workbench(window_handle, cx);
+                self.replace_empty_workbench(cx.weak_entity(), cx);
             }
             self.focus_active_surface(cx);
             cx.notify();
             return Ok(());
         };
-        let open_view_count = cx
-            .global::<ApplicationWorkbenches>()
-            .view_count(document, cx);
+        let open_view_count = cx.global::<ApplicationSessions>().view_count(document, cx);
         let documents = Self::documents(cx);
         let document_is_dirty = documents
             .read(cx)
@@ -816,7 +786,7 @@ impl ProductShell {
             });
         }
         if transition.workbench_is_empty() {
-            self.replace_empty_workbench(window_handle, cx);
+            self.replace_empty_workbench(cx.weak_entity(), cx);
         }
         self.focus_active_surface(cx);
         cx.notify();
@@ -831,7 +801,7 @@ fn in_pane_scope(
     origin: &ProductCommandTarget,
     view: &ProtectedView,
 ) -> bool {
-    view.key.window == origin.window
+    view.key.session == origin.shell.entity_id()
         && view.key.workbench == origin.workbench.entity_id()
         && view.key.pane == origin.pane
         && match kind {

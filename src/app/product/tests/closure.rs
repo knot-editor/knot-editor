@@ -486,7 +486,7 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
     let host = cx.update(extensions::host::install);
     let key = install_operation_fixture(&host, SOURCE, "close.invalid", cx);
     let (first, first_window) = empty_product_window(&documents, cx);
-    let (control, control_window) = empty_product_window(&documents, cx);
+    let (control, _) = empty_product_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&first, first_window, "close.prepare", cx),
@@ -506,7 +506,7 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
         let target = current_open_target(&control, cx);
         let workbench = control.read(cx).workbench.clone();
         super::super::relocate::TabRelocationDestination {
-            window: control_window,
+            shell: control.downgrade(),
             workbench: workbench.downgrade(),
             tab: crate::app::workbench::TabMoveDestination::At {
                 anchor: workbench
@@ -518,11 +518,9 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
         }
     });
     assert_eq!(
-        cx.update_window(first_window, |_, window, cx| first.update(
-            cx,
-            |shell, cx| shell.relocate_tab_to(&source, &destination, window, cx)
-        ))
-        .unwrap(),
+        cx.update_window(first_window, |_, _, cx| first.update(cx, |shell, cx| shell
+            .relocate_tab_to(&source, &destination, cx)))
+            .unwrap(),
         CommandOutcome::Completed
     );
     assert_eq!(
@@ -1166,11 +1164,9 @@ async fn native_window_close_is_vetoed_until_protected_closure_finishes(cx: &mut
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window_cx) = cx.add_window_view(|window, cx| {
+    let (shell, window_cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        cx.global::<ApplicationWorkbenches>()
-            .register(&workbench, window.window_handle());
-        ProductShell::new(workbench)
+        ProductShell::new(workbench, cx)
     });
     window_cx.update(|window, cx| {
         install_protected_window_close(&shell, window, cx);

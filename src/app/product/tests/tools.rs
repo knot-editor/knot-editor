@@ -67,11 +67,12 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
             uri.to_string()
         )
     });
-    cx.update_window(window, |_, window, cx| {
-        let state =
-            shell
-                .read(cx)
-                .application_window(window, &std::collections::HashMap::new(), cx);
+    cx.update_window(window, |_, _, cx| {
+        let state = shell.read(cx).application_window(
+            shell.entity_id(),
+            &std::collections::HashMap::new(),
+            cx,
+        );
         let tool = state
             .panes
             .iter()
@@ -355,10 +356,12 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     cx.run_until_parked();
     let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
     let state = |cx: &mut TestAppContext| {
-        cx.update_window(window, |_, window, cx| {
-            shell
-                .read(cx)
-                .application_window(window, &std::collections::HashMap::new(), cx)
+        cx.update_window(window, |_, _, cx| {
+            shell.read(cx).application_window(
+                shell.entity_id(),
+                &std::collections::HashMap::new(),
+                cx,
+            )
         })
         .unwrap()
     };

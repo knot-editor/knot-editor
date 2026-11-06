@@ -67,7 +67,6 @@ impl ProductShell {
         &mut self,
         pane: PaneId,
         forward: bool,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         if self
@@ -106,7 +105,7 @@ impl ProductShell {
             return Err(CommandOutcome::InvalidTarget);
         }
         self.focus_active_surface(cx);
-        if !window.modifiers().control {
+        if !self.modifiers(cx).control {
             self.commit_recent_walk(cx);
         }
         cx.notify();
@@ -187,7 +186,6 @@ impl ProductShell {
         pane: PaneId,
         tab: TabId,
         edge: SplitEdge,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         self.maximized = None;
@@ -215,11 +213,11 @@ impl ProductShell {
             None => return Err(CommandOutcome::Unavailable),
         };
         let destination = TabRelocationDestination {
-            window: window.window_handle(),
+            shell: cx.weak_entity(),
             workbench: self.workbench.downgrade(),
             tab: target,
         };
-        match self.relocate_tab_to(&source, &destination, window, cx) {
+        match self.relocate_tab_to(&source, &destination, cx) {
             CommandOutcome::Completed => Ok(()),
             outcome => Err(outcome),
         }

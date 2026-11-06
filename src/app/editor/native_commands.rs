@@ -82,7 +82,7 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     let name = context.name;
     context
-        .foreground(move |target, window, cx| {
+        .in_window(move |target, window, cx| {
             let Some(crate::app::workbench::CommandView::Editor(editor)) = target.command_view(cx)
             else {
                 return Err(CommandOutcome::InvalidTarget);

@@ -27,7 +27,6 @@ impl ProductShell {
         &mut self,
         target: ProductCommandTarget,
         completion: CommandCompletion,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if !self.target_is_live(&target, cx) {
@@ -41,11 +40,11 @@ impl ProductShell {
         if cx.try_global::<ApplicationOpenDialog>().is_none()
             && !cx.can_select_mixed_files_and_dirs()
         {
-            let prompt = window.prompt(
+            let prompt = self.prompt(
                 PromptLevel::Info,
                 "What would you like to open?",
                 None,
-                &[
+                vec![
                     PromptButton::new("File"),
                     PromptButton::new("Folder"),
                     PromptButton::cancel("Cancel"),
@@ -281,7 +280,7 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) -> tokio::sync::oneshot::Receiver<Result<OpenCommit, OpenFailure>> {
         let (completion, result) = tokio::sync::oneshot::channel();
-        let window = target.window;
+        let window = self.window;
         self.start_resource_operation(
             request,
             target,
@@ -330,7 +329,7 @@ impl ProductShell {
                     {
                         Err(OpenFailure::Cancelled)
                     } else if this.open_generation != generation
-                        || !workbench_is_live(target.window, &this.workbench, cx)
+                        || !session_is_live(&target.shell, &this.workbench, cx)
                         || !target.matches_presentation(&this.workbench, cx)
                     {
                         Err(OpenFailure::InvalidTarget)
@@ -450,10 +449,7 @@ impl ProductShell {
                     .expect("validated destination pane")
             });
             if let Some(replaced) = replaced.filter(|replaced| *replaced != document)
-                && cx
-                    .global::<ApplicationWorkbenches>()
-                    .view_count(replaced, cx)
-                    == 0
+                && cx.global::<ApplicationSessions>().view_count(replaced, cx) == 0
             {
                 documents.update(cx, |documents, cx| {
                     documents.remove(replaced, cx);
@@ -469,10 +465,7 @@ impl ProductShell {
                 });
                 if replaced
                     && previous != document
-                    && cx
-                        .global::<ApplicationWorkbenches>()
-                        .view_count(previous, cx)
-                        == 0
+                    && cx.global::<ApplicationSessions>().view_count(previous, cx) == 0
                 {
                     documents.update(cx, |documents, cx| {
                         documents.remove(previous, cx);
@@ -494,7 +487,7 @@ impl ProductShell {
         };
         let capture = self.workbench.read(cx).capture_tab_move(pane, tab).unwrap();
         OpenTarget {
-            window: target.window,
+            shell: target.shell.clone(),
             workbench: self.workbench.downgrade(),
             pane,
             tab,

@@ -328,7 +328,7 @@ impl TabDragCoordinator {
             return DropAction::Invalid;
         };
         DropAction::Target(TabRelocationDestination {
-            window: entry.window,
+            shell: entry.shell.clone(),
             workbench: entry.workbench.clone(),
             tab: target.tab,
         })
@@ -425,12 +425,10 @@ fn commit_drop_with(
         };
         shell.update(cx, |shell, cx| match action {
             DropAction::Target(destination) => {
-                shell.relocate_tab_to(&active.source, &destination, window, cx);
+                shell.relocate_tab_to(&active.source, &destination, cx);
             }
             DropAction::TearOut(pointer) => {
-                shell.relocate_tab_to_new_window_with(&active.source, window, cx, |cx| {
-                    create(pointer, cx)
-                });
+                shell.relocate_tab_to_new_window_with(&active.source, cx, |cx| create(pointer, cx));
             }
             DropAction::Invalid => {}
         });

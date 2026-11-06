@@ -44,7 +44,7 @@ fn bounds(
 }
 
 fn texts(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> (Vec<String>, Vec<String>) {
-    let key = window.window_id().as_u64().to_string();
+    let key = crate::app::product::test_session_id(window);
     cx.read(|cx| {
         let hidden = crate::app::settings::strings(STATUS_BAR_HIDDEN_ITEMS, cx);
         let items = cx.global::<ApplicationStatusBar>().0.items(&key, &hidden);

@@ -47,53 +47,69 @@ pub(super) fn open_product_window_with(
         })
         .collect::<Vec<_>>();
     let notice = recovery.as_ref().and_then(recovery_listing::startup_notice);
+    let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
+    let shell = cx.new(|cx| ProductShell::new(workbench, cx));
+    shell.update(cx, |shell, cx| {
+        shell.restore_fresh_window_layout(cx);
+        let pane = shell.workbench.read(cx).focused_pane().unwrap();
+        let tab = pane.active_tab();
+        let target = OpenTarget {
+            shell: cx.weak_entity(),
+            workbench: shell.workbench.downgrade(),
+            pane: pane.id(),
+            tab: tab.id(),
+            surface: tab.surface_id(),
+            presentation: tab.presentation(),
+        };
+        shell.workbench.update(cx, |workbench, cx| {
+            for (document, model) in restored {
+                workbench.open_tab_for_document(target.pane, document, model, cx);
+            }
+            workbench.activate_tab(target.pane, target.tab);
+        });
+        shell.focus_active_surface(cx);
+        if let Some(request) = request {
+            drop(shell.start_open_operation(request, target, true, cx));
+        }
+    });
     let bounds = Bounds::centered(None, size(px(1000.), px(720.)), cx);
-    cx.open_window(
+    let window = show_session(
+        shell.clone(),
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(480.), px(320.))),
             ..Default::default()
         },
+        cx,
+    )
+    .expect("product window must open");
+    if let Some((title, detail)) = notice {
+        shell.update(cx, |shell, cx| {
+            shell.show_notice(PromptLevel::Warning, title, detail, cx)
+        });
+    }
+    window.into()
+}
+
+/// Open a window that shows `shell`; closing the window ends the session,
+/// and a window that fails to open ends it at once.
+pub(super) fn show_session(
+    shell: Entity<ProductShell>,
+    options: WindowOptions,
+    cx: &mut App,
+) -> anyhow::Result<WindowHandle<ProductShell>> {
+    let window = cx.open_window(options, {
+        let shell = shell.clone();
         move |window, cx| {
-            let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-            cx.global::<ApplicationWorkbenches>()
-                .register(&workbench, window.window_handle());
-            let shell = cx.new(|_| ProductShell::new(workbench));
             shell.update(cx, |shell, cx| shell.observe_extension_host(window, cx));
             install_protected_window_close(&shell, window, cx);
-            shell.update(cx, |shell, cx| shell.restore_fresh_window_layout(cx));
-            let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
-            let tab = pane.active_tab();
-            let target = OpenTarget {
-                window: window.window_handle(),
-                workbench: shell.read(cx).workbench.downgrade(),
-                pane: pane.id(),
-                tab: tab.id(),
-                surface: tab.surface_id(),
-                presentation: tab.presentation(),
-            };
-            shell.update(cx, |shell, cx| {
-                shell.workbench.update(cx, |workbench, cx| {
-                    for (document, model) in restored {
-                        workbench.open_tab_for_document(target.pane, document, model, cx);
-                    }
-                    workbench.activate_tab(target.pane, target.tab);
-                });
-            });
-            shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
-            shell.update(cx, |shell, cx| {
-                if let Some(request) = request {
-                    drop(shell.start_open_operation(request, target, true, cx));
-                }
-                if let Some((title, detail)) = notice {
-                    shell.show_notice(PromptLevel::Warning, title, detail, cx);
-                }
-            });
             shell
-        },
-    )
-    .expect("product window must open")
-    .into()
+        }
+    });
+    if window.is_err() {
+        shell.update(cx, |shell, cx| shell.end(cx));
+    }
+    window
 }
 
 #[cfg(test)]
@@ -136,7 +152,10 @@ pub(super) fn open_tab_transfer_window_with_bounds(
     bounds: Bounds<Pixels>,
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<ProductShell>> {
-    cx.open_window(
+    let workbench = cx.new(|_| Workbench::empty());
+    let shell = cx.new(|cx| ProductShell::new(workbench, cx));
+    show_session(
+        shell,
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(480.), px(320.))),
@@ -144,13 +163,7 @@ pub(super) fn open_tab_transfer_window_with_bounds(
             show: !cfg!(target_os = "macos"),
             ..Default::default()
         },
-        |window, cx| {
-            let workbench = cx.new(|_| Workbench::empty());
-            let shell = cx.new(|_| ProductShell::new(workbench));
-            shell.update(cx, |shell, cx| shell.observe_extension_host(window, cx));
-            install_protected_window_close(&shell, window, cx);
-            shell
-        },
+        cx,
     )
 }
 
@@ -168,7 +181,11 @@ pub(super) fn open_session_window(
             None,
         ),
     };
-    let handle = cx.open_window(
+    let workbench = cx.new(|_| Workbench::empty());
+    let shell = cx.new(|cx| ProductShell::new(workbench, cx));
+    shell.update(cx, |shell, cx| shell.restore_fresh_window_layout(cx));
+    let handle = show_session(
+        shell.clone(),
         WindowOptions {
             window_bounds: Some(window_bounds),
             window_min_size: Some(size(px(480.), px(320.))),
@@ -176,18 +193,9 @@ pub(super) fn open_session_window(
             focus: false,
             ..Default::default()
         },
-        |window, cx| {
-            let workbench = cx.new(|_| Workbench::empty());
-            cx.global::<ApplicationWorkbenches>()
-                .register(&workbench, window.window_handle());
-            let shell = cx.new(|_| ProductShell::new(workbench));
-            shell.update(cx, |shell, cx| shell.observe_extension_host(window, cx));
-            install_protected_window_close(&shell, window, cx);
-            shell.update(cx, |shell, cx| shell.restore_fresh_window_layout(cx));
-            shell
-        },
+        cx,
     )?;
-    Ok((handle.entity(cx)?, handle.into()))
+    Ok((shell, handle.into()))
 }
 
 /// Saved geometry fitted to the connected displays, as window options.
@@ -318,12 +326,12 @@ fn open_launch_windows(
         .map(|result| result.windows)
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|window| operations::capture_window(&window.window, cx).ok())
+        .filter_map(|window| operations::capture_session(&window.window, cx).ok())
         .collect::<Vec<_>>();
     let mut recovery = Some(recovery);
-    if let Some((shell, _)) = restored.first() {
+    if let Some(shell) = restored.first() {
         let recovery = recovery.take().expect("recovery is unclaimed");
-        let workbenches = cx.global::<ApplicationWorkbenches>();
+        let workbenches = cx.global::<ApplicationSessions>();
         let unpresented = recovery
             .restored
             .iter()
@@ -373,13 +381,7 @@ fn open_report_after_failed_startup(cx: &mut App) {
     if !failed {
         return;
     }
-    for window in cx.windows() {
-        let Some(shell) = window
-            .downcast::<ProductShell>()
-            .and_then(|window| window.entity(cx).ok())
-        else {
-            continue;
-        };
+    for shell in sessions(cx) {
         shell.update(cx, |shell, cx| {
             shell.extension_report_open = true;
             cx.notify();
@@ -417,7 +419,7 @@ pub(crate) fn run(initial_request: Option<OpenRequest>) {
             )),
         ));
         cx.set_global(crate::app::settings::ApplicationSettings::default());
-        cx.set_global(ApplicationWorkbenches(RefCell::new(Vec::new())));
+        cx.set_global(ApplicationSessions(RefCell::new(Vec::new())));
         cx.set_global(ApplicationProtectedClosure(RefCell::new(false)));
         cx.set_global(ApplicationTerminalSessions(RefCell::new(
             TerminalSessions::default(),

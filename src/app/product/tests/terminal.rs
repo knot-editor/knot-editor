@@ -19,9 +19,9 @@ fn relocate_to_new_window(
     cx: &mut TestAppContext,
     create_destination: impl FnOnce(&mut gpui::App) -> anyhow::Result<gpui::WindowHandle<ProductShell>>,
 ) -> CommandOutcome {
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
-            shell.relocate_tab_to_new_window_with(source, window, cx, create_destination)
+            shell.relocate_tab_to_new_window_with(source, cx, create_destination)
         })
     })
     .unwrap()
@@ -193,8 +193,7 @@ async fn terminal_tab_has_a_captured_surface_and_document_commands_are_unavailab
     cx.read(|cx| {
         assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
         assert_eq!(
-            cx.global::<ApplicationWorkbenches>()
-                .view_count(document, cx),
+            cx.global::<ApplicationSessions>().view_count(document, cx),
             1
         );
     });
@@ -1325,7 +1324,7 @@ async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
     let layout = cx
         .update_window(source_window, |_, window, cx| {
-            source.read(cx).capture_layout(window, cx)
+            source.read(cx).capture_layout(Some(window), cx)
         })
         .unwrap();
     let mut value = serde_json::to_value(&layout).unwrap();

@@ -229,7 +229,7 @@ impl Fixture {
     }
 
     fn status_in(&self, cx: &gpui::App) -> (Vec<String>, Vec<String>) {
-        let key = self.window.window_id().as_u64().to_string();
+        let key = crate::app::product::test_session_id(self.window);
         let items = cx.global::<ApplicationStatusBar>().0.items(&key, &[]);
         let texts = |side: Vec<crate::app::status_bar::BarItem>| {
             side.into_iter().map(|bar| bar.item.text).collect()

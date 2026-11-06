@@ -907,7 +907,7 @@ pub(crate) async fn copy_selected_uri(
 ) -> Result<(), crate::host::protocol::CommandOutcome> {
     use crate::host::protocol::CommandOutcome;
     context
-        .foreground(|target, _, cx| {
+        .foreground(|target, cx| {
             let Some(crate::app::workbench::CommandView::Workspace(view)) = target.command_view(cx)
             else {
                 return Err(CommandOutcome::InvalidTarget);

@@ -43,23 +43,14 @@ fn window_target(destination: &DocumentDestination) -> &WindowTarget {
     }
 }
 
-pub(super) fn capture_window(
+/// The open session a window target names.
+pub(super) fn capture_session(
     target: &WindowTarget,
-    cx: &mut App,
-) -> Result<(Entity<ProductShell>, AnyWindowHandle), AccessError> {
-    let window = cx
-        .windows()
-        .into_iter()
-        .find(|window| {
-            window.downcast::<ProductShell>().is_some()
-                && window.window_id().as_u64().to_string() == target.window
-        })
-        .ok_or(AccessError::InvalidTarget)?;
-    let shell = cx
-        .update_window(window, |root, _, _| root.downcast::<ProductShell>())
-        .map_err(|_| AccessError::InvalidTarget)?
-        .map_err(|_| AccessError::InvalidTarget)?;
-    Ok((shell, window))
+    cx: &App,
+) -> Result<Entity<ProductShell>, AccessError> {
+    cx.global::<ApplicationSessions>()
+        .find(&target.window)
+        .ok_or(AccessError::InvalidTarget)
 }
 
 pub(super) fn workspace_info(
@@ -85,8 +76,8 @@ fn capture_destination(
     destination: &DocumentDestination,
     cx: &mut App,
 ) -> Result<(Entity<ProductShell>, OpenTarget), AccessError> {
-    let (shell, window) = capture_window(window_target(destination), cx)?;
-    cx.update_window(window, |_, _, cx| {
+    let shell = capture_session(window_target(destination), cx)?;
+    {
         let state = shell.read(cx);
         let workbench = state.workbench.read(cx);
         let pane = match destination {
@@ -121,16 +112,15 @@ fn capture_destination(
             return Err(AccessError::InvalidTarget);
         }
         let target = OpenTarget {
-            window,
+            shell: shell.downgrade(),
             workbench: state.workbench.downgrade(),
             pane: pane.id(),
             tab: tab.id(),
             surface: tab.surface_id(),
             presentation,
         };
-        Ok((shell, target))
-    })
-    .map_err(|_| AccessError::InvalidTarget)?
+        Ok((shell.clone(), target))
+    }
 }
 
 impl OpenTarget {
@@ -138,7 +128,7 @@ impl OpenTarget {
         PresentationTarget {
             pane: PaneTarget {
                 window: WindowTarget {
-                    window: self.window.window_id().as_u64().to_string(),
+                    window: session_id(self.shell.entity_id()),
                 },
                 workbench: self.workbench.entity_id().as_u64().to_string(),
                 pane: self.pane.value().to_string(),
@@ -248,16 +238,13 @@ pub(crate) fn open_terminal(
     cx: &mut App,
 ) -> Result<PresentationTarget, AccessError> {
     let (shell, target) = capture_destination(&destination, cx)?;
-    cx.update_window(target.window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            let directory = directory.or_else(|| shell.terminal_directory(cx));
-            shell
-                .new_terminal_in_pane(target.pane, directory, cx)
-                .map(|target| target.public_target())
-                .ok_or(AccessError::InvalidTarget)
-        })
+    shell.update(cx, |shell, cx| {
+        let directory = directory.or_else(|| shell.terminal_directory(cx));
+        shell
+            .new_terminal_in_pane(target.pane, directory, cx)
+            .map(|target| target.public_target())
+            .ok_or(AccessError::InvalidTarget)
     })
-    .map_err(|_| AccessError::InvalidTarget)?
 }
 
 /// An exact document tab presentation retained beyond one command. It never
@@ -270,7 +257,7 @@ impl EditorTab {
     pub(crate) fn editor(&self, cx: &App) -> Option<Entity<crate::app::editor::EditorView>> {
         let target = &self.0;
         let workbench = target.workbench.upgrade()?;
-        if !workbench_is_live(target.window, &workbench, cx)
+        if !session_is_live(&target.shell, &workbench, cx)
             || !target.matches_presentation(&workbench, cx)
         {
             return None;
@@ -350,15 +337,12 @@ pub(crate) fn create_untitled(
     cx: &mut App,
 ) -> Result<(DocumentId, PresentationTarget), OpenError> {
     let (shell, target) = capture_destination(&destination, cx)?;
-    cx.update_window(target.window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            let (document, target) = shell
-                .new_document_in_pane(target.pane, cx)
-                .ok_or(OpenError::Access(AccessError::InvalidTarget))?;
-            Ok((document, target.public_target()))
-        })
+    shell.update(cx, |shell, cx| {
+        let (document, target) = shell
+            .new_document_in_pane(target.pane, cx)
+            .ok_or(OpenError::Access(AccessError::InvalidTarget))?;
+        Ok((document, target.public_target()))
     })
-    .map_err(|_| OpenError::Access(AccessError::InvalidTarget))?
 }
 
 pub(crate) fn present_document(
@@ -408,7 +392,7 @@ pub(crate) fn replace_roots(
                 .map_err(|_| WorkspaceError::Resource(OpenError::InvalidUri))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let (shell, window) = capture_window(&window_target, cx)?;
+    let shell = capture_session(&window_target, cx)?;
     let shell_id = shell.entity_id();
     shell.update(cx, |shell, cx| {
         let generation = shell.next_open_generation();
@@ -448,9 +432,7 @@ pub(crate) fn replace_roots(
                         )))
                     } else if shell.open_generation != generation
                         || !shell.workspace.is_current(&workspace)
-                        || !cx
-                            .update_window(window, |root, _, _| root.entity_id() == shell_id)
-                            .unwrap_or(false)
+                        || !cx.global::<ApplicationSessions>().is_open(shell_id)
                     {
                         Err(WorkspaceError::Resource(OpenError::Access(
                             AccessError::InvalidTarget,
@@ -494,7 +476,6 @@ pub(crate) fn close_presentation(
         .and_then(|tab| tab.command_view())
         .ok_or(CloseError::Access(AccessError::InvalidTarget))?;
     let origin = ProductCommandTarget {
-        window: target.window,
         shell: shell.downgrade(),
         workbench: target.workbench,
         pane: target.pane,

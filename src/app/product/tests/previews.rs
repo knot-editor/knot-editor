@@ -75,7 +75,7 @@ async fn explorer_clicks_replace_one_preview_and_double_clicks_or_edits_keep_tab
     // Layouts record no preview state, so a restored preview is a tab.
     let layout = cx
         .update_window(window, |_, window, cx| {
-            shell.update(cx, |shell, cx| shell.capture_layout(window, cx))
+            shell.update(cx, |shell, cx| shell.capture_layout(Some(window), cx))
         })
         .unwrap();
     let recorded = serde_json::to_string(&layout).unwrap();

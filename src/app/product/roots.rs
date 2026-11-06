@@ -10,17 +10,11 @@ use crate::app::resource::ResourceUri;
 use crate::host::protocol::CommandOutcome;
 
 impl ProductShell {
-    /// Choose a directory in the window's transient slot and append it.
-    pub(super) fn start_add_folder(
-        &mut self,
-        target: &ProductCommandTarget,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    /// Choose a directory in the session's transient slot and append it.
+    pub(super) fn start_add_folder(&mut self, cx: &mut Context<Self>) {
         let Ok(receiver) = self.begin_folder_picker(None, cx) else {
             return;
         };
-        let handle = target.window;
         let task = cx.spawn(async move |this, cx| {
             let path = match receiver.await {
                 Ok(TransientOutcome::Folder(path)) => path,
@@ -49,7 +43,7 @@ impl ProductShell {
             let Ok(result) = resolved.await else {
                 return;
             };
-            Self::in_window(&this, handle, cx, |shell, _, cx| match result {
+            let _ = this.update(cx, |shell, cx| match result {
                 Ok(uri) => shell.add_workspace_root(uri, cx),
                 Err(error) => {
                     use crate::host::declarations::HostError;

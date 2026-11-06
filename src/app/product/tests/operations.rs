@@ -659,8 +659,8 @@ fn public_open_rejects_pane_or_window_loss_and_command_cancellation_without_leak
         );
         let (control, control_window) = empty_product_window(&documents, cx);
         let index = usize::from(
-            first_window.window_id().as_u64().to_string()
-                > control_window.window_id().as_u64().to_string(),
+            crate::app::product::test_session_id(first_window)
+                > crate::app::product::test_session_id(control_window),
         );
         let source = r#"
 import { commands, documents, windows, workbench } from "knot";

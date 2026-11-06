@@ -757,7 +757,7 @@ fn arrangement(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> Value 
         }
     }
     let target = crate::host::protocol::WindowTarget {
-        window: window.window_id().as_u64().to_string(),
+        window: crate::app::product::test_session_id(window),
     };
     let layout = cx
         .update(|cx| super::super::sessions::capture_layout(&target, cx))
@@ -987,7 +987,7 @@ fn restored_windows_rebind_after_launch_and_unrestored_sessions_suspend(cx: &mut
             executor.clone(),
         )),
     ));
-    cx.set_global(ApplicationWorkbenches(RefCell::new(Vec::new())));
+    cx.set_global(ApplicationSessions::default());
     cx.update(|cx| {
         crate::app::extensions::host::reset_launched_for_test(cx);
         crate::app::window_sessions::install(

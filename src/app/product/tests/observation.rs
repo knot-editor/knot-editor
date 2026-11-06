@@ -484,7 +484,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
             .find_map(|event| match &event.change {
                 ApplicationChange::WindowOpened { window }
                 | ApplicationChange::PresentationsChanged { window }
-                    if window.target.window == handle.window_id().as_u64().to_string() =>
+                    if window.target.window == crate::app::product::test_session_id(handle) =>
                 {
                     Some(window)
                 }
@@ -507,6 +507,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
     let initial_events = take_events(&host, cx);
     let initial = window_state(&initial_events, window);
     let original = initial.panes[0].tabs[0].clone();
+    let session = shell.downgrade();
     let (source, destination) = cx.read(|cx| {
         let shell = shell.read(cx);
         let workbench = shell.workbench.read(cx);
@@ -516,7 +517,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
                 .capture_tab_relocation(pane.id(), pane.tabs()[0].id(), cx)
                 .unwrap(),
             super::super::relocate::TabRelocationDestination {
-                window,
+                shell: session.clone(),
                 workbench: shell.workbench.downgrade(),
                 tab: TabMoveDestination::At {
                     anchor: workbench
@@ -528,8 +529,8 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
         )
     });
     assert_eq!(
-        cx.update_window(window, |_, window, cx| shell.update(cx, |shell, cx| shell
-            .relocate_tab_to(&source, &destination, window, cx)))
+        cx.update_window(window, |_, _, cx| shell.update(cx, |shell, cx| shell
+            .relocate_tab_to(&source, &destination, cx)))
             .unwrap(),
         CommandOutcome::Completed
     );
@@ -575,7 +576,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
             .find(|tab| tab.document_id() == Some(document))
             .unwrap();
         OpenTarget {
-            window,
+            shell: shell.downgrade(),
             workbench: workbench.downgrade(),
             pane: first_pane.id(),
             tab: tab.id(),
@@ -583,6 +584,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
             presentation: tab.editor().map(Entity::entity_id),
         }
     });
+    let session = shell.downgrade();
     let (source, destination) = cx.read(|cx| {
         let shell = shell.read(cx);
         let workbench = shell.workbench.read(cx);
@@ -592,7 +594,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
                 .capture_tab_relocation(old_target.pane, old_target.tab, cx)
                 .unwrap(),
             super::super::relocate::TabRelocationDestination {
-                window,
+                shell: session.clone(),
                 workbench: shell.workbench.downgrade(),
                 tab: TabMoveDestination::At {
                     anchor: workbench
@@ -605,8 +607,8 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
     });
     take_events(&host, cx);
     assert_eq!(
-        cx.update_window(window, |_, window, cx| shell.update(cx, |shell, cx| shell
-            .relocate_tab_to(&source, &destination, window, cx)))
+        cx.update_window(window, |_, _, cx| shell.update(cx, |shell, cx| shell
+            .relocate_tab_to(&source, &destination, cx)))
             .unwrap(),
         CommandOutcome::Completed
     );
@@ -645,8 +647,8 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
     });
     shell.update(cx, |shell, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-        cx.global::<ApplicationWorkbenches>()
-            .register(&workbench, window);
+        cx.global::<ApplicationSessions>()
+            .register(cx.weak_entity(), &workbench);
         shell.workbench = workbench;
         cx.notify();
     });
@@ -713,11 +715,9 @@ fn deactivation_publishes_null_targets_without_repaint_events(cx: &mut TestAppCo
     let host = cx.update(extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, visual) = cx.add_window_view(|window, cx| {
+    let (shell, visual) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        cx.global::<ApplicationWorkbenches>()
-            .register(&workbench, window.window_handle());
-        ProductShell::new(workbench)
+        ProductShell::new(workbench, cx)
     });
     visual.update(|window, cx| {
         shell.update(cx, |shell, cx| shell.observe_extension_host(window, cx))
@@ -917,7 +917,7 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
         let workbench = &second.read(cx).workbench;
         let pane = workbench.read(cx).focused_pane().unwrap();
         super::super::relocate::TabRelocationDestination {
-            window: second_window,
+            shell: second.downgrade(),
             workbench: workbench.downgrade(),
             tab: crate::app::workbench::TabMoveDestination::At {
                 anchor: workbench
@@ -929,11 +929,9 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
         }
     });
     assert_eq!(
-        cx.update_window(first_window, |_, window, cx| first.update(
-            cx,
-            |shell, cx| shell.relocate_tab_to(&source, &destination, window, cx)
-        ))
-        .unwrap(),
+        cx.update_window(first_window, |_, _, cx| first.update(cx, |shell, cx| shell
+            .relocate_tab_to(&source, &destination, cx)))
+            .unwrap(),
         CommandOutcome::Completed
     );
     let updated = report(&first, first_window, cx);
@@ -1315,7 +1313,7 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     }
     cx.executor()
         .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE);
-    assert_eq!(settled(cx), [window.window_id().as_u64().to_string()]);
+    assert_eq!(settled(cx), [crate::app::product::test_session_id(window)]);
     // An unchanged layout reports nothing, and other windows stay quiet.
     shell.update(cx, |_, cx| cx.notify());
     cx.executor()
@@ -1330,7 +1328,7 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     });
     cx.executor()
         .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE * 2);
-    assert_eq!(settled(cx), [window.window_id().as_u64().to_string()]);
+    assert_eq!(settled(cx), [crate::app::product::test_session_id(window)]);
     let _ = other;
 }
 

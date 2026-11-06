@@ -13,7 +13,7 @@ pub(super) const RESTART_TITLE: &str = "Restart Extension";
 
 impl ProductShell {
     /// List restartable packages in the captured window and restart the selection.
-    pub(crate) fn start_extension_restart(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn start_extension_restart(&mut self, cx: &mut Context<Self>) {
         let Some(report) = super::super::extensions::host::startup_report(cx) else {
             self.show_notice(PromptLevel::Warning, "Extensions are unavailable", None, cx);
             return;

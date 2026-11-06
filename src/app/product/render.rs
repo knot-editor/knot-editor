@@ -256,9 +256,9 @@ impl ProductShell {
                             // Keep the press from starting a tab drag or
                             // activating the tab it closes.
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .on_click(cx.listener(move |this, _, window, cx| {
+                            .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
-                                this.close_tab_from_pointer(pane_id, tab_id, window, cx);
+                                this.close_tab_from_pointer(pane_id, tab_id, cx);
                             })),
                     )
                     .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
@@ -271,8 +271,8 @@ impl ProductShell {
                     }))
                     .on_mouse_up(
                         MouseButton::Middle,
-                        cx.listener(move |this, _, window, cx| {
-                            this.close_tab_from_pointer(pane_id, tab_id, window, cx);
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_tab_from_pointer(pane_id, tab_id, cx);
                         }),
                     )
             })
@@ -315,12 +315,12 @@ impl ProductShell {
 
 impl ProductShell {
     /// The status bar below the workbench, unless the setting hides it.
-    fn render_status_bar(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn render_status_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         use crate::app::{settings, status_bar::ApplicationStatusBar};
         if !settings::boolean(settings::STATUS_BAR_VISIBLE, cx) {
             return None;
         }
-        let window_key = window.window_handle().window_id().as_u64().to_string();
+        let window_key = session_id(cx.entity_id());
         let hidden = settings::strings(settings::STATUS_BAR_HIDDEN_ITEMS, cx);
         let items = cx
             .try_global::<ApplicationStatusBar>()
@@ -429,11 +429,7 @@ impl Render for ProductShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(test)]
         crate::app::work_counts::draw();
-        // The window rendering a session is the one it is attached to.
-        if self.window.is_none() {
-            self.window = Some(window.window_handle());
-            self.follow_focus(cx);
-        }
+        self.attach_window(window, cx);
         self.observe_application_focus(window, cx);
         window.set_rem_size(px(zoom::BASE_REM * zoom::factor(cx)));
         tab_drag::coordinator(cx);
@@ -448,7 +444,7 @@ impl Render for ProductShell {
             .as_ref()
             .map(|palette| palette.picker().clone());
         let transient = self.render_transient();
-        let status_bar = self.render_status_bar(window, cx);
+        let status_bar = self.render_status_bar(cx);
         let dismiss_transient =
             cx.listener(|this: &mut Self, _: &MouseDownEvent, _: &mut Window, cx| {
                 this.finish_transient(TransientOutcome::Dismissed, cx);

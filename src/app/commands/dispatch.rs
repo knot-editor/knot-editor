@@ -34,7 +34,7 @@ impl ProductCommandSource {
 
 #[derive(Clone, PartialEq)]
 pub(crate) struct ProductCommandTarget {
-    pub(crate) window: AnyWindowHandle,
+    /// The session the command runs in.
     pub(crate) shell: WeakEntity<ProductShell>,
     pub(crate) workbench: WeakEntity<crate::app::workbench::Workbench>,
     pub(crate) pane: crate::app::workbench::PaneId,
@@ -48,13 +48,28 @@ pub(crate) struct ProductCommandTarget {
 }
 
 impl ProductCommandTarget {
-    /// Validate the owning window/workbench and exact captured presentation.
+    /// The session while it is open and still shows the captured workbench.
+    pub(crate) fn session(&self, cx: &App) -> Option<Entity<ProductShell>> {
+        let workbench = self.workbench.upgrade()?;
+        crate::app::product::session_is_live(&self.shell, &workbench, cx)
+            .then(|| self.shell.upgrade())
+            .flatten()
+    }
+
+    /// The window the session is shown in.
+    pub(crate) fn window(&self, cx: &App) -> Option<AnyWindowHandle> {
+        self.session(cx)?;
+        crate::app::product::session_window(self.shell.entity_id(), cx)
+    }
+
+    /// Validate the session, its workbench, and the exact captured
+    /// presentation.
     pub(crate) fn validate_tab(&self, cx: &App) -> Result<(), CommandOutcome> {
         let workbench = self
             .workbench
             .upgrade()
             .ok_or(CommandOutcome::InvalidTarget)?;
-        if crate::app::product::workbench_is_live(self.window, &workbench, cx)
+        if crate::app::product::session_is_live(&self.shell, &workbench, cx)
             && workbench
                 .read(cx)
                 .capture_tab_move(self.pane, self.tab)
@@ -107,9 +122,6 @@ impl ProductCommandTarget {
     }
 
     pub(crate) fn validate_view(&self, cx: &App) -> Result<(), CommandOutcome> {
-        if !cx.windows().contains(&self.window) {
-            return Err(CommandOutcome::InvalidTarget);
-        }
         let Some(view) = self.command_view(cx) else {
             return Err(CommandOutcome::InvalidTarget);
         };
@@ -285,29 +297,14 @@ pub(crate) fn dispatch_open_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    if target.shell.upgrade().is_none()
-        || target.workbench.upgrade().is_none()
-        || !cx.windows().contains(&target.window)
-    {
-        return Err(CommandOutcome::InvalidTarget);
-    }
-    let shell = target.shell.clone();
+    let shell = target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
+    target.validate_tab(cx)?;
+    break_captured_history_group(target, cx);
     let target = target.clone();
-    cx.update_window(target.window, move |_, window, cx| {
-        let Some(shell) = shell.upgrade() else {
-            return Err(CommandOutcome::InvalidTarget);
-        };
-        if window.root::<ProductShell>().flatten().as_ref() != Some(&shell) {
-            return Err(CommandOutcome::InvalidTarget);
-        }
-        target.validate_tab(cx)?;
-        break_captured_history_group(&target, cx);
-        shell.update(cx, |shell, cx| {
-            shell.start_open_dialog(target, completion, window, cx);
-        });
-        Ok(())
-    })
-    .unwrap_or(Err(CommandOutcome::InvalidTarget))
+    shell.update(cx, |shell, cx| {
+        shell.start_open_dialog(target, completion, cx)
+    });
+    Ok(())
 }
 
 pub(crate) fn dispatch_save_to_captured_target(
@@ -316,29 +313,14 @@ pub(crate) fn dispatch_save_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    if target.shell.upgrade().is_none()
-        || target.workbench.upgrade().is_none()
-        || !cx.windows().contains(&target.window)
-    {
-        return Err(CommandOutcome::InvalidTarget);
-    }
-    let shell = target.shell.clone();
+    let shell = target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
+    target.document_id(cx)?;
+    break_captured_history_group(target, cx);
     let target = target.clone();
-    cx.update_window(target.window, move |_, window, cx| {
-        let Some(shell) = shell.upgrade() else {
-            return Err(CommandOutcome::InvalidTarget);
-        };
-        if window.root::<ProductShell>().flatten().as_ref() != Some(&shell) {
-            return Err(CommandOutcome::InvalidTarget);
-        }
-        target.document_id(cx)?;
-        break_captured_history_group(&target, cx);
-        shell.update(cx, |shell, cx| {
-            shell.start_save_command(save_as, target, completion, cx);
-        });
-        Ok(())
-    })
-    .unwrap_or(Err(CommandOutcome::InvalidTarget))
+    shell.update(cx, |shell, cx| {
+        shell.start_save_command(save_as, target, completion, cx);
+    });
+    Ok(())
 }
 
 pub(crate) fn dispatch_close_to_captured_target(
@@ -347,27 +329,10 @@ pub(crate) fn dispatch_close_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    if target.shell.upgrade().is_none()
-        || target.workbench.upgrade().is_none()
-        || !cx.windows().contains(&target.window)
-    {
-        return Err(CommandOutcome::InvalidTarget);
-    }
-    let Some(shell) = target.shell.upgrade() else {
-        return Err(CommandOutcome::InvalidTarget);
-    };
-    let target = target.clone();
-    let valid = cx
-        .update_window(target.window, |_, window, _| {
-            window.root::<ProductShell>().flatten().as_ref() == Some(&shell)
-        })
-        .unwrap_or(false);
-    if !valid {
-        return Err(CommandOutcome::InvalidTarget);
-    }
+    target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
     target.validate_tab(cx)?;
-    break_captured_history_group(&target, cx);
-    ProductShell::begin_protected_close(kind, target, Some(completion), cx);
+    break_captured_history_group(target, cx);
+    ProductShell::begin_protected_close(kind, target.clone(), Some(completion), cx);
     Ok(())
 }
 
@@ -377,95 +342,79 @@ pub(crate) fn dispatch_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> CommandClaim {
-    if target.shell.upgrade().is_none()
-        || target.workbench.upgrade().is_none()
-        || !cx.windows().contains(&target.window)
-    {
+    if target.session(cx).is_none() {
         return CommandClaim::Finished(CommandOutcome::InvalidTarget);
     }
-    let shell = target.shell.clone();
-    let target = target.clone();
-    cx.update_window(target.window, move |_, window, cx| {
-        let Some(shell) = shell.upgrade() else {
-            return CommandClaim::Finished(CommandOutcome::InvalidTarget);
+    if let Err(outcome) = target.validate_tab(cx) {
+        return CommandClaim::Finished(outcome);
+    }
+    if let Err(outcome) = target.validate_view(cx) {
+        return CommandClaim::Finished(outcome);
+    }
+    if let Some(view) = target.command_view(cx)
+        && target.focused
+    {
+        let result = match view {
+            CommandView::Workspace(_) => crate::app::commands::declarations::registry().dispatch(
+                crate::app::commands::declarations::Participant::WorkspaceTree,
+                command,
+                target,
+                completion.clone(),
+                cx,
+            ),
+            CommandView::Extension(view) => view.handle_command(command, cx),
+            CommandView::Editor(_) => crate::app::commands::declarations::registry().dispatch(
+                crate::app::commands::declarations::Participant::Editor,
+                command,
+                target,
+                completion.clone(),
+                cx,
+            ),
+            CommandView::Terminal(_) => crate::app::commands::declarations::registry().dispatch(
+                crate::app::commands::declarations::Participant::Terminal,
+                command,
+                target,
+                completion.clone(),
+                cx,
+            ),
         };
-        if window.root::<ProductShell>().flatten().as_ref() != Some(&shell) {
-            return CommandClaim::Finished(CommandOutcome::InvalidTarget);
-        }
-        if let Err(outcome) = target.validate_tab(cx) {
-            return CommandClaim::Finished(outcome);
-        }
-        if let Err(outcome) = target.validate_view(cx) {
-            return CommandClaim::Finished(outcome);
-        }
-        if let Some(view) = target.command_view(cx)
-            && target.focused
-        {
-            let result = match view {
-                CommandView::Workspace(_) => crate::app::commands::declarations::registry()
-                    .dispatch(
-                        crate::app::commands::declarations::Participant::WorkspaceTree,
-                        command,
-                        &target,
-                        completion.clone(),
-                        cx,
-                    ),
-                CommandView::Extension(view) => view.handle_command(command, cx),
-                CommandView::Editor(_) => crate::app::commands::declarations::registry().dispatch(
-                    crate::app::commands::declarations::Participant::Editor,
-                    command,
-                    &target,
-                    completion.clone(),
-                    cx,
-                ),
-                CommandView::Terminal(_) => crate::app::commands::declarations::registry()
-                    .dispatch(
-                        crate::app::commands::declarations::Participant::Terminal,
-                        command,
-                        &target,
-                        completion.clone(),
-                        cx,
-                    ),
-            };
-            if !matches!(result, CommandClaim::Declined) {
-                return result;
-            }
-        }
-        let result = crate::app::commands::declarations::registry().dispatch(
-            crate::app::commands::declarations::Participant::Workbench,
-            command,
-            &target,
-            completion.clone(),
-            cx,
-        );
         if !matches!(result, CommandClaim::Declined) {
             return result;
         }
-        let result = crate::app::commands::declarations::registry().dispatch(
-            crate::app::commands::declarations::Participant::Application,
-            command,
-            &target,
-            completion,
-            cx,
-        );
-        if !matches!(result, CommandClaim::Declined) {
-            return result;
-        }
-        let catalog = cx
-            .global::<ApplicationProductCommands>()
-            .0
-            .read(cx)
-            .catalog();
-        let handler = match catalog.borrow().resolve(command.name.as_ref()) {
-            Ok(super::catalog::CommandTargetKind::Extension(handler)) => handler,
-            _ => return CommandClaim::Declined,
-        };
-        CommandClaim::Extension {
-            handler,
-            view: None,
-        }
-    })
-    .unwrap_or(CommandClaim::Finished(CommandOutcome::InvalidTarget))
+    }
+    let result = crate::app::commands::declarations::registry().dispatch(
+        crate::app::commands::declarations::Participant::Workbench,
+        command,
+        target,
+        completion.clone(),
+        cx,
+    );
+    if !matches!(result, CommandClaim::Declined) {
+        return result;
+    }
+    let result = crate::app::commands::declarations::registry().dispatch(
+        crate::app::commands::declarations::Participant::Application,
+        command,
+        target,
+        completion,
+        cx,
+    );
+    if !matches!(result, CommandClaim::Declined) {
+        return result;
+    }
+    let catalog = cx
+        .global::<ApplicationProductCommands>()
+        .0
+        .read(cx)
+        .catalog();
+    let handler = match catalog.borrow().resolve(command.name.as_ref()) {
+        Ok(super::catalog::CommandTargetKind::Extension(handler)) => handler,
+        _ => return CommandClaim::Declined,
+    };
+    CommandClaim::Extension {
+        handler,
+        view: None,
+    }
 }
 
 #[cfg(test)]

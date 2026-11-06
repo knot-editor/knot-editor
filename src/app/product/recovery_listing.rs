@@ -16,16 +16,11 @@ use crate::host::protocol::PickerItem;
 pub(super) const LISTING_TITLE: &str = "Recover Unsaved Documents";
 
 impl ProductShell {
-    /// List recoverable snapshots in the captured window and act on the selection.
-    pub(crate) fn start_recovery_listing(
-        &mut self,
-        target: &ProductCommandTarget,
-        cx: &mut Context<Self>,
-    ) {
+    /// List recoverable snapshots in this session and act on the selection.
+    pub(crate) fn start_recovery_listing(&mut self, cx: &mut Context<Self>) {
         if self.transient.is_some() {
             return;
         }
-        let window = target.window;
         let listing = crate::app::recovery::recoverable(cx);
         let providers = Self::filesystems(cx);
         let task = cx.spawn(async move |this, cx| {
@@ -64,7 +59,7 @@ impl ProductShell {
                     description: Some(describe_snapshot(snapshot, now)),
                 })
                 .collect();
-            let Some(Ok(receiver)) = Self::in_window(&this, window, cx, |shell, _, cx| {
+            let Ok(Ok(receiver)) = this.update(cx, |shell, cx| {
                 shell.begin_owned_picker(None, LISTING_TITLE.into(), items, None, cx)
             }) else {
                 return;
@@ -77,12 +72,12 @@ impl ProductShell {
                 return;
             };
             let title = snapshot.title.clone();
-            let Some(answer) = Self::in_window(&this, window, cx, |_, window, cx| {
-                window.prompt(
+            let Ok(answer) = this.update(cx, |shell, cx| {
+                shell.prompt(
                     PromptLevel::Info,
-                    &format!("Recover “{title}”?"),
-                    Some("Restore opens the recovered text as an unsaved document. Discard permanently deletes it."),
-                    &[
+                    format!("Recover “{title}”?"),
+                    Some("Restore opens the recovered text as an unsaved document. Discard permanently deletes it.".into()),
+                    vec![
                         PromptButton::new("Restore"),
                         PromptButton::new("Discard"),
                         PromptButton::cancel("Cancel"),
@@ -101,7 +96,7 @@ impl ProductShell {
                         return;
                     };
                     let outcome = restore.await;
-                    Self::in_window(&this, window, cx, |shell, _, cx| {
+                    let _ = this.update(cx, |shell, cx| {
                         shell.present_recovered(outcome, &title, cx)
                     });
                 }
@@ -160,15 +155,12 @@ impl ProductShell {
         document: DocumentId,
         cx: &mut Context<Self>,
     ) {
-        let Some(window) = self.window else {
-            return;
-        };
         let Some(pane) = self.workbench.read(cx).focused_pane() else {
             return;
         };
         let tab = pane.active_tab();
         let target = OpenTarget {
-            window,
+            shell: cx.weak_entity(),
             workbench: self.workbench.downgrade(),
             pane: pane.id(),
             tab: tab.id(),
@@ -186,19 +178,6 @@ impl ProductShell {
         cx: &mut AsyncApp,
     ) {
         let _ = this.update(cx, |shell, cx| shell.show_notice(level, title, detail, cx));
-    }
-
-    pub(super) fn in_window<R>(
-        this: &WeakEntity<Self>,
-        window: AnyWindowHandle,
-        cx: &mut AsyncApp,
-        access: impl FnOnce(&mut Self, &mut Window, &mut Context<Self>) -> R,
-    ) -> Option<R> {
-        let shell = this.upgrade()?;
-        cx.update_window(window, |_, window, cx| {
-            shell.update(cx, |shell, cx| access(shell, window, cx))
-        })
-        .ok()
     }
 }
 

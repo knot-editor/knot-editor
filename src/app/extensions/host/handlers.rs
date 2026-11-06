@@ -1233,7 +1233,7 @@ pub(crate) async fn show_picker(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, window, cx| shell.begin_picker(owner, title, items, None, window, cx),
+            move |shell, cx| shell.begin_picker(owner, title, items, None, cx),
             cx,
         )
     })??;
@@ -1286,9 +1286,7 @@ pub(crate) async fn begin_picker(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, window, cx| {
-                shell.begin_picker(owner, title, items, Some(sender), window, cx)
-            },
+            move |shell, cx| shell.begin_picker(owner, title, items, Some(sender), cx),
             cx,
         )
     })??;
@@ -1400,9 +1398,7 @@ pub(crate) async fn show_input(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, _, cx| {
-                shell.begin_input(owner, title, value.unwrap_or_default(), None, cx)
-            },
+            move |shell, cx| shell.begin_input(owner, title, value.unwrap_or_default(), None, cx),
             cx,
         )
     })??;
@@ -1431,7 +1427,7 @@ pub(crate) async fn begin_input(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, _, cx| {
+            move |shell, cx| {
                 shell.begin_input(owner, title, value.unwrap_or_default(), Some(sender), cx)
             },
             cx,
@@ -1512,13 +1508,12 @@ pub(crate) async fn show_confirmation(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, window, cx| {
+            move |shell, cx| {
                 shell.begin_confirmation(
                     owner,
                     PromptText { title, message },
                     confirm_label.unwrap_or_else(|| "OK".to_owned()),
                     cancel_label.unwrap_or_else(|| "Cancel".to_owned()),
-                    window,
                     cx,
                 )
             },
@@ -1548,9 +1543,7 @@ pub(crate) async fn show_message(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, window, cx| {
-                shell.begin_message(owner, PromptText { title, message }, window, cx)
-            },
+            move |shell, cx| shell.begin_message(owner, PromptText { title, message }, cx),
             cx,
         )
     })??;
@@ -1584,7 +1577,7 @@ pub(crate) async fn pick_folder(
         host.with_transient_window(
             &request,
             arguments.target.as_deref(),
-            move |shell, _, cx| shell.begin_folder_picker(Some(owner), cx),
+            move |shell, cx| shell.begin_folder_picker(Some(owner), cx),
             cx,
         )
     })??;

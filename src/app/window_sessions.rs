@@ -11,7 +11,7 @@
 
 use std::{cell::Cell, time::Duration};
 
-use gpui::{App, AppContext as _, Global, Subscription, Task};
+use gpui::{App, Global, Subscription, Task};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -114,22 +114,20 @@ pub(crate) fn record(cx: &mut App) {
     {
         return;
     }
-    let active = cx.active_window();
+    let active = crate::app::product::active_session(cx).map(|shell| shell.entity_id());
     let mut captured = Vec::new();
-    for handle in cx.windows() {
-        if handle.downcast::<ProductShell>().is_none() {
-            continue;
-        }
-        let window = cx.update_window(handle, |root, window, cx| {
-            let shell = root.downcast::<ProductShell>().unwrap();
-            let shell = shell.read(cx);
-            let recorded = RecordedWindow {
-                roots: shell.root_uris().iter().map(ToString::to_string).collect(),
-                layout: shell.capture_layout(window, cx),
-            };
-            (shell.creation_order(), active == Some(handle), recorded)
-        });
-        captured.extend(window);
+    for shell in crate::app::product::sessions(cx) {
+        let layout = ProductShell::capture_session_layout(&shell, cx);
+        let state = shell.read(cx);
+        let recorded = RecordedWindow {
+            roots: state.root_uris().iter().map(ToString::to_string).collect(),
+            layout,
+        };
+        captured.push((
+            state.creation_order(),
+            active == Some(shell.entity_id()),
+            recorded,
+        ));
     }
     captured.sort_by_key(|(order, _, _)| *order);
     let active_index = captured.iter().position(|(_, active, _)| *active);

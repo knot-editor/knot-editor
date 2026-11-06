@@ -285,7 +285,7 @@ await commands.register("api.nontext", async (context) => {
                         .model()
                         .clone()
                 });
-                let (destination_shell, destination_window) =
+                let (destination_shell, _) =
                     product_window(destination_document, destination_model, cx);
                 let source = cx.read(|cx| {
                     shell
@@ -297,7 +297,7 @@ await commands.register("api.nontext", async (context) => {
                     let workbench = &destination_shell.read(cx).workbench;
                     let pane = workbench.read(cx).focused_pane().unwrap();
                     super::super::relocate::TabRelocationDestination {
-                        window: destination_window,
+                        shell: destination_shell.downgrade(),
                         workbench: workbench.downgrade(),
                         tab: crate::app::workbench::TabMoveDestination::At {
                             anchor: workbench
@@ -309,9 +309,9 @@ await commands.register("api.nontext", async (context) => {
                     }
                 });
                 let outcome = cx
-                    .update_window(window, |_, window, cx| {
+                    .update_window(window, |_, _, cx| {
                         shell.update(cx, |shell, cx| {
-                            shell.relocate_tab_to(&source, &destination, window, cx)
+                            shell.relocate_tab_to(&source, &destination, cx)
                         })
                     })
                     .unwrap();
