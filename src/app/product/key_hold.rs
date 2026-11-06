@@ -1,18 +1,21 @@
 //! Ordered key delivery: while an extension command a key invoked is
-//! unfinished, later key-downs in its window and committed text in its
+//! unfinished, later keys in the session and committed text in the held
 //! editor wait, then replay in order, so each key sees the state the
 //! previous one committed. Native commands need no hold because they run in
-//! the dispatch turn.
+//! the dispatch turn. The session owns the hold, so it works with or
+//! without a window.
 //!
 //! The hold ends when the command completes, when a key arrives after focus
 //! left the held view (a command awaiting a picker), or after a timeout, so
 //! a stuck extension never keeps the keyboard.
 
+use std::collections::VecDeque;
+
 use super::*;
-use crate::app::commands::key_hold::{HeldInput, HeldInputQueue, TextCommandRouter};
-use crate::app::editor::EditorView;
+use crate::app::commands::key_hold::{HeldInput, TypedTextRouter};
+use crate::app::editor::Editor;
 use crate::host::protocol::CommandOutcome;
-use crate::host::protocol::{Command, CommandArgumentValue, CommandName};
+use crate::host::protocol::{Command, CommandArgumentValue};
 
 /// How long a command may hold later input before it is released anyway.
 pub(super) const KEY_HOLD_TIMEOUT: Duration = Duration::from_secs(1);
@@ -20,42 +23,26 @@ pub(super) const KEY_HOLD_TIMEOUT: Duration = Duration::from_secs(1);
 pub(super) struct KeyHold {
     generation: u64,
     focus: FocusTarget,
-    queue: HeldInputQueue,
-    editor: Option<WeakEntity<EditorView>>,
+    queue: VecDeque<HeldInput>,
+    /// The editor whose committed text waits too.
+    editor: Option<WeakEntity<Editor>>,
 }
 
 impl ProductShell {
-    /// Hold the focused view's later input until `completion` settles.
+    /// Hold the session's later input until `completion` settles.
     pub(super) fn hold_keys_until(
         &mut self,
         completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
-        editor: Option<Entity<EditorView>>,
-        window: &mut Window,
+        editor: Option<Entity<Editor>>,
         cx: &mut Context<Self>,
     ) {
-        let queue = HeldInputQueue::default();
-        let Some(generation) =
-            self.start_key_hold(editor.as_ref().map(Entity::downgrade), queue.clone(), cx)
-        else {
-            return;
-        };
-        if let Some(editor) = &editor {
-            editor.update(cx, |view, cx| {
-                view.editor()
-                    .update(cx, |editor, _| editor.set_held_input(Some(queue)))
-            });
+        if let Some(generation) = self.start_key_hold(editor.as_ref().map(Entity::downgrade), cx) {
+            self.release_key_hold_after(generation, completion, cx);
         }
-        self.release_key_hold_after(generation, completion, window, cx);
     }
 
-    /// Begin holding input into `queue`; the caller attaches the held editor
-    /// to the same queue. `None` when a hold is already active.
-    fn start_key_hold(
-        &mut self,
-        editor: Option<WeakEntity<EditorView>>,
-        queue: HeldInputQueue,
-        cx: &App,
-    ) -> Option<u64> {
+    /// Begin holding input; `None` when a hold is already active.
+    fn start_key_hold(&mut self, editor: Option<WeakEntity<Editor>>, cx: &App) -> Option<u64> {
         if self.key_hold.is_some() {
             return None;
         }
@@ -64,7 +51,7 @@ impl ProductShell {
         self.key_hold = Some(KeyHold {
             generation: self.key_hold_generation,
             focus,
-            queue,
+            queue: VecDeque::new(),
             editor,
         });
         Some(self.key_hold_generation)
@@ -76,111 +63,134 @@ impl ProductShell {
         &mut self,
         generation: u64,
         completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        cx.spawn_in(window, async move |this, cx| {
+        cx.spawn(async move |this, cx| {
             let _ = completion.await;
-            let _ = cx.update(|window, cx| release_key_hold(&this, generation, window, cx));
+            let _ = cx.update(|cx| release_key_hold(&this, generation, cx));
         })
         .detach();
-        cx.spawn_in(window, async move |this, cx| {
+        cx.spawn(async move |this, cx| {
             cx.background_executor().timer(KEY_HOLD_TIMEOUT).await;
-            let _ = cx.update(|window, cx| release_key_hold(&this, generation, window, cx));
+            let _ = cx.update(|cx| release_key_hold(&this, generation, cx));
         })
         .detach();
     }
 
+    /// Queue a key while the session holds its input; true when it did.
+    /// A key arriving after focus left the held view releases the hold.
+    pub(super) fn hold_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let focused = self.focus_target(cx);
+        let Some(hold) = self.key_hold.as_mut() else {
+            return false;
+        };
+        hold.queue.push_back(HeldInput::Key(keystroke.clone()));
+        if focused != hold.focus {
+            let generation = hold.generation;
+            let shell = cx.weak_entity();
+            cx.defer(move |cx| release_key_hold(&shell, generation, cx));
+        }
+        true
+    }
+
+    /// Take text committed into `editor` when the session holds it behind a
+    /// command or a text binding routes it to one; false when the editor
+    /// should insert it. A composition commits in place, since its preedit
+    /// is already in the text.
+    pub(super) fn take_typed_text(
+        &mut self,
+        editor: &Entity<Editor>,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if editor.read(cx).is_composing() {
+            return false;
+        }
+        if let Some(hold) = self.key_hold.as_mut() {
+            if hold.editor.as_ref() != Some(&editor.downgrade()) {
+                return false;
+            }
+            hold.queue.push_back(HeldInput::Text(text.to_owned()));
+            return true;
+        }
+        let Some(command) = editor.read(cx).text_command(cx) else {
+            return false;
+        };
+        let Some(generation) = self.start_key_hold(Some(editor.downgrade()), cx) else {
+            return false;
+        };
+        // The command is dispatched once the caller is done with the editor,
+        // since capturing a target reads it; the hold already queues input.
+        let command = Command {
+            name: command,
+            arguments: CommandArgumentValue::Object(
+                [(
+                    "text".to_owned(),
+                    CommandArgumentValue::String(text.to_owned()),
+                )]
+                .into(),
+            ),
+        };
+        let shell = cx.weak_entity();
+        cx.defer(move |cx| {
+            let Some(entity) = shell.upgrade() else {
+                return;
+            };
+            let dispatched = entity.update(cx, |this, cx| {
+                let target = this.capture_command_target(cx)?;
+                let execution = ProductShell::command_dispatcher(cx)
+                    .update(cx, |dispatcher, cx| {
+                        dispatcher.dispatch(command, target, cx)
+                    });
+                this.release_key_hold_after(generation, execution.completion, cx);
+                Some(())
+            });
+            if dispatched.is_none() {
+                release_key_hold(&shell, generation, cx);
+            }
+        });
+        true
+    }
+
+    /// Type `text` into `editor` as committed input, unless the session
+    /// takes it.
+    pub(super) fn type_into_editor(
+        &mut self,
+        editor: &Entity<Editor>,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.take_typed_text(editor, text, cx) {
+            editor.update(cx, |editor, cx| editor.type_text(None, text, cx));
+        }
+    }
+
     #[cfg(test)]
-    pub(super) fn holds_keys(&self) -> bool {
+    pub(crate) fn holds_keys(&self) -> bool {
         self.key_hold.is_some()
     }
 }
 
-/// Send text an editor's text binding claims to its command as
-/// `{ text }`. The hold starts now, while the editor is still handling the
-/// input, so later keys and text wait; the command is dispatched once the
-/// editor is free, since capturing a target reads it.
-fn route_text_command(
-    editor: WeakEntity<EditorView>,
-    command: CommandName,
-    text: String,
-    queue: HeldInputQueue,
+/// Offer text committed into an editor of a product window to its session.
+fn route_typed_text(
+    editor: &Entity<Editor>,
+    text: &str,
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
     let Some(Some(shell)) = window.root::<ProductShell>() else {
         return false;
     };
-    let Some(generation) = shell.update(cx, |shell, cx| {
-        shell.start_key_hold(Some(editor), queue, cx)
-    }) else {
-        return false;
-    };
-    let shell = shell.downgrade();
-    window.defer(cx, move |window, cx| {
-        let Some(shell_entity) = shell.upgrade() else {
-            return;
-        };
-        let dispatched = shell_entity.update(cx, |this, cx| {
-            let target = this.capture_command_target(cx)?;
-            let command = Command {
-                name: command,
-                arguments: CommandArgumentValue::Object(
-                    [("text".to_owned(), CommandArgumentValue::String(text))].into(),
-                ),
-            };
-            let execution = ProductShell::command_dispatcher(cx).update(cx, |dispatcher, cx| {
-                dispatcher.dispatch(command, target, cx)
-            });
-            this.release_key_hold_after(generation, execution.completion, window, cx);
-            Some(())
-        });
-        if dispatched.is_none() {
-            release_key_hold(&shell, generation, window, cx);
-        }
-    });
-    true
+    shell.update(cx, |shell, cx| shell.take_typed_text(editor, text, cx))
 }
 
 pub(super) fn install_text_router(cx: &mut App) {
-    cx.set_global(TextCommandRouter(route_text_command));
-}
-
-/// Queue a key-down when the window holds its input; true when it did.
-/// The key routing interceptor asks first, so a held key is neither
-/// matched nor delivered.
-pub(super) fn hold_key(
-    shell: &Entity<ProductShell>,
-    event: &gpui::KeystrokeEvent,
-    window: &mut Window,
-    cx: &mut App,
-) -> bool {
-    let held = shell.update(cx, |shell, cx| {
-        let hold = shell.key_hold.as_ref()?;
-        hold.queue.push(HeldInput::Key(event.keystroke.clone()));
-        Some((hold.generation, shell.focus_target(cx) == hold.focus))
-    });
-    let Some((generation, focused)) = held else {
-        return false;
-    };
-    if !focused {
-        let shell = shell.downgrade();
-        window.defer(cx, move |window, cx| {
-            release_key_hold(&shell, generation, window, cx)
-        });
-    }
-    true
+    cx.set_global(TypedTextRouter(route_typed_text));
 }
 
 /// End the hold `generation` and replay its input. A replayed key that
 /// starts another extension command holds whatever is still queued.
-fn release_key_hold(
-    shell: &WeakEntity<ProductShell>,
-    generation: u64,
-    window: &mut Window,
-    cx: &mut App,
-) {
+fn release_key_hold(shell: &WeakEntity<ProductShell>, generation: u64, cx: &mut App) {
     let Some(shell) = shell.upgrade() else {
         return;
     };
@@ -193,42 +203,41 @@ fn release_key_hold(
         return;
     };
     let editor = hold.editor.as_ref().and_then(WeakEntity::upgrade);
-    if let Some(editor) = &editor {
-        editor.update(cx, |view, cx| {
-            view.editor()
-                .update(cx, |editor, _| editor.set_held_input(None))
-        });
-    }
-    replay(&shell, editor, hold.queue.take(), window, cx);
+    replay(&shell, editor, hold.queue, cx);
 }
 
 /// Replay the first of `pending`, then the rest once the effects it started
-/// have run. Commands a key dispatches run deferred, so replaying every input
-/// in one turn would insert later text before an earlier key's command. A
-/// replayed key that starts another hold takes whatever is still queued.
+/// have run. A replayed key that starts another hold takes whatever is
+/// still queued. Keys go through the session's window when it has one, so
+/// they reach its text input as typed keys do.
 fn replay(
     shell: &Entity<ProductShell>,
-    editor: Option<Entity<EditorView>>,
-    mut pending: std::collections::VecDeque<HeldInput>,
-    window: &mut Window,
+    editor: Option<Entity<Editor>>,
+    mut pending: VecDeque<HeldInput>,
     cx: &mut App,
 ) {
-    if let Some(next) = &shell.read(cx).key_hold {
-        next.queue.prepend(pending);
+    let held = shell.update(cx, |shell, _| {
+        let next = shell.key_hold.as_mut()?;
+        pending.append(&mut next.queue);
+        next.queue = std::mem::take(&mut pending);
+        Some(())
+    });
+    if held.is_some() {
         return;
     }
     let Some(input) = pending.pop_front() else {
         return;
     };
     match input {
-        HeldInput::Key(keystroke) => {
-            window.dispatch_keystroke(keystroke, cx);
-        }
+        HeldInput::Key(keystroke) => match shell.read(cx).window {
+            Some(window) => {
+                let _ = window.update(cx, |_, window, cx| window.dispatch_keystroke(keystroke, cx));
+            }
+            None => shell.update(cx, |shell, cx| shell.press_key(keystroke, cx)),
+        },
         HeldInput::Text(text) => {
             if let Some(editor) = &editor {
-                editor.update(cx, |editor, cx| {
-                    editor.replace_text_in_range(None, &text, window, cx)
-                });
+                shell.update(cx, |shell, cx| shell.type_into_editor(editor, &text, cx));
             }
         }
     }
@@ -236,7 +245,5 @@ fn replay(
         return;
     }
     let shell = shell.clone();
-    window.defer(cx, move |window, cx| {
-        replay(&shell, editor, pending, window, cx)
-    });
+    cx.defer(move |cx| replay(&shell, editor, pending, cx));
 }

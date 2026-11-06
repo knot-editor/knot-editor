@@ -1,7 +1,7 @@
 //! Key matching for a product session. A window's key-downs pass through one
-//! interceptor, which first holds them behind an unfinished key-invoked
-//! extension command and otherwise hands them to the session; a session
-//! without a window takes keys and text directly. The session routes a key
+//! interceptor that hands them to the session; a session without a window
+//! takes keys and text directly. The session first holds a key behind an
+//! unfinished key-invoked extension command, and otherwise routes it
 //! through its `KeyRouter` against the focused view's kind and live key
 //! contexts while the workbench has focus. A key the keymap does not claim
 //! goes to the surface with Knot-side focus, and one that surface ignores
@@ -48,18 +48,9 @@ pub(in crate::app) fn intercept_keys(cx: &mut App) {
         let Some(Some(shell)) = window.root::<ProductShell>() else {
             return;
         };
-        if super::key_hold::hold_key(&shell, event, window, cx) {
-            cx.stop_propagation();
-            return;
-        }
         // An unhandled key propagates to the window's text input.
         let handled = shell.update(cx, |shell, cx| {
-            if !std::mem::take(&mut shell.keys.native)
-                && shell.route_key(event.keystroke.clone(), Some(window), cx)
-            {
-                return true;
-            }
-            shell.deliver_key(&event.keystroke, cx)
+            shell.key_down(event.keystroke.clone(), Some(window), cx)
         });
         if handled {
             cx.stop_propagation();
@@ -69,13 +60,30 @@ pub(in crate::app) fn intercept_keys(cx: &mut App) {
 }
 
 impl ProductShell {
-    /// Press a key in a session without a window: it is routed, and when
-    /// unclaimed delivered to the focused surface or typed.
-    #[cfg(test)]
+    /// Take a key-down: held behind a running extension command, routed
+    /// through the keymap, or given to the surface with Knot-side focus.
+    /// False when nothing took it, so it becomes typed text.
+    fn key_down(
+        &mut self,
+        keystroke: Keystroke,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.hold_key(&keystroke, cx) {
+            return true;
+        }
+        if !std::mem::take(&mut self.keys.native) && self.route_key(keystroke.clone(), window, cx) {
+            return true;
+        }
+        self.deliver_key(&keystroke, cx)
+    }
+
+    /// Press a key in a session without a window, as `key_down` takes it,
+    /// typing its text when nothing does.
     pub(crate) fn press_key(&mut self, keystroke: Keystroke, cx: &mut Context<Self>) {
         let keystroke = keystroke.with_simulated_ime();
-        if !self.route_key(keystroke.clone(), None, cx) {
-            self.deliver_unclaimed(&keystroke, cx);
+        if !self.key_down(keystroke.clone(), None, cx) {
+            self.type_key_text(&keystroke, cx);
         }
     }
 
@@ -85,7 +93,7 @@ impl ProductShell {
             Focus::Workbench => match self.focused_command_view(cx) {
                 Some(CommandView::Editor(view)) => {
                     let editor = view.read(cx).editor().clone();
-                    editor.update(cx, |editor, cx| editor.type_text(None, text, cx));
+                    self.type_into_editor(&editor, text, cx);
                 }
                 Some(CommandView::Terminal(view)) => {
                     view.update(cx, |view, cx| view.insert_text(text, cx));
@@ -164,9 +172,13 @@ impl ProductShell {
     /// Deliver an unclaimed key without a window: to the focused surface,
     /// otherwise as the text it types, as a window's text input would.
     fn deliver_unclaimed(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
-        if self.deliver_key(keystroke, cx) {
-            return;
+        if !self.deliver_key(keystroke, cx) {
+            self.type_key_text(keystroke, cx);
         }
+    }
+
+    /// Type the text a key produces, when it produces any.
+    fn type_key_text(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
         let modifiers = keystroke.modifiers;
         if let Some(text) = &keystroke.key_char
             && !modifiers.platform
@@ -185,8 +197,7 @@ impl ProductShell {
     }
 
     /// Route a typed key while the workbench has focus; false when the
-    /// keymap leaves it unclaimed. Without a window, extension commands do
-    /// not hold later input.
+    /// keymap leaves it unclaimed.
     fn route_key(
         &mut self,
         keystroke: Keystroke,
@@ -217,9 +228,7 @@ impl ProductShell {
         match actions.as_slice() {
             [] => true,
             [KeyAction::Native(native)] if !was_pending && *native == keystroke => false,
-            [KeyAction::Run(command)] if !was_pending => {
-                self.run_key_command(command.clone(), window, cx)
-            }
+            [KeyAction::Run(command)] if !was_pending => self.run_key_command(command.clone(), cx),
             _ => {
                 self.perform_key_actions(actions.into(), window, cx);
                 true
@@ -261,12 +270,7 @@ impl ProductShell {
     /// Run a key's command in the focused view. Later input waits for an
     /// extension command; native ones run in this turn. False when nothing
     /// can be targeted.
-    fn run_key_command(
-        &mut self,
-        command: Command,
-        window: Option<&mut Window>,
-        cx: &mut Context<Self>,
-    ) -> bool {
+    fn run_key_command(&mut self, command: Command, cx: &mut Context<Self>) -> bool {
         let Some(target) = self.capture_command_target(cx) else {
             return false;
         };
@@ -283,11 +287,9 @@ impl ProductShell {
         let execution = dispatcher.update(cx, |dispatcher, cx| {
             dispatcher.dispatch(command, target, cx)
         });
-        if let Some(window) = window
-            && !native
-            && self.key_hold.is_none()
-        {
-            self.hold_keys_until(execution.completion, editor, window, cx);
+        if !native && self.key_hold.is_none() {
+            let editor = editor.map(|view| view.read(cx).editor().clone());
+            self.hold_keys_until(execution.completion, editor, cx);
         }
         true
     }
@@ -304,7 +306,7 @@ impl ProductShell {
         while let Some(action) = actions.pop_front() {
             match action {
                 KeyAction::Run(command) => {
-                    self.run_key_command(command, window.as_deref_mut(), cx);
+                    self.run_key_command(command, cx);
                 }
                 KeyAction::Native(keystroke) => {
                     let Some(window) = window.as_deref_mut() else {

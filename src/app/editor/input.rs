@@ -305,9 +305,9 @@ impl EntityInputHandler for EditorView {
         self.editor.update(cx, |editor, cx| editor.unmark_text(cx));
     }
 
-    /// The `insertText:` callback, which commits text into the document,
-    /// unless the editor's input is held behind a command or a text binding
-    /// routes it to one.
+    /// The `insertText:` callback, which commits text into the document
+    /// unless the session takes it, to hold behind a command or to route to
+    /// a text binding.
     fn replace_text_in_range(
         &mut self,
         range: Option<Range<usize>>,
@@ -315,28 +315,12 @@ impl EntityInputHandler for EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let editor = self.editor.read(cx);
-        // A composition commits in place: its preedit is already in the text.
-        if editor.marked_range_utf16.is_none() {
-            if let Some(queue) = &editor.held_input {
-                queue.push(crate::app::commands::key_hold::HeldInput::Text(
-                    text.to_owned(),
-                ));
-                return;
-            }
-            if let Some(command) = editor.text_command(cx)
-                && let Some(route) = cx
-                    .try_global::<crate::app::commands::key_hold::TextCommandRouter>()
-                    .map(|router| router.0)
-            {
-                let queue = crate::app::commands::key_hold::HeldInputQueue::default();
-                let view = cx.entity().downgrade();
-                if route(view, command, text.to_owned(), queue.clone(), window, cx) {
-                    self.editor
-                        .update(cx, |editor, _| editor.set_held_input(Some(queue)));
-                    return;
-                }
-            }
+        if let Some(route) = cx
+            .try_global::<crate::app::commands::key_hold::TypedTextRouter>()
+            .map(|router| router.0)
+            && route(&self.editor, text, window, cx)
+        {
+            return;
         }
         self.editor
             .update(cx, |editor, cx| editor.type_text(range, text, cx));

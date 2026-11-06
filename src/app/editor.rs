@@ -274,9 +274,6 @@ pub struct Editor {
     /// Caret shapes lifecycles have set; the latest one wins and each belongs
     /// to its lifecycle. Presentation state, never recorded.
     caret_shapes: Vec<(crate::host::lifecycle::ExtensionKey, CaretShape)>,
-    /// Where committed text input goes instead of the buffer while a
-    /// key-invoked extension command holds this editor's input.
-    held_input: Option<crate::app::commands::key_hold::HeldInputQueue>,
     _model_subscription: Subscription,
     _release_subscription: Subscription,
 }
@@ -364,7 +361,6 @@ impl Editor {
             auto_closed: Vec::new(),
             key_contexts: Vec::new(),
             caret_shapes: Vec::new(),
-            held_input: None,
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
         }
@@ -501,13 +497,9 @@ impl Editor {
         cx.notify();
     }
 
-    /// Queue committed text input in `queue` rather than inserting it, or
-    /// insert it again with `None`.
-    pub(crate) fn set_held_input(
-        &mut self,
-        queue: Option<crate::app::commands::key_hold::HeldInputQueue>,
-    ) {
-        self.held_input = queue;
+    /// Whether an IME composition is in progress.
+    pub(crate) fn is_composing(&self) -> bool {
+        self.marked_range_utf16.is_some()
     }
 
     /// The command a text binding routes this editor's typed text to.
