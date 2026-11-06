@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 at its review gate. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–4 complete. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -254,44 +254,21 @@ and End are now Vim motions outside insert mode. Visual `I` and `A` wait for
 D142. Cases cover the visual motions and operators, and a product test drags
 with the mouse.
 
-### 4. Marks and the jumplist 🔍
+### 4. Marks and the jumplist ✅
 
-Deliverables:
-
-- ✅ `m{a-z}` buffer marks and `m{A-Z}` global marks, with `'` and `` ` ``
-  jumps as motions, operator targets (`d'a`, ``y`a``), and visual motions.
-- ✅ `''` and ``` `` ``` to the last jump, `m'` and ``m` `` to record one, and
-  the per-editor jumplist on `ctrl-o` and `ctrl-i` (and Tab), recording `G`,
-  `gg`, `%`, `{ }`, and mark jumps, in visual mode too; later checkpoints
-  record theirs.
-- ✅ Global marks do not persist across restarts: D152 tracks it.
-
-Validation:
-
-- ✅ Unit tests for the jumplist's insertion, deduplication, limit, and
-  steps (`test/jumps.test.ts`). Vim's default keeps entries after a step
-  back rather than truncating them, so a jump appends at the end.
-- ✅ Cases for marks across edits above and below them, a mark whose text
-  was deleted, `''`, `ctrl-o` and `ctrl-i`, and marks as operator targets.
-- ✅ A product test for a global mark jumping to another open document.
-
-Review gate: dogfooding.
-
-Notes: a mark at a line's start survived `dd`, because a zero-width
-anchor at a deletion's start stays; linewise deletes now take the line
-break before their lines, so the mark is inside the deleted text. As in
-Vim, the jumplist holds a line once, so `ctrl-o` never returns along a
-line, as after a one-line `%`. A global mark in another document is only a
-plain motion; as an operator target or in visual mode it fails. `jumps.ts`
-is pure.
-
-Implementation context:
-
-- `buffer.createMark` and `Mark.position()`; a mark deleted with its text
-  reports null, and the jump fails as Vim's does for an unset mark.
-- `documents.present` opens the document of a global mark.
-- Vim treats Tab and `ctrl-i` as one key, so both jump forward; Tab is
-  already bound in `vim.normal`, and `ctrl-i` gets its own binding.
+Complete and approved after dogfooding: `m{a-z}` buffer marks and `m{A-Z}`
+global marks over `buffer.createMark`, with `'` and `` ` `` as motions,
+operator targets, and visual motions; a global mark in another document
+presents it with `documents.present`, as a plain motion only. `''`,
+``` `` ```, and `m'` use the position before the latest jump, and each
+editor's jumplist on `ctrl-o` and `ctrl-i` or Tab records `G`, `gg`, `%`,
+and `{ }` and mark jumps; later checkpoints record theirs. `jumps.ts` is
+pure. As with Vim's default `jumpoptions`, a jump appends at the end after a
+step back rather than truncating, and the list holds a line once, so
+`ctrl-o` never returns along one line. A mark at a line's start survived
+`dd`, because a zero-width anchor at a deletion's start stays, so linewise
+deletes take the line break before their lines. Global marks end with their
+document and do not persist (D152).
 
 ### 5. Scrolling 📝
 
