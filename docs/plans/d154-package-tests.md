@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoint 1 awaiting its review gate. Comes before checkpoint 6 of the
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -93,34 +93,19 @@ crate-private, and its test platform uses `NoopTextSystem`, whose advance is
 Checkpoints 1, 2, 3, and 10 are independent of the others; 4 through 8 build
 on each other in order. Each checkpoint updates the documentation it changes.
 
-### 1. cargo-nextest — 🔍 awaiting CI
+### 1. cargo-nextest — ✅
 
-- ✅ `just test` and the CI Rust job run `cargo nextest run --all-targets`
-  (CI with the `ci` profile, which does not fail fast) and then
-  `cargo test --doc`; the macOS and Windows handler-platform job keeps its
-  filtered `cargo test` runs, which nextest would not speed up.
-- ✅ V8 platform initialization and gpui test apps work with one process per
-  test: all 1,164 tests pass under nextest on macOS.
-- ✅ Wall time on Apple M1 Pro/macOS debug builds, tests already built:
-  `cargo test --all-targets` 131 s, `cargo nextest run --all-targets` 110–112 s.
-  The Vim case test alone takes 95 s, so it bounds the suite until later
-  checkpoints split and speed it up; the next slowest, a project session test,
-  takes 10 s.
-- ⏳ CI green on the pushed branch.
+Rust tests run under `cargo nextest run --all-targets`, one process per test,
+locally (`just test`) and in CI (the `ci` profile, which does not fail fast);
+doc tests stay on `cargo test --doc`, and the handler-platform jobs keep their
+filtered `cargo test` runs. See [development](../development.md).
 
-Deliverables: tests run under `cargo nextest run` locally and in CI, in
-separate processes; doc tests stay on `cargo test --doc`.
-
-Validation: the full suite passes under nextest on macOS and in CI; wall time
-before and after recorded here.
-
-Implementation context: `.github/workflows/ci.yml` (`cargo test --locked
---workspace --all-targets` and the declaration-check steps), add
-`.config/nextest.toml` if slow-test or retry settings are needed,
-`docs/development.md` for local commands. Confirm V8 platform
-initialization and gpui test apps behave with one process per test.
-
-Review gate: CI is green, and local runs are faster.
+On Apple M1 Pro/macOS debug builds, tests already built, the suite went from
+131 s under `cargo test` to 110–112 s; the 95 s Vim case test bounds it until
+later checkpoints. On CI the test step takes about 170–230 s. Parallel test
+processes on the CI runner exposed fixtures that assumed a fast machine: test
+polling deadlines are now 10 s, and a syntax-query count test sets an
+unbounded parse budget.
 
 ### 2. Optimized gpui and taffy in debug builds
 
