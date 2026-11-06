@@ -100,6 +100,9 @@ struct OpenSession {
     shell: WeakEntity<ProductShell>,
     workbench: WeakEntity<Workbench>,
     window: Option<AnyWindowHandle>,
+    /// Whether this session was activated last, which makes it the active
+    /// session while it has no window.
+    active: bool,
 }
 
 impl Global for ApplicationSessions {}
@@ -303,6 +306,7 @@ impl ApplicationSessions {
                 shell,
                 workbench: workbench.downgrade(),
                 window: None,
+                active: false,
             }),
         }
     }
@@ -317,6 +321,23 @@ impl ApplicationSessions {
         {
             open.window = Some(window);
         }
+    }
+
+    /// Mark `shell` as the session activated last.
+    #[cfg(test)]
+    fn activate(&self, shell: EntityId) {
+        for open in self.0.borrow_mut().iter_mut() {
+            open.active = open.shell.entity_id() == shell;
+        }
+    }
+
+    /// The activated session, when it has no window.
+    fn active_without_window(&self) -> Option<Entity<ProductShell>> {
+        self.0
+            .borrow()
+            .iter()
+            .find(|open| open.active && open.window.is_none())
+            .and_then(|open| open.shell.upgrade())
     }
 
     fn close(&self, shell: EntityId) {
@@ -419,9 +440,15 @@ pub(crate) fn session_in_window(window: AnyWindowHandle, cx: &App) -> Option<Ent
     cx.try_global::<ApplicationSessions>()?.in_window(window)
 }
 
-/// The session shown in the active window.
+/// The session shown in the active window, or without an active window the
+/// session activated last when it has no window.
 pub(crate) fn active_session(cx: &App) -> Option<Entity<ProductShell>> {
-    session_in_window(cx.active_window()?, cx)
+    match cx.active_window() {
+        Some(window) => session_in_window(window, cx),
+        None => cx
+            .try_global::<ApplicationSessions>()?
+            .active_without_window(),
+    }
 }
 
 #[cfg(test)]
@@ -787,12 +814,9 @@ impl ProductShell {
         .map_err(|_| ProtectedCloseFailure::InvalidTarget)
     }
 
+    /// Show the session in `native_window` and report it to extensions.
     fn observe_extension_host(&mut self, native_window: &mut Window, cx: &mut Context<Self>) {
         self.attach_window(native_window, cx);
-        self.application_observer = Some(cx.observe(&cx.entity(), |this, _, cx| {
-            super::extensions::host::application_changed(cx);
-            this.schedule_view_state(cx);
-        }));
         self.observe_window_bounds(native_window, cx);
         self.application_activation =
             Some(cx.observe_window_activation(native_window, |_, _, cx| {
@@ -801,6 +825,16 @@ impl ProductShell {
         self._appearance_observer = Some(
             native_window.observe_window_appearance(|_, cx| super::themes::selection_changed(cx)),
         );
+        self.observe_application(cx);
+    }
+
+    /// Report the session to extensions as it changes and show their
+    /// contributed frames, which needs no window.
+    pub(crate) fn observe_application(&mut self, cx: &mut Context<Self>) {
+        self.application_observer = Some(cx.observe(&cx.entity(), |this, _, cx| {
+            super::extensions::host::application_changed(cx);
+            this.schedule_view_state(cx);
+        }));
         self._status_bar_observers = vec![
             cx.observe_global::<super::status_bar::ApplicationStatusBar>(|_, cx| cx.notify()),
             cx.observe_global::<super::settings::ApplicationSettings>(|_, cx| cx.notify()),
@@ -831,6 +865,14 @@ impl ProductShell {
             }));
             self.sync_contributed_views(cx);
         }
+    }
+
+    /// Make this session the active one while no window is active, as
+    /// focusing its window would.
+    #[cfg(test)]
+    pub(crate) fn activate(&mut self, cx: &mut Context<Self>) {
+        cx.global::<ApplicationSessions>().activate(cx.entity_id());
+        super::extensions::host::application_changed(cx);
     }
 
     fn observe_application_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
