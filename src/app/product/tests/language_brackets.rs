@@ -1,29 +1,17 @@
 //! Runs the bracket cases each bundled language package keeps in
-//! `test/brackets.jsonc` through an editor view on the registered language.
+//! `test/cases/brackets.jsonc` through an editor on the registered language, in
+//! the [case](super::cases) format.
 //!
-//! Files group cases by language as the indentation cases do, with the same
-//! `‸` markers. A `type` case types `text` one character at a time, `⌫`
+//! Groups list their `languages` as the indentation cases do. A `type` case types `text` one character at a time, `⌫`
 //! pressing Backspace, and expects `after` with its caret or selection. A
 //! `jump` case runs Jump to Matching Bracket and expects the caret. A `match`
 //! case expects `after` to be the text with `«` and `»` around the brackets
 //! the view highlights at the caret, or without markers when none match.
-use serde::Deserialize;
 
-use super::harness::start_bundled_packages;
-use super::language_indents::{Action, IndentCase, TypeCase, case_files, read_cases, run, unmark};
+use super::cases::{Failures, read_groups, topic_files, unmark};
+use super::harness::{Action, run, start_bundled_packages};
+use super::language_indents::{IndentCase, TypeCase};
 use super::*;
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct BracketCases {
-    languages: Vec<String>,
-    #[serde(default, rename = "type")]
-    typing: Vec<TypeCase>,
-    #[serde(default)]
-    jump: Vec<IndentCase>,
-    #[serde(default, rename = "match")]
-    matching: Vec<IndentCase>,
-}
 
 /// `text` with `«` and `»` around each of `brackets`.
 fn mark_brackets(text: &str, brackets: Option<[std::ops::Range<usize>; 2]>) -> String {
@@ -42,45 +30,38 @@ fn bundled_bracket_cases_run_on_their_registered_languages(cx: &mut TestAppConte
     start_bundled_packages(cx);
 
     let mut tested = Vec::new();
-    let mut failures = Vec::new();
-    let mut check = |id: &str, name: &str, expected: String, actual: String| {
-        if actual != expected {
-            failures.push(format!(
-                "{id}: {name}\n  expected:\n{expected}\n  actual:\n{actual}"
-            ));
-        }
-    };
-    for cases in case_files("brackets.jsonc")
-        .iter()
-        .flat_map(|path| read_cases::<BracketCases>(path))
-    {
-        for id in &cases.languages {
-            tested.push(id.clone());
-            for case in &cases.typing {
-                let (before, selection) = unmark(&case.before);
-                assert!(selection.is_some(), "{id}: {} marks no caret", case.name);
-                let actual = run(cx, id, &before, selection, Action::Type(&case.text)).marked();
-                check(id, &case.name, case.after.join("\n"), actual);
-            }
-            for case in &cases.jump {
-                let (before, selection) = unmark(&case.before);
-                assert!(selection.is_some(), "{id}: {} marks no caret", case.name);
-                let actual = run(
-                    cx,
-                    id,
-                    &before,
-                    selection,
-                    Action::Command("editor.jump-to-matching-bracket"),
-                )
-                .marked();
-                check(id, &case.name, case.after.join("\n"), actual);
-            }
-            for case in &cases.matching {
-                let (before, selection) = unmark(&case.before);
-                assert!(selection.is_some(), "{id}: {} marks no caret", case.name);
-                let outcome = run(cx, id, &before, selection, Action::Inspect);
-                let actual = mark_brackets(&outcome.text, outcome.matched);
-                check(id, &case.name, case.after.join("\n"), actual);
+    let mut failures = Failures::default();
+    for path in topic_files("brackets") {
+        for group in read_groups(&path, &["languages", "type", "jump", "match"]) {
+            for id in group.field::<Vec<String>>("languages") {
+                tested.push(id.clone());
+                for case in group.cases::<TypeCase>("type") {
+                    let (before, selection) = unmark(&case.value.before);
+                    assert!(selection.is_some(), "{}: marks no caret", case.at);
+                    let actual =
+                        run(cx, &id, &before, selection, Action::Type(&case.value.text)).marked();
+                    failures.check(&case, &id, &case.value.after.join("\n"), &actual);
+                }
+                for case in group.cases::<IndentCase>("jump") {
+                    let (before, selection) = unmark(&case.value.before);
+                    assert!(selection.is_some(), "{}: marks no caret", case.at);
+                    let actual = run(
+                        cx,
+                        &id,
+                        &before,
+                        selection,
+                        Action::Command("editor.jump-to-matching-bracket"),
+                    )
+                    .marked();
+                    failures.check(&case, &id, &case.value.after.join("\n"), &actual);
+                }
+                for case in group.cases::<IndentCase>("match") {
+                    let (before, selection) = unmark(&case.value.before);
+                    assert!(selection.is_some(), "{}: marks no caret", case.at);
+                    let outcome = run(cx, &id, &before, selection, Action::Inspect);
+                    let actual = mark_brackets(&outcome.text, outcome.matched);
+                    failures.check(&case, &id, &case.value.after.join("\n"), &actual);
+                }
             }
         }
     }
@@ -102,6 +83,6 @@ fn bundled_bracket_cases_run_on_their_registered_languages(cx: &mut TestAppConte
             .filter(|id| !tested.contains(id))
             .collect()
     });
-    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+    failures.assert_none();
     assert!(untested.is_empty(), "no bracket cases for {untested:?}");
 }

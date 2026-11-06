@@ -1,0 +1,42 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: marks.
+{
+  "cases": [
+    // Marks.
+    { "name": "' goes to a mark's line at its first non-blank", "before": ["  a‸bc", "x", "y"], "keys": "majj'a", "after": ["  ‸abc", "x", "y"] },
+    { "name": "` goes to the mark itself", "before": ["  a‸bc", "x", "y"], "keys": "majj`a", "after": ["  a‸bc", "x", "y"] },
+    { "name": "a mark follows lines added above it", "before": ["one", "tw‸o"], "keys": "maggOnew<esc>`a", "after": ["new", "one", "tw‸o"] },
+    { "name": "a mark stays put when text below it changes", "before": ["on‸e", "two"], "keys": "maGAxyz<esc>`a", "after": ["on‸e", "twoxyz"] },
+    { "name": "a mark follows text inserted before it on its line", "before": ["ab‸c"], "keys": "ma0ix<esc>`a", "after": ["xab‸c"] },
+    { "name": "a mark whose text was deleted goes nowhere", "before": ["a", "‸b", "c"], "keys": "maddgg'a", "after": ["‸a", "c"] },
+    { "name": "dd removes a mark inside its line", "before": ["a", "b‸cd", "e"], "keys": "maddgg`a", "after": ["‸a", "e"] },
+    { "name": "dd keeps a mark on the next line", "before": ["a", "‸b", "c"], "keys": "jmakdd`a", "after": ["a", "‸c"] },
+    { "name": "an unset mark goes nowhere", "before": ["a‸b"], "keys": "'z", "after": ["a‸b"] },
+    { "name": "a global mark in the same document jumps like a buffer mark", "before": ["a‸b", "c"], "keys": "mBj`B", "after": ["a‸b", "c"] },
+    { "name": "d' deletes the lines through the mark", "before": ["‸a", "b", "c", "d"], "keys": "jmaGd'a", "after": ["‸a"] },
+    { "name": "d` deletes up to the mark", "before": ["abc‸d"], "keys": "ma0d`a", "after": ["‸d"] },
+    { "name": "y` yanks up to the mark", "before": ["ab‸cd"], "keys": "ma0y`aP", "after": ["a‸babcd"] },
+    { "name": "` extends a visual selection to the mark", "before": ["a‸bcd"], "keys": "ma$v`a", "after": { "text": ["a‸bcd‸"], "mode": "visual" } },
+
+    // The jumplist.
+    { "name": "'' returns to the line before a jump", "before": ["  a‸b", "c", "d"], "keys": "G''", "after": ["  ‸ab", "c", "d"] },
+    { "name": "'' twice returns to the jump's end", "before": ["‸a", "b", "c"], "keys": "G''''", "after": ["a", "b", "‸c"] },
+    { "name": "`` returns to the position before a jump", "before": ["a‸b", "c"], "keys": "G``", "after": ["a‸b", "c"] },
+    { "name": "m' records the caret for ''", "before": ["‸a", "b", "c"], "keys": "jm'j''", "after": ["a", "‸b", "c"] },
+    { "name": "ctrl-o steps back through jumps", "before": ["‸a", "b", "c", "d"], "keys": "3GG<c-o><c-o>", "after": ["‸a", "b", "c", "d"] },
+    { "name": "ctrl-o with a count steps several jumps", "before": ["‸a", "b", "c", "d"], "keys": "3GG2<c-o>", "after": ["‸a", "b", "c", "d"] },
+    { "name": "Tab steps forward again", "before": ["‸a", "b", "c", "d"], "keys": "3GG<c-o><c-o><tab>", "after": ["a", "b", "‸c", "d"] },
+    { "name": "ctrl-i steps forward as Tab does", "before": ["‸a", "b", "c", "d"], "keys": "3GG<c-o><c-o><c-i><c-i>", "after": ["a", "b", "c", "‸d"] },
+    { "name": "ctrl-o without jumps stays", "before": ["a‸b"], "keys": "<c-o>", "after": ["a‸b"] },
+    { "name": "ctrl-o goes back to the exact position", "before": ["a‸b", "c"], "keys": "G<c-o>", "after": ["a‸b", "c"] },
+    { "name": "% is a jump", "before": ["‸(a", ")"], "keys": "%<c-o>", "after": ["‸(a", ")"] },
+
+    // As in Vim, the jumplist holds a line once.
+    { "name": "ctrl-o does not return along a line", "before": ["‸(a)", "b"], "keys": "%<c-o>", "after": ["(a‸)", "b"] },
+    { "name": "} is a jump", "before": ["‸a", "", "b"], "keys": "}<c-o>", "after": ["‸a", "", "b"] },
+    { "name": "a mark jump is a jump", "before": ["‸a", "b", "c"], "keys": "Gmagg'a<c-o>", "after": ["‸a", "b", "c"] },
+    { "name": "a jump in visual mode is recorded", "before": ["‸a", "b"], "keys": "vG<esc><c-o>", "after": ["‸a", "b"] },
+    { "name": "a jump whose line was deleted leaves the jumplist", "before": ["a", "‸b", "c", "d"], "keys": "Gkkddgg<c-o><c-o>", "after": ["a", "‸c", "d"] }
+  ]
+}

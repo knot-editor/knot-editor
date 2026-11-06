@@ -1,0 +1,33 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: insert.
+{
+  "cases": [
+    // Insert mode.
+    { "name": "i inserts before the caret and Escape steps back", "before": ["a‸b"], "keys": "ix<esc>", "after": ["a‸xb"] },
+    { "name": "a inserts after the caret", "before": ["a‸b"], "keys": "ax<esc>", "after": ["ab‸x"] },
+    { "name": "a on an empty line inserts there", "before": ["‸"], "keys": "ax<esc>", "after": ["‸x"] },
+    { "name": "I inserts at the first non-blank", "before": ["  fo‸o"], "keys": "Ix<esc>", "after": ["  ‸xfoo"] },
+    { "name": "A appends at the line end", "before": ["f‸oo"], "keys": "Ax<esc>", "after": ["foo‸x"] },
+    { "name": "Escape at the line start stays there", "before": ["‸ab"], "keys": "i<esc>", "after": ["‸ab"] },
+    { "name": "insert mode stays until Escape", "before": ["a‸b"], "keys": "i", "after": { "text": ["a‸b"], "mode": "insert" } },
+    { "name": "keys typed right after A reach insert mode in order", "before": ["o‸ne", "two"], "keys": "A!x<cr>y<esc>", "after": ["one!x", "‸y", "two"] },
+    { "name": "Backspace deletes in insert mode", "before": ["ab‸c"], "keys": "a<bs><bs>x<esc>", "after": ["a‸x"] },
+    { "name": "o opens a line below with the indentation", "before": ["  a‸b", "c"], "keys": "ox<esc>", "after": ["  ab", "  ‸x", "c"] },
+    { "name": "O opens a line above with the current line's indentation", "before": ["x", "  a‸b"], "keys": "Oy<esc>", "after": ["x", "  ‸y", "  ab"] },
+    { "name": "O on the first line opens above it", "before": ["  a‸b"], "keys": "Oy<esc>", "after": ["  ‸y", "  ab"] },
+    { "name": "an opened line left empty keeps no indentation", "before": ["  a‸b"], "keys": "o<esc>", "after": ["  ab", "‸"] },
+    { "name": "o indents from the language's indent query", "language": "rust", "before": ["fn f() ‸{", "}"], "keys": "ox<esc>", "after": ["fn f() {", "    ‸x", "}"] },
+    { "name": "O indents from the language's indent query", "language": "rust", "before": ["fn f() {", "    a();", "‸}"], "keys": "Ob<esc>", "after": ["fn f() {", "    a();", "    ‸b", "}"] },
+
+    // Undo and redo.
+    { "name": "an insert session undoes as one step", "before": ["a‸b"], "keys": "ixyz<esc>u", "after": ["a‸b"] },
+    { "name": "A with a line break undoes as one step", "before": ["o‸ne", "two"], "keys": "Ax<cr>y<esc>u", "after": ["o‸ne", "two"] },
+    { "name": "o undoes as one step", "before": ["a‸b"], "keys": "ox<esc>u", "after": ["a‸b"] },
+    { "name": "a count undoes several sessions", "before": ["‸a"], "keys": "ix<esc>iy<esc>2u", "after": ["‸a"] },
+
+    // Redo restores the caret from the end of the change: back on the last
+    // inserted character after Escape.
+    { "name": "ctrl-r redoes", "before": ["‸a"], "keys": "ix<esc>iy<esc>2u<c-r>", "after": ["‸xa"] }
+  ]
+}

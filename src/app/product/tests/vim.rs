@@ -1,23 +1,25 @@
 //! The bundled Vim package driven by real keystrokes through a product
 //! session.
 //!
-//! The behavior cases live beside the package in `test/cases.jsonc` and run
-//! here through a windowless session's key router, native commands, and
-//! ordered key delivery. A case starts from `before`, where `‸` marks the
-//! caret, or both ends of a selection, anchor first, types `keys` in the
-//! [harness](super::harness) key notation, and expects `after` with the
-//! caret or the selection at its markers and the editor in `mode`. A `view`
-//! lays the editor out to show exactly `lines` lines, scrolls `top` to its
-//! first line before the keys, and expects `afterTop` there afterwards.
-//! Keys are pressed without waiting between them, as fast typing arrives,
-//! and the run settles once at the end. One session shows every case in
-//! turn, each in a fresh workbench over a fresh document. Pointer input and the work a key
-//! costs a window run in a product window.
+//! The behavior cases live beside the package in `test/cases/<topic>.jsonc`,
+//! in the [case](super::cases) format, and each topic runs as its own test
+//! through a windowless session's key router, native commands, and ordered
+//! key delivery. A case starts from `before`, types `keys` in the key
+//! notation, and expects `after`: the text with the caret or the selection at
+//! its markers, or an object with that `text` and the `mode` the editor is
+//! in afterwards, "normal" unless given, or "insert", "visual", or
+//! "visual-line", and the `top` line in view. A `view` lays the editor out to
+//! show exactly `lines` lines and scrolls `top` to its first line before the
+//! keys. `language` sets the document's language. Keys are pressed without
+//! waiting between them, as fast typing arrives, and the run settles once at
+//! the end. One session shows every case in turn, each in a fresh workbench
+//! over a fresh document. Pointer input and the work a key costs a window run
+//! in a product window.
 use serde::Deserialize;
 
+use super::cases::{Failures, Text, package_files, read_groups, unmark};
 use super::editor_api::active_editor_view;
 use super::harness::{Session, start_bundled_packages_with_post_init};
-use super::language_indents::{case_files, unmark};
 use super::*;
 use crate::app::editor::{CaretShape, Reveal};
 
@@ -27,33 +29,40 @@ await settings.set("vim.enabled", true);
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Cases {
-    cases: Vec<Case>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Case {
-    name: String,
     #[serde(default)]
     language: Option<String>,
-    before: Vec<String>,
+    before: Text,
     keys: String,
-    after: Vec<String>,
-    #[serde(default = "normal")]
-    mode: String,
+    after: Expected,
     #[serde(default)]
     view: Option<View>,
 }
 
+/// What a case expects: the text, or the text with more.
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(untagged)]
+enum Expected {
+    Full(Full),
+    Text(Text),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Full {
+    text: Text,
+    #[serde(default = "normal")]
+    mode: String,
+    #[serde(default)]
+    top: Option<usize>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct View {
     lines: usize,
     #[serde(default)]
     top: usize,
-    #[serde(default)]
-    after_top: Option<usize>,
 }
 
 fn normal() -> String {
@@ -158,76 +167,107 @@ impl Windowed {
 
     /// Press `keys` through the window, then settle.
     fn press(&self, keys: &str, cx: &mut TestAppContext) {
-        for key in super::harness::parse_keys(keys) {
+        for key in super::cases::parse_keys(keys) {
             cx.dispatch_keystroke(self.window, gpui::Keystroke::parse(&key).unwrap());
         }
         self.session.settle(cx);
     }
 }
 
-#[gpui::test]
-fn the_vim_cases_behave_as_listed(cx: &mut TestAppContext) {
+/// Run the cases of the topic file `topic`.
+fn run_topic(topic: &str, cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(Some(ENABLE), cx);
-    let mut failures = Vec::new();
+    let mut failures = Failures::default();
     let mut count = 0;
-    // KNOT_CASES runs only the cases whose names contain it.
-    let filter = std::env::var("KNOT_CASES").ok();
-    let started = std::time::Instant::now();
     // One session shows every case in turn.
     let mut session: Option<Session> = None;
-    for path in case_files("cases.jsonc") {
-        let text = std::fs::read_to_string(&path).unwrap();
-        let cases: Cases = jsonc_parser::parse_to_serde_value(&text, &Default::default())
-            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-        for case in cases.cases {
-            if filter
-                .as_ref()
-                .is_some_and(|filter| !case.name.contains(filter.as_str()))
-            {
-                continue;
-            }
-            count += 1;
-            let (before, selection) = unmark(&case.before);
-            let Some(selection) = selection else {
-                panic!("{} marks no caret", case.name);
-            };
-            let language = case.language.as_deref();
-            match &mut session {
-                Some(session) => session.load(&before, language, selection, cx),
-                None => session = Some(Session::open(&before, language, selection, cx)),
-            }
-            let session = session.as_ref().unwrap();
-            if let Some(view) = &case.view {
-                session.show_lines(view.lines, view.top, cx);
-            }
-            session.press(&case.keys, cx);
-            let expected = case.after.join("\n");
-            let actual = session.marked(cx);
-            let mode = session.mode(cx);
-            let top = session.top_line(cx);
-            let expected_top = case.view.as_ref().and_then(|view| view.after_top);
-            if actual != expected
-                || mode != case.mode
-                || expected_top.is_some_and(|line| line != top)
-            {
-                let top = match expected_top {
-                    Some(line) => format!("\n  top line: expected {line}, actual {top}"),
-                    None => String::new(),
+    for path in package_files("vim")
+        .into_iter()
+        .filter(|path| path.file_stem().is_some_and(|stem| stem == topic))
+    {
+        for group in read_groups(&path, &["cases"]) {
+            for case in group.cases::<Case>("cases") {
+                count += 1;
+                let value = &case.value;
+                let (before, selection) = unmark(&value.before.lines());
+                let Some(selection) = selection else {
+                    panic!("{}: {} marks no caret", case.at, case.name);
                 };
-                failures.push(format!(
-                    "{} (keys {:?})\n  expected ({}):\n{expected}\n  actual ({mode}):\n{actual}{top}",
-                    case.name, case.keys, case.mode
-                ));
+                let language = value.language.as_deref();
+                match &mut session {
+                    Some(session) => session.load(&before, language, selection, cx),
+                    None => session = Some(Session::open(&before, language, selection, cx)),
+                }
+                let session = session.as_ref().unwrap();
+                if let Some(view) = &value.view {
+                    session.show_lines(view.lines, view.top, cx);
+                }
+                session.press(&value.keys, cx);
+                let (text, expected_mode, expected_top) = match &value.after {
+                    Expected::Text(text) => (text, "normal", None),
+                    Expected::Full(full) => (&full.text, full.mode.as_str(), full.top),
+                };
+                let expected = text.lines().join("\n");
+                let actual = session.marked(cx);
+                let mode = session.mode(cx);
+                let top = session.top_line(cx);
+                if actual != expected
+                    || mode != expected_mode
+                    || expected_top.is_some_and(|line| line != top)
+                {
+                    let top = match expected_top {
+                        Some(line) => format!("\n  top line: expected {line}, actual {top}"),
+                        None => String::new(),
+                    };
+                    failures.fail(
+                        &case,
+                        "",
+                        format!(
+                            "keys {:?}\n  expected ({expected_mode}):\n{expected}\n  actual ({mode}):\n{actual}{top}",
+                            value.keys
+                        ),
+                    );
+                }
             }
         }
     }
-    assert!(count > 0, "no Vim cases found");
-    eprintln!(
-        "{count} Vim cases in {:?}, {:?} each",
-        started.elapsed(),
-        started.elapsed() / count
+    if std::env::var("KNOT_CASES").is_err() {
+        assert!(count > 0, "no Vim cases in {topic}");
+    }
+    failures.assert_none();
+}
+
+/// A test per topic file, so the topics run in parallel.
+macro_rules! topics {
+    ($($topic:ident),* $(,)?) => {
+        const TOPICS: &[&str] = &[$(stringify!($topic)),*];
+
+        mod topics {
+            use super::*;
+            $(
+                #[gpui::test]
+                fn $topic(cx: &mut TestAppContext) {
+                    run_topic(stringify!($topic), cx);
+                }
+            )*
+        }
+    };
+}
+
+topics!(
+    insert, marks, motions, objects, operators, registers, scrolling, visual
+);
+
+#[test]
+fn every_topic_file_has_a_test() {
+    let files: Vec<String> = package_files("vim")
+        .iter()
+        .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        files, TOPICS,
+        "list each file in vim/test/cases in `topics!`"
     );
-    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
 #[gpui::test]

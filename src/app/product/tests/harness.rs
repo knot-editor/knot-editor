@@ -3,18 +3,16 @@
 //! document in turn and takes keys through its router as a window would
 //! forward them. A run settles once the session holds no keys and the extension
 //! pool has gone quiet, waiting on finished turns rather than polling.
-//!
-//! In the key notation, characters are typed and `<name>` presses a named
-//! key: `<esc>`, `<cr>`, `<bs>`, `<del>`, `<tab>`, `<s-tab>`, the arrows,
-//! `<home>`, `<end>`, `<lt>` for `<`, and `<c-x>` for ctrl with a letter.
+//! The key notation is described with the [cases](super::cases).
+use std::ops::Range;
 use std::time::{Duration, Instant};
 
 use gpui::Keystroke;
 
+use super::cases::{CARET, parse_keys};
 use super::editor_api::active_editor_view;
-use super::language_indents::CARET;
 use super::*;
-use crate::app::editor::{Editor, Reveal};
+use crate::app::editor::{Editor, EditorViewState, Reveal};
 use crate::app::extensions::load::LoadResult;
 use crate::app::product::DocumentId;
 use crate::app::status_bar::ApplicationStatusBar;
@@ -259,40 +257,92 @@ fn new_document(
     (document, model)
 }
 
-/// gpui keystrokes for the key notation.
-pub(super) fn parse_keys(keys: &str) -> Vec<String> {
-    let mut parsed = Vec::new();
-    let mut rest = keys;
-    while let Some(character) = rest.chars().next() {
-        if character == '<'
-            && let Some(end) = rest.find('>')
-        {
-            let name = &rest[1..end];
-            parsed.push(match name {
-                "esc" => "escape".to_owned(),
-                "cr" => "enter".to_owned(),
-                "bs" => "backspace".to_owned(),
-                "del" => "delete".to_owned(),
-                "tab" => "tab".to_owned(),
-                "s-tab" => "shift-tab".to_owned(),
-                "lt" => "<".to_owned(),
-                "left" | "right" | "up" | "down" | "home" | "end" => name.to_owned(),
-                _ => match name.strip_prefix("c-") {
-                    Some(letter) => format!("ctrl-{letter}"),
-                    None => panic!("unknown key <{name}>"),
-                },
-            });
-            rest = &rest[end + 1..];
-        } else {
-            parsed.push(match character {
-                ' ' => "space".to_owned(),
-                upper if upper.is_ascii_uppercase() => {
-                    format!("shift-{}", upper.to_ascii_lowercase())
-                }
-                other => other.to_string(),
-            });
-            rest = &rest[character.len_utf8()..];
+/// In typed text, presses Backspace.
+pub(super) const BACKSPACE: char = '⌫';
+
+/// What a case does at its selection.
+pub(super) enum Action<'a> {
+    Command(&'a str),
+    /// Type the text one character at a time, pressing Backspace for `⌫`.
+    Type(&'a str),
+    /// Leave the view as it is.
+    Inspect,
+}
+
+/// What a run left: the text, the selection, and the brackets the view
+/// highlights.
+pub(super) struct Outcome {
+    pub(super) text: String,
+    pub(super) anchor: usize,
+    pub(super) caret: usize,
+    pub(super) matched: Option<[Range<usize>; 2]>,
+}
+
+impl Outcome {
+    /// The text with `‸` at the caret, or at both ends of the selection.
+    pub(super) fn marked(&self) -> String {
+        let mut marked = self.text.clone();
+        marked.insert(self.anchor.max(self.caret), CARET);
+        if self.anchor != self.caret {
+            marked.insert(self.anchor.min(self.caret), CARET);
         }
+        marked
     }
-    parsed
+}
+
+/// Run `action` on `text` in `language` with the marked selection, or with
+/// everything selected, in an editor without a window.
+pub(super) fn run(
+    cx: &mut TestAppContext,
+    language: &str,
+    text: &str,
+    selection: Option<(usize, usize)>,
+    action: Action,
+) -> Outcome {
+    let model = cx.new(|_| {
+        let mut model = BufferModel::from_text(text);
+        model.set_document(uuid::Uuid::new_v4());
+        model
+    });
+    cx.update(|cx| crate::app::documents::detect_indentation(&model, cx));
+    cx.update(|cx| crate::app::languages::set_language(&model, language.into(), cx));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    let (anchor, caret) = selection.unwrap_or((0, text.len()));
+    editor.update(cx, |editor, cx| {
+        editor.restore_view_state(
+            EditorViewState {
+                anchor,
+                caret,
+                top: 0,
+                scroll_x: 0.,
+            },
+            cx,
+        );
+        match action {
+            Action::Command(command) => {
+                editor.execute_editing_command(command, cx);
+            }
+            Action::Type(text) => {
+                for character in text.chars() {
+                    if character == BACKSPACE {
+                        editor.execute_editing_command("editor.delete-backward", cx);
+                    } else {
+                        editor.type_text(None, &character.to_string(), cx);
+                    }
+                }
+            }
+            Action::Inspect => {}
+        }
+    });
+    cx.run_until_parked();
+    let (state, matched) = cx.read(|cx| {
+        let editor = editor.read(cx);
+        (editor.view_state(cx), editor.matched_brackets_for_test(cx))
+    });
+    Outcome {
+        text: model.read_with(cx, |model, _| model.text()),
+        anchor: state.anchor,
+        caret: state.caret,
+        matched,
+    }
 }

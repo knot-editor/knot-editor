@@ -142,7 +142,7 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   comment toggles are plain functions over text and that configuration, with
   no buffer or view.
   Each bundled language package keeps line and block comment toggling cases
-  in `test/comments.jsonc`, which a product test runs through the native
+  in `test/cases/comments.jsonc`, which a product test runs through the native
   toggles on the registered configuration.
 - Bracket matching reads the syntax tree with the registered pairs and no
   extra query. A bracket is a leaf token whose text is a pair's opener or
@@ -157,7 +157,7 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   unless its last line ends with the language's block comment closer.
   Markdown's inline language shares Markdown's bracket pairs, since it is the
   language at the caret inside paragraphs. Packages keep typing, Backspace,
-  wrapping, jump, and highlight cases in `test/brackets.jsonc`, run through
+  wrapping, jump, and highlight cases in `test/cases/brackets.jsonc`, run through
   an editor view; a language with bracket pairs must have cases.
 - An optional `indents` query compiles with the others and drives native
   indentation. The evaluator follows nvim-treesitter's indent module over the
@@ -170,7 +170,7 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   given to the lines above it. Inside a parse error, each opening bracket of
   the language's bracket pairs that the error leaves unclosed before the line
   indents it one level, at most once per row. Packages keep Enter, typing,
-  and reindent cases in `test/indents.jsonc`, which a product test runs
+  and reindent cases in `test/cases/indents.jsonc`, which a product test runs
   through an editor view; a language with an indent query must have cases.
 - The native Set Language Mode command offers the registered languages, or Auto
   Detect, in the window's transient picker. Contributed text frames take a

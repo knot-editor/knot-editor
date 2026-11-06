@@ -70,7 +70,7 @@ nothing in them is specific to Vim.
 
 ### The case format
 
-`cases.jsonc` is one flat file of about 400 lines, grouped only by
+`cases.jsonc` was one flat file of about 400 lines, grouped only by
 comments. Each new kind of expectation adds an optional field to one
 struct: `language`, `mode`, and now `view` with `lines`, `top`, and
 `afterTop`. Scrolling cases need 30-line texts written out in full in

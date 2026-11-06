@@ -1,0 +1,39 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: scrolling.
+{
+  "cases": [
+    // Scrolling and the lines in view.
+    { "name": "ctrl-d scrolls half the view and moves the caret as far", "before": { "numbered": 30, "caret": [2, 0] }, "keys": "<c-d>", "after": { "text": { "numbered": 30, "caret": [7, 1] }, "top": 5 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "a count on ctrl-d sets how far later ones scroll", "before": { "numbered": 30, "caret": [0, 0] }, "keys": "2<c-d><c-d>", "after": { "text": { "numbered": 30, "caret": [4, 1] }, "top": 4 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "ctrl-u scrolls half the view up", "before": { "numbered": 30, "caret": [15, 0] }, "keys": "<c-u>", "after": { "text": { "numbered": 30, "caret": [10, 1] }, "top": 5 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "ctrl-d at the end moves the caret without scrolling", "before": { "numbered": 30, "caret": [25, 0] }, "keys": "<c-d>", "after": { "text": { "numbered": 30, "caret": [29, 1] }, "top": 20 }, "view": { "lines": 10, "top": 20 } },
+    { "name": "ctrl-u at the start moves the caret to the first line", "before": { "numbered": 30, "caret": [3, 0] }, "keys": "<c-u>", "after": { "text": { "numbered": 30, "caret": [0, 1] }, "top": 0 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "ctrl-f keeps two lines of the previous page", "before": { "numbered": 30, "caret": [2, 0] }, "keys": "<c-f>", "after": { "text": { "numbered": 30, "caret": [8, 1] }, "top": 8 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "ctrl-f with a count scrolls pages", "before": { "numbered": 30, "caret": [2, 0] }, "keys": "2<c-f>", "after": { "text": { "numbered": 30, "caret": [16, 1] }, "top": 16 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "ctrl-b keeps two lines of the next page", "before": { "numbered": 30, "caret": [20, 0] }, "keys": "<c-b>", "after": { "text": { "numbered": 30, "caret": [17, 1] }, "top": 8 }, "view": { "lines": 10, "top": 16 } },
+    { "name": "ctrl-f at the end goes to the last line", "before": { "numbered": 30, "caret": [22, 0] }, "keys": "<c-f>", "after": { "text": { "numbered": 30, "caret": [29, 1] }, "top": 20 }, "view": { "lines": 10, "top": 20 } },
+    { "name": "ctrl-b at the start goes to the first line", "before": { "numbered": 30, "caret": [5, 0] }, "keys": "<c-b>", "after": { "text": { "numbered": 30, "caret": [0, 1] }, "top": 0 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "ctrl-e moves a caret leaving the view down, keeping its column", "before": { "numbered": 30, "caret": [0, 2] }, "keys": "<c-e>", "after": { "text": { "numbered": 30, "caret": [1, 2] }, "top": 1 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "ctrl-e leaves a caret still in view", "before": { "numbered": 30, "caret": [5, 2] }, "keys": "3<c-e>", "after": { "text": { "numbered": 30, "caret": [5, 2] }, "top": 3 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "ctrl-y moves a caret leaving the view up", "before": { "numbered": 30, "caret": [14, 2] }, "keys": "<c-y>", "after": { "text": { "numbered": 30, "caret": [13, 2] }, "top": 4 }, "view": { "lines": 10, "top": 5 } },
+    { "name": "zt scrolls the caret's line to the top", "before": { "numbered": 30, "caret": [5, 2] }, "keys": "zt", "after": { "text": { "numbered": 30, "caret": [5, 2] }, "top": 5 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "zb scrolls the caret's line to the bottom", "before": { "numbered": 30, "caret": [12, 2] }, "keys": "zb", "after": { "text": { "numbered": 30, "caret": [12, 2] }, "top": 3 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "zz centers the caret's line", "before": { "numbered": 30, "caret": [9, 2] }, "keys": "zz", "after": { "text": { "numbered": 30, "caret": [9, 2] }, "top": 5 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "zz centers a line above the middle", "before": { "numbered": 30, "caret": [11, 2] }, "keys": "zz", "after": { "text": { "numbered": 30, "caret": [11, 2] }, "top": 7 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "zb stops at the start of the text", "before": { "numbered": 30, "caret": [3, 2] }, "keys": "zb", "after": { "text": { "numbered": 30, "caret": [3, 2] }, "top": 0 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "z<cr> with a count puts that line at the top on its first non-blank", "before": { "numbered": 30, "caret": [0, 2] }, "keys": "20z<cr>", "after": { "text": { "numbered": 30, "caret": [19, 1] }, "top": 19 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "z. centers on the first non-blank", "before": { "numbered": 30, "caret": [9, 2] }, "keys": "z.", "after": { "text": { "numbered": 30, "caret": [9, 1] }, "top": 5 }, "view": { "lines": 10, "top": 0 } },
+    { "name": "z- puts the line at the bottom on its first non-blank", "before": { "numbered": 30, "caret": [12, 2] }, "keys": "z-", "after": { "text": { "numbered": 30, "caret": [12, 1] }, "top": 3 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "H goes to the first line in view", "before": { "numbered": 30, "caret": [15, 2] }, "keys": "H", "after": { "text": { "numbered": 30, "caret": [10, 1] }, "top": 10 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "H with a count counts from the top", "before": { "numbered": 30, "caret": [15, 2] }, "keys": "3H", "after": { "text": { "numbered": 30, "caret": [12, 1] }, "top": 10 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "L goes to the last line in view", "before": { "numbered": 30, "caret": [15, 2] }, "keys": "L", "after": { "text": { "numbered": 30, "caret": [19, 1] }, "top": 10 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "L with a count counts from the bottom", "before": { "numbered": 30, "caret": [15, 2] }, "keys": "2L", "after": { "text": { "numbered": 30, "caret": [18, 1] }, "top": 10 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "M goes to the middle line in view", "before": { "numbered": 30, "caret": [10, 2] }, "keys": "M", "after": { "text": { "numbered": 30, "caret": [14, 1] }, "top": 10 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "H is a jump", "before": { "numbered": 30, "caret": [15, 2] }, "keys": "H<c-o>", "after": { "text": { "numbered": 30, "caret": [15, 2] }, "top": 10 }, "view": { "lines": 10, "top": 10 } },
+    { "name": "dL deletes through the last line in view", "before": { "numbered": 30, "caret": [7, 2] }, "keys": "dL", "after": [" 00", " 01", " 02", " 03", " 04", " 05", " 06", " ‸10", " 11", " 12", " 13", " 14", " 15", " 16", " 17", " 18", " 19", " 20", " 21", " 22", " 23", " 24", " 25", " 26", " 27", " 28", " 29"], "view": { "lines": 10, "top": 0 } },
+    { "name": "ctrl-d extends a visual-line selection", "before": { "numbered": 30, "caret": [0, 0] }, "keys": "V<c-d>d", "after": [" ‸06", " 07", " 08", " 09", " 10", " 11", " 12", " 13", " 14", " 15", " 16", " 17", " 18", " 19", " 20", " 21", " 22", " 23", " 24", " 25", " 26", " 27", " 28", " 29"], "view": { "lines": 10, "top": 0 } },
+    { "name": "M in a short text goes to its middle line", "before": ["‸a", "b", "c"], "keys": "M", "after": ["a", "‸b", "c"] },
+    { "name": "L in a short text goes to its last line", "before": ["‸a", "b", "c"], "keys": "L", "after": ["a", "b", "‸c"] }
+  ]
+}

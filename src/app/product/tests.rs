@@ -1,5 +1,6 @@
 //! Product shell integration tests and their shared fixtures.
 
+mod cases;
 mod closure;
 mod commands;
 mod editing;

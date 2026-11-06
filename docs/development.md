@@ -59,12 +59,16 @@ It does not use a global `tsc`. Runtime contracts still require Rust/V8 tests.
 Files under a package's `test/fixtures` are test inputs and are not compiled;
 The bundled language packages keep highlight fixtures there, checked by a Rust test that
 highlights them with the bundled queries (see `src/app/extensions/host/highlight_tests.rs`).
-A language package's `test/comments.jsonc` lists comment toggling cases, which
+Packages keep behavior cases as JSONC topic files in `test/cases/`. A language
+package's `comments.jsonc` lists comment toggling cases, which
 `src/app/product/tests/language_editing.rs` runs through the native toggle;
-`test/indents.jsonc` and `test/brackets.jsonc` list indentation and bracket
-cases, which `language_indents.rs` and `language_brackets.rs` beside it run
-through an editor without a window. `@knot/vim` keeps `test/cases.jsonc`, which
-`vim.rs` runs through the headless harness in `harness.rs`: the bundled
+`indents.jsonc` and `brackets.jsonc` list indentation and bracket cases, which
+`language_indents.rs` and `language_brackets.rs` beside it run through an
+editor without a window. `@knot/vim` keeps one file per topic, each its own
+parallel test in `vim.rs`. `src/app/product/tests/cases.rs` holds what every
+runner shares: discovery, parsing, the `KNOT_CASES` name filter, caret
+markers, generated numbered texts, the key notation, and failure reports that
+name the file and line of the case. `vim.rs` runs the cases through the headless harness in `harness.rs`: the bundled
 packages start without a window, one windowless session shows each case in
 a fresh workbench and types its keys through the session's router, and a run
 settles once the session holds no keys and the

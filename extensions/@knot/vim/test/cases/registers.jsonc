@@ -1,0 +1,19 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: registers.
+{
+  "cases": [
+    // Registers.
+    { "name": "a named register keeps its text", "before": ["‸one", "two"], "keys": "\"ayyjyy\"ap", "after": ["one", "two", "‸one"] },
+    { "name": "an uppercase register appends", "before": ["‸one", "two", "x"], "keys": "\"ayyj\"AyyG\"ap", "after": ["one", "two", "x", "‸one", "two"] },
+    { "name": "appending characters to lines adds a line", "before": ["‸one", "two"], "keys": "\"ayyj\"Ayw\"aP", "after": ["one", "‸one", "two", "two"] },
+    { "name": "\"0 keeps the last yank after a delete", "before": ["‸a", "b", "c"], "keys": "yyjdd\"0p", "after": ["a", "c", "‸a"] },
+    { "name": "deletes shift through \"1 and \"2", "before": ["‸a", "b", "c"], "keys": "dddd\"2p", "after": ["c", "‸a"] },
+    { "name": "a small delete goes to \"-", "before": ["‸ab", "c"], "keys": "xj\"-p", "after": ["b", "c‸a"] },
+    { "name": "a small delete leaves \"1 alone", "before": ["‸a", "bc"], "keys": "ddx\"1p", "after": ["c", "‸a"] },
+    { "name": "the black hole register keeps the clipboard", "before": ["‸a", "b"], "keys": "yyj\"_ddp", "after": ["a", "‸a"] },
+    { "name": "\"+ is the clipboard", "before": ["‸a", "b"], "keys": "\"+yyjp", "after": ["a", "b", "‸a"] },
+    { "name": "a named yank leaves the clipboard", "before": ["‸a", "b"], "keys": "yyj\"byyp", "after": ["a", "b", "‸a"] },
+    { "name": "an unknown register cancels", "before": ["‸ab"], "keys": "\"!x", "after": ["‸b"] }
+  ]
+}

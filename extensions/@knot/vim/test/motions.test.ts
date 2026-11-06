@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  bracketFrom, findInLine, left, lineStart, linesOf, matchBracketText, paragraph, type Position, right,
+  bracketFrom, findInLine, linesOf, matchBracketText, paragraph, type Position,
   wordBackward, wordEnd, wordEndBackward, wordForward,
 } from "../src/motions.js";
 import { columnAtByte, columnAtScreen, firstNonBlank, lastColumn, screenColumn, utf8Length } from "../src/text.js";
@@ -74,22 +74,6 @@ test("words treat letters with marks, digits, and underscores as one class", asy
   assert.deepEqual(await wordForward(lines, { line: 0, col: 0 }, 1, false), { line: 0, col: 4 });
   assert.deepEqual(await wordForward(lines, { line: 0, col: 4 }, 1, false), { line: 0, col: 6 });
   assert.deepEqual(await wordForward(lines, { line: 0, col: 6 }, 1, false), { line: 0, col: 11 });
-});
-
-test("h and l stay within the line unless wrapping, and l stops on the last character", async () => {
-  const lines = linesOf("ab😀\ncd");
-  assert.deepEqual(await right(lines, { line: 0, col: 0 }, 5, false), { line: 0, col: 2 });
-  assert.deepEqual(await right(lines, { line: 0, col: 2 }, 1, true), { line: 1, col: 0 });
-  assert.deepEqual(await left(lines, { line: 1, col: 0 }, 1, false), { line: 1, col: 0 });
-  assert.deepEqual(await left(lines, { line: 1, col: 0 }, 1, true), { line: 0, col: 2 });
-  assert.deepEqual(await left(lines, { line: 0, col: 2 }, 1, false), { line: 0, col: 1 });
-});
-
-test("line starts skip indentation and clamp to the document", async () => {
-  const lines = linesOf("a\n\t  b\n   ");
-  assert.deepEqual(await lineStart(lines, 1), { line: 1, col: 3 });
-  assert.deepEqual(await lineStart(lines, 9), { line: 2, col: 2 });
-  assert.deepEqual(await lineStart(lines, -3), { line: 0, col: 0 });
 });
 
 test("screen columns expand tabs to the next stop", () => {

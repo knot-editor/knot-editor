@@ -1,0 +1,85 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: motions.
+{
+  "cases": [
+    // Character and line motions.
+    { "name": "l stops on the last character", "before": ["‸abc"], "keys": "5l", "after": ["ab‸c"] },
+    { "name": "h stops at the line start", "before": ["a‸bc"], "keys": "5h", "after": ["‸abc"] },
+    { "name": "l steps over a surrogate pair", "before": ["‸😀a"], "keys": "l", "after": ["😀‸a"] },
+    { "name": "a count of ten moves ten characters", "before": ["‸abcdefghijkl"], "keys": "10l", "after": ["abcdefghij‸kl"] },
+    { "name": "Backspace moves left onto the previous line", "before": ["ab", "‸cd"], "keys": "<bs>", "after": ["a‸b", "cd"] },
+    { "name": "Space moves right onto the next line", "before": ["a‸b", "cd"], "keys": " ", "after": ["ab", "‸cd"] },
+    { "name": "0 goes to the line start", "before": ["  fo‸o"], "keys": "0", "after": ["‸  foo"] },
+    { "name": "the arrows move as h, j, k, and l", "before": ["‸abc", "def"], "keys": "<right><down><right><up><left>", "after": ["a‸bc", "def"] },
+    { "name": "Home and End go to the line's ends", "before": ["a‸bc"], "keys": "<end>x<home>x", "after": ["‸b"] },
+    { "name": "d with Down deletes two lines", "before": ["‸a", "b", "c"], "keys": "d<down>", "after": ["‸c"] },
+    { "name": "^ goes to the first non-blank", "before": ["‸  foo"], "keys": "^", "after": ["  ‸foo"] },
+    { "name": "$ goes to the last character", "before": ["‸  foo"], "keys": "$", "after": ["  fo‸o"] },
+    { "name": "2$ goes to the end of the next line", "before": ["‸ab", "cd"], "keys": "2$", "after": ["ab", "c‸d"] },
+    { "name": "Enter goes to the next line's first non-blank", "before": ["‸a", "  b", "c"], "keys": "<cr>", "after": ["a", "  ‸b", "c"] },
+    { "name": "+ with a count skips lines", "before": ["‸a", "b", "  c"], "keys": "2+", "after": ["a", "b", "  ‸c"] },
+    { "name": "- goes to the previous line's first non-blank", "before": ["a", "  b", "‸c"], "keys": "-", "after": ["a", "  ‸b", "c"] },
+    { "name": "gg goes to the first line's first non-blank", "before": ["  one", "two", "th‸ree"], "keys": "gg", "after": ["  ‸one", "two", "three"] },
+    { "name": "G goes to the last line", "before": ["‸one", "two", "  three"], "keys": "G", "after": ["one", "two", "  ‸three"] },
+    { "name": "a count before G names the line", "before": ["‸one", "  two", "three"], "keys": "2G", "after": ["one", "  ‸two", "three"] },
+    { "name": "a count before gg names the line", "before": ["‸one", "two", "three"], "keys": "3gg", "after": ["one", "two", "‸three"] },
+
+    // j and k.
+    { "name": "j keeps the wanted column across short and empty lines", "before": ["abc‸def", "ab", "", "abcdefgh"], "keys": "jjj", "after": ["abcdef", "ab", "", "abc‸defgh"] },
+    { "name": "j clamps to a short line's last character", "before": ["abc‸def", "ab"], "keys": "j", "after": ["abcdef", "a‸b"] },
+    { "name": "k keeps the wanted column", "before": ["abcdef", "", "abc‸d"], "keys": "kk", "after": ["abc‸def", "", "abcd"] },
+    { "name": "after $, j stays at line ends", "before": ["a‸b", "abcd", "x"], "keys": "$jj", "after": ["ab", "abcd", "‸x"] },
+    { "name": "after $, j lands on a longer line's end", "before": ["a‸b", "abcd"], "keys": "$j", "after": ["ab", "abc‸d"] },
+    { "name": "j counts a tab as reaching the next tab stop", "before": ["abcd‸e", "\tx"], "keys": "j", "after": ["abcde", "\t‸x"] },
+    { "name": "j inside a tab lands on the tab", "before": ["a‸bcde", "\tx"], "keys": "j", "after": ["abcde", "‸\tx"] },
+    { "name": "a count of j past the end stops on the last line", "before": ["‸a", "b", "c"], "keys": "5j", "after": ["a", "b", "‸c"] },
+    { "name": "k on the first line stays", "before": ["a‸b"], "keys": "k", "after": ["a‸b"] },
+
+    // Word motions.
+    { "name": "w stops at punctuation and words", "before": ["‸foo.bar baz"], "keys": "w", "after": ["foo‸.bar baz"] },
+    { "name": "3w moves three words", "before": ["‸foo.bar baz"], "keys": "3w", "after": ["foo.bar ‸baz"] },
+    { "name": "w crosses lines and stops on an empty line", "before": ["foo ‸bar", "", "baz"], "keys": "w", "after": ["foo bar", "‸", "baz"] },
+    { "name": "w after an empty line goes to the next word", "before": ["foo ‸bar", "", "  baz"], "keys": "ww", "after": ["foo bar", "", "  ‸baz"] },
+    { "name": "w on the last word goes to the last character", "before": ["foo ‸bar"], "keys": "w", "after": ["foo ba‸r"] },
+    { "name": "w separates letters from emoji", "before": ["‸é😀 x"], "keys": "w", "after": ["é‸😀 x"] },
+    { "name": "W skips punctuation", "before": ["‸a.b c"], "keys": "W", "after": ["a.b ‸c"] },
+    { "name": "b goes to the previous word start", "before": ["foo ba‸r"], "keys": "b", "after": ["foo ‸bar"] },
+    { "name": "2b goes back two words", "before": ["foo ba‸r"], "keys": "2b", "after": ["‸foo bar"] },
+    { "name": "b crosses lines", "before": ["foo", "  ‸bar"], "keys": "b", "after": ["‸foo", "  bar"] },
+    { "name": "B skips punctuation", "before": ["a.b ‸c"], "keys": "B", "after": ["‸a.b c"] },
+    { "name": "e goes to the word end", "before": ["‸foo bar"], "keys": "e", "after": ["fo‸o bar"] },
+    { "name": "e from a word end goes to the next one", "before": ["fo‸o bar"], "keys": "e", "after": ["foo ba‸r"] },
+    { "name": "e skips empty lines", "before": ["fo‸o", "", "bar"], "keys": "e", "after": ["foo", "", "ba‸r"] },
+    { "name": "E skips punctuation", "before": ["‸a.b c"], "keys": "E", "after": ["a.‸b c"] },
+    { "name": "ge goes to the previous word end", "before": ["foo b‸ar"], "keys": "ge", "after": ["fo‸o bar"] },
+    { "name": "gE skips punctuation", "before": ["a.b ‸c"], "keys": "gE", "after": ["a.‸b c"] },
+
+    // f, t, ;, and ,.
+    { "name": "f finds a character on the line", "before": ["‸a.b.c"], "keys": "f.", "after": ["a‸.b.c"] },
+    { "name": "2f finds the second", "before": ["‸a.b.c"], "keys": "2f.", "after": ["a.b‸.c"] },
+    { "name": "F finds backwards", "before": ["a.b.‸c"], "keys": "F.", "after": ["a.b‸.c"] },
+    { "name": "t stops before the character", "before": ["‸abcd"], "keys": "tc", "after": ["a‸bcd"] },
+    { "name": "T stops after the character", "before": ["abc‸d"], "keys": "Ta", "after": ["a‸bcd"] },
+    { "name": "f without a match stays", "before": ["a‸bc"], "keys": "fz", "after": ["a‸bc"] },
+    { "name": "; repeats f", "before": ["‸a.b.c"], "keys": "f.;", "after": ["a.b‸.c"] },
+    { "name": ", repeats f backwards", "before": ["‸a.b.c"], "keys": "2f.,", "after": ["a‸.b.c"] },
+    { "name": "; after t moves on to the next match", "before": ["‸a.b.c"], "keys": "t.;", "after": ["a.‸b.c"] },
+    { "name": "f finds a tab", "before": ["‸a\tb"], "keys": "f<tab>", "after": ["a‸\tb"] },
+
+    // %, {, and }.
+    { "name": "% jumps to the matching bracket", "before": ["‸(a (b) c)"], "keys": "%", "after": ["(a (b) c‸)"] },
+    { "name": "% jumps back to the opener", "before": ["(a (b) c‸)"], "keys": "%", "after": ["‸(a (b) c)"] },
+    { "name": "% finds the next bracket on the line", "before": ["‸x = f(a);"], "keys": "%", "after": ["x = f(a‸);"] },
+    { "name": "% from inside a pair uses the next bracket", "before": ["f(a‸, b)"], "keys": "%", "after": ["f‸(a, b)"] },
+    { "name": "% matches an adjacent pair", "before": ["‸()"], "keys": "%", "after": ["(‸)"] },
+    { "name": "% skips brackets in strings with syntax", "language": "rust", "before": ["fn f() ‸{ \"}\"; }"], "keys": "%", "after": ["fn f() { \"}\"; ‸}"] },
+    { "name": "% spans lines", "language": "rust", "before": ["fn f() ‸{", "    a();", "}"], "keys": "%", "after": ["fn f() {", "    a();", "‸}"] },
+    { "name": "a count before % goes to that percentage of lines", "before": ["‸a", "b", "c", "d"], "keys": "50%", "after": ["a", "‸b", "c", "d"] },
+    { "name": "} goes to the next empty line", "before": ["‸a", "b", "", "c"], "keys": "}", "after": ["a", "b", "‸", "c"] },
+    { "name": "} at the last paragraph goes to the last character", "before": ["‸a", "bc"], "keys": "}", "after": ["a", "b‸c"] },
+    { "name": "2} skips a paragraph", "before": ["‸a", "", "b", "", "c"], "keys": "2}", "after": ["a", "", "b", "‸", "c"] },
+    { "name": "{ goes to the previous empty line", "before": ["a", "", "b", "‸c"], "keys": "{", "after": ["a", "‸", "b", "c"] },
+    { "name": "{ at the first paragraph goes to the first line", "before": ["a", "b‸c"], "keys": "{", "after": ["‸a", "bc"] }
+  ]
+}

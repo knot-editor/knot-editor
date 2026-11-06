@@ -1,0 +1,125 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: operators.
+{
+  "cases": [
+    // d.
+    { "name": "dw deletes a word and its white space", "before": ["‸foo bar"], "keys": "dw", "after": ["‸bar"] },
+    { "name": "dw on the line's last word keeps the line break", "before": ["foo ‸bar", "baz"], "keys": "dw", "after": ["foo‸ ", "baz"] },
+    { "name": "dw on the document's last word deletes to its end", "before": ["foo b‸ar"], "keys": "dw", "after": ["foo ‸b"] },
+    { "name": "d2w and 2dw delete two words", "before": ["‸a b c d e"], "keys": "d2w2dw", "after": ["‸e"] },
+    { "name": "de deletes to the word end", "before": ["‸foo bar"], "keys": "de", "after": ["‸ bar"] },
+    { "name": "db deletes back to the word start", "before": ["foo ba‸r"], "keys": "db", "after": ["foo ‸r"] },
+    { "name": "d$ deletes to the line end", "before": ["ab‸cd", "e"], "keys": "d$", "after": ["a‸b", "e"] },
+    { "name": "D deletes to the line end", "before": ["ab‸cd"], "keys": "D", "after": ["a‸b"] },
+    { "name": "d0 deletes to the line start", "before": ["ab‸cd"], "keys": "d0", "after": ["‸cd"] },
+    { "name": "dd deletes the line", "before": ["a", "  ‸b", "  c"], "keys": "dd", "after": ["a", "  ‸c"] },
+    { "name": "dd on the last line goes to the line above", "before": ["  a", "‸b"], "keys": "dd", "after": ["  ‸a"] },
+    { "name": "3dd deletes three lines", "before": ["‸a", "b", "c", "d"], "keys": "3dd", "after": ["‸d"] },
+    { "name": "a count past the end deletes to the end", "before": ["a", "‸b", "c"], "keys": "9dd", "after": ["‸a"] },
+    { "name": "dd on the only line empties the document", "before": ["a‸b"], "keys": "dd", "after": ["‸"] },
+    { "name": "dj deletes this line and the next", "before": ["‸a", "b", "c"], "keys": "dj", "after": ["‸c"] },
+    { "name": "dk deletes this line and the previous", "before": ["a", "b", "‸c"], "keys": "dk", "after": ["‸a"] },
+    { "name": "dj on the last line does nothing", "before": ["a", "‸b"], "keys": "dj", "after": ["a", "‸b"] },
+    { "name": "dG deletes to the last line", "before": ["a", "‸b", "c"], "keys": "dG", "after": ["‸a"] },
+    { "name": "dgg deletes to the first line", "before": ["a", "‸b", "c"], "keys": "dgg", "after": ["‸c"] },
+    { "name": "dfx deletes through the character", "before": ["‸a.b.c"], "keys": "df.", "after": ["‸b.c"] },
+    { "name": "dtx deletes up to the character", "before": ["‸a.b.c"], "keys": "dt.", "after": ["‸.b.c"] },
+    { "name": "dfx without a match does nothing", "before": ["‸abc"], "keys": "dfz", "after": ["‸abc"] },
+    { "name": "d% deletes through the matching bracket", "before": ["a‸(b)c"], "keys": "d%", "after": ["a‸c"] },
+    { "name": "d} from a paragraph start deletes its lines", "before": ["‸a", "b", "", "c"], "keys": "d}", "after": ["‸", "c"] },
+    { "name": "d} from inside a line keeps what is before", "before": ["a‸b", "c", "", "d"], "keys": "d}", "after": ["‸a", "", "d"] },
+    { "name": "x deletes the character", "before": ["a‸bc"], "keys": "x", "after": ["a‸c"] },
+    { "name": "x on the last character steps back", "before": ["ab‸c"], "keys": "x", "after": ["a‸b"] },
+    { "name": "3x deletes three characters", "before": ["‸abcd"], "keys": "3x", "after": ["‸d"] },
+    { "name": "x past the end deletes to the end", "before": ["a‸bc"], "keys": "5x", "after": ["‸a"] },
+    { "name": "x on an empty line does nothing", "before": ["‸", "a"], "keys": "x", "after": ["‸", "a"] },
+    { "name": "X deletes before the caret", "before": ["ab‸c"], "keys": "X", "after": ["a‸c"] },
+    { "name": "X at the line start does nothing", "before": ["‸abc"], "keys": "X", "after": ["‸abc"] },
+    { "name": "x deletes a surrogate pair whole", "before": ["a‸😀b"], "keys": "x", "after": ["a‸b"] },
+
+    // c.
+    { "name": "cw changes to the word end", "before": ["‸foo bar"], "keys": "cwx<esc>", "after": ["‸x bar"] },
+    { "name": "cw on a word's last character changes it alone", "before": ["fo‸o bar"], "keys": "cwx<esc>", "after": ["fo‸x bar"] },
+    { "name": "c2w changes two words", "before": ["‸a b c"], "keys": "c2wx<esc>", "after": ["‸x c"] },
+    { "name": "cw on white space changes up to the next word", "before": ["a‸  b"], "keys": "cwx<esc>", "after": ["a‸xb"] },
+    { "name": "cc keeps the indentation", "before": ["  a‸b", "c"], "keys": "ccx<esc>", "after": ["  ‸x", "c"] },
+    { "name": "cc left empty keeps no indentation", "before": ["  a‸b", "c"], "keys": "cc<esc>", "after": ["‸", "c"] },
+    { "name": "S changes the line", "before": ["a‸b"], "keys": "Sx<esc>", "after": ["‸x"] },
+    { "name": "C changes to the line end", "before": ["a‸bc"], "keys": "Cx<esc>", "after": ["a‸x"] },
+    { "name": "s substitutes a character", "before": ["a‸bc"], "keys": "sxy<esc>", "after": ["ax‸yc"] },
+    { "name": "2s substitutes two characters", "before": ["‸abc"], "keys": "2sx<esc>", "after": ["‸xc"] },
+    { "name": "s on an empty line inserts", "before": ["‸"], "keys": "sx<esc>", "after": ["‸x"] },
+    { "name": "c leaves insert mode active", "before": ["‸foo"], "keys": "cw", "after": { "text": ["‸"], "mode": "insert" } },
+
+    // Undo restores the caret from before the change, where Vim puts it at
+    // the change's start.
+    { "name": "ciw…<Esc> undoes as one step", "before": ["foo b‸ar baz"], "keys": "ciwxy<esc>u", "after": ["foo b‸ar baz"] },
+    { "name": "cw…<Esc> with a line break undoes as one step", "before": ["‸foo bar"], "keys": "cwx<cr>y<esc>u", "after": ["‸foo bar"] },
+
+    // y and p.
+    { "name": "yy then p puts the line below", "before": ["‸a", "b"], "keys": "yyp", "after": ["a", "‸a", "b"] },
+    { "name": "yy then P puts the line above", "before": ["a", "‸b"], "keys": "yyP", "after": ["a", "‸b", "b"] },
+    { "name": "yy then p on the last line", "before": ["a", "  ‸b"], "keys": "yyp", "after": ["a", "  b", "  ‸b"] },
+    { "name": "a count before p puts several copies", "before": ["‸a"], "keys": "yy3p", "after": ["a", "‸a", "a", "a"] },
+    { "name": "dd then p moves a line down", "before": ["‸a", "b", "c"], "keys": "ddp", "after": ["b", "‸a", "c"] },
+    { "name": "2yy then p puts both lines", "before": ["‸a", "b", "c"], "keys": "2yyGp", "after": ["a", "b", "c", "‸a", "b"] },
+    { "name": "Y yanks the line", "before": ["‸a", "b"], "keys": "Yjp", "after": ["a", "b", "‸a"] },
+    { "name": "yw then p puts after the caret", "before": ["‸foo bar"], "keys": "ywP", "after": ["foo‸ foo bar"] },
+    { "name": "yiw then p puts the word after the caret", "before": ["f‸oo"], "keys": "yiw$p", "after": ["foofo‸o"] },
+    { "name": "yb moves the caret to the start", "before": ["foo ‸bar"], "keys": "yb", "after": ["‸foo bar"] },
+    { "name": "x then p swaps characters", "before": ["‸ab"], "keys": "xp", "after": ["b‸a"] },
+    { "name": "p on an empty line puts there", "before": ["‸ab", ""], "keys": "yiwjp", "after": ["ab", "a‸b"] },
+    { "name": "2p repeats characterwise text", "before": ["‸ab"], "keys": "yl2p", "after": ["aa‸ab"] },
+    { "name": "putting several lines of characters leaves the caret at their start", "before": ["a‸b", "cd", "x"], "keys": "yeGP", "after": ["ab", "cd", "‸b", "cdx"] },
+    { "name": "a put undoes as one step", "before": ["‸a"], "keys": "yy3pu", "after": ["‸a"] },
+    { "name": "dd then u restores the line", "before": ["a", "‸b", "c"], "keys": "ddu", "after": ["a", "‸b", "c"] },
+
+    // Indentation operators.
+    { "name": ">> indents the line", "before": ["a‸b"], "keys": ">>", "after": ["    ‸ab"] },
+    { "name": "3>> indents three lines", "before": ["‸a", "b", "c", "d"], "keys": "3>>", "after": ["    ‸a", "    b", "    c", "d"] },
+    { "name": ">j indents two lines", "before": ["‸a", "b", "c"], "keys": ">j", "after": ["    ‸a", "    b", "c"] },
+    { "name": "<< outdents the line", "before": ["        a‸b"], "keys": "<lt><lt>", "after": ["    ‸ab"] },
+    { "name": ">ip indents the paragraph", "before": ["a", "‸b", "", "c"], "keys": ">ip", "after": ["    ‸a", "    b", "", "c"] },
+    { "name": ">> undoes as one step", "before": ["a‸b"], "keys": ">>u", "after": ["a‸b"] },
+    { "name": "== reindents a Rust line", "language": "rust", "before": ["fn f() {", "‸a();", "}"], "keys": "==", "after": ["fn f() {", "    ‸a();", "}"] },
+    { "name": "=ap reindents a Rust block", "language": "rust", "before": ["fn f() {", "a();", "‸  b();", "}"], "keys": "=ap", "after": ["‸fn f() {", "    a();", "    b();", "}"] },
+    { "name": "== reindents a TypeScript line", "language": "typescript", "before": ["function f() {", "‸a();", "}"], "keys": "==", "after": ["function f() {", "    ‸a();", "}"] },
+    { "name": ">> in Rust indents by the tab size", "language": "rust", "before": ["‸a();"], "keys": ">>", "after": ["    ‸a();"] },
+
+    // Case operators.
+    { "name": "gUiw uppercases a word", "before": ["foo b‸ar"], "keys": "gUiw", "after": ["foo ‸BAR"] },
+    { "name": "guu lowercases the line", "before": ["AB‸C"], "keys": "guu", "after": ["ab‸c"] },
+    { "name": "gUU uppercases the line", "before": ["ab‸c"], "keys": "gUU", "after": ["AB‸C"] },
+    { "name": "g~~ switches the line's case", "before": ["a‸B"], "keys": "g~~", "after": ["A‸b"] },
+    { "name": "gUgU uppercases the line", "before": ["‸ab"], "keys": "gUgU", "after": ["‸AB"] },
+    { "name": "g~w switches a word's case", "before": ["‸aB c"], "keys": "g~w", "after": ["‸Ab c"] },
+    { "name": "gu$ lowercases to the line end", "before": ["A‸BC"], "keys": "gu$", "after": ["A‸bc"] },
+
+    // r, ~, and J.
+    { "name": "r replaces the character", "before": ["a‸bc"], "keys": "rx", "after": ["a‸xc"] },
+    { "name": "3r replaces three characters", "before": ["‸abcd"], "keys": "3rx", "after": ["xx‸xd"] },
+    { "name": "r with too large a count does nothing", "before": ["a‸bc"], "keys": "5rx", "after": ["a‸bc"] },
+    { "name": "r on an empty line does nothing", "before": ["‸"], "keys": "rx", "after": ["‸"] },
+    { "name": "~ switches case and moves on", "before": ["‸ab"], "keys": "~", "after": ["A‸b"] },
+    { "name": "3~ switches three characters", "before": ["‸aBcd"], "keys": "3~", "after": ["AbC‸d"] },
+    { "name": "~ on the last character stays", "before": ["a‸b"], "keys": "~", "after": ["a‸B"] },
+    { "name": "J joins the next line with a space", "before": ["‸a", "  b"], "keys": "J", "after": ["a‸ b"] },
+    { "name": "3J joins three lines", "before": ["‸a", "b", "c", "d"], "keys": "3J", "after": ["a b‸ c", "d"] },
+    { "name": "J on the last line does nothing", "before": ["‸a"], "keys": "J", "after": ["‸a"] },
+    { "name": "3J undoes as one step", "before": ["‸a", "b", "c"], "keys": "3Ju", "after": ["‸a", "b", "c"] },
+
+    // Operator-pending input.
+    { "name": "Escape cancels a pending operator", "before": ["‸abc"], "keys": "d<esc>l", "after": ["a‸bc"] },
+    { "name": "a different operator cancels", "before": ["‸abc"], "keys": "dyl", "after": ["a‸bc"] },
+    { "name": "an unknown text object cancels", "before": ["‸abc"], "keys": "dizl", "after": ["a‸bc"] },
+    { "name": "counts before and after the operator multiply", "before": ["‸a b c d e f g"], "keys": "2d3w", "after": ["‸g"] },
+
+    // Keys that mean nothing in normal mode.
+    { "name": "typed text that names no command is swallowed", "before": ["a‸b"], "keys": "QZ", "after": ["a‸b"] },
+    { "name": "editing keys do not edit in normal mode", "before": ["a‸b"], "keys": "<del><tab><s-tab><c-d><c-k><c-j>", "after": ["a‸b"] },
+    { "name": "Escape cancels a pending count", "before": ["‸abc"], "keys": "2<esc>l", "after": ["a‸bc"] },
+    { "name": "an unknown key cancels a pending count", "before": ["‸abc"], "keys": "2Ql", "after": ["a‸bc"] },
+    { "name": "an unknown g key cancels it", "before": ["‸abc"], "keys": "gzl", "after": ["a‸bc"] }
+  ]
+}

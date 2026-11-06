@@ -1,0 +1,38 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: objects.
+{
+  "cases": [
+    // Text objects.
+    { "name": "diw deletes the word", "before": ["foo b‸ar baz"], "keys": "diw", "after": ["foo ‸ baz"] },
+    { "name": "daw deletes the word and the white space after", "before": ["foo b‸ar baz"], "keys": "daw", "after": ["foo ‸baz"] },
+    { "name": "daw on the last word takes the white space before", "before": ["foo b‸ar"], "keys": "daw", "after": ["fo‸o"] },
+    { "name": "daw keeps indentation", "before": ["  b‸ar"], "keys": "daw", "after": [" ‸ "] },
+    { "name": "diw on white space deletes it", "before": ["foo ‸  bar"], "keys": "diw", "after": ["foo‸bar"] },
+    { "name": "daw on white space takes the next word", "before": ["foo‸  bar baz"], "keys": "daw", "after": ["foo‸ baz"] },
+    { "name": "d2aw deletes two words", "before": ["‸a b c"], "keys": "d2aw", "after": ["‸c"] },
+    { "name": "d3iw deletes a word, a space, and a word", "before": ["‸a b c"], "keys": "d3iw", "after": ["‸ c"] },
+    { "name": "diW includes punctuation", "before": ["x a.‸b y"], "keys": "diW", "after": ["x ‸ y"] },
+    { "name": "di( deletes inside the parentheses", "before": ["f(a, ‸b)"], "keys": "di(", "after": ["f(‸)"] },
+    { "name": "da( deletes the parentheses too", "before": ["f(a, ‸b) x"], "keys": "da(", "after": ["f‸ x"] },
+    { "name": "dib on the opener", "before": ["f‸(a)"], "keys": "dib", "after": ["f(‸)"] },
+    { "name": "di) on the closer", "before": ["f(a‸)"], "keys": "di)", "after": ["f(‸)"] },
+    { "name": "d2i( deletes inside the outer pair", "before": ["(a (‸b) c)"], "keys": "d2i(", "after": ["(‸)"] },
+    { "name": "di( outside any pair does nothing", "before": ["‸a (b)"], "keys": "di(", "after": ["‸a (b)"] },
+    { "name": "ci( in an empty pair inserts there", "before": ["f‸()"], "keys": "ci(x<esc>", "after": ["f(‸x)"] },
+    { "name": "di{ deletes a block's lines", "before": ["fn f() {", "    a‸();", "    b();", "}"], "keys": "di{", "after": ["fn f() {", "‸}"] },
+    { "name": "ci{ leaves an indented line in a block", "before": ["fn f() {", "    a‸();", "}"], "keys": "ci{x<esc>", "after": ["fn f() {", "    ‸x", "}"] },
+    { "name": "da{ deletes the block", "before": ["x {", "  ‸a", "} y"], "keys": "daB", "after": ["x ‸ y"] },
+    { "name": "di[ and di< work", "before": ["[‸a] <b>"], "keys": "di[f<lt>di<lt>", "after": ["[] <‸>"] },
+    { "name": "di\" deletes inside quotes", "before": ["x = \"a‸b\";"], "keys": "di\"", "after": ["x = \"‸\";"] },
+    { "name": "da\" deletes quotes and white space after", "before": ["x \"a‸b\" y"], "keys": "da\"", "after": ["x ‸y"] },
+    { "name": "da\" at the line end takes white space before", "before": ["x \"a‸b\""], "keys": "da\"", "after": ["‸x"] },
+    { "name": "di\" before a quoted string uses it", "before": ["‸x \"ab\""], "keys": "di\"", "after": ["x \"‸\""] },
+    { "name": "di\" skips escaped quotes", "before": ["\"a\\\"‸b\""], "keys": "di\"", "after": ["\"‸\""] },
+    { "name": "di' and di` work", "before": ["'‸a' `b`"], "keys": "di'fbdi`", "after": ["'' `‸`"] },
+    { "name": "dip deletes the paragraph", "before": ["a", "‸b", "", "c"], "keys": "dip", "after": ["‸", "c"] },
+    { "name": "dap deletes the paragraph and the blank line after", "before": ["a", "‸b", "", "c"], "keys": "dap", "after": ["‸c"] },
+    { "name": "dap on the last paragraph takes the blank lines before", "before": ["a", "", "‸b"], "keys": "dap", "after": ["‸a"] },
+    { "name": "yip then P puts the paragraph", "before": ["‸a", "b", "", "c"], "keys": "yipGP", "after": ["a", "b", "", "‸a", "b", "c"] }
+  ]
+}

@@ -174,7 +174,7 @@ to be rebuilt later:
     closer such as `}` or Python's `else:` outdents its line; Reindent Lines
     recomputes a selection. Unclosed brackets inside a parse error indent the
     lines after them. Rust, ECMAScript, Python, and TOML ship queries with
-    `test/indents.jsonc` cases
+    `test/cases/indents.jsonc` cases
     ([semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
     [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
     [decisions](../decisions.md#indentation),
@@ -187,7 +187,7 @@ to be rebuilt later:
     including `notIn` strings and comments from highlight captures; closers
     Knot inserted are stepped over and deleted in pairs, and openers wrap a
     selection. `editor.autoClosingBrackets` and `editor.autoSurround` turn
-    them off, and packages keep `test/brackets.jsonc` cases
+    them off, and packages keep `test/cases/brackets.jsonc` cases
     ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
     [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
     [decisions](../decisions.md#brackets)).

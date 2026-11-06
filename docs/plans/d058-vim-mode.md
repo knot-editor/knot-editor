@@ -192,7 +192,7 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 ## Testing
 
 The package's behavior is tested end to end through the real editor, as
-native editing is. `extensions/@knot/vim/test/cases.jsonc` holds the cases: a
+native editing is. `extensions/@knot/vim/test/cases/` holds the cases by topic: a
 marked starting text, the keys in Vim notation, the expected text and caret,
 and the mode. `src/app/product/tests/vim.rs` runs every case in a product
 window with the bundled package enabled from `post-init.js`, pressing real

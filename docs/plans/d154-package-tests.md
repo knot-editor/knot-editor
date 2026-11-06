@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–8 complete; checkpoint 9 is next. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–9 complete; checkpoint 10 is next. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -218,23 +218,20 @@ on extension turns for about 40% of the run, and half of each turn is the
 debug-built host glue rather than V8, which ships as a release library.
 Fewer round trips per key is D156.
 
-### 9. Shared case harness and topic files
+### 9. Shared case harness and topic files — ✅
 
-Deliverables: one harness for case discovery, JSONC parsing, markers, name
-filtering, and failures with file and line; the key notation beside it;
-`test/cases/` topic files, each its own test; expectations grouped in objects
-and shared or generated starting texts for long documents; parser tests
-limited to what cases cannot show.
-
-Validation: every runner uses the harness; a failing case reports its file
-and line.
-
-Implementation context: `case_files`, `unmark`, and `CARET` in
-`language_indents.rs`; the copies in `language_editing.rs`; `parse_keys` and
-`marked` in `vim.rs`; `extensions/@knot/vim/test/cases.jsonc` and
-`keys.test.ts`.
-
-Review gate: the case format reads well for a new topic.
+`src/app/product/tests/cases.rs` is the one harness: case discovery in
+`test/cases/<topic>.jsonc`, JSONC parsing with line numbers, `KNOT_CASES`
+name filtering, caret markers, generated `{ "numbered": n }` texts for long
+documents, the key notation, and failures that name the case's file and line.
+The comment, indent, bracket, and Vim runners all use it, and the editor
+runner they share moved into `harness.rs`. Vim cases are split into eight
+topic files, each its own parallel test, with a guard test that every file
+is listed; a case groups its expectations (`text`, `mode`, `top`) in an
+`after` object when it needs more than text. Two TypeScript motion tests that
+the cases repeat were removed; the remaining package unit tests check pure
+functions with edge cases the cases do not show. See
+[development](../development.md).
 
 ### 10. Package state reset between cases
 

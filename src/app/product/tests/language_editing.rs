@@ -1,28 +1,17 @@
 //! Runs the comment toggling cases each bundled language package keeps in
-//! `test/comments.jsonc` through the native line and block toggles, on the
-//! configuration the package registers.
-use std::path::{Path, PathBuf};
-
+//! `test/cases/comments.jsonc` through the native line and block toggles, on the
+//! configuration the package registers, in the [case](super::cases) format.
 use serde::Deserialize;
 
+use super::cases::{Failures, read_groups, topic_files};
 use super::harness::start_bundled_packages;
 use super::*;
 use crate::app::languages::editing::EditingConfiguration;
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CommentCases {
-    languages: Vec<String>,
-    cases: Vec<CommentCase>,
-    #[serde(default)]
-    block: Vec<BlockCase>,
-}
 
 /// Toggling comments on `before` gives `after`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CommentCase {
-    name: String,
     before: Vec<String>,
     after: Vec<String>,
 }
@@ -31,27 +20,8 @@ struct CommentCase {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BlockCase {
-    name: String,
     before: String,
     after: String,
-}
-
-/// Every bundled package's case file.
-fn case_files() -> Vec<PathBuf> {
-    let packages = Path::new(env!("CARGO_MANIFEST_DIR")).join("extensions/@knot");
-    let mut files: Vec<PathBuf> = std::fs::read_dir(packages)
-        .unwrap()
-        .map(|entry| entry.unwrap().path().join("test/comments.jsonc"))
-        .filter(|path| path.exists())
-        .collect();
-    files.sort();
-    files
-}
-
-fn read_cases(path: &Path) -> CommentCases {
-    let text = std::fs::read_to_string(path).unwrap();
-    jsonc_parser::parse_to_serde_value(&text, &Default::default())
-        .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
 /// Toggle comments on `lines` and apply the edits.
@@ -78,37 +48,33 @@ fn bundled_comment_cases_toggle_on_their_registered_languages(cx: &mut TestAppCo
     start_bundled_packages(cx);
 
     let mut tested = Vec::new();
-    let mut failures = Vec::new();
-    for path in case_files() {
-        let cases = read_cases(&path);
-        for id in &cases.languages {
-            let configuration = cx.read(|cx| crate::app::languages::editing_configuration(id, cx));
-            let Some(configuration) = configuration else {
-                failures.push(format!("{}: {id} is not registered", path.display()));
-                continue;
-            };
-            for case in &cases.cases {
-                let actual = toggle(&configuration, &case.before);
-                if actual != case.after {
-                    failures.push(format!(
-                        "{id}: {}\n  before: {:?}\n  expected: {:?}\n  actual: {:?}",
-                        case.name, case.before, case.after, actual
-                    ));
+    let mut failures = Failures::default();
+    for path in topic_files("comments") {
+        for group in read_groups(&path, &["languages", "cases", "block"]) {
+            let line_cases = group.cases::<CommentCase>("cases");
+            let block_cases = group.cases::<BlockCase>("block");
+            for id in group.field::<Vec<String>>("languages") {
+                let configuration =
+                    cx.read(|cx| crate::app::languages::editing_configuration(&id, cx));
+                let Some(configuration) = configuration else {
+                    panic!("{}: {id} is not registered", path.display());
+                };
+                for case in &line_cases {
+                    let actual = toggle(&configuration, &case.value.before).join("\n");
+                    failures.check(case, &id, &case.value.after.join("\n"), &actual);
                 }
-            }
-            for case in &cases.block {
-                let actual = toggle_block(&configuration, &case.before);
-                if actual != case.after {
-                    failures.push(format!(
-                        "{id}: {}\n  before: {:?}\n  expected: {:?}\n  actual: {:?}",
-                        case.name, case.before, case.after, actual
-                    ));
+                for case in &block_cases {
+                    let actual = toggle_block(&configuration, &case.value.before);
+                    failures.check(case, &id, &case.value.after, &actual);
                 }
+                if configuration.block_comment.is_some()
+                    && group.cases::<BlockCase>("block").is_empty()
+                    && std::env::var("KNOT_CASES").is_err()
+                {
+                    panic!("{}: {id} has no block comment cases", path.display());
+                }
+                tested.push(id);
             }
-            if configuration.block_comment.is_some() && cases.block.is_empty() {
-                failures.push(format!("{id}: no block comment cases"));
-            }
-            tested.push(id.clone());
         }
     }
 
@@ -125,6 +91,6 @@ fn bundled_comment_cases_toggle_on_their_registered_languages(cx: &mut TestAppCo
             .filter(|id| !tested.contains(id))
             .collect()
     });
+    failures.assert_none();
     assert!(untested.is_empty(), "no comment cases for {untested:?}");
-    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
