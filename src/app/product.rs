@@ -20,6 +20,7 @@ mod closure;
 pub(super) mod commands;
 mod extension_restart;
 mod key_hold;
+mod key_routing;
 mod language_mode;
 mod launch;
 mod move_tool;
@@ -62,7 +63,7 @@ use super::{
         dispatch_close_to_captured_target, dispatch_open_to_captured_target,
         dispatch_save_to_captured_target,
     },
-    commands::keymaps::{ApplicationKeymaps, BindingResolution, KeymapAction},
+    commands::keymaps::ApplicationKeymaps,
     documents::{ApplicationDocuments, DocumentCollection, DocumentId, DocumentState},
     entry::OpenRequest,
     extensions::host::handlers::TransientError,
@@ -437,6 +438,7 @@ pub(crate) struct ProductShell {
     /// Input waiting for a key-invoked extension command to finish.
     key_hold: Option<key_hold::KeyHold>,
     key_hold_generation: u64,
+    keys: key_routing::KeyRouting,
 }
 
 /// One live transient interaction owned by this window. Native interactions
@@ -547,6 +549,7 @@ impl ProductShell {
             },
             key_hold: None,
             key_hold_generation: 0,
+            keys: Default::default(),
         }
     }
 
@@ -984,61 +987,6 @@ impl ProductShell {
             return;
         };
         self.dispatch_command(source.command(), target, cx);
-    }
-
-    fn dispatch_keybinding(
-        &mut self,
-        action: &KeymapAction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.command_palette.is_some() {
-            cx.propagate();
-            return;
-        }
-        let Some(target) = self.capture_command_target(window, cx) else {
-            cx.propagate();
-            return;
-        };
-        let view_kind = Self::target_view_kind(&target, cx);
-        // The view's live contexts rather than gpui's, which reflect the last
-        // rendered frame: the previous key may have changed them.
-        let editor = view_kind
-            .is_some()
-            .then(|| target.command_view(cx))
-            .flatten()
-            .and_then(|view| match view {
-                super::workbench::CommandView::Editor(editor) => Some(editor),
-                _ => None,
-            });
-        let contexts = editor
-            .as_ref()
-            .map(|editor| editor.read(cx).key_contexts())
-            .unwrap_or_default();
-        let resolution = cx.global::<ApplicationKeymaps>().0.resolve_in(
-            &action.key,
-            view_kind.as_deref(),
-            &contexts,
-        );
-        let Some(BindingResolution::Command(command)) = resolution else {
-            cx.propagate();
-            return;
-        };
-        let dispatcher = Self::command_dispatcher(cx);
-        let native = matches!(
-            dispatcher
-                .read(cx)
-                .catalog()
-                .borrow()
-                .resolve(command.name.as_ref()),
-            Ok(super::commands::catalog::CommandTargetKind::Native)
-        );
-        let execution = dispatcher.update(cx, |dispatcher, cx| {
-            dispatcher.dispatch(command, target, cx)
-        });
-        if !native && self.key_hold.is_none() {
-            self.hold_keys_until(execution.completion, editor, window, cx);
-        }
     }
 
     #[cfg(test)]

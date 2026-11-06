@@ -1,8 +1,11 @@
-//! Application-owned keybinding slots and gpui recognition.
+//! Application-owned keybinding slots, and how typed keystrokes match them.
+//!
+//! Knot matches keys itself (see `key_router`), so gpui holds bindings only
+//! to label menus with their key equivalents.
 
 use std::collections::{HashMap, HashSet};
 
-use gpui::{App, DummyKeyboardMapper, Global, KeyBinding, KeyBindingContextPredicate, Keystroke};
+use gpui::{App, Global, KeyBinding, Keystroke, Modifiers};
 
 use crate::host::protocol::{
     Command, CommandArgumentValue, CommandName, ExtensionId, ExtensionLifecycleId,
@@ -10,6 +13,7 @@ use crate::host::protocol::{
 };
 
 use crate::app::commands::dispatch::{ProductCommandSource, QUIT_COMMAND};
+use crate::app::commands::key_router::TypedMatch;
 
 /// A key context no element declares, for bindings that only label menus.
 const MENU_SHORTCUT_CONTEXT: &str = "menu_shortcut";
@@ -120,14 +124,6 @@ impl EffectiveKey {
     fn is_empty(&self) -> bool {
         self.global.is_none() && self.views.is_empty() && self.contexts.is_empty()
     }
-
-    /// The views that have a context-scoped slot for this key.
-    fn context_views(&self) -> HashSet<&str> {
-        self.contexts
-            .keys()
-            .map(|(view, _)| view.as_str())
-            .collect()
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -143,6 +139,8 @@ pub(crate) struct BindingRegistry {
     slots: HashMap<SlotKey, Slot>,
     text_slots: HashMap<TextSlotKey, TextSlot>,
     active: HashMap<String, EffectiveKey>,
+    /// The keystrokes of each active key sequence.
+    strokes: HashMap<String, Vec<Keystroke>>,
     kinds: HashSet<String>,
     next_order: u64,
 }
@@ -445,6 +443,7 @@ impl BindingRegistry {
     }
 
     /// Reads a canonical key sequence for a focused view holding `contexts`.
+    #[cfg(test)]
     pub(crate) fn resolve_in(
         &self,
         key: &str,
@@ -493,59 +492,54 @@ impl BindingRegistry {
             .collect()
     }
 
+    #[cfg(test)]
     pub(crate) fn keys(&self) -> Vec<String> {
         let mut keys = self.active.keys().cloned().collect::<Vec<_>>();
         keys.sort();
         keys
     }
 
-    /// gpui recognizes each key wherever some binding could apply. Knot
-    /// resolves key contexts itself against the view's live state, so a
-    /// view with a context-scoped slot recognizes the key broadly and an
-    /// unmatched key propagates like an unbound one.
-    fn gpui_bindings(&self) -> Vec<(String, String)> {
-        self.keys()
-            .into_iter()
-            .flat_map(|key| {
-                let effective = &self.active[&key];
-                let context_views = effective.context_views();
-                if matches!(effective.global, Some(BindingResolution::Command(_))) {
-                    let mut context = "product && !palette && !transient".to_owned();
-                    let mut unbound_views = effective
-                        .views
-                        .iter()
-                        .filter_map(|(view, resolution)| {
-                            matches!(resolution, BindingResolution::Unbound).then_some(view)
-                        })
-                        .collect::<Vec<_>>();
-                    unbound_views.sort();
-                    let mut bindings = Vec::new();
-                    for view in unbound_views {
-                        context.push_str(&format!(" && !{}", view_context(view)));
-                        if context_views.contains(view.as_str()) {
-                            bindings
-                                .push((key.clone(), format!("product > {}", view_context(view))));
-                        }
-                    }
-                    bindings.insert(0, (key, context));
-                    return bindings;
-                }
-                let mut views = effective
-                    .views
+    /// How `typed` matches the bindings that resolve to a command in
+    /// `view` holding `contexts`. A keystroke matches a binding's as gpui
+    /// matches them: by key and modifiers, or by the character it typed
+    /// with only its control and command modifiers. Among exact matches a
+    /// direct one wins.
+    pub(crate) fn match_typed(
+        &self,
+        typed: &[Keystroke],
+        view: Option<&str>,
+        contexts: &[&str],
+    ) -> TypedMatch {
+        let mut result = TypedMatch::default();
+        let mut direct = false;
+        for (key, effective) in &self.active {
+            let strokes = &self.strokes[key];
+            if strokes.len() < typed.len()
+                || !typed
                     .iter()
-                    .filter_map(|(view, resolution)| {
-                        matches!(resolution, BindingResolution::Command(_)).then_some(view.as_str())
-                    })
-                    .chain(context_views.iter().copied())
-                    .collect::<Vec<_>>();
-                views.sort();
-                views.dedup();
-                views
-                    .into_iter()
-                    .map(|view| (key.clone(), format!("product > {}", view_context(view))))
-                    .collect()
-            })
-            .collect()
+                    .zip(strokes)
+                    .all(|(typed, bound)| typed_matches(typed, bound))
+            {
+                continue;
+            }
+            let Some(BindingResolution::Command(command)) = effective.resolve(view, contexts)
+            else {
+                continue;
+            };
+            if strokes.len() > typed.len() {
+                result.longer = true;
+                continue;
+            }
+            let is_direct = typed
+                .iter()
+                .zip(strokes)
+                .all(|(typed, bound)| typed.key == bound.key && typed.modifiers == bound.modifiers);
+            if result.exact.is_none() || (is_direct && !direct) {
+                result.exact = Some(command.clone());
+                direct = is_direct;
+            }
+        }
+        result
     }
 
     fn validate_view(&self, view: Option<&str>) -> Result<Option<String>, BindingError> {
@@ -665,8 +659,15 @@ impl BindingRegistry {
         };
         if effective.is_empty() {
             self.active.remove(key);
+            self.strokes.remove(key);
         } else {
             self.active.insert(key.to_owned(), effective);
+            self.strokes.insert(
+                key.to_owned(),
+                key.split_whitespace()
+                    .filter_map(|stroke| Keystroke::parse(stroke).ok())
+                    .collect(),
+            );
         }
     }
 }
@@ -799,28 +800,31 @@ fn canonical_key(source: &str) -> Result<String, BindingError> {
         })
         .collect::<Result<Vec<_>, _>>()?
         .join(" ");
-    KeyBinding::load(
-        &canonical,
-        Box::new(KeymapAction {
-            key: canonical.clone().into(),
-        }),
-        Some(
-            KeyBindingContextPredicate::parse("product")
-                .map_err(|_| BindingError::Key)?
-                .into(),
-        ),
-        false,
-        None,
-        &DummyKeyboardMapper,
-    )
-    .map_err(|_| BindingError::Key)?;
     Ok(canonical)
 }
 
-#[derive(Clone, PartialEq, gpui::Action)]
-#[action(namespace = knot, no_json)]
-pub(crate) struct KeymapAction {
-    pub(crate) key: gpui::SharedString,
+/// Whether a typed keystroke matches a binding's, as gpui's
+/// `Keystroke::should_match` decides: directly, or by the character it
+/// typed, which already reflects its other modifiers.
+fn typed_matches(typed: &Keystroke, bound: &Keystroke) -> bool {
+    if let Some(key_char) = typed
+        .key_char
+        .as_ref()
+        .filter(|key_char| **key_char != typed.key)
+    {
+        #[cfg(not(windows))]
+        let modifiers = Modifiers {
+            control: typed.modifiers.control,
+            platform: typed.modifiers.platform,
+            ..Default::default()
+        };
+        #[cfg(windows)]
+        let modifiers = Modifiers::none();
+        if bound.key == *key_char && bound.modifiers == modifiers {
+            return true;
+        }
+    }
+    bound.modifiers == typed.modifiers && bound.key == typed.key
 }
 
 pub(crate) struct ApplicationKeymaps(pub(crate) BindingRegistry);
@@ -841,7 +845,7 @@ pub(crate) fn install(cx: &mut App) {
 ///
 /// Menus show the key bound to their action. Binding these keys to the menu
 /// action in a context no element declares labels the menu without the
-/// binding ever dispatching; a pressed key still reaches the keymap action.
+/// binding ever dispatching; a pressed key still reaches Knot's key routing.
 fn menu_shortcuts(registry: &BindingRegistry) -> Vec<(CommandName, String)> {
     registry
         .shown_bindings(None)
@@ -862,18 +866,10 @@ fn menu_shortcuts(registry: &BindingRegistry) -> Vec<(CommandName, String)> {
         .collect()
 }
 
+/// Give gpui the bindings it still needs: menu key equivalents and the
+/// config error window's Quit.
 pub(crate) fn rebuild(cx: &mut App) {
-    let bindings = cx.global::<ApplicationKeymaps>().0.gpui_bindings();
     cx.clear_key_bindings();
-    cx.bind_keys(bindings.into_iter().map(|(key, context)| {
-        KeyBinding::new(
-            &key,
-            KeymapAction {
-                key: key.clone().into(),
-            },
-            Some(&context),
-        )
-    }));
     let shortcuts = menu_shortcuts(&cx.global::<ApplicationKeymaps>().0);
     cx.bind_keys(shortcuts.into_iter().map(|(name, key)| {
         KeyBinding::new(

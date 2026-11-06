@@ -1332,3 +1332,126 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
     cx.simulate_keystrokes(window, "h");
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhhc");
 }
+
+/// One window over "abc" with the editor focused and the caret at the end.
+fn focused_editor_window(
+    documents: &Entity<DocumentCollection>,
+    cx: &mut TestAppContext,
+) -> (
+    Entity<ProductShell>,
+    gpui::AnyWindowHandle,
+    Entity<BufferModel>,
+) {
+    let model = cx.new(|_| BufferModel::from_text("abc"));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Keys", model.clone(), cx)
+    });
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.update_window(window, |_, window, cx| {
+        let editor = shell
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane()
+            .unwrap()
+            .active_tab()
+            .editor()
+            .unwrap()
+            .clone();
+        editor.update(cx, |editor, cx| {
+            editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
+        });
+        shell.read(cx).focus_active_editor(window, cx)
+    })
+    .unwrap();
+    cx.refresh().unwrap();
+    (shell, window, model)
+}
+
+/// A sequence another package binds in a context that is off holds no key:
+/// a modal package's text binding receives both keys, and nothing is left
+/// pending. Once that context is on, the sequence runs its command.
+#[gpui::test]
+fn a_sequence_bound_in_another_context_leaves_keys_to_a_modal_package(cx: &mut TestAppContext) {
+    use crate::host::lifecycle::ExtensionKey;
+    const MODAL: &str = r#"
+        import { commands, keymaps, workbench } from "knot";
+        const typed = [];
+        await commands.register("a.enter", ({ editor }) => editor.setKeyContext("a.mode", true));
+        await commands.register("a.type", ({ arguments: { text } }) => { typed.push(text); });
+        await commands.register("a.report", () => workbench.writeClipboardText(typed.join("")));
+        keymaps.bind("f8", "a.enter");
+        keymaps.bind("f9", "a.report");
+        keymaps.bindText("a.type", { view: "editor", context: "a.mode" });
+    "#;
+    const CHORDS: &str = r#"
+        import { commands, keymaps, workbench } from "knot";
+        await commands.register("b.enter", ({ editor }) => editor.setKeyContext("b.mode", true));
+        await commands.register("b.bottom", () => workbench.writeClipboardText("bottom"));
+        await commands.register("b.top", () => workbench.writeClipboardText("top"));
+        keymaps.bind("f7", "b.enter");
+        keymaps.bind("z b", "b.bottom", { view: "editor", context: "b.mode" });
+        keymaps.bind("z t", "b.top", { view: "editor", context: "b.mode" });
+    "#;
+    let documents = install_globals(cx);
+    cx.update(super::super::bind_product_keys);
+    let host = cx.update(super::super::super::extensions::host::install);
+    for (id, source) in [(741, MODAL), (742, CHORDS)] {
+        let key = ExtensionKey::new(ExtensionId::new(id), ExtensionLifecycleId::new(1));
+        host.update(cx, |host, cx| {
+            let execution = host.load_test_source(key, source).unwrap();
+            cx.spawn(async move |_, _| execution.await.unwrap())
+                .detach();
+        });
+    }
+    wait_for_api_condition(cx, |cx| {
+        keymap_command(cx, "f7", None).as_deref() == Some("b.enter")
+            && keymap_command(cx, "f9", None).as_deref() == Some("a.report")
+    });
+    let (shell, window, model) = focused_editor_window(&documents, cx);
+    let clipboard = |cx: &gpui::App| cx.read_from_clipboard().and_then(|item| item.text());
+
+    cx.simulate_keystrokes(window, "f8");
+    wait_for_api_condition(cx, |cx| !shell.read(cx).holds_keys());
+    cx.simulate_keystrokes(window, "z b");
+    cx.simulate_keystrokes(window, "f9");
+    wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("zb"));
+    cx.read(|cx| {
+        assert!(!shell.read(cx).has_pending_keys());
+        assert_eq!(model.read(cx).text(), "abc");
+    });
+
+    cx.simulate_keystrokes(window, "f7");
+    wait_for_api_condition(cx, |cx| !shell.read(cx).holds_keys());
+    cx.simulate_keystrokes(window, "z t");
+    wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("top"));
+    cx.simulate_keystrokes(window, "f9");
+    wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("zb"));
+}
+
+/// The keys of a sequence that stops matching are delivered in order, as
+/// if unbound, and a prefix left alone is delivered after a second.
+#[gpui::test]
+fn an_unfinished_sequence_delivers_its_keys(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    cx.update(super::super::bind_product_keys);
+    let (shell, window, model) = focused_editor_window(&documents, cx);
+
+    cx.simulate_keystrokes(window, "secondary-k");
+    cx.read(|cx| assert!(shell.read(cx).has_pending_keys()));
+    cx.simulate_keystrokes(window, "x y");
+    cx.run_until_parked();
+    cx.read(|cx| {
+        assert!(!shell.read(cx).has_pending_keys());
+        assert_eq!(model.read(cx).text(), "abcxy");
+    });
+
+    cx.simulate_keystrokes(window, "secondary-k");
+    cx.executor()
+        .advance_clock(crate::app::commands::key_router::SEQUENCE_TIMEOUT);
+    cx.run_until_parked();
+    cx.read(|cx| assert!(!shell.read(cx).has_pending_keys()));
+    cx.simulate_keystrokes(window, "z");
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "abcxyz"));
+}

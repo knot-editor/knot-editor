@@ -464,7 +464,6 @@ impl Render for ProductShell {
             .capture_key_down(cx.listener(Self::cancel_tab_drag))
             .on_modifiers_changed(cx.listener(Self::modifiers_changed))
             .on_action(cx.listener(Self::dispatch_source))
-            .on_action(cx.listener(Self::dispatch_keybinding))
             .flex()
             .flex_col()
             .size_full()

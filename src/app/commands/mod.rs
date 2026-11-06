@@ -6,4 +6,5 @@ pub(super) mod declarations;
 pub(super) mod dispatch;
 pub(super) mod extension;
 pub(crate) mod key_hold;
+pub(crate) mod key_router;
 pub(super) mod keymaps;

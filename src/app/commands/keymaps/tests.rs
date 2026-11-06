@@ -560,8 +560,27 @@ fn bare_uppercase_key_preserves_implicit_shift() {
     assert_eq!(resolved(&registry, "a", Some("editor")), None);
 }
 
+fn typed(keys: &str) -> Vec<Keystroke> {
+    keys.split_whitespace()
+        .map(|key| Keystroke::parse(key).unwrap().with_simulated_ime())
+        .collect()
+}
+
+fn matched(
+    registry: &BindingRegistry,
+    keys: &str,
+    view: Option<&str>,
+    contexts: &[&str],
+) -> (Option<String>, bool) {
+    let result = registry.match_typed(&typed(keys), view, contexts);
+    (
+        result.exact.map(|command| command.name.to_string()),
+        result.longer,
+    )
+}
+
 #[test]
-fn gpui_contexts_limit_scoped_prefixes_and_exclude_palette_input() {
+fn typed_keys_match_prefixes_only_where_a_binding_of_them_resolves() {
     let mut registry = BindingRegistry::new();
     registry.declare_extension_kind("outline").unwrap();
     registry
@@ -581,38 +600,49 @@ fn gpui_contexts_limit_scoped_prefixes_and_exclude_palette_input() {
         )
         .unwrap();
     assert_eq!(
-        registry.gpui_bindings(),
-        vec![
-            (
-                canonical_key("cmd-j").unwrap(),
-                format!("product > {}", view_context("outline"))
-            ),
-            (
-                canonical_key("cmd-k right").unwrap(),
-                "product > editor".into()
-            ),
-        ]
+        matched(&registry, "cmd-k", Some("editor"), &[]),
+        (None, true)
     );
-    let personal = BindingOwner::Extension(ExtensionId::new(0), ExtensionLifecycleId::new(1));
-    registry
-        .set(personal, "cmd-k right", None, Some(command("global")))
-        .unwrap();
     assert_eq!(
-        registry.gpui_bindings()[1],
-        (
-            canonical_key("cmd-k right").unwrap(),
-            "product && !palette && !transient".into()
+        matched(&registry, "cmd-k right", Some("editor"), &[]),
+        (Some("split".into()), false)
+    );
+    assert_eq!(
+        matched(&registry, "cmd-k", Some("terminal"), &[]),
+        (None, false)
+    );
+    assert_eq!(matched(&registry, "cmd-k", None, &[]), (None, false));
+    assert_eq!(
+        matched(&registry, "cmd-j", Some("outline"), &[]),
+        (Some("copy".into()), false)
+    );
+
+    // A sequence bound in a context begins only where the context is on.
+    let modal = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    registry
+        .set_in_context(
+            modal,
+            "z b",
+            Some("editor"),
+            Some("modal"),
+            Some(command("bottom")),
         )
+        .unwrap();
+    assert_eq!(matched(&registry, "z", Some("editor"), &[]), (None, false));
+    assert_eq!(
+        matched(&registry, "z", Some("editor"), &["modal"]),
+        (None, true)
+    );
+    assert_eq!(
+        matched(&registry, "z b", Some("editor"), &["modal"]),
+        (Some("bottom".into()), false)
     );
 }
 
 #[test]
-fn unbound_keys_do_not_install_actions_in_their_scope() {
+fn unbound_keys_match_nothing_in_their_scope() {
     let mut registry = BindingRegistry::new();
     let personal = BindingOwner::Extension(ExtensionId::new(0), ExtensionLifecycleId::new(1));
-    registry.set(personal, "a", Some("editor"), None).unwrap();
-    assert!(registry.gpui_bindings().is_empty());
-
     registry
         .set(BindingOwner::Preset, "cmd-n", None, Some(command("new")))
         .unwrap();
@@ -620,11 +650,44 @@ fn unbound_keys_do_not_install_actions_in_their_scope() {
         .set(personal, "cmd-n", Some("editor"), None)
         .unwrap();
     assert_eq!(
-        registry.gpui_bindings(),
-        vec![(
-            canonical_key("cmd-n").unwrap(),
-            "product && !palette && !transient && !editor".into()
-        )]
+        matched(&registry, "cmd-n", None, &[]),
+        (Some("new".into()), false)
+    );
+    assert_eq!(
+        matched(&registry, "cmd-n", Some("terminal"), &[]),
+        (Some("new".into()), false)
+    );
+    assert_eq!(
+        matched(&registry, "cmd-n", Some("editor"), &[]),
+        (None, false)
+    );
+}
+
+#[test]
+fn a_typed_character_matches_the_binding_of_that_character() {
+    let mut registry = BindingRegistry::new();
+    let owner = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    registry
+        .set(owner, "?", None, Some(command("help")))
+        .unwrap();
+    registry
+        .set(owner, "shift-a", None, Some(command("upper")))
+        .unwrap();
+    let question = Keystroke {
+        key: "/".into(),
+        modifiers: gpui::Modifiers::shift(),
+        key_char: Some("?".into()),
+    };
+    assert_eq!(
+        registry
+            .match_typed(&[question], None, &[])
+            .exact
+            .map(|c| c.name.to_string()),
+        Some("help".into())
+    );
+    assert_eq!(
+        matched(&registry, "shift-a", None, &[]),
+        (Some("upper".into()), false)
     );
 }
 
@@ -1203,7 +1266,7 @@ fn a_context_needs_a_view_and_a_name() {
 }
 
 #[test]
-fn context_slots_recognize_their_key_broadly_in_the_view() {
+fn context_slots_beat_an_unbinding_of_their_view_and_list_unshadowed() {
     let mut registry = BindingRegistry::new();
     let owner = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
     registry
@@ -1215,25 +1278,18 @@ fn context_slots_recognize_their_key_broadly_in_the_view() {
             Some(command("left")),
         )
         .unwrap();
-    assert_eq!(
-        registry.gpui_bindings(),
-        [("h".to_owned(), "product > editor".to_owned())]
-    );
-    // A global binding the editor unbinds still needs the editor binding so
-    // the context can claim the key there.
     registry
         .set(owner, "h", None, Some(command("global")))
         .unwrap();
     registry.set(owner, "h", Some("editor"), None).unwrap();
+    assert_eq!(matched(&registry, "h", Some("editor"), &[]), (None, false));
     assert_eq!(
-        registry.gpui_bindings(),
-        [
-            (
-                "h".to_owned(),
-                "product && !palette && !transient && !editor".to_owned()
-            ),
-            ("h".to_owned(), "product > editor".to_owned()),
-        ]
+        matched(&registry, "h", Some("editor"), &["normal"]),
+        (Some("left".into()), false)
+    );
+    assert_eq!(
+        matched(&registry, "h", None, &[]),
+        (Some("global".into()), false)
     );
     let listing = registry.listing();
     let context_slot = listing

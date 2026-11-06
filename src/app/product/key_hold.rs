@@ -145,31 +145,34 @@ fn route_text_command(
     true
 }
 
-/// Queue key-downs for product windows that hold their input. Interceptors
-/// run before keybindings and text input, so a held key does neither.
-pub(in crate::app) fn intercept_held_keys(cx: &mut App) {
+pub(super) fn install_text_router(cx: &mut App) {
     cx.set_global(TextCommandRouter(route_text_command));
-    cx.intercept_keystrokes(|event, window, cx| {
-        let Some(Some(shell)) = window.root::<ProductShell>() else {
-            return;
-        };
-        let held = shell.update(cx, |shell, _| {
-            let hold = shell.key_hold.as_ref()?;
-            hold.queue.push(HeldInput::Key(event.keystroke.clone()));
-            Some((hold.generation, hold.focus.is_focused(window)))
+}
+
+/// Queue a key-down when the window holds its input; true when it did.
+/// The key routing interceptor asks first, so a held key is neither
+/// matched nor delivered.
+pub(super) fn hold_key(
+    shell: &Entity<ProductShell>,
+    event: &gpui::KeystrokeEvent,
+    window: &mut Window,
+    cx: &mut App,
+) -> bool {
+    let held = shell.update(cx, |shell, _| {
+        let hold = shell.key_hold.as_ref()?;
+        hold.queue.push(HeldInput::Key(event.keystroke.clone()));
+        Some((hold.generation, hold.focus.is_focused(window)))
+    });
+    let Some((generation, focused)) = held else {
+        return false;
+    };
+    if !focused {
+        let shell = shell.downgrade();
+        window.defer(cx, move |window, cx| {
+            release_key_hold(&shell, generation, window, cx)
         });
-        let Some((generation, focused)) = held else {
-            return;
-        };
-        cx.stop_propagation();
-        if !focused {
-            let shell = shell.downgrade();
-            window.defer(cx, move |window, cx| {
-                release_key_hold(&shell, generation, window, cx)
-            });
-        }
-    })
-    .detach();
+    }
+    true
 }
 
 /// End the hold `generation` and replay its input. A replayed key that
