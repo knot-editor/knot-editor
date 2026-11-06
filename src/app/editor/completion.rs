@@ -116,7 +116,7 @@ impl EditorView {
         let row = self.row(model, self.caret_row());
         let x = self.text_bounds().origin.x - self.bounds.origin.x
             + self.x_in_row(model, &row, self.cursor_col, window, cx);
-        let y = px((row.index + 1) as f32 * self.metrics.line_height - self.scroll);
+        let y = px((row.index as f32 + 1. - self.scroll_top) * self.metrics.line_height);
         // Keep the popup, with a margin, inside the view.
         let popup = |pixels| crate::app::zoom::scaled(pixels, cx);
         point(

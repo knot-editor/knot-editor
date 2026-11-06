@@ -117,18 +117,17 @@ fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppCo
     cx.simulate_resize(size(px(400.), px(300.)));
     cx.run_until_parked();
     let top = editor.update(cx, |view, cx| {
-        let line_height = view.metrics.line_height;
         let rows = view.wrap.rows(0).len();
-        view.scroll = 1e9;
+        view.scroll_top = 1e9;
         view.clamp_scroll();
         assert_eq!(
-            view.scroll,
-            view.wrap.row_count() as f32 * line_height - view.viewport_h
+            view.scroll_top,
+            view.wrap.row_count() as f32 - view.viewport_rows
         );
         assert_eq!(view.visible_rows().end, view.wrap.row_count());
 
         // The view state's top is the start of the top row, mid-line.
-        view.scroll = (3 * rows + 2) as f32 * line_height;
+        view.scroll_top = (3 * rows + 2) as f32;
         let model = view.model.read(cx);
         let start = view.wrap.row_range(3, 2, line_end(model, 3)).start;
         let top = to_flat_byte(model, 3, start);
@@ -172,7 +171,7 @@ fn a_state_restored_before_the_first_layout_keeps_its_row(cx: &mut TestAppContex
     cx.run_until_parked();
     let state = measured.update(cx, |view, cx| {
         assert!(view.wrap.rows(0).len() > 2);
-        view.scroll = (view.wrap.first_row(5) + 2) as f32 * view.metrics.line_height;
+        view.scroll_top = (view.wrap.first_row(5) + 2) as f32;
         EditorViewState {
             anchor: 0,
             caret: 0,
@@ -285,7 +284,7 @@ fn visual_movement_follows_rows_and_logical_twins_follow_lines(cx: &mut TestAppC
             let [first, second, third, last] =
                 [0, 1, 2, rows - 1].map(|index| view.row(model, index));
             let end = line_end(model, 0);
-            let page = (view.viewport_h / view.metrics.line_height).floor() as usize;
+            let page = view.viewport_rows.floor() as usize;
             let last_line = model.line_count() - 1;
             let late_row = view.wrap.first_row(last_line);
             let on_second = (0, second.range.start + 16);

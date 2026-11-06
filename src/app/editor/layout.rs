@@ -141,13 +141,13 @@ impl EditorView {
         self.metrics
     }
 
-    /// Resolve the metrics for the current settings and zoom. Keeps the
-    /// same line at the top of the viewport when the line height changes.
+    /// Resolve the metrics for the current settings and zoom. Scrolling is
+    /// in rows, so the same line stays at the top when the line height
+    /// changes.
     pub(super) fn update_metrics(&mut self, cx: &App) {
         let font_size = settings::font_size(&self.settings_scope(self.model.read(cx), cx), cx);
         let metrics = EditorMetrics::new(font_size * crate::app::zoom::factor(cx));
         if metrics != self.metrics {
-            self.scroll *= metrics.line_height / self.metrics.line_height;
             self.metrics = metrics;
             self.max_line_width = 0.;
         }
@@ -180,7 +180,7 @@ impl EditorView {
         self.wrap
             .set_width(wrap, model.line_count(), |line| line_text(model, line));
         let (line, col) = flat_byte_to_position(model, top);
-        self.scroll = self.wrap.row_of(line, col) as f32 * self.metrics.line_height;
+        self.scroll_top = self.wrap.row_of(line, col) as f32;
         if wrap.is_some() {
             self.scroll_x = 0.;
         }

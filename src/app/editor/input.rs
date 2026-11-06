@@ -159,7 +159,7 @@ impl EditorView {
         cx: &App,
     ) -> (usize, usize) {
         let origin = self.text_bounds().origin;
-        let row = ((f32::from(p.y - origin.y) + self.scroll) / self.metrics.line_height)
+        let row = (f32::from(p.y - origin.y) / self.metrics.line_height + self.scroll_top)
             .floor()
             .max(0.) as usize;
         self.column_for_x(model, row, p.x - origin.x + px(self.scroll_x), window, cx)
@@ -352,8 +352,8 @@ impl EntityInputHandler for EditorView {
         let start = flat_utf16_to_position(model, range_utf16.start);
         let end = flat_utf16_to_position(model, range_utf16.end);
         let row = self.row(model, self.wrap.row_of(start.0, start.1));
-        let top = element_bounds.origin.y + px(row.index as f32 * self.metrics.line_height)
-            - px(self.scroll);
+        let top = element_bounds.origin.y
+            + px((row.index as f32 - self.scroll_top) * self.metrics.line_height);
         let x0 = self.x_in_row(model, &row, start.1, window, cx);
         let x1 = if row.holds(end) {
             self.x_in_row(model, &row, end.1, window, cx)

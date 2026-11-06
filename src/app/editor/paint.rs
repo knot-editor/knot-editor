@@ -52,7 +52,7 @@ impl Render for EditorView {
                         p.y * this.metrics.line_height,
                     ),
                 };
-                this.scroll -= dy;
+                this.scroll_top -= dy / this.metrics.line_height;
                 let wide = if this.wrap.width().is_some() {
                     0.
                 } else {
@@ -139,7 +139,7 @@ impl Element for EditorElement {
                 .map(|row| Bounds {
                     origin: point(
                         bounds.origin.x,
-                        bounds.origin.y + px(row as f32 * line_height - view.scroll),
+                        bounds.origin.y + px((row as f32 - view.scroll_top) * line_height),
                     ),
                     size: size(px(view.gutter.markers_width), px(line_height)),
                 })
@@ -179,9 +179,9 @@ impl Element for EditorElement {
         self.entity.update(cx, |view, cx| {
             let resized = view.bounds.size != bounds.size;
             view.bounds = bounds;
-            view.viewport_h = f32::from(bounds.size.height);
+            view.viewport_rows = f32::from(bounds.size.height) / view.metrics.line_height;
             if view.reveal_caret || (resized && !view.preserve_scroll_on_layout) {
-                view.ensure_cursor_visible(view.viewport_h);
+                view.ensure_cursor_visible();
             }
             if view.wrap.width().is_some() {
                 // Wrapped rows fit the width, so nothing scrolls sideways.
@@ -321,7 +321,7 @@ impl Element for EditorElement {
                 .map(|lit| lit.start.max(rows.start)..lit.end.min(rows.end))
                 .filter(|lit| !lit.is_empty());
             (
-                view.scroll,
+                view.scroll_top * metrics.line_height,
                 max,
                 vis,
                 view.tab_size(model, cx),
@@ -348,10 +348,10 @@ impl Element for EditorElement {
         // Write the measured viewport height back into the view so the key
         // and scroll handlers can clamp against the real viewport. No
         // notify: this must not trigger a re-render.
-        let viewport_h = f32::from(bounds.size.height);
+        let viewport_rows = f32::from(bounds.size.height) / metrics.line_height;
         let full_bounds = bounds;
         let bounds = self.entity.update(cx, |view, _cx| {
-            view.viewport_h = viewport_h;
+            view.viewport_rows = viewport_rows;
             view.bounds = full_bounds;
             #[cfg(test)]
             {

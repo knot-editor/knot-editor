@@ -285,8 +285,8 @@ fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text(text));
     let editor = cx.new(|cx| EditorView::new(model, cx));
     editor.update(cx, |editor, _| {
-        editor.viewport_h = 10. * editor.metrics.line_height;
-        editor.scroll = 30. * editor.metrics.line_height;
+        editor.viewport_rows = 10.;
+        editor.scroll_top = 30.;
     });
     cx.update(|cx| {
         cx.global_mut::<ApplicationSettings>()
@@ -298,7 +298,7 @@ fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
     cx.read(|cx| {
         let editor = editor.read(cx);
         assert_eq!(editor.metrics.line_height, 30.);
-        assert_eq!(editor.scroll, 30. * 30.);
+        assert_eq!(editor.scroll_top, 30.);
     });
 }
 
@@ -315,7 +315,7 @@ fn movement_uses_visual_columns_graphemes_and_pane_height(cx: &mut TestAppContex
             view.execute_editing_command("editor.move-down", window, cx);
             assert_eq!((view.cursor_line, view.cursor_col), (2, 3));
             view.execute_editing_command("editor.move-document-start", window, cx);
-            view.viewport_h = 2. * view.metrics.line_height;
+            view.viewport_rows = 2.;
             view.execute_editing_command("editor.select-page-down", window, cx);
             assert_eq!(view.selected_byte_range(cx), Some(0..10));
             view.execute_editing_command("editor.move-document-end", window, cx);
@@ -944,7 +944,7 @@ fn read_only_text_keeps_normal_selection_copy_and_scroll_behavior(cx: &mut TestA
     cx.read(|cx| {
         let editor = editor.read(cx);
         assert_eq!(editor.model().read(cx).text(), text);
-        assert!(editor.scroll > 0.);
+        assert!(editor.scroll_top > 0.);
     });
 }
 
@@ -1078,23 +1078,23 @@ fn set_selection_reveals_nearest_or_centers_an_offscreen_caret(cx: &mut TestAppC
         line_start(90),
     );
     editor.update(cx, |editor, cx| {
-        editor.viewport_h = 10. * editor.metrics.line_height;
+        editor.viewport_rows = 10.;
 
         // Nearest scrolls just enough to show the caret's line at the bottom.
         editor.set_selection(line_50, line_50 + 2, Reveal::Nearest, cx);
-        assert_eq!(editor.scroll, 41. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 41.);
         assert_eq!(editor.selection(cx), (line_50, line_50 + 2));
         assert_eq!(editor.selected_byte_range(cx), Some(line_50..line_50 + 2));
 
         // Center keeps the scroll while the caret's line is visible...
         editor.set_selection(line_10, line_10, Reveal::Nearest, cx);
-        assert_eq!(editor.scroll, 10. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 10.);
         editor.set_selection(line_15, line_15, Reveal::Center, cx);
-        assert_eq!(editor.scroll, 10. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 10.);
 
         // ...and centers it when the line is outside the viewport.
         editor.set_selection(line_90, line_90, Reveal::Center, cx);
-        assert_eq!(editor.scroll, 85.5 * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 85.5);
         assert_eq!(editor.selected_byte_range(cx), None);
     });
 }
@@ -1111,32 +1111,32 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret(cx: &mut TestApp
     editor.update(cx, |editor, cx| {
         // Before layout there is a single visible line.
         assert_eq!(editor.fully_visible_lines(), (0, 0));
-        editor.viewport_h = 10. * editor.metrics.line_height;
+        editor.viewport_rows = 10.;
         assert_eq!(editor.fully_visible_lines(), (0, 9));
 
         editor.set_selection(line_50, line_50, Reveal::Top, cx);
-        assert_eq!(editor.scroll, 50. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 50.);
         assert_eq!(editor.fully_visible_lines(), (50, 59));
         editor.set_selection(line_50, line_50, Reveal::Bottom, cx);
-        assert_eq!(editor.scroll, 41. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 41.);
         assert_eq!(editor.fully_visible_lines(), (41, 50));
 
         // Both stop at the ends of the text.
         editor.set_selection(line_5, line_5, Reveal::Bottom, cx);
-        assert_eq!(editor.scroll, 0.);
+        assert_eq!(editor.scroll_top, 0.);
         editor.set_selection(line_100, line_100, Reveal::Top, cx);
-        assert_eq!(editor.scroll, 91. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 91.);
         assert_eq!(editor.fully_visible_lines(), (91, 100));
 
         // Scrolling moves neither the caret nor the reveal-on-paint flag.
         editor.scroll_by_lines(-30., cx);
-        assert_eq!(editor.scroll, 61. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 61.);
         assert_eq!(editor.selection(cx), (line_100, line_100));
         assert!(!editor.reveal_caret);
         editor.scroll_by_lines(-1000., cx);
-        assert_eq!(editor.scroll, 0.);
+        assert_eq!(editor.scroll_top, 0.);
         editor.scroll_by_lines(1000., cx);
-        assert_eq!(editor.scroll, 91. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 91.);
     });
 }
 
@@ -1155,7 +1155,7 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
         let editor = editor.read(cx);
         assert_eq!(editor.view_state(cx), state);
         assert_eq!(editor.selected_byte_range(cx), Some(4..9));
-        assert_eq!(editor.scroll, 2. * editor.metrics.line_height);
+        assert_eq!(editor.scroll_top, 2.);
     });
 
     // Offsets past the end clamp, and offsets inside a scalar snap back.
@@ -1204,13 +1204,13 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
         view.anchor_line = 0;
         view.anchor_col = 1;
         view.has_selection = true;
-        view.scroll = 20.;
+        view.scroll_top = 1.;
         view.sync_view_position(cx);
     });
     second.update(cx, |view, cx| {
         view.cursor_line = 2;
         view.cursor_col = 3;
-        view.scroll = 40.;
+        view.scroll_top = 2.;
         view.sync_view_position(cx);
     });
 
@@ -1249,8 +1249,8 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
         assert_eq!((second.cursor_line, second.cursor_col), (3, 3));
         assert!(first.has_selection);
         assert!(!second.has_selection);
-        assert_eq!(first.scroll, 20.);
-        assert_eq!(second.scroll, 40.);
+        assert_eq!(first.scroll_top, 1.);
+        assert_eq!(second.scroll_top, 2.);
         assert!(first.rendering.show_gutter);
         assert!(!second.rendering.show_gutter);
         assert_ne!(first.focus, second.focus);
@@ -1663,7 +1663,7 @@ fn caret_geometry_and_painting_share_one_syntax_query(cx: &mut TestAppContext) {
 
     // Scrolling by a line stays within the overscan.
     editor.update(cx, |view, cx| {
-        view.scroll += view.metrics.line_height;
+        view.scroll_top += 1.;
         cx.notify();
     });
     cx.run_until_parked();
