@@ -317,6 +317,13 @@ impl RecoveryStore {
         Self::open_with_cadence(path, executor, SETTLE, MAX_INTERVAL)
     }
 
+    /// A store that lives only as long as this value, for tests that need
+    /// no file.
+    #[cfg(test)]
+    pub(crate) fn in_memory(executor: BackgroundExecutor) -> Self {
+        Self::open(crate::app::record_store::IN_MEMORY.into(), executor)
+    }
+
     fn open_with_cadence(
         path: PathBuf,
         executor: BackgroundExecutor,

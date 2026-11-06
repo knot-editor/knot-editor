@@ -42,6 +42,11 @@ struct Database {
     records: Mutex<Vec<Weak<dyn PendingRecord>>>,
 }
 
+/// SQLite's name for a private in-memory database, which lives as long as
+/// its one connection.
+#[cfg(test)]
+pub(crate) const IN_MEMORY: &str = ":memory:";
+
 /// Shared handle to the application state database.
 #[derive(Clone)]
 pub(crate) struct StateDatabase {
@@ -53,6 +58,13 @@ impl StateDatabase {
         directories::ProjectDirs::from("", "", "Knot")
             .map(|dirs| dirs.data_local_dir().join("state.sqlite3"))
             .ok_or_else(|| "cannot determine the user application-data directory".into())
+    }
+
+    /// A database that lives only as long as this value, for tests that
+    /// need no file.
+    #[cfg(test)]
+    pub(crate) fn in_memory(executor: BackgroundExecutor) -> Self {
+        Self::open(IN_MEMORY.into(), executor)
     }
 
     pub(crate) fn open(path: PathBuf, executor: BackgroundExecutor) -> Self {
@@ -118,7 +130,8 @@ impl StateDatabase {
     fn read<T: DeserializeOwned>(&self, table: &str, version: u32) -> Option<T> {
         let mut connection = self.inner.connection.lock().unwrap();
         if connection.is_none() {
-            // Never create the database on read: a fresh install has no record.
+            // Never create the database on read: a fresh install has no record,
+            // and neither has an in-memory database before its first write.
             if !self.inner.path.is_file() {
                 return None;
             }

@@ -504,26 +504,18 @@ fn route_nested_command(
     }
 }
 
-/// Test hosts isolate extension storage so bundled packages never read the
-/// developer's real records. Production uses the platform application-data root.
+/// Test hosts keep extension storage in memory, so bundled packages never
+/// read the developer's real records and every test starts empty.
+/// Production uses the platform application-data root.
 #[cfg(test)]
 fn test_storage(
     cx: &mut Context<ProductExtensionHost>,
 ) -> Result<crate::app::extensions::storage::ExtensionStorage, String> {
-    #[allow(
-        dead_code,
-        reason = "keeps the test storage directory alive with the app"
-    )]
-    struct TestStorageDir(tempfile::TempDir);
-    impl Global for TestStorageDir {}
-
-    let directory = tempfile::tempdir().expect("test extension storage root");
-    let root = directory.path().to_owned();
-    cx.set_global(TestStorageDir(directory));
-    Ok(crate::app::extensions::storage::ExtensionStorage::new(
-        root,
-        cx.background_executor().clone(),
-    ))
+    Ok(
+        crate::app::extensions::storage::ExtensionStorage::in_memory(
+            cx.background_executor().clone(),
+        ),
+    )
 }
 
 #[cfg(not(test))]

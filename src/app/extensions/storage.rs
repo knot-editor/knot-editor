@@ -90,7 +90,8 @@ impl std::error::Error for StorageError {}
 /// Constructing and binding owners performs no I/O. All operations, including lazy
 /// schema initialization and connection locking, run on the background executor.
 pub(crate) struct ExtensionStorage {
-    root: PathBuf,
+    /// Where owners' databases live; `None` keeps each in memory.
+    root: Option<PathBuf>,
     executor: BackgroundExecutor,
     databases: Mutex<BTreeMap<StorageOwner, Arc<Database>>>,
     work: Arc<Mutex<WorkState>>,
@@ -108,6 +109,17 @@ impl ExtensionStorage {
     }
 
     pub(crate) fn new(root: PathBuf, executor: BackgroundExecutor) -> Self {
+        Self::with_root(Some(root), executor)
+    }
+
+    /// Storage whose databases live only as long as it does, for tests that
+    /// need no files.
+    #[cfg(test)]
+    pub(crate) fn in_memory(executor: BackgroundExecutor) -> Self {
+        Self::with_root(None, executor)
+    }
+
+    fn with_root(root: Option<PathBuf>, executor: BackgroundExecutor) -> Self {
         Self {
             root,
             executor,
@@ -128,7 +140,10 @@ impl ExtensionStorage {
             .entry(owner.clone())
             .or_insert_with(|| {
                 Arc::new(Database {
-                    path: self.root.join(owner.relative_path()),
+                    path: match &self.root {
+                        Some(root) => root.join(owner.relative_path()),
+                        None => ":memory:".into(),
+                    },
                     connection: Mutex::new(None),
                 })
             })

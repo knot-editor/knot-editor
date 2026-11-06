@@ -30,6 +30,8 @@ fn wait<T: 'static>(task: gpui::Task<T>, cx: &mut TestAppContext) -> T {
 impl Launch {
     fn new(cx: &mut TestAppContext) -> Self {
         install_globals(cx);
+        // Restarts reopen recovery from its file.
+        install_file_recovery(cx);
         let (filesystems, provider) = memory_filesystems_with_provider();
         for directory in ["a", "b"] {
             provider.seed_directory(uri(directory)).unwrap();

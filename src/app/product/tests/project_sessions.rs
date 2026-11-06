@@ -927,6 +927,8 @@ fn schema_one_records_switch_without_a_layout(cx: &mut TestAppContext) {
 #[gpui::test]
 fn restored_windows_rebind_after_launch_and_unrestored_sessions_suspend(cx: &mut TestAppContext) {
     let mut fixture = start_registry(cx);
+    // The restart reopens recovery from its file.
+    install_file_recovery(cx);
     let sessions = tempfile::tempdir().unwrap();
     let path = sessions.path().join("state.sqlite3");
     let executor = cx.background_executor.clone();

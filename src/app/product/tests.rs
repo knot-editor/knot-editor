@@ -137,16 +137,12 @@ fn focus_view(handle: &gpui::FocusHandle, window: &mut gpui::Window, cx: &mut gp
 pub(super) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollection> {
     let documents = cx.new(|_| DocumentCollection::new());
     cx.set_global(ApplicationDocuments(documents.clone()));
-    // Each test gets an isolated recovery database; the directory is kept
-    // as a global so the database path stays alive with the test.
-    let recovery_dir = tempfile::tempdir().unwrap();
+    // Each test gets its own in-memory recovery and state databases.
     cx.set_global(crate::app::recovery::ApplicationRecovery(
-        crate::app::recovery::RecoveryService::new(crate::app::recovery::RecoveryStore::open(
-            recovery_dir.path().join("recovery.sqlite3"),
+        crate::app::recovery::RecoveryService::new(crate::app::recovery::RecoveryStore::in_memory(
             cx.background_executor.clone(),
         )),
     ));
-    cx.set_global(TestRecoveryDir(recovery_dir));
     cx.set_global(ApplicationSessions::default());
     cx.update(super::key_routing::intercept_keys);
     cx.set_global(ApplicationProtectedClosure(RefCell::new(false)));
@@ -156,18 +152,11 @@ pub(super) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollect
     cx.set_global(ApplicationFileSystems(product_filesystems()));
     let commands = cx.new(ProductCommandDispatcher::new);
     cx.set_global(ApplicationProductCommands(commands));
-    // Each test gets an isolated tool-layout database; the directory is
-    // retained as a global so the database path stays alive with the test.
-    let layout_dir = tempfile::tempdir().unwrap();
     cx.set_global(crate::app::tool_layout::ApplicationToolLayout(
         crate::app::tool_layout::ToolLayoutStore::open(
-            &crate::app::record_store::StateDatabase::open(
-                layout_dir.path().join("state.sqlite3"),
-                cx.background_executor.clone(),
-            ),
+            &crate::app::record_store::StateDatabase::in_memory(cx.background_executor.clone()),
         ),
     ));
-    cx.set_global(TestToolLayoutDir(layout_dir));
     documents
 }
 
@@ -186,10 +175,19 @@ pub(super) fn install_failing_recovery(cx: &mut TestAppContext) {
     cx.set_global(TestRecoveryDir(dir));
 }
 
-#[allow(dead_code, reason = "ownership keeps the test database path alive")]
-struct TestToolLayoutDir(tempfile::TempDir);
-
-impl gpui::Global for TestToolLayoutDir {}
+/// Replace recovery with a store in a file of its own, under
+/// `TestRecoveryDir` as `recovery.sqlite3`, for a test that reopens it as a
+/// restart would.
+pub(super) fn install_file_recovery(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    cx.set_global(crate::app::recovery::ApplicationRecovery(
+        crate::app::recovery::RecoveryService::new(crate::app::recovery::RecoveryStore::open(
+            dir.path().join("recovery.sqlite3"),
+            cx.background_executor.clone(),
+        )),
+    ));
+    cx.set_global(TestRecoveryDir(dir));
+}
 
 #[allow(dead_code, reason = "ownership keeps the test database path alive")]
 struct TestRecoveryDir(tempfile::TempDir);
