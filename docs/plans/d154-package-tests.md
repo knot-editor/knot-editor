@@ -1,6 +1,7 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–7 complete; checkpoint 8 is next. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–7 complete; checkpoint 8 is implemented and awaits
+review. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -193,7 +194,7 @@ and [semantic UI](../architecture/semantic-ui.md#extension-transient-interaction
 session. Without a window, keys after an extension command are not held yet;
 that moves into the session in checkpoint 8.
 
-### 8. Headless harness
+### 8. Headless harness — 🔍 awaiting review
 
 Deliverables: a harness that starts the application, packages, and sessions
 without a window, types keys and text, and settles without polling; the Vim,
@@ -202,12 +203,36 @@ rendering, IME, pointer input, and the adapter.
 
 Validation: the case suites pass and their per-case times are recorded here.
 
-Implementation context: `src/app/product/tests/vim.rs` (`Fixture`,
-`wait_until`, `parse_keys`), `language_editing.rs`
-(`start_bundled_packages_with_post_init`), `language_indents.rs`,
-`language_brackets.rs`, and `product_window` in `src/app/product/tests.rs`.
-
 Review gate: cases take milliseconds.
+
+Done:
+
+- ✅ The session owns the key hold and text-binding routing, with or without
+  a window: keys queue before matching, a window's editor offers committed
+  text to its session, and release replays through the window when there is
+  one and through the session otherwise
+  ([ordered delivery](../architecture/commands.md#ordered-delivery)).
+- ✅ A windowless session joins application observation and becomes the
+  active session once activated while no window is active, so packages
+  follow its editor.
+- ✅ The extension pool reports, under test, whether any package has work in
+  progress and how many turns have finished, and blocks until the next turn
+  finishes. `src/app/product/tests/harness.rs` settles by running the
+  foreground, then waiting on a finished turn while a package is busy, until
+  no hold remains and no turn finished during a foreground run.
+- ✅ The harness starts the bundled packages, opens a windowless session per
+  case with its editor laid out at 40 rows by 100 cells, and presses keys in
+  the case notation. The Vim cases and bespoke tests run on it, except the
+  mouse drag and the per-key draw count, which stay windowed. The indent and
+  bracket runners use an `Editor` without a window; the comment runner never
+  had one.
+
+On Apple M1 Pro/macOS debug builds, the 364 Vim cases went from 6.4 s in a
+window to 3.5–3.7 s headless, about 10 ms per case including opening and
+closing a session; the test takes about 4.2 s with package startup. The
+comment, indent, and bracket tests take about 0.7 s each, nearly all of it
+package startup. The full suite takes about 16 s, with the Vim cases still
+its longest test until checkpoint 9 splits them by topic.
 
 ### 9. Shared case harness and topic files
 

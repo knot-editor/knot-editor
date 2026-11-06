@@ -110,29 +110,30 @@ line; the shape is presentation state and never recorded.
 
 A text binding routes committed text that an editor would insert to a command
 with `{ text }` as its arguments, scoped and resolved like key bindings but in
-its own slots. The editor resolves it in its
-text input handler, after keyboard layout and IME, and hands the text to a
-router the product shell installs: the editor is mid-update there and cannot
-capture a command target, so the router starts the key hold at once and
-dispatches once the handler returns. Where a text binding applies, composition
-never touches the buffer and the IME's commit routes as text.
+its own slots. Committed text, after keyboard layout and IME, reaches the
+session before the editor inserts it: a window's editor offers it from its
+text input handler through a router the product shell installs, and a
+session without a window types into the editor itself. Where the editor's
+text binding applies, the session starts the key hold at once and dispatches
+the command once the caller is done with the editor, since capturing a
+command target reads it. Where a text binding applies, composition never
+touches the buffer and the IME's commit routes as text.
 
 ### Ordered delivery
 
 A key that dispatches an extension command holds its session's later input
-until that command finishes: key-downs are intercepted before keybindings and
-text insertion, and the held editor queues its committed text, in one queue.
-Release replays the queue in order through the window's keystroke dispatch,
-and so the key router, and the editor's input path, so each key sees the state its predecessor committed, as
-native commands already do by finishing in the dispatch turn. Dispatched
-commands run deferred to the end of the effect cycle while typed text inserts
-at once, so release replays one input per deferred step, letting a replayed
-Enter or Backspace commit before the text typed after it. A replayed key or
-text that starts another extension command holds the rest of the queue. The
-hold also releases on the first key after focus leaves the held view, such as
-a command awaiting a picker, and after one second, so a stuck extension never
-keeps the keyboard. Composition preedit is not queued, since the IME already
-shows it.
+until that command finishes, with or without a window: the session queues
+later key-downs before matching them, and committed text for the held
+editor, in one queue. Release replays the queue in order, a key through the
+window's keystroke dispatch when the session has one and otherwise through
+the session's own key path, so each key sees the state its predecessor
+committed, as native commands already do by finishing in the dispatch turn.
+Release replays one input per deferred step, letting a replayed Enter or
+Backspace commit before the text typed after it. A replayed key or text that
+starts another extension command holds the rest of the queue. The hold also
+releases on the first key after focus leaves the held view, such as a command
+awaiting a picker, and after one second, so a stuck extension never keeps the
+keyboard. Composition preedit is not queued, since the IME already shows it.
 
 Menus show each command's shown global single-keystroke binding through a
 binding to the menu action in a context no element declares, so it labels the

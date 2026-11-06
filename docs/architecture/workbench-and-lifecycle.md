@@ -59,8 +59,9 @@ session through it (see [keymaps](commands.md#keymaps)), and tab drags and
 dock resizing are pointer input. Every surface's state, the editor, trees,
 terminals, the palette, pickers, and text fields, runs without a window, so a
 session without one takes keys and text and gives each to the surface with
-Knot-side focus. Until held input moves into the session, keys after an
-extension command wait for it only in a window.
+Knot-side focus, and keys after an extension command wait for it there too.
+Extensions see a session without a window as active once it is activated,
+while no window is active, which only tests do.
 
 ## Zoom
 

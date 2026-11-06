@@ -180,7 +180,7 @@ capture's match reaches the caret, so a brace someone placed stays when they
 type ` else {` after it, and Python's `else` waits for its colon.
 
 Each package keeps Enter, typing, and reindent cases as JSONC run through an
-editor view, like its comment cases, because indentation crosses the
+editor, like its comment cases, because indentation crosses the
 editor's commit and parse path. Reindenting pasted text and an
 `editor.autoIndent` setting are D135 and D136.
 
@@ -218,8 +218,8 @@ closer. Stepping over a closer and deleting an empty pair apply only to
 closers the view inserted, while the caret stays inside them, as VS Code's
 `auto` overtype and delete do. Overtyping any closer, as Sublime Text and
 Helix do, inserts nothing when someone fixing unbalanced code needs an extra
-`)`. Each package keeps bracket cases as JSONC run through an editor view,
-like its indentation cases.
+`)`. Each package keeps bracket cases as JSONC run through an editor, like
+its indentation cases.
 
 References: [editor views](architecture/workbench-and-lifecycle.md#editor-views)
 and [semantic UI](architecture/semantic-ui.md#syntax-highlighting-and-languages).
