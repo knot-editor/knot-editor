@@ -8,9 +8,10 @@ fmt:
 lint:
     cargo clippy --all-targets -- -D warnings
 
-# Run all Rust tests
+# Run all Rust tests, each in its own process, then doc tests
 test:
-    cargo test --all-targets
+    cargo nextest run --all-targets
+    cargo test --doc
 
 # Run Knot
 run:

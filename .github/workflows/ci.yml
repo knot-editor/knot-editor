@@ -42,9 +42,12 @@ jobs:
             libx11-xcb-dev libxkbcommon-x11-dev
       - name: Clippy
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-nextest
       - name: Test
         run: |
-          cargo test --locked --workspace --all-targets
+          cargo nextest run --locked --workspace --all-targets --profile ci
           cargo test --locked --doc
 
   handler-platforms:

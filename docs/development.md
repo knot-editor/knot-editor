@@ -9,12 +9,20 @@ explicitly.
 Run `just check` for local formatting, Clippy, and Rust and extension tests. Run `just app` to build
 the macOS app bundle locally.
 
+Rust tests run under [cargo-nextest](https://nexte.st), which runs each test
+in its own process and in parallel across test binaries: install it with
+`cargo install --locked cargo-nextest` and run `cargo nextest run
+--all-targets`. Nextest does not run doc tests, so `just test` and CI also run
+`cargo test --doc`. [`.config/nextest.toml`](../.config/nextest.toml) holds the
+`ci` profile, which reports every failure instead of stopping at the first.
+
 The [CI workflow](../.github/workflows/ci.yml) runs on pull requests and pushes
 to `main`:
 
 - The Rust job uses Ubuntu 24.04. It checks that formatting produces no diff,
-  runs Clippy with warnings as errors, and tests all Rust targets. Clippy and
-  tests use the committed `Cargo.lock` through `--locked`.
+  runs Clippy with warnings as errors, and tests all Rust targets under
+  nextest, then doc tests. Clippy and tests use the committed `Cargo.lock`
+  through `--locked`.
 - The handler-platforms job runs on macOS and Windows. It tests handler
   declarations, linked inventory discovery, and doc tests, then builds the
   product binary. It does not run the full suite on those platforms.

@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 planned; no checkpoint started. Comes before checkpoint 6 of the
+Status: 🚧 checkpoint 1 awaiting its review gate. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -93,7 +93,20 @@ crate-private, and its test platform uses `NoopTextSystem`, whose advance is
 Checkpoints 1, 2, 3, and 10 are independent of the others; 4 through 8 build
 on each other in order. Each checkpoint updates the documentation it changes.
 
-### 1. cargo-nextest
+### 1. cargo-nextest — 🔍 awaiting CI
+
+- ✅ `just test` and the CI Rust job run `cargo nextest run --all-targets`
+  (CI with the `ci` profile, which does not fail fast) and then
+  `cargo test --doc`; the macOS and Windows handler-platform job keeps its
+  filtered `cargo test` runs, which nextest would not speed up.
+- ✅ V8 platform initialization and gpui test apps work with one process per
+  test: all 1,164 tests pass under nextest on macOS.
+- ✅ Wall time on Apple M1 Pro/macOS debug builds, tests already built:
+  `cargo test --all-targets` 131 s, `cargo nextest run --all-targets` 110–112 s.
+  The Vim case test alone takes 95 s, so it bounds the suite until later
+  checkpoints split and speed it up; the next slowest, a project session test,
+  takes 10 s.
+- ⏳ CI green on the pushed branch.
 
 Deliverables: tests run under `cargo nextest run` locally and in CI, in
 separate processes; doc tests stay on `cargo test --doc`.

@@ -1,0 +1,4 @@
+# Each test runs in its own process. CI reports every failure rather than
+# stopping at the first.
+[profile.ci]
+fail-fast = false
