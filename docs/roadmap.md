@@ -360,6 +360,7 @@ complete list for that item.
     case file with TypeScript, so packages keep one format.
 
 - **D154 — Fast, isolated package behavior tests**
+  - 🚧 [Plan](plans/d154-package-tests.md).
   - Deferred: Found while D058 grew past 300 Vim cases; see the
     [package tests report](reports/package-tests.md). The cases run serially
     in one product test at about 255 ms each, 94 s in all, mostly while
