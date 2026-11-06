@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–4 complete; checkpoint 5 at its review gate. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–5 complete; D154 comes before checkpoint 6. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -270,29 +270,24 @@ step back rather than truncating, and the list holds a line once, so
 deletes take the line break before their lines. Global marks end with their
 document and do not persist (D152).
 
-### 5. Scrolling 🔍
+### 5. Scrolling ✅
 
-At its review gate: `ctrl-d ctrl-u ctrl-f ctrl-b ctrl-e ctrl-y` with
-counts, in normal and visual mode; `zt zz zb` and `z<cr> z. z-` with a line
-count; and `H M L` with counts as jump motions, operator targets, and visual
-motions. As Vim's `startofline` does, and as `gg` and `G` already did, the
+Complete and approved after dogfooding: `ctrl-d ctrl-u ctrl-f ctrl-b ctrl-e
+ctrl-y` with counts in normal and visual mode, `zt zz zb` and `z<cr> z. z-`
+with a line count, and `H M L` as jump motions, operator targets, and visual
+motions. As with Vim's `startofline`, and as `gg` and `G` already did,
 half-view and page scrolls and `H M L` land on the first non-blank, while
-`ctrl-e` and `ctrl-y` keep the column `j` and `k` aim for. A count on
-`ctrl-d` or `ctrl-u` sets how far later ones scroll, per editor, as Vim's
-`scroll` option. Page scrolls keep two lines of the previous view and go to
-the last or first line when the view cannot scroll. `zt` and `zb` use the
-exact `top` and `bottom` reveals in normal mode and scroll by lines in visual
-mode, where the editor's caret can sit on the next line; `zz` always scrolls
-by the caret's offset from the middle of `visibleLines()`. Lines are buffer
-lines, so all of these are approximate under soft wrap until D112.
-
-The case runner sizes the window so a case's `view` shows exactly `lines`
-lines, scrolls it to `top`, and checks `afterTop`, so the cases cover the
-scroll position as well as the caret, including `zz`, `zt`, `zb`, and
-`ctrl-d` keeping the caret's screen offset; no separate product test was
-needed. `KNOT_CASES` runs only the cases whose names contain it.
-
-Review gate: dogfooding.
+`ctrl-e` and `ctrl-y` keep the column `j` and `k` aim for; a count on
+`ctrl-d` or `ctrl-u` sets later ones' distance, as Vim's `scroll` option.
+In normal mode `zt` and `zb` use the exact `top` and `bottom` reveals; `zz`,
+and all three in visual mode, scroll by the line's offset from
+`visibleLines()`. Lines are buffer lines, so these are approximate under
+soft wrap until D112. A case's `view` sizes the window to a number of lines
+and checks the scroll position, so cases cover scrolling without separate
+product tests, and `KNOT_CASES` runs matching cases. Dogfooding found an
+installed package's context-scoped `z b` sequence swallowing Vim's `zb`
+(D153), and the growing cases showed slow, leaking tests (D154, which comes
+before checkpoint 6).
 
 ### 6. Ex line 📝
 
