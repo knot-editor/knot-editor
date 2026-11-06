@@ -746,10 +746,8 @@ async fn edit_racing_protected_close_save_preserves_the_document_and_every_view(
     });
     model.update(cx, |model, _| model.replace(0..0, "captured ").unwrap());
     let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Horizontal, window, cx)
-        });
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
     })
     .unwrap();
 
@@ -787,10 +785,8 @@ async fn closing_one_of_multiple_views_of_a_dirty_document_does_not_prompt(
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Horizontal, window, cx)
-        });
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
     })
     .unwrap();
 
@@ -813,10 +809,8 @@ async fn window_close_prompts_once_for_a_multiply_viewed_dirty_document(cx: &mut
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Horizontal, window, cx)
-        });
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
     })
     .unwrap();
 
@@ -1125,10 +1119,10 @@ async fn concurrent_close_is_rejected_without_a_second_prompt(cx: &mut TestAppCo
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
     let (shell, window) = product_window(document, model, cx);
     let target = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -1180,7 +1174,7 @@ async fn native_window_close_is_vetoed_until_protected_closure_finishes(cx: &mut
     });
     window_cx.update(|window, cx| {
         install_protected_window_close(&shell, window, cx);
-        shell.read(cx).focus_active_editor(window, cx);
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
     });
 
     assert!(!window_cx.simulate_close());
@@ -1322,14 +1316,13 @@ async fn close_pane_collapses_its_split_and_keeps_the_other_pane(cx: &mut TestAp
     let documents = install_globals(cx);
     let (shell, window, [_, _, pinned, focused]) = bulk_close_fixture(&documents, cx);
     let split = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
                 shell.split_pane(
                     pane,
                     SplitDirection::Horizontal,
                     super::super::SplitPlacement::After,
-                    window,
                     cx,
                 );
                 shell.workbench.read(cx).focused_pane_id().unwrap()

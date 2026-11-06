@@ -25,8 +25,8 @@ fn fixture(cx: &mut TestAppContext) -> (Entity<ProductShell>, AnyWindowHandle) {
         });
         cx.notify();
     });
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_surface(window, cx));
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
     })
     .unwrap();
     cx.run_until_parked();
@@ -233,10 +233,10 @@ fn escape_and_stale_source_leave_model_unchanged(cx: &mut TestAppContext) {
 #[gpui::test]
 fn terminal_drag_preserves_live_view_session_and_attachment(cx: &mut TestAppContext) {
     let (shell, window) = fixture(cx);
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.new_terminal_in_pane(pane, None, window, cx).is_some());
+            assert!(shell.new_terminal_in_pane(pane, None, cx).is_some());
         });
     })
     .unwrap();
@@ -290,8 +290,8 @@ fn tool_fixture(cx: &mut TestAppContext) -> (Entity<ProductShell>, AnyWindowHand
         cx.notify();
     });
     cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_surface(window, cx));
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
     })
     .unwrap();
     (shell, window)

@@ -56,7 +56,7 @@ impl ProductShell {
                                         tab: snapshot.tab_id,
                                         surface: snapshot.surface,
                                         presentation: Some(editor.entity_id()),
-                                        focus: editor.focus_handle(cx).downgrade(),
+                                        focused: true,
                                         view: None,
                                     }),
                                 }
@@ -157,7 +157,6 @@ impl ProductShell {
 
     #[cfg(test)]
     pub(super) fn close_active_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.sync_focused_pane(window, cx);
         let Some((pane, tab, document)) = self.workbench.read(cx).focused_pane().and_then(|pane| {
             Some((
                 pane.id(),
@@ -212,12 +211,12 @@ impl ProductShell {
             return;
         };
         if let TabSurfaceId::Tool(id) = tab.surface_id() {
-            self.hide_tool_from_pointer(id, window, cx);
+            self.hide_tool_from_pointer(id, cx);
             return;
         }
-        let Some(focus) = tab.command_view().map(|view| view.focus_handle(cx)) else {
+        if tab.command_view().is_none() {
             return;
-        };
+        }
         let target = ProductCommandTarget {
             window: window.window_handle(),
             shell: cx.entity().downgrade(),
@@ -226,7 +225,7 @@ impl ProductShell {
             tab: tab.id(),
             surface: tab.surface_id(),
             presentation: tab.presentation(),
-            focus: focus.downgrade(),
+            focused: true,
             view: None,
         };
         // Protected closure updates this shell, so it starts outside the
@@ -240,14 +239,13 @@ impl ProductShell {
     pub(super) fn hide_tool_from_pointer(
         &mut self,
         id: crate::app::workbench::ToolFrameId,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.workbench.update(cx, |workbench, _| {
             workbench.hide_tool(id);
         });
         self.publish_tool_layout(cx);
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         cx.notify();
     }
 
@@ -736,7 +734,7 @@ impl ProductShell {
                 .register(&workbench, window.window_handle());
             self.workbench = workbench;
         }
-        self.focus_active_editor(window, cx);
+        self.focus_active_editor(cx);
         cx.notify();
         CommandOutcome::Completed
     }
@@ -759,9 +757,7 @@ impl ProductShell {
             self.workbench.update(cx, |workbench, _| {
                 workbench.hide_tool(id);
             });
-            let _ = cx.update_window(window_handle, |_, window, cx| {
-                self.focus_active_surface(window, cx)
-            });
+            self.focus_active_surface(cx);
             cx.notify();
             return Ok(());
         }
@@ -779,9 +775,7 @@ impl ProductShell {
             if transition.workbench_is_empty() {
                 self.replace_empty_workbench(window_handle, cx);
             }
-            let _ = cx.update_window(window_handle, |_, window, cx| {
-                self.focus_active_surface(window, cx)
-            });
+            self.focus_active_surface(cx);
             cx.notify();
             return Ok(());
         };
@@ -824,9 +818,7 @@ impl ProductShell {
         if transition.workbench_is_empty() {
             self.replace_empty_workbench(window_handle, cx);
         }
-        let _ = cx.update_window(window_handle, |_, window, cx| {
-            self.focus_active_surface(window, cx)
-        });
+        self.focus_active_surface(cx);
         cx.notify();
         Ok(())
     }
@@ -854,14 +846,14 @@ pub(super) fn install_protected_window_close(
     cx: &App,
 ) {
     let shell = shell.downgrade();
-    window.on_window_should_close(cx, move |window, cx| {
+    window.on_window_should_close(cx, move |_, cx| {
         let Some(shell) = shell.upgrade() else {
             return true;
         };
         if shell.read(cx).workbench.read(cx).panes().is_empty() {
             return true;
         }
-        let target = shell.update(cx, |shell, cx| shell.window_close_target(window, cx));
+        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
         if let Some(target) = target {
             cx.defer(move |cx| {
                 ProductShell::begin_protected_close(ProtectedCloseKind::Window, target, None, cx);

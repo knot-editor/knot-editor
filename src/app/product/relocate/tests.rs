@@ -45,10 +45,10 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
     model.update(cx, |model, _| model.replace(0..0, &text).unwrap());
     let (source, source_window) = product_window(document, model.clone(), cx);
     let (origin, command, editor) = cx
-        .update_window(source_window, |_, window, cx| {
+        .update_window(source_window, |_, _, cx| {
             source.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
-                let command = shell.capture_command_target(window, cx).unwrap();
+                shell.focus_active_surface(cx);
+                let command = shell.capture_command_target(cx).unwrap();
                 let editor = shell
                     .workbench
                     .read(cx)
@@ -214,9 +214,9 @@ fn abandoning_an_inactive_tab_capture_keeps_focus_and_document_ownership(cx: &mu
         })
     });
     let (before, active) = cx
-        .update_window(source_window, |_, window, cx| {
+        .update_window(source_window, |_, _, cx| {
             source.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
+                shell.focus_active_surface(cx);
                 (
                     shell.workbench.read(cx).tab_snapshots(),
                     shell
@@ -348,10 +348,10 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (source, source_window) = product_window(document, model.clone(), cx);
     let (destination, destination_window) = product_window(document, model, cx);
-    cx.update_window(source_window, |_, window, cx| {
+    cx.update_window(source_window, |_, _, cx| {
         source.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.new_terminal_in_pane(pane, None, window, cx).is_some());
+            assert!(shell.new_terminal_in_pane(pane, None, cx).is_some());
         })
     })
     .unwrap();

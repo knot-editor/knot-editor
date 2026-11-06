@@ -1400,8 +1400,8 @@ pub(crate) async fn show_input(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, window, cx| {
-                shell.begin_input(owner, title, value.unwrap_or_default(), None, window, cx)
+            move |shell, _, cx| {
+                shell.begin_input(owner, title, value.unwrap_or_default(), None, cx)
             },
             cx,
         )
@@ -1431,15 +1431,8 @@ pub(crate) async fn begin_input(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, window, cx| {
-                shell.begin_input(
-                    owner,
-                    title,
-                    value.unwrap_or_default(),
-                    Some(sender),
-                    window,
-                    cx,
-                )
+            move |shell, _, cx| {
+                shell.begin_input(owner, title, value.unwrap_or_default(), Some(sender), cx)
             },
             cx,
         )
@@ -1591,7 +1584,7 @@ pub(crate) async fn pick_folder(
         host.with_transient_window(
             &request,
             arguments.target.as_deref(),
-            move |shell, window, cx| shell.begin_folder_picker(Some(owner), window, cx),
+            move |shell, _, cx| shell.begin_folder_picker(Some(owner), cx),
             cx,
         )
     })??;

@@ -669,10 +669,10 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
         .unwrap();
     let retained_workbench = cx.read(|cx| shell.read(cx).workbench.clone());
     let old_command_target = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_surface(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -708,9 +708,7 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
 }
 
 #[gpui::test]
-fn native_focus_loss_and_deactivation_publish_null_targets_without_repaint_events(
-    cx: &mut TestAppContext,
-) {
+fn deactivation_publishes_null_targets_without_repaint_events(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let host = cx.update(extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -727,7 +725,7 @@ fn native_focus_loss_and_deactivation_publish_null_targets_without_repaint_event
     visual.refresh().unwrap();
     visual.update(|window, cx| {
         window.activate_window();
-        shell.read(cx).focus_active_editor(window, cx);
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
     });
     let focused = take_events(&host, visual);
     assert!(focused.iter().any(|event| matches!(
@@ -739,18 +737,12 @@ fn native_focus_loss_and_deactivation_publish_null_targets_without_repaint_event
     )));
     visual.refresh().unwrap();
     assert!(take_events(&host, visual).is_empty());
+    // Focus is the session's, so the window losing native focus leaves it.
     visual.update(|window, _| window.blur());
-    let blurred = take_events(&host, visual);
-    assert!(blurred.iter().any(|event| matches!(
-        &event.change,
-        ApplicationChange::ActiveTargetChanged {
-            active_window: Some(_),
-            active_target: None
-        }
-    )));
-    assert!(changed_documents(&blurred).is_empty());
+    assert!(take_events(&host, visual).is_empty());
     visual.deactivate_window();
     let deactivated = take_events(&host, visual);
+    assert!(changed_documents(&deactivated).is_empty());
     assert!(deactivated.iter().any(|event| matches!(
         &event.change,
         ApplicationChange::ActiveTargetChanged {
@@ -878,7 +870,7 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
     let (first, first_window) = product_window(document, model.clone(), cx);
     cx.update_window(first_window, |_, window, cx| {
         window.activate_window();
-        first.read(cx).focus_active_editor(window, cx);
+        first.update(cx, |shell, cx| shell.focus_active_editor(cx));
     })
     .unwrap();
     let initial = report(&first, first_window, cx);

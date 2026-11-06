@@ -608,7 +608,7 @@ fn commit(
             }
             shell.update(cx, |shell, cx| {
                 if focused {
-                    shell.focus_active_surface(native, cx);
+                    shell.focus_active_surface(cx);
                 }
                 shell.observe_application_focus(native, cx);
             });
@@ -941,7 +941,7 @@ pub(crate) fn focus_window(target: &WindowTarget, cx: &mut App) -> Result<(), Ac
     let (shell, handle) = operations::capture_window(target, cx)?;
     cx.update_window(handle, |_, window, cx| {
         window.activate_window();
-        shell.read(cx).focus_active_surface(window, cx);
+        shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
     })
     .map_err(|_| AccessError::InvalidTarget)
 }

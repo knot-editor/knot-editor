@@ -93,10 +93,10 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
     let target = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_surface(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -225,8 +225,8 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
         })
         .unwrap()
         .unwrap();
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -291,8 +291,8 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
             3
         )
     });
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.open_command_palette(window, cx));
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.open_command_palette(cx));
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -405,7 +405,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
             editor.replace_text_in_range(None, "Editor selection", window, cx);
             editor.execute_editing_command("editor.select-all", window, cx);
         });
-        editor.focus_handle(cx).focus(window);
+        focus_view(&editor.focus_handle(cx), window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -422,7 +422,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
 
     cx.update_window(window, |_, window, cx| {
         tree.update(cx, |tree, cx| assert!(tree.select_item("first", cx)));
-        tree.focus_handle(cx).focus(window);
+        focus_view(&tree.focus_handle(cx), window, cx);
     })
     .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
@@ -580,8 +580,8 @@ async fn keybinding_adapter_enters_the_product_dispatcher(cx: &mut TestAppContex
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model, cx);
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window_handle, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
 
@@ -619,8 +619,8 @@ fn personal_global_binding_overrides_editor_default_in_every_window(cx: &mut Tes
         let document = cx.update(|cx| create_untitled_document(&documents, cx));
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
         let (shell, window) = product_window(document, model.clone(), cx);
-        cx.update_window(window, |_, window, cx| {
-            shell.read(cx).focus_active_editor(window, cx)
+        cx.update_window(window, |_, _, cx| {
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
         })
         .unwrap();
         windows.push((window, model));
@@ -661,8 +661,8 @@ fn unbinding_an_unmapped_letter_preserves_editor_input(cx: &mut TestAppContext) 
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.update(|cx| {
@@ -688,8 +688,8 @@ async fn editor_unbind_leaves_global_binding_available_in_terminal(cx: &mut Test
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     // A named key, because Windows and Linux terminals leave ctrl with a
@@ -734,8 +734,8 @@ fn sequence_prefix_dispatches_the_product_command(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -751,8 +751,8 @@ fn unavailable_high_priority_binding_does_not_invoke_native_default(cx: &mut Tes
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.update(|cx| {
@@ -796,7 +796,7 @@ fn windows_native_ctrl_shift_p_opens_command_palette(cx: &mut TestAppContext) {
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
     cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx);
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -833,8 +833,8 @@ fn personal_config_ctrl_shift_p_opens_command_palette(cx: &mut TestAppContext) {
         })
         .unwrap()
         .unwrap();
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx);
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -852,8 +852,8 @@ fn macos_emacs_keys_edit_through_the_knot_preset(cx: &mut TestAppContext) {
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "hello world").unwrap());
     let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -942,8 +942,8 @@ fn selected_contributed_preset_replaces_knot_beneath_extension_bindings(cx: &mut
         })
         .unwrap()
         .unwrap();
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx);
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
     })
     .unwrap();
     let tabs = |cx: &mut TestAppContext| {
@@ -990,8 +990,8 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     let save = gpui::Keystroke::parse("secondary-s").unwrap().unparse();
@@ -1131,8 +1131,8 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
         documents.create_untitled("Probe", model.clone(), cx)
     });
     let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -1188,8 +1188,8 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
     }
     report("dispatch to completion, no-op handler", round_trips);
 
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -1290,8 +1290,8 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
         documents.create_untitled("Modal", model.clone(), cx)
     });
     let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     let editor = cx.read(|cx| {
@@ -1347,7 +1347,7 @@ fn focused_editor_window(
         documents.create_untitled("Keys", model.clone(), cx)
     });
     let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         let editor = shell
             .read(cx)
             .workbench
@@ -1361,7 +1361,7 @@ fn focused_editor_window(
         editor.update(cx, |editor, cx| {
             editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
         });
-        shell.read(cx).focus_active_editor(window, cx)
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();

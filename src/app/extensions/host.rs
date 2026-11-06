@@ -1848,7 +1848,11 @@ impl ProductExtensionHost {
                 let Some(target) = capture_product_target(*window, cx) else {
                     return;
                 };
-                if target.focus != *focus {
+                if !target.focused
+                    || !target
+                        .command_view(cx)
+                        .is_some_and(|view| view.matches_focus(focus, cx))
+                {
                     return;
                 }
                 let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
@@ -2550,7 +2554,7 @@ impl ProductExtensionHost {
                 .collect(),
         };
         for handle in handles {
-            let _ = cx.update_window(handle, |root, window, cx| {
+            let _ = cx.update_window(handle, |root, _, cx| {
                 let Ok(shell) = root.downcast::<ProductShell>() else {
                     return;
                 };
@@ -2562,7 +2566,7 @@ impl ProductExtensionHost {
                         shell.set_contributed_view_visible(&id, false, cx);
                     }
                     crate::app::extensions::semantics::ViewPresentation::Focus => {
-                        shell.focus_contributed_view(&id, window, cx);
+                        shell.focus_contributed_view(&id, cx);
                     }
                 });
             });
@@ -2713,7 +2717,7 @@ fn capture_product_target(
 ) -> Option<ProductCommandTarget> {
     cx.update_window(window_handle, |_, window, cx| {
         let shell = window.root::<ProductShell>().flatten()?;
-        shell.update(cx, |shell, cx| shell.capture_command_target(window, cx))
+        shell.update(cx, |shell, cx| shell.capture_command_target(cx))
     })
     .ok()
     .flatten()

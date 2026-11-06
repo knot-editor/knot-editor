@@ -14,10 +14,10 @@ impl ProductShell {
     pub(super) fn start_add_folder(
         &mut self,
         target: &ProductCommandTarget,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Ok(receiver) = self.begin_folder_picker(None, window, cx) else {
+        let Ok(receiver) = self.begin_folder_picker(None, cx) else {
             return;
         };
         let handle = target.window;

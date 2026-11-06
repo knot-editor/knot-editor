@@ -377,10 +377,8 @@ impl ProductShell {
             }
             Err(error) => return Err(error),
         };
-        if let OpenCommit::Document { target, .. } = &committed {
-            let _ = cx.update_window(target.window, |_, window, cx| {
-                self.focus_active_surface(window, cx)
-            });
+        if matches!(committed, OpenCommit::Document { .. }) {
+            self.focus_active_surface(cx);
         }
         cx.notify();
         Ok(committed)

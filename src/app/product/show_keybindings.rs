@@ -18,7 +18,7 @@ impl ProductShell {
     pub(crate) fn start_show_keybindings(
         &mut self,
         target: ProductCommandTarget,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let listing = cx
@@ -36,7 +36,7 @@ impl ProductShell {
             .map(|(index, binding)| keybinding_item(index, binding, &titles, cx))
             .collect::<Vec<_>>();
         let Ok(receiver) =
-            self.begin_owned_picker(None, SHOW_KEYBINDINGS_TITLE.into(), items, None, window, cx)
+            self.begin_owned_picker(None, SHOW_KEYBINDINGS_TITLE.into(), items, None, cx)
         else {
             cx.notify();
             return;

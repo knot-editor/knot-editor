@@ -125,10 +125,8 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model, cx);
 
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Horizontal, window, cx)
-        });
+    cx.update_window(window_handle, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
     })
     .unwrap();
     cx.run_until_parked();
@@ -147,10 +145,8 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
     });
     let target = cx
         .update_window(window_handle, |_, window, cx| {
-            first_editor.focus_handle(cx).focus(window);
-            shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            })
+            focus_view(&first_editor.focus_handle(cx), window, cx);
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
         })
         .unwrap();
     let execution = cx.update(|cx| {
@@ -167,7 +163,7 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
         })
     });
     cx.update_window(window_handle, |_, window, cx| {
-        second_editor.focus_handle(cx).focus(window)
+        focus_view(&second_editor.focus_handle(cx), window, cx)
     })
     .unwrap();
 
@@ -191,10 +187,10 @@ async fn destroyed_product_targets_are_not_retargeted(cx: &mut TestAppContext) {
     cx.refresh().unwrap();
 
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -229,8 +225,8 @@ fn menu_action_reaches_the_captured_window_in_its_dispatch_turn(cx: &mut TestApp
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -266,10 +262,8 @@ async fn palette_discovers_commands_and_keeps_its_opening_target(cx: &mut TestAp
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model, cx);
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Horizontal, window, cx)
-        });
+    cx.update_window(window_handle, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -284,7 +278,7 @@ async fn palette_discovers_commands_and_keeps_its_opening_target(cx: &mut TestAp
         )
     });
     cx.update_window(window_handle, |_, window, cx| {
-        first_editor.focus_handle(cx).focus(window);
+        focus_view(&first_editor.focus_handle(cx), window, cx);
     })
     .unwrap();
     cx.simulate_keystrokes(window_handle, "secondary-shift-p");
@@ -315,11 +309,9 @@ async fn native_participants_reject_arguments_before_mutation(cx: &mut TestAppCo
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model.clone(), cx);
     let target = cx
-        .update_window(window, |_, window, cx| {
-            shell.read(cx).focus_active_editor(window, cx);
-            shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            })
+        .update_window(window, |_, _, cx| {
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
         })
         .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("ignored".into())));
@@ -411,10 +403,10 @@ keymaps.bind("ctrl-alt-f", "fixture.described");
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
-            shell.focus_active_surface(window, cx);
-            shell.open_command_palette(window, cx);
+            shell.focus_active_surface(cx);
+            shell.open_command_palette(cx);
         });
     })
     .unwrap();
@@ -463,10 +455,10 @@ fn confirming_a_palette_command_ranks_it_first_next_time(cx: &mut TestAppContext
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
     let first_command = |cx: &mut TestAppContext| {
-        cx.update_window(window, |_, window, cx| {
+        cx.update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
-                shell.open_command_palette(window, cx);
+                shell.focus_active_surface(cx);
+                shell.open_command_palette(cx);
                 let palette = shell.command_palette.as_ref().unwrap();
                 let entry = palette.picker().read(cx).selected_entry().unwrap();
                 palette.command(entry).name.to_string()
@@ -505,7 +497,7 @@ fn closing_the_palette_returns_focus_to_its_origin(cx: &mut TestAppContext) {
             .clone()
     });
     cx.update_window(window, |_, window, cx| {
-        editor.focus_handle(cx).focus(window);
+        focus_view(&editor.focus_handle(cx), window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();

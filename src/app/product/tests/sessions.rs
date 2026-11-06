@@ -722,10 +722,10 @@ fn concurrent_operations_and_caller_unload_during_staging_leave_the_source(
         Err(ReplaceError::OperationInProgress)
     ));
     let target = cx
-        .update_window(window, |_, native, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(native, cx);
-                shell.capture_command_target(native, cx).unwrap()
+                shell.focus_active_surface(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();

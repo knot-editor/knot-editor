@@ -122,6 +122,16 @@ impl FileSystemProvider for GatedFileSystemProvider {
     }
 }
 
+/// Focus the surface owning `handle` in the window's session, as a click
+/// in the view would.
+fn focus_view(handle: &gpui::FocusHandle, window: &mut gpui::Window, cx: &mut gpui::App) {
+    let shell = window
+        .root::<ProductShell>()
+        .flatten()
+        .expect("a product window");
+    shell.update(cx, |shell, cx| shell.focus_view(handle, cx));
+}
+
 pub(super) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollection> {
     let documents = cx.new(|_| DocumentCollection::new());
     cx.set_global(ApplicationDocuments(documents.clone()));
@@ -331,10 +341,10 @@ fn place_explorer(
     placement: crate::app::workbench::ToolPlacement,
     cx: &mut TestAppContext,
 ) {
-    cx.update_window(window_handle, |_, window, cx| {
+    cx.update_window(window_handle, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let id = shell.explorer_frame(cx).unwrap();
-            assert!(shell.place_tool(id, placement, window, cx));
+            assert!(shell.place_tool(id, placement, cx));
         })
     })
     .unwrap();
@@ -357,10 +367,10 @@ fn dispatch_product_command_with(
     cx: &mut TestAppContext,
 ) -> super::super::CommandExecution {
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_surface(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -493,10 +503,8 @@ fn dispatch_tree_command(
     cx: &mut TestAppContext,
 ) -> crate::app::CommandExecution {
     let target = cx
-        .update_window(window, |_, window, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            })
+        .update_window(window, |_, _, cx| {
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
         })
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());

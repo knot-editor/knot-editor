@@ -29,8 +29,8 @@ fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut
     cx.run_until_parked();
     assert!(cx.read(|cx| right_texts(window, cx)).is_empty());
 
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     wait_for_api_condition(cx, |cx| right_texts(window, cx).len() == 3);

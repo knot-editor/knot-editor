@@ -225,14 +225,14 @@ fn commands_on_other_surfaces_have_no_editor(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let (session, view) = shell.create_terminal(cx);
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
             let tab = shell.workbench.update(cx, |workbench, _| {
                 workbench.open_terminal_tab(pane, session, view).unwrap()
             });
-            shell.activate_tab(pane, tab, window, cx);
+            shell.activate_tab(pane, tab, cx);
         })
     })
     .unwrap();
@@ -527,8 +527,8 @@ fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAp
     assert_eq!(cx.read(clipboard_text).as_deref(), Some("2:4"));
 
     // Typing moves the caret, which is a selection change too.
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.simulate_input(window, "x");

@@ -51,9 +51,15 @@ impl ProductShell {
             {
                 continue;
             }
-            let subscription = cx.observe(&editor, |this, _, cx| {
+            // Only a changed view state counts: a blinking caret notifies too.
+            let mut seen = editor.read(cx).view_state(cx);
+            let subscription = cx.observe(&editor, move |this, editor, cx| {
                 this.promote_edited_previews(cx);
-                this.schedule_view_state(cx);
+                let state = editor.read(cx).view_state(cx);
+                if state != seen {
+                    seen = state;
+                    this.schedule_view_state(cx);
+                }
             });
             self.view_state
                 .editors

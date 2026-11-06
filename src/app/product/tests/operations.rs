@@ -273,7 +273,7 @@ await commands.register("operations.delayed", async () => {
     wait_for_api_condition(cx, |_| provider.read_release.lock().unwrap().is_none());
     cx.update_window(second_window, |_, window, cx| {
         window.activate_window();
-        second.read(cx).focus_active_surface(window, cx);
+        second.update(cx, |shell, cx| shell.focus_active_surface(cx));
     })
     .unwrap();
     release.send(()).unwrap();
@@ -680,11 +680,11 @@ await commands.register("operations.target-loss", async () => {
         wait_for_api_condition(cx, |_| provider.read_release.lock().unwrap().is_none());
         match scenario {
             "pane" => {
-                cx.update_window(first_window, |_, window, cx| {
+                cx.update_window(first_window, |_, _, cx| {
                     first.update(cx, |shell, cx| {
                         let pane = &shell.workbench.read(cx).panes()[0];
                         let (pane, tab) = (pane.id(), pane.active_tab_id());
-                        shell.activate_tab(pane, tab, window, cx);
+                        shell.activate_tab(pane, tab, cx);
                     })
                 })
                 .unwrap();

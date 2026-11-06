@@ -66,7 +66,7 @@ impl ProductShell {
         }
     }
 
-    fn focus_relocated_surface(&self, window: &mut Window, cx: &mut App) {
+    fn focus_relocated_surface(&mut self, cx: &mut Context<Self>) {
         let editor = self
             .workbench
             .read(cx)
@@ -79,7 +79,7 @@ impl ProductShell {
                 cx.notify();
             });
         }
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
     }
 
     pub(super) fn relocate_tab_to(
@@ -111,7 +111,7 @@ impl ProductShell {
             if matches!(source.tab.tab.surface, TabSurfaceId::Tool(_)) {
                 self.publish_tool_layout(cx);
             }
-            self.focus_relocated_surface(window, cx);
+            self.focus_relocated_surface(cx);
             cx.notify();
             return CommandOutcome::Completed;
         }
@@ -176,7 +176,7 @@ impl ProductShell {
                     cx.global::<ApplicationWorkbenches>()
                         .register(&destination_workbench, destination_window.window_handle());
                 }
-                shell.focus_relocated_surface(destination_window, cx);
+                shell.focus_relocated_surface(cx);
                 if !matches!(destination.tab, TabMoveDestination::Empty) {
                     destination_window.activate_window();
                 }
@@ -187,7 +187,7 @@ impl ProductShell {
         if !matches!(result, Ok(CommandOutcome::Completed)) {
             return CommandOutcome::InvalidTarget;
         }
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         cx.notify();
         CommandOutcome::Completed
     }

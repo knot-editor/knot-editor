@@ -64,8 +64,8 @@ impl ProductShell {
                     description: Some(describe_snapshot(snapshot, now)),
                 })
                 .collect();
-            let Some(Ok(receiver)) = Self::in_window(&this, window, cx, |shell, window, cx| {
-                shell.begin_owned_picker(None, LISTING_TITLE.into(), items, None, window, cx)
+            let Some(Ok(receiver)) = Self::in_window(&this, window, cx, |shell, _, cx| {
+                shell.begin_owned_picker(None, LISTING_TITLE.into(), items, None, cx)
             }) else {
                 return;
             };
@@ -101,8 +101,8 @@ impl ProductShell {
                         return;
                     };
                     let outcome = restore.await;
-                    Self::in_window(&this, window, cx, |shell, window, cx| {
-                        shell.present_recovered(outcome, &title, window, cx)
+                    Self::in_window(&this, window, cx, |shell, _, cx| {
+                        shell.present_recovered(outcome, &title, cx)
                     });
                 }
                 1 => {
@@ -131,7 +131,6 @@ impl ProductShell {
         &mut self,
         outcome: Result<RestoreOutcome, RestoreError>,
         title: &str,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let document = match outcome {
@@ -151,7 +150,7 @@ impl ProductShell {
             }
         };
         self.present_document_in_focused_pane(document, cx);
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         cx.notify();
     }
 

@@ -68,7 +68,7 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
         )
     });
     let view = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             let id = cx
                 .global::<ApplicationTerminalSessions>()
                 .0
@@ -85,7 +85,7 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
                 let tab = shell.workbench.update(cx, |workbench, _| {
                     workbench.open_terminal_tab(pane, id, view.clone()).unwrap()
                 });
-                shell.activate_tab(pane, tab, window, cx);
+                shell.activate_tab(pane, tab, cx);
             });
             view
         })
@@ -182,10 +182,10 @@ async fn terminal_tab_has_a_captured_surface_and_document_commands_are_unavailab
             .surface_id()
     });
     let target = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.activate_tab(pane, tab, window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.activate_tab(pane, tab, cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -254,10 +254,10 @@ async fn closing_terminal_tab_preserves_dirty_document_and_invalidates_its_targe
         (pane, tab)
     });
     let stale = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.activate_tab(pane, tab, window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.activate_tab(pane, tab, cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -316,8 +316,8 @@ async fn mixed_window_and_quit_cancellation_preserve_every_surface(cx: &mut Test
             .active_tab()
             .surface_id()
     });
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.activate_tab(pane, tab, window, cx));
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.activate_tab(pane, tab, cx));
     })
     .unwrap();
     for command in [CLOSE_WINDOW_COMMAND, QUIT_COMMAND] {
@@ -397,16 +397,14 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
         );
     });
 
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.activate_tab(pane, document_tab, window, cx)
-        });
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.activate_tab(pane, document_tab, cx));
     })
     .unwrap();
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let terminal_tab = shell.workbench.read(cx).pane(pane).unwrap().tabs()[1].id();
-            shell.activate_tab(pane, terminal_tab, window, cx);
+            shell.activate_tab(pane, terminal_tab, cx);
         });
     })
     .unwrap();
@@ -566,10 +564,8 @@ async fn closing_the_final_terminal_tab_installs_an_untitled_workbench(cx: &mut 
                 .clone(),
         )
     });
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.activate_tab(pane, document_tab, window, cx)
-        });
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.activate_tab(pane, document_tab, cx));
     })
     .unwrap();
     assert_eq!(
@@ -1111,8 +1107,8 @@ async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppC
         });
         id
     });
-    cx.update_window(source_window, |_, window, cx| {
-        source.update(cx, |shell, cx| shell.focus_active_surface(window, cx))
+    cx.update_window(source_window, |_, _, cx| {
+        source.update(cx, |shell, cx| shell.focus_active_surface(cx))
     })
     .unwrap();
     let relocation = capture_active_tab(&source, cx);
@@ -1209,7 +1205,7 @@ fn focus_document(
                 .into_iter()
                 .find(|tab| tab.surface == TabSurfaceId::Document(document))
                 .unwrap();
-            shell.activate_tab(tab.pane_id, tab.tab_id, window, cx);
+            shell.activate_tab(tab.pane_id, tab.tab_id, cx);
         });
         window.activate_window();
     })
@@ -1278,12 +1274,12 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             shell.replace_workspace_roots(vec![directory_uri(&root)], cx);
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
             shell
-                .new_terminal_in_pane(pane, Some(nested.clone()), window, cx)
+                .new_terminal_in_pane(pane, Some(nested.clone()), cx)
                 .unwrap();
         });
     })
@@ -1295,14 +1291,13 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
     assert_eq!(focused_terminal_directory(&shell, cx), Some(nested.clone()));
 
     // So does splitting a terminal pane.
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
             assert!(shell.split_pane(
                 pane,
                 SplitDirection::Horizontal,
                 super::super::SplitPlacement::After,
-                window,
                 cx
             ));
         });

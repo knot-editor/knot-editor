@@ -28,7 +28,6 @@ impl ProductShell {
         &mut self,
         pane: PaneId,
         forward: bool,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         let tab = self
@@ -36,7 +35,7 @@ impl ProductShell {
             .read(cx)
             .adjacent_tab(pane, forward)
             .ok_or(CommandOutcome::InvalidTarget)?;
-        self.activate_tab(pane, tab, window, cx);
+        self.activate_tab(pane, tab, cx);
         Ok(())
     }
 
@@ -45,7 +44,6 @@ impl ProductShell {
         &mut self,
         pane: PaneId,
         index: Option<usize>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         let tabs = self
@@ -60,7 +58,7 @@ impl ProductShell {
         }
         .map(|tab| tab.id())
         .ok_or(CommandOutcome::Unavailable)?;
-        self.activate_tab(pane, tab, window, cx);
+        self.activate_tab(pane, tab, cx);
         Ok(())
     }
 
@@ -107,7 +105,7 @@ impl ProductShell {
             self.recent_walk = None;
             return Err(CommandOutcome::InvalidTarget);
         }
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         if !window.modifiers().control {
             self.commit_recent_walk(cx);
         }
@@ -169,7 +167,6 @@ impl ProductShell {
         &mut self,
         pane: PaneId,
         edge: SplitEdge,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         self.maximized = None;
@@ -179,7 +176,7 @@ impl ProductShell {
             .ok_or(CommandOutcome::Unavailable)?;
         self.workbench
             .update(cx, |workbench, _| workbench.focus_pane(neighbor));
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         Ok(())
     }
 

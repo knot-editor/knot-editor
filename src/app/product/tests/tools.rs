@@ -15,7 +15,7 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
     let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     cx.update_window(window, |_, window, cx| {
-        tree.focus_handle(cx).focus(window);
+        focus_view(&tree.focus_handle(cx), window, cx);
         tree.update(cx, |tree, cx| {
             assert!(tree.activate_for_test(&uri, false, cx))
         });
@@ -37,10 +37,8 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
     });
     let target = cx
         .update_window(window, |_, window, cx| {
-            tree.focus_handle(cx).focus(window);
-            shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            })
+            focus_view(&tree.focus_handle(cx), window, cx);
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
         })
         .unwrap();
     cx.read(|cx| {
@@ -148,10 +146,8 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
             TabSurfaceId::Tool(_)
         ));
     });
-    cx.update_window(window, |_, window, cx| {
-        let target = shell.update(cx, |shell, cx| {
-            shell.capture_command_target(window, cx).unwrap()
-        });
+    cx.update_window(window, |_, _, cx| {
+        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
         assert!(matches!(target.surface, TabSurfaceId::Tool(_)));
         assert_eq!(target.validate_view(cx), Ok(()));
     })
@@ -376,7 +372,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     let focus_editor = |cx: &mut TestAppContext| {
         cx.update_window(window, |_, window, cx| {
             shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));
-            shell.read(cx).focus_active_editor(window, cx);
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
         })
         .unwrap();
         cx.update_window(window, |_, window, cx| {
@@ -389,9 +385,6 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     cx.update_window(window, |_, window, _| window.activate_window())
         .unwrap();
 
-    // Before any editor was focused there is nothing to describe.
-    assert_eq!(state(cx).status_target, None);
-
     focus_editor(cx);
     let editor = state(cx).current_target.expect("focused editor");
     assert_eq!(state(cx).status_target, Some(editor.clone()));
@@ -399,7 +392,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     // A tool keeps the editor it was focused from.
     cx.update_window(window, |_, window, cx| {
         shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));
-        tree.focus_handle(cx).focus(window);
+        focus_view(&tree.focus_handle(cx), window, cx);
     })
     .unwrap();
     settle(cx);
@@ -418,7 +411,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     assert!(state(cx).current_target.is_some());
     assert_eq!(state(cx).status_target, None);
     cx.update_window(window, |_, window, cx| {
-        tree.focus_handle(cx).focus(window);
+        focus_view(&tree.focus_handle(cx), window, cx);
     })
     .unwrap();
     assert_eq!(state(cx).status_target, None);
@@ -427,8 +420,8 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     cx.update(|cx| {
         let workbench = shell.read(cx).workbench.clone();
         workbench.update(cx, |workbench, _| {
-            let pane = workbench.focused_pane().unwrap();
-            let (pane, tab) = (pane.id(), pane.tabs()[0].id());
+            let pane = workbench.normal_pane().unwrap();
+            let tab = workbench.pane(pane).unwrap().tabs()[0].id();
             assert!(workbench.activate_tab(pane, tab));
         });
     });

@@ -13,14 +13,10 @@ fn shell_actions_render_tabs_and_both_split_directions(cx: &mut TestAppContext) 
         ProductShell::new(workbench)
     });
 
-    cx.update(|window, cx| {
-        shell.update(cx, |shell, cx| shell.new_tab(window, cx));
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Horizontal, window, cx)
-        });
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Vertical, window, cx)
-        });
+    cx.update(|_, cx| {
+        shell.update(cx, |shell, cx| shell.new_tab(cx));
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Vertical, cx));
     });
     cx.run_until_parked();
 
@@ -64,10 +60,8 @@ fn new_tab_targets_the_pane_whose_editor_has_focus(cx: &mut TestAppContext) {
         ProductShell::new(workbench)
     });
 
-    cx.update(|window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Horizontal, window, cx)
-        });
+    cx.update(|_, cx| {
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
     });
     cx.run_until_parked();
     cx.refresh().unwrap();
@@ -88,17 +82,17 @@ fn new_tab_targets_the_pane_whose_editor_has_focus(cx: &mut TestAppContext) {
             workbench.panes()[1].active_tab().editor().unwrap().clone(),
         )
     });
-    cx.update(|window, cx| second_editor.focus_handle(cx).focus(window));
+    cx.update(|window, cx| focus_view(&second_editor.focus_handle(cx), window, cx));
     cx.run_until_parked();
     cx.refresh().unwrap();
     assert!(cx.update(|window, cx| second_editor.focus_handle(cx).is_focused(window)));
-    cx.update(|window, cx| first_editor.focus_handle(cx).focus(window));
+    cx.update(|window, cx| focus_view(&first_editor.focus_handle(cx), window, cx));
     cx.run_until_parked();
     cx.refresh().unwrap();
     assert!(cx.update(|window, cx| first_editor.focus_handle(cx).is_focused(window)));
 
-    cx.update(|window, cx| {
-        shell.update(cx, |shell, cx| shell.new_tab(window, cx));
+    cx.update(|_, cx| {
+        shell.update(cx, |shell, cx| shell.new_tab(cx));
     });
     cx.run_until_parked();
 

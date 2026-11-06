@@ -54,7 +54,6 @@ impl ProductShell {
     /// reopens its file and a terminal starts in its last directory.
     pub(super) fn reopen_closed_tab(
         &mut self,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         let closed = self.closed_tabs.pop().ok_or(CommandOutcome::Unavailable)?;
@@ -76,7 +75,7 @@ impl ProductShell {
                     pinned,
                     cx,
                 );
-                self.focus_active_surface(window, cx);
+                self.focus_active_surface(cx);
                 Ok(())
             }
             LayoutTab::Document {
@@ -93,7 +92,7 @@ impl ProductShell {
                     self.install_reopened_document(
                         pane, index, document, view, language, pinned, cx,
                     );
-                    self.focus_active_surface(window, cx);
+                    self.focus_active_surface(cx);
                     return Ok(());
                 }
                 let providers = Self::filesystems(cx);
@@ -105,11 +104,7 @@ impl ProductShell {
                                 this.install_reopened_document(
                                     pane, index, document, view, language, pinned, cx,
                                 );
-                                if let Some(window) = this.window {
-                                    let _ = cx.update_window(window, |_, window, cx| {
-                                        this.focus_active_surface(window, cx)
-                                    });
-                                }
+                                this.focus_active_surface(cx);
                             }
                         }
                         Err(error) => this.show_notice(

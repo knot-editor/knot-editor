@@ -95,7 +95,7 @@ impl Fixture {
             editor.update(cx, |editor, cx| {
                 editor.set_selection(anchor, caret, crate::app::editor::Reveal::Nearest, cx)
             });
-            shell.read(cx).focus_active_editor(window, cx)
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
         })
         .unwrap();
         cx.refresh().unwrap();
@@ -535,10 +535,8 @@ fn a_global_mark_jumps_to_another_open_document(cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(Some(ENABLE), cx);
     let fixture = Fixture::open("one\ntwo", None, 0, cx);
     fixture.press("jmA", cx);
-    cx.update_window(fixture.window, |_, window, cx| {
-        fixture
-            .shell
-            .update(cx, |shell, cx| shell.new_tab(window, cx))
+    cx.update_window(fixture.window, |_, _, cx| {
+        fixture.shell.update(cx, |shell, cx| shell.new_tab(cx))
     })
     .unwrap();
     let other = active_editor(&fixture.shell, cx);

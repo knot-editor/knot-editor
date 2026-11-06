@@ -13,9 +13,9 @@ pub(crate) async fn new(context: CommandContext, (): ()) -> Result<(), CommandOu
         })
         .await?;
     context
-        .shell(move |shell, target, window, cx| {
+        .shell(move |shell, target, _, cx| {
             shell
-                .new_document_in_pane(target.pane, window, cx)
+                .new_document_in_pane(target.pane, cx)
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         })
@@ -31,10 +31,10 @@ pub(crate) async fn new_terminal(context: CommandContext, (): ()) -> Result<(), 
         })
         .await?;
     context
-        .shell(move |shell, target, window, cx| {
+        .shell(move |shell, target, _, cx| {
             let directory = shell.terminal_directory(cx);
             shell
-                .new_terminal_in_pane(target.pane, directory, window, cx)
+                .new_terminal_in_pane(target.pane, directory, cx)
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         })
@@ -61,7 +61,7 @@ pub(crate) async fn reopen_closed_tab(
     (): (),
 ) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, _, window, cx| shell.reopen_closed_tab(window, cx))
+        .shell(|shell, _, _, cx| shell.reopen_closed_tab(cx))
         .await
 }
 
@@ -216,14 +216,14 @@ async fn resize(context: &CommandContext, grow: bool) -> Result<(), CommandOutco
 #[command("workbench.next-tab", title = "Next Tab", description = "Show the next tab of the focused pane.", id = NEXT_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn next_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, window, cx| shell.cycle_tab(target.pane, true, window, cx))
+        .shell(|shell, target, _, cx| shell.cycle_tab(target.pane, true, cx))
         .await
 }
 
 #[command("workbench.previous-tab", title = "Previous Tab", description = "Show the previous tab of the focused pane.", id = PREVIOUS_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn previous_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, window, cx| shell.cycle_tab(target.pane, false, window, cx))
+        .shell(|shell, target, _, cx| shell.cycle_tab(target.pane, false, cx))
         .await
 }
 
@@ -249,7 +249,7 @@ macro_rules! go_to_tab {
         #[command($name, title = $title, palette = false, id = $id, participant = Workbench)]
         pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
             context
-                .shell(|shell, target, window, cx| shell.go_to_tab(target.pane, $index, window, cx))
+                .shell(|shell, target, _, cx| shell.go_to_tab(target.pane, $index, cx))
                 .await
         }
     )*};
@@ -269,7 +269,7 @@ go_to_tab! {
 #[command("workbench.go-to-last-tab", title = "Go to Last Tab", description = "Show the last tab of the focused pane.", id = GO_TO_LAST_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn go_to_last_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, window, cx| shell.go_to_tab(target.pane, None, window, cx))
+        .shell(|shell, target, _, cx| shell.go_to_tab(target.pane, None, cx))
         .await
 }
 
@@ -318,9 +318,7 @@ pub(crate) async fn move_tab_down(context: CommandContext, (): ()) -> Result<(),
 
 async fn focus_toward(context: CommandContext, edge: SplitEdge) -> Result<(), CommandOutcome> {
     context
-        .shell(move |shell, target, window, cx| {
-            shell.focus_pane_toward(target.pane, edge, window, cx)
-        })
+        .shell(move |shell, target, _, cx| shell.focus_pane_toward(target.pane, edge, cx))
         .await
 }
 
@@ -472,8 +470,8 @@ pub(crate) async fn show_command_palette(
         })
         .await?;
     context
-        .shell(move |shell, target, window, cx| {
-            shell.open_command_palette_from(target.clone(), window, cx);
+        .shell(move |shell, target, _, cx| {
+            shell.open_command_palette_from(target.clone(), cx);
             Ok(())
         })
         .await
@@ -504,10 +502,10 @@ pub(crate) async fn show_extension_memory(
     (): (),
 ) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, window, cx| {
+        .shell(|shell, target, _, cx| {
             let report = super::super::extensions::host::memory_report(cx);
             shell
-                .new_untitled_in_pane(target.pane, "Extension Memory", &report, window, cx)
+                .new_untitled_in_pane(target.pane, "Extension Memory", &report, cx)
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         })
@@ -564,8 +562,8 @@ async fn split(
     placement: SplitPlacement,
 ) -> Result<(), CommandOutcome> {
     context
-        .shell(move |shell, target, window, cx| {
-            if shell.split_pane(target.pane, direction, placement, window, cx) {
+        .shell(move |shell, target, _, cx| {
+            if shell.split_pane(target.pane, direction, placement, cx) {
                 Ok(())
             } else {
                 Err(CommandOutcome::InvalidTarget)
@@ -597,8 +595,8 @@ async fn close_target(
 #[command("workbench.toggle-explorer", title = "Toggle Explorer", description = "Show or hide the file explorer.", id = TOGGLE_EXPLORER_COMMAND, participant = Workbench)]
 pub(crate) async fn toggle_explorer(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, _, window, cx| {
-            shell.toggle_explorer(window, cx);
+        .shell(|shell, _, _, cx| {
+            shell.toggle_explorer(cx);
             Ok(())
         })
         .await
@@ -683,12 +681,12 @@ pub(crate) async fn toggle_bottom_dock(
 
 async fn toggle_dock(context: CommandContext, dock: DockLocation) -> Result<(), CommandOutcome> {
     context
-        .shell(move |shell, _, window, cx| {
+        .shell(move |shell, _, _, cx| {
             shell
                 .workbench
                 .update(cx, |workbench, _| workbench.toggle_dock(dock));
             shell.publish_tool_layout(cx);
-            shell.focus_active_surface(window, cx);
+            shell.focus_active_surface(cx);
             cx.notify();
             Ok(())
         })
@@ -708,8 +706,8 @@ pub(crate) async fn move_tool_to_dock(
 #[command("workbench.reset-layout", title = "Reset Layout", description = "Return docks and tools to their default arrangement.", id = RESET_LAYOUT_COMMAND, participant = Workbench)]
 pub(crate) async fn reset_layout(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(move |shell, _, window, cx| {
-            shell.reset_tool_layout(window, cx);
+        .shell(move |shell, _, _, cx| {
+            shell.reset_tool_layout(cx);
             Ok(())
         })
         .await

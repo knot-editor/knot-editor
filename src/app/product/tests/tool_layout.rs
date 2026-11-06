@@ -98,9 +98,9 @@ fn existing_windows_keep_live_state_and_activation_does_not_publish(cx: &mut Tes
         });
     }
     // Interacting with the older window without a layout change publishes nothing.
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
-            shell.focus_active_surface(window, cx);
+            shell.focus_active_surface(cx);
         });
     })
     .unwrap();

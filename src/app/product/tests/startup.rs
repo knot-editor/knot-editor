@@ -522,10 +522,10 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
         CommandOutcome::InvalidArgument { .. }
     ));
     let target = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_surface(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -572,7 +572,7 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
     });
     cx.update_window(window, |_, window, cx| {
         tree.update(cx, |tree, cx| assert!(tree.select_item("root", cx)));
-        tree.focus_handle(cx).focus(window);
+        focus_view(&tree.focus_handle(cx), window, cx);
     })
     .unwrap();
     let copy = dispatch_tree_copy(&shell, window, cx);
@@ -582,8 +582,7 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
         super::super::super::extensions::host::completion_provider_count(cx) == 1
     });
     cx.update_window(window, |_, window, cx| {
-        copy_editor.read(cx).focus_handle(cx).focus(window);
-        shell.update(cx, |shell, cx| shell.sync_focused_pane(window, cx));
+        focus_view(&copy_editor.read(cx).focus_handle(cx), window, cx);
     })
     .unwrap();
     let completion =

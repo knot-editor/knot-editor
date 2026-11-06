@@ -248,11 +248,11 @@ pub(crate) fn open_terminal(
     cx: &mut App,
 ) -> Result<PresentationTarget, AccessError> {
     let (shell, target) = capture_destination(&destination, cx)?;
-    cx.update_window(target.window, |_, window, cx| {
+    cx.update_window(target.window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let directory = directory.or_else(|| shell.terminal_directory(cx));
             shell
-                .new_terminal_in_pane(target.pane, directory, window, cx)
+                .new_terminal_in_pane(target.pane, directory, cx)
                 .map(|target| target.public_target())
                 .ok_or(AccessError::InvalidTarget)
         })
@@ -350,10 +350,10 @@ pub(crate) fn create_untitled(
     cx: &mut App,
 ) -> Result<(DocumentId, PresentationTarget), OpenError> {
     let (shell, target) = capture_destination(&destination, cx)?;
-    cx.update_window(target.window, |_, window, cx| {
+    cx.update_window(target.window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let (document, target) = shell
-                .new_document_in_pane(target.pane, window, cx)
+                .new_document_in_pane(target.pane, cx)
                 .ok_or(OpenError::Access(AccessError::InvalidTarget))?;
             Ok((document, target.public_target()))
         })
@@ -376,9 +376,7 @@ pub(crate) fn present_document(
     let target = shell.update(cx, |shell, cx| {
         shell.next_open_generation();
         let target = shell.present_open_document(document, &target, false, false, cx);
-        let _ = cx.update_window(target.window, |_, window, cx| {
-            shell.focus_active_surface(window, cx)
-        });
+        shell.focus_active_surface(cx);
         cx.notify();
         target
     });
@@ -489,11 +487,11 @@ pub(crate) fn close_presentation(
         .workbench
         .upgrade()
         .ok_or(CloseError::Access(AccessError::InvalidTarget))?;
-    let focus = workbench
+    workbench
         .read(cx)
         .pane(target.pane)
         .and_then(|pane| pane.tabs().iter().find(|tab| tab.id() == target.tab))
-        .and_then(|tab| tab.command_view().map(|view| view.focus_handle(cx)))
+        .and_then(|tab| tab.command_view())
         .ok_or(CloseError::Access(AccessError::InvalidTarget))?;
     let origin = ProductCommandTarget {
         window: target.window,
@@ -503,7 +501,7 @@ pub(crate) fn close_presentation(
         tab: target.tab,
         surface: target.surface,
         presentation: target.presentation,
-        focus: focus.downgrade(),
+        focused: true,
         view: None,
     };
     super::super::commands::dispatch::break_captured_history_group(&origin, cx);

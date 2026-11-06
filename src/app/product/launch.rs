@@ -80,7 +80,7 @@ pub(super) fn open_product_window_with(
                     workbench.activate_tab(target.pane, target.tab);
                 });
             });
-            shell.read(cx).focus_active_surface(window, cx);
+            shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
             shell.update(cx, |shell, cx| {
                 if let Some(request) = request {
                     drop(shell.start_open_operation(request, target, true, cx));

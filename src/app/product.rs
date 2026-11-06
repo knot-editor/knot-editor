@@ -439,6 +439,27 @@ pub(crate) struct ProductShell {
     key_hold: Option<key_hold::KeyHold>,
     key_hold_generation: u64,
     keys: key_routing::KeyRouting,
+    /// What has Knot-side focus. The attached window focuses its handle and
+    /// reports focus a click moves.
+    focus: Focus,
+}
+
+/// What has Knot-side focus, by identity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FocusTarget {
+    layer: Focus,
+    pane: Option<PaneId>,
+    tab: Option<TabId>,
+}
+
+/// The layer of a session that has focus: the focused pane's active
+/// surface, the command palette, or the transient interaction.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum Focus {
+    #[default]
+    Workbench,
+    Palette,
+    Transient,
 }
 
 /// One live transient interaction owned by this window. Native interactions
@@ -448,7 +469,7 @@ struct ActiveTransient {
     surface: Option<TransientSurface>,
     focus: Option<FocusHandle>,
     completion: Option<tokio::sync::oneshot::Sender<TransientOutcome>>,
-    restore_focus: Option<WeakFocusHandle>,
+    restore_focus: Focus,
     _subscription: Option<Subscription>,
 }
 
@@ -550,6 +571,7 @@ impl ProductShell {
             key_hold: None,
             key_hold_generation: 0,
             keys: Default::default(),
+            focus: Focus::default(),
         }
     }
 
@@ -645,14 +667,14 @@ impl ProductShell {
             }
             // A view focused before its subscription exists sends no event.
             if handle.is_focused(window) {
-                self.remember_focused_document(&handle, cx);
+                self.focus_view(&handle, cx);
             }
             self.application_focus.push((
                 handle.clone(),
                 cx.on_focus(&handle, window, {
                     let handle = handle.clone();
                     move |this, _, cx| {
-                        this.remember_focused_document(&handle, cx);
+                        this.focus_view(&handle, cx);
                         super::extensions::host::application_changed(cx);
                         this.schedule_view_state(cx);
                     }
@@ -665,24 +687,29 @@ impl ProductShell {
         self.observe_editor_view_state(cx);
     }
 
-    fn remember_focused_document(&mut self, handle: &FocusHandle, cx: &App) {
-        let tab = self
-            .workbench
-            .read(cx)
-            .panes()
-            .iter()
-            .flat_map(|pane| pane.tabs())
-            .find(|tab| {
-                tab.command_view()
-                    .is_some_and(|view| &view.focus_handle(cx) == handle)
-            })
-            .map(|tab| (tab.id(), tab.document_id()));
-        if let Some((id, document)) = tab
-            && document.is_some()
-        {
+    /// Focus the surface whose view owns `handle`. The window reports focus
+    /// a click gives a view the same way.
+    pub(crate) fn focus_view(&mut self, handle: &FocusHandle, cx: &mut Context<Self>) {
+        let Some((pane, tab, document)) = self.workbench.read(cx).panes().iter().find_map(|pane| {
+            pane.tabs()
+                .iter()
+                .find(|tab| {
+                    tab.command_view()
+                        .is_some_and(|view| &view.focus_handle(cx) == handle)
+                })
+                .map(|tab| (pane.id(), tab.id(), tab.document_id()))
+        }) else {
+            return;
+        };
+        self.focus = Focus::Workbench;
+        self.workbench.update(cx, |workbench, _| {
+            workbench.focus_pane(pane);
+        });
+        if document.is_some() {
             self.last_focused_document = document;
-            self.last_focused_editor_tab = Some(id);
+            self.last_focused_editor_tab = Some(tab);
         }
+        self.follow_focus(cx);
     }
 
     /// The directory a new terminal in this window starts in: the focused
@@ -749,6 +776,10 @@ impl ProductShell {
         };
         let workbench = self.workbench.read(cx);
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
+        let focused = workbench
+            .focused_pane()
+            .filter(|_| self.focus == Focus::Workbench)
+            .map(|pane| (pane.id(), pane.active_tab_id()));
         let mut current_target = None;
         let mut current_kind = None;
         let mut last_editor_target = None;
@@ -774,11 +805,7 @@ impl ProductShell {
                             tab: tab.id().value().to_string(),
                             presentation,
                         };
-                        if let Some(focus) = window.focused(cx)
-                            && tab
-                                .command_view()
-                                .is_some_and(|view| view.matches_focus(&focus.downgrade(), cx))
-                        {
+                        if focused == Some((pane.id(), tab.id())) {
                             current_target = Some(view_target.clone());
                             current_kind = Some(tab.surface_id());
                         }
@@ -895,73 +922,100 @@ impl ProductShell {
         }
     }
 
-    fn focus_active_surface(&self, window: &mut Window, cx: &App) {
-        let Some(view) = self
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .and_then(|pane| pane.active_tab().command_view())
-        else {
-            return;
-        };
-        view.focus_handle(cx).focus(window);
+    /// Give Knot-side focus to `focus` and have the window follow.
+    fn set_focus(&mut self, focus: Focus, cx: &mut Context<Self>) {
+        self.focus = focus;
+        self.follow_focus(cx);
     }
 
+    /// Focus the focused pane's active surface.
+    pub(super) fn focus_active_surface(&mut self, cx: &mut Context<Self>) {
+        self.set_focus(Focus::Workbench, cx);
+    }
+
+    /// Focus `pane`'s active surface.
+    fn focus_pane_surface(&mut self, pane: PaneId, cx: &mut Context<Self>) {
+        self.workbench.update(cx, |workbench, _| {
+            workbench.focus_pane(pane);
+        });
+        self.focus_active_surface(cx);
+    }
+
+    /// What has Knot-side focus, by identity. Reading it never reads a view,
+    /// so a view handling input may ask.
+    fn focus_target(&self, cx: &App) -> FocusTarget {
+        let pane = self.workbench.read(cx).focused_pane();
+        FocusTarget {
+            layer: self.focus,
+            pane: pane.map(|pane| pane.id()),
+            tab: pane.map(|pane| pane.active_tab_id()),
+        }
+    }
+
+    /// The focus handle of what has Knot-side focus.
+    fn focused_handle(&self, cx: &App) -> Option<FocusHandle> {
+        match self.focus {
+            Focus::Workbench => self
+                .workbench
+                .read(cx)
+                .focused_pane()
+                .and_then(|pane| pane.active_tab().command_view())
+                .map(|view| view.focus_handle(cx)),
+            Focus::Palette => self
+                .command_palette
+                .as_ref()
+                .map(|palette| palette.picker().read(cx).focus_handle(cx)),
+            Focus::Transient => self
+                .transient
+                .as_ref()
+                .and_then(|active| active.focus.clone()),
+        }
+    }
+
+    /// Have the attached window focus what has Knot-side focus once the
+    /// current update ends, so a caller may hold the window.
+    fn follow_focus(&self, cx: &mut Context<Self>) {
+        let Some(window) = self.window else {
+            return;
+        };
+        let shell = cx.weak_entity();
+        cx.defer(move |cx| {
+            let Some(handle) = shell
+                .upgrade()
+                .and_then(|shell| shell.read(cx).focused_handle(cx))
+            else {
+                return;
+            };
+            let _ = window.update(cx, |_, window, _| window.focus(&handle));
+        });
+    }
+
+    /// The focused pane's active tab, with whether its view has focus.
     pub(crate) fn capture_command_target(
         &mut self,
-        window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<ProductCommandTarget> {
-        self.sync_focused_pane(window, cx);
-        let focus = window.focused(cx)?;
+        let window = self.window?;
         let workbench = self.workbench.read(cx);
         let pane = workbench.focused_pane()?;
         let tab = pane.active_tab();
+        let focused = self.focus == Focus::Workbench;
         let view = match tab.command_view() {
-            Some(super::workbench::CommandView::Extension(extension))
-                if extension.focus_handle(cx) == focus =>
-            {
+            Some(super::workbench::CommandView::Extension(extension)) if focused => {
                 Some(extension.instance_id(cx))
             }
             _ => None,
         };
         Some(ProductCommandTarget {
-            window: window.window_handle(),
+            window,
             shell: cx.entity().downgrade(),
             workbench: self.workbench.downgrade(),
             pane: pane.id(),
             tab: tab.id(),
             surface: tab.surface_id(),
             presentation: tab.presentation(),
-            focus: focus.downgrade(),
+            focused,
             view,
-        })
-    }
-
-    fn window_close_target(
-        &mut self,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> Option<ProductCommandTarget> {
-        if let Some(target) = self.capture_command_target(window, cx) {
-            return Some(target);
-        }
-        let workbench = self.workbench.read(cx);
-        let pane = workbench.panes().first()?;
-        let tab = pane.tabs().first()?;
-        Some(ProductCommandTarget {
-            window: window.window_handle(),
-            shell: cx.entity().downgrade(),
-            workbench: self.workbench.downgrade(),
-            pane: pane.id(),
-            tab: tab.id(),
-            surface: tab.surface_id(),
-            presentation: tab.presentation(),
-            focus: tab
-                .command_view()
-                .map(|view| view.focus_handle(cx).downgrade())
-                .or_else(|| window.focused(cx).map(|focus| focus.downgrade()))?,
-            view: None,
         })
     }
 
@@ -976,13 +1030,8 @@ impl ProductShell {
         });
     }
 
-    fn dispatch_source(
-        &mut self,
-        source: &ProductCommandSource,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(target) = self.capture_command_target(window, cx) else {
+    fn dispatch_source(&mut self, source: &ProductCommandSource, cx: &mut Context<Self>) {
+        let Some(target) = self.capture_command_target(cx) else {
             cx.notify();
             return;
         };
@@ -990,11 +1039,11 @@ impl ProductShell {
     }
 
     #[cfg(test)]
-    fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(origin) = self.capture_command_target(window, cx) else {
+    fn open_command_palette(&mut self, cx: &mut Context<Self>) {
+        let Some(origin) = self.capture_command_target(cx) else {
             return;
         };
-        self.open_command_palette_from(origin, window, cx);
+        self.open_command_palette_from(origin, cx);
     }
 
     fn record_palette_command(name: &str, cx: &App) {
@@ -1013,7 +1062,7 @@ impl ProductShell {
     /// special case.
     fn target_view_kind(target: &ProductCommandTarget, cx: &App) -> Option<String> {
         target.command_view(cx).and_then(|view| {
-            view.matches_focus(&target.focus, cx).then(|| match view {
+            target.focused.then(|| match view {
                 super::workbench::CommandView::Editor(_) => "editor".to_owned(),
                 super::workbench::CommandView::Terminal(_) => "terminal".to_owned(),
                 super::workbench::CommandView::Workspace(_) => "workspace-tree".to_owned(),
@@ -1022,12 +1071,7 @@ impl ProductShell {
         })
     }
 
-    fn open_command_palette_from(
-        &mut self,
-        origin: ProductCommandTarget,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_command_palette_from(&mut self, origin: ProductCommandTarget, cx: &mut Context<Self>) {
         let definitions = Self::command_dispatcher(cx)
             .read(cx)
             .definitions()
@@ -1065,9 +1109,9 @@ impl ProductShell {
             this.refocus_active_transient(cx);
             cx.notify();
         });
-        window.focus(&picker.read(cx).focus_handle(cx));
         self.command_palette = Some(palette);
         self.command_palette_subscription = Some(subscription);
+        self.set_focus(Focus::Palette, cx);
         cx.notify();
     }
 
@@ -1079,56 +1123,39 @@ impl ProductShell {
         }
     }
 
-    fn transient_restore_focus(
-        &self,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> Option<WeakFocusHandle> {
-        window.focused(cx).map(|focus| focus.downgrade())
-    }
-
     fn finish_transient(&mut self, outcome: TransientOutcome, cx: &mut Context<Self>) {
         let Some(mut active) = self.transient.take() else {
             return;
         };
         active.settle(outcome);
-        self.restore_focus(active.restore_focus, cx);
+        if active.focus.is_some() {
+            self.set_focus(active.restore_focus, cx);
+        }
         cx.notify();
     }
 
-    fn restore_focus(&self, restore: Option<WeakFocusHandle>, cx: &mut Context<Self>) {
-        let (Some(window), Some(focus)) = (self.window, restore.and_then(|focus| focus.upgrade()))
-        else {
-            return;
-        };
-        let _ = cx.update_window(window, |_, window, _| window.focus(&focus));
+    /// Focus the pane the palette opened from, or the focused pane when that
+    /// pane is gone.
+    fn restore_palette_origin_focus(
+        &mut self,
+        origin: &ProductCommandTarget,
+        cx: &mut Context<Self>,
+    ) {
+        if self.workbench.read(cx).pane(origin.pane).is_some() {
+            self.focus_pane_surface(origin.pane, cx);
+        } else {
+            self.focus_active_surface(cx);
+        }
     }
 
-    /// Focus the view the palette opened from, or the focused pane's active
-    /// surface when that view is gone.
-    fn restore_palette_origin_focus(&self, origin: &ProductCommandTarget, cx: &mut Context<Self>) {
-        let Some(window) = self.window else {
-            return;
-        };
-        let focus = origin.focus.upgrade();
-        let _ = cx.update_window(window, |_, window, cx| match focus {
-            Some(focus) => window.focus(&focus),
-            None => self.focus_active_surface(window, cx),
-        });
-    }
-
-    fn refocus_active_transient(&self, cx: &mut Context<Self>) {
-        let Some(focus) = self
+    fn refocus_active_transient(&mut self, cx: &mut Context<Self>) {
+        if self
             .transient
             .as_ref()
-            .and_then(|active| active.focus.clone())
-        else {
-            return;
-        };
-        let Some(window) = self.window else {
-            return;
-        };
-        let _ = cx.update_window(window, |_, window, _| window.focus(&focus));
+            .is_some_and(|active| active.focus.is_some())
+        {
+            self.set_focus(Focus::Transient, cx);
+        }
     }
 
     /// Cancel the live interaction when it belongs to the requested owner.
@@ -1156,10 +1183,10 @@ impl ProductShell {
         title: String,
         items: Vec<crate::host::protocol::PickerItem>,
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
-        self.begin_owned_picker(Some(owner), title, items, highlights, window, cx)
+        self.begin_owned_picker(Some(owner), title, items, highlights, cx)
     }
 
     /// Present a picker in the transient slot. With `highlights`, the ID of
@@ -1171,11 +1198,10 @@ impl ProductShell {
         title: String,
         items: Vec<crate::host::protocol::PickerItem>,
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
         self.transient_slot_free()?;
-        let restore_focus = self.transient_restore_focus(window, cx);
+        let restore_focus = self.focus;
         let (ids, entries): (Vec<_>, Vec<_>) = items
             .into_iter()
             .map(|item| {
@@ -1216,12 +1242,12 @@ impl ProductShell {
         self.transient = Some(ActiveTransient {
             owner,
             surface: Some(TransientSurface::Picker(view)),
-            focus: Some(focus.clone()),
+            focus: Some(focus),
             completion: Some(completion),
             restore_focus,
             _subscription: Some(subscription),
         });
-        window.focus(&focus);
+        self.set_focus(Focus::Transient, cx);
         cx.notify();
         Ok(receiver)
     }
@@ -1236,7 +1262,6 @@ impl ProductShell {
         title: String,
         initial: String,
         changes: Option<tokio::sync::watch::Sender<Option<String>>>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<
         (
@@ -1246,7 +1271,7 @@ impl ProductShell {
         TransientError,
     > {
         self.transient_slot_free()?;
-        let restore_focus = self.transient_restore_focus(window, cx);
+        let restore_focus = self.focus;
         let view = cx.new(|cx| InputView::new(title, initial, changes, cx));
         let weak = view.downgrade();
         let focus = view.read(cx).focus_handle(cx);
@@ -1263,12 +1288,12 @@ impl ProductShell {
         self.transient = Some(ActiveTransient {
             owner: Some(owner),
             surface: Some(TransientSurface::Input(view)),
-            focus: Some(focus.clone()),
+            focus: Some(focus),
             completion: Some(completion),
             restore_focus,
             _subscription: Some(subscription),
         });
-        window.focus(&focus);
+        self.set_focus(Focus::Transient, cx);
         cx.notify();
         Ok((receiver, weak))
     }
@@ -1285,7 +1310,7 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
         self.transient_slot_free()?;
-        let restore_focus = self.transient_restore_focus(window, cx);
+        let restore_focus = self.focus;
         let prompt = window.prompt(
             PromptLevel::Warning,
             &text.title,
@@ -1327,7 +1352,7 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
         self.transient_slot_free()?;
-        let restore_focus = self.transient_restore_focus(window, cx);
+        let restore_focus = self.focus;
         let prompt = window.prompt(
             PromptLevel::Info,
             &text.title,
@@ -1360,11 +1385,10 @@ impl ProductShell {
     pub(crate) fn begin_folder_picker(
         &mut self,
         owner: Option<TransientOwner>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
         self.transient_slot_free()?;
-        let restore_focus = self.transient_restore_focus(window, cx);
+        let restore_focus = self.focus;
         let selection: OpenDialogFuture =
             if let Some(dialog) = cx.try_global::<ApplicationOpenDialog>() {
                 dialog.0.select()
@@ -1414,26 +1438,6 @@ impl ProductShell {
         self.transient.as_ref().and_then(|active| active.render())
     }
 
-    fn sync_focused_pane(&self, window: &Window, cx: &mut Context<Self>) {
-        let Some(focus) = window.focused(cx) else {
-            return;
-        };
-        let focused_pane = self.workbench.read(cx).panes().iter().find_map(|pane| {
-            pane.tabs()
-                .iter()
-                .any(|tab| {
-                    tab.command_view()
-                        .is_some_and(|view| view.matches_focus(&focus.downgrade(), cx))
-                })
-                .then_some(pane.id())
-        });
-        if let Some(pane) = focused_pane {
-            self.workbench.update(cx, |workbench, _| {
-                workbench.focus_pane(pane);
-            });
-        }
-    }
-
     fn documents(cx: &App) -> Entity<DocumentCollection> {
         cx.global::<ApplicationDocuments>().0.clone()
     }
@@ -1443,21 +1447,19 @@ impl ProductShell {
     }
 
     #[cfg(test)]
-    fn new_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.sync_focused_pane(window, cx);
+    fn new_tab(&mut self, cx: &mut Context<Self>) {
         let Some(pane) = self.workbench.read(cx).focused_pane_id() else {
             return;
         };
-        self.new_document_in_pane(pane, window, cx);
+        self.new_document_in_pane(pane, cx);
     }
 
     fn new_document_in_pane(
         &mut self,
         pane: PaneId,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<(DocumentId, OpenTarget)> {
-        self.new_untitled_in_pane(pane, "Untitled", "", window, cx)
+        self.new_untitled_in_pane(pane, "Untitled", "", cx)
     }
 
     /// Open an untitled document holding `text` in `pane` and focus it. The
@@ -1467,9 +1469,9 @@ impl ProductShell {
         pane: PaneId,
         title: &str,
         text: &str,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<(DocumentId, OpenTarget)> {
+        let window = self.window?;
         self.next_open_generation();
         self.workbench.read(cx).pane(pane)?;
         let documents = Self::documents(cx);
@@ -1497,12 +1499,12 @@ impl ProductShell {
             .editor()
             .unwrap()
             .clone();
-        editor.focus_handle(cx).focus(window);
+        self.focus_active_surface(cx);
         cx.notify();
         Some((
             document,
             OpenTarget {
-                window: window.window_handle(),
+                window,
                 workbench: self.workbench.downgrade(),
                 pane,
                 tab,
@@ -1518,9 +1520,9 @@ impl ProductShell {
         &mut self,
         pane: PaneId,
         directory: Option<std::path::PathBuf>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<OpenTarget> {
+        let window = self.window?;
         self.workbench.read(cx).pane(pane)?;
         let (id, view) = self.create_terminal_in(directory, cx);
         let presentation = view.entity_id();
@@ -1536,10 +1538,10 @@ impl ProductShell {
             self.close_terminal(id, cx);
             return None;
         };
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         cx.notify();
         Some(OpenTarget {
-            window: window.window_handle(),
+            window,
             workbench: self.workbench.downgrade(),
             pane,
             tab,
@@ -1549,12 +1551,11 @@ impl ProductShell {
     }
 
     #[cfg(test)]
-    fn split(&mut self, direction: SplitDirection, window: &mut Window, cx: &mut Context<Self>) {
-        self.sync_focused_pane(window, cx);
+    fn split(&mut self, direction: SplitDirection, cx: &mut Context<Self>) {
         let Some(pane) = self.workbench.read(cx).focused_pane_id() else {
             return;
         };
-        self.split_pane(pane, direction, SplitPlacement::After, window, cx);
+        self.split_pane(pane, direction, SplitPlacement::After, cx);
     }
 
     fn split_pane(
@@ -1562,7 +1563,6 @@ impl ProductShell {
         pane: PaneId,
         direction: SplitDirection,
         placement: SplitPlacement,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let terminal = match self
@@ -1588,7 +1588,7 @@ impl ProductShell {
                 None => workbench.split_pane(pane, direction, placement, cx),
             });
         if split.is_some() {
-            self.focus_active_surface(window, cx);
+            self.focus_active_surface(cx);
             cx.notify();
             true
         } else {
@@ -1599,13 +1599,7 @@ impl ProductShell {
         }
     }
 
-    fn activate_tab(
-        &mut self,
-        pane: PaneId,
-        tab: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn activate_tab(&mut self, pane: PaneId, tab: TabId, cx: &mut Context<Self>) {
         let activated = self.workbench.update(cx, |workbench, _| {
             workbench.activate_tab(pane, tab);
             workbench
@@ -1613,21 +1607,14 @@ impl ProductShell {
                 .is_some_and(|pane| pane.active_tab_id() == tab)
         });
         if activated {
-            self.focus_active_surface(window, cx);
+            self.focus_active_surface(cx);
         }
         cx.notify();
     }
 
     #[cfg(test)]
-    fn focus_active_editor(&self, window: &mut Window, cx: &App) {
-        if let Some(editor) = self
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .and_then(|pane| pane.active_tab().editor().cloned())
-        {
-            editor.focus_handle(cx).focus(window);
-        }
+    fn focus_active_editor(&mut self, cx: &mut Context<Self>) {
+        self.focus_active_surface(cx);
     }
 
     fn replace_empty_workbench(&mut self, window: AnyWindowHandle, cx: &mut App) {

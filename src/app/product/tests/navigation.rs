@@ -163,12 +163,12 @@ fn focus(
     pane: crate::app::workbench::PaneId,
     cx: &mut TestAppContext,
 ) {
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             shell
                 .workbench
                 .update(cx, |workbench, _| workbench.focus_pane(pane));
-            shell.focus_active_surface(window, cx);
+            shell.focus_active_surface(cx);
         })
     })
     .unwrap();

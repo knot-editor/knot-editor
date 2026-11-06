@@ -15,7 +15,7 @@ impl ProductShell {
     pub(crate) fn start_language_mode(
         &mut self,
         target: &ProductCommandTarget,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         let TabSurfaceId::Document(document) = target.surface else {
@@ -62,7 +62,7 @@ impl ProductShell {
             choices.push(Some(language.id));
         }
         let Ok(receiver) =
-            self.begin_owned_picker(None, LANGUAGE_MODE_TITLE.into(), items, None, window, cx)
+            self.begin_owned_picker(None, LANGUAGE_MODE_TITLE.into(), items, None, cx)
         else {
             cx.notify();
             return Ok(());

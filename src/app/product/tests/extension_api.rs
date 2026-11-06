@@ -126,10 +126,10 @@ await commands.register("api.cross", async (context) => {
     });
     // Capture before the palette takes focus, then admit the saved origin.
     let origin = cx
-        .update_window(first_window, |_, window, cx| {
+        .update_window(first_window, |_, _, cx| {
             first_shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
-                shell.open_command_palette(window, cx);
+                shell.focus_active_surface(cx);
+                shell.open_command_palette(cx);
                 shell.command_palette.as_ref().unwrap().origin()
             })
         })
@@ -148,8 +148,8 @@ await commands.register("api.cross", async (context) => {
             )
         });
         wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
-        cx.update_window(second_window, |_, window, cx| {
-            second_shell.read(cx).focus_active_surface(window, cx)
+        cx.update_window(second_window, |_, _, cx| {
+            second_shell.update(cx, |shell, cx| shell.focus_active_surface(cx))
         })
         .unwrap();
         host.update(cx, |host, cx| host.release_view_requests(cx));
@@ -254,10 +254,8 @@ await commands.register("api.nontext", async (context) => {
         let execution = dispatch_product_command(&shell, window, "api.stale", cx);
         wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
         let target = cx
-            .update_window(window, |_, window, cx| {
-                shell.update(cx, |shell, cx| {
-                    shell.capture_command_target(window, cx).unwrap()
-                })
+            .update_window(window, |_, _, cx| {
+                shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
             })
             .unwrap();
         match change {
@@ -336,14 +334,14 @@ await commands.register("api.nontext", async (context) => {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let (session, view) = shell.create_terminal(cx);
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
             let tab = shell.workbench.update(cx, |workbench, _| {
                 workbench.open_terminal_tab(pane, session, view).unwrap()
             });
-            shell.activate_tab(pane, tab, window, cx);
+            shell.activate_tab(pane, tab, cx);
         })
     })
     .unwrap();
@@ -727,10 +725,8 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     }
 
     cx.update_window(window, |_, window, cx| {
-        tree.focus_handle(cx).focus(window);
-        let target = shell.update(cx, |shell, cx| {
-            shell.capture_command_target(window, cx).unwrap()
-        });
+        focus_view(&tree.focus_handle(cx), window, cx);
+        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
         assert_eq!(target.view, Some(tree.read(cx).instance_id()));
     })
     .unwrap();
@@ -761,8 +757,8 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         );
         std::thread::yield_now();
     }
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
@@ -849,8 +845,10 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
             2
         );
     });
-    cx.update_window(window, |_, window, cx| tree.focus_handle(cx).focus(window))
-        .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        focus_view(&tree.focus_handle(cx), window, cx)
+    })
+    .unwrap();
     cx.read(|cx| {
         assert_eq!(
             cx.read_from_clipboard().unwrap().text().unwrap(),
@@ -878,7 +876,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     }
     cx.update_window(second_window, |_, window, cx| {
         second_tree.update(cx, |tree, cx| assert!(tree.select_item("first", cx)));
-        second_tree.focus_handle(cx).focus(window);
+        focus_view(&second_tree.focus_handle(cx), window, cx);
     })
     .unwrap();
     assert_eq!(
@@ -950,8 +948,8 @@ fn startup_script_command_cannot_borrow_the_focused_product_window(cx: &mut Test
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx);
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
     })
     .unwrap();
 
@@ -1056,11 +1054,9 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
         std::thread::yield_now();
     }
     let target = cx
-        .update_window(window, |_, window, cx| {
-            shell.read(cx).focus_active_editor(window, cx);
-            shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            })
+        .update_window(window, |_, _, cx| {
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
         })
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
@@ -1197,7 +1193,7 @@ await commands.registerForView("example.outline", "copy", async () => {
     }
     cx.update_window(window, |_, window, cx| {
         tree.update(cx, |tree, cx| assert!(tree.select_item("held", cx)));
-        tree.focus_handle(cx).focus(window);
+        focus_view(&tree.focus_handle(cx), window, cx);
     })
     .unwrap();
     host.update(cx, |host, _| host.hold_clipboard_writes());
@@ -1259,7 +1255,7 @@ await commands.registerForView("example.outline", "copy", async () => {
     }
     cx.update_window(second_window, |_, window, cx| {
         second_tree.update(cx, |tree, cx| assert!(tree.select_item("held", cx)));
-        second_tree.focus_handle(cx).focus(window);
+        focus_view(&second_tree.focus_handle(cx), window, cx);
     })
     .unwrap();
     host.update(cx, |host, _| host.hold_clipboard_writes());

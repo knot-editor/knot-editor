@@ -8,15 +8,13 @@ async fn editing_commands_keep_the_captured_view_and_native_clipboard(cx: &mut T
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model.clone(), cx);
     let (target, dispatcher) = cx
-        .update_window(window_handle, |_, window, cx| {
-            shell.read(cx).focus_active_editor(window, cx);
-            let target = shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            });
+        .update_window(window_handle, |_, _, cx| {
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                 "fn café() {\n    👩‍💻\n}\n".into(),
             ));
-            shell.update(cx, |shell, cx| shell.new_tab(window, cx));
+            shell.update(cx, |shell, cx| shell.new_tab(cx));
             (target, cx.global::<ApplicationProductCommands>().0.clone())
         })
         .unwrap();
@@ -136,10 +134,8 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
     })
     .unwrap();
     let editor_target = cx
-        .update_window(window, |_, window, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            })
+        .update_window(window, |_, _, cx| {
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
         })
         .unwrap();
     let editor_copy = dispatch_product_command(&shell, window, super::super::COPY_COMMAND, cx);
@@ -159,8 +155,8 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
         CommandOutcome::Unavailable
     );
 
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.open_command_palette(window, cx));
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.open_command_palette(cx));
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -193,7 +189,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
         })
     });
     let target = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 let session = cx
                     .global::<ApplicationTerminalSessions>()
@@ -212,8 +208,8 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
                 let tab = shell.workbench.update(cx, |workbench, _| {
                     workbench.open_terminal_tab(pane, session, view).unwrap()
                 });
-                shell.activate_tab(pane, tab, window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.activate_tab(pane, tab, cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -377,7 +373,7 @@ fn product_editor_accepts_utf16_composition_and_grapheme_deletion(cx: &mut TestA
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model.clone(), cx);
     cx.update_window(window_handle, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx);
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
         let editor = shell
             .read(cx)
             .workbench
@@ -413,8 +409,8 @@ fn editing_keybindings_use_semantic_commands(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model.clone(), cx);
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window_handle, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.simulate_keystrokes(window_handle, "enter");
@@ -510,11 +506,9 @@ async fn undo_command_routes_to_the_captured_editor(cx: &mut TestAppContext) {
         model.update(cx, |model, _| model.replace(0..0, "edit").unwrap());
     });
     let (target, dispatcher) = cx
-        .update_window(window_handle, |_, window, cx| {
-            shell.read(cx).focus_active_editor(window, cx);
-            let target = shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            });
+        .update_window(window_handle, |_, _, cx| {
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
             (target, cx.global::<ApplicationProductCommands>().0.clone())
         })
         .unwrap();
@@ -580,11 +574,9 @@ async fn every_editor_motion_command_reaches_the_focused_view(cx: &mut TestAppCo
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
     let target = cx
-        .update_window(window, |_, window, cx| {
-            shell.read(cx).focus_active_editor(window, cx);
-            shell.update(cx, |shell, cx| {
-                shell.capture_command_target(window, cx).unwrap()
-            })
+        .update_window(window, |_, _, cx| {
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
         })
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
@@ -623,8 +615,8 @@ async fn undo_keeps_the_document_captured_before_focus_changes(cx: &mut TestAppC
             .clone()
     });
     let (shell, window_handle) = product_window(first_document, first_model.clone(), cx);
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.new_tab(window, cx));
+    cx.update_window(window_handle, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.new_tab(cx));
     })
     .unwrap();
 
@@ -651,10 +643,10 @@ async fn undo_keeps_the_document_captured_before_focus_changes(cx: &mut TestAppC
     second_model.update(cx, |model, _| model.replace(0..0, "second").unwrap());
 
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.activate_tab(pane, first_tab, window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.activate_tab(pane, first_tab, cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -669,10 +661,8 @@ async fn undo_keeps_the_document_captured_before_focus_changes(cx: &mut TestAppC
             cx,
         )
     });
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.activate_tab(pane, second_tab, window, cx)
-        });
+    cx.update_window(window_handle, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.activate_tab(pane, second_tab, cx));
     })
     .unwrap();
 
@@ -705,10 +695,8 @@ fn focus_transfer_and_distinct_views_break_typing_groups(cx: &mut TestAppContext
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model.clone(), cx);
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.split(SplitDirection::Horizontal, window, cx)
-        });
+    cx.update_window(window_handle, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -721,19 +709,19 @@ fn focus_transfer_and_distinct_views_break_typing_groups(cx: &mut TestAppContext
         )
     });
     cx.update_window(window_handle, |_, window, cx| {
-        first.focus_handle(cx).focus(window)
+        focus_view(&first.focus_handle(cx), window, cx)
     })
     .unwrap();
     cx.refresh().unwrap();
     cx.simulate_input(window_handle, "a");
     cx.update_window(window_handle, |_, window, cx| {
-        second.focus_handle(cx).focus(window);
+        focus_view(&second.focus_handle(cx), window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();
     cx.run_until_parked();
     cx.update_window(window_handle, |_, window, cx| {
-        first.focus_handle(cx).focus(window);
+        focus_view(&first.focus_handle(cx), window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -747,14 +735,14 @@ fn focus_transfer_and_distinct_views_break_typing_groups(cx: &mut TestAppContext
     cx.simulate_keystrokes(window_handle, "secondary-shift-z");
     cx.run_until_parked();
     cx.update_window(window_handle, |_, window, cx| {
-        second.focus_handle(cx).focus(window)
+        focus_view(&second.focus_handle(cx), window, cx)
     })
     .unwrap();
     cx.refresh().unwrap();
     cx.run_until_parked();
     cx.simulate_input(window_handle, "X");
     cx.update_window(window_handle, |_, window, cx| {
-        first.focus_handle(cx).focus(window)
+        focus_view(&first.focus_handle(cx), window, cx)
     })
     .unwrap();
     cx.refresh().unwrap();

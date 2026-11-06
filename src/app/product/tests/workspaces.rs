@@ -149,7 +149,7 @@ await commands.register("workspaces.pending", async () => {
             "focus" => {
                 cx.update_window(second_window, |_, window, cx| {
                     window.activate_window();
-                    second.read(cx).focus_active_surface(window, cx);
+                    second.update(cx, |shell, cx| shell.focus_active_surface(cx));
                 })
                 .unwrap();
             }

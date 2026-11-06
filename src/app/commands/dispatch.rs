@@ -41,7 +41,9 @@ pub(crate) struct ProductCommandTarget {
     pub(crate) tab: crate::app::workbench::TabId,
     pub(crate) surface: crate::app::workbench::TabSurfaceId,
     pub(crate) presentation: Option<EntityId>,
-    pub(crate) focus: WeakFocusHandle,
+    /// Whether the tab's view had Knot-side focus when captured; only a
+    /// focused view takes its own commands.
+    pub(crate) focused: bool,
     pub(crate) view: Option<ViewId>,
 }
 
@@ -111,7 +113,7 @@ impl ProductCommandTarget {
         let Some(view) = self.command_view(cx) else {
             return Err(CommandOutcome::InvalidTarget);
         };
-        if !view.matches_focus(&self.focus, cx) {
+        if !self.focused {
             return Err(CommandOutcome::InvalidTarget);
         }
         if self.view.is_some_and(|view_id| {
@@ -285,7 +287,6 @@ pub(crate) fn dispatch_open_to_captured_target(
 ) -> Result<(), CommandOutcome> {
     if target.shell.upgrade().is_none()
         || target.workbench.upgrade().is_none()
-        || target.focus.upgrade().is_none()
         || !cx.windows().contains(&target.window)
     {
         return Err(CommandOutcome::InvalidTarget);
@@ -317,7 +318,6 @@ pub(crate) fn dispatch_save_to_captured_target(
 ) -> Result<(), CommandOutcome> {
     if target.shell.upgrade().is_none()
         || target.workbench.upgrade().is_none()
-        || target.focus.upgrade().is_none()
         || !cx.windows().contains(&target.window)
     {
         return Err(CommandOutcome::InvalidTarget);
@@ -349,7 +349,6 @@ pub(crate) fn dispatch_close_to_captured_target(
 ) -> Result<(), CommandOutcome> {
     if target.shell.upgrade().is_none()
         || target.workbench.upgrade().is_none()
-        || target.focus.upgrade().is_none()
         || !cx.windows().contains(&target.window)
     {
         return Err(CommandOutcome::InvalidTarget);
@@ -380,7 +379,6 @@ pub(crate) fn dispatch_to_captured_target(
 ) -> CommandClaim {
     if target.shell.upgrade().is_none()
         || target.workbench.upgrade().is_none()
-        || target.focus.upgrade().is_none()
         || !cx.windows().contains(&target.window)
     {
         return CommandClaim::Finished(CommandOutcome::InvalidTarget);
@@ -401,7 +399,7 @@ pub(crate) fn dispatch_to_captured_target(
             return CommandClaim::Finished(outcome);
         }
         if let Some(view) = target.command_view(cx)
-            && view.matches_focus(&target.focus, cx)
+            && target.focused
         {
             let result = match view {
                 CommandView::Workspace(_) => crate::app::commands::declarations::registry()

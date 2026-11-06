@@ -30,8 +30,8 @@ fn focus_document_tab(
     let Some((pane, tab)) = located else {
         return;
     };
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.activate_tab(pane, tab, window, cx));
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.activate_tab(pane, tab, cx));
     })
     .unwrap();
     cx.run_until_parked();
@@ -92,8 +92,8 @@ pub(super) fn activate_tree_tab(
         })
     });
     let (pane, tab) = located.expect("contributed tree tab is attached");
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.activate_tab(pane, tab, window, cx));
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.activate_tab(pane, tab, cx));
     })
     .unwrap();
     cx.run_until_parked();
@@ -108,7 +108,7 @@ fn invoke_tree_action(
 ) {
     activate_tree_tab(shell, tree, window, cx);
     let _ = cx.update_window(window, |_, window, cx| {
-        tree.read(cx).focus_handle(cx).focus(window);
+        focus_view(&tree.read(cx).focus_handle(cx), window, cx);
     });
     cx.run_until_parked();
     let _ = cx.update_window(window, |_, window, cx| {
@@ -434,7 +434,7 @@ fn switching_to_a_project_with_a_missing_root_is_actionable_and_keeps_the_source
     // Arrow navigation follows the rendered rows.
     activate_tree_tab(&fixture.shell, &tree, fixture.window, cx);
     let _ = cx.update_window(fixture.window, |_, window, cx| {
-        tree.read(cx).focus_handle(cx).focus(window);
+        focus_view(&tree.read(cx).focus_handle(cx), window, cx);
     });
     cx.refresh().unwrap();
     let labels = cx.read(|cx| tree.read(cx).visible_labels());

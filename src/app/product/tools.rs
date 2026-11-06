@@ -181,7 +181,6 @@ impl ProductShell {
     pub(crate) fn focus_contributed_view(
         &mut self,
         stable_id: &str,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         if !self.set_contributed_view_visible(stable_id, true, cx) {
@@ -200,7 +199,7 @@ impl ProductShell {
         else {
             return false;
         };
-        view.focus_handle(cx).focus(window);
+        self.focus_view(&view.focus_handle(cx), cx);
         cx.notify();
         true
     }
@@ -225,7 +224,6 @@ impl ProductShell {
         &mut self,
         id: ToolFrameId,
         placement: ToolPlacement,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let placed = self
@@ -234,12 +232,12 @@ impl ProductShell {
         if placed {
             self.publish_tool_layout(cx);
         }
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         cx.notify();
         placed
     }
 
-    pub(super) fn toggle_explorer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn toggle_explorer(&mut self, cx: &mut Context<Self>) {
         if self.workspace_tree.is_none() {
             self.ensure_explorer(true, cx);
         } else {
@@ -253,7 +251,7 @@ impl ProductShell {
             });
         }
         self.publish_tool_layout(cx);
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         cx.notify();
     }
 
@@ -354,7 +352,7 @@ impl ProductShell {
     }
 
     /// Reset this window's tools to product defaults and publish the reset.
-    pub(super) fn reset_tool_layout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn reset_tool_layout(&mut self, cx: &mut Context<Self>) {
         if self.workspace_tree.is_none() {
             self.ensure_explorer(false, cx);
         }
@@ -378,7 +376,7 @@ impl ProductShell {
             }
         });
         self.publish_tool_layout(cx);
-        self.focus_active_surface(window, cx);
+        self.focus_active_surface(cx);
         cx.notify();
     }
 

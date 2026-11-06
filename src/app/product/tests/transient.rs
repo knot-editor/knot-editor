@@ -59,8 +59,8 @@ fn settle(
 fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_surface(window, cx);
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
     })
     .unwrap();
     let before = cx
@@ -76,10 +76,10 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
         .unwrap();
 
     let overlap = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell
-                    .begin_input(owner(None), "Name".into(), String::new(), None, window, cx)
+                    .begin_input(owner(None), "Name".into(), String::new(), None, cx)
                     .map(|(receiver, _)| receiver)
             })
         })
@@ -104,17 +104,10 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     let (shell, window) = empty_product_window(&documents, cx);
 
     let mut input = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell
-                    .begin_input(
-                        owner(None),
-                        "Add path".into(),
-                        "seed".into(),
-                        None,
-                        window,
-                        cx,
-                    )
+                    .begin_input(owner(None), "Add path".into(), "seed".into(), None, cx)
                     .map(|(receiver, _)| receiver)
             })
         })
@@ -213,9 +206,9 @@ fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) 
         OpenDialogOutcome::Selected(path.clone()),
     ))));
     let mut selected = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.begin_folder_picker(Some(owner(None)), window, cx)
+                shell.begin_folder_picker(Some(owner(None)), cx)
             })
         })
         .unwrap()
@@ -226,9 +219,9 @@ fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) 
         OpenDialogOutcome::Cancelled,
     ))));
     let mut dismissed = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.begin_folder_picker(Some(owner(None)), window, cx)
+                shell.begin_folder_picker(Some(owner(None)), cx)
             })
         })
         .unwrap()
@@ -239,9 +232,9 @@ fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) 
         OpenDialogOutcome::Failed("dialog exploded".into()),
     ))));
     let mut failed = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.begin_folder_picker(Some(owner(None)), window, cx)
+                shell.begin_folder_picker(Some(owner(None)), cx)
             })
         })
         .unwrap()

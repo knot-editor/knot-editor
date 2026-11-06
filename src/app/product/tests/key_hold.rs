@@ -93,8 +93,8 @@ fn focus_editor(
     cx.update_window(window, |_, window, cx| {
         editor.update(cx, |editor, cx| {
             editor.set_selection(caret, caret, Reveal::Nearest, cx);
-            editor.focus_handle(cx).focus(window);
-        })
+        });
+        focus_view(&editor.focus_handle(cx), window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();

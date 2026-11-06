@@ -32,7 +32,7 @@ fn click(
     let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
     let uri = ResourceUri::parse(&format!("mem://product/{name}")).unwrap();
     cx.update_window(window, |_, window, cx| {
-        tree.focus_handle(cx).focus(window);
+        focus_view(&tree.focus_handle(cx), window, cx);
         tree.update(cx, |tree, cx| {
             assert!(tree.activate_for_test(&uri, preview, cx))
         });

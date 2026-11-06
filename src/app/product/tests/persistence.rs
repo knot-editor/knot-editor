@@ -11,10 +11,10 @@ async fn cancelling_the_native_open_selection_settles_the_command(cx: &mut TestA
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model, cx);
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -51,10 +51,10 @@ async fn save_creates_a_destination_before_binding_it_as_persisted(cx: &mut Test
     });
     let (shell, window_handle) = product_window(document, model, cx);
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -168,10 +168,10 @@ async fn edit_racing_save_keeps_the_newer_revision_dirty(cx: &mut TestAppContext
     let captured_revision = model.read_with(cx, |model, _| model.revision());
     let (shell, window_handle) = product_window(document, model.clone(), cx);
     let (completion, receiver) = super::super::CommandCompletion::new();
-    cx.update_window(window_handle, |_, window, cx| {
+    cx.update_window(window_handle, |_, _, cx| {
         let target = shell.update(cx, |shell, cx| {
-            shell.focus_active_editor(window, cx);
-            shell.capture_command_target(window, cx).unwrap()
+            shell.focus_active_editor(cx);
+            shell.capture_command_target(cx).unwrap()
         });
         shell.update(cx, |shell, cx| {
             shell.start_save_command(false, target, completion, cx)
@@ -222,13 +222,10 @@ async fn save_completion_rejects_a_closed_captured_tab(cx: &mut TestAppContext) 
                 shell.workbench.read(cx).focused_pane_id().unwrap(),
                 SplitDirection::Horizontal,
                 super::super::SplitPlacement::After,
-                window,
                 cx,
             ));
         });
-        let target = shell.update(cx, |shell, cx| {
-            shell.capture_command_target(window, cx).unwrap()
-        });
+        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
         shell.update(cx, |shell, cx| {
             shell.start_save_command(false, target.clone(), completion, cx);
             assert_eq!(
@@ -272,10 +269,10 @@ async fn save_as_overwrites_the_selected_file_and_retargets_only_after_success(
     });
     let (shell, window_handle) = product_window(document, model, cx);
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -318,10 +315,10 @@ async fn save_as_cancellation_preserves_untitled_identity(cx: &mut TestAppContex
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window_handle) = product_window(document, model, cx);
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -366,10 +363,10 @@ async fn save_as_failure_preserves_text_and_document_identity(cx: &mut TestAppCo
     });
     let (shell, window_handle) = product_window(document, model.clone(), cx);
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -423,10 +420,10 @@ async fn external_save_conflict_offers_reload_and_installs_the_external_version(
     provider.seed_file(uri.clone(), b"external text").unwrap();
     let (shell, window_handle) = product_window(document, model.clone(), cx);
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -545,10 +542,10 @@ async fn cancelling_an_external_save_conflict_preserves_the_dirty_document(
     provider.seed_file(uri.clone(), b"external text").unwrap();
     let (shell, window_handle) = product_window(document, model.clone(), cx);
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -613,10 +610,10 @@ async fn save_as_after_an_external_conflict_retargets_only_after_saving(cx: &mut
         .unwrap();
     let (shell, window_handle) = product_window(document, model.clone(), cx);
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_editor(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -869,8 +866,8 @@ fn open_from_terminal_requests_picker_and_preserves_terminal(cx: &mut TestAppCon
             workbench.open_terminal_tab(pane, session, view).unwrap()
         })
     });
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_surface(window, cx));
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
     })
     .unwrap();
     let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);

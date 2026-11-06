@@ -100,8 +100,8 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
 
     // Clicking an item runs its command with its arguments, in the window's
     // focused view.
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_editor(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));

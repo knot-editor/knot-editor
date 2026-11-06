@@ -58,7 +58,7 @@ fn pair(
                             cx.global::<ApplicationWorkbenches>()
                                 .register(&workbench, window.window_handle());
                             let shell = cx.new(|_| ProductShell::new(workbench));
-                            shell.read(cx).focus_active_surface(window, cx);
+                            shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
                             shell
                         },
                     )
@@ -324,7 +324,7 @@ fn destination_preview_tracks_source_pointer_and_either_receiver_can_drop_or_can
 fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppContext) {
     let (source, source_window, _, _) = pair(cx, 1);
     let (document, editor, command) = cx
-        .update_window(source_window, |_, window, cx| {
+        .update_window(source_window, |_, _, cx| {
             source.update(cx, |shell, cx| {
                 let tab = shell
                     .workbench
@@ -345,11 +345,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                         cx,
                     )
                 });
-                (
-                    document,
-                    editor,
-                    shell.capture_command_target(window, cx).unwrap(),
-                )
+                (document, editor, shell.capture_command_target(cx).unwrap())
             })
         })
         .unwrap();
@@ -503,10 +499,10 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
     cx: &mut TestAppContext,
 ) {
     let (source, source_window, destination, destination_window) = pair(cx, 1);
-    cx.update_window(source_window, |_, window, cx| {
+    cx.update_window(source_window, |_, _, cx| {
         source.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.new_terminal_in_pane(pane, None, window, cx).is_some());
+            assert!(shell.new_terminal_in_pane(pane, None, cx).is_some());
         })
     })
     .unwrap();
@@ -741,10 +737,10 @@ fn closing_final_source_window_clears_framework_drag_before_reopening(cx: &mut T
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = crate::app::product::tests::product_window(document, model, cx);
     let target = cx
-        .update_window(window, |_, window, cx| {
+        .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(window, cx);
-                shell.capture_command_target(window, cx).unwrap()
+                shell.focus_active_surface(cx);
+                shell.capture_command_target(cx).unwrap()
             })
         })
         .unwrap();
@@ -766,8 +762,8 @@ fn closing_final_source_window_clears_framework_drag_before_reopening(cx: &mut T
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = crate::app::product::tests::product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.read(cx).focus_active_surface(window, cx)
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| shell.focus_active_surface(cx))
     })
     .unwrap();
     cx.run_until_parked();

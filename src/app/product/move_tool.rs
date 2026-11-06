@@ -37,8 +37,7 @@ impl ProductShell {
                 description: None,
             })
             .collect();
-        let Ok(receiver) =
-            self.begin_owned_picker(None, MOVE_TOOL_TITLE.into(), items, None, window, cx)
+        let Ok(receiver) = self.begin_owned_picker(None, MOVE_TOOL_TITLE.into(), items, None, cx)
         else {
             cx.notify();
             return Ok(());
@@ -55,8 +54,8 @@ impl ProductShell {
             else {
                 return;
             };
-            let _ = cx.update_window(handle, |_, window, cx| {
-                this.update(cx, |shell, cx| shell.place_tool(id, *placement, window, cx))
+            let _ = cx.update_window(handle, |_, _, cx| {
+                this.update(cx, |shell, cx| shell.place_tool(id, *placement, cx))
             });
         });
         self.tasks.push(task);

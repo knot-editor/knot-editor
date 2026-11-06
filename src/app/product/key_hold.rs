@@ -19,7 +19,7 @@ pub(super) const KEY_HOLD_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub(super) struct KeyHold {
     generation: u64,
-    focus: FocusHandle,
+    focus: FocusTarget,
     queue: HeldInputQueue,
     editor: Option<WeakEntity<EditorView>>,
 }
@@ -34,12 +34,9 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) {
         let queue = HeldInputQueue::default();
-        let Some(generation) = self.start_key_hold(
-            editor.as_ref().map(Entity::downgrade),
-            queue.clone(),
-            window,
-            cx,
-        ) else {
+        let Some(generation) =
+            self.start_key_hold(editor.as_ref().map(Entity::downgrade), queue.clone(), cx)
+        else {
             return;
         };
         if let Some(editor) = &editor {
@@ -49,19 +46,17 @@ impl ProductShell {
     }
 
     /// Begin holding input into `queue`; the caller attaches the held editor
-    /// to the same queue. `None` when a hold is already active or nothing
-    /// has focus.
+    /// to the same queue. `None` when a hold is already active.
     fn start_key_hold(
         &mut self,
         editor: Option<WeakEntity<EditorView>>,
         queue: HeldInputQueue,
-        window: &Window,
         cx: &App,
     ) -> Option<u64> {
         if self.key_hold.is_some() {
             return None;
         }
-        let focus = window.focused(cx)?;
+        let focus = self.focus_target(cx);
         self.key_hold_generation += 1;
         self.key_hold = Some(KeyHold {
             generation: self.key_hold_generation,
@@ -115,7 +110,7 @@ fn route_text_command(
         return false;
     };
     let Some(generation) = shell.update(cx, |shell, cx| {
-        shell.start_key_hold(Some(editor), queue, window, cx)
+        shell.start_key_hold(Some(editor), queue, cx)
     }) else {
         return false;
     };
@@ -125,7 +120,7 @@ fn route_text_command(
             return;
         };
         let dispatched = shell_entity.update(cx, |this, cx| {
-            let target = this.capture_command_target(window, cx)?;
+            let target = this.capture_command_target(cx)?;
             let command = Command {
                 name: command,
                 arguments: CommandArgumentValue::Object(
@@ -158,10 +153,10 @@ pub(super) fn hold_key(
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
-    let held = shell.update(cx, |shell, _| {
+    let held = shell.update(cx, |shell, cx| {
         let hold = shell.key_hold.as_ref()?;
         hold.queue.push(HeldInput::Key(event.keystroke.clone()));
-        Some((hold.generation, hold.focus.is_focused(window)))
+        Some((hold.generation, shell.focus_target(cx) == hold.focus))
     });
     let Some((generation, focused)) = held else {
         return false;

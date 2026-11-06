@@ -119,10 +119,10 @@ fn new_untitled(
     text: &str,
     cx: &mut TestAppContext,
 ) {
-    cx.update_window(window, |_, native, cx| {
+    cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).normal_pane().unwrap();
-            shell.new_document_in_pane(pane, native, cx);
+            shell.new_document_in_pane(pane, cx);
         });
     })
     .unwrap();
@@ -363,9 +363,9 @@ fn a_suspended_root_opened_manually_is_never_bound_or_overwritten(cx: &mut TestA
     set_root(&manual, Some(&file_uri(a.path())), cx);
     open_path(&manual, &a.path().join("one.txt"), cx);
     type_text(&manual, " elsewhere", cx);
-    cx.update_window(manual_window, |_, native, cx| {
+    cx.update_window(manual_window, |_, _, cx| {
         manual.update(cx, |shell, cx| {
-            shell.new_document_in_pane(shell.workbench.read(cx).normal_pane().unwrap(), native, cx)
+            shell.new_document_in_pane(shell.workbench.read(cx).normal_pane().unwrap(), cx)
         });
     })
     .unwrap();

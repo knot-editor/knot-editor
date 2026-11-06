@@ -261,13 +261,13 @@ impl ProductShell {
                                 this.close_tab_from_pointer(pane_id, tab_id, window, cx);
                             })),
                     )
-                    .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                    .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                         if event.click_count() > 1 {
                             this.workbench.update(cx, |workbench, _| {
                                 workbench.promote_preview(pane_id, tab_id)
                             });
                         }
-                        this.activate_tab(pane_id, tab_id, window, cx);
+                        this.activate_tab(pane_id, tab_id, cx);
                     }))
                     .on_mouse_up(
                         MouseButton::Middle,
@@ -383,8 +383,8 @@ impl ProductShell {
                 element
                     .cursor_pointer()
                     .hover(move |style| style.bg(hover))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        let Some(target) = this.capture_command_target(window, cx) else {
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let Some(target) = this.capture_command_target(cx) else {
                             return;
                         };
                         let name = command.name.clone();
@@ -429,6 +429,11 @@ impl Render for ProductShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(test)]
         crate::app::work_counts::draw();
+        // The window rendering a session is the one it is attached to.
+        if self.window.is_none() {
+            self.window = Some(window.window_handle());
+            self.follow_focus(cx);
+        }
         self.observe_application_focus(window, cx);
         window.set_rem_size(px(zoom::BASE_REM * zoom::factor(cx)));
         tab_drag::coordinator(cx);
@@ -463,7 +468,7 @@ impl Render for ProductShell {
             .key_context("product")
             .capture_key_down(cx.listener(Self::cancel_tab_drag))
             .on_modifiers_changed(cx.listener(Self::modifiers_changed))
-            .on_action(cx.listener(Self::dispatch_source))
+            .on_action(cx.listener(|this, source, _, cx| this.dispatch_source(source, cx)))
             .flex()
             .flex_col()
             .size_full()
@@ -661,9 +666,9 @@ pub(super) fn command_button(
         .cursor_pointer()
         .text_color(accent)
         .child(label)
-        .on_click(move |_, window, cx| {
+        .on_click(move |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.dispatch_source(&ProductCommandSource::new(command), window, cx);
+                shell.dispatch_source(&ProductCommandSource::new(command), cx);
             })
         })
 }

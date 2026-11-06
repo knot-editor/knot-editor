@@ -19,7 +19,7 @@ use crate::host::protocol::Command;
 pub(super) struct KeyRouting {
     router: KeyRouter,
     /// What had focus when the pending sequence began.
-    focus: Option<FocusHandle>,
+    focus: Option<FocusTarget>,
     /// Bumped by every routed key, so a timer finds whether its sequence is
     /// still the pending one.
     generation: u64,
@@ -71,12 +71,12 @@ impl ProductShell {
         if self.command_palette.is_some() {
             return false;
         }
-        let focus = window.focused(cx);
+        let focus = Some(self.focus_target(cx));
         if self.keys.router.is_pending() && self.keys.focus != focus {
             self.keys.router.clear();
         }
         let was_pending = self.keys.router.is_pending();
-        let (view, contexts) = self.key_scope(window, cx);
+        let (view, contexts) = self.key_scope(cx);
         let contexts = contexts.iter().map(String::as_str).collect::<Vec<_>>();
         let keymaps = &cx.global::<ApplicationKeymaps>().0;
         let actions = self.keys.router.key(keystroke.clone(), |typed| {
@@ -103,12 +103,8 @@ impl ProductShell {
     /// The keymap view kind of the focused view and its live key contexts.
     /// The contexts are the view's own rather than gpui's, which reflect the
     /// last rendered frame, since the previous key may have changed them.
-    fn key_scope(
-        &mut self,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> (Option<String>, Vec<String>) {
-        let Some(target) = self.capture_command_target(window, cx) else {
+    fn key_scope(&mut self, cx: &mut Context<Self>) -> (Option<String>, Vec<String>) {
+        let Some(target) = self.capture_command_target(cx) else {
             return (None, Vec::new());
         };
         let contexts = Self::target_editor(&target, cx)
@@ -142,7 +138,7 @@ impl ProductShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(target) = self.capture_command_target(window, cx) else {
+        let Some(target) = self.capture_command_target(cx) else {
             return false;
         };
         let editor = Self::target_editor(&target, cx);
@@ -197,11 +193,11 @@ impl ProductShell {
                 if this.keys.generation != generation || !this.keys.router.is_pending() {
                     return;
                 }
-                if this.keys.focus != window.focused(cx) {
+                if this.keys.focus != Some(this.focus_target(cx)) {
                     this.keys.router.clear();
                     return;
                 }
-                let (view, contexts) = this.key_scope(window, cx);
+                let (view, contexts) = this.key_scope(cx);
                 let contexts = contexts.iter().map(String::as_str).collect::<Vec<_>>();
                 let keymaps = &cx.global::<ApplicationKeymaps>().0;
                 let actions = this
