@@ -359,6 +359,22 @@ complete list for that item.
     cases. Then choose one of those loading paths and replace every JSONC
     case file with TypeScript, so packages keep one format.
 
+- **D154 — Fast, isolated package behavior tests**
+  - Deferred: Found while D058 grew past 300 Vim cases; see the
+    [package tests report](reports/package-tests.md). The cases run serially
+    in one product test at about 255 ms each, 94 s in all, mostly while
+    pressing keys; package-wide state such as registers and the clipboard
+    carries over between cases; and the comment, indent, bracket, and Vim
+    runners each keep their own copy of case discovery, markers, and
+    failure reporting.
+  - Reconsider: Next, before D058's later checkpoints add more cases. Then
+    profile the key path, reuse one window across cases, reset package
+    state between cases, share one case harness and the key-driven product
+    fixture across runners, and split case files by topic into parallel
+    tests, as the report proposes.
+  - Order: before the rest of D058; with D133 if TypeScript case modules
+    are adopted at the same time.
+
 - **D138 — Extension startup report as an untitled document**
   - Deferred: Developer: Show Extension Startup Report toggles a custom
     overlay that the product shell renders, and launch opens it when a
@@ -671,6 +687,24 @@ Kakoune mode could use it too. The
     many bindings or keep redundant contexts in sync. Then allow several
     contexts, or negated ones, per binding, still resolved by counting
     matching facts rather than by an expression language.
+  - Order: after D110.
+
+- **D153 — Context-scoped key sequences swallow keys outside their context**
+  - Deferred: Found while dogfooding D058. Knot resolves key contexts itself,
+    so `keymaps.rebuild` registers every binding with gpui by key and view
+    kind only. A sequence bound in one context, such as `z b` in a package's
+    `modal` context, therefore makes gpui hold its first key as pending in
+    every editor, and the completed sequence resolves to nothing where the
+    context is off. An installed example package's `z t` and `z b` made
+    Vim's `zb` do nothing and left keys pending; removing the package fixed
+    it.
+  - Reconsider: Before a second modal or chord-heavy package ships, or when
+    another binding collision appears. Then make a sequence hold its keys
+    only in views where some binding of it can resolve, for example by
+    registering context-scoped sequences with gpui only for views whose
+    live contexts match, or by replaying the held keys as typed text when
+    the sequence resolves to nothing, and cover it with a product test of
+    two packages.
   - Order: after D110.
 
 ## Terminals and generated surfaces
