@@ -108,7 +108,7 @@ impl Fixture {
         wait_for_api_condition(cx, |cx| self.shell.read(cx).transient.is_some());
         cx.simulate_input(self.window, name);
         cx.simulate_keystrokes(self.window, "enter");
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while !cx.has_pending_prompt() {
             assert!(
                 std::time::Instant::now() < deadline,

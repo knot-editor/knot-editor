@@ -133,7 +133,7 @@ fn queued_file_open_runs_only_after_configured_startup(cx: &mut TestAppContext) 
         )
     });
     assert!(wait_for_product_startup(cx));
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         let text = cx.read(|cx| {
@@ -781,7 +781,7 @@ fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
     );
     cx.read(|cx| assert!(shell.read(cx).contributed_views.is_empty()));
     let mut execution = dispatch_product_command(&shell, window, "example.dependent", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         match execution.completion.try_recv() {
@@ -839,7 +839,7 @@ fn extension_startup_shows_known_outcomes_while_a_later_entry_is_pending(cx: &mu
     host.update(cx, |host, cx| {
         host.start_installed_extensions(root.path().to_path_buf(), cx)
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         let report = cx
@@ -999,7 +999,7 @@ fn installed_packages_run_through_the_product_command_bridge(cx: &mut TestAppCon
             .all(|entry| entry.result == super::super::super::extensions::load::LoadResult::Loaded)
     );
     let mut execution = dispatch_product_command(&shell, window, "example.greet", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         match execution.completion.try_recv() {

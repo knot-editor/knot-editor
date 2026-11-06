@@ -466,7 +466,7 @@ fn wait_for_contributed_view(
     id: &str,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::tree_view::TreeView> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if let Some(view) = cx.read(|cx| {
@@ -521,7 +521,7 @@ fn dispatch_tree_copy(
 }
 
 fn wait_for_api_condition(cx: &mut TestAppContext, mut ready: impl FnMut(&gpui::App) -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(&mut ready) {

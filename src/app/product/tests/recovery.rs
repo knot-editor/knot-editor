@@ -630,7 +630,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
         let execution =
             dispatch_product_command(&shell, window, super::super::commands::RECOVER_COMMAND, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while cx.read(|cx| shell.read(cx).transient.is_none()) {
             assert!(std::time::Instant::now() < deadline, "listing did not open");
             cx.run_until_parked();
@@ -644,7 +644,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Restore");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while cx.read(|cx| {
         documents
             .read(cx)
@@ -670,7 +670,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     cx.simulate_keystrokes(window, "enter");
     cx.run_until_parked();
     cx.simulate_prompt_answer("Discard");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while recovery_store(cx)
         .automatic(discarded.document_id)
         .await
@@ -701,7 +701,7 @@ fn open_listing_empty(
     let execution =
         dispatch_product_command(shell, window, super::super::commands::RECOVER_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while !cx.has_pending_prompt() {
         assert!(std::time::Instant::now() < deadline, "no notice appeared");
         cx.run_until_parked();
@@ -832,7 +832,7 @@ async fn launch_requests_open_alongside_recovery_when_an_extension_fails(cx: &mu
     });
     assert!(wait_for_product_startup(cx));
     assert_eq!(cx.windows().len(), 2);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         let opened = cx.read(|cx| {

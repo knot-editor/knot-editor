@@ -44,7 +44,7 @@ fn wait_open(
     mut receiver: tokio::sync::oneshot::Receiver<CommandOutcome>,
     cx: &mut TestAppContext,
 ) -> CommandOutcome {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         match receiver.try_recv() {

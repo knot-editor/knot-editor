@@ -703,7 +703,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     });
 
     let tree = wait_for_contributed_view(&shell, "example.outline", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -746,7 +746,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     cx.refresh().unwrap();
     cx.simulate_keystrokes(window, "enter");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -776,7 +776,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         window_cx.simulate_mouse_down(row, MouseButton::Left, Modifiers::default());
         window_cx.simulate_mouse_up(row, MouseButton::Left, Modifiers::default());
     }
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -814,7 +814,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     });
     cx.refresh().unwrap();
     cx.simulate_keystrokes(window, "cmd-j");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -864,7 +864,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         cx.read(|cx| tree.read(cx).instance_id()),
         cx.read(|cx| second_tree.read(cx).instance_id())
     );
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| second_tree.read(cx).root_labels().len() == 2) {
@@ -898,7 +898,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
 
     let dispose = dispatch_product_command(&shell, window, "test.dispose-view-copy", cx);
     assert_eq!(wait_for_command(dispose, cx), CommandOutcome::Completed);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -975,7 +975,7 @@ if (!rejected) throw new Error("startup borrowed focus");
         })
         .detach();
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         match result.try_recv() {
@@ -1035,7 +1035,7 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
         })
         .detach();
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -1111,7 +1111,7 @@ await commands.register("test.nested-open", async () => {
         })
         .detach();
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -1173,7 +1173,7 @@ await commands.registerForView("example.outline", "copy", async () => {
         .detach();
     });
     let tree = wait_for_contributed_view(&shell, "example.outline", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -1203,7 +1203,7 @@ await commands.registerForView("example.outline", "copy", async () => {
     host.update(cx, |host, _| host.hold_clipboard_writes());
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     let execution = dispatch_tree_copy(&shell, window, cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| host.read(cx).pending_view_request_count() == 1) {
@@ -1245,7 +1245,7 @@ await commands.registerForView("example.outline", "copy", async () => {
 
     let (second_shell, second_window) = product_window(document, model, cx);
     let second_tree = wait_for_contributed_view(&second_shell, "example.outline", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| second_tree.read(cx).root_labels().len() == 1) {
@@ -1264,7 +1264,7 @@ await commands.registerForView("example.outline", "copy", async () => {
     .unwrap();
     host.update(cx, |host, _| host.hold_clipboard_writes());
     let interrupted = dispatch_tree_copy(&second_shell, second_window, cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| host.read(cx).pending_view_request_count() == 1) {

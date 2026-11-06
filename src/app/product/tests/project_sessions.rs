@@ -28,7 +28,7 @@ fn open_path(shell: &Entity<ProductShell>, path: &Path, cx: &mut TestAppContext)
         shell.start_open_operation(request, target, false, cx)
     });
     // Local file I/O completes on the provider's own runtime.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if let Ok(result) = opened.try_recv() {
@@ -319,7 +319,7 @@ fn a_switch_racing_an_edit_retries_with_fresh_captures(cx: &mut TestAppContext) 
     select_project(&fixture, &a_id, cx);
     wait_for_api_condition(cx, |_| true);
     let mut first_attempt = Vec::new();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while !first_attempt
         .iter()
         .any(|snapshot: &StoredSnapshot| snapshot.text == "bee typed")

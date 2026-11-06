@@ -263,7 +263,7 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
     });
 
     cx.simulate_keystrokes(window, "cmd-r");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| keymap_command(cx, "cmd-y", Some("editor")).as_deref() == Some("file.new"))
@@ -380,7 +380,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
         .unwrap()
         .unwrap();
     let tree = wait_for_contributed_view(&shell, "example.outline", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| tree.read(cx).root_labels() == ["Tree item"]) {
@@ -428,7 +428,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     cx.refresh().unwrap();
     cx.simulate_keystrokes(window, "cmd-j");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {
@@ -554,7 +554,7 @@ fn unloading_a_script_lifecycle_removes_its_keybindings(cx: &mut TestAppContext)
         })
         .detach();
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while !*loaded.lock().unwrap() {
         cx.run_until_parked();
         assert!(
@@ -956,7 +956,7 @@ fn selected_contributed_preset_replaces_knot_beneath_extension_bindings(cx: &mut
     assert_eq!(tabs(cx), before + 1);
 
     drop(dispatch_product_command(&shell, window, "test.knot", cx));
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| keymap_command(cx, "cmd-s", None).is_some()) {

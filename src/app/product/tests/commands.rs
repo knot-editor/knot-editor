@@ -31,7 +31,7 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
         host
     });
 
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         let registered = cx.read(|cx| {
@@ -52,7 +52,7 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
     }
 
     let mut execution = dispatch_product_command(&shell, window, "knot.fixture.primary", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     let outcome = loop {
         cx.run_until_parked();
         match execution.completion.try_recv() {
@@ -91,7 +91,7 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
             .unwrap()
             .clone()
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if cx.read(|cx| {

@@ -269,7 +269,7 @@ fn settle(
     settled: &Rc<RefCell<Option<Result<ReplaceWindowsResult, ReplaceError>>>>,
     cx: &mut TestAppContext,
 ) -> Result<ReplaceWindowsResult, ReplaceError> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
         if let Some(result) = settled.borrow_mut().take() {

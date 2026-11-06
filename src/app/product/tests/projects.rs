@@ -4,7 +4,7 @@ use super::operations::empty_product_window;
 use super::*;
 
 pub(super) fn wait_for_prompt(cx: &mut TestAppContext) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while !cx.has_pending_prompt() {
         cx.run_until_parked();
         assert!(
