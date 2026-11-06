@@ -146,6 +146,20 @@ impl RunningTerminal {
     fn shutdown(&mut self) {
         let _ = self.sender.send(Msg::Shutdown);
         if let Some(thread) = self.thread.take() {
+            // The event loop hangs the shell up when it drops the PTY, which
+            // never happens if Knot exits first. Closing the PTY on exit ends
+            // a running shell but not one still starting: on macOS its open
+            // of the terminal then blocks forever. The child is `login`,
+            // which survives a hangup and may not have started the shell
+            // yet, so kill its process group now. A shell that started has
+            // its own process group by then and hangs up when the PTY
+            // closes.
+            #[cfg(target_os = "macos")]
+            if let Some(pid) = self.pid {
+                unsafe {
+                    libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+                }
+            }
             std::thread::spawn(move || {
                 let _ = thread.join();
             });
