@@ -566,3 +566,64 @@ fn a_global_mark_jumps_to_another_open_document(cx: &mut TestAppContext) {
     fixture.press("k", cx);
     assert_eq!(fixture.marked(cx), "‸one\ntwo");
 }
+
+/// The draws and host requests each key causes, pressed one at a time in
+/// the case notation and settled before the next.
+fn work_per_key(
+    fixture: &Fixture,
+    keys: &[&str],
+    cx: &mut TestAppContext,
+) -> Vec<crate::app::work_counts::WorkCounts> {
+    crate::app::work_counts::take();
+    keys.iter()
+        .map(|key| {
+            fixture.press(key, cx);
+            settle_requests(cx);
+            crate::app::work_counts::take()
+        })
+        .collect()
+}
+
+/// Wait until no host request arrives for 100 ms, since listeners run on
+/// host workers after the key hold releases.
+fn settle_requests(cx: &mut TestAppContext) {
+    let mut seen = crate::app::work_counts::requests();
+    let mut quiet = std::time::Instant::now();
+    while quiet.elapsed() < std::time::Duration::from_millis(100) {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        cx.run_until_parked();
+        let now = crate::app::work_counts::requests();
+        if now != seen {
+            seen = now;
+            quiet = std::time::Instant::now();
+        }
+    }
+}
+
+/// A key costs a few draws and the host requests its behavior needs: the
+/// package's reads and writes, the selection notifications, and the status
+/// bar package's position. Unchanged status items send nothing.
+#[gpui::test]
+fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let fixture = Fixture::open("one two three\nfour five six\n", None, 0, cx);
+    // The first key also pays for following the editor.
+    work_per_key(&fixture, &["l"], cx);
+    let keys = ["w", "d", "w", "i", "a", "<esc>"];
+    // At most (draws, requests) per key.
+    let bounds = [(3, 16), (3, 3), (7, 26), (3, 10), (3, 7), (6, 20)];
+    let counts = work_per_key(&fixture, &keys, cx);
+    let report = keys
+        .iter()
+        .zip(&counts)
+        .map(|(key, counts)| format!("{key}: {} draws, {:?}", counts.draws, counts.requests))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for (counts, (draws, requests)) in counts.iter().zip(bounds) {
+        assert!(
+            counts.draws <= draws && counts.requests.len() <= requests,
+            "\n{report}"
+        );
+    }
+    assert_eq!(fixture.marked(cx), "one ‸athree\nfour five six\n");
+}
