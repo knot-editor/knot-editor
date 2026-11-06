@@ -10,7 +10,8 @@
 //! lays the editor out to show exactly `lines` lines, scrolls `top` to its
 //! first line before the keys, and expects `afterTop` there afterwards.
 //! Keys are pressed without waiting between them, as fast typing arrives,
-//! and the run settles once at the end. Pointer input and the work a key
+//! and the run settles once at the end. One session shows every case in
+//! turn, each in a fresh workbench over a fresh document. Pointer input and the work a key
 //! costs a window run in a product window.
 use serde::Deserialize;
 
@@ -172,6 +173,8 @@ fn the_vim_cases_behave_as_listed(cx: &mut TestAppContext) {
     // KNOT_CASES runs only the cases whose names contain it.
     let filter = std::env::var("KNOT_CASES").ok();
     let started = std::time::Instant::now();
+    // One session shows every case in turn.
+    let mut session: Option<Session> = None;
     for path in case_files("cases.jsonc") {
         let text = std::fs::read_to_string(&path).unwrap();
         let cases: Cases = jsonc_parser::parse_to_serde_value(&text, &Default::default())
@@ -188,7 +191,12 @@ fn the_vim_cases_behave_as_listed(cx: &mut TestAppContext) {
             let Some(selection) = selection else {
                 panic!("{} marks no caret", case.name);
             };
-            let session = Session::open(&before, case.language.as_deref(), selection, cx);
+            let language = case.language.as_deref();
+            match &mut session {
+                Some(session) => session.load(&before, language, selection, cx),
+                None => session = Some(Session::open(&before, language, selection, cx)),
+            }
+            let session = session.as_ref().unwrap();
             if let Some(view) = &case.view {
                 session.show_lines(view.lines, view.top, cx);
             }
@@ -197,7 +205,6 @@ fn the_vim_cases_behave_as_listed(cx: &mut TestAppContext) {
             let actual = session.marked(cx);
             let mode = session.mode(cx);
             let top = session.top_line(cx);
-            session.close(cx);
             let expected_top = case.view.as_ref().and_then(|view| view.after_top);
             if actual != expected
                 || mode != case.mode

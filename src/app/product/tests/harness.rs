@@ -1,7 +1,7 @@
 //! A headless product for package behavior tests. The application and its
-//! bundled packages start without a window; a session opens over each
-//! document and takes keys through its router as a window would forward
-//! them. A run settles once the session holds no keys and the extension
+//! bundled packages start without a window; one session shows each case's
+//! document in turn and takes keys through its router as a window would
+//! forward them. A run settles once the session holds no keys and the extension
 //! pool has gone quiet, waiting on finished turns rather than polling.
 //!
 //! In the key notation, characters are typed and `<name>` presses a named
@@ -62,6 +62,13 @@ pub(super) fn start_bundled_packages_with_post_init(
         .filter(|entry| entry.result != LoadResult::Loaded)
         .collect();
     assert!(failures.is_empty(), "{failures:?}");
+    // Launch opens a window when nothing else does; close it, since a
+    // window redraws on every change its session sees.
+    for window in cx.windows() {
+        cx.update_window(window, |_, window, _| window.remove_window())
+            .unwrap();
+    }
+    cx.run_until_parked();
 }
 
 /// Start the bundled packages with an empty personal config.
@@ -111,22 +118,15 @@ pub(super) struct Session {
 }
 
 impl Session {
-    /// Open `text` in `language`, or detected, with the selection from
-    /// `anchor` to `caret`, and settle.
+    /// Open a session over `text` in `language`, or detected, with the
+    /// selection from `anchor` to `caret`, and settle.
     pub(super) fn open(
         text: &str,
         language: Option<&str>,
-        (anchor, caret): (usize, usize),
+        selection: (usize, usize),
         cx: &mut TestAppContext,
     ) -> Self {
-        let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
-        let model = cx.new(|_| BufferModel::from_text(text));
-        let document = documents.update(cx, |documents, cx| {
-            documents.create_untitled("Case", model.clone(), cx)
-        });
-        if let Some(language) = language {
-            cx.update(|cx| crate::app::languages::set_language(&model, language.into(), cx));
-        }
+        let (document, model) = new_document(text, language, cx);
         let shell = cx.update(|cx| {
             let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
             cx.new(|cx| ProductShell::new(workbench, cx))
@@ -134,22 +134,56 @@ impl Session {
         shell.update(cx, |shell, cx| {
             shell.observe_application(cx);
             shell.activate(cx);
-            shell.focus_active_surface(cx);
         });
         let view = active_editor_view(&shell, cx);
         let editor = cx.read(|cx| view.read(cx).editor().clone());
-        editor.update(cx, |editor, cx| {
-            editor.set_selection(anchor, caret, Reveal::Nearest, cx)
-        });
         let session = Self {
             shell,
             editor,
             model,
             document,
         };
-        session.lay_out(ROWS, COLUMNS, cx);
-        session.settle(cx);
+        session.show(selection, cx);
         session
+    }
+
+    /// Show `text` in `language`, or detected, in a fresh workbench in
+    /// place of the previous document, which is released, with the
+    /// selection from `anchor` to `caret`, and settle.
+    pub(super) fn load(
+        &mut self,
+        text: &str,
+        language: Option<&str>,
+        selection: (usize, usize),
+        cx: &mut TestAppContext,
+    ) {
+        let (document, model) = new_document(text, language, cx);
+        self.shell.update(cx, |shell, cx| {
+            let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
+            cx.global::<ApplicationSessions>()
+                .register(cx.weak_entity(), &workbench);
+            shell.workbench = workbench;
+            cx.notify();
+        });
+        let previous = std::mem::replace(&mut self.document, document);
+        let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
+        documents.update(cx, |documents, cx| documents.remove(previous, cx));
+        self.model = model;
+        let view = active_editor_view(&self.shell, cx);
+        self.editor = cx.read(|cx| view.read(cx).editor().clone());
+        self.show(selection, cx);
+    }
+
+    /// Focus the editor, select from `anchor` to `caret`, lay it out, and
+    /// settle.
+    fn show(&self, (anchor, caret): (usize, usize), cx: &mut TestAppContext) {
+        self.shell
+            .update(cx, |shell, cx| shell.focus_active_surface(cx));
+        self.editor.update(cx, |editor, cx| {
+            editor.set_selection(anchor, caret, Reveal::Nearest, cx)
+        });
+        self.lay_out(ROWS, COLUMNS, cx);
+        self.settle(cx);
     }
 
     pub(super) fn settle(&self, cx: &mut TestAppContext) {
@@ -173,16 +207,6 @@ impl Session {
         self.editor.update(cx, |editor, cx| {
             editor.lay_out_for_test(rows as f32, columns, cx)
         });
-    }
-
-    /// End the session and release its document, so later cases do not pay
-    /// for them.
-    pub(super) fn close(self, cx: &mut TestAppContext) {
-        self.shell.update(cx, |shell, cx| shell.end(cx));
-        let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
-        documents.update(cx, |documents, cx| documents.remove(self.document, cx));
-        cx.update(crate::app::application_observation::changed);
-        self.settle(cx);
     }
 
     /// The text with `‸` at the caret, or at both ends of a selection.
@@ -216,6 +240,23 @@ impl Session {
         };
         (texts(items.left), texts(items.right))
     }
+}
+
+/// A new untitled document holding `text`, in `language` when given.
+fn new_document(
+    text: &str,
+    language: Option<&str>,
+    cx: &mut TestAppContext,
+) -> (DocumentId, Entity<BufferModel>) {
+    let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Case", model.clone(), cx)
+    });
+    if let Some(language) = language {
+        cx.update(|cx| crate::app::languages::set_language(&model, language.into(), cx));
+    }
+    (document, model)
 }
 
 /// gpui keystrokes for the key notation.
