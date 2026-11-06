@@ -1046,7 +1046,7 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
             Some("Overridden by extension")
         );
         assert!(rows.iter().any(|row| {
-            row.label == "Move to line start ignoring soft wrap"
+            row.label == "Move left"
                 && row
                     .description
                     .as_deref()

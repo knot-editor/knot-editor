@@ -1603,6 +1603,9 @@ fn caret_geometry_and_painting_share_one_syntax_query(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text("fn f() {}\n".repeat(200)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     model.update(cx, |model, cx| {
+        // A reparse that overruns the foreground budget on a slow machine
+        // finishes in the background and queries again.
+        model.set_syntax_budget(std::time::Duration::from_secs(60));
         let language = SyntaxLanguage::new("rust", "\"fn\" @keyword\n", "").unwrap();
         model.set_syntax(
             Some(SyntaxState::new(Arc::new(language), Arc::new(|_| None))),
