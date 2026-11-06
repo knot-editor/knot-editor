@@ -241,3 +241,8 @@ Implementation context: Restart Extension in
 `src/app/extensions/`, `extensions/@knot/vim/src/registers.ts`.
 
 Review gate: case order no longer matters.
+
+### 11. Update vim extension plan
+
+Ensure [vim plan](./d058-vim-mode.md) is up-to-date with the new testing
+framework.
