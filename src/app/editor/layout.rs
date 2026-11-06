@@ -155,6 +155,19 @@ impl Editor {
         }
     }
 
+    /// Lay out as a view `rows` rows tall and `columns` cells wide would,
+    /// wrapping when `editor.softWrap` is on, for a test without a window.
+    #[cfg(test)]
+    pub(crate) fn lay_out_for_test(&mut self, rows: f32, columns: usize, cx: &App) {
+        let scope = self.settings_scope(self.model.read(cx), cx);
+        let wrap = settings::editor_soft_wrap(&scope, cx).then(|| WrapWidth {
+            columns,
+            tab_size: settings::editor_tab_size(&scope, cx),
+        });
+        self.set_wrap(wrap, cx);
+        self.lay_out(rows, true);
+    }
+
     /// Visual row `index`, clamped to the last row.
     pub(super) fn row(&self, model: &BufferModel, index: usize) -> Row {
         let (line, sub) = self.wrap.position(index);

@@ -7,18 +7,18 @@
 //! marked lines, or every line without a marker, and expects `after`. An
 //! `enter` case presses Enter at the marked selection, and a `type` case
 //! types `text` there one character at a time, each expecting `after` with
-//! the caret where its marker is. The file reading, markers, and editor
-//! runs are shared with the bracket cases.
+//! the caret where its marker is. Cases run in an editor without a window.
+//! The file reading, markers, and editor runs are shared with the bracket
+//! cases.
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, de::DeserializeOwned};
 
-use super::language_editing::start_bundled_packages;
+use super::harness::start_bundled_packages;
 use super::*;
-use gpui::EntityInputHandler;
 
-use crate::app::editor::{EditorView, EditorViewState};
+use crate::app::editor::{Editor, EditorViewState};
 
 pub(super) const CARET: char = '‸';
 /// In typed text, presses Backspace.
@@ -132,7 +132,7 @@ pub(super) fn unmark(lines: &[String]) -> (String, Option<(usize, usize)>) {
 }
 
 /// Run `action` on `text` in `language` with the marked selection, or with
-/// everything selected.
+/// everything selected, in an editor without a window.
 pub(super) fn run(
     cx: &mut TestAppContext,
     language: &str,
@@ -147,49 +147,38 @@ pub(super) fn run(
     });
     cx.update(|cx| crate::app::documents::detect_indentation(&model, cx));
     cx.update(|cx| crate::app::languages::set_language(&model, language.into(), cx));
-    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let (anchor, caret) = selection.unwrap_or((0, text.len()));
-    cx.update(|window, cx| {
-        editor.update(cx, |view, cx| {
-            view.editor().clone().update(cx, |view, cx| {
-                view.restore_view_state(
-                    EditorViewState {
-                        anchor,
-                        caret,
-                        top: 0,
-                        scroll_x: 0.,
-                    },
-                    cx,
-                )
-            });
-            match action {
-                Action::Command(command) => {
-                    view.editor()
-                        .clone()
-                        .update(cx, |view, cx| view.execute_editing_command(command, cx));
-                }
-                Action::Type(text) => {
-                    for character in text.chars() {
-                        if character == BACKSPACE {
-                            view.editor().clone().update(cx, |view, cx| {
-                                view.execute_editing_command("editor.delete-backward", cx)
-                            });
-                        } else {
-                            view.replace_text_in_range(None, &character.to_string(), window, cx);
-                        }
+    editor.update(cx, |editor, cx| {
+        editor.restore_view_state(
+            EditorViewState {
+                anchor,
+                caret,
+                top: 0,
+                scroll_x: 0.,
+            },
+            cx,
+        );
+        match action {
+            Action::Command(command) => {
+                editor.execute_editing_command(command, cx);
+            }
+            Action::Type(text) => {
+                for character in text.chars() {
+                    if character == BACKSPACE {
+                        editor.execute_editing_command("editor.delete-backward", cx);
+                    } else {
+                        editor.type_text(None, &character.to_string(), cx);
                     }
                 }
-                Action::Inspect => {}
             }
-        })
+            Action::Inspect => {}
+        }
     });
     cx.run_until_parked();
     let (state, matched) = cx.read(|cx| {
-        let view = editor.read(cx);
-        (
-            view.editor().read(cx).view_state(cx),
-            view.editor().read(cx).matched_brackets_for_test(cx),
-        )
+        let editor = editor.read(cx);
+        (editor.view_state(cx), editor.matched_brackets_for_test(cx))
     });
     Outcome {
         text: model.read_with(cx, |model, _| model.text()),

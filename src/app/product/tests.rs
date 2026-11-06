@@ -7,6 +7,7 @@ mod editor_api;
 mod extension_api;
 mod extension_restart;
 mod go_to_line;
+mod harness;
 mod headless;
 mod key_hold;
 mod keybindings;

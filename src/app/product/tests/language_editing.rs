@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use super::harness::start_bundled_packages;
 use super::*;
-use crate::app::extensions::load::LoadResult;
 use crate::app::languages::editing::EditingConfiguration;
 
 #[derive(Deserialize)]
@@ -52,48 +52,6 @@ fn read_cases(path: &Path) -> CommentCases {
     let text = std::fs::read_to_string(path).unwrap();
     jsonc_parser::parse_to_serde_value(&text, &Default::default())
         .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
-}
-
-/// Start every bundled package with an empty personal config and no
-/// installed packages, and require that each one loaded.
-pub(super) fn start_bundled_packages(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(None, cx);
-}
-
-/// Start the bundled packages under a personal config whose `post-init.js`
-/// is `post_init`, when given.
-pub(super) fn start_bundled_packages_with_post_init(
-    post_init: Option<&str>,
-    cx: &mut TestAppContext,
-) {
-    let config = tempfile::tempdir().unwrap();
-    if let Some(source) = post_init {
-        std::fs::write(config.path().join("post-init.js"), source).unwrap();
-    }
-    let extensions = tempfile::tempdir().unwrap();
-    install_globals(cx);
-    // Product startup binds keys before packages start, so they can bind theirs.
-    cx.update(super::super::launch::bind_product_keys);
-    install_launch_gate(cx);
-    let host = cx.update(crate::app::extensions::host::install);
-    host.update(cx, |host, cx| {
-        host.start_product_startup(
-            Ok(config.path().to_path_buf()),
-            Ok(extensions.path().to_path_buf()),
-            cx,
-        )
-    });
-    assert!(wait_for_product_startup(cx));
-    let report = cx
-        .read(crate::app::extensions::host::startup_report)
-        .unwrap();
-    let failures: Vec<_> = report
-        .report
-        .entries
-        .iter()
-        .filter(|entry| entry.result != LoadResult::Loaded)
-        .collect();
-    assert!(failures.is_empty(), "{failures:?}");
 }
 
 /// Toggle comments on `lines` and apply the edits.

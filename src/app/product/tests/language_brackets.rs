@@ -9,7 +9,7 @@
 //! the view highlights at the caret, or without markers when none match.
 use serde::Deserialize;
 
-use super::language_editing::start_bundled_packages;
+use super::harness::start_bundled_packages;
 use super::language_indents::{Action, IndentCase, TypeCase, case_files, read_cases, run, unmark};
 use super::*;
 

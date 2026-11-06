@@ -158,11 +158,6 @@ impl EditorView {
         self.bounds
     }
 
-    #[cfg(test)]
-    pub(crate) fn line_height(&self) -> f32 {
-        self.metrics.line_height
-    }
-
     /// The part of `bounds` that shows text: everything right of the gutter.
     pub(crate) fn text_bounds(&self) -> Bounds<Pixels> {
         let gutter = px(self.gutter.width).min(self.bounds.size.width);

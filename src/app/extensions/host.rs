@@ -132,6 +132,12 @@ pub(crate) fn entity(cx: &App) -> Option<Entity<ProductExtensionHost>> {
         .map(|global| global._host.clone())
 }
 
+/// The extension pool, for tests that wait until it goes quiet.
+#[cfg(test)]
+pub(crate) fn pool(cx: &App) -> Option<Arc<ExtensionPool>> {
+    Some(entity(cx)?.read(cx).pool.clone())
+}
+
 pub(crate) fn application_changed(cx: &mut App) {
     crate::app::application_observation::changed(cx);
 }

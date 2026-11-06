@@ -1,6 +1,6 @@
 //! The bundled status bar package, following the editor a window describes.
 use super::editor_api::active_editor;
-use super::language_editing::start_bundled_packages;
+use super::harness::start_bundled_packages;
 use super::*;
 use crate::app::status_bar::ApplicationStatusBar;
 

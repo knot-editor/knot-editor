@@ -26,8 +26,3 @@ pub(crate) fn request(operation: &'static str) {
 pub(crate) fn take() -> WorkCounts {
     COUNTS.with(|counts| std::mem::take(&mut *counts.borrow_mut()))
 }
-
-/// How many requests were counted since the previous `take`.
-pub(crate) fn requests() -> usize {
-    COUNTS.with(|counts| counts.borrow().requests.len())
-}

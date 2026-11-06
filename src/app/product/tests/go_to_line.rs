@@ -1,5 +1,5 @@
 //! The bundled Go to Line package, driven from its key in an editor.
-use super::language_editing::start_bundled_packages;
+use super::harness::start_bundled_packages;
 use super::*;
 
 #[gpui::test]
