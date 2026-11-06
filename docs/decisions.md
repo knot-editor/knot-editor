@@ -966,9 +966,14 @@ Surface-specific semantic data lets extensions customize behavior without
 blocking native painting. A general widget tree or WebView needs a concrete
 unmet use case first.
 
-Grapheme-aware horizontal movement and shaped-x vertical movement preserve
-visual behavior that byte columns cannot express across combining text, CJK,
-and emoji.
+Horizontal movement steps by graphemes, so combining text, CJK, and emoji
+move as one character. Vertical movement keeps a display column measured in
+`unicode-width` cells with tabs expanded, as soft wrap measures rows, rather
+than a shaped x: movement then needs no window, so editor state and its
+commands run headless (D154), and tests check what users get, since the gpui
+test platform never shapes real text. The cost is a cell's drift beside
+proportional fallback glyphs and on right-to-left lines, which Knot's
+monospace text rarely shows.
 
 References: [semantic UI](architecture/semantic-ui.md) and
 [editor views](architecture/workbench-and-lifecycle.md#editor-views).

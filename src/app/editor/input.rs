@@ -60,7 +60,7 @@ impl EditorView {
             return;
         }
         self.suppress_drag_selection = false;
-        self.preferred_x = None;
+        self.preferred_column = None;
         let unit = match ev.click_count {
             _ if ev.modifiers.shift => SelectionUnit::Character,
             0 | 1 => SelectionUnit::Character,
@@ -140,7 +140,7 @@ impl EditorView {
         };
         (self.anchor_line, self.anchor_col) = fixed;
         (self.cursor_line, self.cursor_col) = moving;
-        self.preferred_x = None;
+        self.preferred_column = None;
         self.has_selection =
             self.cursor_line != self.anchor_line || self.cursor_col != self.anchor_col;
         self.finish_position_change(cx);
@@ -301,7 +301,7 @@ impl EntityInputHandler for EditorView {
         if !self.model.read(cx).is_editable() || self.text_command(cx).is_some() {
             return;
         }
-        self.preferred_x = None;
+        self.preferred_column = None;
         let range = self.bytes_for_utf16(range, cx);
         let model = self.model.read(cx);
         let range = range.unwrap_or_else(|| self.implicit_replacement_range(model));

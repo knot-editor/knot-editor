@@ -83,7 +83,7 @@ impl EditorView {
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, target);
         self.has_selection = false;
         self.marked_range_utf16 = None;
-        self.preferred_x = None;
+        self.preferred_column = None;
         self.finish_position_change(cx);
     }
 
@@ -146,7 +146,7 @@ impl EditorView {
             let model = self.model.read(cx);
             (self.cursor_line, self.cursor_col) =
                 flat_byte_to_position(model, caret + pair.close.len());
-            self.preferred_x = None;
+            self.preferred_column = None;
             self.finish_position_change(cx);
             return true;
         }
@@ -167,7 +167,7 @@ impl EditorView {
                 caret: typed_end,
             },
         };
-        self.preferred_x = None;
+        self.preferred_column = None;
         self.splice(
             caret..caret,
             &format!("{text}{close}"),

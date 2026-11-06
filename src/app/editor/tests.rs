@@ -329,6 +329,36 @@ fn movement_uses_visual_columns_graphemes_and_pane_height(cx: &mut TestAppContex
 }
 
 #[gpui::test]
+fn vertical_movement_keeps_the_display_cell_across_tabs_and_wide_characters(
+    cx: &mut TestAppContext,
+) {
+    // Cells: a tab reaches the next stop of 4, CJK and emoji take two.
+    let text = "abcdefgh\n\tx\n中文字\n😀😀z\nab\nabcdefgh";
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            let mut down = |view: &mut EditorView| {
+                view.execute_editing_command("editor.move-down", window, cx);
+                (view.cursor_line, view.cursor_col)
+            };
+            view.cursor_col = 5;
+            // Cell 5 is after the tab and `x`.
+            assert_eq!(down(view), (1, 2));
+            // The wanted cell stays 5, between 文 (ending at 4) and 字
+            // (ending at 6): the earlier boundary wins.
+            assert_eq!(down(view), (2, "中文".len()));
+            // After two emoji and `z`, the line ends at cell 5.
+            assert_eq!(down(view), (3, "😀😀z".len()));
+            // A short line ends at its end, and the cell survives it.
+            assert_eq!(down(view), (4, 2));
+            assert_eq!(down(view), (5, 5));
+        })
+    });
+}
+
+#[gpui::test]
 fn tabs_hit_testing_and_horizontal_reveal_share_geometry(cx: &mut TestAppContext) {
     let model = cx.new(|_| BufferModel::from_text(format!("\tx{}", "z".repeat(300))));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));

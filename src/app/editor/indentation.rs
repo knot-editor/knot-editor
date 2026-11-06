@@ -70,7 +70,7 @@ impl EditorView {
                 caret,
             },
         };
-        self.preferred_x = None;
+        self.preferred_column = None;
         self.splice(range, &text, None, view, cx);
         self.marked_range_utf16 = None;
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(self.model.read(cx), caret);
@@ -157,7 +157,7 @@ impl EditorView {
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
         self.has_selection = anchor != caret;
-        self.preferred_x = None;
+        self.preferred_column = None;
         self.finish_position_change(cx);
     }
 

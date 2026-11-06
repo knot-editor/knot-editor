@@ -83,8 +83,9 @@ document-wide UTF-16 offsets, through the buffer's line index, so editing cost
 does not grow with document size. A test guards that editing, navigation, IME,
 scrolling, and painting never read the whole document.
 
-Movement and deletion respect grapheme boundaries and vertical movement
-retains a shaped x coordinate. Words are Unicode word segments split at VS
+Movement and deletion respect grapheme boundaries, and vertical movement
+keeps the display cell it started from, counted with `unicode-width` and
+expanded tabs, across shorter lines. Words are Unicode word segments split at VS
 Code's default word separators, so each run of separators such as `.` or `::`
 is its own unit; word movement stops at the edges of words and separator runs,
 and double-click selects one. Dragging after a double- or triple-click keeps

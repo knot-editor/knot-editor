@@ -155,7 +155,7 @@ impl EditorView {
         (self.anchor_line, self.anchor_col) = anchor;
         (self.cursor_line, self.cursor_col) = caret;
         self.has_selection = anchor != caret;
-        self.preferred_x = None;
+        self.preferred_column = None;
         self.finish_position_change(cx);
     }
 

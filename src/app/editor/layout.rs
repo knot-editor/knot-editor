@@ -464,6 +464,36 @@ impl EditorView {
         (row.line, row.range.start + col)
     }
 
+    /// The display cell the caret shows at: the caret's row's indentation
+    /// plus the cells of the row's text before it, with tabs expanded.
+    pub(super) fn caret_column(&self, model: &BufferModel, cx: &App) -> usize {
+        let (line, sub) = self.wrap.position(self.caret_row());
+        let range = self.wrap.row_range(line, sub, line_end(model, line));
+        let text = line_text(model, line);
+        let col = self.cursor_col.clamp(range.start, range.end);
+        self.wrap.indent(line, sub)
+            + wrap::cells_before(&text[range.start..col], self.tab_size(model, cx))
+    }
+
+    /// The caret position on row `index` nearest display cell `column`. A
+    /// row that does not end its line leaves its end to the next row.
+    pub(super) fn position_at_column(
+        &self,
+        model: &BufferModel,
+        index: usize,
+        column: usize,
+        cx: &App,
+    ) -> (usize, usize) {
+        let (line, sub) = self.wrap.position(index);
+        let range = self.wrap.row_range(line, sub, line_end(model, line));
+        let last = self.wrap.rows(line).end == self.wrap.first_row(line) + sub + 1;
+        let text = line_text(model, line);
+        let column = column.saturating_sub(self.wrap.indent(line, sub));
+        let col =
+            wrap::index_at_cells(&text[range.clone()], column, self.tab_size(model, cx), last);
+        (line, range.start + col)
+    }
+
     /// Per-line horizontal offset for RTL lines: right-align the line within
     /// the pane so a pure-Arabic line starts at the right edge instead of the
     /// left. Returns 0 for LTR lines, `(pane_w - shaped_w).max(0)` for RTL.

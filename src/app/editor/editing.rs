@@ -12,7 +12,7 @@ impl EditorView {
         if command == commands::UNDO_COMMAND || command == commands::REDO_COMMAND {
             self.break_history_group(cx);
             self.marked_range_utf16 = None;
-            self.preferred_x = None;
+            self.preferred_column = None;
             let changed = self.model.update(cx, |model, cx| {
                 let changed = if command == commands::UNDO_COMMAND {
                     model.undo()
@@ -70,7 +70,7 @@ impl EditorView {
             self.cursor_line = self.line_count - 1;
             self.cursor_col = line_end(self.model.read(cx), self.cursor_line);
             self.has_selection = self.cursor_line != 0 || self.cursor_col != 0;
-            self.preferred_x = None;
+            self.preferred_column = None;
             self.finish_position_change(cx);
             return true;
         }
@@ -273,11 +273,11 @@ impl EditorView {
                 } else {
                     step(row.index, self.wrap.row_count() - 1)
                 };
-                let x = self
-                    .preferred_x
-                    .unwrap_or_else(|| self.caret_x(model, window, cx));
-                self.preferred_x = Some(x);
-                self.column_for_x(model, target, x, window, cx)
+                let column = self
+                    .preferred_column
+                    .unwrap_or_else(|| self.caret_column(model, cx));
+                self.preferred_column = Some(column);
+                self.position_at_column(model, target, column, cx)
             }
             _ => return false,
         };
@@ -292,13 +292,13 @@ impl EditorView {
             let (start, end) = self.selection_range().unwrap();
             (self.cursor_line, self.cursor_col) = if forward { end } else { start };
             self.has_selection = false;
-            self.preferred_x = None;
+            self.preferred_column = None;
         } else {
             (self.cursor_line, self.cursor_col) = target;
             self.has_selection = false;
         }
         if !vertical {
-            self.preferred_x = None;
+            self.preferred_column = None;
         }
         self.finish_position_change(cx);
         true

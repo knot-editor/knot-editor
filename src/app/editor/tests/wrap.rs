@@ -261,7 +261,7 @@ fn run(
 ) -> (usize, usize) {
     (view.cursor_line, view.cursor_col) = from;
     view.has_selection = false;
-    view.preferred_x = None;
+    view.preferred_column = None;
     assert!(
         view.execute_editing_command(command, window, cx),
         "{command}"
@@ -427,7 +427,7 @@ fn without_wrapping_each_movement_and_its_twin_agree(cx: &mut TestAppContext) {
                     for suffix in ["", "-logical"] {
                         (view.cursor_line, view.cursor_col) = (30, 6);
                         view.has_selection = false;
-                        view.preferred_x = None;
+                        view.preferred_column = None;
                         let command = format!("editor.{prefix}-{movement}{suffix}");
                         assert!(
                             view.execute_editing_command(&command, window, cx),

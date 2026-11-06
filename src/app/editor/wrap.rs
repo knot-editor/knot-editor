@@ -40,6 +40,33 @@ fn cells(grapheme: &str, column: usize, tab_size: usize) -> usize {
     }
 }
 
+/// The cells `text`, the start of a row, takes, with tabs expanded from the
+/// row's start.
+pub(super) fn cells_before(text: &str, tab_size: usize) -> usize {
+    let tab_size = tab_size.max(1);
+    text.graphemes(true).fold(0, |column, grapheme| {
+        column + cells(grapheme, column, tab_size)
+    })
+}
+
+/// The grapheme boundary of `text`, a row, nearest `column` cells from its
+/// start, the earlier one on a tie. The row's end counts only with `end`.
+pub(super) fn index_at_cells(text: &str, column: usize, tab_size: usize, end: bool) -> usize {
+    let tab_size = tab_size.max(1);
+    let mut best = (0, column);
+    let mut used: usize = 0;
+    for (index, grapheme) in text.grapheme_indices(true) {
+        if index > 0 && used.abs_diff(column) < best.1 {
+            best = (index, used.abs_diff(column));
+        }
+        used += cells(grapheme, used, tab_size);
+    }
+    if end && used.abs_diff(column) < best.1 {
+        best = (text.len(), used.abs_diff(column));
+    }
+    best.0
+}
+
 /// Break `text`, one line without its terminator, into rows of `width`.
 pub(super) fn wrap_line(text: &str, width: WrapWidth) -> LineWrap {
     let columns = width.columns.max(1);

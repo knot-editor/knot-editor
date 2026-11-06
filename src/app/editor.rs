@@ -236,8 +236,8 @@ pub struct EditorView {
     /// Caret position: (line index, byte offset within that line).
     cursor_line: usize,
     cursor_col: usize,
-    /// Shaped x position retained across vertical movement, including short lines.
-    preferred_x: Option<Pixels>,
+    /// The display cell vertical movement aims for, kept across short lines.
+    preferred_column: Option<usize>,
     scroll_x: f32,
     /// What a drag with the left button held extends from, from mouse-down
     /// to mouse-up.
@@ -427,7 +427,7 @@ impl EditorView {
         self.scroll = self.wrap.row_of(top_line, top_col) as f32 * self.metrics.line_height;
         self.restored_top = Some(snap(state.top));
         self.scroll_x = state.scroll_x.max(0.);
-        self.preferred_x = None;
+        self.preferred_column = None;
         self.reveal_caret = false;
         self.preserve_scroll_on_layout = true;
         self.sync_view_position(cx);
@@ -549,7 +549,7 @@ impl EditorView {
     ) {
         self.break_history_group(cx);
         self.marked_range_utf16 = None;
-        self.preferred_x = None;
+        self.preferred_column = None;
         let model = self.model.read(cx);
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
@@ -676,7 +676,7 @@ impl EditorView {
             if this.seen_revision != model.revision() {
                 this.text_changed(model);
                 this.marked_range_utf16 = None;
-                this.preferred_x = None;
+                this.preferred_column = None;
             }
             this.refresh(model, model.resolve_view_position(this.position_range));
             if let Some(restore) = model.history_view_restore() {
@@ -728,7 +728,7 @@ impl EditorView {
             scroll: 0.,
             cursor_line: 0,
             cursor_col: 0,
-            preferred_x: None,
+            preferred_column: None,
             scroll_x: 0.,
             drag_anchor: None,
             reveal_caret: true,
@@ -1060,7 +1060,7 @@ impl EditorView {
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
         self.has_selection = anchor != caret;
         self.marked_range_utf16 = None;
-        self.preferred_x = None;
+        self.preferred_column = None;
         self.finish_position_change(cx);
     }
 
@@ -1087,7 +1087,7 @@ impl EditorView {
         if !self.model.read(cx).is_editable() {
             return;
         }
-        self.preferred_x = None;
+        self.preferred_column = None;
         let model = self.model.read(cx);
         let text = text
             .replace("\r\n", "\n")
