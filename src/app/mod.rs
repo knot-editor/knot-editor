@@ -44,6 +44,8 @@ mod tree_view;
 mod typography;
 mod window_layout;
 mod window_sessions;
+#[cfg(test)]
+mod work_counts;
 mod workbench;
 mod workspace;
 mod workspace_tree;

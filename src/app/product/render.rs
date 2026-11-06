@@ -427,6 +427,8 @@ impl Render for StatusTooltip {
 
 impl Render for ProductShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        crate::app::work_counts::draw();
         self.observe_application_focus(window, cx);
         window.set_rem_size(px(zoom::BASE_REM * zoom::factor(cx)));
         tab_drag::coordinator(cx);

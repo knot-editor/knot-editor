@@ -1302,7 +1302,6 @@ impl ProductExtensionHost {
                 self.remove_lifecycle(key, cx);
             }
         }
-        cx.notify();
     }
 
     fn handle_request(&mut self, request: HostRequest, cx: &mut Context<Self>) {
@@ -1311,6 +1310,8 @@ impl ProductExtensionHost {
             self.deferred_view_requests.push(request);
             return;
         }
+        #[cfg(test)]
+        crate::app::work_counts::request(request.operation.descriptor.name);
         let operation = request.operation.clone();
         let context = handlers::HostContext::new(request.context(), cx);
         let pool = self.pool.clone();
