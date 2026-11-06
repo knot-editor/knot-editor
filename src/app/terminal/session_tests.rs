@@ -578,33 +578,11 @@ fn old_parser_and_input_generation_cannot_write_to_restarted_pty(cx: &mut TestAp
     session.update(cx, |session, cx| session.close(cx));
 }
 
-gpui::actions!(terminal_compatibility, [BoundTerminalCommand]);
-
-struct TerminalCommandHarness {
-    view: Entity<TerminalView>,
-    commands: usize,
-}
-
-impl gpui::Render for TerminalCommandHarness {
-    fn render(
-        &mut self,
-        _: &mut gpui::Window,
-        cx: &mut gpui::Context<Self>,
-    ) -> impl gpui::IntoElement {
-        use gpui::{InteractiveElement, ParentElement, Styled};
-        gpui::div()
-            .size_full()
-            .child(self.view.clone())
-            .on_action(cx.listener(|this, _: &BoundTerminalCommand, _, _| this.commands += 1))
-    }
-}
-
 #[gpui::test]
-fn gpui_commands_precede_mode_aware_keyboard_delivery(cx: &mut TestAppContext) {
-    use gpui::Focusable;
+fn keys_reach_the_program_in_its_keyboard_modes_without_a_window(cx: &mut TestAppContext) {
     let temp = tempfile::tempdir().unwrap();
     let destination = temp.path().join("keyboard.hex");
-    let expected = "\x1bOA\x1b[1;2D\x1b[15~\x1bb\0é".as_bytes();
+    let expected = "\x1bOA\x1b[1;2D\x1b[15~\x1bb\0éx".as_bytes();
     let script = format!(
         "stty raw -echo; printf '\\033[?1hready'; dd bs=1 count={} 2>/dev/null | od -An -tx1 > '{}'",
         expected.len(),
@@ -612,34 +590,23 @@ fn gpui_commands_precede_mode_aware_keyboard_delivery(cx: &mut TestAppContext) {
     );
     let session = cx.new(|cx| TerminalSession::new_with_options(shell(&script), cx));
     wait_for(cx, &session, |session| output(session).contains("ready"));
-    cx.update(|cx| {
-        cx.bind_keys([gpui::KeyBinding::new(
-            "ctrl-a",
-            BoundTerminalCommand,
-            Some("terminal"),
-        )])
-    });
-    let (harness, cx) = cx.add_window_view(|_, cx| TerminalCommandHarness {
-        view: cx.new(|cx| TerminalView::new(session.clone(), cx)),
-        commands: 0,
-    });
-    cx.refresh().unwrap();
-    cx.update(|window, cx| {
-        harness
-            .read(cx)
-            .view
-            .read(cx)
-            .focus_handle(cx)
-            .focus(window)
-    });
-    cx.simulate_keystrokes("ctrl-a up shift-left f5 alt-b ctrl-space");
-    cx.simulate_event(gpui::KeyDownEvent {
-        keystroke: gpui::Keystroke {
+    let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
+    view.update(cx, |view, cx| {
+        for key in ["up", "shift-left", "f5", "alt-b", "ctrl-space"] {
+            assert!(
+                view.key_down(&gpui::Keystroke::parse(key).unwrap(), cx),
+                "{key}"
+            );
+        }
+        let accented = gpui::Keystroke {
             key: "é".into(),
             key_char: Some("é".into()),
             ..Default::default()
-        },
-        is_held: false,
+        };
+        assert!(view.key_down(&accented, cx));
+        // A key with no encoding is left to the caller.
+        assert!(!view.key_down(&gpui::Keystroke::parse("cmd-k").unwrap(), cx));
+        view.insert_text("x", cx);
     });
     wait_for(cx, &session, |session| {
         matches!(session.status(), TerminalStatus::Exited(_))
@@ -650,8 +617,7 @@ fn gpui_commands_precede_mode_aware_keyboard_delivery(cx: &mut TestAppContext) {
         .map(|hex| u8::from_str_radix(hex, 16).unwrap())
         .collect();
     assert_eq!(bytes, expected);
-    cx.read(|cx| assert_eq!(harness.read(cx).commands, 1));
-    cx.update(|_, cx| session.update(cx, |session, cx| session.close(cx)));
+    cx.update(|cx| session.update(cx, |session, cx| session.close(cx)));
 }
 
 #[gpui::test]

@@ -55,8 +55,12 @@ leaves the session's focus alone.
 Native prompts go through the session, which asks its window; a session
 without a window answers nothing, which callers treat as cancellation.
 The window stays an adapter for raw input: key-downs and typed text reach the
-session's router through it (see [keymaps](commands.md#keymaps)), and tab
-drags and dock resizing are pointer input.
+session through it (see [keymaps](commands.md#keymaps)), and tab drags and
+dock resizing are pointer input. Every surface's state, the editor, trees,
+terminals, the palette, pickers, and text fields, runs without a window, so a
+session without one takes keys and text and gives each to the surface with
+Knot-side focus. Until held input moves into the session, keys after an
+extension command wait for it only in a window.
 
 ## Zoom
 

@@ -8,7 +8,7 @@
 #[cfg(debug_assertions)]
 use std::collections::HashSet;
 
-use gpui::{App, AppContext, Context, Entity, FocusHandle, Focusable, WeakFocusHandle};
+use gpui::{App, AppContext, Context, Entity, FocusHandle, Focusable};
 
 #[cfg(test)]
 use super::documents::Document;
@@ -313,10 +313,6 @@ impl CommandView {
             Self::Extension(view) => view.focus_handle(cx),
             Self::Workspace(view) => view.focus_handle(cx),
         }
-    }
-
-    pub(crate) fn matches_focus(&self, focus: &WeakFocusHandle, cx: &App) -> bool {
-        focus.upgrade() == Some(self.focus_handle(cx))
     }
 }
 

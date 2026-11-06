@@ -7,6 +7,7 @@ mod editor_api;
 mod extension_api;
 mod extension_restart;
 mod go_to_line;
+mod headless;
 mod key_hold;
 mod keybindings;
 mod language_brackets;
@@ -146,6 +147,7 @@ pub(super) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollect
     ));
     cx.set_global(TestRecoveryDir(recovery_dir));
     cx.set_global(ApplicationSessions::default());
+    cx.update(super::key_routing::intercept_keys);
     cx.set_global(ApplicationProtectedClosure(RefCell::new(false)));
     cx.set_global(ApplicationTerminalSessions(RefCell::new(
         TerminalSessions::default(),

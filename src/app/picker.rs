@@ -225,17 +225,31 @@ impl Picker {
         }
     }
 
-    fn on_key_down(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
-        match event.keystroke.key.to_lowercase().as_str() {
+    /// Handle a key the keymap left unclaimed, the query field first; false
+    /// when the picker ignores it.
+    pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        if self
+            .input
+            .update(cx, |input, cx| input.key_down(keystroke, cx))
+        {
+            return true;
+        }
+        match keystroke.key.to_lowercase().as_str() {
             "escape" => cx.emit(PickerEvent::Dismissed),
             "enter" => self.confirm(cx),
             "up" => self.move_selection(-1, cx),
             "down" => self.move_selection(1, cx),
             "pageup" => self.move_selection(-PAGE_ROWS, cx),
             "pagedown" => self.move_selection(PAGE_ROWS, cx),
-            _ => return,
+            _ => return false,
         }
-        cx.stop_propagation();
+        true
+    }
+
+    /// Type `text` into the query.
+    pub(crate) fn insert_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.input
+            .update(cx, |input, cx| input.insert_text(None, text, cx));
     }
 
     #[cfg(test)]
@@ -376,7 +390,6 @@ impl Render for Picker {
             .shadow_lg()
             .key_context(self.key_context)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_key_down(cx.listener(Self::on_key_down))
             .when_some(self.title.clone(), |panel, title| {
                 panel.child(div().px_3().pt_2().text_sm().child(title))
             })
@@ -405,7 +418,7 @@ impl Render for Picker {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use gpui::{Entity, TestAppContext, VisualTestContext};
+    use gpui::{AppContext as _, Entity, Keystroke, TestAppContext};
 
     use super::{Picker, PickerEntry, PickerEvent};
 
@@ -416,11 +429,8 @@ mod tests {
         }
     }
 
-    fn picker(
-        entries: Vec<PickerEntry>,
-        cx: &mut TestAppContext,
-    ) -> (Entity<Picker>, &mut VisualTestContext) {
-        cx.add_window_view(|_, cx| Picker::new(Some("Pick".into()), entries, "picker", cx))
+    fn picker(entries: Vec<PickerEntry>, cx: &mut TestAppContext) -> Entity<Picker> {
+        cx.new(|cx| Picker::new(Some("Pick".into()), entries, "picker", cx))
     }
 
     fn labels(picker: &Picker) -> Vec<&str> {
@@ -454,7 +464,7 @@ mod tests {
 
     #[gpui::test]
     fn ranks_the_expected_command_first(cx: &mut TestAppContext) {
-        let (picker, cx) = picker(
+        let picker = picker(
             COMMANDS.iter().map(|label| entry(label, None)).collect(),
             cx,
         );
@@ -488,7 +498,7 @@ mod tests {
             "src/app/command_palette.rs",
             "docs/architecture/commands.md",
         ];
-        let (picker, cx) = picker(paths.iter().map(|path| entry(path, None)).collect(), cx);
+        let picker = picker(paths.iter().map(|path| entry(path, None)).collect(), cx);
         picker.update(cx, |picker, cx| {
             picker.set_query("catalog", cx);
             assert_eq!(labels(picker), ["src/app/commands/catalog.rs"]);
@@ -499,7 +509,7 @@ mod tests {
 
     #[gpui::test]
     fn empty_query_and_ties_keep_the_callers_order(cx: &mut TestAppContext) {
-        let (picker, cx) = picker(
+        let picker = picker(
             vec![
                 entry("beta", None),
                 entry("alpha", None),
@@ -522,7 +532,7 @@ mod tests {
             match_text: Some("files.recent".into()),
             ..PickerEntry::new("Open Recent")
         };
-        let (picker, cx) = picker(
+        let picker = picker(
             vec![
                 hidden,
                 entry("Projects", Some("recent folders")),
@@ -544,7 +554,7 @@ mod tests {
     #[gpui::test]
     #[allow(clippy::single_range_in_vec_init)]
     fn highlights_cover_matched_bytes_in_multibyte_text(cx: &mut TestAppContext) {
-        let (picker, cx) = picker(vec![entry("Café crème", Some("naïve 日本語"))], cx);
+        let picker = picker(vec![entry("Café crème", Some("naïve 日本語"))], cx);
         picker.update(cx, |picker, cx| {
             picker.set_query("cafe", cx);
             assert_eq!(picker.highlights(0).0, [0..5]);
@@ -559,13 +569,13 @@ mod tests {
 
     #[gpui::test]
     fn confirms_the_selection_and_blocks_without_matches(cx: &mut TestAppContext) {
-        let (picker, cx) = picker(
+        let picker = picker(
             vec![entry("Alpha", Some("first")), entry("Beta", Some("second"))],
             cx,
         );
         let events = Rc::new(RefCell::new(Vec::new()));
         let observed = events.clone();
-        let _subscription = cx.update(|_, cx| {
+        let _subscription = cx.update(|cx| {
             cx.subscribe(&picker, move |_, event, _| {
                 observed.borrow_mut().push(event.clone())
             })
@@ -588,6 +598,48 @@ mod tests {
                 PickerEvent::Highlighted(Some(1)),
                 PickerEvent::Confirmed(1),
                 PickerEvent::Highlighted(None),
+            ]
+        );
+    }
+
+    #[gpui::test]
+    fn keys_edit_the_query_and_move_and_confirm_the_selection(cx: &mut TestAppContext) {
+        let picker = picker(
+            vec![
+                entry("Alpha", None),
+                entry("Beta", None),
+                entry("Gamma", None),
+            ],
+            cx,
+        );
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let observed = events.clone();
+        let _subscription = cx.update(|cx| {
+            cx.subscribe(&picker, move |_, event, _| {
+                observed.borrow_mut().push(event.clone())
+            })
+        });
+        let press = |key: &str, cx: &mut TestAppContext| {
+            let keystroke = Keystroke::parse(key).unwrap();
+            picker.update(cx, |picker, cx| picker.key_down(&keystroke, cx))
+        };
+        assert!(press("down", cx));
+        assert!(press("up", cx));
+        picker.update(cx, |picker, cx| picker.insert_text("mx", cx));
+        assert!(press("backspace", cx));
+        cx.read(|cx| assert_eq!(labels(picker.read(cx)), ["Gamma"]));
+        assert!(press("enter", cx));
+        assert!(!press("a", cx));
+        assert!(press("escape", cx));
+        assert_eq!(
+            *events.borrow(),
+            [
+                PickerEvent::Highlighted(Some(1)),
+                PickerEvent::Highlighted(Some(0)),
+                PickerEvent::Highlighted(None),
+                PickerEvent::Highlighted(Some(2)),
+                PickerEvent::Confirmed(2),
+                PickerEvent::Dismissed,
             ]
         );
     }

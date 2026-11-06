@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::{AppContext, Focusable, Subscription, TestAppContext};
+use gpui::{AppContext, Subscription, TestAppContext};
 
 use super::{TreeProviderIdentity, TreeView, TreeViewEvent, TreeViewRegistrationError};
 use crate::host::protocol::{
@@ -220,16 +220,14 @@ fn response(
     }
 }
 
-fn windowed_tree(cx: &mut TestAppContext) -> (gpui::Entity<TreeView>, gpui::AnyWindowHandle) {
-    let (tree, window) = cx.add_window_view(|_, cx| TreeView::new("example.git", "1", cx));
-    let handle = window.update(|window, _| window.window_handle());
-    (tree, handle)
+fn tree(cx: &mut TestAppContext) -> gpui::Entity<TreeView> {
+    cx.new(|cx| TreeView::new("example.git", "1", cx))
 }
 
 #[gpui::test]
 fn groups_fetch_children_and_are_not_activated(cx: &mut TestAppContext) {
     let registration = TreeProviderRegistrationId::new(5);
-    let (tree, handle) = windowed_tree(cx);
+    let tree = tree(cx);
     let (events, _subscriber) = subscribe_commands(cx, &tree);
     let generation = tree.update(cx, |tree, cx| {
         tree.register_provider("example.git", owner(registration), Vec::new(), cx)
@@ -272,13 +270,13 @@ fn groups_fetch_children_and_are_not_activated(cx: &mut TestAppContext) {
         ["Staged", "file.rs", "notes.txt"]
     );
 
-    tree.update(cx, |tree, cx| tree.activate("staged", handle, cx));
+    tree.update(cx, |tree, cx| tree.activate("staged", cx));
     assert!(
         events.borrow().is_empty(),
         "a group header is not activatable"
     );
 
-    tree.update(cx, |tree, cx| tree.activate("notes", handle, cx));
+    tree.update(cx, |tree, cx| tree.activate("notes", cx));
     let events = events.borrow();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].0, "example.activate");
@@ -288,7 +286,7 @@ fn groups_fetch_children_and_are_not_activated(cx: &mut TestAppContext) {
 #[gpui::test]
 fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
     let registration = TreeProviderRegistrationId::new(6);
-    let (tree, handle) = windowed_tree(cx);
+    let tree = tree(cx);
     let (events, _subscriber) = subscribe_commands(cx, &tree);
     let frame_action = TreeAction {
         label: "Refresh".into(),
@@ -334,7 +332,7 @@ fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
             tree.action_focus_for_test(),
             Some((Some("notes".into()), 0))
         );
-        tree.invoke_action(stage.clone(), handle, cx);
+        tree.invoke_action(stage.clone(), cx);
     });
     let events = events.borrow();
     assert_eq!(events.len(), 1);
@@ -345,7 +343,7 @@ fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
 #[gpui::test]
 fn arrow_keys_move_selection_across_visible_rows(cx: &mut TestAppContext) {
     let registration = TreeProviderRegistrationId::new(9);
-    let (tree, window) = windowed_tree(cx);
+    let tree = tree(cx);
     let generation = tree.update(cx, |tree, cx| {
         tree.register_provider("example.git", owner(registration), Vec::new(), cx)
             .unwrap();
@@ -368,31 +366,22 @@ fn arrow_keys_move_selection_across_visible_rows(cx: &mut TestAppContext) {
             cx,
         ));
     });
-    cx.update_window(window, |_, window, cx| {
-        tree.read(cx).focus_handle(cx).focus(window);
-    })
-    .unwrap();
-    cx.refresh().unwrap();
-
-    let selected = |cx: &mut TestAppContext| cx.read(|cx| tree.read(cx).selected.clone());
-    cx.simulate_keystrokes(window, "down");
-    assert_eq!(selected(cx).as_deref(), Some("a"));
-    cx.simulate_keystrokes(window, "down");
-    assert_eq!(selected(cx).as_deref(), Some("b"));
-    cx.simulate_keystrokes(window, "down");
-    assert_eq!(selected(cx).as_deref(), Some("c"));
-    cx.simulate_keystrokes(window, "down");
-    assert_eq!(selected(cx).as_deref(), Some("c"));
-    cx.simulate_keystrokes(window, "up");
-    assert_eq!(selected(cx).as_deref(), Some("b"));
+    let press = |key: &str, cx: &mut TestAppContext| {
+        let keystroke = gpui::Keystroke::parse(key).unwrap();
+        tree.update(cx, |tree, cx| tree.key_down(&keystroke, cx));
+        cx.read(|cx| tree.read(cx).selected.clone())
+    };
+    assert_eq!(press("down", cx).as_deref(), Some("a"));
+    assert_eq!(press("down", cx).as_deref(), Some("b"));
+    assert_eq!(press("down", cx).as_deref(), Some("c"));
+    assert_eq!(press("down", cx).as_deref(), Some("c"));
+    assert_eq!(press("up", cx).as_deref(), Some("b"));
 
     // Stale rows stay navigable while a root refresh is in flight.
     tree.update(cx, |tree, cx| {
         tree.invalidate(registration, None, cx).unwrap();
     });
-    cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "up");
-    assert_eq!(selected(cx).as_deref(), Some("a"));
+    assert_eq!(press("up", cx).as_deref(), Some("a"));
 }
 
 #[gpui::test]

@@ -75,16 +75,21 @@ replaces the whole slot. A preset binding for an undeclared view kind is
 skipped.
 
 Knot matches keys itself. Every key-down in a product window passes one
-interceptor, ahead of view key handlers and text input, which hands it to the
-session's key router (`src/app/commands/key_router.rs`) with the focused view's
+interceptor, ahead of gpui's key handling and text input, which hands it to
+the session; a session without a window takes keys directly. While the
+workbench has focus, the session's key router
+(`src/app/commands/key_router.rs`) matches the key with the focused view's
 kind and live key contexts. A key that begins a binding resolving to a command
 there waits for the rest of its sequence; a completed binding enters command
-dispatch; any other key propagates as if unbound. A sequence that stops
-matching runs its longest bound prefix, or delivers its first key natively,
-and routes the rest again, and a pending sequence flushes the same way after
-one second or ends when focus moves. Keys typed in the palette or a transient
-interaction go to them. Menus and palette commands bypass keymaps. gpui holds
-bindings only for menu key equivalents and the config-error window's Quit.
+dispatch. Any other key goes to the surface with Knot-side focus, whose state
+handles its own keys, such as a tree's arrows, the palette's Enter, or a
+terminal's bytes, and a key that surface ignores becomes typed text, as if
+unbound. A sequence that stops matching runs its longest bound prefix, or
+delivers its first key natively, and routes the rest again, and a pending
+sequence flushes the same way after one second or ends when focus moves. Keys
+typed in the palette or a transient interaction skip the router and go to
+them. Menus and palette commands bypass keymaps. gpui holds bindings only for
+menu key equivalents and the config-error window's Quit.
 
 ### Key contexts
 

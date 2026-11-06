@@ -42,7 +42,7 @@ fn tree_tab_attached(
     tree: &Entity<crate::app::tree_view::TreeView>,
     cx: &gpui::App,
 ) -> bool {
-    let focus = tree.read(cx).focus_handle(cx).downgrade();
+    let focus = tree.read(cx).focus_handle(cx);
     shell
         .read(cx)
         .workbench
@@ -52,7 +52,7 @@ fn tree_tab_attached(
         .any(|pane| {
             pane.tabs().iter().any(|tab| {
                 tab.command_view()
-                    .is_some_and(|view| view.matches_focus(&focus, cx))
+                    .is_some_and(|view| view.focus_handle(cx) == focus)
             })
         })
 }
@@ -62,12 +62,12 @@ fn tree_tab_focused(
     tree: &Entity<crate::app::tree_view::TreeView>,
     cx: &gpui::App,
 ) -> bool {
-    let focus = tree.read(cx).focus_handle(cx).downgrade();
+    let focus = tree.read(cx).focus_handle(cx);
     let workbench = shell.read(cx).workbench.read(cx);
     workbench.focused_pane().is_some_and(|pane| {
         pane.active_tab()
             .command_view()
-            .is_some_and(|view| view.matches_focus(&focus, cx))
+            .is_some_and(|view| view.focus_handle(cx) == focus)
     })
 }
 
@@ -78,7 +78,7 @@ pub(super) fn activate_tree_tab(
     window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) {
-    let focus = cx.read(|cx| tree.read(cx).focus_handle(cx).downgrade());
+    let focus = cx.read(|cx| tree.read(cx).focus_handle(cx));
     let located = cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         workbench.panes().iter().find_map(|pane| {
@@ -86,7 +86,7 @@ pub(super) fn activate_tree_tab(
                 .iter()
                 .find(|tab| {
                     tab.command_view()
-                        .is_some_and(|view| view.matches_focus(&focus, cx))
+                        .is_some_and(|view| view.focus_handle(cx) == focus)
                 })
                 .map(|tab| (pane.id(), tab.id()))
         })
@@ -111,10 +111,8 @@ fn invoke_tree_action(
         focus_view(&tree.read(cx).focus_handle(cx), window, cx);
     });
     cx.run_until_parked();
-    let _ = cx.update_window(window, |_, window, cx| {
-        tree.update(cx, |tree, cx| {
-            tree.invoke_action(action, window.window_handle(), cx)
-        });
+    let _ = cx.update_window(window, |_, _, cx| {
+        tree.update(cx, |tree, cx| tree.invoke_action(action, cx));
     });
 }
 
@@ -456,10 +454,8 @@ fn switching_to_a_project_with_a_missing_root_is_actionable_and_keeps_the_source
     });
     std::fs::remove_dir_all(&path).unwrap();
     activate_tree_tab(&fixture.shell, &tree, fixture.window, cx);
-    cx.update_window(fixture.window, |_, window, cx| {
-        tree.update(cx, |tree, cx| {
-            tree.activate_row_for_test(&gone, window.window_handle(), cx)
-        });
+    cx.update_window(fixture.window, |_, _, cx| {
+        tree.update(cx, |tree, cx| tree.activate_row_for_test(&gone, cx));
     })
     .unwrap();
     wait_for_prompt(cx);
@@ -533,10 +529,8 @@ fn project_selection_stays_in_the_capturing_window(cx: &mut TestAppContext) {
 
     // Row activation in one window opens that project's root there only.
     activate_tree_tab(&second_shell, &second_tree, second_window, cx);
-    cx.update_window(second_window, |_, window, cx| {
-        second_tree.update(cx, |tree, cx| {
-            tree.activate_row_for_test(&second_id, window.window_handle(), cx)
-        });
+    cx.update_window(second_window, |_, _, cx| {
+        second_tree.update(cx, |tree, cx| tree.activate_row_for_test(&second_id, cx));
     })
     .unwrap();
     cx.run_until_parked();

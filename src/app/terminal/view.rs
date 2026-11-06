@@ -213,12 +213,11 @@ impl TerminalView {
         self.session.update(cx, |session, _| session.resize(size));
     }
 
-    fn on_key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
-        if self.attachment.is_none() {
-            return;
-        }
-        if self.session.read(cx).status() != TerminalStatus::Running {
-            return;
+    /// Send a key the keymap left unclaimed to the program; false when it
+    /// has no encoding or the session is not running.
+    pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        if self.attachment.is_none() || self.session.read(cx).status() != TerminalStatus::Running {
+            return false;
         }
         let mode = self
             .session
@@ -226,11 +225,17 @@ impl TerminalView {
             .terminal()
             .map(|terminal| *terminal.lock().mode())
             .unwrap_or_default();
-        let bytes = terminal_key_bytes(&event.keystroke, mode);
-        if !bytes.is_empty() {
-            self.send_user_input(bytes, cx);
-            cx.stop_propagation();
+        let bytes = terminal_key_bytes(keystroke, mode);
+        if bytes.is_empty() {
+            return false;
         }
+        self.send_user_input(bytes, cx);
+        true
+    }
+
+    /// Send typed `text` to the program.
+    pub(crate) fn insert_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.send_user_input(text.as_bytes().to_vec(), cx);
     }
 
     fn release_focus(&mut self, cx: &mut App) {
@@ -747,7 +752,6 @@ impl Render for TerminalView {
                     .min_h_0()
                     .track_focus(&self.focus)
                     .key_context(TERMINAL_KEY_CONTEXT)
-                    .on_key_down(cx.listener(Self::on_key_down))
                     .child(TerminalElement { entity }),
             )
     }

@@ -34,8 +34,10 @@ pub(crate) enum TreeViewEvent {
         provider: TreeProviderIdentity,
         command: String,
         arguments: CommandArgumentValue,
-        window: AnyWindowHandle,
-        focus: WeakFocusHandle,
+        /// The session showing the tree.
+        window: String,
+        /// The tree, which must still have focus there.
+        view: ViewId,
     },
 }
 
@@ -172,13 +174,8 @@ impl TreeView {
     }
 
     #[cfg(test)]
-    pub(crate) fn activate_row_for_test(
-        &mut self,
-        id: &str,
-        window: AnyWindowHandle,
-        cx: &mut Context<Self>,
-    ) {
-        self.activate(id, window, cx);
+    pub(crate) fn activate_row_for_test(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.activate(id, cx);
     }
 
     #[cfg(test)]
@@ -435,7 +432,7 @@ impl TreeView {
             .find(|item| item.id == id)
     }
 
-    fn activate(&mut self, id: &str, window: AnyWindowHandle, cx: &mut Context<Self>) {
+    fn activate(&mut self, id: &str, cx: &mut Context<Self>) {
         self.selected = Some(id.to_owned());
         let Some(item) = self.item(id).cloned() else {
             return;
@@ -453,8 +450,8 @@ impl TreeView {
                         provider,
                         command,
                         arguments: CommandArgumentValue::Null,
-                        window,
-                        focus: self.focus.downgrade(),
+                        window: self.window.clone(),
+                        view: self.instance_id,
                     });
                 }
             }
@@ -548,12 +545,7 @@ impl TreeView {
         }
     }
 
-    pub(crate) fn invoke_action(
-        &mut self,
-        action: TreeAction,
-        window: AnyWindowHandle,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn invoke_action(&mut self, action: TreeAction, cx: &mut Context<Self>) {
         let Some(provider) = self.provider else {
             return;
         };
@@ -561,13 +553,15 @@ impl TreeView {
             provider,
             command: action.command,
             arguments: action.arguments,
-            window,
-            focus: self.focus.downgrade(),
+            window: self.window.clone(),
+            view: self.instance_id,
         });
     }
 
-    fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let key = event.keystroke.key.to_lowercase();
+    /// Handle a key the keymap left unclaimed; false when the tree ignores
+    /// it.
+    pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let key = keystroke.key.to_lowercase();
         if let Some(focus) = self.action_focus.clone() {
             let actions = self.focused_actions();
             if !actions.is_empty() {
@@ -578,7 +572,6 @@ impl TreeView {
                             index: focus.index.saturating_sub(1),
                         });
                         cx.notify();
-                        cx.stop_propagation();
                     }
                     "down" => {
                         self.action_focus = Some(ActionFocus {
@@ -586,21 +579,18 @@ impl TreeView {
                             index: (focus.index + 1).min(actions.len() - 1),
                         });
                         cx.notify();
-                        cx.stop_propagation();
                     }
                     "enter" | "space" => {
                         let action = actions[focus.index.min(actions.len() - 1)].clone();
-                        self.invoke_action(action, window.window_handle(), cx);
-                        cx.stop_propagation();
+                        self.invoke_action(action, cx);
                     }
                     "escape" | "left" => {
                         self.action_focus = None;
                         cx.notify();
-                        cx.stop_propagation();
                     }
-                    _ => {}
+                    _ => return false,
                 }
-                return;
+                return true;
             }
             // The focused row disappeared (for example after a refresh); fall
             // through so the arrow still moves the row cursor.
@@ -621,18 +611,18 @@ impl TreeView {
             })
             .collect::<Vec<_>>();
         if item_rows.is_empty() {
-            return;
+            return false;
         }
         let current = self
             .selected
             .as_deref()
             .and_then(|selected| item_rows.iter().position(|(_, id, _)| *id == selected));
-        let target = match key.as_str() {
-            "up" => Some(current.unwrap_or(1).saturating_sub(1)),
-            "down" => Some((current.map_or(0, |index| index + 1)).min(item_rows.len() - 1)),
+        let index = match key.as_str() {
+            "up" => current.unwrap_or(1).saturating_sub(1),
+            "down" => (current.map_or(0, |index| index + 1)).min(item_rows.len() - 1),
             "left" => {
                 let Some(index) = current else {
-                    return;
+                    return false;
                 };
                 let (_, id, parent) = item_rows[index];
                 if self.expanded.remove(id) {
@@ -640,47 +630,39 @@ impl TreeView {
                 } else if let Some(parent) = parent {
                     self.selected = Some(parent.to_owned());
                 }
-                cx.stop_propagation();
-                return;
+                return true;
             }
             "right" => {
                 let Some(index) = current else {
                     // With no row cursor, enter the frame's own actions.
                     self.enter_action_focus(cx);
-                    cx.stop_propagation();
-                    return;
+                    return true;
                 };
                 let id = item_rows[index].1;
                 let collapsible = self
                     .item(id)
                     .is_some_and(|item| item.collapsible_state != TreeCollapsibleState::None);
                 if collapsible {
-                    self.activate(id, window.window_handle(), cx);
+                    self.activate(id, cx);
                 } else {
                     self.selected = Some(id.to_owned());
                     self.enter_action_focus(cx);
                 }
-                cx.stop_propagation();
-                return;
+                return true;
             }
             "enter" => {
-                let Some(index) = current.or(Some(0)) else {
-                    return;
-                };
-                self.activate(item_rows[index].1, window.window_handle(), cx);
-                cx.stop_propagation();
-                return;
+                let index = current.unwrap_or(0);
+                self.activate(item_rows[index].1, cx);
+                return true;
             }
-            _ => return,
+            _ => return false,
         };
-        if let Some(index) = target {
-            let (flat, id, _) = item_rows[index];
-            self.selected = Some(id.to_owned());
-            self.action_focus = None;
-            self.scroll.scroll_to_item(flat, ScrollStrategy::Center);
-            cx.notify();
-            cx.stop_propagation();
-        }
+        let (flat, id, _) = item_rows[index];
+        self.selected = Some(id.to_owned());
+        self.action_focus = None;
+        self.scroll.scroll_to_item(flat, ScrollStrategy::Center);
+        cx.notify();
+        true
     }
 
     fn disclosure(item: &TreeItem, expanded: bool) -> &'static str {
@@ -764,10 +746,9 @@ impl Render for TreeView {
                         .hover(|style| style.bg(button_hover))
                         .child(action.label)
                         .on_click(move |_, window, cx| {
-                            let handle = window.window_handle();
                             entity.update(cx, |tree, cx| {
                                 tree.focus_handle(cx).focus(window);
-                                tree.invoke_action(target.clone(), handle, cx);
+                                tree.invoke_action(target.clone(), cx);
                             });
                             cx.stop_propagation();
                         }),
@@ -861,10 +842,9 @@ impl Render for TreeView {
                                     })
                                     .child(action.label.clone())
                                     .on_click(move |_, window, cx| {
-                                        let handle = window.window_handle();
                                         entity.update(cx, |tree, cx| {
                                             tree.focus_handle(cx).focus(window);
-                                            tree.invoke_action(target.clone(), handle, cx);
+                                            tree.invoke_action(target.clone(), cx);
                                         });
                                         cx.stop_propagation();
                                     }),
@@ -873,10 +853,9 @@ impl Render for TreeView {
                         row.on_click({
                             let entity = entity.clone();
                             move |_, window, cx| {
-                                let handle = window.window_handle();
                                 entity.update(cx, |tree, cx| {
                                     tree.focus_handle(cx).focus(window);
-                                    tree.activate(&id, handle, cx);
+                                    tree.activate(&id, cx);
                                 });
                             }
                         })
@@ -905,8 +884,7 @@ impl Render for TreeView {
         .flex_1()
         .track_scroll(self.scroll.clone())
         .track_focus(&self.focus)
-        .key_context(key_context)
-        .on_key_down(cx.listener(Self::on_key_down));
+        .key_context(key_context);
 
         div()
             .size_full()

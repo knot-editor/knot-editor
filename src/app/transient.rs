@@ -115,18 +115,33 @@ impl InputView {
         &self.input
     }
 
-    fn on_key_down(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
-        match event.keystroke.key.to_lowercase().as_str() {
+    /// Handle a key the keymap left unclaimed, the field first; false when
+    /// the prompt ignores it.
+    pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        if self
+            .input
+            .update(cx, |input, cx| input.key_down(keystroke, cx))
+        {
+            return true;
+        }
+        match keystroke.key.to_lowercase().as_str() {
             "escape" => cx.emit(InputEvent::Dismissed),
             "enter" => {
                 let value = self.input.read(cx).text().to_string();
                 cx.emit(InputEvent::Accepted(value));
             }
-            _ => return,
+            _ => return false,
         }
-        cx.stop_propagation();
+        true
+    }
+
+    /// Type `text` into the field.
+    pub(crate) fn insert_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.input
+            .update(cx, |input, cx| input.insert_text(None, text, cx));
     }
 }
+
 impl EventEmitter<InputEvent> for InputView {}
 
 impl Render for InputView {
@@ -143,7 +158,6 @@ impl Render for InputView {
             .shadow_lg()
             .key_context(super::TRANSIENT_KEY_CONTEXT)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_key_down(cx.listener(Self::on_key_down))
             .child(
                 div()
                     .px_3()

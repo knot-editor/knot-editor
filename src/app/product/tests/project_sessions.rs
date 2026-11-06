@@ -192,10 +192,8 @@ fn select_project(fixture: &Fixture, id: &str, cx: &mut TestAppContext) {
     let tree = wait_for_contributed_view(&fixture.shell, "builtin.projects", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).status_for_test(id).is_some());
     activate_tree_tab(&fixture.shell, &tree, fixture.window, cx);
-    cx.update_window(fixture.window, |_, window, cx| {
-        tree.update(cx, |tree, cx| {
-            tree.activate_row_for_test(id, window.window_handle(), cx)
-        });
+    cx.update_window(fixture.window, |_, _, cx| {
+        tree.update(cx, |tree, cx| tree.activate_row_for_test(id, cx));
     })
     .unwrap();
     cx.run_until_parked();

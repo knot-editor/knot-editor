@@ -261,8 +261,10 @@ D055).
 Frame, group, and row actions are semantic command references with JSON
 arguments, never drawing callbacks. The native view renders them as controls
 and emits the same captured-window command event as activation, with the action
-arguments instead of null. Action clicks stop propagation so they cannot also
-activate the row. The same actions are reachable from the keyboard by entering
+arguments instead of null; the event names the session and the tree, which
+must still have focus there when it runs. Action clicks stop propagation so
+they cannot also activate the row. The same actions are reachable from the
+keyboard by entering
 an action-focus mode on the current row; keyboard navigation indexes the
 rendered rows directly so scrolling stays aligned when a transient loading or
 error row is present. A root invalidation keeps stale rows visible while the
@@ -315,7 +317,11 @@ one settled outcome (selection, acceptance, dismissal, cancellation)
 `TextInput` is one shared single-line gpui `EntityInputHandler`: typing, IME
 preedit, and clipboard flow through gpui, while the field owns caret, selection,
 keyboard movement, and pointer selection. It backs both transient fields and
-the command palette query, so text entry has one native path.
+the command palette query, so text entry has one native path. Trees, pickers,
+prompts, and the field handle keys the keymap leaves unclaimed in their own
+state, which the session calls whether or not a window shows it (see
+[keymaps](commands.md#keymaps)): the field's keys first, then the picker's or
+prompt's.
 
 One native `Picker` serves the command palette, native pickers, and extension
 pickers. It fuzzy-matches the supplied item list locally with

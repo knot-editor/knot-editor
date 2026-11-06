@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–6 complete; checkpoint 7 is next. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–6 complete; checkpoint 7 awaits review. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -177,7 +177,26 @@ and `commands_run_in_a_session_without_a_window` edits and moves. Held input
 and text bindings still route through the view's input handler and the
 window until checkpoint 8.
 
-### 7. The other surfaces
+### 7. The other surfaces — 🔍 awaiting review
+
+Done: ✅ trees, the explorer, terminals, pickers, prompts, and `TextInput`
+handle unclaimed keys in a window-free `key_down`, with `insert_text` for
+typed text, and no gpui key listeners; ✅ the session routes a key through
+the router while the workbench has focus and otherwise, or when unclaimed,
+gives it to the surface with Knot-side focus, and a key that surface ignores
+becomes typed text; a windowless session takes `press_key` and `type_text`;
+✅ tree row commands name the session and tree instead of a window and focus
+handle; ✅ `src/app/product/tests/headless.rs` drives the editor, palette,
+transient picker and input, explorer, and a terminal through a windowless
+session, and the tree, picker, field, and terminal unit tests run without a
+window.
+
+Scope decision: these surfaces stay one entity each. Unlike the editor,
+nothing in their state needed a window except the key listener's signature,
+so a separate state entity would only add indirection; the terminal's state
+already lives in its application-owned session. Without a window, keys after
+an extension command are not held yet; that moves into the session with the
+harness in checkpoint 8.
 
 Deliverables: state and view splits for tree views, terminals, and the
 shared `TextInput`, palette, and picker, driven through the router and

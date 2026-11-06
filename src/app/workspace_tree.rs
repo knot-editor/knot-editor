@@ -372,7 +372,9 @@ impl WorkspaceTree {
             .collect()
     }
 
-    fn on_key_down(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+    /// Handle a key the keymap left unclaimed; false when the tree ignores
+    /// it.
+    pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
         let rows = self.visible_rows();
         let entries = rows
             .iter()
@@ -388,18 +390,18 @@ impl WorkspaceTree {
             })
             .collect::<Vec<_>>();
         if entries.is_empty() {
-            return;
+            return false;
         }
         let current = self
             .selected
             .as_ref()
             .and_then(|selected| entries.iter().position(|(key, _)| key == selected));
-        let target = match event.keystroke.key.to_lowercase().as_str() {
-            "up" => Some(current.unwrap_or(1).saturating_sub(1)),
-            "down" => Some((current.map_or(0, |index| index + 1)).min(entries.len() - 1)),
+        let index = match keystroke.key.to_lowercase().as_str() {
+            "up" => current.unwrap_or(1).saturating_sub(1),
+            "down" => (current.map_or(0, |index| index + 1)).min(entries.len() - 1),
             "left" => {
                 let Some(index) = current else {
-                    return;
+                    return false;
                 };
                 let (key, parent) = &entries[index];
                 if self.expanded.remove(key) {
@@ -408,24 +410,20 @@ impl WorkspaceTree {
                     self.selected = Some(parent.clone());
                     cx.notify();
                 }
-                cx.stop_propagation();
-                return;
+                return true;
             }
             "right" | "enter" => {
                 let index = current.unwrap_or(0);
                 let key = entries[index].0.clone();
                 self.activate(&key, false, cx);
-                cx.stop_propagation();
-                return;
+                return true;
             }
-            _ => return,
+            _ => return false,
         };
-        if let Some(index) = target {
-            self.selected = Some(entries[index].0.clone());
-            self.scroll.scroll_to_item(index, ScrollStrategy::Center);
-            cx.notify();
-            cx.stop_propagation();
-        }
+        self.selected = Some(entries[index].0.clone());
+        self.scroll.scroll_to_item(index, ScrollStrategy::Center);
+        cx.notify();
+        true
     }
 
     fn disclosure(kind: &ResourceKind, expanded: bool) -> &'static str {
@@ -591,9 +589,6 @@ impl Render for WorkspaceTree {
         .track_scroll(self.scroll.clone())
         .track_focus(&self.focus)
         .key_context(WORKSPACE_TREE_KEY_CONTEXT)
-        .on_key_down(cx.listener(|this, event, _window, cx| {
-            this.on_key_down(event, cx);
-        }))
     }
 }
 

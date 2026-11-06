@@ -1838,23 +1838,23 @@ impl ProductExtensionHost {
                 command,
                 arguments,
                 window,
-                focus,
+                view,
             } => {
                 if !self
                     .lifecycles
                     .contains(&ExtensionKey::new(provider.extension, provider.lifecycle))
-                    || focus.upgrade().is_none()
                 {
                     return;
                 }
-                let Some(target) = capture_product_target(*window, cx) else {
+                // The tree must still have focus in its session.
+                let Some(target) =
+                    crate::app::product::find_session(window, cx).and_then(|shell| {
+                        shell.update(cx, |shell, cx| shell.capture_command_target(cx))
+                    })
+                else {
                     return;
                 };
-                if !target.focused
-                    || !target
-                        .command_view(cx)
-                        .is_some_and(|view| view.matches_focus(focus, cx))
-                {
+                if target.view != Some(*view) {
                     return;
                 }
                 let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
@@ -2669,14 +2669,6 @@ fn application_document_info(
             size: crate::app::settings::editor_tab_size(&scope, cx),
         },
     }
-}
-
-fn capture_product_target(
-    window_handle: gpui::AnyWindowHandle,
-    cx: &mut App,
-) -> Option<ProductCommandTarget> {
-    crate::app::product::session_in_window(window_handle, cx)?
-        .update(cx, |shell, cx| shell.capture_command_target(cx))
 }
 
 #[cfg(test)]

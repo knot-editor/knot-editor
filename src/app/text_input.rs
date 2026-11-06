@@ -4,7 +4,8 @@
 //! at the gpui input boundary, and exposes the same editing path to transient
 //! picker/input surfaces and the command palette. Typing, IME preedit, and
 //! clipboard flow through gpui; the field supplies ordinary arrow/home/end
-//! movement, shift selection, and pointer click/drag selection.
+//! movement and shift selection in `key_down`, which its session calls
+//! without a window, and pointer click/drag selection.
 
 use gpui::{prelude::*, *};
 use std::ops::Range;
@@ -243,10 +244,12 @@ impl TextInput {
         Self::utf16_for_byte(&self.text, byte.min(self.text.len()))
     }
 
-    fn on_key_down(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
-        let key = event.keystroke.key.to_lowercase();
-        let command = event.keystroke.modifiers.platform || event.keystroke.modifiers.control;
-        let extend = event.keystroke.modifiers.shift;
+    /// Handle a key the keymap left unclaimed; false when the field ignores
+    /// it.
+    pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let key = keystroke.key.to_lowercase();
+        let command = keystroke.modifiers.platform || keystroke.modifiers.control;
+        let extend = keystroke.modifiers.shift;
         if command {
             match key.as_str() {
                 "a" => self.select_all(),
@@ -255,11 +258,10 @@ impl TextInput {
                 "v" => self.paste(cx),
                 "left" => self.move_to_start(extend),
                 "right" => self.move_to_end(extend),
-                _ => return,
+                _ => return false,
             }
             cx.notify();
-            cx.stop_propagation();
-            return;
+            return true;
         }
         let changed = match key.as_str() {
             "backspace" => self.delete_backward(),
@@ -280,13 +282,42 @@ impl TextInput {
                 self.move_to_end(extend);
                 false
             }
-            _ => return,
+            _ => return false,
         };
         cx.notify();
         if changed {
             cx.emit(TextInputEvent::Changed);
         }
-        cx.stop_propagation();
+        true
+    }
+
+    /// Replace a UTF-16 range, or the preedit, selection, or caret, with
+    /// typed `text`.
+    pub(crate) fn insert_text(
+        &mut self,
+        range: Option<Range<usize>>,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let text = sanitize(text);
+        let range = range
+            .map(|range| {
+                Self::byte_for_utf16(&self.text, range.start)
+                    ..Self::byte_for_utf16(&self.text, range.end)
+            })
+            .or_else(|| {
+                self.marked.as_ref().map(|marked| {
+                    Self::byte_for_utf16(&self.text, marked.start)
+                        ..Self::byte_for_utf16(&self.text, marked.end)
+                })
+            })
+            .unwrap_or_else(|| self.selection());
+        self.text.replace_range(range.clone(), &text);
+        self.caret = range.start + text.len();
+        self.anchor = self.caret;
+        self.marked = None;
+        cx.notify();
+        cx.emit(TextInputEvent::Changed);
     }
 
     fn begin_pointer_selection(
@@ -381,25 +412,7 @@ impl EntityInputHandler for TextInput {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let text = sanitize(text);
-        let range = range
-            .map(|range| {
-                Self::byte_for_utf16(&self.text, range.start)
-                    ..Self::byte_for_utf16(&self.text, range.end)
-            })
-            .or_else(|| {
-                self.marked.as_ref().map(|marked| {
-                    Self::byte_for_utf16(&self.text, marked.start)
-                        ..Self::byte_for_utf16(&self.text, marked.end)
-                })
-            })
-            .unwrap_or_else(|| self.selection());
-        self.text.replace_range(range.clone(), &text);
-        self.caret = range.start + text.len();
-        self.anchor = self.caret;
-        self.marked = None;
-        cx.notify();
-        cx.emit(TextInputEvent::Changed);
+        self.insert_text(range, text, cx);
     }
 
     fn replace_and_mark_text_in_range(
@@ -487,7 +500,6 @@ impl Render for TextInput {
             .cursor(CursorStyle::IBeam)
             .track_focus(&self.focus)
             .key_context(super::TEXT_INPUT_KEY_CONTEXT)
-            .on_key_down(cx.listener(Self::on_key_down))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(Self::begin_pointer_selection),
@@ -567,34 +579,44 @@ impl Render for TextInput {
 
 #[cfg(test)]
 mod tests {
-    use gpui::{EntityInputHandler, TestAppContext};
+    use gpui::{AppContext as _, EntityInputHandler, Keystroke, TestAppContext};
 
     use super::{TextInput, TextInputEvent};
 
     #[gpui::test]
     fn typing_inserts_unicode_and_reports_changes(cx: &mut TestAppContext) {
-        let (input, cx) = cx.add_window_view(|_, cx| TextInput::new("", cx));
+        let input = cx.new(|cx| TextInput::new("", cx));
         let changes = std::rc::Rc::new(std::cell::Cell::new(0));
         let observed = changes.clone();
-        let _subscription = cx.update(|_, cx| {
+        let _subscription = cx.update(|cx| {
             cx.subscribe(&input, move |_, event, _| {
                 if *event == TextInputEvent::Changed {
                     observed.set(observed.get() + 1);
                 }
             })
         });
-        cx.update(|window, cx| {
-            input.update(cx, |input, cx| {
-                input.replace_text_in_range(None, "héλ", window, cx);
-            });
-        });
+        input.update(cx, |input, cx| input.insert_text(None, "héλ", cx));
         input.read_with(cx, |input, _| assert_eq!(input.text(), "héλ"));
         assert_eq!(changes.get(), 1);
+        // Keys edit and move; the rest are left to the caller.
+        let press = |key: &str, cx: &mut TestAppContext| {
+            let keystroke = Keystroke::parse(key).unwrap();
+            input.update(cx, |input, cx| input.key_down(&keystroke, cx))
+        };
+        assert!(press("left", cx));
+        assert!(press("shift-home", cx));
+        input.update(cx, |input, cx| input.insert_text(None, "x", cx));
+        assert!(press("end", cx));
+        assert!(press("backspace", cx));
+        assert!(!press("enter", cx));
+        assert!(!press("up", cx));
+        input.read_with(cx, |input, _| assert_eq!(input.text(), "x"));
+        assert_eq!(changes.get(), 3);
     }
 
     #[gpui::test]
     fn deletes_selection_and_moves_by_grapheme(cx: &mut TestAppContext) {
-        let (input, cx) = cx.add_window_view(|_, cx| TextInput::new("ab👩‍🚀", cx));
+        let input = cx.new(|cx| TextInput::new("ab👩‍🚀", cx));
         input.update(cx, |input, cx| {
             input.select_all();
             input.delete_backward();
@@ -610,7 +632,7 @@ mod tests {
 
     #[gpui::test]
     fn shift_selection_and_clipboard_round_trip(cx: &mut TestAppContext) {
-        let (input, cx) = cx.add_window_view(|_, cx| TextInput::new("hello", cx));
+        let input = cx.new(|cx| TextInput::new("hello", cx));
         input.update(cx, |input, cx| {
             input.select_all();
             input.copy(cx);
@@ -633,7 +655,7 @@ mod tests {
         let (input, cx) = cx.add_window_view(|_, cx| TextInput::new("", cx));
         cx.update(|window, cx| {
             input.update(cx, |input, cx| {
-                input.replace_text_in_range(None, "a\nb\r", window, cx);
+                input.insert_text(None, "a\nb\r", cx);
                 assert_eq!(input.text(), "ab");
                 input.replace_and_mark_text_in_range(Some(0..0), "に", Some(0..1), window, cx);
                 assert_eq!(input.text(), "にab");
