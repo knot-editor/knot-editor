@@ -1,7 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1, 2, and 3 complete; checkpoint 4 implemented,
-awaiting its review gate. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 next. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -133,54 +132,18 @@ editor, the tab size, two selection notifications, and the status bar
 package reading the caret's line in its own isolate; removing the lookup
 needs the view in the command context, which checkpoints 4 and 5 reshape.
 
-### 4. Knot-owned key matching — 🔍 review
+### 4. Knot-owned key matching — ✅
 
-✅ Done:
-
-- `src/app/commands/key_router.rs` matches typed keystrokes one at a time
-  against `BindingRegistry::match_typed`, which compares keystrokes as
-  gpui's `should_match` does and counts only bindings that resolve to a
-  command in the focused view and its live contexts. A prefix of a binding
-  waits, a sequence that stops matching runs its longest bound prefix or
-  delivers its first key natively, and a pending sequence flushes after a
-  second; an exact binding that is also a prefix waits, as in gpui.
-- `src/app/product/key_routing.rs` is the one key-down interceptor: the key
-  hold first, then the router, skipping the palette and transient
-  interactions. A key nothing claims propagates untouched; keys a failed
-  sequence delivers are dispatched again after the turn, bypassing the
-  router. The router lives on the product shell until checkpoint 5 moves it
-  into the session.
-- `keymaps::rebuild` registers only menu key equivalents and the
-  config-error Quit; `KeymapAction` and the gpui binding generation are
-  gone. D153 is removed from the roadmap.
-- Router unit tests, `match_typed` tests, and product tests
-  `a_sequence_bound_in_another_context_leaves_keys_to_a_modal_package`
-  (D153's two packages) and `an_unfinished_sequence_delivers_its_keys`.
-  The existing keymap, key-hold, and Vim tests pass unchanged.
-
-The terminal tests passed with the router in place, but the sandbox later
-stopped allowing PTYs, so the final run left them out.
-
-Deliverables: a key router that receives keystrokes and text, matches
-sequences against the effective map and live contexts, holds pending
-sequences only where they can resolve, and times them out after one second;
-windows forward raw input to it; gpui bindings remain only for menu key
-equivalents. D153 is removed from the roadmap.
-
-Validation: router unit tests for sequences, contexts, timeouts, and the
-unbound-sequence case; the D153 two-package product test; existing keymap and
-key-hold tests pass.
-
-Implementation context: `src/app/commands/keymaps.rs` (`rebuild` registers
-every binding with gpui; `resolve`, `resolve_in`, and `resolve_text` already
-resolve in Knot), `src/app/product/render.rs` (`dispatch_keybinding`,
-`dispatch_source`), `src/app/product/key_hold.rs` and
-`src/app/commands/key_hold.rs`, the editor input handler in
-`src/app/editor/input.rs`, and the terminal's own key path in
-`src/app/terminal/view.rs`. Update [commands](../architecture/commands.md)
-and the keymaps decision.
-
-Review gate: keys, sequences, menus, and typing behave the same in the app.
+A key router (`src/app/commands/key_router.rs`) matches keys and sequences
+against the keymap with the focused view's live contexts, holding a key only
+where some binding beginning with it resolves to a command; one interceptor
+in `src/app/product/key_routing.rs` holds keys behind extension commands and
+then routes them, and gpui keeps bindings only for menu key equivalents. See
+[commands](../architecture/commands.md#keymaps) and the keymaps decision.
+D153 is fixed and removed from the roadmap. The router lives on the product
+shell until checkpoint 5 moves it into the session. A key that begins a chord
+in the focused context now waits for its next key, so a modal package's key
+that shares a chord prefix arrives after the one-second timeout.
 
 ### 5. Window-independent sessions
 
