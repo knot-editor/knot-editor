@@ -825,6 +825,18 @@ impl ProductShell {
         self._appearance_observer = Some(
             native_window.observe_window_appearance(|_, cx| super::themes::selection_changed(cx)),
         );
+        // The bar and settings change only what the window paints, so they
+        // redraw it without notifying the session, which extensions observe.
+        self._status_bar_observers = vec![
+            cx.observe_global_in::<super::status_bar::ApplicationStatusBar>(
+                native_window,
+                |_, window, _| window.refresh(),
+            ),
+            cx.observe_global_in::<super::settings::ApplicationSettings>(
+                native_window,
+                |_, window, _| window.refresh(),
+            ),
+        ];
         self.observe_application(cx);
     }
 
@@ -835,10 +847,6 @@ impl ProductShell {
             super::extensions::host::application_changed(cx);
             this.schedule_view_state(cx);
         }));
-        self._status_bar_observers = vec![
-            cx.observe_global::<super::status_bar::ApplicationStatusBar>(|_, cx| cx.notify()),
-            cx.observe_global::<super::settings::ApplicationSettings>(|_, cx| cx.notify()),
-        ];
         super::extensions::host::application_changed(cx);
         if let Some(host) = super::extensions::host::entity(cx) {
             self.extension_report_subscription = Some(cx.observe(&host, |this, _, cx| {
