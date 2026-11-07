@@ -14,7 +14,7 @@ import {
 import { type Region, textObject } from "./objects.js";
 import type { Register, Registers } from "./registers.js";
 import {
-  columnAtScreen, firstNonBlank, lastColumn, nextColumn, previousColumn, screenColumn, utf8Length,
+  columnAtByte, firstNonBlank, lastColumn, nextColumn, previousColumn, utf8Length,
 } from "./text.js";
 
 export const NORMAL = "vim.normal";
@@ -319,16 +319,23 @@ export async function resolve(
   }
 }
 
-/** `j` and `k` landing on `line`: the column nearest the screen column the
+/** The display cells the UTF-16 column `col` of buffer line `line`, whose text
+ * is `text`, starts at, measured by the editor as soft wrap measures rows. */
+export async function cellsAt(state: State, line: number, text: string, col: number): Promise<number> {
+  return state.handle.cellsBefore(line, utf8Length(text.slice(0, col)));
+}
+
+/** `j` and `k` landing on `line`: the character covering the display cell the
  * caret aims for, which they keep aiming for. */
 export async function towardWant(state: State, lines: BufferLines, from: Position, line: number): Promise<Moved> {
-  const tabSize = await tabSizeOf(state);
   const caret = await lines.offset(from);
   const want = state.caret === caret && state.want !== null
     ? state.want
-    : screenColumn(await lines.text(from.line), from.col, tabSize);
+    : await cellsAt(state, from.line, await lines.text(from.line), from.col);
   const target = await lines.text(line);
-  const col = want === Infinity ? lastColumn(target) : columnAtScreen(target, want, tabSize);
+  const col = want === Infinity
+    ? lastColumn(target)
+    : columnAtByte(target, await state.handle.columnAtCells(line, want));
   return { to: { line, col }, type: "linewise", want };
 }
 
@@ -551,7 +558,7 @@ async function land(state: State, lines: BufferLines, moved: Moved) {
   const text = await lines.text(moved.to.line);
   const to = { line: moved.to.line, col: Math.min(moved.to.col, lastColumn(text)) };
   await moveTo(state, lines, to, moved.reveal);
-  state.want = moved.want ?? screenColumn(text, to.col, await tabSizeOf(state));
+  state.want = moved.want ?? await cellsAt(state, to.line, text, to.col);
 }
 
 /** The region from `from` to where a motion moved, by its type. */
@@ -910,12 +917,6 @@ export async function join(state: State, count: number) {
   await clampCaret(state);
 }
 
-export async function tabSizeOf(state: State): Promise<number> {
-  const size = await settings.get("editor.tabSize", {
-    document: state.document, language: state.language, view: "editor",
-  });
-  return typeof size === "number" && size >= 1 ? size : 4;
-}
 
 async function enterInsert(state: State, at: InsertAt) {
   state.group = await openGroup(state);

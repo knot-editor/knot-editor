@@ -8,10 +8,10 @@ import { BufferLines } from "./lines.js";
 import { lineStart, type Position } from "./motions.js";
 import {
   applyOperator, clampCaret, grouped, isVisual, join, type Moved, moveOnto, moveTo, readRegister, record, recordJump,
-  regionText, replace, reposition, resolve, scroll, setMode, type State, tabSizeOf, towardWant,
+  regionText, replace, reposition, resolve, scroll, setMode, type State, cellsAt, towardWant,
 } from "./normal.js";
 import { type Region, textObject } from "./objects.js";
-import { lastColumn, nextColumn, previousColumn, screenColumn, utf8Length } from "./text.js";
+import { lastColumn, nextColumn, previousColumn, utf8Length } from "./text.js";
 
 /** Runs a command in a visual mode, or `v`, `V`, or `gv` from normal mode. */
 export async function runVisual(state: State, command: Command) {
@@ -98,7 +98,7 @@ async function land(state: State, lines: BufferLines, moved: Moved) {
   const to = { line: moved.to.line, col };
   visual.caret = await lines.offset(to);
   state.caret = visual.caret;
-  state.want = moved.want ?? screenColumn(text, col, await tabSizeOf(state));
+  state.want = moved.want ?? await cellsAt(state, moved.to.line, text, col);
   await show(state, lines, moved.reveal);
 }
 

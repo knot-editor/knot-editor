@@ -4,7 +4,7 @@ import {
   bracketFrom, findInLine, linesOf, matchBracketText, paragraph, type Position,
   wordBackward, wordEnd, wordEndBackward, wordForward,
 } from "../src/motions.js";
-import { columnAtByte, columnAtScreen, firstNonBlank, lastColumn, screenColumn, utf8Length } from "../src/text.js";
+import { columnAtByte, firstNonBlank, lastColumn, utf8Length } from "../src/text.js";
 
 /** Applies `motion` repeatedly from the start and lists where it lands. */
 async function stops(
@@ -74,14 +74,6 @@ test("words treat letters with marks, digits, and underscores as one class", asy
   assert.deepEqual(await wordForward(lines, { line: 0, col: 0 }, 1, false), { line: 0, col: 4 });
   assert.deepEqual(await wordForward(lines, { line: 0, col: 4 }, 1, false), { line: 0, col: 6 });
   assert.deepEqual(await wordForward(lines, { line: 0, col: 6 }, 1, false), { line: 0, col: 11 });
-});
-
-test("screen columns expand tabs to the next stop", () => {
-  assert.equal(screenColumn("\tab", 1, 4), 4);
-  assert.equal(screenColumn("a\tb", 2, 4), 4);
-  assert.equal(columnAtScreen("\tab", 5, 4), 2);
-  assert.equal(columnAtScreen("\tab", 2, 4), 0, "inside a tab lands on the tab");
-  assert.equal(columnAtScreen("ab", 10, 4), 1, "past the end lands on the last character");
 });
 
 test("columns convert to UTF-8 bytes and back on surrogate pairs", () => {

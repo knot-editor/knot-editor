@@ -114,8 +114,9 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 - **Undo:** entering insert opens an undo group and leaving it closes the
   group. Each insert session, and each change (`ciw…<Esc>`), is therefore one
   undo step. Multi-batch operators open their own group.
-- **`j` and `k`** move by buffer lines in JavaScript toward a wanted screen
-  column, with tabs reaching the next stop, and `$` makes the wanted column
+- **`j` and `k`** move by buffer lines in JavaScript toward a wanted display
+  cell, which the editor measures as soft wrap does, so tabs and wide
+  characters count as the screen shows them. `$` makes the wanted column
   the line end, as Vim's `curswant` does. Native logical movement could not
   keep it: every caret clamp resets the native goal column. `gj`/`gk` invoke
   the native row commands, so shaping and soft wrap stay native. When an

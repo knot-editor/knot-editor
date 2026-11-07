@@ -33,6 +33,8 @@
     { "name": "after $, j lands on a longer line's end", "before": ["a‸b", "abcd"], "keys": "$j", "after": ["ab", "abc‸d"] },
     { "name": "j counts a tab as reaching the next tab stop", "before": ["abcd‸e", "\tx"], "keys": "j", "after": ["abcde", "\t‸x"] },
     { "name": "j inside a tab lands on the tab", "before": ["a‸bcde", "\tx"], "keys": "j", "after": ["abcde", "‸\tx"] },
+    { "name": "j counts a wide character as two cells", "before": ["a漢‸c", "abcd"], "keys": "j", "after": ["a漢c", "abc‸d"] },
+    { "name": "j inside a wide character lands on it", "before": ["a‸bc", "漢x"], "keys": "j", "after": ["abc", "‸漢x"] },
     { "name": "a count of j past the end stops on the last line", "before": ["‸a", "b", "c"], "keys": "5j", "after": ["a", "b", "‸c"] },
     { "name": "k on the first line stays", "before": ["a‸b"], "keys": "k", "after": ["a‸b"] },
 
