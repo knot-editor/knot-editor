@@ -310,8 +310,9 @@ editor surface, but edits are rejected. Pass `language` with the registration to
 highlight the frame's text as a registered language. A frame has no gutter
 unless the registration passes `gutter: true`; its line numbers then follow
 `editor.lineNumbers` scoped to the frame's view ID, so
-`settings.set("editor.lineNumbers", "off", { view: "example.log" })` keeps
-only the marker lane.
+`settings.set("editor.lineNumbers", "off", { view: "example.log" })` drops the
+numbers, and `editor.folding` set to `false` the fold lane; with both off, only
+the marker lane remains.
 
 ## Register a language
 

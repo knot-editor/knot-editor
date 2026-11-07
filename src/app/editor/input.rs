@@ -19,11 +19,30 @@ impl EditorView {
         self.model
             .update(cx, |model, _| model.break_history_group());
         let editor = self.editor.read(cx);
+        if let Some(&(_, line)) = self
+            .fold_placeholders
+            .iter()
+            .find(|(bounds, _)| bounds.contains(&ev.position))
+        {
+            self.suppress_drag_selection = true;
+            if let Some(lines) = editor.folds().into_iter().find(|lines| lines.start == line) {
+                self.editor
+                    .update(cx, |editor, cx| editor.unfold(&lines, cx));
+            }
+            return;
+        }
         let (line, col) = self.hit_test(editor, ev.position, window, cx);
         let action = match self.gutter_lane_at(ev.position) {
             Some(GutterLane::Markers) => editor
                 .gutter_marker(line)
                 .and_then(|marker| Some((marker.command.clone()?, marker.source, marker.range))),
+            Some(GutterLane::Folds) => {
+                self.suppress_drag_selection = true;
+                self.editor.update(cx, |editor, cx| {
+                    editor.toggle_fold_at_line(line, ev.modifiers.alt, cx)
+                });
+                return;
+            }
             Some(GutterLane::Numbers) => {
                 self.suppress_drag_selection = false;
                 self.drag_anchor = Some(self.editor.update(cx, |editor, cx| {
@@ -102,6 +121,12 @@ impl EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let hovered = self.bounds.contains(&ev.position)
+            && f32::from(ev.position.x - self.bounds.origin.x) < self.gutter.width;
+        if hovered != self.gutter_hovered {
+            self.gutter_hovered = hovered;
+            cx.notify();
+        }
         if ev.pressed_button != Some(MouseButton::Left) {
             self.drag_anchor = None;
             self.suppress_drag_selection = false;

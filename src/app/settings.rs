@@ -37,6 +37,10 @@ pub(crate) const EDITOR_AUTO_SURROUND: &str = "editor.autoSurround";
 pub(crate) const EDITOR_SOFT_WRAP: &str = "editor.softWrap";
 /// Line numbers in the editor gutter: `on`, `off`, or `relative`.
 pub(crate) const EDITOR_LINE_NUMBERS: &str = "editor.lineNumbers";
+/// Whether the editor gutter has a fold lane.
+pub(crate) const EDITOR_FOLDING: &str = "editor.folding";
+/// When the fold lane shows chevrons on foldable lines: `mouseover` or `always`.
+pub(crate) const EDITOR_SHOW_FOLDING_CONTROLS: &str = "editor.showFoldingControls";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
 pub(crate) const THEME_MODE: &str = "theme.mode";
 /// The theme name used in dark mode.
@@ -235,6 +239,17 @@ fn native_definitions() -> Vec<SettingDefinition> {
             EDITOR_LINE_NUMBERS,
             "on",
             "Line numbers in the editor gutter: \"on\", \"off\", or \"relative\" to number lines by their distance from the cursor",
+        ),
+        SettingDefinition {
+            key: EDITOR_FOLDING.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Show the fold lane in the editor gutter".into(),
+        },
+        text(
+            EDITOR_SHOW_FOLDING_CONTROLS,
+            "mouseover",
+            "When the fold lane shows chevrons on foldable lines: \"mouseover\" while the pointer is over the gutter, or \"always\"; collapsed folds always show one",
         ),
         text(
             THEME_MODE,
@@ -521,6 +536,33 @@ pub(crate) fn editor_line_numbers(context: &SettingsScope, cx: &App) -> LineNumb
         Some("relative") => LineNumbers::Relative,
         _ => LineNumbers::On,
     }
+}
+
+/// The fold lane of an editor in `context`.
+pub(crate) fn editor_folding(context: &SettingsScope, cx: &App) -> Folding {
+    if !resolve(EDITOR_FOLDING, context, cx, Value::as_bool)
+        .expect("editor.folding is a native boolean setting")
+    {
+        return Folding::Off;
+    }
+    match resolve(EDITOR_SHOW_FOLDING_CONTROLS, context, cx, |value| {
+        value.as_str().map(str::to_owned)
+    })
+    .as_deref()
+    {
+        Some("always") => Folding::Always,
+        _ => Folding::Mouseover,
+    }
+}
+
+/// What the editor gutter's fold lane shows.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum Folding {
+    Off,
+    /// Chevrons on foldable lines while the pointer is over the gutter.
+    #[default]
+    Mouseover,
+    Always,
 }
 
 /// What the editor gutter's line-number lane shows.

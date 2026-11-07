@@ -3,10 +3,12 @@
 
 use super::input::unit_range;
 use super::*;
-use crate::app::settings::LineNumbers;
+use crate::app::settings::{Folding, LineNumbers};
 
 /// Width of the lane that holds extension markers.
 const MARKER_LANE_WIDTH: f32 = 16.;
+/// Width of the lane that holds fold chevrons.
+const FOLD_LANE_WIDTH: f32 = 18.;
 /// Space between the line numbers and the text.
 const NUMBER_LANE_PADDING: f32 = 12.;
 /// The fewest digits the line-number lane is sized for.
@@ -18,6 +20,8 @@ pub(super) enum GutterLane {
     Markers,
     /// The line numbers and the padding between them and the text.
     Numbers,
+    /// The fold chevrons.
+    Folds,
 }
 
 /// Where each gutter lane sits, as x offsets from the view's left edge.
@@ -25,10 +29,14 @@ pub(super) enum GutterLane {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct GutterLayout {
     pub(super) line_numbers: LineNumbers,
+    pub(super) folding: Folding,
     /// The marker lane spans `0..markers_width`.
     pub(super) markers_width: f32,
     /// The right edge numbers align to; zero when numbers are off.
     pub(super) numbers_end: f32,
+    /// The fold lane spans `numbers_end.max(markers_width)..width`; it is
+    /// empty when folding is off.
+    pub(super) folds_start: f32,
     pub(super) width: f32,
 }
 
@@ -38,6 +46,7 @@ impl GutterLayout {
     /// default.
     pub(super) fn new(
         line_numbers: LineNumbers,
+        folding: Folding,
         line_count: usize,
         digit_width: f32,
         scale: f32,
@@ -50,15 +59,19 @@ impl GutterLayout {
                 markers_width + digits.max(MIN_NUMBER_DIGITS) as f32 * digit_width
             }
         };
+        let folds_start = numbers_end.max(markers_width);
+        let width = match (folding, numbers_end > 0.) {
+            (Folding::Off, true) => numbers_end + NUMBER_LANE_PADDING * scale,
+            (Folding::Off, false) => markers_width,
+            _ => folds_start + FOLD_LANE_WIDTH * scale,
+        };
         Self {
             line_numbers,
+            folding,
             markers_width,
             numbers_end,
-            width: if numbers_end > 0. {
-                numbers_end + NUMBER_LANE_PADDING * scale
-            } else {
-                markers_width
-            },
+            folds_start,
+            width,
         }
     }
 
@@ -68,9 +81,16 @@ impl GutterLayout {
             None
         } else if x < self.markers_width {
             Some(GutterLane::Markers)
+        } else if self.folding != Folding::Off && x >= self.folds_start {
+            Some(GutterLane::Folds)
         } else {
             Some(GutterLane::Numbers)
         }
+    }
+
+    /// The x of the fold lane's middle.
+    pub(super) fn folds_center(&self) -> f32 {
+        (self.folds_start + self.width) / 2.
     }
 
     /// The number shown beside `line`, with the cursor on `cursor_line`.
@@ -91,8 +111,9 @@ impl EditorView {
             return;
         }
         let editor = self.editor.read(cx);
-        let line_numbers =
-            settings::editor_line_numbers(&editor.settings_scope(self.model.read(cx), cx), cx);
+        let scope = editor.settings_scope(self.model.read(cx), cx);
+        let line_numbers = settings::editor_line_numbers(&scope, cx);
+        let folding = settings::editor_folding(&scope, cx);
         let text = window.text_system();
         let font_size = self.metrics.font_size;
         let digit_width = text
@@ -104,6 +125,7 @@ impl EditorView {
             .map_or(font_size * 0.6, |advance| f32::from(advance.width));
         self.gutter = GutterLayout::new(
             line_numbers,
+            folding,
             editor.line_count,
             digit_width,
             self.metrics.scale(),
@@ -191,25 +213,28 @@ impl Editor {
 
 #[cfg(test)]
 mod tests {
-    use super::{GutterLayout, LineNumbers, MARKER_LANE_WIDTH, NUMBER_LANE_PADDING};
+    use super::{
+        FOLD_LANE_WIDTH, Folding, GutterLane, GutterLayout, LineNumbers, MARKER_LANE_WIDTH,
+        NUMBER_LANE_PADDING,
+    };
 
     #[test]
     fn number_lane_fits_the_digits_of_the_line_count() {
-        let width = |lines| GutterLayout::new(LineNumbers::On, lines, 10., 1.).width;
+        let width = |lines| GutterLayout::new(LineNumbers::On, Folding::Off, lines, 10., 1.).width;
         assert_eq!(width(1), width(99));
         assert_eq!(width(100) - width(99), 10.);
         assert_eq!(width(999), width(100));
         assert_eq!(width(1000) - width(999), 10.);
         assert_eq!(width(9), MARKER_LANE_WIDTH + 20. + NUMBER_LANE_PADDING);
         assert_eq!(
-            GutterLayout::new(LineNumbers::Relative, 100, 10., 1.).width,
+            GutterLayout::new(LineNumbers::Relative, Folding::Off, 100, 10., 1.).width,
             width(100)
         );
         assert_eq!(
-            GutterLayout::new(LineNumbers::Off, 100, 10., 1.).width,
+            GutterLayout::new(LineNumbers::Off, Folding::Off, 100, 10., 1.).width,
             MARKER_LANE_WIDTH
         );
-        let larger = GutterLayout::new(LineNumbers::On, 9, 15., 1.5);
+        let larger = GutterLayout::new(LineNumbers::On, Folding::Off, 9, 15., 1.5);
         assert_eq!(larger.markers_width, MARKER_LANE_WIDTH * 1.5);
         assert_eq!(
             larger.width,
@@ -218,9 +243,23 @@ mod tests {
     }
 
     #[test]
+    fn fold_lane_follows_the_numbers() {
+        let on = GutterLayout::new(LineNumbers::On, Folding::Mouseover, 9, 10., 1.);
+        assert_eq!(on.folds_start, on.numbers_end);
+        assert_eq!(on.width, on.numbers_end + FOLD_LANE_WIDTH);
+        assert_eq!(on.lane_at(on.numbers_end - 1.), Some(GutterLane::Numbers));
+        assert_eq!(on.lane_at(on.numbers_end), Some(GutterLane::Folds));
+        assert_eq!(on.lane_at(on.width), None);
+        let bare = GutterLayout::new(LineNumbers::Off, Folding::Always, 9, 10., 1.);
+        assert_eq!(bare.folds_start, MARKER_LANE_WIDTH);
+        assert_eq!(bare.width, MARKER_LANE_WIDTH + FOLD_LANE_WIDTH);
+        assert_eq!(bare.lane_at(MARKER_LANE_WIDTH), Some(GutterLane::Folds));
+    }
+
+    #[test]
     fn labels_follow_the_line_number_mode() {
         let labels = |mode| {
-            let layout = GutterLayout::new(mode, 5, 10., 1.);
+            let layout = GutterLayout::new(mode, Folding::Off, 5, 10., 1.);
             (0..5).map(|line| layout.label(line, 2)).collect::<Vec<_>>()
         };
         assert_eq!(

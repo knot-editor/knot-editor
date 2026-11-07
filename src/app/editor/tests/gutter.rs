@@ -9,7 +9,10 @@ use super::super::{
     BufferModel, ContributionSource, EditorContributionAction, EditorView, GutterLayout,
     gutter::GutterLane,
 };
-use crate::app::settings::{ApplicationSettings, EDITOR_LINE_NUMBERS, LineNumbers, SettingsScope};
+use crate::app::settings::{
+    ApplicationSettings, EDITOR_FOLDING, EDITOR_LINE_NUMBERS, EDITOR_SHOW_FOLDING_CONTROLS,
+    Folding, LineNumbers, SettingsScope,
+};
 use crate::host::protocol::{ByteRange, EditorContribution};
 
 fn set_line_numbers(cx: &mut VisualTestContext, value: &str, view: Option<&str>) {
@@ -163,6 +166,7 @@ fn lane_point(
         let x = match lane {
             GutterLane::Markers => 4.,
             GutterLane::Numbers => view.gutter.markers_width + 2.,
+            GutterLane::Folds => view.gutter.folds_start + 2.,
         };
         point(
             bounds.origin.x + px(x),
@@ -177,15 +181,29 @@ fn press(
     position: Point<Pixels>,
     shift: bool,
 ) -> Option<std::ops::Range<usize>> {
+    press_with(
+        cx,
+        editor,
+        position,
+        Modifiers {
+            shift,
+            ..Modifiers::default()
+        },
+    )
+}
+
+fn press_with(
+    cx: &mut VisualTestContext,
+    editor: &Entity<EditorView>,
+    position: Point<Pixels>,
+    modifiers: Modifiers,
+) -> Option<std::ops::Range<usize>> {
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
             view.on_mouse_down(
                 &MouseDownEvent {
                     position,
-                    modifiers: Modifiers {
-                        shift,
-                        ..Modifiers::default()
-                    },
+                    modifiers,
                     button: MouseButton::Left,
                     click_count: 1,
                     first_mouse: false,
@@ -300,4 +318,138 @@ fn the_marker_lane_runs_the_top_marker_command_and_selects_nothing(cx: &mut Test
         assert_eq!(drag_to(cx, &editor, at), Some(8..13));
     }
     assert_eq!(commands.borrow().len(), 1);
+}
+
+fn set_setting(cx: &mut VisualTestContext, key: &str, value: serde_json::Value) {
+    cx.update(|_, cx| {
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .set(key, value, SettingsScope::default())
+            .unwrap();
+    });
+    cx.run_until_parked();
+}
+
+const NESTED: &str = "a\n  b\n    c\n      d\n    e\n  f\ng";
+
+#[gpui::test]
+fn the_fold_lane_toggles_folds(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let model = cx.new(|_| BufferModel::from_text(NESTED));
+    let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    let folds = |cx: &mut VisualTestContext| cx.read(|cx| view.read(cx).editor().read(cx).folds());
+    let chevron = |cx: &mut VisualTestContext, line| lane_point(cx, &view, GutterLane::Folds, line);
+    let click = |cx: &mut VisualTestContext, line, alt| {
+        let at = chevron(cx, line);
+        press_with(
+            cx,
+            &view,
+            at,
+            Modifiers {
+                alt,
+                ..Modifiers::default()
+            },
+        );
+        cx.refresh().unwrap();
+    };
+
+    // A click collapses the region on the line, a second one expands it, and
+    // neither selects text.
+    click(cx, 0, false);
+    assert_eq!(folds(cx), vec![0..6]);
+    cx.read(|cx| {
+        assert!(
+            view.read(cx)
+                .editor()
+                .read(cx)
+                .selected_byte_range(cx)
+                .is_none()
+        )
+    });
+    click(cx, 0, false);
+    assert!(folds(cx).is_empty());
+
+    // Alt-click collapses the nested regions too, and expands them again.
+    click(cx, 0, true);
+    assert_eq!(folds(cx), [0..6, 1..5, 2..4]);
+    click(cx, 0, true);
+    assert!(folds(cx).is_empty());
+
+    // A line that starts no region does nothing.
+    click(cx, 3, false);
+    assert!(folds(cx).is_empty());
+
+    // The placeholder of a collapsed fold expands it.
+    click(cx, 1, false);
+    assert_eq!(folds(cx), vec![1..5]);
+    let (bounds, line) = cx.read(|cx| view.read(cx).fold_placeholders[0]);
+    assert_eq!(line, 1);
+    press(cx, &view, bounds.center(), false);
+    assert!(folds(cx).is_empty());
+}
+
+#[gpui::test]
+fn fold_marks_list_visible_foldable_lines(cx: &mut TestAppContext) {
+    let model = cx.new(|_| BufferModel::from_text(NESTED));
+    let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    let marks = |cx: &mut VisualTestContext| {
+        cx.read(|cx| view.read(cx).editor().read(cx).fold_marks(0..7, cx))
+    };
+    assert_eq!(marks(cx), [(0, false), (1, false), (2, false)]);
+    cx.update(|_, cx| {
+        view.read(cx)
+            .editor()
+            .clone()
+            .update(cx, |editor, cx| editor.fold(1..5, cx));
+    });
+    // The collapsed fold's nested region is hidden.
+    assert_eq!(marks(cx), [(0, false), (1, true)]);
+}
+
+#[gpui::test]
+fn folding_settings_shape_the_fold_lane(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let model = cx.new(|_| BufferModel::from_text(NESTED));
+    let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    assert_eq!(gutter(cx, &view).folding, Folding::Mouseover);
+    let with_lane = gutter(cx, &view).width;
+
+    set_setting(cx, EDITOR_SHOW_FOLDING_CONTROLS, "always".into());
+    assert_eq!(gutter(cx, &view).folding, Folding::Always);
+
+    set_setting(cx, EDITOR_FOLDING, false.into());
+    let off = gutter(cx, &view);
+    assert_eq!(off.folding, Folding::Off);
+    assert!(off.width < with_lane);
+    assert_eq!(off.lane_at(off.numbers_end), Some(GutterLane::Numbers));
+}
+
+#[gpui::test]
+fn the_pointer_over_the_gutter_is_tracked(cx: &mut TestAppContext) {
+    let model = cx.new(|_| BufferModel::from_text(NESTED));
+    let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    let hover = |cx: &mut VisualTestContext, position| {
+        cx.update(|window, cx| {
+            view.update(cx, |view, cx| {
+                view.on_mouse_move(
+                    &MouseMoveEvent {
+                        position,
+                        modifiers: Modifiers::default(),
+                        pressed_button: None,
+                    },
+                    window,
+                    cx,
+                );
+                view.gutter_hovered
+            })
+        })
+    };
+    let in_gutter = lane_point(cx, &view, GutterLane::Numbers, 0);
+    assert!(hover(cx, in_gutter));
+    let in_text = cx.read(|cx| view.read(cx).text_bounds().center());
+    assert!(!hover(cx, in_text));
 }

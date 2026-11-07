@@ -1,6 +1,6 @@
 # D066 — Folding
 
-Status: 🚧 checkpoints 1–2 complete; checkpoints 3–5 not started. Item D066 of the [editor API](editor-api.md) plan
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 awaiting review; checkpoints 4–5 not started. Item D066 of the [editor API](editor-api.md) plan
 (phase 4), from the [roadmap](../roadmap.md). Depends on D109 and D112, which
 landed.
 
@@ -98,11 +98,12 @@ TypeScript/JavaScript (and JSX), Python, TOML, and Markdown. Region rules are in
 the query contract in the [extension guide](../extension-api.md). A collapsed
 block keeps its closing-bracket line visible.
 
-### 3. Gutter lane, placeholder interaction, and settings
+### 3. Gutter lane, placeholder interaction, and settings 🚧 awaiting review
 
-Deliverables: fold lane with hover chevrons and always-visible collapsed
-markers, click and alt-click, placeholder click, `editor.folding`,
-`editor.showFoldingControls`, `editor.foldPlaceholder` color key, docs.
+Deliverables: ✅ fold lane with hover chevrons and always-visible collapsed
+markers, ✅ click and alt-click, ✅ placeholder click, ✅ `editor.folding`,
+`editor.showFoldingControls`, ✅ docs. The `editor.foldPlaceholder` color key
+landed in checkpoint 1.
 
 **Implementation context:** `src/app/editor/gutter.rs` (`GutterLane`,
 `GutterLayout`, `lane_at`, add a lane), `paint.rs`, `input.rs` (pointer

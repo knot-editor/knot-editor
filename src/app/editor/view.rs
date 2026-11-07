@@ -20,6 +20,10 @@ pub struct EditorView {
     pub(super) measured_revision: u64,
     /// The gutter's lanes as of the last paint.
     pub(super) gutter: GutterLayout,
+    /// Whether the pointer is over the gutter, which shows fold chevrons.
+    pub(super) gutter_hovered: bool,
+    /// The painted bounds of each fold placeholder, with its line.
+    pub(super) fold_placeholders: Vec<(Bounds<Pixels>, usize)>,
     /// Syntax highlights of the visible lines and some overscan, shared by
     /// painting and the caret, hit-testing, and IME geometry on those lines.
     pub(super) syntax_cache: RefCell<Option<SyntaxCache>>,
@@ -119,6 +123,8 @@ impl EditorView {
             max_line_width: 0.,
             measured_revision,
             gutter: GutterLayout::default(),
+            gutter_hovered: false,
+            fold_placeholders: Vec::new(),
             syntax_cache: RefCell::default(),
             bounds: Bounds::default(),
             drag_anchor: None,

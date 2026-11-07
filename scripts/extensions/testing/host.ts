@@ -118,6 +118,8 @@ function emptyState() {
       ["editor.autoSurround", { key: "editor.autoSurround", type: "boolean", default: true, description: "Wrap the selection when typing an opening bracket or quote over it" }],
       ["editor.softWrap", { key: "editor.softWrap", type: "boolean", default: false, description: "Wrap long lines at the viewport width" }],
       ["editor.lineNumbers", { key: "editor.lineNumbers", type: "string", default: "on", description: "Line numbers in the editor gutter" }],
+      ["editor.folding", { key: "editor.folding", type: "boolean", default: true, description: "Show the fold lane in the editor gutter" }],
+      ["editor.showFoldingControls", { key: "editor.showFoldingControls", type: "string", default: "mouseover", description: "When the fold lane shows chevrons on foldable lines" }],
       ["theme.mode", { key: "theme.mode", type: "string", default: "dark", description: "Which theme applies" }],
       ["theme.dark", { key: "theme.dark", type: "string", default: "One Dark", description: "The theme used in dark mode" }],
       ["theme.light", { key: "theme.light", type: "string", default: "One Light", description: "The theme used in light mode" }],

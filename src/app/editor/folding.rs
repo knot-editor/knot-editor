@@ -160,6 +160,63 @@ impl Editor {
         true
     }
 
+    /// Toggle the fold that starts on `line`: expand the outermost collapsed
+    /// one, else collapse the region starting there. `recursive` also
+    /// expands or collapses every fold or region nested inside.
+    pub(super) fn toggle_fold_at_line(
+        &mut self,
+        line: usize,
+        recursive: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(lines) = self.folds().into_iter().find(|lines| lines.start == line) {
+            if recursive {
+                self.unfold_where(cx, |fold| {
+                    lines.start <= fold.start && fold.end <= lines.end
+                });
+            } else {
+                self.unfold(&lines, cx);
+            }
+            return;
+        }
+        let regions = self.fold_regions(cx);
+        let Some(region) = regions.iter().find(|lines| lines.start == line) else {
+            return;
+        };
+        if recursive {
+            let nested: Vec<_> = regions
+                .iter()
+                .filter(|lines| region.start <= lines.start && lines.end <= region.end)
+                .cloned()
+                .collect();
+            self.fold_all_of(&nested, cx);
+        } else {
+            self.fold_all_of(std::slice::from_ref(region), cx);
+        }
+    }
+
+    /// The foldable lines among `lines` that are not hidden: each with whether
+    /// it starts a collapsed fold, in line order.
+    pub(super) fn fold_marks(&self, lines: Range<usize>, cx: &App) -> Vec<(usize, bool)> {
+        let regions = self.fold_regions(cx);
+        let first = regions.partition_point(|region| region.start < lines.start);
+        let mut marks: Vec<(usize, bool)> = regions[first..]
+            .iter()
+            .take_while(|region| region.start < lines.end)
+            .map(|region| (region.start, self.is_fold_start(region.start)))
+            .collect();
+        // Manual folds have no region behind them.
+        for fold in self.folds() {
+            if lines.contains(&fold.start) && !marks.iter().any(|(line, _)| *line == fold.start) {
+                marks.push((fold.start, true));
+            }
+        }
+        marks.sort_by_key(|(line, _)| *line);
+        marks.dedup_by_key(|(line, _)| *line);
+        marks.retain(|(line, _)| !self.wrap.is_hidden(*line));
+        marks
+    }
+
     /// Collapse every region of the text.
     pub(super) fn fold_all_regions(&mut self, cx: &mut Context<Self>) {
         let regions = self.fold_regions(cx);

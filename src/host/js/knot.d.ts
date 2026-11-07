@@ -315,6 +315,12 @@ declare module "knot" {
      * numbers other lines by their distance from the cursor's line. Native
      * default "on"; other text means "on". */
     "editor.lineNumbers": "on" | "off" | "relative";
+    /** Whether the gutter has a fold lane. Native default true. */
+    "editor.folding": boolean;
+    /** When the fold lane shows chevrons on foldable lines: "mouseover", while
+     * the pointer is over the gutter, or "always". A collapsed fold always
+     * shows one. Native default "mouseover"; other text means "mouseover". */
+    "editor.showFoldingControls": "mouseover" | "always";
     /** Which theme applies: theme.dark's, theme.light's, or the one matching
      * the system appearance. Native default "dark"; other text means "dark". */
     "theme.mode": "dark" | "light" | "system";

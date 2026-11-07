@@ -215,7 +215,7 @@ ordinary text. Composition never closes or wraps. `editor.autoClosingBrackets`
 and `editor.autoSurround`, resolved for the view's scope, turn the two off.
 
 The gutter left of the text is an ordered row of native lanes: extension
-markers, then line numbers. The view lays the lanes out before each paint, so
+markers, line numbers, then folds. The view lays the lanes out before each paint, so
 text bounds, hit testing, and painting read one layout. The marker lane has a
 fixed width that stays reserved, so text never shifts when a marker appears;
 the number lane fits the digits of the line count and is absent when
@@ -226,7 +226,12 @@ does, the caret's line paints `editor.lineHighlight` across the text area
 while nothing is selected, focused or not. Each lane handles its own pointer:
 a number click selects its line with the line break, shift-click extends from
 the selection's anchor, and dragging extends by lines; a marker click runs
-the command of the marker painted there and never selects. Documents always
+the command of the marker painted there and never selects; a fold-lane click
+toggles the fold or region starting on that line, Alt-click also its nested
+ones, and never selects. The fold lane draws chevrons on foldable lines while
+the pointer is over the gutter, or always when `editor.showFoldingControls` is
+`"always"`, and always one on a collapsed fold's line; `editor.folding`, resolved
+for the view's scope, turns the lane off. Documents always
 have the gutter, while a contributed text frame has none unless its
 registration asks for one.
 
@@ -242,7 +247,7 @@ step over a fold, folding moves a caret inside it to the first line, selecting
 a fold's first line by pointer selects the whole fold, line commands take a
 collapsed fold's lines with its first line, and anything that puts the caret
 in hidden lines (Go to Line, an extension's `setSelection`, undo) expands the
-folds hiding it. The Fold, Unfold, Toggle Fold, Fold All, and Unfold All
+folds hiding it; clicking a fold's placeholder expands it. The Fold, Unfold, Toggle Fold, Fold All, and Unfold All
 commands act on the [regions](semantic-ui.md#syntax-highlighting-and-languages)
 the language offers; Fold collapses the innermost uncollapsed region that
 starts on the caret's line or encloses it. Extensions fold exact line ranges

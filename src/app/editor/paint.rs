@@ -287,8 +287,22 @@ impl Element for EditorElement {
                 Some(editor.wrap.first_row(line))
                     .filter(|row| rows.contains(row) && !editor.wrap.is_hidden(line))
             };
+            let folds = match view.gutter.folding {
+                crate::app::settings::Folding::Off => Vec::new(),
+                folding => {
+                    let show =
+                        folding == crate::app::settings::Folding::Always || view.gutter_hovered;
+                    editor
+                        .fold_marks(lines.clone(), cx)
+                        .into_iter()
+                        .filter(|(_, collapsed)| show || *collapsed)
+                        .filter_map(|(line, collapsed)| Some((first_row(line)?, collapsed)))
+                        .collect()
+                }
+            };
             let gutter = GutterPaint {
                 layout: view.gutter,
+                folds,
                 numbers: view
                     .gutter_numbers(editor, rows.clone())
                     .into_iter()
@@ -502,6 +516,7 @@ impl Element for EditorElement {
             }
 
             // The placeholder after a collapsed fold's first line.
+            let mut placeholders = Vec::new();
             for (row, s, x_off) in &shaped {
                 if !row.folded {
                     continue;
@@ -524,6 +539,7 @@ impl Element for EditorElement {
                     origin: point(left, top(row.row.index) + px(2.)),
                     size: size(glyph.width + pad * 2., line_height - px(4.)),
                 };
+                placeholders.push((rect, row.row.line));
                 window.paint_quad(fill(rect, colors.fold_placeholder.opacity(0.2)));
                 let _ = glyph.paint(
                     point(left + pad, top(row.row.index)),
@@ -532,6 +548,9 @@ impl Element for EditorElement {
                     cx,
                 );
             }
+
+            self.entity
+                .update(cx, |view, _| view.fold_placeholders = placeholders);
 
             // IME preedit (marked text) underline: a bar at the bottom of the
             // marked span of each row, partitioned like the selection.
@@ -629,6 +648,33 @@ impl Element for EditorElement {
                         };
                         window.paint_quad(fill(marker_bounds, *color));
                     }
+                    for (row, collapsed) in &gutter.folds {
+                        let half = px(3. * metrics.scale());
+                        let center = point(
+                            gutter_bounds.origin.x + px(gutter.layout.folds_center()),
+                            top(*row) + line_height / 2.,
+                        );
+                        let mut path = PathBuilder::stroke(px(1.5 * metrics.scale()));
+                        if *collapsed {
+                            path.move_to(point(center.x - half / 2., center.y - half));
+                            path.line_to(point(center.x + half / 2., center.y));
+                            path.line_to(point(center.x - half / 2., center.y + half));
+                        } else {
+                            path.move_to(point(center.x - half, center.y - half / 2.));
+                            path.line_to(point(center.x, center.y + half / 2.));
+                            path.line_to(point(center.x + half, center.y - half / 2.));
+                        }
+                        if let Ok(path) = path.build() {
+                            window.paint_path(
+                                path,
+                                if *collapsed {
+                                    gutter.active_number
+                                } else {
+                                    gutter.number
+                                },
+                            );
+                        }
+                    }
                     for (row, label, active) in &gutter.numbers {
                         let run = TextRun {
                             len: label.len(),
@@ -718,6 +764,8 @@ pub(super) struct GutterPaint {
     /// The row of each visible line number, its label, and whether it is
     /// the cursor's line.
     numbers: Vec<(usize, SharedString, bool)>,
+    /// The row of each visible fold chevron, and whether its fold is collapsed.
+    folds: Vec<(usize, bool)>,
     /// The row and color of each visible marker.
     markers: Vec<(usize, Hsla)>,
     background: Hsla,
