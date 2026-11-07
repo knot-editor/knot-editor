@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–7 complete; checkpoint 8 is next. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–7 complete; checkpoint 8 awaits dogfooding. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -319,17 +319,17 @@ line passes `:`. A product test covers the option, and cases cover `:<bs>` and
 `:2<bs><bs>j`. See [semantic UI](../architecture/semantic-ui.md) and the
 `InputOptions` declaration in `knot.d.ts`.
 
-### 8. Window commands 📝
+### 8. Window commands 🔍
 
 Deliverables:
 
-- `ctrl-w` followed by `h j k l`, `s`, `v`, `c`, `o`, and `w`, also with
+- ✅ `ctrl-w` followed by `h j k l`, `s`, `v`, `c`, `o`, and `w`, also with
   ctrl held on the second key (`ctrl-w ctrl-h`), and the pending `^W` shown
   in the status bar.
 
 Validation:
 
-- A product test for each `ctrl-w` command over a split window, and that a
+- ✅ Product tests for the `ctrl-w` commands over split panes, and that a
   `ctrl-w` left pending does not swallow the next key's meaning.
 
 Review gate: dogfooding.
@@ -340,7 +340,10 @@ Implementation context:
   `split-vertical`, `close-pane`, the commands closest to `only`, and
   `next-recent-tab`, resolved against the catalog at implementation. A
   command with no counterpart gets a roadmap entry rather than native work
-  here.
+  here. Resolved: `s` and `v` split down and right, `c` closes the pane, `o`
+  maximizes it and `w` walks recent tabs, as no command shows only or cycles
+  panes (tracked in D151). With ctrl held, `h` arrives as Backspace; `ctrl-s`,
+  `ctrl-v`, and `ctrl-c` stay native, so only the plain `s v c` split and close.
 
 ### 9. Documentation and plan removal 📝
 

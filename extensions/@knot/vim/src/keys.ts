@@ -37,6 +37,12 @@ export type Target =
   | { readonly kind: "line" }
   | { readonly kind: "selection"; readonly linewise: boolean };
 
+/** What `ctrl-w` does: moves to the pane in a direction, splits, closes the
+ * pane, shows only it, or goes to the next recent tab. */
+export type WindowAction =
+  | "focus-left" | "focus-down" | "focus-up" | "focus-right"
+  | "split-down" | "split-right" | "close" | "only" | "next";
+
 export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O";
 
 export type Command =
@@ -70,6 +76,8 @@ export type Command =
   /** `o` in visual mode: moves the caret to the selection's other end. */
   | { readonly kind: "swap-ends" }
   | { readonly kind: "leave-visual" }
+  /** `ctrl-w` and a key: a window command. */
+  | { readonly kind: "window"; readonly action: WindowAction }
   /** `:`: opens the Ex line. */
   | { readonly kind: "ex" }
   /** A text object typed in visual mode, which selects it. */
@@ -118,6 +126,15 @@ const SCROLLS: Readonly<Record<string, Scroll>> = {
 const REPOSITIONS: Readonly<Record<string, readonly ["top" | "center" | "bottom", boolean]>> = {
   t: ["top", false], z: ["center", false], b: ["bottom", false],
   "<cr>": ["top", true], ".": ["center", true], "-": ["bottom", true],
+};
+
+/** The keys after `ctrl-w`. With ctrl held, `h` arrives as Backspace, as in
+ * Vim, and the others as their control names. */
+const WINDOW_ACTIONS: Readonly<Record<string, WindowAction>> = {
+  h: "focus-left", "<bs>": "focus-left", j: "focus-down", "<c-j>": "focus-down",
+  k: "focus-up", "<c-k>": "focus-up", l: "focus-right", "<c-l>": "focus-right",
+  s: "split-down", v: "split-right", c: "close",
+  o: "only", "<c-o>": "only", w: "next", "<c-w>": "next",
 };
 
 const G_MOTIONS: Readonly<Record<string, SimpleMotion>> = {
@@ -221,6 +238,10 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
       if (visual) return done({ kind: "select-object", object, around, count: count ?? 1 });
       return target({ kind: "object", object, around });
     }
+    case "<c-w>": {
+      const action = WINDOW_ACTIONS[key];
+      return action === undefined ? done(null) : done({ kind: "window", action });
+    }
     case "z": {
       const reposition = REPOSITIONS[key];
       if (reposition === undefined) return done(null);
@@ -263,6 +284,7 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
   const scroll = SCROLLS[key];
   if (scroll !== undefined) return done({ kind: "scroll", scroll, count });
   if (key === "z") return next({ prefix: "z" });
+  if (key === "<c-w>" && operator === null) return next({ prefix: "<c-w>" });
   if (key === '"') return next({ prefix: '"' });
   if (key === "r") return next({ prefix: "r" });
   if (key === "m" && !visual) return next({ prefix: "m" });
@@ -307,6 +329,7 @@ function displayed(key: string): string {
     case "<cr>": return "^M";
     case "<bs>": return "^H";
     case "<tab>": return "^I";
+    case "<c-w>": return "^W";
     default: return key.length > 1 && key.startsWith("<") ? "" : key;
   }
 }

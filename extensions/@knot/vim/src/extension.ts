@@ -8,7 +8,7 @@ import { commands, documents, keymaps, settings, storage, windows, workbench } f
 import type { CommandContext, DocumentId, EditorHandle, JsonValue, StatusItem, ViewTarget, WindowTarget } from "knot";
 import { commandLine } from "./command-line.js";
 import { JumpList } from "./jumps.js";
-import { EMPTY, feed, type Pending, pendingText } from "./keys.js";
+import { EMPTY, feed, type Pending, pendingText, type WindowAction } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import { lineStart } from "./motions.js";
 import {
@@ -51,6 +51,8 @@ const NAMED_KEYS: readonly (readonly [string, string])[] = [
   ["ctrl-j", "<c-j>"],
   ["ctrl-k", "<c-k>"],
   ["ctrl-o", "<c-o>"],
+  ["ctrl-l", "<c-l>"],
+  ["ctrl-w", "<c-w>"],
   // Vim takes ctrl-i and Tab as one key.
   ["ctrl-i", "<tab>"],
   ["left", "<left>"],
@@ -309,6 +311,11 @@ class Vim {
         await showOperator(state, false);
         const command = fed.command;
         if (command === null) continue;
+        if (command.kind === "window") {
+          await whileOpen(() => windowCommand(command.action));
+          if (this.states.get(state.target) !== state) return this.showStatus(state.target.window);
+          continue;
+        }
         if (command.kind === "ex") {
           // A command such as `:q` may close the editor.
           await whileOpen(async () => {
@@ -368,6 +375,25 @@ function forgetMarks(shared: Shared, document: DocumentId) {
   for (const [name, global] of shared.globalMarks) {
     if (global.document === document) shared.globalMarks.delete(name);
   }
+}
+
+/** The workbench command each `ctrl-w` key runs. Knot has no command for
+ * moving to the next pane or closing every other one, so `w` walks the tabs
+ * and `o` maximizes the pane. */
+const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
+  "focus-left": "workbench.focus-pane-left",
+  "focus-down": "workbench.focus-pane-down",
+  "focus-up": "workbench.focus-pane-up",
+  "focus-right": "workbench.focus-pane-right",
+  "split-down": "workbench.split-vertical",
+  "split-right": "workbench.split-horizontal",
+  close: "workbench.close-pane",
+  only: "workbench.toggle-maximize-pane",
+  next: "workbench.next-recent-tab",
+};
+
+async function windowCommand(action: WindowAction) {
+  await commands.invoke(WINDOW_COMMANDS[action]);
 }
 
 const MODE_TEXT: Readonly<Record<Mode, string>> = {

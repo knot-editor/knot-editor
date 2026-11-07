@@ -634,3 +634,67 @@ fn ex_set_writes_document_scoped_settings(cx: &mut TestAppContext) {
     session.press("l", cx);
     assert!(!shows(cx, "E518: Unknown option: hls"));
 }
+
+fn pane_count(session: &Session, cx: &mut TestAppContext) -> usize {
+    cx.read(|cx| session.shell.read(cx).workbench.read(cx).panes().len())
+}
+
+fn focused_pane(session: &Session, cx: &mut TestAppContext) -> crate::app::workbench::PaneId {
+    cx.read(|cx| {
+        session
+            .shell
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane_id()
+            .unwrap()
+    })
+}
+
+/// `ctrl-w` runs the workbench's pane commands, with or without ctrl on the
+/// second key, and Vim follows the editor each leaves focused.
+#[gpui::test]
+fn ctrl_w_splits_moves_between_and_closes_panes(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let session = open("one\ntwo", 0, cx);
+    let first = focused_pane(&session, cx);
+
+    session.press("<c-w>v", cx);
+    assert_eq!(pane_count(&session, cx), 2);
+    let right = focused_pane(&session, cx);
+    assert_ne!(right, first, "a split focuses the new pane");
+    assert!(cx.read(|cx| session.status(cx).1.iter().all(|text| text != "^W")));
+
+    session.press("<c-w>h", cx);
+    assert_eq!(focused_pane(&session, cx), first);
+    session.press("<c-w><c-l>", cx);
+    assert_eq!(focused_pane(&session, cx), right);
+    // Vim follows the pane's editor, which takes the keys.
+    session.press("<c-w>h<c-w><bs>", cx);
+    assert_eq!(focused_pane(&session, cx), first);
+
+    session.press("<c-w>s", cx);
+    assert_eq!(pane_count(&session, cx), 3);
+    session.press("<c-w>k", cx);
+    session.press("<c-w>c", cx);
+    assert_eq!(pane_count(&session, cx), 2);
+    session.press("<c-w>o", cx);
+    assert_eq!(pane_count(&session, cx), 2, "only hides panes");
+}
+
+/// A `ctrl-w` left pending shows `^W`, and the next key either completes it
+/// or cancels it without acting as its own command.
+#[gpui::test]
+fn a_pending_ctrl_w_does_not_swallow_the_next_keys_meaning(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let session = open("one\ntwo", 0, cx);
+    session.press("<c-w>", cx);
+    assert!(cx.read(|cx| session.status(cx).1.iter().any(|text| text == "^W")));
+    session.press("<esc>j", cx);
+    assert_eq!(session.marked(cx), "one\n‸two");
+    assert!(cx.read(|cx| session.status(cx).1.iter().all(|text| text != "^W")));
+    // An unknown key cancels, and the key after it is a plain command.
+    session.press("<c-w>xk", cx);
+    assert_eq!(session.marked(cx), "‸one\ntwo");
+    assert_eq!(pane_count(&session, cx), 1);
+}

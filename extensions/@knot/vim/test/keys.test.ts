@@ -183,3 +183,15 @@ test(": opens the Ex line in normal mode only", () => {
   assert.equal(parse("d", ":").command, null);
   assert.equal(visual(":"), null);
 });
+
+test("ctrl-w takes a window key, with or without ctrl", () => {
+  assert.equal(pendingText(parse("<c-w>").pending), "^W");
+  assert.deepEqual(parse("<c-w>", "h").command, { kind: "window", action: "focus-left" });
+  assert.deepEqual(parse("<c-w>", "<bs>").command, { kind: "window", action: "focus-left" });
+  assert.deepEqual(parse("<c-w>", "<c-j>").command, { kind: "window", action: "focus-down" });
+  assert.deepEqual(parse("<c-w>", "<c-w>").command, { kind: "window", action: "next" });
+  assert.deepEqual(visual("<c-w>", "v"), { kind: "window", action: "split-right" });
+  assert.equal(parse("<c-w>", "x").command, null, "an unknown key cancels");
+  assert.equal(parse("<c-w>", "<esc>").command, null);
+  assert.equal(parse("d", "<c-w>").command, null, "ctrl-w is no operator target");
+});
