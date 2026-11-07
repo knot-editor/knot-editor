@@ -1,6 +1,6 @@
 # D066 — Folding
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 awaiting review; checkpoint 5 not started. Item D066 of the [editor API](editor-api.md) plan
+Status: 🚧 checkpoints 1–3 complete; checkpoints 1–4 complete; checkpoint 5 not started. Item D066 of the [editor API](editor-api.md) plan
 (phase 4), from the [roadmap](../roadmap.md). Depends on D109 and D112, which
 landed.
 
@@ -106,41 +106,14 @@ placeholder click to unfold, and the `editor.folding` and
 `editor.showFoldingControls` settings. Behavior is in
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views).
 
-### 4. Vim folding keys ✅ (awaiting review)
+### 4. Vim folding keys ✅
 
-Deliverables: `@knot/vim` gains the standard fold keys on the public handle
-and commands only:
-
-- Create and delete: `zf{motion}`, `zF` (count lines), visual `zf`, `zd`,
-  `zD`, `zE`.
-- Open and close: `zo`, `zO`, `zc`, `zC`, `za`, `zA`, `zv`, `zx`/`zX` as
-  reveal-caret.
-- All folds: `zR`, `zM`, `zn`, `zN`, `zi` (fold enable toggle).
-- Navigation: `zj`, `zk`, `[z`, `]z`.
-- Counts work as in Vim; `j`/`k`/`G` and the existing row scrolls (`H M L`,
-  `zz`) already count visible rows from D112; `dd`, `yy`, and `>>` on a
-  closed fold act on the whole fold.
-
-**Implementation context:** `extensions/@knot/vim/src/keys.ts` (the `z`
-prefix near line 252), `normal.ts` (operators and line motions),
-`extensions/@knot/vim/test/cases/*.jsonc` (add `folding.jsonc` and wrapped
-cases), plus any primitive gaps closed as generic handle APIs (a fold-aware
-line-range query), documented in `docs/extension-api.md`.
-
-Validation: Vim end-to-end cases through the real editor covering each key,
-counts, nested folds, and a closed fold under `dd`
-(`extensions/@knot/vim/test/cases/folding.jsonc`).
-
-Scope decisions: folds are regions that are collapsed or not, so `zd`, `zD`,
-and `zE` expand (a manual fold, having no region behind it, vanishes); `zx` and
-`zX` behave as `zv`. `zn` remembers the collapsed folds for `zN`, and the
-closing and creating keys turn folding back on, as in Vim. `zj`, `zk`, `[z`,
-and `]z` are linewise motions, so operators take them. `p` below a closed fold
-puts after all of it. No new editor primitive was needed: the package reads
-`folds()` and `foldRegions()` from the handle.
-
-Review gate: a `Try:` post-init config enabling Vim; exercise each key on a
-real source file.
+Complete: `@knot/vim` has the standard fold keys (`zo zO zc zC za zA zv zx zX`,
+`zf zF zd zD zE`, `zR zM zn zN zi`, and the motions `zj zk [z ]z`), and a
+closed fold counts as one line for `j`, `k`, `dd`, `yy`, `p`, `>>`, and
+visual-line operators. Folds are regions that are collapsed or not, so `zd`,
+`zD`, and `zE` expand them; `zx`/`zX` behave as `zv`. The cases are in
+`extensions/@knot/vim/test/cases/folding.jsonc`.
 
 ### 5. Persistence and documentation
 
