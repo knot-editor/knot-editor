@@ -673,6 +673,23 @@ fn ctrl_w_splits_moves_between_and_closes_panes(cx: &mut TestAppContext) {
     session.press("<c-w>h<c-w><bs>", cx);
     assert_eq!(focused_pane(&session, cx), first);
 
+    // w and W cycle the panes, p goes back, t and b go to the ends.
+    session.press("<c-w>w", cx);
+    assert_eq!(focused_pane(&session, cx), right);
+    session.press("<c-w>w", cx);
+    assert_eq!(focused_pane(&session, cx), first, "w wraps");
+    session.press("<c-w>W", cx);
+    assert_eq!(focused_pane(&session, cx), right, "W wraps back");
+    session.press("<c-w>p", cx);
+    assert_eq!(focused_pane(&session, cx), first);
+    session.press("<c-w>p", cx);
+    assert_eq!(focused_pane(&session, cx), right, "p alternates");
+    session.press("<c-w>t", cx);
+    assert_eq!(focused_pane(&session, cx), first);
+    session.press("<c-w>b", cx);
+    assert_eq!(focused_pane(&session, cx), right);
+    session.press("<c-w>h", cx);
+
     session.press("<c-w>s", cx);
     assert_eq!(pane_count(&session, cx), 3);
     session.press("<c-w>k", cx);

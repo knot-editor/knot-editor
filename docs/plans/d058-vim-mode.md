@@ -341,13 +341,13 @@ Implementation context:
   `next-recent-tab`, resolved against the catalog at implementation. A
   command with no counterpart gets a roadmap entry rather than native work
   here. Resolved: `s` and `v` split down and right, `c` closes the tab, and its pane with the last one, as other editors' Vim modes do, `o`
-  maximizes it and `w` walks recent tabs, as no command shows only or cycles
-  panes (tracked in D151). With ctrl held, `h` arrives as Backspace; `ctrl-s`,
+  maximizes it, as no command shows only the pane (tracked in D151). `w` `W`
+  `p` `t` `b` use new pane-focus commands (next, previous, previously
+  focused, first, last). With ctrl held, `h` arrives as Backspace; `ctrl-s`,
   `ctrl-v`, and `ctrl-c` stay native, so only the plain `s v c` split and close.
   Also `q` (closes the tab), `=` (equalizes), and `+ - < >`, which resize the nearest
-  split whatever the axis. Held for lack of commands: `p` previous pane,
-  `t` `b` first and last pane, `n` new empty pane, `x` `r` `R` swap and
-  rotate (D151).
+  split whatever the axis. Held for lack of commands: `n` new empty pane,
+  `x` `r` `R` swap and rotate (D151).
 
 ### 9. Documentation and plan removal 📝
 

@@ -649,11 +649,9 @@ Kakoune mode could use it too. The
     space before a `)`; `gJ` joining without spaces; a repeated `i(` or
     `a(` in visual mode growing the selection to the enclosing pair; sentence motions and
     objects (`( )`, `is`, `as`); tag objects (`it`, `at`); `gp`, `gP`, and
-    `]p`; `_` and `|`; `gi`; and `ga`; and `ctrl-w w` cycling panes and `ctrl-w o` closing the other
-    panes, which need workbench commands for both (they walk the pane's
-    recent tabs and maximize the pane for now; pane history,
-    first and last pane, an empty pane, swapping and rotating panes, and
-    axis-specific resizing).
+    `]p`; `_` and `|`; `gi`; and `ga`; and the `ctrl-w` keys that need workbench commands: `o` closing the
+    other panes (it maximizes the pane for now), `n` an empty pane, `x` `r`
+    `R` swapping and rotating panes, and axis-specific resizing.
   - Reconsider: Daily Vim use reaches for one of them. Then add it inside
     the Vim package over existing primitives, with cases beside the others;
     tag objects may wait for D144's syntax-tree queries.

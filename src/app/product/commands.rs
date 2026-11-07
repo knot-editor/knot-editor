@@ -1,7 +1,7 @@
 //! Workbench and application command declarations.
 use super::*;
 use crate::app::commands::declarations::{CommandContext, command};
-use crate::app::workbench::SplitEdge;
+use crate::app::workbench::{PaneId, SplitEdge, Workbench};
 use crate::host::protocol::CommandOutcome;
 
 #[command("file.new", title = "New Document", description = "Open an untitled document.", id = NEW_COMMAND, participant = Workbench)]
@@ -314,6 +314,49 @@ pub(crate) async fn move_tab_up(context: CommandContext, (): ()) -> Result<(), C
 #[command("workbench.move-tab-down", title = "Move Tab Down", description = "Move the focused tab to the pane below, splitting when there is none.", id = MOVE_TAB_DOWN_COMMAND, participant = Workbench)]
 pub(crate) async fn move_tab_down(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     move_toward(context, SplitEdge::Bottom).await
+}
+
+#[command("workbench.focus-next-pane", title = "Focus Next Pane", description = "Focus the next pane in layout order, wrapping.", id = FOCUS_NEXT_PANE_COMMAND, participant = Workbench)]
+pub(crate) async fn focus_next_pane(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    focus_chosen(context, |workbench| workbench.cycle_pane_id(true)).await
+}
+
+#[command("workbench.focus-previous-pane", title = "Focus Previous Pane", description = "Focus the previous pane in layout order, wrapping.", id = FOCUS_PREVIOUS_PANE_COMMAND, participant = Workbench)]
+pub(crate) async fn focus_previous_pane(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    focus_chosen(context, |workbench| workbench.cycle_pane_id(false)).await
+}
+
+#[command("workbench.focus-first-pane", title = "Focus First Pane", description = "Focus the first pane in layout order.", id = FOCUS_FIRST_PANE_COMMAND, participant = Workbench)]
+pub(crate) async fn focus_first_pane(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    focus_chosen(context, Workbench::first_pane_id).await
+}
+
+#[command("workbench.focus-last-pane", title = "Focus Last Pane", description = "Focus the last pane in layout order.", id = FOCUS_LAST_PANE_COMMAND, participant = Workbench)]
+pub(crate) async fn focus_last_pane(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    focus_chosen(context, Workbench::last_pane_id).await
+}
+
+#[command("workbench.focus-previously-focused-pane", title = "Focus Previously Focused Pane", description = "Go back to the pane that had focus before this one.", id = FOCUS_PREVIOUS_FOCUSED_PANE_COMMAND, participant = Workbench)]
+pub(crate) async fn focus_previously_focused_pane(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    focus_chosen(context, Workbench::previous_pane_id).await
+}
+
+async fn focus_chosen(
+    context: CommandContext,
+    choose: impl FnOnce(&Workbench) -> Option<PaneId> + 'static,
+) -> Result<(), CommandOutcome> {
+    context
+        .shell(move |shell, _, cx| shell.focus_chosen_pane(choose, cx))
+        .await
 }
 
 async fn focus_toward(context: CommandContext, edge: SplitEdge) -> Result<(), CommandOutcome> {

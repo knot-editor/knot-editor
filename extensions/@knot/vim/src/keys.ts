@@ -41,7 +41,7 @@ export type Target =
  * tab, shows only it, goes to the next recent tab, or resizes. */
 export type WindowAction =
   | "focus-left" | "focus-down" | "focus-up" | "focus-right"
-  | "split-down" | "split-right" | "close" | "only" | "next" | "equalize" | "grow" | "shrink";
+  | "split-down" | "split-right" | "close" | "only" | "next" | "previous" | "last-used" | "first" | "last" | "equalize" | "grow" | "shrink";
 
 export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O";
 
@@ -135,7 +135,8 @@ const WINDOW_ACTIONS: Readonly<Record<string, WindowAction>> = {
   k: "focus-up", "<c-k>": "focus-up", l: "focus-right", "<c-l>": "focus-right",
   s: "split-down", v: "split-right", c: "close", q: "close",
   "=": "equalize", "+": "grow", ">": "grow", "-": "shrink", "<": "shrink",
-  o: "only", "<c-o>": "only", w: "next", "<c-w>": "next",
+  o: "only", "<c-o>": "only", w: "next", "<c-w>": "next", W: "previous",
+  p: "last-used", t: "first", b: "last", "<c-b>": "last",
 };
 
 const G_MOTIONS: Readonly<Record<string, SimpleMotion>> = {

@@ -459,6 +459,8 @@ pub(crate) struct Workbench {
     layout: Option<WorkbenchLayout>,
     panes: Vec<Pane>,
     focused_pane: Option<PaneId>,
+    /// The pane that had focus before the focused one, for going back.
+    previous_pane: Option<PaneId>,
 }
 
 impl Workbench {
@@ -473,6 +475,7 @@ impl Workbench {
             layout: None,
             panes: Vec::new(),
             focused_pane: None,
+            previous_pane: None,
         }
     }
 
@@ -510,6 +513,7 @@ impl Workbench {
                 tab_id,
             )],
             focused_pane: Some(pane_id),
+            previous_pane: None,
         };
         workbench.debug_assert_invariants();
         workbench
@@ -557,11 +561,59 @@ impl Workbench {
             .collect()
     }
 
+    /// Focus `pane_id`, remembering the pane it leaves.
+    fn set_focus(&mut self, pane_id: PaneId) {
+        if self.focused_pane != Some(pane_id) {
+            self.previous_pane = self.focused_pane;
+        }
+        self.focused_pane = Some(pane_id);
+    }
+
+    /// The panes in layout order.
+    fn pane_order(&self) -> Vec<PaneId> {
+        let mut ids = Vec::new();
+        if let Some(layout) = &self.layout {
+            layout.pane_ids(&mut ids);
+        }
+        ids
+    }
+
+    /// The first pane in layout order.
+    pub(crate) fn first_pane_id(&self) -> Option<PaneId> {
+        self.pane_order().first().copied()
+    }
+
+    /// The last pane in layout order.
+    pub(crate) fn last_pane_id(&self) -> Option<PaneId> {
+        self.pane_order().last().copied()
+    }
+
+    /// The pane after (or before) the focused one in layout order, wrapping.
+    pub(crate) fn cycle_pane_id(&self, forward: bool) -> Option<PaneId> {
+        let order = self.pane_order();
+        let index = order
+            .iter()
+            .position(|pane| Some(*pane) == self.focused_pane)?;
+        let count = order.len();
+        Some(
+            order[if forward {
+                (index + 1) % count
+            } else {
+                (index + count - 1) % count
+            }],
+        )
+    }
+
+    /// The pane that had focus before the focused one, while it is open.
+    pub(crate) fn previous_pane_id(&self) -> Option<PaneId> {
+        self.previous_pane.filter(|pane| self.pane(*pane).is_some())
+    }
+
     pub(crate) fn focus_pane(&mut self, pane_id: PaneId) -> bool {
         if self.pane(pane_id).is_none() {
             return false;
         }
-        self.focused_pane = Some(pane_id);
+        self.set_focus(pane_id);
         self.debug_assert_invariants();
         true
     }
@@ -586,7 +638,7 @@ impl Workbench {
         } else {
             pane.active_tab = tab_id;
         }
-        self.focused_pane = Some(pane_id);
+        self.set_focus(pane_id);
         self.debug_assert_invariants();
         true
     }
@@ -720,7 +772,7 @@ impl Workbench {
             },
         });
         pane.select(tab_id);
-        self.focused_pane = Some(pane_id);
+        self.set_focus(pane_id);
         self.debug_assert_invariants();
         Some(tab_id)
     }
@@ -762,7 +814,7 @@ impl Workbench {
             payload: WorkbenchTabPayload::Terminal { session_id, view },
         });
         pane.select(tab_id);
-        self.focused_pane = Some(pane_id);
+        self.set_focus(pane_id);
         self.debug_assert_invariants();
         Some(tab_id)
     }
@@ -789,7 +841,7 @@ impl Workbench {
             editor: cx.new(|cx| EditorView::new(model, cx)),
         };
         pane.select(tab_id);
-        self.focused_pane = Some(pane_id);
+        self.set_focus(pane_id);
         self.debug_assert_invariants();
         true
     }
@@ -839,7 +891,7 @@ impl Workbench {
             }],
             tab_id,
         ));
-        self.focused_pane = Some(new_pane_id);
+        self.set_focus(new_pane_id);
         self.debug_assert_invariants();
         Some(new_pane_id)
     }
@@ -912,7 +964,7 @@ impl Workbench {
             }],
             tab_id,
         ));
-        self.focused_pane = Some(new_pane_id);
+        self.set_focus(new_pane_id);
         self.debug_assert_invariants();
         Some(new_pane_id)
     }

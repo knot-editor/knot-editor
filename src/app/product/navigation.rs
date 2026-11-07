@@ -179,6 +179,21 @@ impl ProductShell {
         Ok(())
     }
 
+    /// Focus the pane `choose` picks, restoring the layout.
+    pub(super) fn focus_chosen_pane(
+        &mut self,
+        choose: impl FnOnce(&Workbench) -> Option<PaneId>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), CommandOutcome> {
+        self.maximized = None;
+        cx.notify();
+        let pane = choose(self.workbench.read(cx)).ok_or(CommandOutcome::Unavailable)?;
+        self.workbench
+            .update(cx, |workbench, _| workbench.focus_pane(pane));
+        self.focus_active_surface(cx);
+        Ok(())
+    }
+
     /// Move a tab into the pane beside its own toward `edge`, or split its
     /// pane on that side when no pane lies there.
     pub(super) fn move_tab_toward(
