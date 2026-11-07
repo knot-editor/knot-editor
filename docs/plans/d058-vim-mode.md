@@ -346,8 +346,10 @@ Implementation context:
   focused, first, last). With ctrl held, `h` arrives as Backspace; `ctrl-s`,
   `ctrl-v`, and `ctrl-c` stay native, so only the plain `s v c` split and close.
   Also `H J K L` (move the tab to the pane in that direction, or split at the edge, as the move-tab commands do), `q` (closes the tab), `=` (equalizes), and `+ - < >`, which resize along the
-  height or width through new axis-specific commands. Held for lack of commands: `n` new empty pane,
-  `x` `r` `R` swap and rotate (D151).
+  height or width through new axis-specific commands. A count before or after `ctrl-w` repeats the resizes; it cannot repeat
+  moving focus, as every child command keeps the pane the command started in.
+  Held for lack of commands: `n` new empty pane (with D061's empty-tab
+  handling), `x` `r` `R` swap and rotate (D151).
 
 ### 9. Documentation and plan removal 📝
 

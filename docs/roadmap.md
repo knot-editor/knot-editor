@@ -649,12 +649,14 @@ Kakoune mode could use it too. The
     space before a `)`; `gJ` joining without spaces; a repeated `i(` or
     `a(` in visual mode growing the selection to the enclosing pair; sentence motions and
     objects (`( )`, `is`, `as`); tag objects (`it`, `at`); `gp`, `gP`, and
-    `]p`; `_` and `|`; `gi`; and `ga`; and the `ctrl-w` keys that need workbench commands: `n` an empty pane, `x` `r`
+    `]p`; `_` and `|`; `gi`; and `ga`; and the `ctrl-w` keys that need workbench commands: `n` an empty pane (with
+    D061's empty-pane handling), counts on `ctrl-w h j k l` (they need native
+    counts, as every child command keeps the pane its parent started in), `x` `r`
     `R` swapping and rotating panes.
   - Reconsider: Daily Vim use reaches for one of them. Then add it inside
     the Vim package over existing primitives, with cases beside the others;
     tag objects may wait for D144's syntax-tree queries.
-  - Order: after D058; tag objects with or after D144.
+  - Order: after D058; tag objects with or after D144; `n` with D061.
 
 - **D158 — Leaving a dock tool from Vim's `ctrl-w`**
   - Deferred: Vim's `ctrl-w h j k l` (D058) uses directional pane focus,

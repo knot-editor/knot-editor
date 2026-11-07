@@ -751,3 +751,31 @@ fn ctrl_w_capital_moves_the_tab_between_panes(cx: &mut TestAppContext) {
     session.press("<c-w>H", cx);
     assert_eq!(pane_count(&session, cx), 1, "the emptied pane collapses");
 }
+
+/// A count before or after `ctrl-w` repeats resizing by a step.
+#[gpui::test]
+fn ctrl_w_counts_repeat_resizing(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let session = open("one\ntwo", 0, cx);
+    session.press("<c-w>v", cx);
+    let split = focused_pane(&session, cx);
+    session.press("<c-w>h", cx);
+    let ratio = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            session
+                .shell
+                .read(cx)
+                .workbench
+                .read(cx)
+                .split_ratio(split)
+                .unwrap()
+        })
+    };
+    session.press("3<c-w>>", cx);
+    assert!((ratio(cx) - 0.65).abs() < 1e-4, "{}", ratio(cx));
+    session.press("<c-w>2<lt>", cx);
+    assert!((ratio(cx) - 0.55).abs() < 1e-4, "{}", ratio(cx));
+    session.press("<c-w>1", cx);
+    assert!(cx.read(|cx| session.status(cx).1.iter().any(|text| text == "^W1")));
+    session.press("<esc>", cx);
+}

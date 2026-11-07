@@ -77,8 +77,9 @@ export type Command =
   /** `o` in visual mode: moves the caret to the selection's other end. */
   | { readonly kind: "swap-ends" }
   | { readonly kind: "leave-visual" }
-  /** `ctrl-w` and a key: a window command. */
-  | { readonly kind: "window"; readonly action: WindowAction }
+  /** `ctrl-w` and a key: a window command, repeated by the count where that
+   * means moving focus or resizing. */
+  | { readonly kind: "window"; readonly action: WindowAction; readonly count: number | null }
   /** `:`: opens the Ex line. */
   | { readonly kind: "ex" }
   /** A text object typed in visual mode, which selects it. */
@@ -243,8 +244,10 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
       return target({ kind: "object", object, around });
     }
     case "<c-w>": {
+      // A count may follow `ctrl-w` as well as precede it.
+      if (/^[1-9]$/.test(key) || (key === "0" && pending.count !== "")) return next({ count: pending.count + key });
       const action = WINDOW_ACTIONS[key];
-      return action === undefined ? done(null) : done({ kind: "window", action });
+      return action === undefined ? done(null) : done({ kind: "window", action, count });
     }
     case "z": {
       const reposition = REPOSITIONS[key];

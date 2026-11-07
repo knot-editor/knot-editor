@@ -312,7 +312,7 @@ class Vim {
         const command = fed.command;
         if (command === null) continue;
         if (command.kind === "window") {
-          await whileOpen(() => windowCommand(command.action));
+          await whileOpen(() => windowCommand(command.action, command.count));
           if (this.states.get(state.target) !== state) return this.showStatus(state.target.window);
           continue;
         }
@@ -405,8 +405,16 @@ const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
   last: "workbench.focus-last-pane",
 };
 
-async function windowCommand(action: WindowAction) {
-  await commands.invoke(WINDOW_COMMANDS[action]);
+/** The most a count repeats a window command, as panes are few. */
+const WINDOW_REPEAT_LIMIT = 20;
+
+/** Actions a count repeats; the others ignore it. A count cannot repeat
+ * moving focus: every child command keeps the pane the command started in. */
+const REPEATED = new Set<WindowAction>(["taller", "shorter", "wider", "narrower"]);
+
+async function windowCommand(action: WindowAction, count: number | null) {
+  const times = REPEATED.has(action) ? Math.min(count ?? 1, WINDOW_REPEAT_LIMIT) : 1;
+  for (let n = 0; n < times; n++) await commands.invoke(WINDOW_COMMANDS[action]);
 }
 
 const MODE_TEXT: Readonly<Record<Mode, string>> = {

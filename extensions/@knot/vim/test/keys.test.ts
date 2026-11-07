@@ -186,17 +186,23 @@ test(": opens the Ex line in normal mode only", () => {
 
 test("ctrl-w takes a window key, with or without ctrl", () => {
   assert.equal(pendingText(parse("<c-w>").pending), "^W");
-  assert.deepEqual(parse("<c-w>", "h").command, { kind: "window", action: "focus-left" });
-  assert.deepEqual(parse("<c-w>", "<bs>").command, { kind: "window", action: "focus-left" });
-  assert.deepEqual(parse("<c-w>", "<c-j>").command, { kind: "window", action: "focus-down" });
-  assert.deepEqual(parse("<c-w>", "<c-w>").command, { kind: "window", action: "next" });
-  assert.deepEqual(visual("<c-w>", "v"), { kind: "window", action: "split-right" });
-  assert.deepEqual(parse("<c-w>", "L").command, { kind: "window", action: "move-right" });
-  assert.deepEqual(parse("<c-w>", "q").command, { kind: "window", action: "close" });
-  assert.deepEqual(parse("<c-w>", "=").command, { kind: "window", action: "equalize" });
-  assert.deepEqual(parse("<c-w>", ">").command, { kind: "window", action: "wider" });
-  assert.deepEqual(parse("<c-w>", "-").command, { kind: "window", action: "shorter" });
+  assert.deepEqual(parse("<c-w>", "h").command, { kind: "window", action: "focus-left", count: null });
+  assert.deepEqual(parse("<c-w>", "<bs>").command, { kind: "window", action: "focus-left", count: null });
+  assert.deepEqual(parse("<c-w>", "<c-j>").command, { kind: "window", action: "focus-down", count: null });
+  assert.deepEqual(parse("<c-w>", "<c-w>").command, { kind: "window", action: "next", count: null });
+  assert.deepEqual(visual("<c-w>", "v"), { kind: "window", action: "split-right", count: null });
+  assert.deepEqual(parse("<c-w>", "L").command, { kind: "window", action: "move-right", count: null });
+  assert.deepEqual(parse("<c-w>", "q").command, { kind: "window", action: "close", count: null });
+  assert.deepEqual(parse("<c-w>", "=").command, { kind: "window", action: "equalize", count: null });
+  assert.deepEqual(parse("<c-w>", ">").command, { kind: "window", action: "wider", count: null });
+  assert.deepEqual(parse("<c-w>", "-").command, { kind: "window", action: "shorter", count: null });
   assert.equal(parse("<c-w>", "x").command, null, "an unsupported key cancels");
   assert.equal(parse("<c-w>", "<esc>").command, null);
   assert.equal(parse("d", "<c-w>").command, null, "ctrl-w is no operator target");
+});
+
+test("a count may precede or follow ctrl-w", () => {
+  assert.deepEqual(parse("3", "<c-w>", "+").command, { kind: "window", action: "taller", count: 3 });
+  assert.deepEqual(parse("<c-w>", "1", "0", ">").command, { kind: "window", action: "wider", count: 10 });
+  assert.equal(pendingText(parse("<c-w>", "2").pending), "^W2");
 });
