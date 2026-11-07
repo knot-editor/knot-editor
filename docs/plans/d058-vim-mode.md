@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–5 complete; checkpoint 6 is implemented and awaits dogfooding. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–6 complete; checkpoint 7 is next. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -292,46 +292,23 @@ installed package's context-scoped `z b` sequence swallowing Vim's `zb`,
 fixed by Knot-owned key matching ([commands](../architecture/commands.md#keymaps)). The growing suite's slow,
 leaking cases moved to the headless harness, with a reset between cases ([development](../development.md)).
 
-### 6. Ex line 🔍
+### 6. Ex line ✅
 
-Implemented; awaiting dogfooding.
-
-Deliverables:
-
-- ✅ `:` opens an input, and `:w`, `:q`, `:q!`, `:wq`, `:x`, `:e <path>`,
-  `:<line>` (and `:$`), and `:set` for `number`, `relativenumber`, `wrap`,
-  `tabstop`, `shiftwidth`, and `expandtab` with their `no`, `inv`, `!`, `?`,
-  and `=` forms. `ex.ts` parses and `command-line.ts` runs. Knot has one
-  indentation size, so `tabstop` and `shiftwidth` both write
-  `editor.tabSize` (separating them is D157). `:w <file>` and `:e!` are
-  D146. Errors such as `E492` show in place of the mode until the
-  next key.
-- ✅ The `":` register holds the last command line.
-- ✅ The `:q!` primitive: `workbench.close(target, { discard: true })`
-  approves the tab's dirty final documents as discarded at the revisions the
-  close saw, without a prompt; recovery keeps their text until the close
-  commits, and a racing edit keeps the tab open
-  ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure)).
-- ✅ `:<line>` is recorded in the jumplist, as `NG` is.
-- The input shows no `:` yet; checkpoint 7 adds the prompt.
-- ✅ Found here: keys typed right after `:` reached the input only after the
-  next key or the hold's timeout, so a key hold now releases once a picker,
-  input, or the palette takes focus
-  ([ordered delivery](../architecture/commands.md#ordered-delivery)).
-
-Validation:
-
-- ✅ Unit tests for parsing command lines, `:set` arguments, and `:e` paths.
-- ✅ Cases for `:<line>`, `:$`, the jump, `":p`, an unknown command, and
-  Escape.
-- ✅ Product tests for `:w`, `:q` on a dirty document prompting, `:q!`, `:e`
-  with a relative path and from an untitled document, `:set` writes, and the
-  error message.
-- ✅ A Rust test for the discarding close, including that recovery keeps the
-  text until the close commits; a key-hold test for keys typed ahead of an
-  input.
-
-Review gate: dogfooding.
+Complete and approved after dogfooding: `:` opens an input for `:w`, `:q`,
+`:q!`, `:wq`, `:x`, `:e <path>`, `:<line>` and `:$` as jumps, and `:set` for
+the six options with their `no`, `inv`, `!`, `?`, and `=` forms, written
+scoped to the document; `":` holds the last command line, and errors show in
+place of the mode until the next key. `ex.ts` parses and `command-line.ts`
+runs. Knot has one indentation size, so `tabstop` and `shiftwidth` both
+write `editor.tabSize` (D157); `:w <file>` and `:e!` need primitives (D146).
+`:q!` closes through `workbench.close(target, { discard: true })`, which
+approves the discard at the revisions the close saw, so recovery keeps the
+text until the close commits and a racing edit keeps the tab open
+([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure)).
+The cases found keys typed right after `:` waiting for the hold's timeout,
+so a key hold now releases once an input, picker, or the palette takes focus
+([ordered delivery](../architecture/commands.md#ordered-delivery)). The input
+shows no `:` yet; checkpoint 7 adds the prompt.
 
 ### 7. Ex line prompt 📝
 
