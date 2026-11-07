@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–5 complete; D154 comes before checkpoint 6. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–5 complete; checkpoint 6 is next. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -99,8 +99,7 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 - **Typed text in `vim.normal`** routes through one `bindText` command into a
   JavaScript state machine. The state machine parses register, count,
   operator, motion or text object, and the mode it is in. Native key sequences
-  are not used, because counts cannot be enumerated and gpui drops a pending
-  sequence after one second (see
+  are not used, because counts cannot be enumerated (see
   [commands and keymaps](../decisions.md#commands-and-keymaps)). Ordered key
   delivery keeps later keys behind the running command.
 - **Non-text keys** get explicit context bindings that feed the same state
@@ -194,14 +193,18 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 The package's behavior is tested end to end through the real editor, as
 native editing is. `extensions/@knot/vim/test/cases/` holds the cases by topic: a
 marked starting text, the keys in Vim notation, the expected text and caret,
-and the mode. `src/app/product/tests/vim.rs` runs every case in a product
-window with the bundled package enabled from `post-init.js`, pressing real
-keystrokes without settling between them, so ordered key delivery, native
-commands, undo groups, and indent queries all take part. Behavior that cases
-cannot express, such as the status bar, caret shapes, soft wrap, and
-enablement, gets its own product test there. `node:test` covers only pure
-modules (motions, text math, the parser); fake-host tests that stub native
-commands are not used.
+and the mode. `src/app/product/tests/vim.rs` runs each topic as its own
+parallel test in a windowless session, with the bundled package enabled from
+`post-init.js`, pressing real keystrokes without settling between them, so
+ordered key delivery, native commands, undo groups, and indent queries all
+take part. Each case starts from an empty clipboard and the package's
+`vim.reset`. Behavior that cases cannot express, such as the status bar,
+caret shapes, soft wrap, enablement, and a package restart, gets a windowless
+product test in the same file. Only a mouse drag and the draws a key costs
+need a product window. The [development](../development.md) reference
+describes the shared harness. `node:test` covers only pure modules (motions,
+text math, the parser); fake-host tests that stub native commands are not
+used.
 
 ## Checkpoints
 
@@ -286,8 +289,8 @@ soft wrap until D112. A case's `view` sizes the window to a number of lines
 and checks the scroll position, so cases cover scrolling without separate
 product tests, and `KNOT_CASES` runs matching cases. Dogfooding found an
 installed package's context-scoped `z b` sequence swallowing Vim's `zb`,
-fixed by D154's Knot-owned key matching, and the growing cases showed slow, leaking tests (D154, which comes
-before checkpoint 6).
+fixed by Knot-owned key matching ([commands](../architecture/commands.md#keymaps)). The growing suite's slow,
+leaking cases moved to the headless harness, with a reset between cases ([development](../development.md)).
 
 ### 6. Ex line 📝
 

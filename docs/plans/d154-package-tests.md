@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–10 complete; checkpoint 11 is next. Comes before checkpoint 6 of the
+Status: ✅ checkpoints 1–11 complete. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -242,7 +242,8 @@ builds, about three times a whole case, while the reset is lost in the noise.
 passes with it. The current cases also pass in reverse order with or without
 it, so none depended on order. See [development](../development.md).
 
-### 11. Update vim extension plan
+### 11. Update vim extension plan — ✅
 
-Ensure [vim plan](./d058-vim-mode.md) is up-to-date with the new testing
-framework.
+The [vim plan](./d058-vim-mode.md) now describes the windowless Vim cases,
+the product tests that stay windowed, and the key router in place of gpui's
+pending-sequence timeout, and it no longer refers to D154's checkpoints.
