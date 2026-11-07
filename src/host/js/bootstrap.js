@@ -369,7 +369,8 @@ function editorFor(authority) {
     },
     async rowAt(row) {
       if (!Number.isSafeInteger(row) || row < 0) throw new TypeError("row must be a non-negative safe integer");
-      return request("editorRowAt", authority, row);
+      const value = await request("editorRowAt", authority, row);
+      return Object.freeze({ line: value.line, column: value.column });
     },
     async rowOf(line, column) {
       if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");

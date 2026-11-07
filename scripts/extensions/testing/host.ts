@@ -738,7 +738,7 @@ function editor(tab: FakeTab): Knot.Editor {
     },
     rowAt: async (row) => {
       if (!Number.isSafeInteger(row) || row < 0) throw new TypeError("row must be a non-negative safe integer");
-      return Math.min(row, lineRanges(document(live().document).text).length - 1);
+      return { line: Math.min(row, lineRanges(document(live().document).text).length - 1), column: 0 };
     },
     rowOf: async (line, column) => {
       const ranges = lineRanges(document(live().document).text);

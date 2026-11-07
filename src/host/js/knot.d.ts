@@ -973,6 +973,8 @@ declare module "knot" {
    * wrap rows and buffer lines coincide.
    */
   export type Viewport = Readonly<{ first: number; rows: number }>;
+  /** Where a document row starts: its 0-based buffer line and UTF-8 byte column. */
+  export type RowStart = Readonly<{ line: number; column: number }>;
   /** A selection's ends as UTF-8 byte offsets; equal for a bare caret. */
   export type EditorSelection = Readonly<{ anchor: number; caret: number }>;
   /** How an editor draws its caret. */
@@ -1011,12 +1013,13 @@ declare module "knot" {
      */
     viewport(): Promise<Viewport>;
     /**
-     * The 0-based buffer line the document row `row` belongs to; a row past
-     * the last is the last. Rows count as `viewport` and `scrollBy` do.
+     * The 0-based buffer line the document row `row` belongs to and the UTF-8
+     * byte `column` where the row starts in it; a row past the last is the
+     * last. Rows count as `viewport` and `scrollBy` do.
      * @throws HostError with InvalidTarget or Cancelled; TypeError for a
      * negative or non-integer row.
      */
-    rowAt(row: number): Promise<number>;
+    rowAt(row: number): Promise<RowStart>;
     /**
      * The document row that UTF-8 byte `column` of buffer line `line` shows on.
      * A column at a break shows on the row that starts there, as the view draws

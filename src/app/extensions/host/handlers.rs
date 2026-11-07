@@ -2310,18 +2310,31 @@ impl HostArguments for RowAtArguments {
     }
 }
 
-/// The buffer line a document row of the captured editor belongs to, the
-/// last line for a row past the end.
+/// Where a document row starts: its buffer line and byte column.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct RowStart {
+    pub line: usize,
+    pub column: usize,
+}
+impl HostSuccess for RowStart {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+/// Where a document row of the captured editor starts, the last row's start
+/// for a row past the end.
 #[host_operation("editorRowAt")]
 pub(crate) async fn editor_row_at(
     context: HostContext,
     arguments: RowAtArguments,
-) -> Result<u64, AccessError> {
+) -> Result<RowStart, AccessError> {
     let request = context.request;
     context.foreground(|host, cx| {
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
         let row = usize::try_from(arguments.row).unwrap_or(usize::MAX);
-        Ok(editor.read(cx).row_line(row) as u64)
+        let (line, column) = editor.read(cx).row_start(row, cx);
+        Ok(RowStart { line, column })
     })?
 }
 

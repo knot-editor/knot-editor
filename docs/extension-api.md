@@ -135,7 +135,8 @@ allows. A row is one screen line of a possibly wrapped line.
 `editor.viewport()` returns the `first` row wholly inside the viewport and the
 number of `rows` that are, from the last layout, and `editor.scrollBy(rows)`
 scrolls by rows, negative upward, without moving the caret.
-`editor.rowAt(row)` returns the buffer line a row belongs to, and
+`editor.rowAt(row)` returns the buffer `line` a row belongs to and the byte
+`column` it starts at, and
 `editor.rowOf(line, column)` the row a byte column shows on, so a motion to a
 screen position needs no caret move. `editor.cellsBefore`
 and `editor.columnAtCells` convert between a line's UTF-8 byte columns and

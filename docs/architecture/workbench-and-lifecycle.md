@@ -153,7 +153,7 @@ reveal shows a line's first row and a bottom reveal its last. The handle
 counts rows: it reports the first row wholly visible in the last layout and
 how many are, which may lag a scroll by a frame, scrolls by rows without
 moving the caret or asking the next paint to reveal it, and maps a document row
-to its buffer line and a line and byte column to its row. Without wrapping,
+to its buffer line and start column and a line and byte column to its row. Without wrapping,
 rows and lines coincide. Go to Line is the bundled `@knot/go-to-line`
 package built on that handle, bound to ctrl-G in the Knot preset.
 

@@ -119,8 +119,8 @@ test("an editor handle reports the viewport, maps rows, and scrolls without movi
   assert.deepEqual(await editor.viewport(), { first: 21, rows: 10 });
   await assert.rejects(editor.scrollBy(1.5), TypeError);
   // The fake does not wrap, so a row is a line.
-  assert.equal(await editor.rowAt(4), 4);
-  assert.equal(await editor.rowAt(1000), 30);
+  assert.deepEqual(await editor.rowAt(4), { line: 4, column: 0 });
+  assert.deepEqual(await editor.rowAt(1000), { line: 30, column: 0 });
   assert.equal(await editor.rowOf(7, 3), 7);
   await assert.rejects(editor.rowOf(7, 99), { code: "InvalidRange" });
   await assert.rejects(editor.rowAt(-1), TypeError);

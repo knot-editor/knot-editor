@@ -115,7 +115,7 @@ impl Session {
     fn top_line(&self, cx: &mut TestAppContext) -> usize {
         cx.read(|cx| {
             let editor = self.editor.read(cx);
-            editor.row_line(editor.viewport().0)
+            editor.row_start(editor.viewport().0, cx).0
         })
     }
 }
@@ -278,8 +278,9 @@ fn screen_motions_and_scrolls_count_rows_under_soft_wrap(cx: &mut TestAppContext
     let (first, rows) = cx.read(|cx| session.editor.read(cx).viewport());
     assert_eq!((first, rows), (0, 8));
     // The line each of the viewport's rows belongs to.
-    let line_of =
-        |row: usize, cx: &mut TestAppContext| cx.read(|cx| session.editor.read(cx).row_line(row));
+    let line_of = |row: usize, cx: &mut TestAppContext| {
+        cx.read(|cx| session.editor.read(cx).row_start(row, cx).0)
+    };
     let caret_line = |cx: &mut TestAppContext| {
         let caret = session.caret(cx);
         cx.read(|cx| {
@@ -332,6 +333,59 @@ fn screen_motions_and_scrolls_count_rows_under_soft_wrap(cx: &mut TestAppContext
     let (first, rows) = cx.read(|cx| session.editor.read(cx).viewport());
     // The caret's row is centered, leaving half a row cut off at each end.
     assert_eq!((first, rows), (row - 3, 7));
+}
+
+#[gpui::test]
+fn scrolls_move_through_the_rows_of_one_wrapped_line(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let long = "word ".repeat(400);
+    let session = open(&format!("{long}\nend"), 0, cx);
+    let uuid = cx.read(|cx| {
+        cx.global::<ApplicationDocuments>()
+            .0
+            .read(cx)
+            .get(session.document)
+            .unwrap()
+            .identity()
+    });
+    cx.update(|cx| crate::app::settings::set_document_soft_wrap(uuid, true, cx));
+    session.lay_out(8, 100, cx);
+    // The row the caret shows on, and the view's first row.
+    let rows = |cx: &mut TestAppContext| {
+        let caret = session.caret(cx);
+        cx.read(|cx| {
+            let editor = session.editor.read(cx);
+            (
+                editor.row_of_position(0, caret, cx).unwrap(),
+                editor.viewport().0,
+            )
+        })
+    };
+    assert_eq!(rows(cx), (0, 0));
+
+    // Half a view of 8 rows, though the whole view is one line.
+    session.press("<c-d>", cx);
+    assert_eq!(rows(cx), (4, 4));
+    session.press("<c-d>", cx);
+    assert_eq!(rows(cx), (8, 8));
+    session.press("<c-u>", cx);
+    assert_eq!(rows(cx), (4, 4));
+
+    // A page keeps two rows; the caret moves only to stay on screen.
+    session.press("<c-f>", cx);
+    assert_eq!(rows(cx), (10, 10));
+    session.press("<c-b>", cx);
+    assert_eq!(rows(cx), (10, 4));
+    session.press("<c-u>", cx);
+    assert_eq!(rows(cx), (6, 0));
+
+    // A line scroll moves the caret only when it would leave the view.
+    session.press("<c-e>", cx);
+    assert_eq!(rows(cx), (6, 1));
+    session.press("6<c-e>", cx);
+    assert_eq!(rows(cx), (7, 7));
+    session.press("<c-y>", cx);
+    assert_eq!(rows(cx), (7, 6));
 }
 
 #[gpui::test]

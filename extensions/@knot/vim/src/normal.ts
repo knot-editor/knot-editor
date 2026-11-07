@@ -312,7 +312,7 @@ export async function resolve(
         : name === "window-bottom"
         ? first + rows - Math.min(rows, n)
         : first + Math.floor((rows - 1) / 2);
-      const line = await state.handle.rowAt(row);
+      const { line } = await state.handle.rowAt(row);
       return { to: await lineStart(lines, line), type: "linewise", jump: true };
     }
   }
@@ -357,17 +357,19 @@ export async function scroll(
   const before = await state.handle.viewport();
   const height = before.rows;
   const lastRow = (viewport: { first: number; rows: number }) => viewport.first + viewport.rows - 1;
+  const caretRow = await rowOfPosition(state, lines, from);
   switch (kind) {
     case "half-down":
     case "half-up": {
       if (count !== null) state.scroll = count;
       const n = state.scroll ?? Math.max(1, Math.floor(height / 2));
       const step = kind === "half-down" ? n : -n;
-      const row = await rowOfPosition(state, lines, from);
-      const line = await state.handle.rowAt(Math.max(0, row + step));
-      if (line === from.line) return null;
+      const target = Math.max(0, caretRow + step);
+      const here = await state.handle.rowAt(caretRow);
+      const there = await state.handle.rowAt(target);
+      if (here.line === there.line && here.column === there.column) return null;
       await state.handle.scrollBy(step);
-      return { to: await lineStart(lines, line), type: "linewise" };
+      return toRow(state, lines, from, target, false);
     }
     case "page-down":
     case "page-up": {
@@ -376,26 +378,37 @@ export async function scroll(
       const after = await state.handle.viewport();
       // At the end of the text the view cannot scroll, so the caret goes
       // there instead.
-      const line = after.first === before.first
-        ? (down ? total - 1 : 0)
-        : down
-        ? Math.max(from.line, await state.handle.rowAt(after.first))
-        : Math.min(from.line, await state.handle.rowAt(lastRow(after)));
-      if (line === from.line && after.first === before.first) return null;
-      return { to: await lineStart(lines, line), type: "linewise" };
+      if (after.first === before.first) {
+        const line = down ? total - 1 : 0;
+        if (line === from.line) return null;
+        return { to: await lineStart(lines, line), type: "linewise" };
+      }
+      return toRow(state, lines, from, down ? Math.max(caretRow, after.first) : Math.min(caretRow, lastRow(after)), false);
     }
     case "line-down":
     case "line-up": {
       const n = count ?? 1;
       await state.handle.scrollBy(kind === "line-down" ? n : -n);
       const after = await state.handle.viewport();
-      const top = await state.handle.rowAt(after.first);
-      const bottom = await state.handle.rowAt(lastRow(after));
-      if (from.line < top) return towardWant(state, lines, from, top);
-      if (from.line > bottom) return towardWant(state, lines, from, bottom);
+      if (caretRow < after.first) return toRow(state, lines, from, after.first, true);
+      if (caretRow > lastRow(after)) return toRow(state, lines, from, lastRow(after), true);
       return null;
     }
   }
+}
+
+/** Where the caret goes to be on document row `row`: that row's start when it
+ * is on the caret's line, or else the line's first non-blank, or the column
+ * `j` and `k` aim for with `aim`. */
+async function toRow(state: State, lines: BufferLines, from: Position, row: number, aim: boolean): Promise<Moved> {
+  const start = await state.handle.rowAt(row);
+  if (start.line === from.line) {
+    const text = await lines.text(start.line);
+    return { to: { line: start.line, col: columnAtByte(text, start.column) }, type: "linewise" };
+  }
+  return aim
+    ? towardWant(state, lines, from, start.line)
+    : { to: await lineStart(lines, start.line), type: "linewise" };
 }
 
 /** The document row the UTF-16 position `at` shows on. */

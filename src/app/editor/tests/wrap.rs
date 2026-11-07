@@ -145,7 +145,7 @@ fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppCo
         assert_eq!(view.view_state(cx).top, top);
         // The top row is mid-line, so the first wholly visible row is the
         // next one, still on line 3.
-        assert_eq!(view.row_line(view.viewport().0), 3);
+        assert_eq!(view.row_start(view.viewport().0, cx).0, 3);
         top
     });
 
@@ -437,14 +437,17 @@ fn row_queries_and_scrolling_follow_wrapped_rows(cx: &mut TestAppContext) {
         view.viewport_rows = 4.;
 
         // Rows map to their lines, and past the end to the last line.
-        assert_eq!(view.row_line(0), 0);
-        assert_eq!(view.row_line(1), 1);
-        assert_eq!(view.row_line(long), 1);
-        assert_eq!(view.row_line(long + 1), 2);
-        assert_eq!(view.row_line(1_000_000), 4);
+        assert_eq!(view.row_start(0, cx).0, 0);
+        assert_eq!(view.row_start(1, cx).0, 1);
+        assert_eq!(view.row_start(long, cx).0, 1);
+        assert_eq!(view.row_start(long + 1, cx).0, 2);
+        assert_eq!(view.row_start(1_000_000, cx).0, 4);
+        // A continuation row starts where the line breaks.
+        let second = view.wrap.row_range(1, 1, 239).start;
+        assert_eq!(view.row_start(2, cx), (1, second));
+        assert_eq!(view.row_start(long + 1, cx), (2, 0));
 
         // A column shows on its row; a break starts the next row.
-        let second = view.wrap.row_range(1, 1, 239).start;
         assert_eq!(view.row_of_position(1, 0, cx), Some(1));
         assert_eq!(view.row_of_position(1, second - 1, cx), Some(1));
         assert_eq!(view.row_of_position(1, second, cx), Some(2));
@@ -457,10 +460,10 @@ fn row_queries_and_scrolling_follow_wrapped_rows(cx: &mut TestAppContext) {
         assert_eq!(view.viewport(), (0, 4));
         view.scroll_by_rows(2, cx);
         assert_eq!(view.viewport(), (2, 4));
-        assert_eq!(view.row_line(view.viewport().0), 1);
+        assert_eq!(view.row_start(view.viewport().0, cx).0, 1);
         view.scroll_by_rows(1_000, cx);
         assert_eq!(view.viewport(), (count - 4, 4));
-        assert_eq!(view.row_line(view.viewport().0 + 3), 4);
+        assert_eq!(view.row_start(view.viewport().0 + 3, cx).0, 4);
         view.scroll_by_rows(-1, cx);
         assert_eq!(view.viewport().0, count - 5);
 

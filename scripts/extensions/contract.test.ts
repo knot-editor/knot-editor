@@ -38,7 +38,8 @@ const registration: Promise<Disposable> = commands.register("check", async (cont
     // @ts-expect-error reveal is "nearest", "center", "always-center", "top" or "bottom"
     await editorHandle.setSelection({ anchor: 0, caret: 0 }, { reveal: "middle" });
     const { first, rows }: import("knot").Viewport = await editorHandle.viewport();
-    const firstLine: number = await editorHandle.rowAt(first);
+    const { line: firstLine, column }: import("knot").RowStart = await editorHandle.rowAt(first);
+    void column;
     const caretRow: number = await editorHandle.rowOf(firstLine, 0);
     await editorHandle.scrollBy(rows - caretRow);
     await editorHandle.restoreViewState(state);

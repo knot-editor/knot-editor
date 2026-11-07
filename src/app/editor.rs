@@ -590,10 +590,13 @@ impl Editor {
         (first, end.saturating_sub(first).max(1))
     }
 
-    /// The buffer line the document row `row` belongs to; a row past the
-    /// last is the last.
-    pub(crate) fn row_line(&self, row: usize) -> usize {
-        self.wrap.position(row).0
+    /// The buffer line the document row `row` belongs to and the byte column
+    /// where the row starts in it; a row past the last is the last.
+    pub(crate) fn row_start(&self, row: usize, cx: &App) -> (usize, usize) {
+        let (line, sub) = self.wrap.position(row);
+        let model = self.model.read(cx);
+        let start = self.wrap.row_range(line, sub, line_end(model, line)).start;
+        (line, start)
     }
 
     /// The document row showing byte `column` of `line`, with a column at a

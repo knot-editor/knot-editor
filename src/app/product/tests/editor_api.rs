@@ -287,9 +287,9 @@ await commands.register("handle.rows", async () => {
     try { return String(await query()); } catch (error) { return error.name === "TypeError" ? "TypeError" : error.code; }
   };
   const report = [
-    await outcome(() => handle.rowAt(0)),
-    await outcome(() => handle.rowAt(2)),
-    await outcome(() => handle.rowAt(1000)),
+    await outcome(async () => (await handle.rowAt(0)).line),
+    await outcome(async () => (await handle.rowAt(2)).line),
+    await outcome(async () => (await handle.rowAt(1000)).line),
     await outcome(() => handle.rowOf(1, 2)),
     await outcome(() => handle.rowOf(1, 9)),
     await outcome(() => handle.rowOf(7, 0)),
