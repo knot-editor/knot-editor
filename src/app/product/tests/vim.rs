@@ -676,6 +676,11 @@ fn ctrl_w_splits_moves_between_and_closes_panes(cx: &mut TestAppContext) {
     session.press("<c-w>s", cx);
     assert_eq!(pane_count(&session, cx), 3);
     session.press("<c-w>k", cx);
+    // Closing closes the tab, and its pane only with the last tab.
+    session.shell.update(cx, |shell, cx| shell.new_tab(cx));
+    session.settle(cx);
+    session.press("<c-w>c", cx);
+    assert_eq!(pane_count(&session, cx), 3, "the pane keeps its other tab");
     session.press("<c-w>c", cx);
     assert_eq!(pane_count(&session, cx), 2);
     session.press("<c-w>v", cx);
