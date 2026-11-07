@@ -285,7 +285,11 @@ bundler, so the runtime loads ordinary modules with readable stack traces.
 Node as a build requirement was preferred over committed output or a restricted
 syntax. Policy is tested under `node:test` against a typed in-memory `knot`
 fake, which is not a second host: product tests remain the authority across the
-native boundary.
+native boundary. Package behavior cases run in a windowless session with the
+same key router, native commands, and ordered key delivery as a window. A
+window's drawing had been most of a case's cost: on Apple M1 Pro debug builds,
+364 Vim cases took 94 s in a window and 1.7 s headless. A fake host that stubs
+native commands was rejected, because the cases exist to exercise them.
 
 References: [extension guide](extension-api.md#write-and-test-in-typescript)
 and [development](development.md).
@@ -375,7 +379,8 @@ not a task graph.
 
 Knot resolves bindings and matches keys itself, because gpui matches the
 contexts of the last rendered frame, which let one package's sequence swallow
-keys in every editor. This also makes key handling headless (D154).
+keys in every editor. This also makes key handling headless, so package cases
+run without a window.
 
 Configuration is code that runs in order, as in Emacs: the latest write wins,
 and view-specific bindings beat global ones. Ranking writers by owner, as VS

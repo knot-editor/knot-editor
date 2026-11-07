@@ -359,23 +359,6 @@ complete list for that item.
     cases. Then choose one of those loading paths and replace every JSONC
     case file with TypeScript, so packages keep one format.
 
-- **D154 — Fast, isolated package behavior tests**
-  - 🚧 [Plan](plans/d154-package-tests.md).
-  - Deferred: Found while D058 grew past 300 Vim cases; see the
-    [package tests report](reports/package-tests.md). The cases run serially
-    in one product test at about 255 ms each, 94 s in all, mostly while
-    pressing keys; package-wide state such as registers and the clipboard
-    carries over between cases; and the comment, indent, bracket, and Vim
-    runners each keep their own copy of case discovery, markers, and
-    failure reporting.
-  - Reconsider: Next, before D058's later checkpoints add more cases. Then
-    profile the key path, reuse one window across cases, reset package
-    state between cases, share one case harness and the key-driven product
-    fixture across runners, and split case files by topic into parallel
-    tests, as the report proposes.
-  - Order: before the rest of D058; with D133 if TypeScript case modules
-    are adopted at the same time.
-
 - **D138 — Extension startup report as an untitled document**
   - Deferred: Developer: Show Extension Startup Report toggles a custom
     overlay that the product shell renders, and launch opens it when a
@@ -401,7 +384,7 @@ complete list for that item.
     unloading only if those fall short.
 
 - **D156 — Fewer host round trips per key**
-  - Deferred: Found by D154. A key bound to an extension command costs
+  - Deferred: Found by the headless package tests. A key bound to an extension command costs
     several foreground requests, each a turn on an extension worker and a
     response back: a Vim motion reads the selection, a line, and the tab
     size, writes the caret, and looks up the focused editor's window, and
