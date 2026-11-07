@@ -15,6 +15,11 @@ const SOURCE: &str = r#"
       const { caret } = await editor.selection();
       await editor.setSelection({ anchor: caret - 1, caret: caret - 1 });
     });
+    await commands.register("hold.ask", async () => {
+      const input = await workbench.showInput({ title: "Ask" });
+      await workbench.writeClipboardText(input.kind === "accepted" ? input.value : "dismissed");
+    });
+    keymaps.bind("f6", "hold.ask");
     keymaps.bind("f8", "hold.home");
     keymaps.bind("f7", "hold.enter");
     keymaps.bind("h", "hold.left", { view: "editor", context: "modal" });
@@ -205,6 +210,18 @@ fn a_key_after_focus_leaves_the_view_releases_the_held_keys(cx: &mut TestAppCont
         .host
         .update(cx, |host, cx| host.release_view_requests(cx));
     cx.run_until_parked();
+}
+
+#[gpui::test]
+fn keys_typed_ahead_of_an_input_reach_it(cx: &mut TestAppContext) {
+    let fixture = fixture("xyz", cx);
+    cx.simulate_keystrokes(fixture.window, "f6 a b enter");
+    wait_for_api_condition(cx, |cx| cx.read_from_clipboard().is_some());
+    assert_eq!(fixture.text(cx), "xyz");
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
+        "ab"
+    );
 }
 
 /// Named keys and text held behind a text-bound command replay in the order

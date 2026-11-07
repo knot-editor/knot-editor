@@ -1168,6 +1168,8 @@ impl ProductShell {
     fn set_focus(&mut self, focus: Focus, cx: &mut Context<Self>) {
         self.focus = focus;
         self.follow_focus(cx);
+        // After the window follows, so released keys reach what took focus.
+        self.release_keys_for_focus(cx);
     }
 
     /// Focus the focused pane's active surface.

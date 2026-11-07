@@ -5,9 +5,10 @@
 //! the dispatch turn. The session owns the hold, so it works with or
 //! without a window.
 //!
-//! The hold ends when the command completes, when a key arrives after focus
-//! left the held view (a command awaiting a picker), or after a timeout, so
-//! a stuck extension never keeps the keyboard.
+//! The hold ends when the command completes, when a picker, input, or the
+//! palette takes focus from the held view, when a key arrives after focus
+//! left it otherwise, or after a timeout, so a stuck extension never keeps
+//! the keyboard.
 
 use std::collections::VecDeque;
 
@@ -163,6 +164,20 @@ impl ProductShell {
         if !self.take_typed_text(editor, text, cx) {
             editor.update(cx, |editor, cx| editor.type_text(None, text, cx));
         }
+    }
+
+    /// Release the hold once a picker, input, or the palette takes focus
+    /// from the held view, so keys typed ahead reach it.
+    pub(super) fn release_keys_for_focus(&mut self, cx: &mut Context<Self>) {
+        let Some(hold) = self.key_hold.as_ref() else {
+            return;
+        };
+        if hold.focus.layer == self.focus {
+            return;
+        }
+        let generation = hold.generation;
+        let shell = cx.weak_entity();
+        cx.defer(move |cx| release_key_hold(&shell, generation, cx));
     }
 
     #[cfg(test)]

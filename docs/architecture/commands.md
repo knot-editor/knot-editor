@@ -131,8 +131,9 @@ committed, as native commands already do by finishing in the dispatch turn.
 Release replays one input per deferred step, letting a replayed Enter or
 Backspace commit before the text typed after it. A replayed key or text that
 starts another extension command holds the rest of the queue. The hold also
-releases on the first key after focus leaves the held view, such as a command
-awaiting a picker, and after one second, so a stuck extension never keeps the
+releases once a picker, input, or the palette takes focus, so keys typed ahead
+of a command's input reach it, on the first key after focus leaves the held
+view otherwise, and after one second, so a stuck extension never keeps the
 keyboard. Composition preedit is not queued, since the IME already shows it.
 
 Menus show each command's shown global single-keystroke binding through a
