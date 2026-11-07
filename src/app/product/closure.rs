@@ -43,6 +43,7 @@ impl ProductShell {
                         surface: snapshot.surface,
                     },
                     pinned,
+                    dock: workbench.read(cx).dock_location(snapshot.pane_id).is_some(),
                     target: editor.map(|editor| ProductCommandTarget {
                         shell: shell.downgrade(),
                         workbench: workbench.downgrade(),
@@ -83,7 +84,9 @@ impl ProductShell {
             .iter()
             .filter(|view| match request.kind {
                 ProtectedCloseKind::Tab => view.key == origin_key,
-                ProtectedCloseKind::OtherTabs | ProtectedCloseKind::Pane => {
+                ProtectedCloseKind::OtherTabs
+                | ProtectedCloseKind::Pane
+                | ProtectedCloseKind::OtherPanes => {
                     in_pane_scope(request.kind, &request.origin, view)
                 }
                 ProtectedCloseKind::Window => view.key.session == request.origin.shell.entity_id(),
@@ -541,7 +544,9 @@ impl ProductShell {
                         && view.key.tab == plan.request.origin.tab
                         && view.key.surface == plan.request.origin.surface
                 }
-                ProtectedCloseKind::OtherTabs | ProtectedCloseKind::Pane => {
+                ProtectedCloseKind::OtherTabs
+                | ProtectedCloseKind::Pane
+                | ProtectedCloseKind::OtherPanes => {
                     in_pane_scope(plan.request.kind, &plan.request.origin, view)
                 }
                 ProtectedCloseKind::Window => {
@@ -620,7 +625,9 @@ impl ProductShell {
                 plan.request.origin.surface,
                 cx,
             ),
-            ProtectedCloseKind::OtherTabs | ProtectedCloseKind::Pane => {
+            ProtectedCloseKind::OtherTabs
+            | ProtectedCloseKind::Pane
+            | ProtectedCloseKind::OtherPanes => {
                 for key in &current_scope {
                     self.close_tab_after_approval(key.pane, key.tab, key.surface, cx)?;
                 }
@@ -808,8 +815,9 @@ impl ProductShell {
     }
 }
 
-/// Whether a view belongs to a bulk close of the origin's pane: every tab for
-/// Close Pane, and every unpinned tab but the origin for Close Other Tabs.
+/// Whether a view belongs to a bulk close: every tab of the origin's pane for
+/// Close Pane, every unpinned tab but the origin for Close Other Tabs, and
+/// every tab of the other panes outside the docks for Close Other Panes.
 fn in_pane_scope(
     kind: ProtectedCloseKind,
     origin: &ProductCommandTarget,
@@ -817,10 +825,12 @@ fn in_pane_scope(
 ) -> bool {
     view.key.session == origin.shell.entity_id()
         && view.key.workbench == origin.workbench.entity_id()
-        && view.key.pane == origin.pane
         && match kind {
-            ProtectedCloseKind::OtherTabs => view.key.tab != origin.tab && !view.pinned,
-            _ => true,
+            ProtectedCloseKind::OtherPanes => view.key.pane != origin.pane && !view.dock,
+            ProtectedCloseKind::OtherTabs => {
+                view.key.pane == origin.pane && view.key.tab != origin.tab && !view.pinned
+            }
+            _ => view.key.pane == origin.pane,
         }
 }
 

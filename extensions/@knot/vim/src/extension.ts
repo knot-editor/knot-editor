@@ -377,10 +377,10 @@ function forgetMarks(shared: Shared, document: DocumentId) {
   }
 }
 
-/** The workbench command each `ctrl-w` key runs. Knot has no command for
- * closing every other pane, so `o` maximizes the pane. A Vim window is a tab, as in other editors'
- * Vim modes, so `c` and `q` close the tab, and its pane with the last one. Resizing moves the pane's nearest split
- * whatever the key's axis. */
+/** The workbench command each `ctrl-w` key runs. A Vim window is a tab, as
+ * in other editors' Vim modes, so `c` and `q` close the tab, and its pane
+ * with the last one. Resizing moves the pane's nearest split whatever the
+ * key's axis. */
 const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
   "focus-left": "workbench.focus-pane-left",
   "focus-down": "workbench.focus-pane-down",
@@ -389,7 +389,7 @@ const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
   "split-down": "workbench.split-vertical",
   "split-right": "workbench.split-horizontal",
   close: "workbench.close-tab",
-  only: "workbench.toggle-maximize-pane",
+  only: "workbench.close-other-panes",
   equalize: "workbench.equalize-panes",
   grow: "workbench.grow-pane",
   shrink: "workbench.shrink-pane",

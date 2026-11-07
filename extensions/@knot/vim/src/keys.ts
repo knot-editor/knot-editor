@@ -38,7 +38,7 @@ export type Target =
   | { readonly kind: "selection"; readonly linewise: boolean };
 
 /** What `ctrl-w` does: moves to the pane in a direction, splits, closes the
- * tab, shows only it, goes to the next recent tab, or resizes. */
+ * tab, closes the other panes, goes to the next recent tab, or resizes. */
 export type WindowAction =
   | "focus-left" | "focus-down" | "focus-up" | "focus-right"
   | "split-down" | "split-right" | "close" | "only" | "next" | "previous" | "last-used" | "first" | "last" | "equalize" | "grow" | "shrink";

@@ -299,7 +299,8 @@ is shell render state that lasts while its pane stays focused.
 
 One application-level coordinator protects tab, pane, window, and quit
 closure; Close Other Tabs covers a pane's unpinned tabs but the origin, and
-Close Pane every tab of the pane, hiding tools in a dock. It
+Close Pane every tab of the pane, hiding tools in a dock, and Close Other
+Panes every tab of the session's other panes outside the docks. It
 captures exact session, workbench, tab, surface, and presentation identities,
 counts live document views across sessions, and deduplicates dirty documents
 losing their final view. Native Save / Don't Save / Cancel prompts run serially;

@@ -639,6 +639,10 @@ fn pane_count(session: &Session, cx: &mut TestAppContext) -> usize {
     cx.read(|cx| session.shell.read(cx).workbench.read(cx).panes().len())
 }
 
+fn only_remaining(session: &Session, cx: &mut TestAppContext) -> crate::app::workbench::PaneId {
+    cx.read(|cx| session.shell.read(cx).workbench.read(cx).panes()[0].id())
+}
+
 fn focused_pane(session: &Session, cx: &mut TestAppContext) -> crate::app::workbench::PaneId {
     cx.read(|cx| {
         session
@@ -713,7 +717,8 @@ fn ctrl_w_splits_moves_between_and_closes_panes(cx: &mut TestAppContext) {
         "q closes the pane resizing left"
     );
     session.press("<c-w>o", cx);
-    assert_eq!(pane_count(&session, cx), 2, "only hides panes");
+    assert_eq!(pane_count(&session, cx), 1, "only closes the other panes");
+    assert_eq!(focused_pane(&session, cx), only_remaining(&session, cx));
 }
 
 /// A `ctrl-w` left pending shows `^W`, and the next key either completes it

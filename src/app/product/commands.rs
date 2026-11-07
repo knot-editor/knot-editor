@@ -93,6 +93,20 @@ pub(crate) async fn close_pane(
     close_target(&context, ProtectedCloseKind::Pane).await
 }
 
+#[command("workbench.close-other-panes", title = "Close Other Panes", description = "Close every tab of the other panes outside the docks.", id = CLOSE_OTHER_PANES_COMMAND, participant = Workbench)]
+pub(crate) async fn close_other_panes(
+    context: CommandContext,
+    (): (),
+) -> Result<CommandOutcome, CommandOutcome> {
+    context
+        .foreground(move |target, cx| {
+            super::super::commands::dispatch::break_captured_history_group(target, cx);
+            Ok(())
+        })
+        .await?;
+    close_target(&context, ProtectedCloseKind::OtherPanes).await
+}
+
 #[command("workbench.toggle-pin-tab", title = "Toggle Pin Tab", description = "Pin the focused tab before the others, or unpin it.", id = TOGGLE_PIN_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn toggle_pin_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context

@@ -1351,6 +1351,53 @@ async fn close_pane_collapses_its_split_and_keeps_the_other_pane(cx: &mut TestAp
 }
 
 #[gpui::test]
+async fn close_other_panes_closes_every_other_pane_and_keeps_the_origin(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (shell, window, _) = bulk_close_fixture(&documents, cx);
+    let (origin, split) = cx
+        .update_window(window, |_, _, cx| {
+            shell.update(cx, |shell, cx| {
+                let origin = shell.workbench.read(cx).focused_pane_id().unwrap();
+                shell.split_pane(
+                    origin,
+                    SplitDirection::Horizontal,
+                    super::super::SplitPlacement::After,
+                    cx,
+                );
+                (origin, shell.workbench.read(cx).focused_pane_id().unwrap())
+            })
+        })
+        .unwrap();
+    let before = tab_documents(&shell, cx).len();
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| {
+            shell
+                .workbench
+                .update(cx, |workbench, _| workbench.focus_pane(origin))
+        })
+    })
+    .unwrap();
+    let execution = dispatch_product_command(
+        &shell,
+        window,
+        crate::app::commands::dispatch::CLOSE_OTHER_PANES_COMMAND,
+        cx,
+    );
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert!(!cx.has_pending_prompt());
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        assert!(workbench.pane(split).is_none());
+        assert_eq!(workbench.panes().len(), 1);
+        assert_eq!(workbench.focused_pane_id(), Some(origin));
+    });
+    assert_eq!(tab_documents(&shell, cx).len(), before - 1);
+}
+
+#[gpui::test]
 fn clicking_a_tab_close_button_closes_that_tab_after_its_save_decision(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (first, second, shell, window) = two_dirty_untitled_documents_in_one_window(&documents, cx);

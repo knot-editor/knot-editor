@@ -182,6 +182,8 @@ pub(crate) enum ProtectedCloseKind {
     OtherTabs,
     /// Every tab of the origin's pane.
     Pane,
+    /// Every tab of the session's other panes outside the docks.
+    OtherPanes,
     Window,
     Quit,
 }
@@ -210,6 +212,8 @@ struct ProtectedViewKey {
 struct ProtectedView {
     key: ProtectedViewKey,
     pinned: bool,
+    /// Whether the view's pane is a dock's tool pane.
+    dock: bool,
     target: Option<ProductCommandTarget>,
 }
 
