@@ -93,6 +93,14 @@ function safeInteger(value) {
   if (!Number.isSafeInteger(value) || value < 0) throw new RangeError("expected a nonnegative safe integer");
   return value;
 }
+function foldRange(value) {
+  record(value, "fold range must be an object");
+  const { start, end } = value;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= end) {
+    throw new TypeError("a fold needs a non-negative safe integer start below its end");
+  }
+  return [start, end];
+}
 function byteRange(value) {
   record(value, "range must be an object");
   const startByteOffset = safeInteger(value.startByteOffset);
@@ -386,6 +394,18 @@ function editorFor(authority) {
       if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");
       if (!Number.isSafeInteger(cells) || cells < 0) throw new TypeError("cells must be a non-negative safe integer");
       return request("editorColumnAtCells", authority, line, cells);
+    },
+    async fold(range) {
+      const [start, end] = foldRange(range);
+      await request("editorFold", authority, start, end);
+    },
+    async unfold(range) {
+      const [start, end] = foldRange(range);
+      await request("editorUnfold", authority, start, end);
+    },
+    async folds() {
+      const folds = await request("editorFolds", authority);
+      return Object.freeze(folds.map(({ start, end }) => Object.freeze({ start, end })));
     },
     async scrollBy(rows) {
       if (!Number.isSafeInteger(rows)) throw new TypeError("rows must be a safe integer");

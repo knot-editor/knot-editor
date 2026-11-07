@@ -230,13 +230,28 @@ the command of the marker painted there and never selects. Documents always
 have the gutter, while a contributed text frame has none unless its
 registration asks for one.
 
+A view folds line regions, which stay per view. A collapsed fold keeps its
+first line visible, with an `editor.foldPlaceholder` `…` after it, and gives
+its other lines no rows: the wrap map treats hidden lines as zero-row lines, so
+the viewport, scrolling, row queries, and painting count only visible rows.
+Each fold is an anchored byte range from the first line's start to the last
+line's content end, so edits keep it over its text, and one left with fewer
+than two lines is dropped. Folds may nest, and the hidden lines are their
+union. The caret never rests in hidden lines: vertical and horizontal moves
+step over a fold, folding moves a caret inside it to the first line, selecting
+a fold's first line by pointer selects the whole fold, line commands take a
+collapsed fold's lines with its first line, and anything that puts the caret
+in hidden lines (Go to Line, an extension's `setSelection`, undo) expands the
+folds hiding it. Extensions fold exact line ranges through the
+[editor handle](../extension-api.md).
+
 Restorable view state is the anchor and caret as byte offsets, the start of the
 top visible row as a byte offset, and horizontal scroll in pixels. Applying it
 clamps each offset to the current text and snaps back to a character boundary,
 so a changed or shorter file never yields an invalid position, and keeps the
 restored scroll instead of revealing the caret; a state restored before the
-view first wraps its lines keeps its row once they wrap. Folding does not
-exist yet. Zoom is application state and wrapping follows settings, so
+view first wraps its lines keeps its row once they wrap. Folds are not
+recorded yet. Zoom is application state and wrapping follows settings, so
 neither is recorded.
 
 ## Status bar

@@ -2359,6 +2359,90 @@ pub(crate) async fn editor_row_of(
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FoldArguments {
+    pub authority: EditorAuthority,
+    pub start: u64,
+    pub end: u64,
+}
+impl HostArguments for FoldArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            start: reader.integer(3)?,
+            end: reader.integer(4)?,
+        })
+    }
+}
+
+/// A collapsed fold's first and last buffer lines.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct FoldRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Collapse a range of lines in the captured editor, keeping its first line
+/// visible.
+#[host_operation("editorFold")]
+pub(crate) async fn editor_fold(
+    context: HostContext,
+    arguments: FoldArguments,
+) -> Result<(), EditorError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let start = usize::try_from(arguments.start).map_err(|_| EditorError::InvalidRange)?;
+        let end = usize::try_from(arguments.end).map_err(|_| EditorError::InvalidRange)?;
+        let folded = editor.update(cx, |editor, cx| {
+            end.checked_add(1)
+                .is_some_and(|end| editor.fold(start..end, cx))
+        });
+        folded.then_some(()).ok_or(EditorError::InvalidRange)
+    })?
+}
+
+/// Expand the collapsed fold over exactly a range of lines of the captured
+/// editor, if there is one.
+#[host_operation("editorUnfold")]
+pub(crate) async fn editor_unfold(
+    context: HostContext,
+    arguments: FoldArguments,
+) -> Result<(), EditorError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let start = usize::try_from(arguments.start).map_err(|_| EditorError::InvalidRange)?;
+        let end = usize::try_from(arguments.end).map_err(|_| EditorError::InvalidRange)?;
+        if let Some(end) = end.checked_add(1) {
+            editor.update(cx, |editor, cx| editor.unfold(&(start..end), cx));
+        }
+        Ok(())
+    })?
+}
+
+/// The collapsed folds of the captured editor, ordered by first line and then
+/// outermost first.
+#[host_operation("editorFolds")]
+pub(crate) async fn editor_folds(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<Vec<FoldRange>, AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        Ok(editor
+            .read(cx)
+            .folds()
+            .into_iter()
+            .map(|lines| FoldRange {
+                start: lines.start,
+                end: lines.end - 1,
+            })
+            .collect())
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LineMeasureArguments {
     pub authority: EditorAuthority,
     pub line: u64,

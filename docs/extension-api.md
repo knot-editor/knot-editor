@@ -141,7 +141,13 @@ scrolls by rows, negative upward, without moving the caret.
 screen position needs no caret move. `editor.cellsBefore`
 and `editor.columnAtCells` convert between a line's UTF-8 byte columns and
 display cells, with the editor's tab size and the cell measure soft wrap uses,
-so vertical movement can aim at what the screen shows. Setting the
+so vertical movement can aim at what the screen shows.
+`editor.fold({ start, end })` collapses a range of buffer lines (0-based, both
+included) into its first line, `editor.unfold(range)` expands the fold over
+exactly that range, and `editor.folds()` lists the collapsed folds, outermost
+first. Rows, `viewport`, `rowAt`, `rowOf`, and `scrollBy` count only the lines
+no fold hides, and putting the caret in hidden lines with `setSelection`
+expands the folds hiding it. Folds are per view and follow edits. Setting the
 selection is not an edit, but it ends the typing undo group as any caret move
 does. Like `context.target`, the handle works only while its command runs and
 rejects `InvalidTarget` once the editor's tab closes or moves.

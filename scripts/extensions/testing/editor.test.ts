@@ -126,6 +126,23 @@ test("an editor handle reports the viewport, maps rows, and scrolls without movi
   await assert.rejects(editor.rowAt(-1), TypeError);
 });
 
+test("an editor handle folds and unfolds line ranges", async () => {
+  const document = host.addDocument({ text: Array.from({ length: 10 }, (_, line) => `line ${line}\n`).join("") });
+  const window = host.openWindow({ documents: [document] });
+  const editor = await workbench.editor(host.tabTarget(window, 0));
+  await editor.fold({ start: 4, end: 6 });
+  await editor.fold({ start: 1, end: 8 });
+  await editor.fold({ start: 4, end: 6 });
+  assert.deepEqual(await editor.folds(), [
+    { start: 1, end: 8 },
+    { start: 4, end: 6 },
+  ]);
+  await editor.unfold({ start: 1, end: 8 });
+  assert.deepEqual(await editor.folds(), [{ start: 4, end: 6 }]);
+  await assert.rejects(editor.fold({ start: 3, end: 99 }), { code: "InvalidRange" });
+  await assert.rejects(editor.fold({ start: 3, end: 3 }), TypeError);
+});
+
 test("reveal top and bottom put the caret's line at that edge of the viewport", async () => {
   const text = Array.from({ length: 30 }, (_, line) => `line ${line}\n`).join("");
   const document = host.addDocument({ text });

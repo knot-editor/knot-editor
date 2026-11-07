@@ -1,6 +1,6 @@
 # D066 — Folding
 
-Status: 🚧 not started. Item D066 of the [editor API](editor-api.md) plan
+Status: 🚧 checkpoint 1 implemented, awaiting its review gate. Item D066 of the [editor API](editor-api.md) plan
 (phase 4), from the [roadmap](../roadmap.md). Depends on D109 and D112, which
 landed.
 

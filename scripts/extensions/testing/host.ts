@@ -33,6 +33,8 @@ type FakeTab = {
   /** How the last `setSelection` revealed the caret, if any did. */
   reveal: "nearest" | "center" | "always-center" | "top" | "bottom" | null;
   keyContexts: Set<string>;
+  /** The collapsed folds. The fake keeps them but still counts rows as lines. */
+  folds: Knot.FoldRange[];
   /** Lines the viewport shows; the view's `top` is its first line. */
   viewportLines: number;
   /** The caret style the extension chose, or null for the default bar. */
@@ -448,6 +450,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     document: id,
     view: { anchor: 0, caret: 0, top: 0, scrollX: 0 },
     keyContexts: new Set(),
+    folds: [],
     cursorStyle: null,
     viewportLines: 10,
     closeListeners: new Set(),
@@ -748,6 +751,20 @@ function editor(tab: FakeTab): Knot.Editor {
       }
       return line;
     },
+    fold: async ({ start, end }) => {
+      const tab = live();
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= end) {
+        throw new TypeError("a fold needs a start below its end");
+      }
+      if (end >= lineRanges(document(tab.document).text).length) throw hostError("InvalidRange");
+      if (!tab.folds.some((fold) => fold.start === start && fold.end === end)) tab.folds.push({ start, end });
+    },
+    unfold: async ({ start, end }) => {
+      const tab = live();
+      tab.folds = tab.folds.filter((fold) => fold.start !== start || fold.end !== end);
+    },
+    folds: async () =>
+      [...live().folds].sort((a, b) => a.start - b.start || b.end - a.end).map((fold) => ({ ...fold })),
     scrollBy: async (rows) => {
       if (!Number.isSafeInteger(rows)) throw new TypeError("rows must be a safe integer");
       const tab = live();
@@ -810,6 +827,9 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     viewport: guard(live.viewport),
     rowAt: guard(live.rowAt),
     rowOf: guard(live.rowOf),
+    fold: guard(live.fold),
+    unfold: guard(live.unfold),
+    folds: guard(live.folds),
     scrollBy: guard(live.scrollBy),
     cellsBefore: guard(live.cellsBefore),
     columnAtCells: guard(live.columnAtCells),
@@ -1004,7 +1024,7 @@ export const CAPTURE_NAMES: readonly string[] = [
 /** The color keys native code defines, as the native table lists them. */
 export const NATIVE_COLOR_KEYS: readonly string[] = [
   "background", "border", "border.hover", "button.background", "button.hover.background",
-  "dropTarget.background", "editor.background", "editor.bracketMatch", "editor.cursor", "editor.foreground",
+  "dropTarget.background", "editor.background", "editor.bracketMatch", "editor.cursor", "editor.foldPlaceholder", "editor.foreground",
   "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
   "editor.markedText", "editor.selection", "error", "info", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",

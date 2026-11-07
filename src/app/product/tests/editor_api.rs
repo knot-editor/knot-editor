@@ -299,6 +299,23 @@ await commands.register("handle.rows", async () => {
   ];
   await workbench.writeClipboardText(report.join(","));
 });
+await commands.register("handle.fold", async () => {
+  const outcome = async (query) => {
+    try { return String(await query()); } catch (error) { return error.name === "TypeError" ? "TypeError" : error.code; }
+  };
+  const report = [
+    await outcome(() => handle.fold({ start: 1, end: 5 })),
+    await outcome(() => handle.fold({ start: 2, end: 3 })),
+    await outcome(() => handle.fold({ start: 7, end: 99 })),
+    await outcome(() => handle.fold({ start: 3, end: 3 })),
+    await outcome(() => handle.fold({ start: 3.5, end: 4 })),
+    JSON.stringify(await handle.folds()),
+    JSON.stringify((await handle.rowAt(3))),
+    await outcome(() => handle.unfold({ start: 1, end: 5 })),
+    JSON.stringify(await handle.folds()),
+  ];
+  await workbench.writeClipboardText(report.join("|"));
+});
 await commands.register("handle.center", async ({ buffer }) => {
   const line = await buffer.lineRange(50);
   await handle.setSelection({ anchor: line.startByteOffset, caret: line.startByteOffset }, { reveal: "always-center" });
@@ -583,6 +600,42 @@ fn editor_handle_maps_rows_validates_arguments_and_always_centers(cx: &mut TestA
     cx.run_until_parked();
     let top = cx.read(|cx| editor.read(cx).view_state(cx).top);
     assert!(top > 0, "line 50 centers a viewport that began at line 0");
+}
+
+#[gpui::test]
+#[allow(clippy::single_range_in_vec_init)]
+fn editor_handle_folds_lines_and_counts_only_the_rows_left_visible(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (_host, _) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.run_until_parked();
+    cx.update(|cx| {
+        model.update(cx, |model, cx| {
+            model.replace(0..0, &"line\n".repeat(10)).unwrap();
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(&shell, window, name, cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    };
+    run("handle.attach", cx);
+    run("handle.fold", cx);
+    let reported = cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap());
+    assert_eq!(
+        reported,
+        concat!(
+            "undefined|undefined|InvalidRange|TypeError|TypeError|",
+            r#"[{"start":1,"end":5},{"start":2,"end":3}]|"#,
+            r#"{"line":7,"column":0}|"#,
+            r#"undefined|[{"start":2,"end":3}]"#,
+        )
+    );
+    cx.read(|cx| assert_eq!(editor.read(cx).folds(), [2..4]));
 }
 
 const SELECTION_SOURCE: &str = r#"

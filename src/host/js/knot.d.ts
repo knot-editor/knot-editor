@@ -420,6 +420,8 @@ declare module "knot" {
     readonly "editor.bracketMatch"?: string;
     /** Text cursor. */
     readonly "editor.cursor"?: string;
+    /** The placeholder after the first line of a collapsed fold. */
+    readonly "editor.foldPlaceholder"?: string;
     /** Unhighlighted editor text. */
     readonly "editor.foreground"?: string;
     /** The editor gutter beside the text. */
@@ -975,6 +977,12 @@ declare module "knot" {
   export type Viewport = Readonly<{ first: number; rows: number }>;
   /** Where a document row starts: its 0-based buffer line and UTF-8 byte column. */
   export type RowStart = Readonly<{ line: number; column: number }>;
+  /**
+   * A fold over buffer lines: the 0-based `start` line, which stays visible,
+   * through the `end` line, which is after it. Collapsed, it hides the lines
+   * after `start` through `end`.
+   */
+  export type FoldRange = Readonly<{ start: number; end: number }>;
   /** A selection's ends as UTF-8 byte offsets; equal for a bare caret. */
   export type EditorSelection = Readonly<{ anchor: number; caret: number }>;
   /** How an editor draws its caret. */
@@ -1045,6 +1053,31 @@ declare module "knot" {
      * @throws HostError with InvalidRange for a line past the last, or Cancelled.
      */
     columnAtCells(line: number, cells: number): Promise<number>;
+    /**
+     * Collapse the lines of `range` into its first line, which shows a
+     * placeholder. Rows, `viewport`, `rowAt`, `rowOf`, and `scrollBy` then
+     * count only the lines no fold hides. A caret or selection end in the
+     * hidden lines moves to the end of the first line and the selection is
+     * cleared. Anything that puts the caret in hidden lines, such as
+     * `setSelection`, expands the folds hiding it. A fold is per view, not an
+     * edit, and follows the text as edits move it. Folding a range already
+     * collapsed changes nothing; folds may nest.
+     * @throws HostError with InvalidRange for a range that ends past the last
+     * line, or Cancelled/InvalidTarget as other editor calls; TypeError for a
+     * range that is not a safe-integer `start` below `end`.
+     */
+    fold(range: FoldRange): Promise<void>;
+    /**
+     * Expand the collapsed fold over exactly the lines of `range`, if there is
+     * one. Folds nested inside it stay collapsed.
+     * @throws HostError with InvalidTarget or Cancelled; TypeError as `fold`.
+     */
+    unfold(range: FoldRange): Promise<void>;
+    /**
+     * The collapsed folds, ordered by first line and then outermost first.
+     * @throws HostError with InvalidTarget or Cancelled.
+     */
+    folds(): Promise<readonly FoldRange[]>;
     /**
      * Scroll by rows, negative upward, without moving or revealing the
      * caret; the scroll stays within the text. Not an edit and not a caret
