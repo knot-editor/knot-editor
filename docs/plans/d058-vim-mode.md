@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–5 complete; checkpoint 6 is next. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–5 complete; checkpoint 6 is implemented and awaits dogfooding. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -177,17 +177,16 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 ### Ex line
 
 - `:` opens `workbench.showInput` with no completion.
-- Commands go to native commands where they exist: `file.save`,
-  `workbench.close-tab`, `workbench.open`, and the `editor.go-to-line`
-  behavior.
+- Commands go to native commands and public APIs: `file.save`,
+  `workbench.close`, `documents.open`, and `G`'s jump for `:<line>`.
 - `:set` writes document-scoped settings, as the status bar's indentation
   picker does.
 - `:e` resolves a relative path against the document's directory, or the
   window's first root for an untitled document.
-- `:q!` closes the tab without the Save prompt. No public API does that
-  today, so checkpoint 6 adds the smallest generic primitive for it. It
-  stays a closure that cannot lose text silently: unsaved-document recovery
-  still holds the text until the close commits.
+- `:q!` closes the tab without the Save prompt through
+  `workbench.close(target, { discard: true })`. It stays a closure that
+  cannot lose text silently: unsaved-document recovery still holds the text
+  until the close commits.
 
 ## Testing
 
@@ -293,38 +292,44 @@ installed package's context-scoped `z b` sequence swallowing Vim's `zb`,
 fixed by Knot-owned key matching ([commands](../architecture/commands.md#keymaps)). The growing suite's slow,
 leaking cases moved to the headless harness, with a reset between cases ([development](../development.md)).
 
-### 6. Ex line 📝
+### 6. Ex line 🔍
+
+Implemented; awaiting dogfooding.
 
 Deliverables:
 
-- `:` opens an input, and `:w`, `:q`, `:q!`, `:wq`, `:x`, `:e <path>`,
-  `:<line>`, and `:set` for `number`, `relativenumber`, `wrap`, `tabstop`,
-  `shiftwidth`, and `expandtab` with their `no` forms.
-- The `":` register holds the last command line.
-- The `:q!` primitive: closing a tab without the Save prompt, with the exact
-  primitive settled here.
-- `:<line>` is recorded in the jumplist.
+- ✅ `:` opens an input, and `:w`, `:q`, `:q!`, `:wq`, `:x`, `:e <path>`,
+  `:<line>` (and `:$`), and `:set` for `number`, `relativenumber`, `wrap`,
+  `tabstop`, `shiftwidth`, and `expandtab` with their `no`, `inv`, `!`, `?`,
+  and `=` forms. `ex.ts` parses and `command-line.ts` runs. Knot has one
+  indentation size, so `tabstop` and `shiftwidth` both write
+  `editor.tabSize`. Errors such as `E492` show in place of the mode until the
+  next key.
+- ✅ The `":` register holds the last command line.
+- ✅ The `:q!` primitive: `workbench.close(target, { discard: true })`
+  approves the tab's dirty final documents as discarded at the revisions the
+  close saw, without a prompt; recovery keeps their text until the close
+  commits, and a racing edit keeps the tab open
+  ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure)).
+- ✅ `:<line>` is recorded in the jumplist, as `NG` is.
+- ✅ Found here: keys typed right after `:` reached the input only after the
+  next key or the hold's timeout, so a key hold now releases once a picker,
+  input, or the palette takes focus
+  ([ordered delivery](../architecture/commands.md#ordered-delivery)).
 
 Validation:
 
-- Unit tests for parsing command lines and `:set` arguments.
-- Cases for `:<line>` and `":p`.
-- Product tests for `:w`, `:q` on a dirty document prompting, `:q!`, `:e`
-  with a relative path and from an untitled document, and `:set` writes.
-- A Rust test for the close primitive, including that recovery still holds
-  the text until the close commits.
+- ✅ Unit tests for parsing command lines, `:set` arguments, and `:e` paths.
+- ✅ Cases for `:<line>`, `:$`, the jump, `":p`, an unknown command, and
+  Escape.
+- ✅ Product tests for `:w`, `:q` on a dirty document prompting, `:q!`, `:e`
+  with a relative path and from an untitled document, `:set` writes, and the
+  error message.
+- ✅ A Rust test for the discarding close, including that recovery keeps the
+  text until the close commits; a key-hold test for keys typed ahead of an
+  input.
 
 Review gate: dogfooding.
-
-Implementation context:
-
-- `workbench.showInput`, `workbench.open`, `file.save`, and
-  `workbench.close-tab`.
-- `:set` writes document-scoped settings, as the status bar's indentation
-  picker does; `number` and `relativenumber` write `editor.lineNumbers`.
-- The close primitive belongs to protected closure in `src/app/product/`
-  (`closure.rs`); see
-  [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
 
 ### 7. Window commands 📝
 
@@ -369,7 +374,5 @@ the plan.
 
 ## Deferred decisions
 
-- The exact `:q!` primitive, either a discard option on closing a tab or a
-  separate command, chosen at checkpoint 6.
 - Whether `ctrl-v` stays native paste in normal mode or is reserved for
   visual-block mode. D142 settles it; until then it stays native.
