@@ -3,7 +3,7 @@
 Status: 🚧 approved, not started. Item of the
 [editor API plan](editor-api.md); builds on D078 (visual rows, done) and D109
 (the editor handle, done). Vim's `H M L`, `zz`, and the half-page and page
-scrolls already ship on buffer lines ([D058 plan](d058-vim-mode.md)) and are
+scrolls already ship on buffer lines (the Vim package) and are
 approximate under soft wrap.
 
 ## Goal
