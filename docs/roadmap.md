@@ -125,6 +125,19 @@ complete list for that item.
     case, or whole-word behavior.
   - Order: after D031; replace-all is a bulk edit, so with or after D092.
 
+- **D157 — Indent width separate from tab width**
+  - Priority: low.
+  - Deferred: `editor.tabSize` sets both how wide a tab displays and how far
+    indentation steps, so Vim's `:set tabstop` and `:set shiftwidth` (D058)
+    write the same setting. Only mixed styles lose, such as GNU-style C that
+    indents by 4 and shows tabs as 8, turning 8 columns of indentation into
+    one tab.
+  - Reconsider: Real files in such a style need editing. Then add an indent
+    width setting defaulting to the tab size, and carry it through indent and
+    outdent, reindent and indent queries, Enter's indentation, indentation
+    detection, the conversion commands, the status bar's picker, and
+    `DocumentInfo.indentation`.
+
 - **D149 — Line ending facts and conversion**
   - Deferred: Newlines take the buffer's first line terminator (see
     [core and buffers](architecture/core-and-buffers.md)), derived from the
@@ -605,9 +618,13 @@ Kakoune mode could use it too. The
     `:q`, `:q!`, `:wq`, `:x`, `:e`, `:<line>`, and `:set` for a few options.
     Substitution and `:noh` are D150. `:g` and `:v`, `:normal`, `:sort`, `:d`, `:m`,
     `:t` and other range commands, `:reg` and `:marks`, `:map` and its
-    variants, and user-defined Ex commands are missing.
+    variants, and user-defined Ex commands are missing. So are `:w <file>`
+    and `:sav <file>`, which need a public save to a given URI without the
+    Save dialog, and `:e!`, which needs a revert of a document to its
+    file's text; neither primitive exists.
   - Reconsider: Daily Vim use reaches for one of them. Then add it inside
-    the Vim package over existing primitives; `:normal` and `:g` with a
+    the Vim package over existing primitives, or add the missing generic
+    primitive first; `:normal` and `:g` with a
     normal-mode command also need replaying keys through the mode, which
     D113's recording provides.
   - Order: after D058; `:normal` after D113; `:g` and `:v` with D150's

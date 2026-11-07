@@ -303,7 +303,8 @@ Deliverables:
   `tabstop`, `shiftwidth`, and `expandtab` with their `no`, `inv`, `!`, `?`,
   and `=` forms. `ex.ts` parses and `command-line.ts` runs. Knot has one
   indentation size, so `tabstop` and `shiftwidth` both write
-  `editor.tabSize`. Errors such as `E492` show in place of the mode until the
+  `editor.tabSize` (separating them is D157). `:w <file>` and `:e!` are
+  D146. Errors such as `E492` show in place of the mode until the
   next key.
 - ✅ The `":` register holds the last command line.
 - ✅ The `:q!` primitive: `workbench.close(target, { discard: true })`
