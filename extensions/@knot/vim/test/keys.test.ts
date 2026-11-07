@@ -191,6 +191,7 @@ test("ctrl-w takes a window key, with or without ctrl", () => {
   assert.deepEqual(parse("<c-w>", "<c-j>").command, { kind: "window", action: "focus-down" });
   assert.deepEqual(parse("<c-w>", "<c-w>").command, { kind: "window", action: "next" });
   assert.deepEqual(visual("<c-w>", "v"), { kind: "window", action: "split-right" });
+  assert.deepEqual(parse("<c-w>", "L").command, { kind: "window", action: "move-right" });
   assert.deepEqual(parse("<c-w>", "q").command, { kind: "window", action: "close" });
   assert.deepEqual(parse("<c-w>", "=").command, { kind: "window", action: "equalize" });
   assert.deepEqual(parse("<c-w>", ">").command, { kind: "window", action: "wider" });

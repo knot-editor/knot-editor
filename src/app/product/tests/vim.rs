@@ -737,3 +737,17 @@ fn a_pending_ctrl_w_does_not_swallow_the_next_keys_meaning(cx: &mut TestAppConte
     assert_eq!(session.marked(cx), "‸one\ntwo");
     assert_eq!(pane_count(&session, cx), 1);
 }
+
+/// `ctrl-w` with a capital moves the tab toward that side, splitting at the
+/// edge, and a pane left without tabs goes away.
+#[gpui::test]
+fn ctrl_w_capital_moves_the_tab_between_panes(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let session = open("one\ntwo", 0, cx);
+    session.shell.update(cx, |shell, cx| shell.new_tab(cx));
+    session.settle(cx);
+    session.press("<c-w>L", cx);
+    assert_eq!(pane_count(&session, cx), 2, "the edge splits");
+    session.press("<c-w>H", cx);
+    assert_eq!(pane_count(&session, cx), 1, "the emptied pane collapses");
+}

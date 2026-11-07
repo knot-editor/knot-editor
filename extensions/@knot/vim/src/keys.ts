@@ -41,6 +41,7 @@ export type Target =
  * tab, closes the other panes, goes to the next recent tab, or resizes. */
 export type WindowAction =
   | "focus-left" | "focus-down" | "focus-up" | "focus-right"
+  | "move-left" | "move-down" | "move-up" | "move-right"
   | "split-down" | "split-right" | "close" | "only" | "next" | "previous" | "last-used" | "first" | "last" | "equalize" | "taller" | "shorter" | "wider" | "narrower";
 
 export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O";
@@ -133,6 +134,7 @@ const REPOSITIONS: Readonly<Record<string, readonly ["top" | "center" | "bottom"
 const WINDOW_ACTIONS: Readonly<Record<string, WindowAction>> = {
   h: "focus-left", "<bs>": "focus-left", j: "focus-down", "<c-j>": "focus-down",
   k: "focus-up", "<c-k>": "focus-up", l: "focus-right", "<c-l>": "focus-right",
+  H: "move-left", J: "move-down", K: "move-up", L: "move-right",
   s: "split-down", v: "split-right", c: "close", q: "close",
   "=": "equalize", "+": "taller", "-": "shorter", ">": "wider", "<": "narrower",
   o: "only", "<c-o>": "only", w: "next", "<c-w>": "next", W: "previous",

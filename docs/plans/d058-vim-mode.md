@@ -345,7 +345,7 @@ Implementation context:
   `p` `t` `b` use new pane-focus commands (next, previous, previously
   focused, first, last). With ctrl held, `h` arrives as Backspace; `ctrl-s`,
   `ctrl-v`, and `ctrl-c` stay native, so only the plain `s v c` split and close.
-  Also `q` (closes the tab), `=` (equalizes), and `+ - < >`, which resize along the
+  Also `H J K L` (move the tab to the pane in that direction, or split at the edge, as the move-tab commands do), `q` (closes the tab), `=` (equalizes), and `+ - < >`, which resize along the
   height or width through new axis-specific commands. Held for lack of commands: `n` new empty pane,
   `x` `r` `R` swap and rotate (D151).
 
