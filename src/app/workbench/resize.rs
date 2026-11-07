@@ -202,11 +202,25 @@ impl Workbench {
     }
 
     /// Grow or shrink a pane by one step: a dock changes its size, any other
-    /// pane the ratio of its nearest enclosing ordinary split. Returns whether
+    /// pane the ratio of its nearest enclosing ordinary split. With an
+    /// `axis`, only a dock or a split along it changes: a horizontal split
+    /// sets the width and a vertical one the height. Returns whether
     /// anything changed.
-    pub(crate) fn resize_pane(&mut self, pane: PaneId, grow: bool) -> bool {
+    pub(crate) fn resize_pane(
+        &mut self,
+        pane: PaneId,
+        grow: bool,
+        axis: Option<SplitDirection>,
+    ) -> bool {
         let sign = if grow { 1. } else { -1. };
         if let Some(dock) = self.dock_location(pane) {
+            let dock_axis = match dock {
+                DockLocation::Bottom => SplitDirection::Vertical,
+                _ => SplitDirection::Horizontal,
+            };
+            if axis.is_some_and(|axis| axis != dock_axis) {
+                return false;
+            }
             let before = self.dock_size(dock);
             self.set_dock_size(dock, before + sign * DOCK_RESIZE_STEP);
             return self.dock_size(dock) != before;
@@ -216,7 +230,12 @@ impl Workbench {
                 .ancestors(pane)
                 .into_iter()
                 .rev()
-                .find(|(split, _)| self.split_dock(split).is_none())
+                .find(|(split, _)| {
+                    self.split_dock(split).is_none()
+                        && axis.is_none_or(|axis| {
+                            matches!(split, WorkbenchLayout::Split { direction, .. } if *direction == axis)
+                        })
+                })
                 .and_then(|(split, in_second)| match split {
                     WorkbenchLayout::Split { ratio, .. } => {
                         Some((split.boundary()?, in_second, *ratio))
@@ -285,32 +304,60 @@ mod tests {
             assert_eq!(workbench.split_ratio(right), Some(0.5));
 
             // The bottom pane's nearest split is the vertical one.
-            assert!(workbench.resize_pane(bottom, true));
+            assert!(workbench.resize_pane(bottom, true, None));
             assert!(close(workbench.split_ratio(bottom).unwrap(), 0.45));
             assert_eq!(workbench.split_ratio(right), Some(0.5));
             // The left pane grows its horizontal split.
-            assert!(workbench.resize_pane(left, true));
+            assert!(workbench.resize_pane(left, true, None));
             assert!(close(workbench.split_ratio(right).unwrap(), 0.55));
             // The right pane's nearest split is the vertical one.
-            assert!(workbench.resize_pane(right, true));
+            assert!(workbench.resize_pane(right, true, None));
             assert!(close(workbench.split_ratio(bottom).unwrap(), 0.5));
-            assert!(workbench.resize_pane(left, false));
+            assert!(workbench.resize_pane(left, false, None));
             assert!(close(workbench.split_ratio(right).unwrap(), 0.5));
 
             for _ in 0..40 {
-                workbench.resize_pane(left, true);
+                workbench.resize_pane(left, true, None);
             }
             assert!(close(
                 workbench.split_ratio(right).unwrap(),
                 1. - WorkbenchLayout::MIN_RATIO
             ));
-            assert!(!workbench.resize_pane(left, true));
+            assert!(!workbench.resize_pane(left, true, None));
             assert!(workbench.set_split_ratio(right, -3.));
             assert!(close(
                 workbench.split_ratio(right).unwrap(),
                 WorkbenchLayout::MIN_RATIO
             ));
             assert!(!workbench.set_split_ratio(left, 0.3));
+        });
+    }
+
+    #[gpui::test]
+    fn resizing_along_an_axis_skips_splits_of_the_other_one(cx: &mut TestAppContext) {
+        let model = cx.new(|_| BufferModel::from_text("shared"));
+        let mut documents = DocumentCollection::new();
+        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
+        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
+
+        workbench.update(cx, |workbench, cx| {
+            let left = workbench.focused_pane_id().unwrap();
+            let right = workbench
+                .split_focused(SplitDirection::Horizontal, SplitPlacement::After, cx)
+                .unwrap();
+            let bottom = workbench
+                .split_focused(SplitDirection::Vertical, SplitPlacement::After, cx)
+                .unwrap();
+
+            // The bottom pane widens through the outer horizontal split, past
+            // its nearest vertical one.
+            assert!(workbench.resize_pane(bottom, true, Some(SplitDirection::Horizontal)));
+            assert!(close(workbench.split_ratio(right).unwrap(), 0.45));
+            assert_eq!(workbench.split_ratio(bottom), Some(0.5));
+            assert!(workbench.resize_pane(bottom, true, Some(SplitDirection::Vertical)));
+            assert!(close(workbench.split_ratio(bottom).unwrap(), 0.45));
+            // The left pane has no vertical split to change.
+            assert!(!workbench.resize_pane(left, true, Some(SplitDirection::Vertical)));
         });
     }
 
@@ -463,10 +510,10 @@ mod tests {
             );
             let (dock, _) = workbench.show_tool(id).unwrap();
             let before = workbench.dock_size(DockLocation::Left);
-            assert!(workbench.resize_pane(dock, true));
+            assert!(workbench.resize_pane(dock, true, None));
             assert_eq!(workbench.dock_size(DockLocation::Left), before + 40.);
             // The document pane's only split is the dock's, so nothing moves.
-            assert!(!workbench.resize_pane(pane, true));
+            assert!(!workbench.resize_pane(pane, true, None));
             assert_eq!(
                 workbench.split_dock(workbench.layout().unwrap()),
                 Some(DockLocation::Left)

@@ -41,7 +41,7 @@ export type Target =
  * tab, closes the other panes, goes to the next recent tab, or resizes. */
 export type WindowAction =
   | "focus-left" | "focus-down" | "focus-up" | "focus-right"
-  | "split-down" | "split-right" | "close" | "only" | "next" | "previous" | "last-used" | "first" | "last" | "equalize" | "grow" | "shrink";
+  | "split-down" | "split-right" | "close" | "only" | "next" | "previous" | "last-used" | "first" | "last" | "equalize" | "taller" | "shorter" | "wider" | "narrower";
 
 export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O";
 
@@ -134,7 +134,7 @@ const WINDOW_ACTIONS: Readonly<Record<string, WindowAction>> = {
   h: "focus-left", "<bs>": "focus-left", j: "focus-down", "<c-j>": "focus-down",
   k: "focus-up", "<c-k>": "focus-up", l: "focus-right", "<c-l>": "focus-right",
   s: "split-down", v: "split-right", c: "close", q: "close",
-  "=": "equalize", "+": "grow", ">": "grow", "-": "shrink", "<": "shrink",
+  "=": "equalize", "+": "taller", "-": "shorter", ">": "wider", "<": "narrower",
   o: "only", "<c-o>": "only", w: "next", "<c-w>": "next", W: "previous",
   p: "last-used", t: "first", b: "last", "<c-b>": "last",
 };

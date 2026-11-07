@@ -650,7 +650,7 @@ Kakoune mode could use it too. The
     `a(` in visual mode growing the selection to the enclosing pair; sentence motions and
     objects (`( )`, `is`, `as`); tag objects (`it`, `at`); `gp`, `gP`, and
     `]p`; `_` and `|`; `gi`; and `ga`; and the `ctrl-w` keys that need workbench commands: `n` an empty pane, `x` `r`
-    `R` swapping and rotating panes, and axis-specific resizing.
+    `R` swapping and rotating panes.
   - Reconsider: Daily Vim use reaches for one of them. Then add it inside
     the Vim package over existing primitives, with cases beside the others;
     tag objects may wait for D144's syntax-tree queries.

@@ -379,8 +379,7 @@ function forgetMarks(shared: Shared, document: DocumentId) {
 
 /** The workbench command each `ctrl-w` key runs. A Vim window is a tab, as
  * in other editors' Vim modes, so `c` and `q` close the tab, and its pane
- * with the last one. Resizing moves the pane's nearest split whatever the
- * key's axis. */
+ * with the last one. */
 const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
   "focus-left": "workbench.focus-pane-left",
   "focus-down": "workbench.focus-pane-down",
@@ -391,8 +390,10 @@ const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
   close: "workbench.close-tab",
   only: "workbench.close-other-panes",
   equalize: "workbench.equalize-panes",
-  grow: "workbench.grow-pane",
-  shrink: "workbench.shrink-pane",
+  taller: "workbench.grow-pane-height",
+  shorter: "workbench.shrink-pane-height",
+  wider: "workbench.grow-pane-width",
+  narrower: "workbench.shrink-pane-width",
   next: "workbench.focus-next-pane",
   previous: "workbench.focus-previous-pane",
   "last-used": "workbench.focus-previously-focused-pane",

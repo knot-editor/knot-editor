@@ -1,7 +1,7 @@
 //! Workbench and application command declarations.
 use super::*;
 use crate::app::commands::declarations::{CommandContext, command};
-use crate::app::workbench::{PaneId, SplitEdge, Workbench};
+use crate::app::workbench::{PaneId, SplitDirection, SplitEdge, Workbench};
 use crate::host::protocol::CommandOutcome;
 
 #[command("file.new", title = "New Document", description = "Open an untitled document.", id = NEW_COMMAND, participant = Workbench)]
@@ -186,12 +186,28 @@ pub(crate) async fn split_vertical(context: CommandContext, (): ()) -> Result<()
 
 #[command("workbench.grow-pane", title = "Grow Pane", description = "Give the focused pane more room.", id = GROW_PANE_COMMAND, participant = Workbench)]
 pub(crate) async fn grow_pane(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    resize(&context, true).await
+    resize(&context, true, None).await
 }
 
 #[command("workbench.shrink-pane", title = "Shrink Pane", description = "Give the focused pane less room.", id = SHRINK_PANE_COMMAND, participant = Workbench)]
 pub(crate) async fn shrink_pane(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    resize(&context, false).await
+    resize(&context, false, None).await
+}
+
+macro_rules! resize_along {
+    ($($name:literal, $title:literal, $description:literal, $id:ident, $function:ident, $grow:expr, $axis:expr;)*) => {$(
+        #[command($name, title = $title, description = $description, id = $id, participant = Workbench)]
+        pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+            resize(&context, $grow, Some($axis)).await
+        }
+    )*};
+}
+
+resize_along! {
+    "workbench.grow-pane-height", "Grow Pane Height", "Give the focused pane more height.", GROW_PANE_HEIGHT_COMMAND, grow_pane_height, true, SplitDirection::Vertical;
+    "workbench.shrink-pane-height", "Shrink Pane Height", "Give the focused pane less height.", SHRINK_PANE_HEIGHT_COMMAND, shrink_pane_height, false, SplitDirection::Vertical;
+    "workbench.grow-pane-width", "Grow Pane Width", "Give the focused pane more width.", GROW_PANE_WIDTH_COMMAND, grow_pane_width, true, SplitDirection::Horizontal;
+    "workbench.shrink-pane-width", "Shrink Pane Width", "Give the focused pane less width.", SHRINK_PANE_WIDTH_COMMAND, shrink_pane_width, false, SplitDirection::Horizontal;
 }
 
 #[command("workbench.equalize-panes", title = "Equalize Panes", description = "Give every split pane an even share.", id = EQUALIZE_PANES_COMMAND, participant = Workbench)]
@@ -207,14 +223,18 @@ pub(crate) async fn equalize_panes(context: CommandContext, (): ()) -> Result<()
         .await
 }
 
-async fn resize(context: &CommandContext, grow: bool) -> Result<(), CommandOutcome> {
+async fn resize(
+    context: &CommandContext,
+    grow: bool,
+    axis: Option<SplitDirection>,
+) -> Result<(), CommandOutcome> {
     context
         .shell(move |shell, target, cx| {
             let pane = target.pane;
             let dock = shell.workbench.read(cx).dock_location(pane);
             if !shell
                 .workbench
-                .update(cx, |workbench, _| workbench.resize_pane(pane, grow))
+                .update(cx, |workbench, _| workbench.resize_pane(pane, grow, axis))
             {
                 return Err(CommandOutcome::Unavailable);
             }
