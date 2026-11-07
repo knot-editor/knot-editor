@@ -242,8 +242,11 @@ step over a fold, folding moves a caret inside it to the first line, selecting
 a fold's first line by pointer selects the whole fold, line commands take a
 collapsed fold's lines with its first line, and anything that puts the caret
 in hidden lines (Go to Line, an extension's `setSelection`, undo) expands the
-folds hiding it. Extensions fold exact line ranges through the
-[editor handle](../extension-api.md).
+folds hiding it. The Fold, Unfold, Toggle Fold, Fold All, and Unfold All
+commands act on the [regions](semantic-ui.md#syntax-highlighting-and-languages)
+the language offers; Fold collapses the innermost uncollapsed region that
+starts on the caret's line or encloses it. Extensions fold exact line ranges
+through the [editor handle](../extension-api.md).
 
 Restorable view state is the anchor and caret as byte offsets, the start of the
 top visible row as a byte offset, and horizontal scroll in pixels. Applying it

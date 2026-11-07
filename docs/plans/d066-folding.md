@@ -1,6 +1,6 @@
 # D066 — Folding
 
-Status: 🚧 checkpoint 1 complete; checkpoints 2–5 not started. Item D066 of the [editor API](editor-api.md) plan
+Status: 🚧 checkpoint 1 complete; checkpoint 2 awaiting review; checkpoints 3–5 not started. Item D066 of the [editor API](editor-api.md) plan
 (phase 4), from the [roadmap](../roadmap.md). Depends on D109 and D112, which
 landed.
 
@@ -87,27 +87,28 @@ and the [extension guide](../extension-api.md). Clicking the placeholder does
 not unfold yet; that is checkpoint 3. The fake test host keeps folds but still
 counts rows as lines.
 
-### 2. Regions, commands, and bundled queries
+### 2. Regions, commands, and bundled queries 🚧
 
-Deliverables: `folds` query compiled with the grammar and exposed in language
-registration (`queries.folds`), indentation fallback, region cache per syntax
-generation, `editor.foldRegions()`, Fold/Unfold/Toggle/Fold All/Unfold All
-commands and default keys, `folds` queries for Rust, TypeScript, Python,
-TOML, and Markdown (sections).
+Implemented, awaiting review:
 
-**Implementation context:** `src/app/languages.rs` (`LanguageQueries`,
-`compile`), `src/app/syntax.rs` and a new `src/app/syntax/fold.rs` mirroring
-`syntax/indent.rs` (capture names, tests), `src/host/js/bootstrap.js` near
-the `indents` handling, `docs/schemas/knot.schema.json`, `knot.d.ts`,
-`extensions/@knot/language-*/src/queries/` and `languages.ts` with query test
-cases like `test/cases/indents.jsonc`, `src/app/editor/native_commands.rs`
-and `src/app/commands/` for registration.
+- ✅ `folds` query (`@fold`) compiled with the grammar
+  (`src/app/syntax/fold.rs`), registered as `queries.folds`, with the region
+  rules in [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
+- ✅ Indentation fallback and the per-revision region cache
+  (`src/app/model/folds.rs`), and `editor.foldRegions()`.
+- ✅ Fold, Unfold, Toggle Fold, Fold All, Unfold All commands, with
+  `cmd-alt-[` and `cmd-alt-]` for Fold and Unfold on macOS. Toggle, Fold All,
+  and Unfold All have no default key, since the keymap has no chords.
+- ✅ `folds` queries and `test/cases/folds.jsonc` for Rust, TypeScript,
+  JavaScript, JSX/TSX, Python, TOML, and Markdown.
 
-Validation: query tests per language; fallback tests; command tests through
-the real editor.
+Scope decisions: regions keep a closing bracket's line visible, so a collapsed
+Rust `fn` shows `fn f() {…` with `}` on the next line; Markdown regions are
+sections, fences, and list items; only Python-style blocks start on their
+header's line.
 
-Review gate: fold real code in each bundled language; judge region
-boundaries.
+Review gate: fold real code in each bundled language (`Try:` commands open
+samples); judge region boundaries.
 
 ### 3. Gutter lane, placeholder interaction, and settings
 

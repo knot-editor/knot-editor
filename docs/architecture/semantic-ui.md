@@ -172,6 +172,17 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   indents it one level, at most once per row. Packages keep Enter, typing,
   and reindent cases in `test/cases/indents.jsonc`, which a product test runs
   through an editor view; a language with an indent query must have cases.
+- An optional `folds` query lists the nodes whose lines can fold, as `@fold`
+  captures, over every layer's tree. A multi-line node is a region from its
+  first line through its last; a closing bracket that ends the node and
+  starts the line stays visible, an indented block after a colon starts on
+  the line of its header, and trailing blank lines are left out. A language
+  without a query folds by indentation. The regions are candidates that
+  Fold, Unfold, and Fold All choose among, cached per text revision and
+  syntax generation on the buffer model; only collapsed folds are view
+  state. Packages keep region cases in `test/cases/folds.jsonc`, which a
+  product test runs through an editor view; a language with a folds query
+  must have cases.
 - The native Set Language Mode command offers the registered languages, or Auto
   Detect, in the window's transient picker. Contributed text frames take a
   fixed language at registration.
