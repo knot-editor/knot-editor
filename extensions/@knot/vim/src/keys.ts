@@ -7,7 +7,8 @@ export type SimpleMotion =
   | "word" | "WORD" | "back" | "BACK" | "end" | "END" | "back-end" | "BACK-END"
   | "line-start" | "first-non-blank" | "line-end" | "next-line-start" | "previous-line-start"
   | "first-line" | "last-line" | "match-pair" | "paragraph-forward" | "paragraph-back"
-  | "repeat-find" | "repeat-find-reverse" | "window-top" | "window-middle" | "window-bottom";
+  | "repeat-find" | "repeat-find-reverse" | "window-top" | "window-middle" | "window-bottom"
+  | "fold-next" | "fold-previous" | "fold-start" | "fold-end";
 
 /** A scroll by half a view (`ctrl-d`, `ctrl-u`), a page (`ctrl-f`,
  * `ctrl-b`), or lines (`ctrl-e`, `ctrl-y`). */
@@ -22,7 +23,17 @@ export type MarkMotion = Readonly<{ mark: string; exact: boolean }>;
 
 export type Motion = SimpleMotion | Readonly<{ find: FindKind; char: string }> | MarkMotion;
 
-export type Operator = "d" | "c" | "y" | ">" | "<" | "=" | "gu" | "gU" | "g~";
+/** `zf` creates a closed fold over the lines its target covers. */
+export type Operator = "d" | "c" | "y" | ">" | "<" | "=" | "gu" | "gU" | "g~" | "zf";
+
+/** What a `z` fold key does at the caret's line; "open" and "close" act one
+ * fold level at a time (`count` levels) and the "-all" forms on every fold
+ * around the line. Folds here are regions that are collapsed or not, so
+ * deleting a fold expands it. */
+export type FoldAction =
+  | "open" | "open-all" | "close" | "close-all" | "toggle" | "toggle-all" | "reveal"
+  | "delete" | "delete-all" | "delete-every" | "open-every" | "close-every"
+  | "disable" | "enable" | "toggle-enabled" | "create-lines" | "create-selection";
 
 export type TextObject =
   | "word" | "WORD" | "paren" | "brace" | "bracket" | "angle"
@@ -77,6 +88,8 @@ export type Command =
   /** `o` in visual mode: moves the caret to the selection's other end. */
   | { readonly kind: "swap-ends" }
   | { readonly kind: "leave-visual" }
+  /** A `z` key that opens, closes, or creates folds. */
+  | { readonly kind: "fold"; readonly action: FoldAction; readonly count: number | null }
   /** `ctrl-w` and a key: a window command, repeated by the count where that
    * means moving focus or resizing. */
   | { readonly kind: "window"; readonly action: WindowAction; readonly count: number | null }
@@ -129,6 +142,19 @@ const REPOSITIONS: Readonly<Record<string, readonly ["top" | "center" | "bottom"
   t: ["top", false], z: ["center", false], b: ["bottom", false],
   "<cr>": ["top", true], ".": ["center", true], "-": ["bottom", true],
 };
+
+/** The keys after `z` that act on folds. */
+const FOLD_ACTIONS: Readonly<Record<string, FoldAction>> = {
+  o: "open", O: "open-all", c: "close", C: "close-all", a: "toggle", A: "toggle-all",
+  v: "reveal", x: "reveal", X: "reveal", d: "delete", D: "delete-all", E: "delete-every",
+  R: "open-every", M: "close-every", n: "disable", N: "enable", i: "toggle-enabled", F: "create-lines",
+};
+
+/** The keys after `z` that move between folds. */
+const FOLD_MOTIONS: Readonly<Record<string, SimpleMotion>> = { j: "fold-next", k: "fold-previous" };
+
+/** The keys after `[` and `]` that move to the start and end of a fold. */
+const BRACKET_FOLD_MOTIONS: Readonly<Record<string, SimpleMotion>> = { "[": "fold-start", "]": "fold-end" };
 
 /** The keys after `ctrl-w`. With ctrl held, `h` arrives as Backspace, as in
  * Vim, and the others as their control names. */
@@ -250,9 +276,24 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
       return action === undefined ? done(null) : done({ kind: "window", action, count });
     }
     case "z": {
+      const foldMotion = FOLD_MOTIONS[key];
+      if (foldMotion !== undefined) return motion(foldMotion);
+      // Only motions follow an operator.
+      if (operator !== null) return done(null);
+      if (key === "f") {
+        return visual
+          ? done({ kind: "fold", action: "create-selection", count })
+          : next({ operator: "zf", prefix: "" });
+      }
+      const action = FOLD_ACTIONS[key];
+      if (action !== undefined) return done({ kind: "fold", action, count });
       const reposition = REPOSITIONS[key];
       if (reposition === undefined) return done(null);
       return done({ kind: "reposition", at: reposition[0], firstNonBlank: reposition[1], count });
+    }
+    case "[": case "]": {
+      const bracketMotion = key === "z" ? BRACKET_FOLD_MOTIONS[pending.prefix] : undefined;
+      return bracketMotion === undefined ? done(null) : motion(bracketMotion);
     }
     case "g": {
       if (operator !== null && DOUBLING[operator] === key) return target({ kind: "line" });
@@ -273,7 +314,8 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
       ? next({ count: pending.count + key })
       : next({ operatorCount: pending.operatorCount + key });
   }
-  if (key === "g") return next({ prefix: "g" });
+  if (key === "g" || key === "[" || key === "]") return next({ prefix: key });
+  if (key === "z") return next({ prefix: "z" });
   if (key === "f" || key === "F" || key === "t" || key === "T" || key === "'" || key === "`") {
     return next({ prefix: key });
   }
@@ -290,7 +332,6 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
   }
   const scroll = SCROLLS[key];
   if (scroll !== undefined) return done({ kind: "scroll", scroll, count });
-  if (key === "z") return next({ prefix: "z" });
   if (key === "<c-w>" && operator === null) return next({ prefix: "<c-w>" });
   if (key === '"') return next({ prefix: '"' });
   if (key === "r") return next({ prefix: "r" });

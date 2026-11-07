@@ -1,0 +1,71 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: folding. `folds` lists the
+// collapsed folds as first and last lines. Plain text folds by indentation:
+// "top" folds lines 1 to 4 and "  mid" lines 2 to 3 in the nested text.
+{
+  "cases": [
+    // Closing and opening.
+    { "name": "zc closes the innermost fold around the caret", "before": ["top", "  mid", "    ‸leaf1", "    leaf2", "  tail", "end"], "keys": "zc", "after": { "text": ["top", "  mi‸d", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]] } },
+    { "name": "zc again closes the fold around the closed one", "before": ["top", "  mid", "    ‸leaf1", "    leaf2", "  tail", "end"], "keys": "zczc", "after": { "text": ["to‸p", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]] } },
+    { "name": "a count on zc closes that many levels", "before": ["top", "  mid", "    ‸leaf1", "    leaf2", "  tail", "end"], "keys": "2zc", "after": { "text": ["to‸p", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]] } },
+    { "name": "zc outside any fold does nothing", "before": ["‸a", "b"], "keys": "zc", "after": { "text": ["‸a", "b"], "folds": [] } },
+    { "name": "zo opens the closed fold on the caret's line", "before": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]], "keys": "zo", "after": { "text": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+    { "name": "zo opens only the outer of nested closed folds", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]], "keys": "zo", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]] } },
+    { "name": "zO opens the closed folds that have the caret's line", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]], "keys": "zO", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]] } },
+    { "name": "zC closes every fold around the caret", "before": ["top", "  mid", "    ‸leaf1", "    leaf2", "  tail", "end"], "keys": "zC", "after": { "text": ["to‸p", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]] } },
+    { "name": "za closes an open fold", "before": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "keys": "za", "after": { "text": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]] } },
+    { "name": "za opens a closed fold", "before": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]], "keys": "za", "after": { "text": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+    { "name": "zA opens every closed fold around the caret", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]], "keys": "zA", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]] } },
+    { "name": "zA closes every fold around an open caret", "before": ["top", "  mid", "    ‸leaf1", "    leaf2", "  tail", "end"], "keys": "zA", "after": { "text": ["to‸p", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]] } },
+    { "name": "zv opens the folds hiding the caret's line", "before": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]], "keys": "zv", "after": { "text": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+    { "name": "zx opens the folds around the caret", "before": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]], "keys": "zx", "after": { "text": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+    { "name": "zd deletes the closed fold", "before": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]], "keys": "zd", "after": { "text": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+    { "name": "zD deletes the closed folds around the caret", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]], "keys": "zD", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]] } },
+    { "name": "zE deletes every fold", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]], "keys": "zE", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+
+    { "name": "zc closes the language's fold, keeping the closing line", "language": "rust", "before": ["fn main() {", "    let a = 1;", "    ‸let b = 2;", "}"], "keys": "zc", "after": { "text": ["fn m‸ain() {", "    let a = 1;", "    let b = 2;", "}"], "folds": [[0, 2]] } },
+
+    // All folds.
+    { "name": "zR opens every fold", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]], "keys": "zR", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+    { "name": "zM closes every fold", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "keys": "zM", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]] } },
+    { "name": "zn opens every fold and zN closes them again", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]], "keys": "znzN", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]] } },
+    { "name": "zn leaves no fold closed", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]], "keys": "zn", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+    { "name": "zi toggles folding", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]], "keys": "zi", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [] } },
+    { "name": "zi twice restores the folds", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]], "keys": "zizi", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]] } },
+    { "name": "closing a fold turns folding back on", "before": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[1, 3]], "keys": "znzM", "after": { "text": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"], "folds": [[0, 4], [1, 3]] } },
+
+    // Creating folds.
+    { "name": "zf over a motion closes a fold of its lines", "before": ["‸a", "b", "c"], "keys": "zfj", "after": { "text": ["‸a", "b", "c"], "folds": [[0, 1]] } },
+    { "name": "a count on zf reaches further", "before": ["‸a", "b", "c", "d"], "keys": "2zfj", "after": { "text": ["‸a", "b", "c", "d"], "folds": [[0, 2]] } },
+    { "name": "zf over a text object folds its lines", "before": ["a", "‸b", "c", "", "d"], "keys": "zfap", "after": { "text": ["‸a", "b", "c", "", "d"], "folds": [[0, 3]] } },
+    { "name": "zf over one line makes no fold", "before": ["‸a", "b"], "keys": "zfl", "after": { "text": ["‸a", "b"], "folds": [] } },
+    { "name": "zF folds count lines", "before": ["‸a", "b", "c", "d"], "keys": "3zF", "after": { "text": ["‸a", "b", "c", "d"], "folds": [[0, 2]] } },
+    { "name": "visual zf folds the selected lines and leaves visual mode", "before": ["‸a", "b", "c"], "keys": "Vjzf", "after": { "text": ["‸a", "b", "c"], "folds": [[0, 1]] } },
+    { "name": "a fold made by zf opens with zo", "before": ["‸a", "b", "c"], "keys": "zfjzo", "after": { "text": ["‸a", "b", "c"], "folds": [] } },
+
+    // Moving between folds.
+    { "name": "zj moves to the start of the next fold", "before": ["‸a", "  b", "c", "  d", "e"], "keys": "zj", "after": ["a", "  b", "‸c", "  d", "e"] },
+    { "name": "zj repeats with a count and stops at the last fold", "before": ["‸a", "  b", "c", "  d", "e"], "keys": "5zj", "after": ["a", "  b", "‸c", "  d", "e"] },
+    { "name": "zj with no fold after it fails", "before": ["a", "  b", "‸c", "  d", "e"], "keys": "zj", "after": ["a", "  b", "‸c", "  d", "e"] },
+    { "name": "zk moves to the end of the previous fold", "before": ["a", "  b", "c", "  d", "‸e"], "keys": "zk", "after": ["a", "  b", "c", "  ‸d", "e"] },
+    { "name": "[z moves to the start of the open fold", "before": ["a", "  ‸b", "c"], "keys": "[z", "after": ["‸a", "  b", "c"] },
+    { "name": "[z at the start moves to the enclosing fold", "before": ["top", "  ‸mid", "    leaf1", "    leaf2", "  tail", "end"], "keys": "[z", "after": ["‸top", "  mid", "    leaf1", "    leaf2", "  tail", "end"] },
+    { "name": "]z moves to the end of the open fold", "before": ["‸a", "  b", "  c", "d"], "keys": "]z", "after": ["a", "  b", "  ‸c", "d"] },
+    { "name": "an operator takes the lines through the next fold's start", "before": ["‸a", "  b", "c", "  d", "e"], "keys": "dzj", "after": ["  ‸d", "e"] },
+
+    // Lines and folds.
+    { "name": "j steps over a closed fold", "before": ["‸a", "  b", "c"], "folds": [[0, 1]], "keys": "j", "after": ["a", "  b", "‸c"] },
+    { "name": "k lands on a closed fold's first line", "before": ["a", "  b", "‸c"], "folds": [[0, 1]], "keys": "k", "after": ["‸a", "  b", "c"] },
+    { "name": "a count on j counts a closed fold as one line", "before": ["‸a", "  b", "c", "d"], "folds": [[0, 1]], "keys": "2j", "after": ["a", "  b", "c", "‸d"] },
+    { "name": "G into a closed fold lands on its first line", "before": ["‸x", "a", "  b", "  c"], "folds": [[1, 3]], "keys": "G", "after": ["x", "‸a", "  b", "  c"] },
+    { "name": "dd deletes a whole closed fold", "before": ["‸a", "  b", "c"], "folds": [[0, 1]], "keys": "dd", "after": { "text": ["‸c"], "folds": [] } },
+    { "name": "a count on dd counts a closed fold as one line", "before": ["‸a", "  b", "c", "d"], "folds": [[0, 1]], "keys": "2dd", "after": { "text": ["‸d"], "folds": [] } },
+    { "name": "dj takes a closed fold with the line below", "before": ["‸a", "  b", "c", "d"], "folds": [[0, 1]], "keys": "dj", "after": { "text": ["‸d"], "folds": [] } },
+    { "name": "dd on the line above a closed fold leaves it closed", "before": ["‸x", "a", "  b", "c"], "folds": [[1, 2]], "keys": "dd", "after": { "text": ["‸a", "  b", "c"], "folds": [[0, 1]] } },
+    { "name": "yy yanks a whole closed fold", "before": ["‸a", "  b", "c"], "folds": [[0, 1]], "keys": "yyGp", "after": { "text": ["a", "  b", "c", "‸a", "  b"], "folds": [[0, 1]] } },
+    { "name": "p puts below a closed fold", "before": ["‸a", "  b", "c"], "folds": [[0, 1]], "keys": "yyp", "after": { "text": ["a", "  b", "‸a", "  b", "c"], "folds": [[0, 1]] } },
+    { "name": ">> shifts a whole closed fold", "before": ["‸a", "  b", "c"], "folds": [[0, 1]], "keys": ">>", "after": { "text": ["    ‸a", "    b", "c"], "folds": [[0, 1]] } },
+    { "name": "visual-line d on a closed fold deletes all of it", "before": ["‸a", "  b", "c"], "folds": [[0, 1]], "keys": "Vd", "after": { "text": ["‸c"], "folds": [] } }
+  ]
+}

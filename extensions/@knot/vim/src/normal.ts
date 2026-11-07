@@ -3,8 +3,9 @@
 // Text math is done here over line snapshots; indentation, joining, bracket
 // matching, and visual-row movement are the native editor commands.
 import { commands, documents, languages, settings, workbench } from "knot";
-import type { Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, Mark, ViewTarget } from "knot";
+import type { Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, FoldRange, Mark, ViewTarget } from "knot";
 import { JumpList, type LineOf } from "./jumps.js";
+import { closedAt, createFold, foldMotion, intoShownLine, lastLine, linesDown, linesUp, runFold, shownLine } from "./folds.js";
 import type { Command, FindKind, InsertAt, MarkMotion, Motion, Operator, Scroll, Target } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import {
@@ -77,6 +78,9 @@ export type State = {
   /** How many lines `ctrl-d` and `ctrl-u` scroll, once a count set it, as
    * Vim's `scroll` option; half the view until then. */
   scroll: number | null;
+  /** The folds `zn` expanded, which `zN` collapses again, or null while
+   * folding is on. */
+  foldsOff: readonly FoldRange[] | null;
 };
 
 export async function setMode(state: State, mode: Mode) {
@@ -146,6 +150,9 @@ export async function run(state: State, command: Command) {
       break;
     case "set-mark":
       await setMark(state, command.name);
+      break;
+    case "fold":
+      await runFold(state, command.action, command.count);
       break;
     case "jump":
       await stepJumps(state, command.count);
@@ -230,7 +237,9 @@ export async function resolve(
     case "right-wrap": return { to: await right(lines, from, n, true), type: "exclusive" };
     case "up":
     case "down": {
-      const line = Math.max(0, Math.min(total - 1, from.line + (name === "up" ? -n : n)));
+      // A collapsed fold counts as one line.
+      const folds = await state.handle.folds();
+      const line = name === "up" ? linesUp(folds, from.line, n) : linesDown(folds, from.line, n, total);
       if (operator !== null) return line === from.line ? null : { to: { line, col: 0 }, type: "linewise" };
       return towardWant(state, lines, from, line);
     }
@@ -302,6 +311,13 @@ export async function resolve(
       if (last === null) return null;
       const kind = name === "repeat-find" ? last.kind : REVERSED[last.kind];
       return find(text, from, kind, last.char, n, true);
+    }
+    case "fold-next":
+    case "fold-previous":
+    case "fold-start":
+    case "fold-end": {
+      const line = await foldMotion(state, from.line, name, n);
+      return line === null ? null : { to: await lineStart(lines, line), type: "linewise" };
     }
     case "window-top":
     case "window-middle":
@@ -571,7 +587,7 @@ async function motion(state: State, name: Motion, count: number | null) {
     return;
   }
   if (moved.jump === true) await recordJump(state, caret);
-  await land(state, lines, moved);
+  await land(state, lines, moved.to.line === from.line ? moved : await intoShownLine(state, lines, moved));
 }
 
 /** Moves the caret where a motion went, onto its line's last character at
@@ -701,7 +717,9 @@ async function operate(
     case "selection":
       return;
     case "line": {
-      const last = Math.min((await lines.count()) - 1, from.line + (count ?? 1) - 1);
+      const folds = await state.handle.folds();
+      const total = await lines.count();
+      const last = linesDown(folds, from.line, (count ?? 1) - 1, total);
       region = { start: { line: from.line, col: 0 }, end: { line: last, col: 0 }, linewise: true };
       break;
     }
@@ -721,7 +739,18 @@ async function operate(
     await moveTo(state, lines, from);
     return;
   }
-  await applyOperator(state, lines, operator, register, await adjust(lines, region, operator), from, big);
+  region = await adjust(lines, region, operator);
+  if (region.linewise) region = await aroundFolds(state, region);
+  await applyOperator(state, lines, operator, register, region, from, big);
+}
+
+/** Whole lines take the closed folds at their ends along, as `dd` on a
+ * closed fold deletes all of it. */
+export async function aroundFolds(state: State, region: Region): Promise<Region> {
+  const folds = await state.handle.folds();
+  const first = shownLine(folds, region.start.line);
+  const last = closedAt(folds, region.end.line)?.end ?? region.end.line;
+  return { ...region, start: { ...region.start, line: first }, end: { ...region.end, line: last } };
 }
 
 /** Applies an operator to a region, from the caret at `from`. `big` makes a
@@ -767,14 +796,22 @@ export async function applyOperator(
       ];
       const first = region.start.line;
       const last = region.end.line;
+      // The native command takes a closed fold's lines along with its first
+      // line, and a selection must not end in hidden ones.
+      const shown = shownLine(await state.handle.folds(), last);
       await grouped(state, async () => {
         const anchor = await lines.offset({ line: first, col: 0 });
-        const caret = await lines.offset({ line: last, col: (await lines.text(last)).length });
+        const caret = await lines.offset({ line: shown, col: (await lines.text(shown)).length });
         await state.handle.setSelection({ anchor, caret });
         for (let n = 0; n < shifts; n++) await commands.invoke(native);
       });
       const fresh = new BufferLines(state.buffer);
       await moveTo(state, fresh, await lineStart(fresh, first));
+      return;
+    }
+    case "zf": {
+      await createFold(state, region.start.line, region.end.line);
+      await moveOnto(state, lines, { line: region.start.line, col: from.col });
       return;
     }
     case "gu":
@@ -844,13 +881,15 @@ async function put(state: State, register: string | null, count: number, before:
   if (value.linewise) {
     const block = (value.text.endsWith("\n") ? value.text : `${value.text}\n`).repeat(count);
     const total = await lines.count();
-    const line = before ? from.line : from.line + 1;
+    // Below a closed fold is after all of it.
+    const last = before ? from.line : lastLine(await state.handle.folds(), from.line);
+    const line = before ? last : last + 1;
     await grouped(state, async () => {
       if (line < total) {
         const at = await lines.offset({ line, col: 0 });
         await replace(state, at, at, block);
       } else {
-        const at = await lines.offset({ line: from.line, col: (await lines.text(from.line)).length });
+        const at = await lines.offset({ line: last, col: (await lines.text(last)).length });
         await replace(state, at, at, `\n${block.slice(0, -1)}`);
       }
     });

@@ -74,7 +74,8 @@ a fresh workbench and types its keys through the session's router, and a run
 settles once the session holds no keys and the extension pool is quiet. Each
 Vim case starts from an empty clipboard and the package's hidden
 `vim.reset`, which clears registers, their record, marks, and the last find,
-so case order does not matter. Windowed product tests remain for rendering, IME,
+so case order does not matter. A case may collapse `folds` before its keys
+and expect them afterwards. Windowed product tests remain for rendering, IME,
 pointer input, and the window adapter. Product tests keep extension storage,
 recovery, and the state database in memory, so each test starts empty; tests
 that reopen a store as a restart would, and the stores' own tests, use

@@ -166,8 +166,32 @@ test("z repositions the caret's line, or a counted line", () => {
     kind: "reposition", at: "top", firstNonBlank: true, count: 12,
   });
   assert.deepEqual(parse("z", "-").command, { kind: "reposition", at: "bottom", firstNonBlank: true, count: null });
-  assert.equal(parse("z", "x").command, null);
-  assert.equal(parse("d", "z").command, null, "z is no operator target");
+  assert.equal(parse("z", "q").command, null);
+  assert.equal(parse("d", "z", "z").command, null, "only fold motions follow an operator");
+});
+
+test("z keys open, close, and create folds", () => {
+  assert.deepEqual(parse("3", "z", "o").command, { kind: "fold", action: "open", count: 3 });
+  assert.deepEqual(parse("z", "C").command, { kind: "fold", action: "close-all", count: null });
+  assert.deepEqual(parse("z", "R").command, { kind: "fold", action: "open-every", count: null });
+  assert.deepEqual(parse("z", "F").command, { kind: "fold", action: "create-lines", count: null });
+  assert.deepEqual(visual("z", "f"), { kind: "fold", action: "create-selection", count: null });
+  const { pending } = parse("z", "f");
+  assert.equal(pending.operator, "zf", "zf waits for a target");
+  assert.deepEqual(parse("z", "f", "j").command, {
+    kind: "operator", operator: "zf", register: null, count: null, target: { kind: "motion", motion: "down" },
+  });
+});
+
+test("fold motions are motions and operator targets", () => {
+  assert.deepEqual(parse("2", "z", "j").command, { kind: "motion", motion: "fold-next", count: 2 });
+  assert.deepEqual(parse("z", "k").command, { kind: "motion", motion: "fold-previous", count: null });
+  assert.deepEqual(parse("[", "z").command, { kind: "motion", motion: "fold-start", count: null });
+  assert.deepEqual(parse("]", "z").command, { kind: "motion", motion: "fold-end", count: null });
+  assert.deepEqual(parse("d", "z", "j").command, {
+    kind: "operator", operator: "d", register: null, count: null, target: { kind: "motion", motion: "fold-next" },
+  });
+  assert.equal(parse("[", "x").command, null);
 });
 
 test("H, M, and L are motions and operator targets", () => {

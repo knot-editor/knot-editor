@@ -3,11 +3,12 @@
 // and shows them as an editor selection that includes both. Motions move the
 // caret; operators apply to the selected text through normal mode's code.
 import type { EditorSelection } from "knot";
+import { createFold, intoShownLine, lastLine, runFold } from "./folds.js";
 import type { Command, TextObject } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import { lineStart, type Position } from "./motions.js";
 import {
-  applyOperator, clampCaret, grouped, isVisual, join, type Moved, moveOnto, moveTo, readRegister, record, recordJump,
+  applyOperator, aroundFolds, clampCaret, grouped, isVisual, join, type Moved, moveOnto, moveTo, readRegister, record, recordJump,
   regionText, replace, reposition, resolve, scroll, setMode, type State, cellsAt, towardWant,
 } from "./normal.js";
 import { type Region, textObject } from "./objects.js";
@@ -43,7 +44,7 @@ export async function runVisual(state: State, command: Command) {
         return;
       }
       if (moved.jump === true) await recordJump(state, visual.caret);
-      await land(state, lines, moved);
+      await land(state, lines, moved.to.line === from.line ? moved : await intoShownLine(state, lines, moved));
       return;
     }
     case "scroll": {
@@ -63,12 +64,22 @@ export async function runVisual(state: State, command: Command) {
       await reposition(state, line, command.at);
       return;
     }
+    case "fold": {
+      if (command.action !== "create-selection") return runFold(state, command.action, command.count);
+      const { region } = await selectedRegion(state, lines, true);
+      await exit(state);
+      await createFold(state, region.start.line, region.end.line);
+      await moveOnto(state, lines, { line: region.start.line, col: 0 });
+      return;
+    }
     case "select-object":
       return selectObject(state, lines, command.object, command.around, command.count);
     case "operator": {
       if (command.target.kind !== "selection") return;
       const linewise = command.target.linewise || state.mode === "visual-line";
-      const { region, from } = await selectedRegion(state, lines, linewise);
+      const selected = await selectedRegion(state, lines, linewise);
+      const { from } = selected;
+      const region = selected.region.linewise ? await aroundFolds(state, selected.region) : selected.region;
       await exit(state);
       // A count on `>` and `<` is how many times to shift.
       await applyOperator(state, lines, command.operator, command.register, region, from, false, command.count ?? 1);
@@ -204,7 +215,9 @@ async function show(state: State, lines: BufferLines, reveal: "nearest" | "cente
     const anchorLine = (await lines.position(anchor)).line;
     const caretLine = (await lines.position(caret)).line;
     const start = await lines.offset({ line: Math.min(anchorLine, caretLine), col: 0 });
-    const end = await lineEnd(lines, Math.max(anchorLine, caretLine));
+    // Whole lines include the lines of a closed fold at the end.
+    const bottom = lastLine(await state.handle.folds(), Math.max(anchorLine, caretLine));
+    const end = await lineEnd(lines, bottom);
     selection = caretLine >= anchorLine ? { anchor: start, caret: end } : { anchor: end, caret: start };
   } else {
     const start = Math.min(anchor, caret);

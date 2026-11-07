@@ -237,7 +237,7 @@ class Vim {
       target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
       language: info.language, mode: "normal", pending: EMPTY, operatorShown: false, message: null,
       want: null, caret: null, group: null, opened: false, visual: null, selected: null, previous: null,
-      jumps: new JumpList(), context: null, scroll: null,
+      jumps: new JumpList(), context: null, scroll: null, foldsOff: null,
     };
     this.states.set(target, state);
     handle.onDidClose(() => {

@@ -38,6 +38,9 @@ struct Case {
     after: Expected,
     #[serde(default)]
     view: Option<View>,
+    /// The folds collapsed before the keys, as first and last lines.
+    #[serde(default)]
+    folds: Vec<[usize; 2]>,
 }
 
 /// What a case expects: the text, or the text with more.
@@ -56,6 +59,9 @@ struct Full {
     mode: String,
     #[serde(default)]
     top: Option<usize>,
+    /// The folds collapsed afterwards, as first and last lines.
+    #[serde(default)]
+    folds: Option<Vec<[usize; 2]>>,
 }
 
 #[derive(Deserialize)]
@@ -111,6 +117,28 @@ impl Session {
         assert_eq!(self.top_line(cx), top, "the view starts at line {top}");
     }
 
+    /// Collapse the folds `folds`, as first and last lines.
+    fn fold_lines(&self, folds: &[[usize; 2]], cx: &mut TestAppContext) {
+        self.editor.update(cx, |editor, cx| {
+            for [first, last] in folds {
+                assert!(editor.fold(*first..*last + 1, cx), "fold {first}..={last}");
+            }
+        });
+        self.settle(cx);
+    }
+
+    /// The collapsed folds as first and last lines.
+    fn fold_lines_now(&self, cx: &mut TestAppContext) -> Vec<[usize; 2]> {
+        cx.read(|cx| {
+            self.editor
+                .read(cx)
+                .folds()
+                .into_iter()
+                .map(|lines| [lines.start, lines.end - 1])
+                .collect()
+        })
+    }
+
     /// The first line wholly in view.
     fn top_line(&self, cx: &mut TestAppContext) -> usize {
         cx.read(|cx| {
@@ -164,19 +192,33 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
                 if let Some(view) = &value.view {
                     session.show_lines(view.lines, view.top, cx);
                 }
+                session.fold_lines(&value.folds, cx);
                 session.press(&value.keys, cx);
-                let (text, expected_mode, expected_top) = match &value.after {
-                    Expected::Text(text) => (text, "normal", None),
-                    Expected::Full(full) => (&full.text, full.mode.as_str(), full.top),
+                let (text, expected_mode, expected_top, expected_folds) = match &value.after {
+                    Expected::Text(text) => (text, "normal", None, None),
+                    Expected::Full(full) => (
+                        &full.text,
+                        full.mode.as_str(),
+                        full.top,
+                        full.folds.as_ref(),
+                    ),
                 };
                 let expected = text.lines().join("\n");
                 let actual = session.marked(cx);
                 let mode = session.mode(cx);
                 let top = session.top_line(cx);
+                let folds = session.fold_lines_now(cx);
                 if actual != expected
                     || mode != expected_mode
                     || expected_top.is_some_and(|line| line != top)
+                    || expected_folds.is_some_and(|expected| *expected != folds)
                 {
+                    let folds = match expected_folds {
+                        Some(expected) => {
+                            format!("\n  folds: expected {expected:?}, actual {folds:?}")
+                        }
+                        None => String::new(),
+                    };
                     let top = match expected_top {
                         Some(line) => format!("\n  top line: expected {line}, actual {top}"),
                         None => String::new(),
@@ -185,7 +227,7 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
                         &case,
                         "",
                         format!(
-                            "keys {:?}\n  expected ({expected_mode}):\n{expected}\n  actual ({mode}):\n{actual}{top}",
+                            "keys {:?}\n  expected ({expected_mode}):\n{expected}\n  actual ({mode}):\n{actual}{top}{folds}",
                             value.keys
                         ),
                     );
@@ -202,7 +244,7 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
 topics!(
     "vim",
     run_topic;
-    ex, insert, marks, motions, objects, operators, registers, scrolling, visual
+    ex, folding, insert, marks, motions, objects, operators, registers, scrolling, visual
 );
 
 #[gpui::test]
