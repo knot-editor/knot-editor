@@ -316,12 +316,12 @@ pub(crate) async fn move_tab_down(context: CommandContext, (): ()) -> Result<(),
     move_toward(context, SplitEdge::Bottom).await
 }
 
-#[command("workbench.focus-next-pane", title = "Focus Next Pane", description = "Focus the next pane in layout order, wrapping.", id = FOCUS_NEXT_PANE_COMMAND, participant = Workbench)]
+#[command("workbench.focus-next-pane", title = "Focus Next Pane", description = "Focus the next editor-area pane in layout order, wrapping.", id = FOCUS_NEXT_PANE_COMMAND, participant = Workbench)]
 pub(crate) async fn focus_next_pane(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     focus_chosen(context, |workbench| workbench.cycle_pane_id(true)).await
 }
 
-#[command("workbench.focus-previous-pane", title = "Focus Previous Pane", description = "Focus the previous pane in layout order, wrapping.", id = FOCUS_PREVIOUS_PANE_COMMAND, participant = Workbench)]
+#[command("workbench.focus-previous-pane", title = "Focus Previous Pane", description = "Focus the previous editor-area pane in layout order, wrapping.", id = FOCUS_PREVIOUS_PANE_COMMAND, participant = Workbench)]
 pub(crate) async fn focus_previous_pane(
     context: CommandContext,
     (): (),
@@ -329,7 +329,7 @@ pub(crate) async fn focus_previous_pane(
     focus_chosen(context, |workbench| workbench.cycle_pane_id(false)).await
 }
 
-#[command("workbench.focus-first-pane", title = "Focus First Pane", description = "Focus the first pane in layout order.", id = FOCUS_FIRST_PANE_COMMAND, participant = Workbench)]
+#[command("workbench.focus-first-pane", title = "Focus First Pane", description = "Focus the first editor-area pane in layout order.", id = FOCUS_FIRST_PANE_COMMAND, participant = Workbench)]
 pub(crate) async fn focus_first_pane(
     context: CommandContext,
     (): (),
@@ -337,7 +337,7 @@ pub(crate) async fn focus_first_pane(
     focus_chosen(context, Workbench::first_pane_id).await
 }
 
-#[command("workbench.focus-last-pane", title = "Focus Last Pane", description = "Focus the last pane in layout order.", id = FOCUS_LAST_PANE_COMMAND, participant = Workbench)]
+#[command("workbench.focus-last-pane", title = "Focus Last Pane", description = "Focus the last editor-area pane in layout order.", id = FOCUS_LAST_PANE_COMMAND, participant = Workbench)]
 pub(crate) async fn focus_last_pane(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     focus_chosen(context, Workbench::last_pane_id).await
 }

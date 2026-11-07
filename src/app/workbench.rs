@@ -569,39 +569,39 @@ impl Workbench {
         self.focused_pane = Some(pane_id);
     }
 
-    /// The panes in layout order.
+    /// The panes in layout order, without the docks' tool panes.
     fn pane_order(&self) -> Vec<PaneId> {
         let mut ids = Vec::new();
         if let Some(layout) = &self.layout {
             layout.pane_ids(&mut ids);
         }
+        ids.retain(|pane| self.dock_location(*pane).is_none());
         ids
     }
 
-    /// The first pane in layout order.
+    /// The first pane in layout order, not in a dock.
     pub(crate) fn first_pane_id(&self) -> Option<PaneId> {
         self.pane_order().first().copied()
     }
 
-    /// The last pane in layout order.
+    /// The last pane in layout order, not in a dock.
     pub(crate) fn last_pane_id(&self) -> Option<PaneId> {
         self.pane_order().last().copied()
     }
 
-    /// The pane after (or before) the focused one in layout order, wrapping.
+    /// The pane after (or before) the focused one in layout order, wrapping
+    /// over panes outside the docks. From a dock, the walk starts at either
+    /// end of the editor area.
     pub(crate) fn cycle_pane_id(&self, forward: bool) -> Option<PaneId> {
         let order = self.pane_order();
-        let index = order
-            .iter()
-            .position(|pane| Some(*pane) == self.focused_pane)?;
         let count = order.len();
-        Some(
-            order[if forward {
-                (index + 1) % count
-            } else {
-                (index + count - 1) % count
-            }],
-        )
+        let Some(index) = order
+            .iter()
+            .position(|pane| Some(*pane) == self.focused_pane)
+        else {
+            return if forward { order.first() } else { order.last() }.copied();
+        };
+        Some(order[(index + if forward { 1 } else { count - 1 }) % count])
     }
 
     /// The pane that had focus before the focused one, while it is open.

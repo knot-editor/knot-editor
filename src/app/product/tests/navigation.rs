@@ -317,3 +317,38 @@ fn maximize_ends_on_toggle_split_close_and_directional_focus(cx: &mut TestAppCon
     assert!(painted(&shell, main, cx));
     assert!(painted(&shell, dock, cx));
 }
+
+#[gpui::test]
+fn pane_cycling_skips_dock_panes_and_starts_from_the_editor_area(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::{
+        FOCUS_FIRST_PANE_COMMAND, FOCUS_LAST_PANE_COMMAND, FOCUS_NEXT_PANE_COMMAND,
+        FOCUS_PANE_LEFT_COMMAND, FOCUS_PREVIOUS_FOCUSED_PANE_COMMAND, FOCUS_PREVIOUS_PANE_COMMAND,
+        SPLIT_HORIZONTAL_COMMAND,
+    };
+    let (shell, window) = docked_window(cx);
+    let (dock, main) = dock_and_main(&shell, cx);
+    focus(&shell, window, main, cx);
+    run(&shell, window, SPLIT_HORIZONTAL_COMMAND, cx);
+    let split = focused(&shell, cx);
+
+    // The walk wraps over the editor area without entering the dock.
+    run(&shell, window, FOCUS_NEXT_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), main);
+    run(&shell, window, FOCUS_NEXT_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), split);
+    run(&shell, window, FOCUS_PREVIOUS_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), main);
+    run(&shell, window, FOCUS_LAST_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), split);
+    run(&shell, window, FOCUS_FIRST_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), main);
+
+    // Directional focus still reaches the dock, a walk leaves it, and the
+    // previously focused pane goes back to it.
+    run(&shell, window, FOCUS_PANE_LEFT_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), dock);
+    run(&shell, window, FOCUS_NEXT_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), main);
+    run(&shell, window, FOCUS_PREVIOUS_FOCUSED_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), dock);
+}
