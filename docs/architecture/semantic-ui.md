@@ -347,6 +347,8 @@ An input with `onChange` follows its typed value through the same session:
 input is accepted or dismissed, and each pull carries the message the
 callback returned for the previous value, which the input shows as a muted
 line under its field.
+An input with a `prompt` shows that fixed text before its field, outside its
+value, and dismisses on Backspace in an empty field, as a command line does.
 Unloading the lifecycle drops its sessions with its transients.
 
 Settlement happens once on acceptance, dismissal, native-prompt answer, window

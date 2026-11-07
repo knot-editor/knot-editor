@@ -294,8 +294,11 @@ double-clicked, moved, kept open by command, or opened again without
 `workbench.previewTabs` setting turns previews into regular tabs. Directional
 focus and moves find the neighbor from pane rectangles laid out from ratios
 and dock sizes over the painted workbench, so they work while a pane is
-maximized, and a move with no neighbor splits the pane on that side. Maximize
-is shell render state that lasts while its pane stays focused.
+maximized, and a move with no neighbor splits the pane on that side. Cycling
+and first and last pane commands walk the panes outside the docks in layout
+order, and the workbench remembers the previously focused pane. Resizing can be
+limited to the width or the height, which changes the nearest split along that
+axis. Maximize is shell render state that lasts while its pane stays focused.
 
 One application-level coordinator protects tab, pane, window, and quit
 closure; Close Other Tabs covers a pane's unpinned tabs but the origin, and

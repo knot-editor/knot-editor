@@ -305,6 +305,23 @@ Projects follow root edits rather than offering a separate add-folder command.
 References: [extension guide](extension-api.md) and
 [workbench lifecycle](architecture/workbench-and-lifecycle.md#automatic-tool-layout-memory).
 
+## Bundled Vim mode
+
+`@knot/vim` is a bundled JavaScript package on public APIs only, because it is
+the acceptance test for the editor API; native modal editing and a Helix-style
+model were rejected. A JavaScript state machine parses typed text, since
+native key sequences cannot enumerate counts. Visual mode keeps its own
+anchor, and ordinary text math, over line snapshots, stays pure. Indentation,
+joining, `%`, and visual rows invoke native commands so they follow the
+language. The unnamed register is the system clipboard, as
+`clipboard=unnamedplus` makes it, with a remembered linewise flag. `ctrl-w`
+treats a window as a tab, as other editors' Vim modes do, so `c` and `q` close
+the tab and cycling skips docks. Search, `.` repeat, and visual-block wait for
+Find, recording, and multiple selections.
+
+References: [extension guide](extension-api.md#bind-keys-and-modal-contexts) and
+[roadmap](roadmap.md) (D113, D142, D150, D151).
+
 ## Project sessions
 
 A project's session is active or suspended. Membership requires an active

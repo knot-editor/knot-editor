@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–8 complete; checkpoint 9 is next. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–8 complete; checkpoint 9 awaits the final dogfooding pass. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -335,20 +335,20 @@ cannot repeat moving focus, as a child command keeps the pane its parent started
 in (D151). Left out (D151, D158): `n`, `x r R`, counts on focus keys, and leaving
 a dock tool by `ctrl-w`. `ctrl-w ctrl-s`, `ctrl-v`, and `ctrl-c` stay native.
 
-### 9. Documentation and plan removal 📝
+### 9. Documentation and plan removal 🔍
 
 Deliverables:
 
-- Architecture and decision updates for the package and the primitives it
+- ✅ Architecture and decision updates for the package and the primitives it
   added or changed.
-- The extension guide mentions the package.
-- Roadmap entries for any deferred decision below that was deferred instead
+- ✅ The extension guide mentions the package.
+- ✅ Roadmap entries for any deferred decision below that was deferred instead
   of settled, and a check that every exclusion and left-out has one.
 - The index plan marks D058 complete, and this plan is removed.
 
 Validation:
 
-- `just check`, and the docs' links resolve.
+- ✅ `just check`, and the docs' links resolve.
 
 Review gate: a final dogfooding pass with every `Try:` command, then remove
 the plan.
