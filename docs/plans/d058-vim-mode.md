@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–6 complete; checkpoint 7 is next. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–6 complete; checkpoint 7 awaits dogfooding. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -310,21 +310,22 @@ so a key hold now releases once an input, picker, or the palette takes focus
 ([ordered delivery](../architecture/commands.md#ordered-delivery)). The input
 shows no `:` yet; checkpoint 7 adds the prompt.
 
-### 7. Ex line prompt 📝
+### 7. Ex line prompt 🔍
 
 Deliverables:
 
-- The Ex line shows `:` before the typed text, outside the editable text,
+- ✅ The Ex line shows `:` before the typed text, outside the editable text,
   and Backspace on an empty line closes it, as Vim's command line does.
-- A generic prompt option on `workbench.showInput` for both, with its exact
-  shape settled here, documented in `knot.d.ts`.
+- ✅ A generic `prompt` option on `workbench.showInput` for both: fixed text
+  before the field, and Backspace on an empty field dismisses; documented in
+  `knot.d.ts`.
 
 Validation:
 
-- A product test for the prompt option: the prompt shows and is not part of
+- ✅ A product test for the prompt option: the prompt shows and is not part of
   the accepted value, and Backspace on an empty field dismisses while
   Backspace on text deletes it.
-- Cases for `:<bs>` leaving the Ex line without running anything and
+- ✅ Cases for `:<bs>` leaving the Ex line without running anything and
   `:2<bs><bs>j` leaving it before `j` moves.
 
 Review gate: dogfooding.

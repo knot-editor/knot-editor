@@ -598,15 +598,16 @@ export async function showInput(options) {
   const target = transientTarget(options);
   const title = string(options.title, "input title must be text");
   const value = optionalText(options.value);
+  const prompt = optionalText(options.prompt);
   const onChange = options.onChange;
-  if (onChange == null) return request("showInput", title, value, target);
+  if (onChange == null) return request("showInput", title, value, prompt, target);
   if (typeof onChange !== "function") {
     throw new TypeError("input onChange must be a function");
   }
   // Values are pulled inside this turn, as picker highlights are, and each
   // returned message travels back with the next pull.
   let failure = null;
-  let update = await request("beginInput", title, value, target);
+  let update = await request("beginInput", title, value, prompt, target);
   while (update.kind === "changed") {
     let message = null;
     if (failure === null) {

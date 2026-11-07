@@ -10,6 +10,8 @@
     { "name": "ctrl-o returns from :<line>", "before": ["‸a", "b", "c"], "keys": ":3<cr><c-o>", "after": ["‸a", "b", "c"] },
     { "name": "\": holds the last command line", "before": ["‸a", "b"], "keys": ":2<cr>\":p", "after": ["a", "b‸2"] },
     { "name": "an unknown command changes nothing", "before": ["‸a", "b"], "keys": ":frob<cr>", "after": ["‸a", "b"] },
+    { "name": "Backspace on an empty Ex line leaves it without running anything", "before": ["‸a", "b"], "keys": ":<bs>j", "after": ["a", "‸b"] },
+    { "name": "Backspace deletes Ex text, then leaves the line", "before": ["‸a", "b", "c"], "keys": ":2<bs><bs>j", "after": ["a", "‸b", "c"] },
     { "name": "Escape dismisses the Ex line", "before": ["‸a", "b"], "keys": ":2<esc>j", "after": ["a", "‸b"] },
     { "name": ":set noet indents with tabs", "before": ["‸a"], "keys": ":set noet<cr>>>", "after": ["\t‸a"] },
     { "name": ":set sw sets the indent step", "before": ["‸a"], "keys": ":set sw=2<cr>>>", "after": ["  ‸a"] },

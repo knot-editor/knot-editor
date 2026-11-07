@@ -1502,6 +1502,7 @@ impl ProductShell {
         owner: TransientOwner,
         title: String,
         initial: String,
+        prompt: Option<String>,
         changes: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<
@@ -1513,7 +1514,7 @@ impl ProductShell {
     > {
         self.transient_slot_free()?;
         let restore_focus = self.focus;
-        let view = cx.new(|cx| InputView::new(title, initial, changes, cx));
+        let view = cx.new(|cx| InputView::new(title, initial, prompt, changes, cx));
         let weak = view.downgrade();
         let focus = view.read(cx).focus_handle(cx);
         let subscription = cx.subscribe(&view, |this: &mut Self, _view, event: &InputEvent, cx| {

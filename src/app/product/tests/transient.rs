@@ -79,7 +79,7 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell
-                    .begin_input(owner(None), "Name".into(), String::new(), None, cx)
+                    .begin_input(owner(None), "Name".into(), String::new(), None, None, cx)
                     .map(|(receiver, _)| receiver)
             })
         })
@@ -107,7 +107,14 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell
-                    .begin_input(owner(None), "Add path".into(), "seed".into(), None, cx)
+                    .begin_input(
+                        owner(None),
+                        "Add path".into(),
+                        "seed".into(),
+                        None,
+                        None,
+                        cx,
+                    )
                     .map(|(receiver, _)| receiver)
             })
         })

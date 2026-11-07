@@ -1302,6 +1302,12 @@ declare module "knot" {
     /** Initial text; defaults to empty. */
     readonly value?: string;
     /**
+     * Fixed text shown before the field, outside its value, as a command
+     * line shows `:`. With a prompt, Backspace on an empty field dismisses
+     * the input.
+     */
+    readonly prompt?: string;
+    /**
      * Called with the field's text, first with the initial value and then
      * whenever it changes. Calls are serial; while one runs, later changes
      * collapse into the latest. A returned string shows as a muted message

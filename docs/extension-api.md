@@ -681,7 +681,7 @@ const named = await workbench.showInput({
 });
 ```
 
-Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. Confirmation
+Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. A `prompt` such as `":"` shows before the field, outside its value, and makes Backspace on an empty field dismiss the input, as a command line does. Confirmation
 and message use the native platform prompt.
 
 One extension transient interaction may own a window at a time. A second

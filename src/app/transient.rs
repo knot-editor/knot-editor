@@ -59,6 +59,9 @@ pub(crate) enum InputEvent {
 
 pub(crate) struct InputView {
     title: SharedString,
+    /// Fixed text before the field, outside its value; with one, Backspace
+    /// on an empty field dismisses.
+    prompt: Option<SharedString>,
     input: Entity<TextInput>,
     /// A muted line under the field, set by the interaction's owner.
     message: Option<SharedString>,
@@ -71,6 +74,7 @@ impl InputView {
     pub(crate) fn new(
         title: String,
         initial: String,
+        prompt: Option<String>,
         changes: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -90,6 +94,7 @@ impl InputView {
         });
         Self {
             title: title.into(),
+            prompt: prompt.map(Into::into),
             input,
             message: None,
             _changes: subscription,
@@ -118,6 +123,15 @@ impl InputView {
     /// Handle a key the keymap left unclaimed, the field first; false when
     /// the prompt ignores it.
     pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let plain = !keystroke.modifiers.modified();
+        if self.prompt.is_some()
+            && plain
+            && keystroke.key == "backspace"
+            && self.input.read(cx).text().is_empty()
+        {
+            cx.emit(InputEvent::Dismissed);
+            return true;
+        }
         if self
             .input
             .update(cx, |input, cx| input.key_down(keystroke, cx))
@@ -166,7 +180,22 @@ impl Render for InputView {
                     .text_color(theme(cx).color(color::TEXT))
                     .child(self.title.clone()),
             )
-            .child(div().px_3().pb_3().child(self.input.clone()))
+            .child(
+                div()
+                    .px_3()
+                    .pb_3()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .children(self.prompt.clone().map(|prompt| {
+                        div()
+                            .flex_none()
+                            .pr_1()
+                            .text_color(theme(cx).color(color::TEXT_MUTED))
+                            .child(prompt)
+                    }))
+                    .child(div().flex_1().child(self.input.clone())),
+            )
             .children(self.message.clone().map(|message| {
                 div()
                     .px_3()

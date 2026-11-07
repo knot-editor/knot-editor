@@ -6,7 +6,7 @@ import { run, type State } from "./normal.js";
 
 /** Asks for a command line and runs it; returns a message to show, or null. */
 export async function commandLine(state: State): Promise<string | null> {
-  const input = await workbench.showInput({ title: "Ex Command" });
+  const input = await workbench.showInput({ title: "Ex Command", prompt: ":" });
   if (input.kind === "dismissed") return null;
   const command = parseEx(input.value);
   if (command.kind === "none") return null;

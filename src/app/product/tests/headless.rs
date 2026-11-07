@@ -105,7 +105,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
 
     let (mut input, _) = shell
         .update(cx, |shell, cx| {
-            shell.begin_input(owner(), "Name".into(), "ab".into(), None, cx)
+            shell.begin_input(owner(), "Name".into(), "ab".into(), None, None, cx)
         })
         .unwrap();
     press(&shell, "backspace", cx);
@@ -116,11 +116,52 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
 
     let (mut input, _) = shell
         .update(cx, |shell, cx| {
-            shell.begin_input(owner(), "Name".into(), String::new(), None, cx)
+            shell.begin_input(owner(), "Name".into(), String::new(), None, None, cx)
         })
         .unwrap();
     press(&shell, "escape", cx);
     assert_eq!(input.try_recv(), Ok(TransientOutcome::Dismissed));
+    // A prompt stays outside the value; Backspace deletes text, then
+    // dismisses on an empty field.
+    let (mut input, _) = shell
+        .update(cx, |shell, cx| {
+            shell.begin_input(owner(), "Ex".into(), "a".into(), Some(":".into()), None, cx)
+        })
+        .unwrap();
+    press(&shell, "backspace", cx);
+    assert_eq!(
+        input.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+    );
+    type_text(&shell, "b", cx);
+    press(&shell, "enter", cx);
+    assert_eq!(input.try_recv(), Ok(TransientOutcome::Input("b".into())));
+    let (mut input, _) = shell
+        .update(cx, |shell, cx| {
+            shell.begin_input(
+                owner(),
+                "Ex".into(),
+                String::new(),
+                Some(":".into()),
+                None,
+                cx,
+            )
+        })
+        .unwrap();
+    press(&shell, "backspace", cx);
+    assert_eq!(input.try_recv(), Ok(TransientOutcome::Dismissed));
+    // An input without a prompt keeps Backspace as a plain edit.
+    let (mut input, _) = shell
+        .update(cx, |shell, cx| {
+            shell.begin_input(owner(), "Name".into(), String::new(), None, None, cx)
+        })
+        .unwrap();
+    press(&shell, "backspace", cx);
+    assert_eq!(
+        input.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+    );
+    press(&shell, "escape", cx);
     // None of those keys reached the editor behind the interactions.
     press(&shell, "q", cx);
     cx.read(|cx| assert_eq!(model.read(cx).text(), "q"));

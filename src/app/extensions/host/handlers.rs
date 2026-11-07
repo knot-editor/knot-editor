@@ -1180,6 +1180,7 @@ impl HostArguments for PickerArguments {
 pub(crate) struct InputArguments {
     pub title: String,
     pub value: Option<String>,
+    pub prompt: Option<String>,
     pub target: Option<String>,
 }
 impl HostArguments for InputArguments {
@@ -1187,7 +1188,8 @@ impl HostArguments for InputArguments {
         Ok(Self {
             title: reader.text(2, "input title must be text")?,
             value: reader.optional_text(3, "input value must be text or null")?,
-            target: reader.optional_text(4, "window target must be text")?,
+            prompt: reader.optional_text(4, "input prompt must be text or null")?,
+            target: reader.optional_text(5, "window target must be text")?,
         })
     }
 }
@@ -1411,13 +1413,16 @@ pub(crate) async fn show_input(
     let InputArguments {
         title,
         value,
+        prompt,
         target,
     } = arguments;
     let (receiver, _) = context.foreground(|host, cx| {
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, cx| shell.begin_input(owner, title, value.unwrap_or_default(), None, cx),
+            move |shell, cx| {
+                shell.begin_input(owner, title, value.unwrap_or_default(), prompt, None, cx)
+            },
             cx,
         )
     })??;
@@ -1439,6 +1444,7 @@ pub(crate) async fn begin_input(
     let InputArguments {
         title,
         value,
+        prompt,
         target,
     } = arguments;
     let (sender, changes) = tokio::sync::watch::channel(None);
@@ -1447,7 +1453,14 @@ pub(crate) async fn begin_input(
             &request,
             target.as_deref(),
             move |shell, cx| {
-                shell.begin_input(owner, title, value.unwrap_or_default(), Some(sender), cx)
+                shell.begin_input(
+                    owner,
+                    title,
+                    value.unwrap_or_default(),
+                    prompt,
+                    Some(sender),
+                    cx,
+                )
             },
             cx,
         )
