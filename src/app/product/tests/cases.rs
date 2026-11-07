@@ -321,6 +321,37 @@ pub(super) fn parse_keys(keys: &str) -> Vec<String> {
     parsed
 }
 
+/// A test per topic file of `package`, run by `runner(topic, cx)`, so the
+/// topics run in parallel, and a test that every file has one.
+macro_rules! topics {
+    ($package:literal, $runner:ident; $($topic:ident),* $(,)?) => {
+        mod topics {
+            use super::*;
+            $(
+                #[gpui::test]
+                fn $topic(cx: &mut TestAppContext) {
+                    $runner(stringify!($topic), cx);
+                }
+            )*
+
+            #[test]
+            fn every_topic_file_has_a_test() {
+                let files: Vec<String> = $crate::app::product::tests::cases::package_files($package)
+                    .iter()
+                    .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
+                    .collect();
+                assert_eq!(
+                    files,
+                    [$(stringify!($topic)),*],
+                    "list each file in {}/test/cases in `topics!`",
+                    $package
+                );
+            }
+        }
+    };
+}
+pub(super) use topics;
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -346,3 +346,69 @@ pub(super) fn run(
         matched,
     }
 }
+
+/// A product window over a document, for pointer input and the work a key
+/// costs a window.
+pub(super) struct Windowed {
+    pub(super) session: Session,
+    pub(super) window: gpui::AnyWindowHandle,
+    pub(super) view: Entity<crate::app::editor::EditorView>,
+}
+
+impl Windowed {
+    pub(super) fn open(text: &str, cx: &mut TestAppContext) -> Self {
+        let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
+        let model = cx.new(|_| BufferModel::from_text(text));
+        let document = documents.update(cx, |documents, cx| {
+            documents.create_untitled("Case", model.clone(), cx)
+        });
+        let (shell, window) = product_window(document, model.clone(), cx);
+        let view = active_editor_view(&shell, cx);
+        let editor = cx.read(|cx| view.read(cx).editor().clone());
+        cx.update_window(window, |_, window, cx| {
+            window.activate_window();
+            editor.update(cx, |editor, cx| {
+                editor.set_selection(0, 0, Reveal::Nearest, cx)
+            });
+            shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+        })
+        .unwrap();
+        cx.refresh().unwrap();
+        let session = Session {
+            shell,
+            editor,
+            model,
+            document,
+        };
+        session.settle(cx);
+        Self {
+            session,
+            window,
+            view,
+        }
+    }
+
+    /// Press `keys` through the window, then settle.
+    pub(super) fn press(&self, keys: &str, cx: &mut TestAppContext) {
+        for key in parse_keys(keys) {
+            cx.dispatch_keystroke(self.window, gpui::Keystroke::parse(&key).unwrap());
+        }
+        self.session.settle(cx);
+    }
+}
+
+/// The draws and host requests each key causes, pressed one at a time
+/// through the window in the key notation and settled before the next.
+pub(super) fn work_per_key(
+    fixture: &Windowed,
+    keys: &[&str],
+    cx: &mut TestAppContext,
+) -> Vec<crate::app::work_counts::WorkCounts> {
+    crate::app::work_counts::take();
+    keys.iter()
+        .map(|key| {
+            fixture.press(key, cx);
+            crate::app::work_counts::take()
+        })
+        .collect()
+}

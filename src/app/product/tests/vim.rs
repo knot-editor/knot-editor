@@ -17,11 +17,11 @@
 //! in a product window.
 use serde::Deserialize;
 
-use super::cases::{Failures, Text, package_files, read_groups, unmark};
+use super::cases::{Failures, Text, package_files, read_groups, topics, unmark};
 use super::editor_api::active_editor_view;
-use super::harness::{Session, start_bundled_packages_with_post_init};
+use super::harness::{Session, Windowed, start_bundled_packages_with_post_init, work_per_key};
 use super::*;
-use crate::app::editor::{CaretShape, Reveal};
+use crate::app::editor::CaretShape;
 
 const ENABLE: &str = r#"import { settings } from "knot";
 await settings.set("vim.enabled", true);
@@ -123,57 +123,6 @@ fn open(text: &str, caret: usize, cx: &mut TestAppContext) -> Session {
     session
 }
 
-/// A product window over a document Vim follows, for pointer input and the
-/// work a key costs a window.
-struct Windowed {
-    session: Session,
-    window: gpui::AnyWindowHandle,
-    view: Entity<crate::app::editor::EditorView>,
-}
-
-impl Windowed {
-    fn open(text: &str, cx: &mut TestAppContext) -> Self {
-        let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
-        let model = cx.new(|_| BufferModel::from_text(text));
-        let document = documents.update(cx, |documents, cx| {
-            documents.create_untitled("Vim", model.clone(), cx)
-        });
-        let (shell, window) = product_window(document, model.clone(), cx);
-        let view = active_editor_view(&shell, cx);
-        let editor = cx.read(|cx| view.read(cx).editor().clone());
-        cx.update_window(window, |_, window, cx| {
-            window.activate_window();
-            editor.update(cx, |editor, cx| {
-                editor.set_selection(0, 0, Reveal::Nearest, cx)
-            });
-            shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
-        })
-        .unwrap();
-        cx.refresh().unwrap();
-        let session = Session {
-            shell,
-            editor,
-            model,
-            document,
-        };
-        session.settle(cx);
-        assert_eq!(session.mode(cx), "normal", "Vim follows the editor");
-        Self {
-            session,
-            window,
-            view,
-        }
-    }
-
-    /// Press `keys` through the window, then settle.
-    fn press(&self, keys: &str, cx: &mut TestAppContext) {
-        for key in super::cases::parse_keys(keys) {
-            cx.dispatch_keystroke(self.window, gpui::Keystroke::parse(&key).unwrap());
-        }
-        self.session.settle(cx);
-    }
-}
-
 /// Run the cases of the topic file `topic`.
 fn run_topic(topic: &str, cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(Some(ENABLE), cx);
@@ -237,38 +186,11 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
     failures.assert_none();
 }
 
-/// A test per topic file, so the topics run in parallel.
-macro_rules! topics {
-    ($($topic:ident),* $(,)?) => {
-        const TOPICS: &[&str] = &[$(stringify!($topic)),*];
-
-        mod topics {
-            use super::*;
-            $(
-                #[gpui::test]
-                fn $topic(cx: &mut TestAppContext) {
-                    run_topic(stringify!($topic), cx);
-                }
-            )*
-        }
-    };
-}
-
 topics!(
+    "vim",
+    run_topic;
     insert, marks, motions, objects, operators, registers, scrolling, visual
 );
-
-#[test]
-fn every_topic_file_has_a_test() {
-    let files: Vec<String> = package_files("vim")
-        .iter()
-        .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(
-        files, TOPICS,
-        "list each file in vim/test/cases in `topics!`"
-    );
-}
 
 #[gpui::test]
 fn the_mode_shows_in_the_status_bar_and_the_caret(cx: &mut TestAppContext) {
@@ -407,6 +329,7 @@ fn the_clipboard_pastes_linewise_only_while_it_holds_the_yanked_line(cx: &mut Te
 fn a_mouse_drag_enters_visual_mode_and_a_click_leaves_it(cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(Some(ENABLE), cx);
     let fixture = Windowed::open("one\ntwo\nthree", cx);
+    assert_eq!(fixture.session.mode(cx), "normal", "Vim follows the editor");
     let session = &fixture.session;
     let (bounds, text_bounds) = cx.read(|cx| {
         let view = fixture.view.read(cx);
@@ -478,22 +401,6 @@ fn a_global_mark_jumps_to_another_open_document(cx: &mut TestAppContext) {
     assert_eq!(session.marked(cx), "‸one\ntwo");
 }
 
-/// The draws and host requests each key causes, pressed one at a time
-/// through the window in the key notation and settled before the next.
-fn work_per_key(
-    fixture: &Windowed,
-    keys: &[&str],
-    cx: &mut TestAppContext,
-) -> Vec<crate::app::work_counts::WorkCounts> {
-    crate::app::work_counts::take();
-    keys.iter()
-        .map(|key| {
-            fixture.press(key, cx);
-            crate::app::work_counts::take()
-        })
-        .collect()
-}
-
 /// A key costs a few draws and the host requests its behavior needs: the
 /// package's reads and writes, the selection notifications, and the status
 /// bar package's position. Unchanged status items send nothing.
@@ -501,6 +408,7 @@ fn work_per_key(
 fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(Some(ENABLE), cx);
     let fixture = Windowed::open("one two three\nfour five six\n", cx);
+    assert_eq!(fixture.session.mode(cx), "normal", "Vim follows the editor");
     // The first key also pays for following the editor.
     work_per_key(&fixture, &["l"], cx);
     let keys = ["w", "d", "w", "i", "a", "<esc>"];
