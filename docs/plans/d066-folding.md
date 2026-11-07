@@ -1,6 +1,6 @@
 # D066 — Folding
 
-Status: 🚧 checkpoints 1–3 complete; checkpoints 1–4 complete; checkpoint 5 not started. Item D066 of the [editor API](editor-api.md) plan
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 awaiting review. Item D066 of the [editor API](editor-api.md) plan
 (phase 4), from the [roadmap](../roadmap.md). Depends on D109 and D112, which
 landed.
 
@@ -115,7 +115,12 @@ visual-line operators. Folds are regions that are collapsed or not, so `zd`,
 `zD`, and `zE` expand them; `zx`/`zX` behave as `zv`. The cases are in
 `extensions/@knot/vim/test/cases/folding.jsonc`.
 
-### 5. Persistence and documentation
+### 5. Persistence and documentation 🚧
+
+Done, awaiting the review gate: folds in `EditorViewState` as byte ranges
+(round-trip, clamping, and restart tests), and the architecture, decisions, and
+extension-type updates. Remaining after approval: remove this plan, mark D066
+✅ in the editor API plan, and update its roadmap references.
 
 Deliverables: folds in `EditorViewState` and the workbench restoration
 paths, architecture updates (workbench and lifecycle editor views, semantic
