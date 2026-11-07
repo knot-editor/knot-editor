@@ -1149,7 +1149,9 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
         scroll_x: 14.,
         folds: Vec::new(),
     };
-    editor.update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx));
+    editor.update(cx, |editor, cx| {
+        editor.restore_view_state(state.clone(), cx)
+    });
     cx.read(|cx| {
         let editor = editor.read(cx);
         assert_eq!(editor.view_state(cx), state);

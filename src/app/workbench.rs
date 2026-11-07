@@ -1716,10 +1716,9 @@ mod tests {
                 })
             });
             second_editor.update(cx, |editor, cx| {
-                editor
-                    .editor()
-                    .clone()
-                    .update(cx, |editor, cx| editor.restore_view_state(selection.clone(), cx))
+                editor.editor().clone().update(cx, |editor, cx| {
+                    editor.restore_view_state(selection.clone(), cx)
+                })
             });
             third_editor.update(cx, |editor, cx| {
                 editor.editor().clone().update(cx, |editor, cx| {

@@ -1540,6 +1540,10 @@ declare module "knot" {
     top: number;
     /** Horizontal scroll in logical pixels. */
     scrollX: number;
+    /** Collapsed folds as byte ranges, in a window layout's tab records. The
+     * editor handle's `viewState` omits them and `restoreViewState` leaves
+     * folds as they are; use `folds` and `fold` there. */
+    folds?: readonly Readonly<{ start: number; end: number }>[];
   }>;
   /** Each tab kind records only what recreates it in the same position. A
    * terminal tab records its shell's working directory as a file URI and

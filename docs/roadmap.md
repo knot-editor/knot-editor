@@ -603,7 +603,7 @@ Kakoune mode could use it too. The
   - Order: after D109 and D092.
 
 - **D144 — Syntax-tree queries and text objects**
-  - Deferred: D066 adds `folds` queries for folding only. Extensions cannot
+  - Deferred: the `folds` queries serve folding only. Extensions cannot
     query the syntax tree, and there are no `textobjects` queries, so Vim's
     `if`, `ac`, and `ia`, structural selection expansion, and tree-based
     motions cannot be built.

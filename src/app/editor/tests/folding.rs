@@ -313,10 +313,15 @@ fn folds_round_trip_through_view_state(cx: &mut TestAppContext) {
     assert_eq!(state.folds, vec![6..17, 15..23]);
 
     let other = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
-    other.update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx));
+    other.update(cx, |editor, cx| {
+        editor.restore_view_state(state.clone(), cx)
+    });
     assert_eq!(rows(&other, cx), 5);
     cx.read(|cx| assert_eq!(other.read(cx).folds(), vec![2..6, 5..8]));
-    assert_eq!(cx.read(|cx| other.read(cx).view_state(cx).folds), state.folds);
+    assert_eq!(
+        cx.read(|cx| other.read(cx).view_state(cx).folds),
+        state.folds
+    );
 
     // Restoring a state without folds expands the ones there.
     let mut plain = state;

@@ -258,9 +258,12 @@ top visible row as a byte offset, and horizontal scroll in pixels. Applying it
 clamps each offset to the current text and snaps back to a character boundary,
 so a changed or shorter file never yields an invalid position, and keeps the
 restored scroll instead of revealing the caret; a state restored before the
-view first wraps its lines keeps its row once they wrap. Folds are not
-recorded yet. Zoom is application state and wrapping follows settings, so
-neither is recorded.
+view first wraps its lines keeps its row once they wrap. It also records the
+collapsed folds as byte ranges, from the first line's start to the last line's
+content end; restoring replaces the view's folds with them, clamped to the text
+and dropped once they span fewer than two lines. The editor handle's view state
+carries no folds and leaves them as they are. Zoom is application state and
+wrapping follows settings, so neither is recorded.
 
 ## Status bar
 

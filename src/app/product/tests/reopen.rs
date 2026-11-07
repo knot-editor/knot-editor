@@ -131,10 +131,9 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
-            editor
-                .editor()
-                .clone()
-                .update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx))
+            editor.editor().clone().update(cx, |editor, cx| {
+                editor.restore_view_state(state.clone(), cx)
+            })
         });
     });
     let closed = active_document(&shell, cx).unwrap();

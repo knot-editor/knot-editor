@@ -303,6 +303,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     });
     let views = editors(&first, cx);
     assert_eq!(views.len(), 3);
+    #[allow(clippy::single_range_in_vec_init)]
     let state = EditorViewState {
         anchor: 6,
         caret: 16,
@@ -311,7 +312,9 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
         // Lines 5 through 7 of the document, collapsed.
         folds: vec![26..40],
     };
-    views[1].update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx));
+    views[1].update(cx, |editor, cx| {
+        editor.restore_view_state(state.clone(), cx)
+    });
 
     let second = cx.update(|cx| {
         let handle = super::super::launch::open_product_window_with(None, None, cx);

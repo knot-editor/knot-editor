@@ -255,6 +255,25 @@ line; scrolling through one wrapped line needed the column.
 
 Reference: [extension host](architecture/extension-host.md#editor-handle-notifications).
 
+## Folding
+
+Fold state belongs to the view, as anchored byte ranges, so two views of one
+document fold independently and edits keep a fold over its text. Hidden lines
+are zero-row lines in the wrap map rather than a second line-to-row mapping, so
+the viewport, scrolling, row queries, and painting count visible rows with no
+parallel bookkeeping. Regions come from a per-language `folds` query, with
+indentation for languages without one, because every language folds usefully
+at once and a package refines it later; regions are only candidates, and just
+collapsed folds are state and persist with the tab's view state. The caret
+never rests in hidden lines, and revealing a hidden position expands its folds,
+as VS Code does, rather than refusing the move.
+
+Rejected: fold state in the buffer, which would couple views and need an
+ownership story across splits; and a fold-aware second row space, which every
+row consumer would have to translate through.
+
+Reference: [editor views](architecture/workbench-and-lifecycle.md#editor-views).
+
 ## Handler declarations
 
 Annotated async handlers keep argument, result, and error types at their

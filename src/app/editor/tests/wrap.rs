@@ -192,8 +192,9 @@ fn a_state_restored_before_the_first_layout_keeps_its_row(cx: &mut TestAppContex
     });
     let (restored, cx) = cx.add_window_view(|_, cx| {
         let view = EditorView::new(model, cx);
-        view.editor()
-            .update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx));
+        view.editor().update(cx, |editor, cx| {
+            editor.restore_view_state(state.clone(), cx)
+        });
         view
     });
     cx.run_until_parked();
