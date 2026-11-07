@@ -169,6 +169,7 @@ D077 moved here from the daily-driver plan.
     rows that folds leave visible.
 
 - **D066 — Folding** (depends on D109)
+  - 🚧 [D066 plan](d066-folding.md)
   - Per-language `folds` queries in language registrations beside
     `indents`, native fold state per view, a fold lane in the gutter, and
     Fold, Unfold, and Toggle Fold commands. The editor handle folds and
