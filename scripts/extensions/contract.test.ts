@@ -34,10 +34,13 @@ const registration: Promise<Disposable> = commands.register("check", async (cont
     const { caret } = await editorHandle.selection();
     await editorHandle.setSelection({ anchor: caret, caret }, { reveal: "center" });
     await editorHandle.setSelection({ anchor: caret, caret }, { reveal: "top" });
-    // @ts-expect-error reveal is "nearest", "center", "top" or "bottom"
+    await editorHandle.setSelection({ anchor: caret, caret }, { reveal: "always-center" });
+    // @ts-expect-error reveal is "nearest", "center", "always-center", "top" or "bottom"
     await editorHandle.setSelection({ anchor: 0, caret: 0 }, { reveal: "middle" });
-    const { first, last }: import("knot").VisibleLines = await editorHandle.visibleLines();
-    await editorHandle.scrollBy(last - first);
+    const { first, rows }: import("knot").Viewport = await editorHandle.viewport();
+    const firstLine: number = await editorHandle.rowAt(first);
+    const caretRow: number = await editorHandle.rowOf(firstLine, 0);
+    await editorHandle.scrollBy(rows - caretRow);
     await editorHandle.restoreViewState(state);
   } else {
     commands.unavailable();

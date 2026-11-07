@@ -306,14 +306,13 @@ export async function resolve(
     case "window-top":
     case "window-middle":
     case "window-bottom": {
-      // Buffer lines, so under soft wrap these miss the rows a long line
-      // takes.
-      const { first, last } = await state.handle.visibleLines();
-      const line = name === "window-top"
-        ? Math.min(last, first + n - 1)
+      const { first, rows } = await state.handle.viewport();
+      const row = name === "window-top"
+        ? first + Math.min(rows, n) - 1
         : name === "window-bottom"
-        ? Math.max(first, last - n + 1)
-        : Math.floor((first + last) / 2);
+        ? first + rows - Math.min(rows, n)
+        : first + Math.floor((rows - 1) / 2);
+      const line = await state.handle.rowAt(row);
       return { to: await lineStart(lines, line), type: "linewise", jump: true };
     }
   }
@@ -342,11 +341,10 @@ export async function towardWant(state: State, lines: BufferLines, from: Positio
 /**
  * Scrolls the view for `ctrl-d`, `ctrl-u`, `ctrl-f`, `ctrl-b`, `ctrl-e`, or
  * `ctrl-y` and returns where the caret goes from `from`, or null when it
- * stays. Half-view scrolls move the caret as many lines as the view, so it
- * keeps its place on screen; page scrolls keep two lines of the previous
+ * stays. Half-view scrolls move the caret as many rows as the view, so it
+ * keeps its place on screen; page scrolls keep two rows of the previous
  * view and move the caret into the new one; line scrolls move it only when
- * it would leave the view. Lines are buffer lines, so soft wrap makes them
- * approximate.
+ * it would leave the view. Rows are screen lines, so soft wrap counts.
  */
 export async function scroll(
   state: State,
@@ -356,15 +354,17 @@ export async function scroll(
   count: number | null,
 ): Promise<Moved | null> {
   const total = await lines.count();
-  const before = await state.handle.visibleLines();
-  const height = before.last - before.first + 1;
+  const before = await state.handle.viewport();
+  const height = before.rows;
+  const lastRow = (viewport: { first: number; rows: number }) => viewport.first + viewport.rows - 1;
   switch (kind) {
     case "half-down":
     case "half-up": {
       if (count !== null) state.scroll = count;
       const n = state.scroll ?? Math.max(1, Math.floor(height / 2));
       const step = kind === "half-down" ? n : -n;
-      const line = Math.max(0, Math.min(total - 1, from.line + step));
+      const row = await rowOfPosition(state, lines, from);
+      const line = await state.handle.rowAt(Math.max(0, row + step));
       if (line === from.line) return null;
       await state.handle.scrollBy(step);
       return { to: await lineStart(lines, line), type: "linewise" };
@@ -373,14 +373,14 @@ export async function scroll(
     case "page-up": {
       const down = kind === "page-down";
       await state.handle.scrollBy((down ? 1 : -1) * Math.max(1, height - 2) * (count ?? 1));
-      const after = await state.handle.visibleLines();
+      const after = await state.handle.viewport();
       // At the end of the text the view cannot scroll, so the caret goes
       // there instead.
       const line = after.first === before.first
         ? (down ? total - 1 : 0)
         : down
-        ? Math.max(from.line, after.first)
-        : Math.min(from.line, after.last);
+        ? Math.max(from.line, await state.handle.rowAt(after.first))
+        : Math.min(from.line, await state.handle.rowAt(lastRow(after)));
       if (line === from.line && after.first === before.first) return null;
       return { to: await lineStart(lines, line), type: "linewise" };
     }
@@ -388,25 +388,34 @@ export async function scroll(
     case "line-up": {
       const n = count ?? 1;
       await state.handle.scrollBy(kind === "line-down" ? n : -n);
-      const after = await state.handle.visibleLines();
-      if (from.line < after.first) return towardWant(state, lines, from, after.first);
-      if (from.line > after.last) return towardWant(state, lines, from, after.last);
+      const after = await state.handle.viewport();
+      const top = await state.handle.rowAt(after.first);
+      const bottom = await state.handle.rowAt(lastRow(after));
+      if (from.line < top) return towardWant(state, lines, from, top);
+      if (from.line > bottom) return towardWant(state, lines, from, bottom);
       return null;
     }
   }
 }
 
+/** The document row the UTF-16 position `at` shows on. */
+async function rowOfPosition(state: State, lines: BufferLines, at: Position): Promise<number> {
+  const text = await lines.text(at.line);
+  return state.handle.rowOf(at.line, utf8Length(text.slice(0, at.col)));
+}
+
 /** Scrolls `line` to the top, middle, or bottom of the view. In normal
  * mode the caret is on it, and the editor aligns its edges exactly. */
 export async function reposition(state: State, line: number, at: "top" | "center" | "bottom") {
-  if (at !== "center" && state.mode === "normal") {
+  if (state.mode === "normal") {
     const { caret } = await state.handle.selection();
-    await state.handle.setSelection({ anchor: caret, caret }, { reveal: at });
+    await state.handle.setSelection({ anchor: caret, caret }, { reveal: at === "center" ? "always-center" : at });
     return;
   }
-  const { first, last } = await state.handle.visibleLines();
-  const target = at === "top" ? first : at === "bottom" ? last : Math.floor((first + last) / 2);
-  if (line !== target) await state.handle.scrollBy(line - target);
+  const { first, rows } = await state.handle.viewport();
+  const target = at === "top" ? first : at === "bottom" ? first + rows - 1 : first + Math.floor((rows - 1) / 2);
+  const row = await state.handle.rowOf(line, 0);
+  if (row !== target) await state.handle.scrollBy(row - target);
 }
 
 const REVERSED: Readonly<Record<FindKind, FindKind>> = { f: "F", F: "f", t: "T", T: "t" };

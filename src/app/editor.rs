@@ -179,8 +179,10 @@ pub(crate) struct EditorViewState {
 pub(crate) enum Reveal {
     /// Scroll the minimum, as ordinary caret movement does.
     Nearest,
-    /// Center the caret's line when it is outside the viewport.
+    /// Center the caret's row when it is outside the viewport.
     Center,
+    /// Center the caret's row even when it is inside the viewport.
+    AlwaysCenter,
     /// Put the caret's line at the top of the viewport, as far as the text
     /// allows.
     Top,
@@ -540,9 +542,12 @@ impl Editor {
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
         self.has_selection = anchor != caret;
         let viewport = self.viewport_rows;
-        if reveal == Reveal::Center && viewport > 0. {
+        if viewport > 0. && matches!(reveal, Reveal::Center | Reveal::AlwaysCenter) {
             let row = self.caret_row() as f32;
-            if row < self.scroll_top || row + 1. > self.scroll_top + viewport {
+            if reveal == Reveal::AlwaysCenter
+                || row < self.scroll_top
+                || row + 1. > self.scroll_top + viewport
+            {
                 self.scroll_top = row + 0.5 - viewport / 2.;
             }
         }
@@ -575,35 +580,37 @@ impl Editor {
         self.finish_position_change(cx);
     }
 
-    /// The first and last lines whose rows are all inside the viewport, from
-    /// the last layout; always at least one line.
-    pub(crate) fn fully_visible_lines(&self) -> (usize, usize) {
+    /// The first row wholly inside the viewport and how many rows are, from
+    /// the last layout; always at least one row.
+    pub(crate) fn viewport(&self) -> (usize, usize) {
         let last_row = self.wrap.row_count().saturating_sub(1);
-        let first_row = (self.scroll_top.ceil() as usize).min(last_row);
-        let end_row =
+        let first = (self.scroll_top.ceil() as usize).min(last_row);
+        let end =
             ((self.scroll_top + self.viewport_rows).floor() as usize).min(self.wrap.row_count());
-        let (first, sub) = self.wrap.position(first_row);
-        let first = if sub > 0 { first + 1 } else { first };
-        let (last, sub) = self.wrap.position(end_row.saturating_sub(1).max(first_row));
-        let last = if sub + 1 < self.wrap.rows(last).len() {
-            last.saturating_sub(1)
-        } else {
-            last
-        };
-        let first = first.min(self.line_count.saturating_sub(1));
-        (first, last.max(first))
+        (first, end.saturating_sub(first).max(1))
     }
 
-    /// Scroll by `lines` buffer lines, negative upward, without moving the
-    /// caret or revealing it; the scroll stays within the text.
-    pub(crate) fn scroll_by_lines(&mut self, lines: f64, cx: &mut Context<Self>) {
-        if self.wrap.width().is_some() {
-            let (top, _) = self.wrap.position(self.scroll_top as usize);
-            let line = (top as f64 + lines.round()).clamp(0., self.line_count as f64 - 1.);
-            self.scroll_top = self.wrap.first_row(line as usize) as f32;
-        } else {
-            self.scroll_top += lines as f32;
+    /// The buffer line the document row `row` belongs to; a row past the
+    /// last is the last.
+    pub(crate) fn row_line(&self, row: usize) -> usize {
+        self.wrap.position(row).0
+    }
+
+    /// The document row showing byte `column` of `line`, with a column at a
+    /// break on the next row. `None` past the last line or off a character
+    /// boundary.
+    pub(crate) fn row_of_position(&self, line: usize, column: usize, cx: &App) -> Option<usize> {
+        let model = self.model.read(cx);
+        if line >= model.line_count() || !line_text(model, line).is_char_boundary(column) {
+            return None;
         }
+        Some(self.wrap.row_of(line, column))
+    }
+
+    /// Scroll by `rows`, negative upward, without moving the caret or
+    /// revealing it; the scroll stays within the text.
+    pub(crate) fn scroll_by_rows(&mut self, rows: i64, cx: &mut Context<Self>) {
+        self.scroll_top += rows as f32;
         self.reveal_caret = false;
         self.clamp_scroll();
         cx.notify();

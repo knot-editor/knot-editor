@@ -103,21 +103,27 @@ test("an editor handle sets and clears its cursor style", async () => {
   await assert.rejects(editor.setCursorStyle("block"), { code: "InvalidTarget" });
 });
 
-test("an editor handle reports visible lines and scrolls without moving the caret", async () => {
+test("an editor handle reports the viewport, maps rows, and scrolls without moving the caret", async () => {
   const text = Array.from({ length: 30 }, (_, line) => `line ${line}\n`).join("");
   const document = host.addDocument({ text });
   const window = host.openWindow({ documents: [document] });
   host.setViewportLines(10, window);
   const editor = await workbench.editor(host.tabTarget(window, 0));
-  assert.deepEqual(await editor.visibleLines(), { first: 0, last: 9 });
+  assert.deepEqual(await editor.viewport(), { first: 0, rows: 10 });
   await editor.scrollBy(4);
-  assert.deepEqual(await editor.visibleLines(), { first: 4, last: 13 });
+  assert.deepEqual(await editor.viewport(), { first: 4, rows: 10 });
   assert.deepEqual(await editor.selection(), { anchor: 0, caret: 0 });
   await editor.scrollBy(-100);
-  assert.deepEqual(await editor.visibleLines(), { first: 0, last: 9 });
+  assert.deepEqual(await editor.viewport(), { first: 0, rows: 10 });
   await editor.scrollBy(100);
-  assert.deepEqual(await editor.visibleLines(), { first: 21, last: 30 });
+  assert.deepEqual(await editor.viewport(), { first: 21, rows: 10 });
   await assert.rejects(editor.scrollBy(1.5), TypeError);
+  // The fake does not wrap, so a row is a line.
+  assert.equal(await editor.rowAt(4), 4);
+  assert.equal(await editor.rowAt(1000), 30);
+  assert.equal(await editor.rowOf(7, 3), 7);
+  await assert.rejects(editor.rowOf(7, 99), { code: "InvalidRange" });
+  await assert.rejects(editor.rowAt(-1), TypeError);
 });
 
 test("reveal top and bottom put the caret's line at that edge of the viewport", async () => {
@@ -129,15 +135,17 @@ test("reveal top and bottom put the caret's line at that edge of the viewport", 
   const lineStart = (line: number) => text.split("\n").slice(0, line).join("\n").length + (line > 0 ? 1 : 0);
   const caret = lineStart(7);
   await editor.setSelection({ anchor: caret, caret }, { reveal: "bottom" });
-  assert.deepEqual(await editor.visibleLines(), { first: 0, last: 9 });
+  assert.deepEqual(await editor.viewport(), { first: 0, rows: 10 });
   const far = lineStart(15);
   await editor.setSelection({ anchor: far, caret: far }, { reveal: "bottom" });
-  assert.deepEqual(await editor.visibleLines(), { first: 6, last: 15 });
+  assert.deepEqual(await editor.viewport(), { first: 6, rows: 10 });
   await editor.setSelection({ anchor: far, caret: far }, { reveal: "top" });
-  assert.deepEqual(await editor.visibleLines(), { first: 15, last: 24 });
+  assert.deepEqual(await editor.viewport(), { first: 15, rows: 10 });
+  await editor.setSelection({ anchor: far, caret: far }, { reveal: "always-center" });
+  assert.deepEqual(await editor.viewport(), { first: 10, rows: 10 });
   const end = text.length;
   await editor.setSelection({ anchor: end, caret: end }, { reveal: "top" });
-  assert.deepEqual(await editor.visibleLines(), { first: 21, last: 30 });
+  assert.deepEqual(await editor.viewport(), { first: 21, rows: 10 });
 });
 
 test("marks follow edits and end when their text is deleted or they are disposed", async () => {

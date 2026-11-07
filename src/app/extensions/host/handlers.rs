@@ -2113,11 +2113,12 @@ impl HostArguments for SetSelectionArguments {
             reveal: match reader.text(5, "reveal must be text")?.as_str() {
                 "nearest" => crate::app::editor::Reveal::Nearest,
                 "center" => crate::app::editor::Reveal::Center,
+                "always-center" => crate::app::editor::Reveal::AlwaysCenter,
                 "top" => crate::app::editor::Reveal::Top,
                 "bottom" => crate::app::editor::Reveal::Bottom,
                 _ => {
                     return Err(DecodeError::Range(
-                        "reveal must be nearest, center, top, or bottom",
+                        "reveal must be nearest, center, always-center, top, or bottom",
                     ));
                 }
             },
@@ -2235,51 +2236,53 @@ pub(crate) async fn editor_set_cursor_style(
     })?
 }
 
-/// The first and last lines wholly inside an editor's viewport.
+/// The first row wholly inside an editor's viewport and the rows that are.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
-pub(crate) struct VisibleLines {
+pub(crate) struct Viewport {
     pub first: usize,
-    pub last: usize,
+    pub rows: usize,
 }
-impl HostSuccess for VisibleLines {
+impl HostSuccess for Viewport {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-/// The 0-based lines wholly visible in the captured editor, from its last
-/// layout.
-#[host_operation("editorVisibleLines")]
-pub(crate) async fn editor_visible_lines(
+/// The rows wholly visible in the captured editor, from its last layout.
+#[host_operation("editorViewport")]
+pub(crate) async fn editor_viewport(
     context: HostContext,
     arguments: EditorArguments,
-) -> Result<VisibleLines, AccessError> {
+) -> Result<Viewport, AccessError> {
     let request = context.request;
     context.foreground(|host, cx| {
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
-        let (first, last) = editor.read(cx).fully_visible_lines();
-        Ok(VisibleLines { first, last })
+        let (first, rows) = editor.read(cx).viewport();
+        Ok(Viewport { first, rows })
     })?
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ScrollByArguments {
     pub authority: EditorAuthority,
-    pub lines: f64,
+    pub rows: i64,
 }
 impl HostArguments for ScrollByArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         let authority = EditorAuthority::decode(reader, 2)?;
-        let crate::host::protocol::CommandArgumentValue::Number(lines) =
+        let crate::host::protocol::CommandArgumentValue::Number(rows) =
             reader.command_arguments(3)?
         else {
-            return Err(DecodeError::Type("scroll lines must be a number"));
+            return Err(DecodeError::Type("scroll rows must be a number"));
         };
-        Ok(Self { authority, lines })
+        Ok(Self {
+            authority,
+            rows: rows as i64,
+        })
     }
 }
 
-/// Scroll the captured editor by whole lines without moving its caret.
+/// Scroll the captured editor by rows without moving its caret.
 #[host_operation("editorScrollBy")]
 pub(crate) async fn editor_scroll_by(
     context: HostContext,
@@ -2288,8 +2291,57 @@ pub(crate) async fn editor_scroll_by(
     let request = context.request;
     context.foreground(|host, cx| {
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
-        editor.update(cx, |editor, cx| editor.scroll_by_lines(arguments.lines, cx));
+        editor.update(cx, |editor, cx| editor.scroll_by_rows(arguments.rows, cx));
         Ok(())
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RowAtArguments {
+    pub authority: EditorAuthority,
+    pub row: u64,
+}
+impl HostArguments for RowAtArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            row: reader.integer(3)?,
+        })
+    }
+}
+
+/// The buffer line a document row of the captured editor belongs to, the
+/// last line for a row past the end.
+#[host_operation("editorRowAt")]
+pub(crate) async fn editor_row_at(
+    context: HostContext,
+    arguments: RowAtArguments,
+) -> Result<u64, AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let row = usize::try_from(arguments.row).unwrap_or(usize::MAX);
+        Ok(editor.read(cx).row_line(row) as u64)
+    })?
+}
+
+/// The document row a byte column of a buffer line shows on in the captured
+/// editor.
+#[host_operation("editorRowOf")]
+pub(crate) async fn editor_row_of(
+    context: HostContext,
+    arguments: LineMeasureArguments,
+) -> Result<u64, EditorError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let line = usize::try_from(arguments.line).map_err(|_| EditorError::InvalidRange)?;
+        let column = usize::try_from(arguments.value).map_err(|_| EditorError::InvalidRange)?;
+        let row = editor
+            .read(cx)
+            .row_of_position(line, column, cx)
+            .ok_or(EditorError::InvalidRange)?;
+        Ok(row as u64)
     })?
 }
 
@@ -2297,8 +2349,8 @@ pub(crate) async fn editor_scroll_by(
 pub(crate) struct LineMeasureArguments {
     pub authority: EditorAuthority,
     pub line: u64,
-    /// A byte column for `editorCellsBefore`, a display cell for
-    /// `editorColumnAtCells`.
+    /// A byte column for `editorCellsBefore` and `editorRowOf`, a display
+    /// cell for `editorColumnAtCells`.
     pub value: u64,
 }
 impl HostArguments for LineMeasureArguments {

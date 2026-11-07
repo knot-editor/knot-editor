@@ -234,12 +234,7 @@ fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut Test
                     window,
                     cx,
                 );
-                (
-                    view.metrics,
-                    state.fully_visible_lines(),
-                    hit,
-                    view.gutter.width,
-                )
+                (view.metrics, state.viewport(), hit, view.gutter.width)
             })
         })
     };
@@ -271,7 +266,7 @@ fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut Test
     let (large, large_lines, large_hit, large_gutter) = measure(cx);
     assert_eq!((large.font_size, large.line_height), (28., 40.));
     assert_eq!(large_hit.0, 3);
-    let count = |(first, last): (usize, usize)| last + 1 - first;
+    let count = |(_, rows): (usize, usize)| rows;
     assert_eq!(count(large_lines), count(small_lines) / 2);
     assert!(large_gutter > small_gutter);
 }
@@ -1100,32 +1095,43 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret(cx: &mut TestApp
     let (line_5, line_50, line_100) = (line_start(5), line_start(50), line_start(100));
     editor.update(cx, |editor, cx| {
         // Before layout there is a single visible line.
-        assert_eq!(editor.fully_visible_lines(), (0, 0));
+        assert_eq!(editor.viewport(), (0, 1));
         editor.viewport_rows = 10.;
-        assert_eq!(editor.fully_visible_lines(), (0, 9));
+        assert_eq!(editor.viewport(), (0, 10));
 
         editor.set_selection(line_50, line_50, Reveal::Top, cx);
         assert_eq!(editor.scroll_top, 50.);
-        assert_eq!(editor.fully_visible_lines(), (50, 59));
+        assert_eq!(editor.viewport(), (50, 10));
         editor.set_selection(line_50, line_50, Reveal::Bottom, cx);
         assert_eq!(editor.scroll_top, 41.);
-        assert_eq!(editor.fully_visible_lines(), (41, 50));
+        assert_eq!(editor.viewport(), (41, 10));
 
         // Both stop at the ends of the text.
         editor.set_selection(line_5, line_5, Reveal::Bottom, cx);
         assert_eq!(editor.scroll_top, 0.);
         editor.set_selection(line_100, line_100, Reveal::Top, cx);
         assert_eq!(editor.scroll_top, 91.);
-        assert_eq!(editor.fully_visible_lines(), (91, 100));
+        assert_eq!(editor.viewport(), (91, 10));
+
+        // Center keeps a caret that is on screen where it is; always-center
+        // moves the view to it.
+        editor.scroll_top = 91.;
+        editor.set_selection(line_100, line_100, Reveal::Center, cx);
+        assert_eq!(editor.scroll_top, 91.);
+        editor.set_selection(line_100, line_100, Reveal::AlwaysCenter, cx);
+        assert_eq!(editor.scroll_top, 91., "clamped to the end of the text");
+        editor.set_selection(line_50, line_50, Reveal::AlwaysCenter, cx);
+        assert_eq!(editor.scroll_top, 45.5);
+        editor.set_selection(line_100, line_100, Reveal::Top, cx);
 
         // Scrolling moves neither the caret nor the reveal-on-paint flag.
-        editor.scroll_by_lines(-30., cx);
+        editor.scroll_by_rows(-30, cx);
         assert_eq!(editor.scroll_top, 61.);
         assert_eq!(editor.selection(cx), (line_100, line_100));
         assert!(!editor.reveal_caret);
-        editor.scroll_by_lines(-1000., cx);
+        editor.scroll_by_rows(-1000, cx);
         assert_eq!(editor.scroll_top, 0.);
-        editor.scroll_by_lines(1000., cx);
+        editor.scroll_by_rows(1000, cx);
         assert_eq!(editor.scroll_top, 91.);
     });
 }

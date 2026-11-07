@@ -105,15 +105,18 @@ impl Session {
     fn show_lines(&self, lines: usize, top: usize, cx: &mut TestAppContext) {
         self.lay_out(lines, 100, cx);
         self.editor.update(cx, |editor, cx| {
-            editor.scroll_by_lines(-1e9, cx);
-            editor.scroll_by_lines(top as f64, cx);
+            editor.scroll_by_rows(-1_000_000_000, cx);
+            editor.scroll_by_rows(top as i64, cx);
         });
         assert_eq!(self.top_line(cx), top, "the view starts at line {top}");
     }
 
     /// The first line wholly in view.
     fn top_line(&self, cx: &mut TestAppContext) -> usize {
-        cx.read(|cx| self.editor.read(cx).fully_visible_lines().0)
+        cx.read(|cx| {
+            let editor = self.editor.read(cx);
+            editor.row_line(editor.viewport().0)
+        })
     }
 }
 

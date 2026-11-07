@@ -967,8 +967,12 @@ declare module "knot" {
     /** Lifecycle-owned semantic data; disposing it does not dispose this buffer. */
     readonly contributions: EditorContributions;
   }
-  /** The 0-based first and last lines wholly inside an editor's viewport. */
-  export type VisibleLines = Readonly<{ first: number; last: number }>;
+  /**
+   * The 0-based first row wholly inside an editor's viewport and how many rows
+   * are. A row is one screen line of a possibly wrapped line, so without soft
+   * wrap rows and buffer lines coincide.
+   */
+  export type Viewport = Readonly<{ first: number; rows: number }>;
   /** A selection's ends as UTF-8 byte offsets; equal for a bare caret. */
   export type EditorSelection = Readonly<{ anchor: number; caret: number }>;
   /** How an editor draws its caret. */
@@ -977,11 +981,12 @@ declare module "knot" {
     /**
      * How the view scrolls to show the caret. "nearest" (the default) scrolls
      * the minimum, as ordinary caret movement does; "center" centers the
-     * caret's line when it is outside the viewport and otherwise keeps scroll;
+     * caret's row when it is outside the viewport and otherwise keeps scroll;
+     * "always-center" centers it even when it is on screen (Vim's `zz`);
      * "top" and "bottom" always put the caret's line at that edge of the
      * viewport, as far as the text allows (Vim's `zt` and `zb`).
      */
-    readonly reveal?: "nearest" | "center" | "top" | "bottom";
+    readonly reveal?: "nearest" | "center" | "always-center" | "top" | "bottom";
   }
   /**
    * The document editor a command captured. It is usable within that
@@ -999,12 +1004,27 @@ declare module "knot" {
      */
     setSelection(selection: EditorSelection, options?: SetSelectionOptions): Promise<void>;
     /**
-     * The lines wholly visible in the viewport, from the view's last layout,
-     * so it may lag a scroll or resize by one frame. Always at least one line;
-     * an editor that has not been laid out yet reports the first line.
+     * The rows wholly visible in the viewport, from the view's last layout,
+     * so it may lag a scroll or resize by one frame. Always at least one row;
+     * an editor that has not been laid out yet reports the first row.
      * @throws HostError with InvalidTarget or Cancelled.
      */
-    visibleLines(): Promise<VisibleLines>;
+    viewport(): Promise<Viewport>;
+    /**
+     * The 0-based buffer line the document row `row` belongs to; a row past
+     * the last is the last. Rows count as `viewport` and `scrollBy` do.
+     * @throws HostError with InvalidTarget or Cancelled; TypeError for a
+     * negative or non-integer row.
+     */
+    rowAt(row: number): Promise<number>;
+    /**
+     * The document row that UTF-8 byte `column` of buffer line `line` shows on.
+     * A column at a break shows on the row that starts there, as the view draws
+     * the caret. Lines are 0-based.
+     * @throws HostError with InvalidRange for a line past the last or a column
+     * past the line's end or inside a character, or Cancelled.
+     */
+    rowOf(line: number, column: number): Promise<number>;
     /**
      * The display cells from the start of buffer line `line` to the UTF-8 byte
      * `column` in it, with tabs expanded from the line's start, measured as soft
@@ -1023,13 +1043,13 @@ declare module "knot" {
      */
     columnAtCells(line: number, cells: number): Promise<number>;
     /**
-     * Scroll by whole lines, negative upward, without moving or revealing the
+     * Scroll by rows, negative upward, without moving or revealing the
      * caret; the scroll stays within the text. Not an edit and not a caret
      * move, so it does not end an undo group.
      * @throws HostError with InvalidTarget or Cancelled; TypeError for a
      * non-integer.
      */
-    scrollBy(lines: number): Promise<void>;
+    scrollBy(rows: number): Promise<void>;
     /**
      * Set or clear a named key context on this editor, which bindings with a
      * matching `context` option require. The context belongs to the caller's

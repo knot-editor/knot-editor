@@ -31,7 +31,7 @@ type FakeTab = {
   document: Knot.DocumentId;
   view: Knot.EditorViewState;
   /** How the last `setSelection` revealed the caret, if any did. */
-  reveal: "nearest" | "center" | "top" | "bottom" | null;
+  reveal: "nearest" | "center" | "always-center" | "top" | "bottom" | null;
   keyContexts: Set<string>;
   /** Lines the viewport shows; the view's `top` is its first line. */
   viewportLines: number;
@@ -723,19 +723,35 @@ function editor(tab: FakeTab): Knot.Editor {
       if (reveal === "top" || reveal === "bottom") {
         const line = lineOf(document(tab.document).text, caret);
         tab.view = { ...tab.view, top: clampTop(tab, reveal === "top" ? line : line - tab.viewportLines + 1) };
+      } else if (reveal === "always-center") {
+        const line = lineOf(document(tab.document).text, caret);
+        tab.view = { ...tab.view, top: clampTop(tab, line - Math.floor(tab.viewportLines / 2)) };
       }
       await notifySelection(tab);
     },
-    visibleLines: async () => {
+    // The fake does not wrap, so rows are lines.
+    viewport: async () => {
       const tab = live();
       const count = lineRanges(document(tab.document).text).length;
       const first = Math.min(tab.view.top, count - 1);
-      return { first, last: Math.max(first, Math.min(first + tab.viewportLines, count) - 1) };
+      return { first, rows: Math.max(1, Math.min(first + tab.viewportLines, count) - first) };
     },
-    scrollBy: async (lines) => {
-      if (!Number.isSafeInteger(lines)) throw new TypeError("lines must be a safe integer");
+    rowAt: async (row) => {
+      if (!Number.isSafeInteger(row) || row < 0) throw new TypeError("row must be a non-negative safe integer");
+      return Math.min(row, lineRanges(document(live().document).text).length - 1);
+    },
+    rowOf: async (line, column) => {
+      const ranges = lineRanges(document(live().document).text);
+      const range = ranges[line];
+      if (range === undefined || column > range.endByteOffset - range.startByteOffset) {
+        throw hostError("InvalidRange");
+      }
+      return line;
+    },
+    scrollBy: async (rows) => {
+      if (!Number.isSafeInteger(rows)) throw new TypeError("rows must be a safe integer");
       const tab = live();
-      tab.view = { ...tab.view, top: clampTop(tab, tab.view.top + lines) };
+      tab.view = { ...tab.view, top: clampTop(tab, tab.view.top + rows) };
     },
     // Display cells come from the native editor's measure, which the fake does
     // not reimplement; a test that needs them is a product test.
@@ -791,7 +807,9 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     selection: guard(live.selection),
     setSelection: guard(live.setSelection),
     setKeyContext: guard(live.setKeyContext),
-    visibleLines: guard(live.visibleLines),
+    viewport: guard(live.viewport),
+    rowAt: guard(live.rowAt),
+    rowOf: guard(live.rowOf),
     scrollBy: guard(live.scrollBy),
     cellsBefore: guard(live.cellsBefore),
     columnAtCells: guard(live.columnAtCells),

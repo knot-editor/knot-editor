@@ -143,7 +143,9 @@ fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppCo
         // A resize keeps the caret visible, so park it on the top row.
         (view.cursor_line, view.cursor_col) = (3, start);
         assert_eq!(view.view_state(cx).top, top);
-        assert_eq!(view.fully_visible_lines().0, 4);
+        // The top row is mid-line, so the first wholly visible row is the
+        // next one, still on line 3.
+        assert_eq!(view.row_line(view.viewport().0), 3);
         top
     });
 
@@ -415,5 +417,55 @@ fn without_wrapping_each_movement_and_its_twin_agree(cx: &mut TestAppContext) {
                 assert_eq!(results[0], results[1], "{prefix}-{movement}");
             }
         }
+    });
+}
+
+#[gpui::test]
+fn row_queries_and_scrolling_follow_wrapped_rows(cx: &mut TestAppContext) {
+    wrap_everything(cx);
+    let text = ["short", &words(60), "tail", &words(60), "end"].join("\n");
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.simulate_resize(size(px(400.), px(300.)));
+    cx.run_until_parked();
+    let state = cx.read(|cx| editor.read(cx).editor().clone());
+    state.update(cx, |view, cx| {
+        let long = view.wrap.rows(1).len();
+        assert!(long > 3);
+        let count = view.wrap.row_count();
+        assert_eq!(count, 3 + 2 * long);
+        view.viewport_rows = 4.;
+
+        // Rows map to their lines, and past the end to the last line.
+        assert_eq!(view.row_line(0), 0);
+        assert_eq!(view.row_line(1), 1);
+        assert_eq!(view.row_line(long), 1);
+        assert_eq!(view.row_line(long + 1), 2);
+        assert_eq!(view.row_line(1_000_000), 4);
+
+        // A column shows on its row; a break starts the next row.
+        let second = view.wrap.row_range(1, 1, 239).start;
+        assert_eq!(view.row_of_position(1, 0, cx), Some(1));
+        assert_eq!(view.row_of_position(1, second - 1, cx), Some(1));
+        assert_eq!(view.row_of_position(1, second, cx), Some(2));
+        assert_eq!(view.row_of_position(5, 0, cx), None);
+        assert_eq!(view.row_of_position(0, 99, cx), None);
+
+        // The viewport counts whole rows, with a long line at the top, in
+        // the middle, and at the end of the text.
+        view.scroll_by_rows(-100, cx);
+        assert_eq!(view.viewport(), (0, 4));
+        view.scroll_by_rows(2, cx);
+        assert_eq!(view.viewport(), (2, 4));
+        assert_eq!(view.row_line(view.viewport().0), 1);
+        view.scroll_by_rows(1_000, cx);
+        assert_eq!(view.viewport(), (count - 4, 4));
+        assert_eq!(view.row_line(view.viewport().0 + 3), 4);
+        view.scroll_by_rows(-1, cx);
+        assert_eq!(view.viewport().0, count - 5);
+
+        // A scrolled view shows a partial top row only when scrolled by hand.
+        view.scroll_top = 1.5;
+        assert_eq!(view.viewport(), (2, 3));
     });
 }

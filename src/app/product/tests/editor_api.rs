@@ -278,9 +278,30 @@ await commands.register("handle.scroll", async () => {
   await handle.setSelection({ anchor: 0, caret: 0 }, { reveal: "top" });
   await handle.scrollBy(4);
   await handle.scrollBy(-1);
-  const { first, last } = await handle.visibleLines();
+  const { first, rows } = await handle.viewport();
   const { caret } = await handle.selection();
-  await workbench.writeClipboardText(`${first}:${last}:${caret}`);
+  await workbench.writeClipboardText(`${first}:${rows}:${caret}`);
+});
+await commands.register("handle.rows", async () => {
+  const outcome = async (query) => {
+    try { return String(await query()); } catch (error) { return error.name === "TypeError" ? "TypeError" : error.code; }
+  };
+  const report = [
+    await outcome(() => handle.rowAt(0)),
+    await outcome(() => handle.rowAt(2)),
+    await outcome(() => handle.rowAt(1000)),
+    await outcome(() => handle.rowOf(1, 2)),
+    await outcome(() => handle.rowOf(1, 9)),
+    await outcome(() => handle.rowOf(7, 0)),
+    await outcome(() => handle.rowAt(-1)),
+    await outcome(() => handle.rowOf(0, 1.5)),
+    await outcome(() => handle.scrollBy(0.5)),
+  ];
+  await workbench.writeClipboardText(report.join(","));
+});
+await commands.register("handle.center", async ({ buffer }) => {
+  const line = await buffer.lineRange(50);
+  await handle.setSelection({ anchor: line.startByteOffset, caret: line.startByteOffset }, { reveal: "always-center" });
 });
 await commands.register("handle.measure", async () => {
   const outcome = async (measure) => {
@@ -463,7 +484,7 @@ fn editor_handle_cursor_style_follows_the_latest_choice_and_ends_with_its_lifecy
 }
 
 #[gpui::test]
-fn editor_handle_scrolls_and_reports_visible_lines(cx: &mut TestAppContext) {
+fn editor_handle_scrolls_and_reports_the_viewport(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (_host, _) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -519,6 +540,49 @@ fn editor_handle_measures_display_cells_and_rejects_bad_positions(cx: &mut TestA
         reported,
         "1,3,InvalidRange,1,4,0,5,InvalidRange,InvalidRange"
     );
+}
+
+#[gpui::test]
+fn editor_handle_maps_rows_validates_arguments_and_always_centers(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (_host, _) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.run_until_parked();
+    cx.update(|cx| {
+        model.update(cx, |model, cx| {
+            model.replace(0..0, "a漢b\n\tc").unwrap();
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(&shell, window, name, cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    };
+    run("handle.attach", cx);
+    run("handle.rows", cx);
+    // Without wrapping rows are lines; rows past the end clamp to the last.
+    let reported = cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap());
+    assert_eq!(
+        reported,
+        "0,1,1,1,InvalidRange,InvalidRange,TypeError,TypeError,TypeError"
+    );
+
+    cx.update(|cx| {
+        model.update(cx, |model, cx| {
+            let end = model.len();
+            model.replace(end..end, &"\nline".repeat(100)).unwrap();
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    let editor = active_editor(&shell, cx);
+    run("handle.center", cx);
+    cx.run_until_parked();
+    let top = cx.read(|cx| editor.read(cx).view_state(cx).top);
+    assert!(top > 0, "line 50 centers a viewport that began at line 0");
 }
 
 const SELECTION_SOURCE: &str = r#"

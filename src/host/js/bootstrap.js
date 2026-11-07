@@ -358,14 +358,23 @@ function editorFor(authority) {
       const anchor = safeInteger(selection.anchor);
       const caret = safeInteger(selection.caret);
       const reveal = options?.reveal ?? "nearest";
-      if (reveal !== "nearest" && reveal !== "center" && reveal !== "top" && reveal !== "bottom") {
-        throw new TypeError('reveal must be "nearest", "center", "top" or "bottom"');
+      if (reveal !== "nearest" && reveal !== "center" && reveal !== "always-center" && reveal !== "top" && reveal !== "bottom") {
+        throw new TypeError('reveal must be "nearest", "center", "always-center", "top" or "bottom"');
       }
       await request("editorSetSelection", authority, anchor, caret, reveal);
     },
-    async visibleLines() {
-      const value = await request("editorVisibleLines", authority);
-      return Object.freeze({ first: value.first, last: value.last });
+    async viewport() {
+      const value = await request("editorViewport", authority);
+      return Object.freeze({ first: value.first, rows: value.rows });
+    },
+    async rowAt(row) {
+      if (!Number.isSafeInteger(row) || row < 0) throw new TypeError("row must be a non-negative safe integer");
+      return request("editorRowAt", authority, row);
+    },
+    async rowOf(line, column) {
+      if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");
+      if (!Number.isSafeInteger(column) || column < 0) throw new TypeError("column must be a non-negative safe integer");
+      return request("editorRowOf", authority, line, column);
     },
     async cellsBefore(line, column) {
       if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");
@@ -377,9 +386,9 @@ function editorFor(authority) {
       if (!Number.isSafeInteger(cells) || cells < 0) throw new TypeError("cells must be a non-negative safe integer");
       return request("editorColumnAtCells", authority, line, cells);
     },
-    async scrollBy(lines) {
-      if (!Number.isSafeInteger(lines)) throw new TypeError("lines must be a safe integer");
-      await request("editorScrollBy", authority, lines);
+    async scrollBy(rows) {
+      if (!Number.isSafeInteger(rows)) throw new TypeError("rows must be a safe integer");
+      await request("editorScrollBy", authority, rows);
     },
     async setKeyContext(name, active) {
       if (typeof name !== "string" || name === "") {

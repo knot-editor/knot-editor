@@ -146,12 +146,15 @@ Extension commands captured in a document editor reach it through an editor
 handle ([commands](commands.md#extension-execution)) that reads and moves its
 selection and saves and restores its view state. Moving the selection ends
 the typing undo group as other caret moves do; a centered reveal recenters
-the caret's line only when it lies outside the viewport, and otherwise
-behaves like ordinary movement; top and bottom reveals always align it with
-that edge. Its units stay buffer lines while wrapping: a top reveal shows a
-line's first row and a bottom reveal its last. The handle also reports the
-lines whose rows are wholly visible in the last layout, which may lag a scroll by a frame, and scrolls by lines without moving
-the caret or asking the next paint to reveal it. Go to Line is the bundled `@knot/go-to-line`
+the caret's row only when it lies outside the viewport and otherwise behaves
+like ordinary movement, an always-centering reveal centers it regardless, and
+top and bottom reveals always align the caret's line with that edge: a top
+reveal shows a line's first row and a bottom reveal its last. The handle
+counts rows: it reports the first row wholly visible in the last layout and
+how many are, which may lag a scroll by a frame, scrolls by rows without
+moving the caret or asking the next paint to reveal it, and maps a document row
+to its buffer line and a line and byte column to its row. Without wrapping,
+rows and lines coincide. Go to Line is the bundled `@knot/go-to-line`
 package built on that handle, bound to ctrl-G in the Knot preset.
 
 Editing commands such as Enter, indent and outdent, comment toggling, and the

@@ -128,11 +128,16 @@ await commands.register("example.go-to-start", async ({ editor, buffer }) => {
 ```
 
 `reveal: "nearest"`, the default, scrolls as ordinary caret movement does;
-`"center"` centers the caret's line only when it was off screen; `"top"` and
+`"center"` centers the caret's row only when it was off screen,
+`"always-center"` centers it even when it is on screen; `"top"` and
 `"bottom"` always put it at that edge of the viewport, as far as the text
-allows. `editor.visibleLines()` returns the `first` and `last` lines wholly
-inside the viewport from the last layout, and `editor.scrollBy(lines)` scrolls
-by whole lines, negative upward, without moving the caret. `editor.cellsBefore`
+allows. A row is one screen line of a possibly wrapped line.
+`editor.viewport()` returns the `first` row wholly inside the viewport and the
+number of `rows` that are, from the last layout, and `editor.scrollBy(rows)`
+scrolls by rows, negative upward, without moving the caret.
+`editor.rowAt(row)` returns the buffer line a row belongs to, and
+`editor.rowOf(line, column)` the row a byte column shows on, so a motion to a
+screen position needs no caret move. `editor.cellsBefore`
 and `editor.columnAtCells` convert between a line's UTF-8 byte columns and
 display cells, with the editor's tab size and the cell measure soft wrap uses,
 so vertical movement can aim at what the screen shows. Setting the
