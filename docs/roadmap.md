@@ -61,7 +61,7 @@ groups, view controls, decoration styles, visual-line movement, and folding,
 proven by a bundled JavaScript Vim mode. It promotes D058, D066's folding,
 D077, D109, D110, D111, D112, and D114's decoration styles, schedules the
 daily-driver items D031, D078, and D080, and adds D141 and D142. Vim features
-left for later are D113, D142, D144, D146, D150, D151, and D152. Language servers
+left for later are D113, D142, D144, D146, D150, D151, D152, and D158. Language servers
 (D067) follow it.
 
 The [package manager](plans/package-manager.md) initiative is selected: extension
@@ -656,6 +656,16 @@ Kakoune mode could use it too. The
     the Vim package over existing primitives, with cases beside the others;
     tag objects may wait for D144's syntax-tree queries.
   - Order: after D058; tag objects with or after D144.
+
+- **D158 — Leaving a dock tool from Vim's `ctrl-w`**
+  - Deferred: Vim's `ctrl-w h j k l` (D058) uses directional pane focus,
+    which reaches a dock's tool pane such as the explorer. Vim follows
+    editors only, so `ctrl-w` does nothing there, and Knot's own chords
+    or a click leave. Pane cycling (`w W t b`) already skips docks.
+  - Reconsider: Landing in a dock by `ctrl-w` gets in the way. Then choose
+    between binding the `ctrl-w` window keys in tool panes' key contexts,
+    and skipping docks for `ctrl-w` direction keys while Vim is active.
+  - Order: after D058.
 
 - **D152 — Persistent Vim global marks**
   - Deferred: The Vim mode's (D058) global marks `A`–`Z` hold a document
