@@ -205,3 +205,100 @@ fn text_inserted_before_a_folds_first_line_does_not_join_the_fold(cx: &mut TestA
     cx.read(|cx| assert_eq!(editor.read(cx).folds(), [5..8]));
     assert_eq!(rows(&editor, cx), 9);
 }
+
+fn regions(editor: &gpui::Entity<Editor>, cx: &mut TestAppContext) -> Vec<std::ops::Range<usize>> {
+    cx.read(|cx| editor.read(cx).fold_regions(cx).to_vec())
+}
+
+fn indented_editor(
+    text: &str,
+    cx: &mut TestAppContext,
+) -> (gpui::Entity<BufferModel>, gpui::Entity<Editor>) {
+    let model = cx.new(|_| BufferModel::from_text(text));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    (model, editor)
+}
+
+const INDENTED: &str = "a\n  b\n    c\n\n    d\n  e\nf\ng\n  h";
+
+#[gpui::test]
+fn text_without_a_folds_query_folds_by_indentation(cx: &mut TestAppContext) {
+    let (_, editor) = indented_editor(INDENTED, cx);
+    // `a` holds through `e`, `b` through `d` without its trailing blank line,
+    // and `g` holds `h`.
+    assert_eq!(regions(&editor, cx), [0..6, 1..5, 7..9]);
+}
+
+#[gpui::test]
+fn fold_commands_collapse_the_innermost_region_at_the_caret(cx: &mut TestAppContext) {
+    let (model, editor) = indented_editor(INDENTED, cx);
+    let at = |line, cx: &mut TestAppContext| {
+        let offset = cx.read(|cx| model.read(cx).line_range(line).start);
+        place(&editor, offset, cx);
+    };
+    // Inside `b`'s region, away from a first line, the innermost encloses.
+    at(2, cx);
+    command(&editor, "editor.fold", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).folds(), [1..5]));
+    // The caret moved to the fold's first line, so folding again takes the
+    // region around it.
+    assert_eq!(caret(&editor, cx).0, 1);
+    command(&editor, "editor.fold", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).folds(), [0..6, 1..5]));
+    // Unfold expands the outermost fold on the caret's line.
+    command(&editor, "editor.unfold", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).folds(), [1..5]));
+    at(1, cx);
+    command(&editor, "editor.toggle-fold", cx);
+    cx.read(|cx| assert!(editor.read(cx).folds().is_empty()));
+    command(&editor, "editor.toggle-fold", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).folds(), [1..5]));
+    command(&editor, "editor.unfold-all", cx);
+    cx.read(|cx| assert!(editor.read(cx).folds().is_empty()));
+    command(&editor, "editor.fold-all", cx);
+    cx.read(|cx| assert_eq!(editor.read(cx).folds(), [0..6, 1..5, 7..9]));
+    assert_eq!(rows(&editor, cx), 3);
+}
+
+fn rust_regions_editor(cx: &mut TestAppContext, text: &str) -> gpui::Entity<Editor> {
+    use crate::app::languages::editing::EditingDefinition;
+    use crate::app::languages::{self, LanguageDefinition, LanguageOwner, LanguageQueries};
+    use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
+    cx.update(|cx| {
+        cx.set_global(ApplicationSettings::default());
+        let rust = LanguageDefinition {
+            info: LanguageInfo {
+                id: "rust".into(),
+                name: "Rust".into(),
+                grammar: "rust".into(),
+                file_extensions: Vec::new(),
+                file_names: Vec::new(),
+                interpreters: Vec::new(),
+            },
+            queries: LanguageQueries {
+                highlights: String::new(),
+                injections: String::new(),
+                indents: String::new(),
+                folds: "(block) @fold\n(declaration_list) @fold".into(),
+            },
+            editing: EditingDefinition::default(),
+        };
+        let owner = LanguageOwner {
+            extension: ExtensionId::new(1),
+            lifecycle: ExtensionLifecycleId::new(1),
+        };
+        languages::register(owner, rust.compile().unwrap(), cx);
+    });
+    let model = cx.new(|_| BufferModel::from_text(text));
+    cx.update(|cx| languages::set_language(&model, "rust".into(), cx));
+    cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx))
+}
+
+#[gpui::test]
+fn a_folds_query_gives_regions_that_leave_the_closing_line_visible(cx: &mut TestAppContext) {
+    let source = "impl T {\n    fn f() {\n        a;\n        b;\n    }\n\n    fn g() { c }\n}\n";
+    let editor = rust_regions_editor(cx, source);
+    // The impl's body ends at its closing brace, which stays visible, and so
+    // does `f`'s; `g` fits one line.
+    assert_eq!(regions(&editor, cx), [0..7, 1..4]);
+}

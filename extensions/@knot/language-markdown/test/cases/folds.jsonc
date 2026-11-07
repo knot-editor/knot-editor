@@ -1,0 +1,16 @@
+// Fold region cases; see the Rust package's folds.jsonc for the format.
+{
+  "languages": ["markdown"],
+  "regions": [
+    {
+      "name": "sections fold from their heading to before the next one",
+      "before": ["# One", "", "text", "", "## Two", "", "more", "", "# Three", "", "end"],
+      "after": ["0-6", "4-6", "8-10"]
+    },
+    {
+      "name": "code fences and lists fold",
+      "before": ["# T", "```rust", "fn f() {", "}", "```", "", "- item", "  more", "- other"],
+      "after": ["0-8", "1-4", "6-7"]
+    }
+  ]
+}

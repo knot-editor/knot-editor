@@ -1,0 +1,44 @@
+// Fold region cases; see the Rust package's folds.jsonc for the format.
+[
+{
+  "languages": ["typescript", "javascript"],
+  "regions": [
+    {
+      "name": "blocks, objects, and calls fold and leave closing lines visible",
+      "before": [
+        "function f(a) {",
+        "  if (a) {",
+        "    b();",
+        "  } else {",
+        "    c();",
+        "  }",
+        "  return {",
+        "    x: 1,",
+        "  };",
+        "}"
+      ],
+      "after": ["0-8", "1-2", "3-4", "6-7"]
+    }
+  ]
+},
+{
+  "languages": ["typescript"],
+  "regions": [
+    {
+      "name": "interfaces and enums fold",
+      "before": ["interface I {", "  a: number;", "}", "enum E {", "  A,", "}"],
+      "after": ["0-1", "3-4"]
+    }
+  ]
+},
+{
+  "languages": ["typescriptreact", "javascriptreact"],
+  "regions": [
+    {
+      "name": "JSX elements fold",
+      "before": ["const a = (", "  <div>", "    <b />", "  </div>", ");"],
+      "after": ["1-3"]
+    }
+  ]
+}
+]

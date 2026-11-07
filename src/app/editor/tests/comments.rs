@@ -28,6 +28,7 @@ fn register(id: &str, injections: &str, comments: CommentTokens, cx: &mut gpui::
             highlights: String::new(),
             injections: injections.into(),
             indents: String::new(),
+            folds: String::new(),
         },
         editing: EditingDefinition {
             comments: Some(comments),

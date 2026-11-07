@@ -1,0 +1,11 @@
+// Fold region cases; see the Rust package's folds.jsonc for the format.
+{
+  "languages": ["toml"],
+  "regions": [
+    {
+      "name": "tables fold without their trailing blank lines",
+      "before": ["[a]", "x = 1", "y = [", "  1,", "]", "", "[[b]]", "z = 2"],
+      "after": ["0-4", "2-3", "6-7"]
+    }
+  ]
+}

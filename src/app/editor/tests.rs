@@ -406,6 +406,7 @@ fn tab_stops_follow_the_settings_for_each_open_view(cx: &mut TestAppContext) {
                 highlights: "(identifier) @variable".into(),
                 injections: String::new(),
                 indents: String::new(),
+                folds: String::new(),
             },
             editing: Default::default(),
         };

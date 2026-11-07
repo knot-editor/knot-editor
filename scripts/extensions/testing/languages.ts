@@ -119,6 +119,14 @@ export function testLanguagePackage(
     }
   });
 
+  test("fold queries capture only fold", () => {
+    for (const { id, kind, source } of queries(definitions)) {
+      if (kind !== "folds") continue;
+      const unknown = [...captures(source)].filter((name) => !name.startsWith("_") && name !== "fold");
+      assert.deepEqual(unknown, [], `${id} folds`);
+    }
+  });
+
   test("queries use only predicates the native engine evaluates", () => {
     for (const { id, kind, source } of queries(definitions)) {
       const unsupported = [...predicates(source)].filter(

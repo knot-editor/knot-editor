@@ -2,6 +2,7 @@
 // claiming the file names, extensions, and shebang interpreters detection
 // matches.
 import type { LanguageDefinition } from "knot";
+import * as folds from "./queries/folds.js";
 import * as python from "./queries/python.js";
 
 export const LANGUAGES: readonly LanguageDefinition[] = [
@@ -11,7 +12,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "python",
     fileExtensions: ["py", "pyi", "pyw"],
     interpreters: ["python", "python3"],
-    queries: { highlights: python.highlights, indents: python.indents },
+    queries: { highlights: python.highlights, indents: python.indents, folds: folds.python },
     // Docstrings are strings, not block comments.
     comments: { line: ["#"] },
     brackets: [

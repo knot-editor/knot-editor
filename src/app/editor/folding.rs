@@ -7,6 +7,7 @@
 //! over the same text. Folds are per view and never recorded in the buffer.
 
 use super::*;
+use std::sync::Arc;
 
 /// One collapsed fold.
 pub(super) struct Fold {
@@ -72,35 +73,102 @@ impl Editor {
     /// keeping the first visible. Does nothing for a fold already collapsed.
     /// Returns whether `lines` is a range of at least two lines in the text.
     pub(crate) fn fold(&mut self, lines: Range<usize>, cx: &mut Context<Self>) -> bool {
+        let valid = lines.len() >= 2 && lines.end <= self.model.read(cx).line_count();
+        if valid {
+            self.fold_all_of(&[lines], cx);
+        }
+        valid
+    }
+
+    /// Collapse every range of `all` that is a valid, uncollapsed fold, and
+    /// hide their lines once.
+    fn fold_all_of(&mut self, all: &[Range<usize>], cx: &mut Context<Self>) {
         let model = self.model.read(cx);
-        if lines.len() < 2 || lines.end > model.line_count() {
-            return false;
-        }
-        if self.folds().contains(&lines) {
-            return true;
-        }
         let top = self.top_offset(model);
-        let start = to_flat_byte(model, lines.start, 0);
-        let last = lines.end - 1;
-        let end = to_flat_byte(model, last, line_end(model, last));
-        let range = self
-            .model
-            .update(cx, |model, _| model.add_view_position(start..end));
-        self.folds.push(Fold {
-            range,
-            lines: Some(lines.clone()),
+        let existing = self.folds();
+        let new: Vec<Range<usize>> = all
+            .iter()
+            .filter(|lines| {
+                lines.len() >= 2 && lines.end <= model.line_count() && !existing.contains(lines)
+            })
+            .cloned()
+            .collect();
+        if new.is_empty() {
+            return;
+        }
+        let anchors: Vec<_> = self.model.update(cx, |model, _| {
+            new.into_iter()
+                .map(|lines| {
+                    let start = to_flat_byte(model, lines.start, 0);
+                    let last = lines.end - 1;
+                    let end = to_flat_byte(model, last, line_end(model, last));
+                    (model.add_view_position(start..end), lines)
+                })
+                .collect()
         });
+        for (range, lines) in anchors {
+            self.folds.push(Fold {
+                range,
+                lines: Some(lines),
+            });
+        }
         self.after_fold_change(top, cx);
-        // The caret and selection leave the lines the fold hides.
+        // The caret and selection leave the lines the folds hide.
         let model = self.model.read(cx);
         if self.wrap.is_hidden(self.cursor_line) || self.wrap.is_hidden(self.anchor_line) {
-            self.cursor_line = lines.start;
-            self.cursor_col = self.cursor_col.min(line_end(model, lines.start));
+            let line = self
+                .wrap
+                .hidden_range(self.cursor_line)
+                .map_or(self.cursor_line, |hidden| hidden.start - 1);
+            self.cursor_line = line;
+            self.cursor_col = self.cursor_col.min(line_end(model, line));
             self.has_selection = false;
             self.preferred_column = None;
             self.finish_position_change(cx);
         }
+    }
+
+    /// The regions the language's `folds` query or, without one, the text's
+    /// indentation offers, as line ranges ordered by first line.
+    pub(crate) fn fold_regions(&self, cx: &App) -> Arc<[Range<usize>]> {
+        self.model.read(cx).fold_regions()
+    }
+
+    /// The uncollapsed region the Fold command collapses: the innermost one
+    /// that starts on the caret's line or encloses it.
+    pub(super) fn fold_at_caret(&mut self, cx: &mut Context<Self>) {
+        let line = self.cursor_line;
+        let collapsed = self.folds();
+        let region = self
+            .fold_regions(cx)
+            .iter()
+            .filter(|lines| lines.start <= line && line < lines.end && !collapsed.contains(lines))
+            .max_by_key(|lines| (lines.start, std::cmp::Reverse(lines.end)))
+            .cloned();
+        if let Some(region) = region {
+            self.fold_all_of(&[region], cx);
+        }
+    }
+
+    /// Expand the outermost fold collapsed on the caret's line.
+    pub(super) fn unfold_at_caret(&mut self, cx: &mut Context<Self>) -> bool {
+        let line = self.cursor_line;
+        let Some(lines) = self.folds().into_iter().find(|lines| lines.start == line) else {
+            return false;
+        };
+        self.unfold(&lines, cx);
         true
+    }
+
+    /// Collapse every region of the text.
+    pub(super) fn fold_all_regions(&mut self, cx: &mut Context<Self>) {
+        let regions = self.fold_regions(cx);
+        self.fold_all_of(&regions, cx);
+    }
+
+    /// Expand every fold.
+    pub(super) fn unfold_all_folds(&mut self, cx: &mut Context<Self>) {
+        self.unfold_where(cx, |_| true);
     }
 
     /// Expand the collapsed fold over exactly `lines`, if there is one.

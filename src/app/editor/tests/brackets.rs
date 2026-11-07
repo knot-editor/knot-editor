@@ -133,6 +133,7 @@ fn pairs_editor<'a>(
                 highlights: "(string_literal) @string\n(line_comment) @comment\n(block_comment) @comment.documentation".into(),
                 injections: String::new(),
                 indents: String::new(),
+                folds: String::new(),
             },
             editing: EditingDefinition {
                 comments: None,

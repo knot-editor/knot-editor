@@ -2,6 +2,7 @@
 // claiming the file names, extensions, and shebang interpreters detection
 // matches.
 import type { LanguageDefinition } from "knot";
+import * as folds from "./queries/folds.js";
 import * as injections from "./queries/injections.js";
 import * as markdown from "./queries/markdown.js";
 import * as markdownInline from "./queries/markdown_inline.js";
@@ -30,7 +31,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     name: "Markdown",
     grammar: "markdown",
     fileExtensions: ["md", "markdown", "mkd"],
-    queries: { highlights: markdown.highlights, injections: injections.markdown },
+    queries: { highlights: markdown.highlights, injections: injections.markdown, folds: folds.markdown },
     ...EDITING,
   },
   {

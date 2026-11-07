@@ -244,6 +244,7 @@ pub(super) fn rust_editor<'a>(
                 highlights: String::new(),
                 injections: String::new(),
                 indents: indents.into(),
+                folds: String::new(),
             },
             editing: EditingDefinition {
                 brackets: Some(vec![pair("{", "}"), pair("(", ")"), pair("\"", "\"")]),

@@ -313,6 +313,7 @@ await commands.register("handle.fold", async () => {
     JSON.stringify((await handle.rowAt(3))),
     await outcome(() => handle.unfold({ start: 1, end: 5 })),
     JSON.stringify(await handle.folds()),
+    JSON.stringify(await handle.foldRegions()),
   ];
   await workbench.writeClipboardText(report.join("|"));
 });
@@ -632,7 +633,7 @@ fn editor_handle_folds_lines_and_counts_only_the_rows_left_visible(cx: &mut Test
             "undefined|undefined|InvalidRange|TypeError|TypeError|",
             r#"[{"start":1,"end":5},{"start":2,"end":3}]|"#,
             r#"{"line":7,"column":0}|"#,
-            r#"undefined|[{"start":2,"end":3}]"#,
+            r#"undefined|[{"start":2,"end":3}]|[]"#,
         )
     );
     cx.read(|cx| assert_eq!(editor.read(cx).folds(), [2..4]));

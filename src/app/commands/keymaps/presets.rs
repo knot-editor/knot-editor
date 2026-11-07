@@ -450,6 +450,8 @@ const MACOS_BINDINGS: &[PresetEntry] = &[
     ("shift-alt-up", COPY_LINES_UP_COMMAND, Some("editor")),
     ("shift-alt-down", COPY_LINES_DOWN_COMMAND, Some("editor")),
     ("ctrl-j", JOIN_LINES_COMMAND, Some("editor")),
+    ("cmd-alt-[", FOLD_COMMAND, Some("editor")),
+    ("cmd-alt-]", UNFOLD_COMMAND, Some("editor")),
     // macOS reports cmd-shift-] as cmd-}.
     ("cmd-}", NEXT_TAB_COMMAND, None),
     ("cmd-{", PREVIOUS_TAB_COMMAND, None),

@@ -1,0 +1,34 @@
+// Fold region cases; see the Rust package's folds.jsonc for the format.
+{
+  "languages": ["python"],
+  "regions": [
+    {
+      "name": "a compound statement folds from its header and clauses fold separately",
+      "before": [
+        "def f(x):",
+        "    if x:",
+        "        a()",
+        "        b()",
+        "    else:",
+        "        c()",
+        "    return 1",
+        "",
+        "y = 2"
+      ],
+      "after": ["0-6", "1-3", "4-5"]
+    },
+    {
+      "name": "classes, loops, and multi-line collections fold",
+      "before": [
+        "class C:",
+        "    def m(self):",
+        "        for i in x:",
+        "            use(i)",
+        "        v = [",
+        "            1,",
+        "        ]"
+      ],
+      "after": ["0-6", "1-6", "2-3", "4-5"]
+    }
+  ]
+}

@@ -314,6 +314,8 @@ pub(super) struct Outcome {
     pub(super) anchor: usize,
     pub(super) caret: usize,
     pub(super) matched: Option<[Range<usize>; 2]>,
+    /// The fold regions as line ranges, first line to one past the last.
+    pub(super) regions: Vec<Range<usize>>,
 }
 
 impl Outcome {
@@ -382,6 +384,7 @@ pub(super) fn run(
         anchor: state.anchor,
         caret: state.caret,
         matched,
+        regions: model.read_with(cx, |model, _| model.fold_regions().to_vec()),
     }
 }
 

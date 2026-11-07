@@ -184,6 +184,8 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
         ("ctrl-h", DELETE_BACKWARD_COMMAND),
         ("ctrl-k", DELETE_TO_LINE_END_COMMAND),
         ("ctrl-j", JOIN_LINES_COMMAND),
+        ("cmd-alt-[", FOLD_COMMAND),
+        ("cmd-alt-]", UNFOLD_COMMAND),
         ("cmd-left", MOVE_SMART_HOME_COMMAND),
         ("shift-cmd-left", SELECT_SMART_HOME_COMMAND),
     ] {

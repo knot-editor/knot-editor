@@ -35,6 +35,14 @@ if (invalidIndents.code !== "InvalidQuery" || invalidIndents.details.query !== "
     || invalidIndents.details.row !== 1) {
   throw new Error(JSON.stringify(invalidIndents.details));
 }
+const invalidFolds = await failure(() => languages.register({
+  id: "rust", name: "Rust", grammar: "rust",
+  queries: { highlights: "", folds: "(block) @fold\n(not_a_node) @fold" },
+}));
+if (invalidFolds.code !== "InvalidQuery" || invalidFolds.details.query !== "folds"
+    || invalidFolds.details.row !== 1) {
+  throw new Error(JSON.stringify(invalidFolds.details));
+}
 const typeError = await failure(() => languages.register({
   id: "rust", name: "Rust", grammar: "rust", fileExtensions: [".rs"], queries: { highlights: "" },
 }));
@@ -52,7 +60,7 @@ for (const editing of [
 }
 await languages.register({
   id: "edited", name: "Edited", grammar: "python",
-  queries: { highlights: "", indents: "(block) @indent.begin" },
+  queries: { highlights: "", indents: "(block) @indent.begin", folds: "" },
   comments: { line: ["#"], block: ['"""', '"""'] },
   brackets: [{ open: "(", close: ")" }, { open: "'", close: "'", notIn: ["string"] }],
   autoCloseBefore: ";)",
@@ -60,7 +68,7 @@ await languages.register({
 const edited = await languages.get("edited");
 const expected = {
   id: "edited", name: "Edited", grammar: "python", fileExtensions: [], fileNames: [],
-  interpreters: [], queries: { highlights: "", injections: "", indents: "(block) @indent.begin" },
+  interpreters: [], queries: { highlights: "", injections: "", indents: "(block) @indent.begin", folds: "" },
   comments: { line: ["#"], block: ['"""', '"""'] },
   brackets: [{ open: "(", close: ")" }, { open: "'", close: "'", notIn: ["string"] }],
   autoCloseBefore: ";)",

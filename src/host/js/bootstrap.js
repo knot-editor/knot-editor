@@ -407,6 +407,10 @@ function editorFor(authority) {
       const folds = await request("editorFolds", authority);
       return Object.freeze(folds.map(({ start, end }) => Object.freeze({ start, end })));
     },
+    async foldRegions() {
+      const regions = await request("editorFoldRegions", authority);
+      return Object.freeze(regions.map(({ start, end }) => Object.freeze({ start, end })));
+    },
     async scrollBy(rows) {
       if (!Number.isSafeInteger(rows)) throw new TypeError("rows must be a safe integer");
       await request("editorScrollBy", authority, rows);
@@ -1225,9 +1229,12 @@ export async function registerLanguage(definition) {
   const indents = queries.indents === undefined
     ? ""
     : string(queries.indents, "indents query must be text");
+  const folds = queries.folds === undefined
+    ? ""
+    : string(queries.folds, "folds query must be text");
   const editing = languageEditing(value);
   const registration = await request("registerLanguage", id, name, grammar, fileExtensions,
-    fileNames, interpreters, highlights, injections, indents, editing);
+    fileNames, interpreters, highlights, injections, indents, folds, editing);
   const owned = ownership(() => {}, () => request("unregisterLanguage", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }

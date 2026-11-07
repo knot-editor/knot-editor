@@ -2442,6 +2442,29 @@ pub(crate) async fn editor_folds(
     })?
 }
 
+/// The regions of the captured editor's text that can fold, as the
+/// language's `folds` query or the text's indentation offers them, ordered by
+/// first line and then outermost first.
+#[host_operation("editorFoldRegions")]
+pub(crate) async fn editor_fold_regions(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<Vec<FoldRange>, AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        Ok(editor
+            .read(cx)
+            .fold_regions(cx)
+            .iter()
+            .map(|lines| FoldRange {
+                start: lines.start,
+                end: lines.end - 1,
+            })
+            .collect())
+    })?
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LineMeasureArguments {
     pub authority: EditorAuthority,
@@ -3147,6 +3170,7 @@ impl LanguageError {
                     SyntaxQuery::Highlights => "highlights",
                     SyntaxQuery::Injections => "injections",
                     SyntaxQuery::Indents => "indents",
+                    SyntaxQuery::Folds => "folds",
                 }
                 .into(),
                 message,
@@ -3172,9 +3196,10 @@ impl HostArguments for LanguageDefinition {
                 highlights: reader.text(8, "highlights query must be text")?,
                 injections: reader.text(9, "injections query must be text")?,
                 indents: reader.text(10, "indents query must be text")?,
+                folds: reader.text(11, "folds query must be text")?,
             },
             editing: serde_json::from_value::<EditingDefinition>(setting_value(
-                reader.command_arguments(11)?,
+                reader.command_arguments(12)?,
             ))
             .map_err(|_| DecodeError::Type("invalid language editing data"))?,
         })

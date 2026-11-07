@@ -3,15 +3,17 @@
 // matches. Languages that share a grammar family compose their highlight
 // queries the way nvim-treesitter's `; inherits:` does: the inherited query
 // comes first, so the more specific patterns after it win. Indent queries
-// compose the same way.
+// compose the same way, and so do fold queries.
 import type { LanguageDefinition } from "knot";
 import * as ecma from "./queries/ecma.js";
+import * as folds from "./queries/folds.js";
 import * as javascript from "./queries/javascript.js";
 import * as jsx from "./queries/jsx.js";
 import * as typescript from "./queries/typescript.js";
 
 const javascriptHighlights = ecma.highlights + jsx.highlights + javascript.highlights;
 const javascriptIndents = ecma.indents + jsx.indents;
+const javascriptFolds = folds.ecma + folds.jsx;
 
 // Editing data every ECMAScript language shares. JSX children comment with
 // `{/* */}`, which needs syntax-scoped configuration.
@@ -36,7 +38,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "javascript",
     fileExtensions: ["js", "mjs", "cjs"],
     interpreters: ["node"],
-    queries: { highlights: javascriptHighlights, indents: javascriptIndents },
+    queries: { highlights: javascriptHighlights, indents: javascriptIndents, folds: javascriptFolds },
     ...EDITING,
   },
   {
@@ -44,7 +46,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     name: "JavaScript JSX",
     grammar: "javascript",
     fileExtensions: ["jsx"],
-    queries: { highlights: javascriptHighlights, indents: javascriptIndents },
+    queries: { highlights: javascriptHighlights, indents: javascriptIndents, folds: javascriptFolds },
     ...EDITING,
   },
   {
@@ -56,6 +58,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     queries: {
       highlights: ecma.highlights + typescript.highlights,
       indents: ecma.indents + typescript.indents,
+      folds: folds.ecma + folds.typescript,
     },
     ...EDITING,
   },
@@ -67,6 +70,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     queries: {
       highlights: ecma.highlights + typescript.highlights + jsx.highlights,
       indents: ecma.indents + typescript.indents + jsx.indents,
+      folds: folds.ecma + folds.typescript + folds.jsx,
     },
     ...EDITING,
   },

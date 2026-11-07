@@ -161,6 +161,8 @@ pub struct BufferModel {
     syntax_driver: Option<Subscription>,
     /// How long a commit may reparse on the foreground.
     syntax_budget: Duration,
+    /// The fold regions of the current text and syntax.
+    fold_regions: RefCell<Option<folds::FoldRegions>>,
     /// Whole-document reads, so tests can assert that views never make them.
     #[cfg(test)]
     whole_text_reads: std::cell::Cell<usize>,
@@ -304,6 +306,7 @@ impl BufferModel {
             syntax: None,
             syntax_driver: None,
             syntax_budget: FOREGROUND_BUDGET,
+            fold_regions: RefCell::new(None),
             #[cfg(test)]
             whole_text_reads: Default::default(),
             #[cfg(test)]
@@ -1549,6 +1552,8 @@ impl Default for BufferSubscriptionRegistry {
         Self::new()
     }
 }
+
+mod folds;
 
 #[cfg(test)]
 mod tests;

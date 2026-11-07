@@ -62,6 +62,7 @@ pub(crate) struct LanguageQueries {
     pub(crate) highlights: String,
     pub(crate) injections: String,
     pub(crate) indents: String,
+    pub(crate) folds: String,
 }
 
 impl LanguageDefinition {
@@ -75,6 +76,7 @@ impl LanguageDefinition {
             &self.queries.injections,
         )?
         .with_indents(&self.queries.indents)?
+        .with_folds(&self.queries.folds)?
         .with_editing(self.editing.resolve());
         Ok(CompiledLanguage {
             definition: self,

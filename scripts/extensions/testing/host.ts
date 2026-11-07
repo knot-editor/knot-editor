@@ -704,6 +704,26 @@ function clampTop(tab: FakeTab, top: number): number {
   return Math.max(0, Math.min(top, count - tab.viewportLines));
 }
 
+/** The regions the real host finds in text without a folds query: a line
+ * followed by more-indented lines, through the last non-blank one. */
+function indentationRegions(text: string): Knot.FoldRange[] {
+  const regions: Knot.FoldRange[] = [];
+  const open: { indent: number; start: number }[] = [];
+  let last = 0;
+  text.split("\n").forEach((line, row) => {
+    if (line.trim() === "") return;
+    const indent = [...line.match(/^\s*/)![0]].reduce((width, c) => width + (c === "\t" ? 4 : 1), 0);
+    while (open.length > 0 && open[open.length - 1]!.indent >= indent) {
+      const { start } = open.pop()!;
+      if (last > start) regions.push({ start, end: last });
+    }
+    open.push({ indent, start: row });
+    last = row;
+  });
+  for (const { start } of open) if (last > start) regions.push({ start, end: last });
+  return regions.sort((a, b) => a.start - b.start || b.end - a.end);
+}
+
 // The fake editor does not clamp offsets or check character boundaries
 // beyond the end of the text.
 function editor(tab: FakeTab): Knot.Editor {
@@ -765,6 +785,7 @@ function editor(tab: FakeTab): Knot.Editor {
     },
     folds: async () =>
       [...live().folds].sort((a, b) => a.start - b.start || b.end - a.end).map((fold) => ({ ...fold })),
+    foldRegions: async () => indentationRegions(document(live().document).text),
     scrollBy: async (rows) => {
       if (!Number.isSafeInteger(rows)) throw new TypeError("rows must be a safe integer");
       const tab = live();
@@ -830,6 +851,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     fold: guard(live.fold),
     unfold: guard(live.unfold),
     folds: guard(live.folds),
+    foldRegions: guard(live.foldRegions),
     scrollBy: guard(live.scrollBy),
     cellsBefore: guard(live.cellsBefore),
     columnAtCells: guard(live.columnAtCells),

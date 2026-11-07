@@ -137,6 +137,28 @@ impl Editor {
                 return true;
             }
             commands::TOGGLE_SOFT_WRAP_COMMAND => return self.toggle_soft_wrap(cx),
+            commands::FOLD_COMMAND => {
+                self.fold_at_caret(cx);
+                return true;
+            }
+            commands::UNFOLD_COMMAND => {
+                self.unfold_at_caret(cx);
+                return true;
+            }
+            commands::TOGGLE_FOLD_COMMAND => {
+                if !self.unfold_at_caret(cx) {
+                    self.fold_at_caret(cx);
+                }
+                return true;
+            }
+            commands::FOLD_ALL_COMMAND => {
+                self.fold_all_regions(cx);
+                return true;
+            }
+            commands::UNFOLD_ALL_COMMAND => {
+                self.unfold_all_folds(cx);
+                return true;
+            }
             _ => {}
         }
         if matches!(

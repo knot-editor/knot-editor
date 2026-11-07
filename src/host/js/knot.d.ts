@@ -223,8 +223,17 @@ declare module "knot" {
      * after its node, and may add the `has-parent?`, `not-has-parent?`,
      * `kind-eq?`, and `not-kind-eq?` node predicates. Typing reindents a line
      * when a closing capture's match reaches the caret. A language without
-     * an indents query keeps the previous line's indentation. */
-    readonly queries: Readonly<{ highlights: string; injections?: string; indents?: string }>;
+     * an indents query keeps the previous line's indentation. Folds capture
+     * the nodes whose lines fold as `@fold`: a node spanning several lines is
+     * a region from its first line through its last, and a last line that
+     * starts with a closing bracket stays visible. A language without a folds
+     * query folds by indentation. */
+    readonly queries: Readonly<{
+      highlights: string;
+      injections?: string;
+      indents?: string;
+      folds?: string;
+    }>;
     readonly comments?: LanguageComments;
     /** One list for matching, auto-closing, and surrounding. Matching pairs
      * the bracket tokens of one syntax node; typing an opener inserts its
@@ -250,7 +259,7 @@ declare module "knot" {
      * @throws TypeError for invalid fields, including empty comment or
      * bracket tokens and tokens with surrounding whitespace; HostError with
      * UnknownGrammar, InvalidQuery (details: query "highlights",
-     * "injections", or "indents", message, and the 0-indexed row and column), or
+     * "injections", "indents", or "folds", message, and the 0-indexed row and column), or
      * Cancelled. */
     register(definition: LanguageDefinition): Promise<Disposable>;
     /**
@@ -1078,6 +1087,14 @@ declare module "knot" {
      * @throws HostError with InvalidTarget or Cancelled.
      */
     folds(): Promise<readonly FoldRange[]>;
+    /**
+     * The regions of the text that can fold, ordered by first line and then
+     * outermost first, from the language's `folds` query or, without one,
+     * from indentation. The Fold, Unfold, and Fold All commands choose among
+     * them; `fold` accepts any range.
+     * @throws HostError with InvalidTarget or Cancelled.
+     */
+    foldRegions(): Promise<readonly FoldRange[]>;
     /**
      * Scroll by rows, negative upward, without moving or revealing the
      * caret; the scroll stays within the text. Not an edit and not a caret

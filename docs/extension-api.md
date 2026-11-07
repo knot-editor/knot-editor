@@ -144,8 +144,9 @@ display cells, with the editor's tab size and the cell measure soft wrap uses,
 so vertical movement can aim at what the screen shows.
 `editor.fold({ start, end })` collapses a range of buffer lines (0-based, both
 included) into its first line, `editor.unfold(range)` expands the fold over
-exactly that range, and `editor.folds()` lists the collapsed folds, outermost
-first. Rows, `viewport`, `rowAt`, `rowOf`, and `scrollBy` count only the lines
+exactly that range, `editor.folds()` lists the collapsed folds, outermost
+first, and `editor.foldRegions()` lists the regions the language offers (see
+`queries.folds`). Rows, `viewport`, `rowAt`, `rowOf`, and `scrollBy` count only the lines
 no fold hides, and putting the caret in hidden lines with `setSelection`
 expands the folds hiding it. Folds are per view and follow edits. Setting the
 selection is not an edit, but it ends the typing undo group as any caret move
@@ -417,6 +418,21 @@ error, an opening bracket from `brackets` that the error leaves unclosed
 indents the lines after it, so a block typed before its closer indents
 without help from the query. A language without an indents query keeps the
 previous line's indentation.
+
+An optional `queries.folds` lists the nodes whose lines fold, as `@fold`
+captures. A captured node spanning several lines is a region from its first
+line through its last; when that last line starts with a closing bracket it
+stays visible, so capture a block rather than its parent to keep `} else {`
+lines. The Fold, Unfold, Toggle Fold, Fold All, and Unfold All commands use
+the regions; a language without a folds query folds by indentation, where a
+line followed by more-indented lines starts a region.
+
+```js
+queries: {
+  highlights: "",
+  folds: "(block) @fold\n(struct_item) @fold",
+},
+```
 
 To change one value of a registered language, spread `languages.get`, which returns the full
 definition, and register the result from `post-init`:

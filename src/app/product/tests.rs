@@ -14,6 +14,7 @@ mod key_hold;
 mod keybindings;
 mod language_brackets;
 mod language_editing;
+mod language_folds;
 mod language_indents;
 mod languages;
 mod navigation;

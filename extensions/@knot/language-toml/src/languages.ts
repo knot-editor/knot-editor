@@ -2,6 +2,7 @@
 // claiming the file names, extensions, and shebang interpreters detection
 // matches.
 import type { LanguageDefinition } from "knot";
+import * as folds from "./queries/folds.js";
 import * as toml from "./queries/toml.js";
 
 export const LANGUAGES: readonly LanguageDefinition[] = [
@@ -11,7 +12,7 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "toml",
     fileExtensions: ["toml"],
     fileNames: ["Cargo.lock", "Pipfile"],
-    queries: { highlights: toml.highlights, indents: toml.indents },
+    queries: { highlights: toml.highlights, indents: toml.indents, folds: folds.toml },
     comments: { line: ["#"] },
     brackets: [
       // Inline tables stay on one line.

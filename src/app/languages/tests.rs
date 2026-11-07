@@ -38,6 +38,7 @@ fn definition(id: &str, name: &str) -> LanguageDefinition {
             highlights: "(identifier) @variable".into(),
             injections: String::new(),
             indents: String::new(),
+            folds: String::new(),
         },
         editing: EditingDefinition::default(),
     }

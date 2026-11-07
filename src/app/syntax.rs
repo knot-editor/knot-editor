@@ -29,6 +29,7 @@
 //! paints over the layer that hosts it.
 
 pub(crate) mod brackets;
+pub(crate) mod fold;
 pub(crate) mod grammars;
 pub(crate) mod indent;
 
@@ -98,6 +99,8 @@ pub(crate) struct SyntaxLanguage {
     editing: Arc<EditingConfiguration>,
     /// `None` when the language registers no indent query.
     indents: Option<indent::IndentQuery>,
+    /// `None` when the language registers no folds query.
+    folds: Option<fold::FoldQuery>,
 }
 
 struct InjectionPattern {
@@ -113,6 +116,7 @@ pub(crate) enum SyntaxQuery {
     Highlights,
     Injections,
     Indents,
+    Folds,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -197,6 +201,7 @@ impl SyntaxLanguage {
             injection_patterns,
             editing: Default::default(),
             indents: None,
+            folds: None,
         })
     }
 
@@ -205,6 +210,15 @@ impl SyntaxLanguage {
     pub(crate) fn with_indents(self, source: &str) -> Result<Self, SyntaxLanguageError> {
         Ok(Self {
             indents: indent::IndentQuery::new(&self.grammar, source)?,
+            ..self
+        })
+    }
+
+    /// This language with a folds query, compiled from `source`; an empty
+    /// query leaves it without one.
+    pub(crate) fn with_folds(self, source: &str) -> Result<Self, SyntaxLanguageError> {
+        Ok(Self {
+            folds: fold::FoldQuery::new(&self.grammar, source)?,
             ..self
         })
     }
