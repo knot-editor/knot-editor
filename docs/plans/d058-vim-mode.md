@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–6 complete; checkpoint 7 awaits dogfooding. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–7 complete; checkpoint 8 is next. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -310,31 +310,14 @@ so a key hold now releases once an input, picker, or the palette takes focus
 ([ordered delivery](../architecture/commands.md#ordered-delivery)). The input
 shows no `:` yet; checkpoint 7 adds the prompt.
 
-### 7. Ex line prompt 🔍
+### 7. Ex line prompt ✅
 
-Deliverables:
-
-- ✅ The Ex line shows `:` before the typed text, outside the editable text,
-  and Backspace on an empty line closes it, as Vim's command line does.
-- ✅ A generic `prompt` option on `workbench.showInput` for both: fixed text
-  before the field, and Backspace on an empty field dismisses; documented in
-  `knot.d.ts`.
-
-Validation:
-
-- ✅ A product test for the prompt option: the prompt shows and is not part of
-  the accepted value, and Backspace on an empty field dismisses while
-  Backspace on text deletes it.
-- ✅ Cases for `:<bs>` leaving the Ex line without running anything and
-  `:2<bs><bs>j` leaving it before `j` moves.
-
-Review gate: dogfooding.
-
-Implementation context:
-
-- The input is `TextInput` in `src/app/text_input.rs`, presented through
-  `src/app/transient.rs`; see
-  [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions).
+Complete and approved after dogfooding: `workbench.showInput` takes a generic
+`prompt` option, fixed muted text before the field and outside its value, which
+also makes Backspace on an empty field dismiss, as a command line does. The Ex
+line passes `:`. A product test covers the option, and cases cover `:<bs>` and
+`:2<bs><bs>j`. See [semantic UI](../architecture/semantic-ui.md) and the
+`InputOptions` declaration in `knot.d.ts`.
 
 ### 8. Window commands 📝
 
