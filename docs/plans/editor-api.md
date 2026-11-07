@@ -1,6 +1,6 @@
 # Editor API and Vim mode
 
-Status: 🚧 phase 1 (D110), D111, D141, and D058 complete. Promotes D058, D066 (folding), D077, D109,
+Status: 🚧 phase 1 (D110), D111, D112, D141, and D058 complete. Promotes D058, D066 (folding), D077, D109,
 D110, D111, D112, and D114 (decoration styles) from the
 [roadmap](../roadmap.md) and adds D141 and D142. Vim features left for later are
 D113, D142, D144, D146, D150, D151, D152, and D158.
@@ -159,15 +159,14 @@ D077 moved here from the daily-driver plan.
 
 ✅ D078 from the daily-driver plan landed before this phase.
 
-- **D112 — Screen movement and layout queries** (depends on D078, D109)
-  - 🚧 [Plan](d112-screen-movement.md): both checkpoints implemented, review gates pending
-  - D078 delivered movement by visual row with `-logical` twins
-    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views)),
-    which Vim's `gj`/`gk` and `j`/`k` bind.
-  - Remaining: movement to screen positions and an always-centering reveal,
-    so `H`/`M`/`L` and `zz` need no shaping data, and visual-row units in
-    the editor handle, whose visible lines, scrolling, and reveals count
-    buffer lines.
+- **D112 — Screen movement and layout queries** ✅
+  - Complete: the editor handle counts screen rows (`viewport`, `rowAt`,
+    `rowOf`, row `scrollBy`) and reveals with `"always-center"`; Vim's
+    `H M L`, `zz`, and the scrolls use them. Behavior in
+    [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views)
+    and the [extension guide](../extension-api.md), rationale in
+    [decisions](../decisions.md#editor-handles). D066 makes rows count only
+    rows that folds leave visible.
 
 - **D066 — Folding** (depends on D109)
   - Per-language `folds` queries in language registrations beside

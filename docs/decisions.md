@@ -247,6 +247,12 @@ styles, and key contexts are lifecycle-owned, so a stuck extension cannot leave
 them behind. Marks are native zero-width anchored ranges, because remapping
 from asynchronous events would lag typing.
 
+The handle's vertical unit is the screen row, with queries from row to buffer
+line and start column and from position to row, rather than a native
+move-to-screen command, so `H`, `M`, `L`, and the scrolls are extension code
+and a Helix mode composes the same queries. The first design returned only the
+line; scrolling through one wrapped line needed the column.
+
 Reference: [extension host](architecture/extension-host.md#editor-handle-notifications).
 
 ## Handler declarations
