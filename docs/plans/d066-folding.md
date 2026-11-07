@@ -1,6 +1,6 @@
 # D066 — Folding
 
-Status: 🚧 checkpoint 1 implemented, awaiting its review gate. Item D066 of the [editor API](editor-api.md) plan
+Status: 🚧 checkpoint 1 complete; checkpoints 2–5 not started. Item D066 of the [editor API](editor-api.md) plan
 (phase 4), from the [roadmap](../roadmap.md). Depends on D109 and D112, which
 landed.
 
@@ -76,27 +76,16 @@ Vim mode gains its standard fold keys. Folds survive edits and restarts.
 
 ## Checkpoints
 
-### 1. ✅ Fold state, rows, and the editor handle — not started (🚧)
+### 1. Fold state, rows, and the editor handle ✅
 
-Deliverables: collapsed-fold state as anchored ranges per `Editor`, zero-row
-hidden lines in `WrapMap`, painting of the placeholder, caret clamping,
-movement across folds, auto-unfold on reveal, `fold`/`unfold`/`folds` on the
-editor handle with `knot.d.ts` and guide entries.
-
-**Implementation context:** `src/app/editor.rs` (state beside `wrap`,
-`EditorViewState`), `src/app/editor/wrap.rs` (`first_rows` with hidden lines,
-`edit`/`set_width` rebuild), `layout.rs` (`reveal`, scroll), `paint.rs`
-(placeholder, skipped lines), `src/app/editor/brackets.rs` (mirror for
-anchored range lifecycle), `src/app/extensions/host/handlers.rs` next to
-`editor_row_of` and `editor_scroll_by`, `src/host/js/knot.d.ts`,
-`src/host/js/bootstrap.js` for the handle.
-
-Validation: `wrap.rs` unit tests for hidden lines; editor tests for edits
-shifting folds, movement, selection, reveal unfolding, row queries with
-folds; an extension test through the real editor for the handle.
-
-Review gate: a `Try:` command folds and unfolds ranges in a long wrapped file
-and checks scrolling and caret behavior by hand.
+Complete: per-view anchored folds (`src/app/editor/folding.rs`), hidden lines
+as zero-row lines in `WrapMap`, the `…` placeholder with the
+`editor.foldPlaceholder` color, caret stepping and reveal-on-hidden, line
+commands over a fold, and `editor.fold`/`unfold`/`folds` on the editor handle.
+Behavior is in [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views)
+and the [extension guide](../extension-api.md). Clicking the placeholder does
+not unfold yet; that is checkpoint 3. The fake test host keeps folds but still
+counts rows as lines.
 
 ### 2. Regions, commands, and bundled queries
 
