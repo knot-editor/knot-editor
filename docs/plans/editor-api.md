@@ -1,6 +1,6 @@
 # Editor API and Vim mode
 
-Status: 🚧 phase 1 (D110), D111, D112, D141, and D058 complete. Promotes D058, D066 (folding), D077, D109,
+Status: 🚧 phase 1 (D110), D111, D112, D141, D058, and D066 complete. Promotes D058, D066 (folding), D077, D109,
 D110, D111, D112, and D114 (decoration styles) from the
 [roadmap](../roadmap.md) and adds D141 and D142. Vim features left for later are
 D113, D142, D144, D146, D150, D151, D152, and D158.
@@ -51,7 +51,6 @@ Excluded, and staying deferred in the roadmap:
   the piece-tree buffer (D092).
 - `.` repeat, `q` macros, the `".` register, and insert counts (D113).
 - Search and substitution (D150), after Find (D031) and D092.
-- Folding commands, which D066 adds to the Vim package when it lands.
 - Tree-sitter text objects and the public syntax-tree query API (D144).
 - Language servers (D067) and the presentation and hook items that would be
   designed against a real server: virtual text and floating panels (D145),
@@ -165,19 +164,15 @@ D077 moved here from the daily-driver plan.
     `H M L`, `zz`, and the scrolls use them. Behavior in
     [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views)
     and the [extension guide](../extension-api.md), rationale in
-    [decisions](../decisions.md#editor-handles). D066 makes rows count only
-    rows that folds leave visible.
+    [decisions](../decisions.md#editor-handles). Rows count only the rows that folds leave visible.
 
-- **D066 — Folding** (depends on D109)
-  - 🚧 [D066 plan](d066-folding.md)
-  - Per-language `folds` queries in language registrations beside
-    `indents`, native fold state per view, a fold lane in the gutter, and
-    Fold, Unfold, and Toggle Fold commands. The editor handle folds and
-    unfolds arbitrary ranges, so Vim's `zf` creates manual folds. D058
-    ships first, so D066 also adds `zf`, `zo`, `zc`, `za`, `zR`, and `zM`
-    to `@knot/vim`.
-  - Movement, search, and editing treat folded lines as VS Code does.
-    Restorable view state records folds.
+- **D066 — Folding** ✅ (depends on D109)
+  - Complete: `folds` queries with an indentation fallback, per-view folds,
+    a fold lane, commands, editor-handle folding, Vim fold keys, and folds in
+    restorable view state. Behavior in
+    [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#editor-views)
+    and the [extension guide](../extension-api.md), rationale in
+    [decisions](../decisions.md#folding).
   - The public syntax-tree query API and text objects are D144.
 
 ## Phase 5 — Vim mode
