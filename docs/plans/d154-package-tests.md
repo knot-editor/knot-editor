@@ -1,6 +1,6 @@
 # D154 — Fast, isolated package behavior tests
 
-Status: 🚧 checkpoints 1–9 complete; checkpoint 10 is next. Comes before checkpoint 6 of the
+Status: 🚧 checkpoints 1–10 complete; checkpoint 11 is next. Comes before checkpoint 6 of the
 [Vim mode](d058-vim-mode.md) plan. Source:
 [roadmap](../roadmap.md) D154 and the
 [package tests report](../reports/package-tests.md). Absorbs D153.
@@ -83,8 +83,6 @@ crate-private, and its test platform uses `NoopTextSystem`, whose advance is
 
 - Where the roadmap places this work, and whether parts become their own
   items, once the tasks are settled.
-- How package state resets between cases: a fresh lifecycle or a reset hook,
-  chosen by measured cost in checkpoint 10.
 
 ## Checkpoints
 
@@ -233,20 +231,16 @@ the cases repeat were removed; the remaining package unit tests check pure
 functions with edge cases the cases do not show. See
 [development](../development.md).
 
-### 10. Package state reset between cases
+### 10. Package state reset between cases — ✅
 
-Deliverables: each case starts with a clean clipboard and package state
-(registers, last `f`/`t`, global marks, the persisted register record),
-by a fresh lifecycle or a reset hook, chosen by cost.
-
-Validation: a case that depends on a register left by an earlier case fails
-without the reset and passes with it.
-
-Implementation context: Restart Extension in
-`src/app/product/extension_restart.rs`, package storage under
-`src/app/extensions/`, `extensions/@knot/vim/src/registers.ts`.
-
-Review gate: case order no longer matters.
+Before each case the Vim runner empties the clipboard and runs the package's
+hidden `vim.reset`, which clears the registers and deletes their record, and
+forgets marks and the last `f`/`t`. A reset hook won over a fresh lifecycle
+by cost: restarting `@knot/vim` takes about 14 ms on Apple M1 Pro/macOS debug
+builds, about three times a whole case, while the reset is lost in the noise.
+`a_case_starts_without_what_an_earlier_one_left` fails without the reset and
+passes with it. The current cases also pass in reverse order with or without
+it, so none depended on order. See [development](../development.md).
 
 ### 11. Update vim extension plan
 

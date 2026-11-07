@@ -13,7 +13,8 @@
 //! keys. `language` sets the document's language. Keys are pressed without
 //! waiting between them, as fast typing arrives, and the run settles once at
 //! the end. One session shows every case in turn, each in a fresh workbench
-//! over a fresh document. Pointer input and the work a key costs a window run
+//! over a fresh document, after Vim starts over with an empty clipboard and
+//! no registers, marks, or last find. Pointer input and the work a key costs a window run
 //! in a product window.
 use serde::Deserialize;
 
@@ -123,6 +124,14 @@ fn open(text: &str, caret: usize, cx: &mut TestAppContext) -> Session {
     session
 }
 
+/// Start over from a fresh start's package state, so no case sees what an
+/// earlier one left: an empty clipboard, and no registers, register record,
+/// marks, or last find.
+fn start_over(session: &Session, cx: &mut TestAppContext) {
+    cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(String::new())));
+    session.run_command("vim.reset", cx);
+}
+
 /// Run the cases of the topic file `topic`.
 fn run_topic(topic: &str, cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(Some(ENABLE), cx);
@@ -148,6 +157,7 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
                     None => session = Some(Session::open(&before, language, selection, cx)),
                 }
                 let session = session.as_ref().unwrap();
+                start_over(session, cx);
                 if let Some(view) = &value.view {
                     session.show_lines(view.lines, view.top, cx);
                 }
@@ -278,12 +288,8 @@ await settings.set("vim.enabled", false, { language: "markdown" });
     assert_eq!(cx.read(|cx| session.contexts(cx)), ["vim.normal"]);
 }
 
-#[gpui::test]
-fn registers_persist_across_a_package_restart(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
-    let session = open("one\ntwo", 0, cx);
-    session.press("\"ayy\"byw", cx);
-
+/// Restart the Vim package and wait until it follows the editor again.
+fn restart_vim(session: &Session, cx: &mut TestAppContext) {
     let restarted = std::sync::Arc::new(std::sync::Mutex::new(None));
     let result = restarted.clone();
     cx.update(|cx| {
@@ -301,6 +307,15 @@ fn registers_persist_across_a_package_restart(cx: &mut TestAppContext) {
         crate::app::extensions::load::LoadResult::Loaded
     );
     assert_eq!(cx.read(|cx| session.contexts(cx)), ["vim.normal"]);
+}
+
+#[gpui::test]
+fn registers_persist_across_a_package_restart(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let session = open("one\ntwo", 0, cx);
+    session.press("\"ayy\"byw", cx);
+
+    restart_vim(&session, cx);
 
     // Linewise text stays linewise, and characterwise text characterwise.
     session.press("j\"ap\"bP", cx);
@@ -428,4 +443,34 @@ fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
         );
     }
     assert_eq!(fixture.session.marked(cx), "one ‸athree\nfour five six\n");
+}
+
+/// What one case leaves in the package, the next case starts without:
+/// registers, the clipboard, the last find, marks, and the persisted
+/// register record a restart would read back.
+#[gpui::test]
+fn a_case_starts_without_what_an_earlier_one_left(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let mut session = open("one\ntwo", 0, cx);
+    session.press("\"ayyyyfe", cx);
+    session.load("xey", None, (2, 2), cx);
+    session.press("mA0", cx);
+    let left = "\"ap;`A";
+    session.press(left, cx);
+    assert_eq!(
+        session.marked(cx),
+        "xe‸y\none",
+        "what the earlier case left"
+    );
+
+    session.load("xey", None, (2, 2), cx);
+    session.press("mA0", cx);
+    start_over(&session, cx);
+    session.press(left, cx);
+    session.press("p", cx);
+    assert_eq!(session.marked(cx), "‸xey");
+
+    restart_vim(&session, cx);
+    session.press("\"ap", cx);
+    assert_eq!(session.marked(cx), "‸xey", "the register record");
 }

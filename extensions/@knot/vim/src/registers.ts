@@ -66,6 +66,12 @@ export class Registers {
     return { text, linewise: this.clipboard?.text === text && this.clipboard.linewise };
   }
 
+  /** Empties every register and forgets what the package gave the clipboard. */
+  clear() {
+    this.stored.clear();
+    this.clipboard = null;
+  }
+
   toJson(): JsonValue {
     const registers: Record<string, JsonValue> = {};
     for (const [name, { text, linewise }] of this.stored) registers[name] = { text, linewise };

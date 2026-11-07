@@ -112,6 +112,21 @@ export async function start() {
   await commands.register("vim.leave-insert", (context) => vim.leaveInsert(context), {
     palette: false,
   });
+  // Starts over from what a fresh start without saved registers has: empty
+  // registers and their record, no marks, and no last find. Package
+  // behavior tests run it between cases.
+  await commands.register("vim.reset", async () => {
+    registers.clear();
+    shared.lastFind = null;
+    for (const buffer of shared.marks.values()) {
+      for (const mark of buffer.values()) mark.dispose().catch(() => {});
+    }
+    shared.marks.clear();
+    for (const { mark } of shared.globalMarks.values()) mark.dispose().catch(() => {});
+    shared.globalMarks.clear();
+    await saving;
+    await storage.delete(REGISTERS);
+  }, { palette: false });
 
   keymaps.bindText("vim.type", normal);
   for (const [key, name] of NAMED_KEYS) {

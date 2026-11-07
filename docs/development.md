@@ -71,8 +71,10 @@ markers, generated numbered texts, the key notation, and failure reports that
 name the file and line of the case. `vim.rs` runs the cases through the headless harness in `harness.rs`: the bundled
 packages start without a window, one windowless session shows each case in
 a fresh workbench and types its keys through the session's router, and a run
-settles once the session holds no keys and the
-extension pool is quiet. Windowed product tests remain for rendering, IME,
+settles once the session holds no keys and the extension pool is quiet. Each
+Vim case starts from an empty clipboard and the package's hidden
+`vim.reset`, which clears registers, their record, marks, and the last find,
+so case order does not matter. Windowed product tests remain for rendering, IME,
 pointer input, and the window adapter. Product tests keep extension storage,
 recovery, and the state database in memory, so each test starts empty; tests
 that reopen a store as a restart would, and the stores' own tests, use

@@ -199,6 +199,33 @@ impl Session {
         self.settle(cx);
     }
 
+    /// Run the command `name` without arguments against the focused editor,
+    /// settle, and require that it completed.
+    pub(super) fn run_command(&self, name: &str, cx: &mut TestAppContext) {
+        let target = self
+            .shell
+            .update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
+        let mut execution = cx.update(|cx| {
+            let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
+            dispatcher.update(cx, |dispatcher, cx| {
+                dispatcher.dispatch(
+                    Command {
+                        name: name.into(),
+                        arguments: CommandArgumentValue::Null,
+                    },
+                    target,
+                    cx,
+                )
+            })
+        });
+        self.settle(cx);
+        assert_eq!(
+            execution.completion.try_recv(),
+            Ok(CommandOutcome::Completed),
+            "{name}"
+        );
+    }
+
     /// Lay the editor out `rows` rows tall and `columns` cells wide, as a
     /// window would.
     pub(super) fn lay_out(&self, rows: usize, columns: usize, cx: &mut TestAppContext) {
