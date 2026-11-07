@@ -2,7 +2,7 @@
 
 Status: 🚧 phase 1 (D110), D111, and D141 complete. Promotes D058, D066 (folding), D077, D109,
 D110, D111, D112, and D114 (decoration styles) from the
-[roadmap](../roadmap.md) and adds D141–D143. Vim features left for later are
+[roadmap](../roadmap.md) and adds D141 and D142. Vim features left for later are
 D113, D142, D144, D146, D150, and D151.
 
 ## Goal
@@ -42,8 +42,8 @@ operators with counts and motions; plain text objects (`iw`, `i(`, `ip`, and
 the like); registers backed by the clipboard; marks; relative line numbers; a mode
 indicator in the status bar; a cursor style per mode; and a core Ex set
 (`:w`, `:q`, `:wq`, `:e`, `:<line>`, and `:set` for a few options). The
-[D058 plan](d058-vim-mode.md) owns the exact set and starts before D112,
-D066, and D143.
+[D058 plan](d058-vim-mode.md) owns the exact set and starts before D112 and
+D066. Ex completion is D143, in the [daily-driver](daily-driver.md) plan.
 
 Excluded, and staying deferred in the roadmap:
 
@@ -182,12 +182,7 @@ D077 moved here from the daily-driver plan.
 
 ## Phase 5 — Vim mode
 
-- **D143 — Input completion**
-  - `workbench.showInput` offers completion items as the text changes,
-    through the pulled input session `onChange` already uses, for the Ex
-    command line.
-
-- **D058 — Vim mode** (depends on the items above except D112, D066, and D143)
+- **D058 — Vim mode** (depends on the items above except D112 and D066)
   - 🚧 [Plan](d058-vim-mode.md)
   - A bundled `@knot/vim` package implementing the scope above on public
     APIs only. A `vim.enabled` setting, off by default, turns it on and off

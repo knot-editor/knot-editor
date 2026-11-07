@@ -52,7 +52,7 @@ removes demo surfaces and adds workbench and editing commands, a richer
 palette, themes, Find, navigation, file watching, and bundled explorer,
 project-selector, and search extensions, keymap presets, and extension
 entitlements. It promotes D007, D008, D010, D031, D034, D053, D060, D064, D068,
-and D089 and adds D069–D088, D120–D123, D127, and D134.
+and D089 and adds D069–D088, D120–D123, D127, D134, and D143.
 
 The [editor API and Vim mode](plans/editor-api.md) initiative is selected
 and runs ahead of the daily-driver files-and-workspace phase: key contexts,
@@ -60,7 +60,7 @@ long-lived editor handles with selection observation, the status bar, undo
 groups, view controls, decoration styles, visual-line movement, and folding,
 proven by a bundled JavaScript Vim mode. It promotes D058, D066's folding,
 D077, D109, D110, D111, D112, and D114's decoration styles, schedules the
-daily-driver items D031, D078, and D080, and adds D141–D143. Vim features
+daily-driver items D031, D078, and D080, and adds D141 and D142. Vim features
 left for later are D113, D142, D144, D146, D150, D151, and D152. Language servers
 (D067) follow it.
 
@@ -85,7 +85,7 @@ complete list for that item.
 - **Editing extensibility** (see the
   [extensibility report](reports/extensibility.md); the
   [editor API](plans/editor-api.md) plan orders D058, D066, D077, D109–D112,
-  D114, and D141–D143):
+  D114, D141, and D142):
   - D110 → D113, D147, D148; D109 → D113, D027, D142
   - D134 → D135, D136
   - D077 → D149

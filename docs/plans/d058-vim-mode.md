@@ -13,7 +13,8 @@ package. A `vim.enabled` setting, off by default, turns it on and off at
 runtime, and scoped values turn it off for a language or view.
 
 This is a smaller first version of the index plan's D058 scope. It starts
-before D112, D066, and D143, which it no longer waits for, and leaves out
+before D112 and D066, which it no longer waits for, and before Ex completion
+(D143, in the [daily-driver](daily-driver.md) plan), and leaves out
 everything that needs Find (D031) or bulk edits (D092).
 
 ## Scope
@@ -66,7 +67,7 @@ These stay deferred:
   - visual-block mode (D142)
   - tree-sitter text objects (D144)
   - the broad Ex set (D146)
-  - Ex completion (D143)
+  - Ex completion (D143, in the [daily-driver](daily-driver.md) plan)
   - global marks across restarts and for closed files (D152)
   - smaller Vim commands outside this scope, such as `r<cr>`, sentence and
     tag motions and objects, `gJ`, and a repeated `i(` growing a visual
@@ -161,8 +162,7 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 - Named and numbered registers are one storage record, written when they
   change.
 - `"%` reads the document's path, or its URI outside the local
-  filesystem, and `":` holds the last Ex command line once checkpoint 6 adds
-  the Ex line.
+  filesystem, and `":` holds the last Ex command line.
 
 ### Marks and the jumplist
 
@@ -176,7 +176,7 @@ Two key contexts: `vim.normal` for every mode except insert, and `vim.insert`.
 
 ### Ex line
 
-- `:` opens `workbench.showInput` with no completion.
+- `:` opens `workbench.showInput` with a `:` prompt and no completion.
 - Commands go to native commands and public APIs: `file.save`,
   `workbench.close`, `documents.open`, and `G`'s jump for `:<line>`.
 - `:set` writes document-scoped settings, as the status bar's indentation
@@ -313,6 +313,7 @@ Deliverables:
   commits, and a racing edit keeps the tab open
   ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure)).
 - ✅ `:<line>` is recorded in the jumplist, as `NG` is.
+- The input shows no `:` yet; checkpoint 7 adds the prompt.
 - ✅ Found here: keys typed right after `:` reached the input only after the
   next key or the hold's timeout, so a key hold now releases once a picker,
   input, or the palette takes focus
@@ -332,7 +333,32 @@ Validation:
 
 Review gate: dogfooding.
 
-### 7. Window commands 📝
+### 7. Ex line prompt 📝
+
+Deliverables:
+
+- The Ex line shows `:` before the typed text, outside the editable text,
+  and Backspace on an empty line closes it, as Vim's command line does.
+- A generic prompt option on `workbench.showInput` for both, with its exact
+  shape settled here, documented in `knot.d.ts`.
+
+Validation:
+
+- A product test for the prompt option: the prompt shows and is not part of
+  the accepted value, and Backspace on an empty field dismisses while
+  Backspace on text deletes it.
+- Cases for `:<bs>` leaving the Ex line without running anything and
+  `:2<bs><bs>j` leaving it before `j` moves.
+
+Review gate: dogfooding.
+
+Implementation context:
+
+- The input is `TextInput` in `src/app/text_input.rs`, presented through
+  `src/app/transient.rs`; see
+  [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions).
+
+### 8. Window commands 📝
 
 Deliverables:
 
@@ -355,7 +381,7 @@ Implementation context:
   command with no counterpart gets a roadmap entry rather than native work
   here.
 
-### 8. Documentation and plan removal 📝
+### 9. Documentation and plan removal 📝
 
 Deliverables:
 

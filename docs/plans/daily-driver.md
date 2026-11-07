@@ -2,7 +2,7 @@
 
 Status: 🚧 approved, not started. Promotes D007, D008, D010, D031, D034, D053,
 D060, D064, D068, and D089 from the [roadmap](../roadmap.md) and adds
-D069–D088, D120–D123, D127, and D134.
+D069–D088, D120–D123, D127, D134, and D143.
 
 ## Goal
 
@@ -299,6 +299,14 @@ to be rebuilt later:
     `workspace.fs` does. The explorer, project-local settings (D089),
     EditorConfig (D090), and project inference (D123) need it, and D010 and
     D081 cover only mutation and enumeration.
+
+- **D143 — Input completion** (depends on D071, D122)
+  - `workbench.showInput` offers completion items as the text changes,
+    through the pulled input session `onChange` already uses, with keys to
+    move through and accept them.
+  - The first consumer is Vim's Ex line (D058): it completes command names,
+    `:set` options, and `:e` paths from the same base `:e` opens against,
+    listing directories through D122.
 
 - **D089 — Project-local settings** (depends on D070, D122)
   - Settings read from a file in the repository, attached to folders rather
