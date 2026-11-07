@@ -282,6 +282,23 @@ await commands.register("handle.scroll", async () => {
   const { caret } = await handle.selection();
   await workbench.writeClipboardText(`${first}:${last}:${caret}`);
 });
+await commands.register("handle.measure", async () => {
+  const outcome = async (measure) => {
+    try { return String(await measure()); } catch (error) { return error.code; }
+  };
+  const report = [
+    await outcome(() => handle.cellsBefore(0, 1)),
+    await outcome(() => handle.cellsBefore(0, 4)),
+    await outcome(() => handle.cellsBefore(0, 2)),
+    await outcome(() => handle.columnAtCells(0, 2)),
+    await outcome(() => handle.columnAtCells(0, 3)),
+    await outcome(() => handle.columnAtCells(1, 1)),
+    await outcome(() => handle.cellsBefore(1, 2)),
+    await outcome(() => handle.cellsBefore(5, 0)),
+    await outcome(() => handle.columnAtCells(9, 0)),
+  ];
+  await workbench.writeClipboardText(report.join(","));
+});
 await commands.register("handle.move", async () => {
   await handle.setSelection({ anchor: 1, caret: 1 });
 });
@@ -473,6 +490,35 @@ fn editor_handle_scrolls_and_reports_visible_lines(cx: &mut TestAppContext) {
     let parts = reported.split(':').collect::<Vec<_>>();
     assert_eq!((parts[0], parts[2]), ("3", "0"), "{reported}");
     assert!(parts[1].parse::<usize>().unwrap() >= 3, "{reported}");
+}
+
+#[gpui::test]
+fn editor_handle_measures_display_cells_and_rejects_bad_positions(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (_host, _) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.run_until_parked();
+    cx.update(|cx| {
+        model.update(cx, |model, cx| {
+            model.replace(0..0, "a漢b\n\tc").unwrap();
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(&shell, window, name, cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    };
+    run("handle.attach", cx);
+    run("handle.measure", cx);
+    // 漢 covers cells 1 and 2, and the tab on the second line covers cell 1.
+    let reported = cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap());
+    assert_eq!(
+        reported,
+        "1,3,InvalidRange,1,4,0,5,InvalidRange,InvalidRange"
+    );
 }
 
 const SELECTION_SOURCE: &str = r#"

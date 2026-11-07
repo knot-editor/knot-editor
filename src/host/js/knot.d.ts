@@ -1006,6 +1006,23 @@ declare module "knot" {
      */
     visibleLines(): Promise<VisibleLines>;
     /**
+     * The display cells from the start of buffer line `line` to the UTF-8 byte
+     * `column` in it, with tabs expanded from the line's start, measured as soft
+     * wrap measures rows: a wide character takes two cells. Uses this editor's tab
+     * size. Lines are 0-based.
+     * @throws HostError with InvalidRange for a line past the last or a column
+     * past the line's end or inside a character, or Cancelled.
+     */
+    cellsBefore(line: number, column: number): Promise<number>;
+    /**
+     * The UTF-8 byte column of the character covering display cell `cells` in
+     * buffer line `line`, under the same measure as `cellsBefore`. A cell inside a
+     * tab lands on the tab, and a cell past the line's end lands on its last
+     * character, or on 0 for an empty line.
+     * @throws HostError with InvalidRange for a line past the last, or Cancelled.
+     */
+    columnAtCells(line: number, cells: number): Promise<number>;
+    /**
      * Scroll by whole lines, negative upward, without moving or revealing the
      * caret; the scroll stays within the text. Not an edit and not a caret
      * move, so it does not end an undo group.

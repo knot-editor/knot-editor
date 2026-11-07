@@ -67,6 +67,23 @@ pub(super) fn index_at_cells(text: &str, column: usize, tab_size: usize, end: bo
     best.0
 }
 
+/// The grapheme of `text`, a row, that covers display cell `column` from its
+/// start, the last one when the row is shorter, or 0 on an empty row. A tab
+/// covers every cell up to its stop.
+pub(super) fn index_at_or_before_cells(text: &str, column: usize, tab_size: usize) -> usize {
+    let tab_size = tab_size.max(1);
+    let mut start = 0;
+    let mut used: usize = 0;
+    for (index, grapheme) in text.grapheme_indices(true) {
+        if used > column {
+            break;
+        }
+        start = index;
+        used += cells(grapheme, used, tab_size);
+    }
+    start
+}
+
 /// Break `text`, one line without its terminator, into rows of `width`.
 pub(super) fn wrap_line(text: &str, width: WrapWidth) -> LineWrap {
     let columns = width.columns.max(1);
@@ -315,6 +332,19 @@ mod tests {
         // A tab after one cell takes three.
         assert_eq!(rows("x\tyz w", 6), ["x\tyz ", "w"]);
         assert_eq!(rows("ab\tc", 4), ["ab\t", "c"]);
+    }
+
+    #[test]
+    fn the_character_covering_a_cell_is_found_at_or_before_it() {
+        // 日 covers cells 1 and 2, 本 cells 3 and 4.
+        assert_eq!(index_at_or_before_cells("a日本", 0, 4), 0);
+        assert_eq!(index_at_or_before_cells("a日本", 2, 4), 1);
+        assert_eq!(index_at_or_before_cells("a日本", 3, 4), 4);
+        assert_eq!(index_at_or_before_cells("a日本", 10, 4), 4);
+        // A tab covers the cells up to its stop, so cell 2 lands on it.
+        assert_eq!(index_at_or_before_cells("\tb", 2, 4), 0);
+        assert_eq!(index_at_or_before_cells("\tb", 4, 4), 1);
+        assert_eq!(index_at_or_before_cells("", 3, 4), 0);
     }
 
     #[test]

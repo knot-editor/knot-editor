@@ -367,6 +367,16 @@ function editorFor(authority) {
       const value = await request("editorVisibleLines", authority);
       return Object.freeze({ first: value.first, last: value.last });
     },
+    async cellsBefore(line, column) {
+      if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");
+      if (!Number.isSafeInteger(column) || column < 0) throw new TypeError("column must be a non-negative safe integer");
+      return request("editorCellsBefore", authority, line, column);
+    },
+    async columnAtCells(line, cells) {
+      if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");
+      if (!Number.isSafeInteger(cells) || cells < 0) throw new TypeError("cells must be a non-negative safe integer");
+      return request("editorColumnAtCells", authority, line, cells);
+    },
     async scrollBy(lines) {
       if (!Number.isSafeInteger(lines)) throw new TypeError("lines must be a safe integer");
       await request("editorScrollBy", authority, lines);

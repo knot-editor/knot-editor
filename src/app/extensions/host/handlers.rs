@@ -2261,6 +2261,64 @@ pub(crate) async fn editor_scroll_by(
     })?
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LineMeasureArguments {
+    pub authority: EditorAuthority,
+    pub line: u64,
+    /// A byte column for `editorCellsBefore`, a display cell for
+    /// `editorColumnAtCells`.
+    pub value: u64,
+}
+impl HostArguments for LineMeasureArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            line: reader.integer(3)?,
+            value: reader.integer(4)?,
+        })
+    }
+}
+
+/// The display cells from the start of a captured editor's buffer line to a
+/// byte column in it, with the editor's tab size.
+#[host_operation("editorCellsBefore")]
+pub(crate) async fn editor_cells_before(
+    context: HostContext,
+    arguments: LineMeasureArguments,
+) -> Result<u64, EditorError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let line = usize::try_from(arguments.line).map_err(|_| EditorError::InvalidRange)?;
+        let column = usize::try_from(arguments.value).map_err(|_| EditorError::InvalidRange)?;
+        let cells = editor
+            .read(cx)
+            .line_cells_before(line, column, cx)
+            .ok_or(EditorError::InvalidRange)?;
+        Ok(cells as u64)
+    })?
+}
+
+/// The byte column of the character covering a display cell in a captured
+/// editor's buffer line, with the editor's tab size.
+#[host_operation("editorColumnAtCells")]
+pub(crate) async fn editor_column_at_cells(
+    context: HostContext,
+    arguments: LineMeasureArguments,
+) -> Result<u64, EditorError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let line = usize::try_from(arguments.line).map_err(|_| EditorError::InvalidRange)?;
+        let cells = usize::try_from(arguments.value).map_err(|_| EditorError::InvalidRange)?;
+        let column = editor
+            .read(cx)
+            .line_column_at_cells(line, cells, cx)
+            .ok_or(EditorError::InvalidRange)?;
+        Ok(column as u64)
+    })?
+}
+
 #[host_operation("editorViewState")]
 pub(crate) async fn editor_view_state(
     context: HostContext,

@@ -132,7 +132,10 @@ await commands.register("example.go-to-start", async ({ editor, buffer }) => {
 `"bottom"` always put it at that edge of the viewport, as far as the text
 allows. `editor.visibleLines()` returns the `first` and `last` lines wholly
 inside the viewport from the last layout, and `editor.scrollBy(lines)` scrolls
-by whole lines, negative upward, without moving the caret. Setting the
+by whole lines, negative upward, without moving the caret. `editor.cellsBefore`
+and `editor.columnAtCells` convert between a line's UTF-8 byte columns and
+display cells, with the editor's tab size and the cell measure soft wrap uses,
+so vertical movement can aim at what the screen shows. Setting the
 selection is not an edit, but it ends the typing undo group as any caret move
 does. Like `context.target`, the handle works only while its command runs and
 rejects `InvalidTarget` once the editor's tab closes or moves.

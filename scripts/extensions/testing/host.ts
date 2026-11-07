@@ -737,6 +737,14 @@ function editor(tab: FakeTab): Knot.Editor {
       const tab = live();
       tab.view = { ...tab.view, top: clampTop(tab, tab.view.top + lines) };
     },
+    // Display cells come from the native editor's measure, which the fake does
+    // not reimplement; a test that needs them is a product test.
+    cellsBefore: async () => {
+      throw hostError("UnsupportedOperation", "the fake host does not measure display cells");
+    },
+    columnAtCells: async () => {
+      throw hostError("UnsupportedOperation", "the fake host does not measure display cells");
+    },
     setKeyContext: async (name, active) => {
       const { keyContexts } = live();
       if (active) keyContexts.add(name);
@@ -785,6 +793,8 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     setKeyContext: guard(live.setKeyContext),
     visibleLines: guard(live.visibleLines),
     scrollBy: guard(live.scrollBy),
+    cellsBefore: guard(live.cellsBefore),
+    columnAtCells: guard(live.columnAtCells),
     setCursorStyle: guard(live.setCursorStyle),
     beginUndoGroup: guard(live.beginUndoGroup),
     viewState: guard(live.viewState),

@@ -216,6 +216,40 @@ impl Editor {
         row.indent + wrap::cells_before(&text[row.range.start..col], self.tab_size(model, cx))
     }
 
+    /// The display cells from the start of buffer line `line` to byte `column`
+    /// in it, with tabs expanded from the line's start, measured as soft wrap
+    /// measures rows. `None` past the last line or off a character boundary.
+    pub(crate) fn line_cells_before(&self, line: usize, column: usize, cx: &App) -> Option<usize> {
+        let model = self.model().read(cx);
+        if line >= model.line_count() {
+            return None;
+        }
+        let text = line_text(model, line);
+        let prefix = text.get(..column)?;
+        Some(wrap::cells_before(prefix, self.tab_size(model, cx)))
+    }
+
+    /// The byte column of the character covering display cell `cells` in buffer
+    /// line `line`, or the line's last character when it is shorter. `None`
+    /// past the last line.
+    pub(crate) fn line_column_at_cells(
+        &self,
+        line: usize,
+        cells: usize,
+        cx: &App,
+    ) -> Option<usize> {
+        let model = self.model().read(cx);
+        if line >= model.line_count() {
+            return None;
+        }
+        let text = line_text(model, line);
+        Some(wrap::index_at_or_before_cells(
+            &text,
+            cells,
+            self.tab_size(model, cx),
+        ))
+    }
+
     /// The caret position on row `index` nearest display cell `column`. A
     /// row that does not end its line leaves its end to the next row.
     pub(super) fn position_at_column(
