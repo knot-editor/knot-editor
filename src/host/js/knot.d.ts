@@ -1425,6 +1425,11 @@ declare module "knot" {
     unavailable(): never;
   }>;
   export type PresentationCloseOutcome = Readonly<{ kind: "closed" | "cancelled" }>;
+  export interface CloseOptions {
+    /** Close a dirty final view without the Save prompt, discarding its
+     * changes. Defaults to false. */
+    readonly discard?: boolean;
+  }
   /** One document reference of a session window. A live document matching
    * `document` or `uri` is always presented and any capture is ignored; else
    * the capture is restored, else the file is opened. */
@@ -1575,8 +1580,13 @@ declare module "knot" {
      * targets reject InvalidTarget; concurrent closure rejects OperationInProgress;
      * save failures reject PersistenceFailed and leave the presentation intact.
      * Caller cancellation/unload before closure commits prevents the close; an
-     * accepted save may already have persisted content and cannot be rolled back. */
-    close(target: ViewTarget): Promise<PresentationCloseOutcome>;
+     * accepted save may already have persisted content and cannot be rolled back.
+     * With `discard`, a dirty final view closes without asking and its changes
+     * are discarded; an edit after the call keeps it open and rejects
+     * InvalidTarget, and unsaved-document recovery keeps the text until the
+     * close commits.
+     * @throws TypeError for invalid options. */
+    close(target: ViewTarget, options?: CloseOptions): Promise<PresentationCloseOutcome>;
     /** A long-lived editor for the document tab `target` names; targets come
      * from observation. @throws HostError with InvalidTarget for a target that
      * is not a live document tab, or Cancelled. */

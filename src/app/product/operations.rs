@@ -461,6 +461,7 @@ pub(crate) fn replace_roots(
 
 pub(crate) fn close_presentation(
     presentation: PresentationTarget,
+    discard: bool,
     caller: OperationCaller,
     completion: impl FnOnce(Result<crate::host::protocol::PresentationCloseOutcome, CloseError>)
     + 'static,
@@ -489,9 +490,12 @@ pub(crate) fn close_presentation(
     };
     super::super::commands::dispatch::break_captured_history_group(&origin, cx);
     ProductShell::begin_protected_operation(
-        ProtectedCloseKind::Tab,
-        origin,
-        Some(caller),
+        ProtectedCloseRequest {
+            kind: ProtectedCloseKind::Tab,
+            origin,
+            caller: Some(caller),
+            discard,
+        },
         Box::new(move |result, _| {
             completion(result.map_err(|error| match error {
                 ProtectedCloseFailure::InvalidTarget => {

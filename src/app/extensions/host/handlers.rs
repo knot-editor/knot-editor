@@ -616,10 +616,28 @@ impl HostArguments for ViewTargetArguments {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CloseArguments {
+    target: crate::host::protocol::PresentationTarget,
+    discard: bool,
+}
+
+impl HostArguments for CloseArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let ViewTargetArguments { target } = ViewTargetArguments::decode(reader)?;
+        Ok(Self {
+            target,
+            discard: reader
+                .optional_boolean(3, "discard must be a boolean")?
+                .unwrap_or(false),
+        })
+    }
+}
+
 #[host_operation("closePresentation")]
 pub(crate) async fn close_presentation(
     context: HostContext,
-    arguments: ViewTargetArguments,
+    arguments: CloseArguments,
 ) -> Result<crate::host::protocol::PresentationCloseOutcome, CloseError> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let caller = product::operations::OperationCaller {
@@ -630,6 +648,7 @@ pub(crate) async fn close_presentation(
     context.foreground(|_, cx| {
         product::operations::close_presentation(
             arguments.target,
+            arguments.discard,
             caller,
             move |result| {
                 let _ = sender.send(result);

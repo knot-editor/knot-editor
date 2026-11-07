@@ -191,6 +191,9 @@ struct ProtectedCloseRequest {
     kind: ProtectedCloseKind,
     origin: ProductCommandTarget,
     caller: Option<operations::OperationCaller>,
+    /// Whether dirty documents losing their final view close without asking,
+    /// their changes discarded once the close commits.
+    discard: bool,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -227,6 +230,8 @@ struct ProtectedClosePlan {
     request: ProtectedCloseRequest,
     scope: Vec<ProtectedViewKey>,
     prompts: Vec<(DocumentId, ProductCommandTarget)>,
+    /// Discards approved without asking, at the revision the plan saw.
+    discarded: Vec<CloseApproval>,
     /// Quit keeps dirty documents in durable recovery instead of asking about them.
     hot_exit: bool,
 }

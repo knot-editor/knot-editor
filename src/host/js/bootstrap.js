@@ -1072,9 +1072,11 @@ function documentPresentationFromNative(value) {
     presentation: Object.freeze({ target: presentationTarget(presentation.target), kind: presentation.kind,
       document: presentation.document, buffer: bufferFor(presentation.buffer) }) });
 }
-export async function closePresentation(target) {
+export async function closePresentation(target, options) {
   if (!livePresentations.has(target)) hostError("InvalidTarget");
-  return Object.freeze(await request("closePresentation", destinationAuthority({ target })));
+  const discard = options === undefined ? undefined : record(options, "close options must be an object").discard;
+  if (discard !== undefined && typeof discard !== "boolean") throw new TypeError("discard must be a boolean");
+  return Object.freeze(await request("closePresentation", destinationAuthority({ target }), discard ?? null));
 }
 export async function createUntitled(options) {
   return documentPresentationFromNative(await request("createUntitled", destinationAuthority(options)));

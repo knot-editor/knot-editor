@@ -134,10 +134,29 @@ impl ProductShell {
         {
             return Err(ProtectedCloseFailure::InvalidTarget);
         }
+        let discarded = if request.discard {
+            prompts
+                .drain(..)
+                .map(|(document, _)| CloseApproval {
+                    document,
+                    revision: documents
+                        .read(cx)
+                        .get(document)
+                        .expect("prompted document is live")
+                        .model()
+                        .read(cx)
+                        .revision(),
+                    kind: CloseApprovalKind::Discarded,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         Ok(ProtectedClosePlan {
             request,
             scope,
             prompts,
+            discarded,
             hot_exit: false,
         })
     }
@@ -163,9 +182,12 @@ impl ProductShell {
         cx: &mut App,
     ) {
         Self::begin_protected_operation(
-            kind,
-            origin,
-            None,
+            ProtectedCloseRequest {
+                kind,
+                origin,
+                caller: None,
+                discard: false,
+            },
             Box::new(move |result, cx| {
                 use crate::host::protocol::{CommandOutcome, PresentationCloseOutcome};
                 let outcome = match result {
@@ -235,9 +257,7 @@ impl ProductShell {
     }
 
     pub(super) fn begin_protected_operation(
-        kind: ProtectedCloseKind,
-        origin: ProductCommandTarget,
-        caller: Option<operations::OperationCaller>,
+        request: ProtectedCloseRequest,
         completion: ProtectedCloseCompletion,
         cx: &mut App,
     ) {
@@ -245,14 +265,8 @@ impl ProductShell {
             completion(Err(ProtectedCloseFailure::InProgress), cx);
             return;
         }
-        let mut plan = match Self::build_protected_close_plan(
-            ProtectedCloseRequest {
-                kind,
-                origin,
-                caller,
-            },
-            cx,
-        ) {
+        let kind = request.kind;
+        let mut plan = match Self::build_protected_close_plan(request, cx) {
             Ok(plan) => plan,
             Err(error) => {
                 completion(Err(error), cx);
@@ -296,7 +310,7 @@ impl ProductShell {
         use crate::host::protocol::{CommandOutcome, PresentationCloseOutcome};
 
         cx.spawn(async move |this, cx| {
-            let mut approvals = Vec::new();
+            let mut approvals = plan.discarded.clone();
             let mut outcome = Ok(PresentationCloseOutcome::Closed);
             for (document, target) in &plan.prompts {
                 let prompt = cx.update(|cx| {

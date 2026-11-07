@@ -3,6 +3,7 @@
 use super::operations::{empty_product_window, install_operation_fixture};
 use super::*;
 use crate::app::extensions;
+use crate::app::product::{ProtectedCloseFailure, ProtectedCloseKind, ProtectedCloseRequest};
 
 const SOURCE: &str = r#"
 import { commands, documents, windows, workbench } from "knot";
@@ -48,6 +49,8 @@ await commands.register("close.invalid", async ({ target }) => {
     try { await workbench.close(invalid); throw new Error("non-view target accepted"); }
     catch (error) { if (error.code !== "InvalidTarget") throw error; }
   }
+  try { await workbench.close(created.presentation.target, { discard: 1 }); throw new Error("invalid discard accepted"); }
+  catch (error) { if (!(error instanceof TypeError)) throw error; }
 });
 "#;
 
@@ -1378,4 +1381,90 @@ fn clicking_a_tab_close_button_closes_that_tab_after_its_save_decision(cx: &mut 
         assert_eq!(pane.tabs().len(), 1);
         assert_eq!(pane.active_tab().document_id(), Some(second));
     });
+}
+
+/// Close the shell's active tab with its changes discarded, running
+/// `between` after the close starts and before it commits.
+fn close_discarding(
+    shell: &Entity<ProductShell>,
+    between: impl FnOnce(&mut gpui::App),
+    cx: &mut TestAppContext,
+) -> Result<crate::host::protocol::PresentationCloseOutcome, ProtectedCloseFailure> {
+    let result = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let sink = result.clone();
+    cx.update(|cx| {
+        let origin = shell
+            .update(cx, |shell, cx| shell.capture_command_target(cx))
+            .unwrap();
+        ProductShell::begin_protected_operation(
+            ProtectedCloseRequest {
+                kind: ProtectedCloseKind::Tab,
+                origin,
+                caller: None,
+                discard: true,
+            },
+            Box::new(move |outcome, _| *sink.borrow_mut() = Some(outcome)),
+            cx,
+        );
+        between(cx);
+    });
+    cx.run_until_parked();
+    assert!(!cx.has_pending_prompt());
+    result.borrow_mut().take().expect("the close settled")
+}
+
+#[gpui::test]
+async fn a_discarding_close_skips_the_prompt_and_recovery_keeps_the_text_until_it_commits(
+    cx: &mut TestAppContext,
+) {
+    let recovery = |cx: &TestAppContext| {
+        cx.read(|cx| {
+            cx.global::<crate::app::recovery::ApplicationRecovery>()
+                .0
+                .store()
+                .clone()
+        })
+    };
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let (model, identity) = cx.read(|cx| {
+        let document = documents.read(cx).get(document).unwrap();
+        (document.model().clone(), document.identity())
+    });
+    model.update(cx, |model, cx| {
+        model.replace(0..0, "unsaved").unwrap();
+        cx.notify();
+    });
+    let (shell, _) = product_window(document, model.clone(), cx);
+    cx.run_until_parked();
+
+    // An edit racing the close keeps the document and its recovered text.
+    let raced = close_discarding(
+        &shell,
+        |cx| {
+            model.update(cx, |model, cx| {
+                model.replace(0..0, "more ").unwrap();
+                cx.notify();
+            })
+        },
+        cx,
+    );
+    assert!(matches!(raced, Err(ProtectedCloseFailure::InvalidTarget)));
+    cx.read(|cx| {
+        assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
+        assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
+    });
+    cx.run_until_parked();
+    recovery(cx).flush().await.unwrap();
+    let kept = recovery(cx).automatic(identity).await.unwrap().unwrap();
+    assert_eq!(kept.text, "more unsaved");
+
+    let closed = close_discarding(&shell, |_| {}, cx);
+    assert!(matches!(
+        closed,
+        Ok(crate::host::protocol::PresentationCloseOutcome::Closed)
+    ));
+    assert!(cx.read(|cx| documents.read(cx).get(document).is_none()));
+    recovery(cx).flush().await.unwrap();
+    assert!(recovery(cx).automatic(identity).await.unwrap().is_none());
 }
