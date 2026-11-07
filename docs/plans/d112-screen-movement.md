@@ -1,6 +1,6 @@
 # D112 — Screen movement and layout queries
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 approved (row query shape revised after review), not started. Item of the
 [editor API plan](editor-api.md); builds on D078 (visual rows, done) and D109
 (the editor handle, done). Vim's `H M L`, `zz`, and the half-page and page
 scrolls already ship on buffer lines (the Vim package) and are
@@ -18,11 +18,16 @@ rows and lines coincide and nothing behaves differently.
   `viewport()`, returning the first wholly visible row and the number of
   wholly visible rows. `scrollBy(n)` counts rows. The extension guide and
   `knot.d.ts` describe a row as one screen line of a possibly wrapped line.
-- **Row to position queries.** `rowAt(row)` returns the buffer line and byte
-  column where a document row starts, clamped to the last row. `rowOf(offset)`
-  returns the row a byte offset shows on, with a caret at a break on the next
-  row as the view draws it. Extensions compute `H M L` targets from these, so
-  operator targets such as `dH` need no caret move.
+- **Row to line queries.** `rowAt(row)` returns the buffer line a document
+  row belongs to, clamped to the last row. `rowOf(line, column)` returns the
+  row a UTF-8 byte column shows on, taking a line and column as `cellsBefore`
+  does, with a caret at a break on the next row as the view draws it.
+  Extensions compute `H M L` targets from these, so operator targets such as
+  `dH` need no caret move. `rowAt` returns no column because no consumer needs
+  where a wrapped row starts.
+- **Rows mean visible rows.** A row is a document row as the view draws it,
+  so D066 makes `rowAt`, `rowOf`, and `viewport` count only rows that folds
+  leave visible, without changing what a row is.
 - **An always-centering reveal.** `"always-center"` joins `setSelection`'s
   reveals and centers the caret's row even when it is on screen. `"center"`
   keeps centering only an off-screen caret, which Go to Line and Vim's
@@ -66,8 +71,8 @@ Validation:
   dropping its wrapped-line rounding; `set_selection` gains the `Reveal`
   variant beside `Center`, `Top`, and `Bottom`.
 - `src/app/editor/wrap.rs`: `position(row)` and `row_of(line, col)` already
-  map rows to lines and back; `rowAt` and `rowOf` wrap them with the
-  column-to-byte conversion used by `cellsBefore`.
+  map rows to lines and back; `rowAt` keeps only the line, and `rowOf` takes
+  the byte column as `cellsBefore` does.
 - `src/app/extensions/host/handlers.rs`: mirror `editor_visible_lines`,
   `editor_scroll_by`, and the `cellsBefore` handlers (`LineMeasureArguments`);
   add the variant to the reveal parser near line 2082.
