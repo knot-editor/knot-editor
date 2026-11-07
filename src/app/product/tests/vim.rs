@@ -18,7 +18,7 @@
 //! in a product window.
 use serde::Deserialize;
 
-use super::cases::{Failures, Text, package_files, read_groups, topics, unmark};
+use super::cases::{Failures, Text, package_files, parse_keys, read_groups, topics, unmark};
 use super::editor_api::active_editor_view;
 use super::harness::{Session, Windowed, start_bundled_packages_with_post_init, work_per_key};
 use super::*;
@@ -199,7 +199,7 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
 topics!(
     "vim",
     run_topic;
-    insert, marks, motions, objects, operators, registers, scrolling, visual
+    ex, insert, marks, motions, objects, operators, registers, scrolling, visual
 );
 
 #[gpui::test]
@@ -473,4 +473,164 @@ fn a_case_starts_without_what_an_earlier_one_left(cx: &mut TestAppContext) {
     restart_vim(&session, cx);
     session.press("\"ap", cx);
     assert_eq!(session.marked(cx), "‸xey", "the register record");
+}
+
+/// Serve `a.txt` holding "one" and `b.txt` holding "two" from
+/// `mem://product/dir/`.
+fn serve_files(cx: &mut TestAppContext) -> Arc<MemoryFileSystemProvider> {
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    provider
+        .seed_directory(ResourceUri::parse("mem://product/dir").unwrap())
+        .unwrap();
+    for (name, text) in [("a.txt", "one"), ("b.txt", "two")] {
+        let uri = ResourceUri::parse(&format!("mem://product/dir/{name}")).unwrap();
+        provider.seed_file(uri, text.as_bytes()).unwrap();
+    }
+    cx.set_global(ApplicationFileSystems(filesystems));
+    provider
+}
+
+/// A session over the served file `uri`.
+fn open_file(provider: &MemoryFileSystemProvider, uri: &str, cx: &mut TestAppContext) -> Session {
+    let uri = ResourceUri::parse(uri).unwrap();
+    let opened = pollster::block_on(provider.read(uri.clone())).unwrap();
+    let model = cx.new(|_| BufferModel::from_text(String::from_utf8(opened.bytes).unwrap()));
+    let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_persisted("a.txt", model.clone(), uri, 0, opened.version, cx)
+    });
+    let session = Session::over(document, model, (0, 0), cx);
+    assert_eq!(session.mode(cx), "normal", "Vim follows the editor");
+    session
+}
+
+/// The text of the session's active editor.
+fn active_text(session: &Session, cx: &mut TestAppContext) -> String {
+    let view = active_editor_view(&session.shell, cx);
+    cx.read(|cx| view.read(cx).model().read(cx).text())
+}
+
+fn served(provider: &MemoryFileSystemProvider, uri: &str) -> String {
+    let file = pollster::block_on(provider.read(ResourceUri::parse(uri).unwrap())).unwrap();
+    String::from_utf8(file.bytes).unwrap()
+}
+
+#[gpui::test]
+fn ex_writes_and_opens_files_beside_the_document(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let provider = serve_files(cx);
+    let session = open_file(&provider, "mem://product/dir/a.txt", cx);
+    session.press("x:w<cr>", cx);
+    assert_eq!(served(&provider, "mem://product/dir/a.txt"), "ne");
+    let dirty = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            let documents = cx.global::<ApplicationDocuments>().0.read(cx);
+            documents.get(session.document).unwrap().is_dirty(cx)
+        })
+    };
+    assert!(!dirty(cx));
+
+    session.press(":e b.txt<cr>", cx);
+    assert_eq!(active_text(&session, cx), "two");
+    // Vim follows the opened editor.
+    session.press("x", cx);
+    assert_eq!(active_text(&session, cx), "wo");
+}
+
+#[gpui::test]
+fn ex_edit_from_an_untitled_document_opens_in_the_first_root(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    serve_files(cx);
+    let session = open("", 0, cx);
+    session.shell.update(cx, |shell, cx| {
+        shell.replace_workspace_roots(vec![ResourceUri::parse("mem://product/dir/").unwrap()], cx);
+    });
+    session.press(":e b.txt<cr>", cx);
+    assert_eq!(active_text(&session, cx), "two");
+}
+
+#[gpui::test]
+fn ex_quit_asks_before_losing_changes_and_quit_bang_does_not(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let fixture = Windowed::open("one", cx);
+    assert_eq!(fixture.session.mode(cx), "normal", "Vim follows the editor");
+    let document = fixture.session.document;
+    let open = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            cx.global::<ApplicationDocuments>()
+                .0
+                .read(cx)
+                .get(document)
+                .is_some()
+        })
+    };
+    fixture.press("x", cx);
+    for key in parse_keys(":q<cr>") {
+        cx.dispatch_keystroke(fixture.window, gpui::Keystroke::parse(&key).unwrap());
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !cx.has_pending_prompt() {
+        assert!(std::time::Instant::now() < deadline, ":q did not ask");
+        cx.run_until_parked();
+        std::thread::yield_now();
+    }
+    cx.simulate_prompt_answer("Cancel");
+    fixture.session.settle(cx);
+    assert!(open(cx));
+    assert_eq!(fixture.session.marked(cx), "‸ne");
+
+    fixture.press(":q!<cr>", cx);
+    assert!(!cx.has_pending_prompt());
+    assert!(!open(cx));
+}
+
+#[gpui::test]
+fn ex_set_writes_document_scoped_settings(cx: &mut TestAppContext) {
+    use crate::app::settings::{LineNumbers, SettingsScope};
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let session = open("one", 0, cx);
+    let scope = SettingsScope {
+        language: None,
+        view: Some("editor".into()),
+        document: Some(cx.read(|cx| {
+            cx.global::<ApplicationDocuments>()
+                .0
+                .read(cx)
+                .get(session.document)
+                .unwrap()
+                .identity()
+                .to_string()
+        })),
+    };
+    let elsewhere = SettingsScope {
+        document: None,
+        ..scope.clone()
+    };
+    session.press(":set ts=2 noet wrap rnu<cr>", cx);
+    cx.read(|cx| {
+        use crate::app::settings::*;
+        assert_eq!(editor_tab_size(&scope, cx), 2);
+        assert!(!editor_insert_spaces(&scope, cx));
+        assert!(editor_soft_wrap(&scope, cx));
+        assert_eq!(editor_line_numbers(&scope, cx), LineNumbers::Relative);
+        assert_eq!(editor_tab_size(&elsewhere, cx), 4);
+        assert_eq!(editor_line_numbers(&elsewhere, cx), LineNumbers::On);
+    });
+    session.press(":set nornu nonu<cr>", cx);
+    assert_eq!(
+        cx.read(|cx| crate::app::settings::editor_line_numbers(&scope, cx)),
+        LineNumbers::Off
+    );
+
+    // An error shows in place of the mode until the next key.
+    let shows = |cx: &mut TestAppContext, text: &str| {
+        cx.read(|cx| session.status(cx))
+            .0
+            .iter()
+            .any(|item| item == text)
+    };
+    session.press(":set hls<cr>", cx);
+    assert!(shows(cx, "E518: Unknown option: hls"));
+    session.press("l", cx);
+    assert!(!shows(cx, "E518: Unknown option: hls"));
 }

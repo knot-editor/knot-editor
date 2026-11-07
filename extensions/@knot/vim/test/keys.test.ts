@@ -177,3 +177,9 @@ test("H, M, and L are motions and operator targets", () => {
   });
   assert.deepEqual(visual("M"), { kind: "motion", motion: "window-middle", count: null });
 });
+
+test(": opens the Ex line in normal mode only", () => {
+  assert.deepEqual(parse(":").command, { kind: "ex" });
+  assert.equal(parse("d", ":").command, null);
+  assert.equal(visual(":"), null);
+});

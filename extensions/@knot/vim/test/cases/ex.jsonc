@@ -1,0 +1,15 @@
+// Vim behavior cases in the format described in
+// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: the Ex line.
+{
+  "cases": [
+    { "name": ":<line> goes to the line's first non-blank", "before": ["‸a", "b", "  c", "d"], "keys": ":3<cr>", "after": ["a", "b", "  ‸c", "d"] },
+    { "name": ":$ goes to the last line", "before": ["‸a", "b", "c"], "keys": ":$<cr>", "after": ["a", "b", "‸c"] },
+    { "name": "a line past the end goes to the last line", "before": ["‸a", "b"], "keys": ":99<cr>", "after": ["a", "‸b"] },
+    { "name": ":<line> is a jump", "before": ["a", "b‸c", "d"], "keys": ":3<cr>``", "after": ["a", "b‸c", "d"] },
+    { "name": "ctrl-o returns from :<line>", "before": ["‸a", "b", "c"], "keys": ":3<cr><c-o>", "after": ["‸a", "b", "c"] },
+    { "name": "\": holds the last command line", "before": ["‸a", "b"], "keys": ":2<cr>\":p", "after": ["a", "b‸2"] },
+    { "name": "an unknown command changes nothing", "before": ["‸a", "b"], "keys": ":frob<cr>", "after": ["‸a", "b"] },
+    { "name": "Escape dismisses the Ex line", "before": ["‸a", "b"], "keys": ":2<esc>j", "after": ["a", "‸b"] }
+  ]
+}

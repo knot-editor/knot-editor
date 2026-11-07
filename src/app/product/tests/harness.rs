@@ -125,6 +125,17 @@ impl Session {
         cx: &mut TestAppContext,
     ) -> Self {
         let (document, model) = new_document(text, language, cx);
+        Self::over(document, model, selection, cx)
+    }
+
+    /// Open a session over `document`, whose text `model` holds, with the
+    /// selection from `anchor` to `caret`, and settle.
+    pub(super) fn over(
+        document: DocumentId,
+        model: Entity<BufferModel>,
+        selection: (usize, usize),
+        cx: &mut TestAppContext,
+    ) -> Self {
         let shell = cx.update(|cx| {
             let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
             cx.new(|cx| ProductShell::new(workbench, cx))

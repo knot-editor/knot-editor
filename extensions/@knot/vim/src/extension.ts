@@ -6,6 +6,7 @@
 // mode.
 import { commands, documents, keymaps, settings, storage, windows, workbench } from "knot";
 import type { CommandContext, DocumentId, EditorHandle, JsonValue, StatusItem, ViewTarget, WindowTarget } from "knot";
+import { commandLine } from "./command-line.js";
 import { JumpList } from "./jumps.js";
 import { EMPTY, feed, type Pending, pendingText } from "./keys.js";
 import { BufferLines } from "./lines.js";
@@ -65,6 +66,9 @@ type Followed = State & {
   pending: Pending;
   /** Whether the caret shows that an operator is pending. */
   operatorShown: boolean;
+  /** What the last Ex command reported, shown in place of the mode until
+   * the next key. */
+  message: string | null;
 };
 
 /** The tab a window last activated, and the document and language it was
@@ -229,7 +233,7 @@ class Vim {
     }
     const state: Followed = {
       target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
-      language: info.language, mode: "normal", pending: EMPTY, operatorShown: false,
+      language: info.language, mode: "normal", pending: EMPTY, operatorShown: false, message: null,
       want: null, caret: null, group: null, opened: false, visual: null, selected: null, previous: null,
       jumps: new JumpList(), context: null, scroll: null,
     };
@@ -293,6 +297,7 @@ class Vim {
   async keys(context: CommandContext, keys: readonly string[]) {
     const state = await this.stateOf(context);
     if (state === null) return;
+    state.message = null;
     for (const key of keys) {
       if (state.mode === "insert") break;
       const visual = isVisual(state.mode);
@@ -304,6 +309,14 @@ class Vim {
         await showOperator(state, false);
         const command = fed.command;
         if (command === null) continue;
+        if (command.kind === "ex") {
+          // A command such as `:q` may close the editor.
+          await whileOpen(async () => {
+            state.message = await commandLine(state);
+          });
+          if (this.states.get(state.target) !== state) return this.showStatus(state.target.window);
+          continue;
+        }
         if (visual || command.kind === "visual" || command.kind === "reselect") {
           await runVisual(state, command);
         } else {
@@ -329,7 +342,7 @@ class Vim {
   private async showStatus(window: WindowTarget) {
     const target = this.active.get(window)?.target;
     const state = target === undefined ? undefined : this.states.get(target);
-    const mode = state === undefined ? null : MODE_TEXT[state.mode];
+    const mode = state === undefined ? null : state.message ?? MODE_TEXT[state.mode];
     const keys = state === undefined ? null : pendingText(state.pending);
     const shown = this.shown.get(window);
     this.shown.set(window, { mode, keys });
