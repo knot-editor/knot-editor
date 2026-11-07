@@ -1,6 +1,6 @@
 # D112 — Screen movement and layout queries
 
-Status: 🚧 approved (row query shape revised after review), not started. Item of the
+Status: 🚧 both checkpoints implemented; awaiting the review gates. Item of the
 [editor API plan](editor-api.md); builds on D078 (visual rows, done) and D109
 (the editor handle, done). Vim's `H M L`, `zz`, and the half-page and page
 scrolls already ship on buffer lines (the Vim package) and are
@@ -44,7 +44,7 @@ rows and lines coincide and nothing behaves differently.
 
 ## Checkpoints
 
-### 1. Row queries and the centering reveal
+### 1. Row queries and the centering reveal ✅
 
 Deliverables:
 
@@ -79,10 +79,10 @@ Validation:
 - `src/host/js/bootstrap.js` (editor handle, near `visibleLines`) validates
   arguments; `src/host/js/knot.d.ts` declares the types.
 
-Review gate: the user reviews the API names and row semantics before Vim
-moves onto them.
+Review gate (pending, requested together with checkpoint 2): the user
+reviews the API names and row semantics.
 
-### 2. Vim on rows
+### 2. Vim on rows ✅
 
 Deliverables:
 
@@ -108,6 +108,10 @@ Validation:
 - A case's `view` sizes the window in lines; wrapped cases also need a
   narrow wrap width, set through `editor.softWrap` in the case.
 
-Review gate: the user dogfoods Vim with soft wrap on, through a `try.*`
-command in the personal `post-init.js`, then the plan is removed and
+Review gate (pending): the user dogfoods Vim with soft wrap on through
+`Try: Vim screen rows` in the personal `post-init.js`, then the plan is removed and
 durable behavior moves to the architecture references.
+
+Implementation notes: the wrapped Vim case is a product test in
+`src/app/product/tests/vim.rs`, because the windowless `KNOT_CASES` harness and
+the fake host do not wrap. The fake host treats rows as lines.

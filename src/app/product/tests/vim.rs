@@ -258,6 +258,83 @@ fn j_moves_by_buffer_line_and_gj_by_row_under_soft_wrap(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
+fn screen_motions_and_scrolls_count_rows_under_soft_wrap(cx: &mut TestAppContext) {
+    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    let long = "word ".repeat(60);
+    let lines = [
+        "alpha", &long, &long, "beta", &long, "gamma", &long, "delta", "end",
+    ];
+    let session = open(&lines.join("\n"), 0, cx);
+    let uuid = cx.read(|cx| {
+        cx.global::<ApplicationDocuments>()
+            .0
+            .read(cx)
+            .get(session.document)
+            .unwrap()
+            .identity()
+    });
+    cx.update(|cx| crate::app::settings::set_document_soft_wrap(uuid, true, cx));
+    session.lay_out(8, 100, cx);
+    let (first, rows) = cx.read(|cx| session.editor.read(cx).viewport());
+    assert_eq!((first, rows), (0, 8));
+    // The line each of the viewport's rows belongs to.
+    let line_of =
+        |row: usize, cx: &mut TestAppContext| cx.read(|cx| session.editor.read(cx).row_line(row));
+    let caret_line = |cx: &mut TestAppContext| {
+        let caret = session.caret(cx);
+        cx.read(|cx| {
+            let model = session.model.read(cx);
+            (0..model.line_count())
+                .rev()
+                .find(|line| model.line_range(*line).start <= caret)
+                .unwrap()
+        })
+    };
+    let bottom = line_of(7, cx);
+    assert!(
+        bottom < lines.len() - 1,
+        "the viewport ends inside the text"
+    );
+    assert!(
+        bottom - line_of(0, cx) < 7,
+        "wrapped lines take several rows"
+    );
+
+    session.press("L", cx);
+    assert_eq!(caret_line(cx), bottom, "L goes to the last row's line");
+    session.press("2H", cx);
+    assert_eq!(
+        caret_line(cx),
+        line_of(1, cx),
+        "2H goes to the second row's line"
+    );
+    session.press("M", cx);
+    assert_eq!(
+        caret_line(cx),
+        line_of(3, cx),
+        "M goes to the middle row's line"
+    );
+
+    // A half-page scroll moves the view by half its rows, so the caret
+    // moves the same number of rows.
+    session.press("gg<c-d>", cx);
+    let (first, _) = cx.read(|cx| session.editor.read(cx).viewport());
+    assert_eq!(first, 4, "ctrl-d scrolls half of the 8 rows");
+    assert_eq!(caret_line(cx), line_of(4, cx));
+    session.press("<c-u>", cx);
+    assert_eq!(cx.read(|cx| session.editor.read(cx).viewport().0), 0);
+
+    // zz centers the caret's row even though it is on screen.
+    session.press("5G", cx);
+    let row = cx.read(|cx| session.editor.read(cx).row_of_position(4, 0, cx).unwrap());
+    assert!(row >= 6, "line 5 starts below the first screenful: {row}");
+    session.press("zz", cx);
+    let (first, rows) = cx.read(|cx| session.editor.read(cx).viewport());
+    // The caret's row is centered, leaving half a row cut off at each end.
+    assert_eq!((first, rows), (row - 3, 7));
+}
+
+#[gpui::test]
 fn vim_follows_the_setting_and_a_language_scoped_value(cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(
         Some(

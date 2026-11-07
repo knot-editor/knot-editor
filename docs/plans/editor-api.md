@@ -160,7 +160,7 @@ D077 moved here from the daily-driver plan.
 ✅ D078 from the daily-driver plan landed before this phase.
 
 - **D112 — Screen movement and layout queries** (depends on D078, D109)
-  - 🚧 [Plan](d112-screen-movement.md)
+  - 🚧 [Plan](d112-screen-movement.md): both checkpoints implemented, review gates pending
   - D078 delivered movement by visual row with `-logical` twins
     ([editor views](../architecture/workbench-and-lifecycle.md#editor-views)),
     which Vim's `gj`/`gk` and `j`/`k` bind.
