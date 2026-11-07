@@ -1,6 +1,6 @@
 # D058 — Vim mode
 
-Status: 🚧 checkpoints 1–7 complete; checkpoint 8 awaits dogfooding. Item of the [editor API](editor-api.md) plan; brief and
+Status: 🚧 checkpoints 1–8 complete; checkpoint 9 is next. Item of the [editor API](editor-api.md) plan; brief and
 guardrails in the [extensibility report](../reports/extensibility.md).
 
 ## Outcome
@@ -319,37 +319,21 @@ line passes `:`. A product test covers the option, and cases cover `:<bs>` and
 `:2<bs><bs>j`. See [semantic UI](../architecture/semantic-ui.md) and the
 `InputOptions` declaration in `knot.d.ts`.
 
-### 8. Window commands 🔍
+### 8. Window commands ✅
 
-Deliverables:
-
-- ✅ `ctrl-w` followed by `h j k l`, `s`, `v`, `c`, `o`, and `w`, also with
-  ctrl held on the second key (`ctrl-w ctrl-h`), and the pending `^W` shown
-  in the status bar.
-
-Validation:
-
-- ✅ Product tests for the `ctrl-w` commands over split panes, and that a
-  `ctrl-w` left pending does not swallow the next key's meaning.
-
-Review gate: dogfooding.
-
-Implementation context:
-
-- `ctrl-w` maps to `workbench.focus-pane-*`, `split-horizontal`,
-  `split-vertical`, `close-pane`, the commands closest to `only`, and
-  `next-recent-tab`, resolved against the catalog at implementation. A
-  command with no counterpart gets a roadmap entry rather than native work
-  here. Resolved: `s` and `v` split down and right, `c` closes the tab, and its pane with the last one, as other editors' Vim modes do, `o`
-  closes the other panes through a new Close Other Panes command. `w` `W`
-  `p` `t` `b` use new pane-focus commands (next, previous, previously
-  focused, first, last). With ctrl held, `h` arrives as Backspace; `ctrl-s`,
-  `ctrl-v`, and `ctrl-c` stay native, so only the plain `s v c` split and close.
-  Also `H J K L` (move the tab to the pane in that direction, or split at the edge, as the move-tab commands do), `q` (closes the tab), `=` (equalizes), and `+ - < >`, which resize along the
-  height or width through new axis-specific commands. A count before or after `ctrl-w` repeats the resizes; it cannot repeat
-  moving focus, as every child command keeps the pane the command started in.
-  Held for lack of commands: `n` new empty pane (with D061's empty-tab
-  handling), `x` `r` `R` swap and rotate (D151).
+Complete and approved after dogfooding: `ctrl-w` followed by `h j k l` (focus),
+`H J K L` (move the tab, or split at the edge), `s v` (split down and right),
+`c q` (close the tab, and its pane with the last one, as other editors' Vim
+modes do), `o` (close the other panes), `w W p t b` (cycle, go back, first,
+last, over the editor area and never the docks), `=`, and `+ - < >` (resize
+along the height or width), each also with ctrl held where it arrives as a
+key; a count before or after repeats the resizes, and the pending `^W` shows in
+the status bar. The package maps them to workbench commands; the checkpoint
+added Close Other Panes, the pane-focus commands, and axis-specific resizing
+([workbench and lifecycle](../architecture/workbench-and-lifecycle.md)). Counts
+cannot repeat moving focus, as a child command keeps the pane its parent started
+in (D151). Left out (D151, D158): `n`, `x r R`, counts on focus keys, and leaving
+a dock tool by `ctrl-w`. `ctrl-w ctrl-s`, `ctrl-v`, and `ctrl-c` stay native.
 
 ### 9. Documentation and plan removal 📝
 
