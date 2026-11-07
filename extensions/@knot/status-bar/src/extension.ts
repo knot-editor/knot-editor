@@ -132,15 +132,18 @@ export async function start() {
       const tab = info.panes
         .flatMap((pane) => pane.tabs)
         .find((candidate) => candidate.target === info.statusTarget);
-      current.target = info.statusTarget;
       current.document = tab?.document ?? null;
       current.buffer = tab?.buffer ?? null;
       current.handle = null;
       current.selection = null;
+      // The target is recorded last, so a failed attach is retried by the
+      // next event instead of leaving the window without a listener.
+      current.target = null;
       if (info.statusTarget !== null) {
         current.handle = await workbench.editor(info.statusTarget);
         current.selection = await current.handle.onDidChangeSelection(() => refreshPosition(window));
       }
+      current.target = info.statusTarget;
     }
     await refreshPosition(window);
     await refreshDocument(window);

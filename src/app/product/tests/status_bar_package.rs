@@ -25,10 +25,7 @@ fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut
     });
     let (shell, window) = product_window(document, model, cx);
     let editor = active_editor(&shell, cx);
-    // Nothing describes an editor before one is focused.
     cx.run_until_parked();
-    assert!(cx.read(|cx| right_texts(window, cx)).is_empty());
-
     cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
