@@ -14,6 +14,7 @@ mod brackets;
 mod comments;
 mod completion;
 mod editing;
+mod folding;
 mod gutter;
 mod indentation;
 mod input;
@@ -222,6 +223,8 @@ pub struct Editor {
     /// Where each line breaks into rows, as of `wrap_revision`.
     wrap: wrap::WrapMap,
     wrap_revision: u64,
+    /// The collapsed folds, whose lines `wrap` hides.
+    folds: Vec<folding::Fold>,
     /// The top of a restored view state, kept until the view next sets the
     /// wrap width, so a restore before lines first wrap still shows the
     /// same row.
@@ -315,6 +318,7 @@ impl Editor {
             if let Some(restore) = model.history_view_restore() {
                 this.apply_history_view_restore(model, restore.generation, &restore.state);
             }
+            this.reveal_caret_folds(cx);
             this.sync_view_position(cx);
             this.apply_pending_indent(cx);
             cx.notify();
@@ -325,6 +329,7 @@ impl Editor {
             });
             let pairs = std::mem::take(&mut this.auto_closed);
             this.release_auto_closed(pairs, cx);
+            this.release_folds(cx);
         });
 
         Self {
@@ -334,6 +339,7 @@ impl Editor {
             seen_revision,
             wrap: wrap::WrapMap::new(line_count),
             wrap_revision: seen_revision,
+            folds: Vec::new(),
             restored_top: None,
             decorations,
             gutter_markers,
@@ -541,6 +547,7 @@ impl Editor {
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
         self.has_selection = anchor != caret;
+        self.reveal_caret_folds(cx);
         let viewport = self.viewport_rows;
         if viewport > 0. && matches!(reveal, Reveal::Center | Reveal::AlwaysCenter) {
             let row = self.caret_row() as f32;
@@ -572,6 +579,8 @@ impl Editor {
         caret: (usize, usize),
         cx: &mut Context<Self>,
     ) {
+        // Selecting a collapsed fold's first line selects the whole fold.
+        let caret = self.out_of_folds(self.model.read(cx), caret, caret >= anchor);
         (self.anchor_line, self.anchor_col) = anchor;
         (self.cursor_line, self.cursor_col) = caret;
         self.has_selection = anchor != caret;
@@ -666,6 +675,7 @@ impl Editor {
     fn refresh(&mut self, model: &BufferModel, position: Option<Range<usize>>) {
         self.line_count = model.line_count();
         self.sync_wrap(model);
+        self.sync_folds(model);
         (
             self.decorations,
             self.gutter_markers,
@@ -687,6 +697,7 @@ impl Editor {
     }
 
     fn finish_position_change(&mut self, cx: &mut Context<Self>) {
+        self.reveal_caret_folds(cx);
         self.prune_auto_closed(cx);
         self.dismiss_completion();
         self.reveal_caret = true;

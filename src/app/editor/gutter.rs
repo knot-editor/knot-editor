@@ -130,6 +130,7 @@ impl EditorView {
         let wrap = &editor.wrap;
         let lines = wrap.position(rows.start).0..wrap.position(rows.end - 1).0 + 1;
         lines
+            .filter(|line| !wrap.is_hidden(*line))
             .filter_map(|line| {
                 let row = wrap.first_row(line);
                 let label = self.gutter.label(line, editor.cursor_line)?;

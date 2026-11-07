@@ -133,7 +133,7 @@ impl Element for EditorElement {
             let markers = editor
                 .gutter_markers
                 .iter()
-                .filter(|marker| marker.command.is_some())
+                .filter(|marker| marker.command.is_some() && !editor.wrap.is_hidden(marker.line))
                 .map(|marker| editor.wrap.first_row(marker.line))
                 .filter(|row| rows.contains(row))
                 .map(|row| Bounds {
@@ -252,6 +252,7 @@ impl Element for EditorElement {
                 vis.push(PaintRow {
                     text: text[row.range.clone()].to_owned(),
                     runs: slice_runs(runs, row.range.clone()),
+                    folded: row.last && editor.is_fold_start(row.line),
                     row,
                 });
             }
@@ -282,8 +283,10 @@ impl Element for EditorElement {
                 .map(|fill| (fill.row, fill.columns, theme.color(fill.key)))
                 .collect();
             // Numbers and markers show on each line's first row.
-            let first_row =
-                |line: usize| Some(editor.wrap.first_row(line)).filter(|row| rows.contains(row));
+            let first_row = |line: usize| {
+                Some(editor.wrap.first_row(line))
+                    .filter(|row| rows.contains(row) && !editor.wrap.is_hidden(line))
+            };
             let gutter = GutterPaint {
                 layout: view.gutter,
                 numbers: view
@@ -329,6 +332,7 @@ impl Element for EditorElement {
                     marked_text: theme.color(color::EDITOR_MARKED_TEXT),
                     bracket_match: theme.color(color::EDITOR_BRACKET_MATCH),
                     line_highlight: theme.color(color::EDITOR_LINE_HIGHLIGHT),
+                    fold_placeholder: theme.color(color::EDITOR_FOLD_PLACEHOLDER),
                     scrollbar: theme.color(color::SCROLLBAR_THUMB),
                 },
                 view.focus.clone(),
@@ -495,6 +499,38 @@ impl Element for EditorElement {
                     let origin = point(bounds.origin.x + *x_off, top(row.row.index));
                     let _ = s.paint(origin, line_height, window, cx);
                 }
+            }
+
+            // The placeholder after a collapsed fold's first line.
+            for (row, s, x_off) in &shaped {
+                if !row.folded {
+                    continue;
+                }
+                let label = SharedString::from("…");
+                let run = TextRun {
+                    len: label.len(),
+                    font: make_font(false, false),
+                    color: colors.fold_placeholder,
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                };
+                let glyph = window
+                    .text_system()
+                    .shape_line(label, font_size, &[run], None);
+                let pad = px(4.);
+                let left = bounds.origin.x + *x_off + s.as_ref().map_or(px(0.), |s| s.width) + pad;
+                let rect = Bounds {
+                    origin: point(left, top(row.row.index) + px(2.)),
+                    size: size(glyph.width + pad * 2., line_height - px(4.)),
+                };
+                window.paint_quad(fill(rect, colors.fold_placeholder.opacity(0.2)));
+                let _ = glyph.paint(
+                    point(left + pad, top(row.row.index)),
+                    line_height,
+                    window,
+                    cx,
+                );
             }
 
             // IME preedit (marked text) underline: a bar at the bottom of the
@@ -665,6 +701,8 @@ pub(super) struct PaintRow {
     row: Row,
     text: String,
     runs: Vec<TextRun>,
+    /// Whether the row ends the first line of a collapsed fold.
+    folded: bool,
 }
 
 /// Pointer regions inserted before paint: the text area and each visible
@@ -694,5 +732,6 @@ pub(super) struct PaintColors {
     marked_text: Hsla,
     bracket_match: Hsla,
     line_highlight: Hsla,
+    fold_placeholder: Hsla,
     scrollbar: Hsla,
 }

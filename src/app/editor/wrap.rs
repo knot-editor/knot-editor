@@ -137,15 +137,19 @@ pub(super) fn wrap_line(text: &str, width: WrapWidth) -> LineWrap {
     }
 }
 
-/// The rows of every line of one view's buffer. Without a width, each line is
-/// one row and nothing is stored per line.
+/// The rows of every line of one view's buffer. Lines a fold hides have no
+/// rows. Without a width or hidden lines, each line is one row and nothing is
+/// stored per line.
 pub(super) struct WrapMap {
     width: Option<WrapWidth>,
     line_count: usize,
     /// Each line's breaks while wrapping.
     lines: Vec<LineWrap>,
-    /// The first row of each line, then the row count, while wrapping.
+    /// The first row of each line, then the row count, while wrapping or
+    /// hiding lines.
     first_rows: Vec<usize>,
+    /// The lines that have no rows, as ascending disjoint ranges.
+    hidden: Vec<Range<usize>>,
 }
 
 impl WrapMap {
@@ -155,6 +159,53 @@ impl WrapMap {
             line_count,
             lines: Vec::new(),
             first_rows: Vec::new(),
+            hidden: Vec::new(),
+        }
+    }
+
+    /// Whether `first_rows` is stored, because rows are not the lines.
+    fn mapped(&self) -> bool {
+        self.width.is_some() || !self.hidden.is_empty()
+    }
+
+    /// Whether `line` has no rows.
+    pub(super) fn is_hidden(&self, line: usize) -> bool {
+        self.hidden_range(line).is_some()
+    }
+
+    /// The run of hidden lines holding `line`.
+    pub(super) fn hidden_range(&self, line: usize) -> Option<Range<usize>> {
+        let at = self.hidden.partition_point(|range| range.end <= line);
+        self.hidden
+            .get(at)
+            .filter(|range| range.start <= line)
+            .cloned()
+    }
+
+    /// Give the lines in `hidden`, ascending and disjoint, no rows.
+    pub(super) fn set_hidden(&mut self, hidden: Vec<Range<usize>>) {
+        if hidden == self.hidden {
+            return;
+        }
+        self.hidden = hidden;
+        self.rebuild_rows(0);
+    }
+
+    /// Recompute the first rows of the lines from `first` on.
+    fn rebuild_rows(&mut self, first: usize) {
+        if !self.mapped() {
+            self.first_rows = Vec::new();
+            return;
+        }
+        let first = if self.hidden.is_empty() { first } else { 0 };
+        self.first_rows.resize(self.line_count + 1, 0);
+        for line in first..self.line_count {
+            let rows = if self.is_hidden(line) {
+                0
+            } else {
+                self.lines.get(line).map_or(0, |wrap| wrap.breaks.len()) + 1
+            };
+            self.first_rows[line + 1] = self.first_rows[line] + rows;
         }
     }
 
@@ -167,9 +218,10 @@ impl WrapMap {
     }
 
     pub(super) fn first_row(&self, line: usize) -> usize {
-        match self.width {
-            Some(_) => self.first_rows[line.min(self.line_count)],
-            None => line,
+        if self.mapped() {
+            self.first_rows[line.min(self.line_count)]
+        } else {
+            line
         }
     }
 
@@ -181,7 +233,7 @@ impl WrapMap {
     /// The line `row` belongs to and its index among that line's rows.
     pub(super) fn position(&self, row: usize) -> (usize, usize) {
         let row = row.min(self.row_count().saturating_sub(1));
-        if self.width.is_none() {
+        if !self.mapped() {
             return (row, 0);
         }
         let line = self.first_rows[..self.line_count].partition_point(|first| *first <= row) - 1;
@@ -242,7 +294,7 @@ impl WrapMap {
         self.line_count = line_count;
         let Some(width) = self.width else {
             self.lines = Vec::new();
-            self.first_rows = Vec::new();
+            self.rebuild_rows(0);
             return;
         };
         let wrap = |line| wrap_line(&text(line), width);
@@ -270,10 +322,7 @@ impl WrapMap {
                 0
             }
         };
-        self.first_rows.resize(line_count + 1, 0);
-        for line in first..line_count {
-            self.first_rows[line + 1] = self.first_rows[line] + self.lines[line].breaks.len() + 1;
-        }
+        self.rebuild_rows(first);
     }
 
     #[cfg(test)]
@@ -396,6 +445,41 @@ mod tests {
         assert_eq!(map.row_range(1, 0, 0), 0..0);
         map.set_width(None, 3, |line| text[line].into());
         assert_eq!((map.row_count(), map.lines().len()), (3, 0));
+    }
+
+    #[test]
+    #[allow(clippy::single_range_in_vec_init)]
+    fn hidden_lines_have_no_rows() {
+        let text = ["one two three", "b", "c", "four", "five"];
+        let mut map = WrapMap::new(5);
+        map.set_hidden([1..3].into());
+        assert_eq!(map.row_count(), 3);
+        assert!(map.is_hidden(2) && !map.is_hidden(3));
+        assert_eq!(map.rows(1), 1..1);
+        assert_eq!(map.rows(3), 1..2);
+        assert_eq!(
+            (map.position(0), map.position(1), map.position(2)),
+            ((0, 0), (3, 0), (4, 0))
+        );
+        // Hidden lines stay mapped while wrapping, and a trailing run has no
+        // rows at the end.
+        let width = WrapWidth {
+            columns: 8,
+            tab_size: 4,
+        };
+        map.set_width(Some(width), 5, |line| text[line].into());
+        assert_eq!(map.row_count(), 4);
+        assert_eq!(map.position(2), (3, 0));
+        map.set_hidden([3..5].into());
+        assert_eq!((map.row_count(), map.position(3)), (4, (2, 0)));
+        assert_eq!(map.rows(4), 4..4);
+        // Edits keep the hidden lines hidden, and showing them again restores
+        // the plain mapping.
+        map.edit(4, None, |line| text[line].into());
+        assert_eq!(map.row_count(), 4);
+        map.set_hidden(Vec::new());
+        map.set_width(None, 4, |line| text[line].into());
+        assert_eq!((map.row_count(), map.position(2)), (4, (2, 0)));
     }
 
     #[test]

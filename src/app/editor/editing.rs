@@ -269,7 +269,9 @@ impl Editor {
                     }
                 };
                 let target = if logical {
-                    self.wrap.first_row(step(self.cursor_line, last))
+                    let line = step(self.cursor_line, last);
+                    let line = self.step_visible_line(self.cursor_line, line, forward);
+                    self.wrap.first_row(line)
                 } else {
                     step(row.index, self.wrap.row_count() - 1)
                 };
@@ -281,6 +283,7 @@ impl Editor {
             }
             _ => return false,
         };
+        let target = self.out_of_folds(model, target, forward);
         if extend {
             if !self.has_selection {
                 self.anchor_line = self.cursor_line;

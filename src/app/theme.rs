@@ -231,6 +231,7 @@ native_colors! {
     EDITOR_BRACKET_MATCH = "editor.bracketMatch", "Background of the bracket at the cursor and its partner.", Rgba(0x8c8c8c40), Rgba(0x8c8c8c33);
     EDITOR_BACKGROUND = "editor.background", "Text editor background.", Key(BACKGROUND), Key(BACKGROUND);
     EDITOR_CURSOR = "editor.cursor", "Text cursor.", Rgb(0xe6e6e6), Rgb(0x1f1f1f);
+    EDITOR_FOLD_PLACEHOLDER = "editor.foldPlaceholder", "The placeholder after the first line of a collapsed fold.", Rgb(0x858585), Rgb(0x8c8c8c);
     EDITOR_FOREGROUND = "editor.foreground", "Unhighlighted editor text.", Rgb(0xd4d4d4), Rgb(0x1f1f1f);
     EDITOR_GUTTER_BACKGROUND = "editor.gutter.background", "The editor gutter beside the text.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);
     EDITOR_LINE_HIGHLIGHT = "editor.lineHighlight", "Background of the cursor's line while nothing is selected.", Rgba(0xffffff0d), Rgba(0x0000000a);

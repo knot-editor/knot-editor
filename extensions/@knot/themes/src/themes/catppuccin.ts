@@ -38,6 +38,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "editor.background": p.base,
       "editor.bracketMatch": `${p.overlay2}33`,
       "editor.cursor": p.rosewater,
+      "editor.foldPlaceholder": p.overlay1,
       "editor.foreground": p.text,
       "editor.gutter.background": p.base,
       "editor.lineHighlight": `${p.text}12`,

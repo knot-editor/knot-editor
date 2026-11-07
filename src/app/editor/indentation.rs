@@ -324,10 +324,15 @@ impl Editor {
     /// The lines a line command acts on: those the selection touches, except
     /// a last line it reaches only at column 0, or else the caret's line.
     pub(super) fn selected_lines(&self) -> Range<usize> {
-        match self.selection_range() {
+        let lines = match self.selection_range() {
             Some((start, end)) if end.0 > start.0 && end.1 == 0 => start.0..end.0,
             Some((start, end)) => start.0..end.0 + 1,
             None => self.cursor_line..self.cursor_line + 1,
+        };
+        // A collapsed fold's lines go with its first line.
+        match self.wrap.hidden_range(lines.end) {
+            Some(hidden) => lines.start..hidden.end,
+            None => lines,
         }
     }
 }

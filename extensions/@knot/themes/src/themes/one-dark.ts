@@ -27,6 +27,7 @@ export const ONE_DARK: ThemeDefinition = {
     "editor.background": bg,
     "editor.bracketMatch": "#515a6b80",
     "editor.cursor": accent,
+    "editor.foldPlaceholder": "#7f848e",
     "editor.foreground": fg,
     "editor.gutter.background": bg,
     "editor.lineHighlight": "#2c313c",
