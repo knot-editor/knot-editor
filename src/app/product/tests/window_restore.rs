@@ -308,8 +308,10 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
         caret: 16,
         top: 6,
         scroll_x: 0.,
+        // Lines 5 through 7 of the document, collapsed.
+        folds: vec![26..40],
     };
-    views[1].update(cx, |editor, cx| editor.restore_view_state(state, cx));
+    views[1].update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx));
 
     let second = cx.update(|cx| {
         let handle = super::super::launch::open_product_window_with(None, None, cx);
@@ -468,6 +470,7 @@ fn changed_files_clamp_view_state_and_missing_clean_files_are_skipped(cx: &mut T
                 caret: 700,
                 top: 600,
                 scroll_x: 0.,
+                folds: Vec::new(),
             },
             cx,
         )

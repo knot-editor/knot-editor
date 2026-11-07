@@ -682,6 +682,7 @@ fn editing_a_large_buffer_never_reads_the_whole_text(cx: &mut TestAppContext) {
                         caret: 50_000,
                         top: 49_000,
                         scroll_x: 0.,
+                        folds: Vec::new(),
                     },
                     cx,
                 )
@@ -1146,8 +1147,9 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
         caret: 9,
         top: 8,
         scroll_x: 14.,
+        folds: Vec::new(),
     };
-    editor.update(cx, |editor, cx| editor.restore_view_state(state, cx));
+    editor.update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx));
     cx.read(|cx| {
         let editor = editor.read(cx);
         assert_eq!(editor.view_state(cx), state);
@@ -1165,6 +1167,7 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
                 caret: 400,
                 top: 400,
                 scroll_x: -5.,
+                folds: Vec::new(),
             },
             cx,
         )
@@ -1177,6 +1180,7 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
                 caret: "é😀\nb".len(),
                 top: "é😀\n".len(),
                 scroll_x: 0.,
+                folds: Vec::new(),
             }
         );
     });

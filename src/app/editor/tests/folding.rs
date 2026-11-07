@@ -302,3 +302,41 @@ fn a_folds_query_gives_regions_that_leave_the_closing_line_visible(cx: &mut Test
     // does `f`'s; `g` fits one line.
     assert_eq!(regions(&editor, cx), [0..7, 1..4]);
 }
+
+#[gpui::test]
+fn folds_round_trip_through_view_state(cx: &mut TestAppContext) {
+    let (model, editor) = editor(cx);
+    fold(&editor, 5..8, cx);
+    fold(&editor, 2..6, cx);
+    let state = cx.read(|cx| editor.read(cx).view_state(cx));
+    // From the start of each first line to the end of its last line's text.
+    assert_eq!(state.folds, vec![6..17, 15..23]);
+
+    let other = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    other.update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx));
+    assert_eq!(rows(&other, cx), 5);
+    cx.read(|cx| assert_eq!(other.read(cx).folds(), vec![2..6, 5..8]));
+    assert_eq!(cx.read(|cx| other.read(cx).view_state(cx).folds), state.folds);
+
+    // Restoring a state without folds expands the ones there.
+    let mut plain = state;
+    plain.folds.clear();
+    other.update(cx, |editor, cx| editor.restore_view_state(plain, cx));
+    assert_eq!(rows(&other, cx), 10);
+}
+
+#[gpui::test]
+fn restored_folds_clamp_to_shorter_text_and_drop_when_empty(cx: &mut TestAppContext) {
+    let (_, editor) = editor(cx);
+    let short = cx.new(|_| BufferModel::from_text("l0\nl1\nl2"));
+    let shorter = cx.new(|cx| Editor::new(short, crate::app::EDITOR_KEY_CONTEXT, cx));
+    let state = super::super::EditorViewState {
+        // The first runs past the end; the second lies within one line; the
+        // third is wholly past the end.
+        folds: vec![3..400, 7..8, 300..400],
+        ..cx.read(|cx| editor.read(cx).view_state(cx))
+    };
+    shorter.update(cx, |editor, cx| editor.restore_view_state(state, cx));
+    cx.read(|cx| assert_eq!(shorter.read(cx).folds(), vec![1..3]));
+    assert_eq!(rows(&shorter, cx), 2);
+}

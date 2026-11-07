@@ -118,6 +118,7 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
         caret: 3,
         top: 0,
         scroll_x: 0.,
+        folds: Vec::new(),
     };
     shell.update(cx, |shell, cx| {
         let editor = shell
@@ -133,7 +134,7 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
             editor
                 .editor()
                 .clone()
-                .update(cx, |editor, cx| editor.restore_view_state(state, cx))
+                .update(cx, |editor, cx| editor.restore_view_state(state.clone(), cx))
         });
     });
     let closed = active_document(&shell, cx).unwrap();

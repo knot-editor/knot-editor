@@ -195,8 +195,9 @@ fn editor_handle_reads_moves_and_restores_the_captured_view(cx: &mut TestAppCont
         caret: 6,
         top: 0,
         scroll_x: 0.,
+        folds: Vec::new(),
     };
-    editor.update(cx, |editor, cx| editor.restore_view_state(original, cx));
+    editor.update(cx, |editor, cx| editor.restore_view_state(original.clone(), cx));
 
     let execution = dispatch_product_command(&shell, window, "api.editor", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);

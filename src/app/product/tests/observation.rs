@@ -1304,6 +1304,7 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
                         caret,
                         top: 0,
                         scroll_x: 0.,
+                        folds: Vec::new(),
                     },
                     cx,
                 )

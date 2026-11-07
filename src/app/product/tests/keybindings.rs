@@ -1236,6 +1236,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
                         caret: 3,
                         top: 0,
                         scroll_x: 0.,
+                        folds: Vec::new(),
                     },
                     cx,
                 )

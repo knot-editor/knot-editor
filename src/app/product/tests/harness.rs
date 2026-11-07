@@ -355,6 +355,7 @@ pub(super) fn run(
                 caret,
                 top: 0,
                 scroll_x: 0.,
+                folds: Vec::new(),
             },
             cx,
         );

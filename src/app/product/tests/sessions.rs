@@ -1048,12 +1048,14 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
             caret: 12,
             top: 6,
             scroll_x: 4.,
+            folds: Vec::new(),
         },
         EditorViewState {
             anchor: 20,
             caret: 20,
             top: 13,
             scroll_x: 0.,
+            folds: Vec::new(),
         },
     ];
     shell.update(cx, |shell, cx| {
@@ -1069,7 +1071,7 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
             workbench.focus_pane(split);
         });
     });
-    for (editor, state) in editors(&shell, cx).iter().zip(states) {
+    for (editor, state) in editors(&shell, cx).iter().zip(states.clone()) {
         editor.update(cx, |editor, cx| editor.restore_view_state(state, cx));
     }
     let source_terminals = terminal_sessions(&shell, cx);

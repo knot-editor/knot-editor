@@ -30,6 +30,38 @@ impl Editor {
         folds
     }
 
+    /// The collapsed folds as byte ranges, from the start of the first line to
+    /// the end of the last line's content, ordered like [`Self::folds`].
+    pub(super) fn fold_bytes(&self, model: &BufferModel) -> Vec<Range<usize>> {
+        let mut bytes: Vec<Range<usize>> = self
+            .folds
+            .iter()
+            .filter(|fold| fold.lines.is_some())
+            .filter_map(|fold| model.resolve_view_position(fold.range))
+            .collect();
+        bytes.sort_by_key(|range| (range.start, std::cmp::Reverse(range.end)));
+        bytes
+    }
+
+    /// Replace the collapsed folds with those over the byte ranges `bytes`,
+    /// clamped to the text; ranges left within one line are dropped.
+    pub(super) fn restore_folds(&mut self, bytes: &[Range<usize>], cx: &mut Context<Self>) {
+        self.unfold_all_folds(cx);
+        let model = self.model.read(cx);
+        let line = |offset: usize| {
+            let mut offset = offset.min(model.len());
+            while !model.is_char_boundary(offset) {
+                offset -= 1;
+            }
+            flat_byte_to_position(model, offset).0
+        };
+        let lines: Vec<Range<usize>> = bytes
+            .iter()
+            .map(|range| line(range.start)..line(range.end) + 1)
+            .collect();
+        self.fold_all_of(&lines, cx);
+    }
+
     /// Whether `line` is the first line of a collapsed fold.
     pub(super) fn is_fold_start(&self, line: usize) -> bool {
         self.folds

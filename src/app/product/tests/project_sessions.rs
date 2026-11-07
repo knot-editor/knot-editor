@@ -823,8 +823,9 @@ fn a_multi_root_layout_with_shared_views_survives_repeated_switches(cx: &mut Tes
         caret: 25,
         top: 20,
         scroll_x: 0.,
+        folds: Vec::new(),
     };
-    split_with_view_state(&fixture.shell, state, cx);
+    split_with_view_state(&fixture.shell, state.clone(), cx);
     let a_id = project_id(&listed_projects(&fixture.shell, fixture.window, cx), "A");
     fixture.create_project(b.path(), "B", cx);
     let b_id = project_id(&listed_projects(&fixture.shell, fixture.window, cx), "B");

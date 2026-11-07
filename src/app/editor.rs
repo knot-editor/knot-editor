@@ -166,13 +166,17 @@ impl Default for EditorRenderingOptions {
 
 /// Restorable editor presentation state. Offsets are absolute UTF-8 byte
 /// positions in the shared buffer; `top` is the start of the first visible row.
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+/// `folds` are the collapsed folds as byte ranges from the start of each
+/// fold's first line to the end of its last.
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EditorViewState {
     pub(crate) anchor: usize,
     pub(crate) caret: usize,
     pub(crate) top: usize,
     pub(crate) scroll_x: f32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) folds: Vec<Range<usize>>,
 }
 
 /// How a selection change scrolls to show the caret.
@@ -418,6 +422,7 @@ impl Editor {
             caret: state.caret,
             top: self.top_offset(model),
             scroll_x: self.scroll_x,
+            folds: self.fold_bytes(model),
         }
     }
 
@@ -426,6 +431,7 @@ impl Editor {
     /// an invalid position; the restored scroll is kept instead of revealing
     /// the caret.
     pub(crate) fn restore_view_state(&mut self, state: EditorViewState, cx: &mut Context<Self>) {
+        self.restore_folds(&state.folds, cx);
         let model = self.model.read(cx);
         let snap = |offset: usize| {
             let mut offset = offset.min(model.len());

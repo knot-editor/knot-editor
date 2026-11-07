@@ -1701,12 +1701,14 @@ mod tests {
                 caret,
                 top: 0,
                 scroll_x,
+                folds: Vec::new(),
             };
             let selection = crate::app::editor::EditorViewState {
                 anchor: 4,
                 caret: 6,
                 top: 4,
                 scroll_x: 20.,
+                folds: Vec::new(),
             };
             first_editor.update(cx, |editor, cx| {
                 editor.editor().clone().update(cx, |editor, cx| {
@@ -1717,7 +1719,7 @@ mod tests {
                 editor
                     .editor()
                     .clone()
-                    .update(cx, |editor, cx| editor.restore_view_state(selection, cx))
+                    .update(cx, |editor, cx| editor.restore_view_state(selection.clone(), cx))
             });
             third_editor.update(cx, |editor, cx| {
                 editor.editor().clone().update(cx, |editor, cx| {

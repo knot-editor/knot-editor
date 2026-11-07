@@ -339,6 +339,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                                 caret: 0,
                                 top: 0,
                                 scroll_x: 12.,
+                                folds: Vec::new(),
                             },
                             cx,
                         )
@@ -377,7 +378,8 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                     anchor: 0,
                     caret: 0,
                     top: 0,
-                    scroll_x: 12.
+                    scroll_x: 12.,
+                    folds: Vec::new(),
                 }
             );
             assert_eq!(

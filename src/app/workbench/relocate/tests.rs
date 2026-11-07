@@ -45,6 +45,7 @@ fn every_same_pane_insertion_preserves_editor_and_order(cx: &mut TestAppContext)
                                 caret: 8,
                                 top: 6,
                                 scroll_x: 12.,
+                                folds: Vec::new(),
                             },
                             cx,
                         )
@@ -81,7 +82,8 @@ fn every_same_pane_insertion_preserves_editor_and_order(cx: &mut TestAppContext)
                         anchor: 1,
                         caret: 8,
                         top: 6,
-                        scroll_x: 12.
+                        scroll_x: 12.,
+                        folds: Vec::new(),
                     }
                 );
                 assert_eq!(workbench.view_count(document), 4);

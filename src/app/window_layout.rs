@@ -413,7 +413,7 @@ impl WindowLayout {
                                 })
                                 .map(|document| PlannedTab::Document {
                                     document,
-                                    view: *view,
+                                    view: view.clone(),
                                     language: language.clone(),
                                 }),
                             LayoutTab::Tool { tool, .. } => ((state.has_tool)(tool)
@@ -644,6 +644,7 @@ mod tests {
             caret,
             top: 0,
             scroll_x: 0.,
+            folds: Vec::new(),
         }
     }
 
@@ -770,7 +771,8 @@ mod tests {
                                 anchor: 1,
                                 caret: 1,
                                 top: 0,
-                                scroll_x: 0.
+                                scroll_x: 0.,
+                                folds: Vec::new(),
                             },
                             language: None,
                         },
@@ -852,7 +854,8 @@ mod tests {
                         anchor: 1,
                         caret: 1,
                         top: 0,
-                        scroll_x: 0.
+                        scroll_x: 0.,
+                        folds: Vec::new(),
                     },
                     language: None,
                 }],

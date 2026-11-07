@@ -2562,6 +2562,7 @@ impl HostArguments for RestoreViewStateArguments {
                 caret,
                 top,
                 scroll_x: scroll_x as f32,
+                folds: Vec::new(),
             },
         })
     }
@@ -2578,7 +2579,10 @@ pub(crate) async fn editor_restore_view_state(
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
         editor.update(cx, |editor, cx| {
             editor.break_history_group(cx);
-            editor.restore_view_state(arguments.state, cx);
+            // Extensions restore selection and scroll; folds stay as they are.
+            let mut state = arguments.state;
+            state.folds = editor.view_state(cx).folds;
+            editor.restore_view_state(state, cx);
         });
         Ok(())
     })?

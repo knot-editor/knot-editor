@@ -65,6 +65,7 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
                                 caret: 8,
                                 top: 6,
                                 scroll_x: 12.,
+                                folds: Vec::new(),
                             },
                             cx,
                         )
@@ -114,7 +115,8 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
                 anchor: 1,
                 caret: 8,
                 top: 6,
-                scroll_x: 12.
+                scroll_x: 12.,
+                folds: Vec::new(),
             }
         );
         assert_eq!(
