@@ -651,7 +651,9 @@ Kakoune mode could use it too. The
     objects (`( )`, `is`, `as`); tag objects (`it`, `at`); `gp`, `gP`, and
     `]p`; `_` and `|`; `gi`; and `ga`; and `ctrl-w w` cycling panes and `ctrl-w o` closing the other
     panes, which need workbench commands for both (they walk the pane's
-    recent tabs and maximize the pane for now).
+    recent tabs and maximize the pane for now; pane history,
+    first and last pane, an empty pane, swapping and rotating panes, and
+    axis-specific resizing).
   - Reconsider: Daily Vim use reaches for one of them. Then add it inside
     the Vim package over existing primitives, with cases beside the others;
     tag objects may wait for D144's syntax-tree queries.

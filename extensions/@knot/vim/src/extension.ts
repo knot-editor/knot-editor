@@ -379,7 +379,8 @@ function forgetMarks(shared: Shared, document: DocumentId) {
 
 /** The workbench command each `ctrl-w` key runs. Knot has no command for
  * moving to the next pane or closing every other one, so `w` walks the tabs
- * and `o` maximizes the pane. */
+ * and `o` maximizes the pane. Resizing moves the pane's nearest split
+ * whatever the key's axis. */
 const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
   "focus-left": "workbench.focus-pane-left",
   "focus-down": "workbench.focus-pane-down",
@@ -389,6 +390,9 @@ const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
   "split-right": "workbench.split-horizontal",
   close: "workbench.close-pane",
   only: "workbench.toggle-maximize-pane",
+  equalize: "workbench.equalize-panes",
+  grow: "workbench.grow-pane",
+  shrink: "workbench.shrink-pane",
   next: "workbench.next-recent-tab",
 };
 

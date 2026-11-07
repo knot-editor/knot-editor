@@ -678,6 +678,18 @@ fn ctrl_w_splits_moves_between_and_closes_panes(cx: &mut TestAppContext) {
     session.press("<c-w>k", cx);
     session.press("<c-w>c", cx);
     assert_eq!(pane_count(&session, cx), 2);
+    session.press("<c-w>v", cx);
+    assert_eq!(pane_count(&session, cx), 3);
+    for key in ["=", "+", "-", "<lt>", ">"] {
+        session.press(&format!("<c-w>{key}"), cx);
+        assert_eq!(pane_count(&session, cx), 3, "{key}");
+    }
+    session.press("<c-w>q", cx);
+    assert_eq!(
+        pane_count(&session, cx),
+        2,
+        "q closes the pane resizing left"
+    );
     session.press("<c-w>o", cx);
     assert_eq!(pane_count(&session, cx), 2, "only hides panes");
 }
