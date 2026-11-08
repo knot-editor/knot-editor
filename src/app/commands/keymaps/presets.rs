@@ -1,28 +1,17 @@
-//! Keymap presets: named sets of default bindings that occupy the preset
-//! slot beneath every extension and personal-config binding.
+//! The Knot preset's bindings and the application's preset registry.
 //!
-//! The Knot preset is native data, so editing works before packages start and
-//! when they fail. Extensions and personal config register further presets by
-//! name; the latest registration of a name defines it, and removing it reveals
-//! the previous one. The `keymap.preset` setting selects the preset. It is
-//! resolved when startup completes and again whenever the setting changes, and
-//! an unregistered name selects Knot. Registering or removing a preset later
-//! changes nothing until the next selection change.
-
-use std::collections::BTreeMap;
+//! The `keymap.preset` setting selects the preset. It is resolved when startup
+//! completes and again whenever the setting changes. Registering or removing a
+//! preset later changes nothing until the next selection change.
 
 use gpui::{App, Global};
 
 use crate::app::keys::{Keystroke, Modifiers};
-use serde::{Deserialize, Serialize};
 
-use super::{ApplicationKeymaps, canonical_key, rebuild};
+use super::{ApplicationKeymaps, Platform, PresetBinding, PresetOwner, PresetRegistry, rebuild};
 use crate::app::commands::dispatch::*;
 use crate::app::settings::{self, ApplicationSettings, KEYMAP_PRESET};
-use knot_protocol::{Command, CommandArgumentValue, ExtensionId, ExtensionLifecycleId};
-
-/// The name of the native preset, which registrations cannot replace.
-pub(crate) const KNOT_PRESET: &str = "knot";
+use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Commands of bundled packages that the Knot preset binds. A key bound to one
 /// reports it unavailable while its package is not running.
@@ -30,173 +19,13 @@ pub(crate) const GO_TO_LINE_COMMAND: &str = "editor.go-to-line";
 #[cfg(test)]
 pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] = &[GO_TO_LINE_COMMAND];
 
-/// One preset binding; a missing command unbinds the key.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct PresetBinding {
-    pub(crate) key: String,
-    pub(crate) command: Option<Command>,
-    #[serde(default)]
-    pub(crate) view: Option<String>,
-}
-
-impl PresetBinding {
-    fn new(key: String, command: Option<&str>, view: Option<&str>) -> Self {
-        Self {
-            key,
-            command: command.map(|name| Command {
-                name: name.into(),
-                arguments: CommandArgumentValue::Null,
-            }),
-            view: view.map(ToOwned::to_owned),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct KeymapPreset {
-    pub(crate) name: String,
-    pub(crate) title: String,
-    pub(crate) bindings: Vec<PresetBinding>,
-}
-
-impl KeymapPreset {
-    /// Why the definition is invalid, if it is.
-    pub(crate) fn invalid_value(&self) -> Option<&'static str> {
-        if self.name.is_empty() {
-            return Some("keymap preset name must be nonempty");
-        }
-        if self.name == KNOT_PRESET {
-            return Some("the knot keymap preset cannot be replaced");
-        }
-        if self
-            .bindings
-            .iter()
-            .any(|binding| canonical_key(&binding.key).is_err())
-        {
-            return Some("keymap preset binding has an invalid key sequence");
-        }
-        if self.bindings.iter().any(|binding| {
-            binding
-                .command
-                .as_ref()
-                .is_some_and(|command| command.name.as_ref().is_empty())
-        }) {
-            return Some("keymap preset binding command name is empty");
-        }
-        None
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct KeymapPresetInfo {
-    pub(crate) name: String,
-    pub(crate) title: String,
-}
-
-/// The extension lifecycle that owns a registration.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct PresetOwner {
-    pub(crate) extension: ExtensionId,
-    pub(crate) lifecycle: ExtensionLifecycleId,
-}
-
-struct Registration {
-    id: u64,
-    owner: PresetOwner,
-    preset: KeymapPreset,
-}
-
-#[derive(Default)]
-pub(crate) struct PresetRegistry {
-    /// In registration order, so a later index wins.
-    registrations: Vec<Registration>,
-    next_id: u64,
-    /// The selection the installed preset was resolved from.
-    applied: Option<String>,
-}
-
-impl PresetRegistry {
-    /// Add a validated registration, returning its ID.
-    pub(crate) fn register(&mut self, owner: PresetOwner, preset: KeymapPreset) -> u64 {
-        self.next_id += 1;
-        self.registrations.push(Registration {
-            id: self.next_id,
-            owner,
-            preset,
-        });
-        self.next_id
-    }
-
-    /// Remove an owned registration; false when it is not live.
-    pub(crate) fn unregister(&mut self, owner: PresetOwner, id: u64) -> bool {
-        let before = self.registrations.len();
-        self.registrations
-            .retain(|registration| registration.id != id || registration.owner != owner);
-        self.registrations.len() != before
-    }
-
-    pub(crate) fn remove_lifecycle(&mut self, owner: PresetOwner) {
-        self.registrations
-            .retain(|registration| registration.owner != owner);
-    }
-
-    /// The preset `name` selects: the native Knot preset or the latest
-    /// registration of the name.
-    pub(crate) fn get(&self, name: &str) -> Option<KeymapPreset> {
-        if name == KNOT_PRESET {
-            return Some(KeymapPreset {
-                name: KNOT_PRESET.into(),
-                title: "Knot".into(),
-                bindings: knot_preset(Platform::current()),
-            });
-        }
-        self.registrations
-            .iter()
-            .rev()
-            .map(|registration| &registration.preset)
-            .find(|preset| preset.name == name)
-            .cloned()
-    }
-
-    /// Knot and each registered name's effective preset, sorted by name.
-    pub(crate) fn list(&self) -> Vec<KeymapPresetInfo> {
-        let mut presets = BTreeMap::from([(KNOT_PRESET.to_owned(), "Knot".to_owned())]);
-        for registration in &self.registrations {
-            presets.insert(
-                registration.preset.name.clone(),
-                registration.preset.title.clone(),
-            );
-        }
-        presets
-            .into_iter()
-            .map(|(name, title)| KeymapPresetInfo { name, title })
-            .collect()
-    }
-
-    /// The title of the installed preset.
-    pub(crate) fn applied_title(&self) -> String {
-        self.applied
-            .as_deref()
-            .and_then(|name| self.get(name))
-            .or_else(|| self.get(KNOT_PRESET))
-            .map(|preset| preset.title)
-            .unwrap_or_default()
-    }
-
-    /// The bindings `selection` names, falling back to Knot.
-    pub(super) fn bindings(&self, selection: &str) -> Vec<PresetBinding> {
-        self.get(selection)
-            .or_else(|| self.get(KNOT_PRESET))
-            .map(|preset| preset.bindings)
-            .unwrap_or_default()
-    }
-}
-
-#[derive(Default)]
 pub(crate) struct ApplicationKeymapPresets(pub(crate) PresetRegistry);
+
+impl Default for ApplicationKeymapPresets {
+    fn default() -> Self {
+        Self(PresetRegistry::new(knot_preset(Platform::current())))
+    }
+}
 
 impl Global for ApplicationKeymapPresets {}
 
@@ -210,12 +39,13 @@ pub(crate) fn apply_at_startup(cx: &mut App) {
 
 fn apply(cx: &mut App, force: bool) {
     let selection = settings::text(KEYMAP_PRESET, cx);
-    let presets = &mut cx.default_global::<ApplicationKeymapPresets>().0;
-    if !force && presets.applied.as_ref() == Some(&selection) {
+    let Some(bindings) = cx
+        .default_global::<ApplicationKeymapPresets>()
+        .0
+        .select(selection, force)
+    else {
         return;
-    }
-    let bindings = presets.bindings(&selection);
-    presets.applied = Some(selection);
+    };
     if cx.has_global::<ApplicationKeymaps>()
         && cx
             .global_mut::<ApplicationKeymaps>()
@@ -238,26 +68,6 @@ pub(crate) fn remove_lifecycle(
                 extension,
                 lifecycle,
             });
-    }
-}
-
-/// The operating system whose conventions a preset follows.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Platform {
-    MacOs,
-    Windows,
-    Linux,
-}
-
-impl Platform {
-    pub(crate) fn current() -> Self {
-        if cfg!(target_os = "macos") {
-            Self::MacOs
-        } else if cfg!(windows) {
-            Self::Windows
-        } else {
-            Self::Linux
-        }
     }
 }
 

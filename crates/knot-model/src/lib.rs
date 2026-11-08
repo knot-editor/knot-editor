@@ -3,6 +3,7 @@
 //! and return results as data; the application shell owns the runtime that
 //! drives them.
 
+pub mod commands;
 pub mod editing;
 pub mod filesystem;
 pub mod history;

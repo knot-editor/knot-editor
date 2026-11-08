@@ -3649,33 +3649,32 @@ fn preset_owner(context: &HostContext) -> PresetOwner {
     }
 }
 
-impl HostArguments for KeymapPreset {
+/// The keymap preset a package registers.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RegisteredPreset(KeymapPreset);
+
+impl HostArguments for RegisteredPreset {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        let preset: Self = serde_json::from_value(setting_value(reader.command_arguments(2)?))
-            .map_err(|_| DecodeError::Type("invalid keymap preset"))?;
+        let preset: KeymapPreset =
+            serde_json::from_value(setting_value(reader.command_arguments(2)?))
+                .map_err(|_| DecodeError::Type("invalid keymap preset"))?;
         match preset.invalid_value() {
             Some(message) => Err(DecodeError::Type(message)),
-            None => Ok(preset),
+            None => Ok(Self(preset)),
         }
-    }
-}
-
-impl HostSuccess for KeymapPresetInfo {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
     }
 }
 
 #[host_operation("registerKeymapPreset")]
 async fn register_keymap_preset(
     context: HostContext,
-    arguments: KeymapPreset,
+    arguments: RegisteredPreset,
 ) -> Result<u64, AccessError> {
     let owner = preset_owner(&context);
     context.foreground(|_, cx| {
         cx.default_global::<ApplicationKeymapPresets>()
             .0
-            .register(owner, arguments)
+            .register(owner, arguments.0)
     })
 }
 

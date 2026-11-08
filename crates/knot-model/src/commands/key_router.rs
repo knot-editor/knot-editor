@@ -9,49 +9,49 @@
 
 use std::time::Duration;
 
-use crate::app::keys::Keystroke;
+use crate::keys::Keystroke;
 
 use knot_protocol::Command;
 
 /// How long a pending sequence waits for its next key.
-pub(crate) const SEQUENCE_TIMEOUT: Duration = Duration::from_secs(1);
+pub const SEQUENCE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// How typed keystrokes match the bindings that resolve to a command where
 /// they were typed.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct TypedMatch {
+pub struct TypedMatch {
     /// The command of a binding of exactly these keystrokes.
-    pub(crate) exact: Option<Command>,
+    pub exact: Option<Command>,
     /// Whether a longer binding begins with them.
-    pub(crate) longer: bool,
+    pub longer: bool,
 }
 
 /// What routing a key asks of the window, in order.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum KeyAction {
+pub enum KeyAction {
     Run(Command),
     /// Deliver the keystroke as if no binding existed.
     Native(Keystroke),
 }
 
 #[derive(Default)]
-pub(crate) struct KeyRouter {
+pub struct KeyRouter {
     pending: Vec<Keystroke>,
 }
 
 impl KeyRouter {
-    pub(crate) fn is_pending(&self) -> bool {
+    pub fn is_pending(&self) -> bool {
         !self.pending.is_empty()
     }
 
     /// Drop a pending sequence, as when focus moves elsewhere.
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.pending.clear();
     }
 
     /// Route a typed key. `matches` reports how keystrokes match the
     /// keymap where the key was typed.
-    pub(crate) fn key(
+    pub fn key(
         &mut self,
         keystroke: Keystroke,
         matches: impl Fn(&[Keystroke]) -> TypedMatch,
@@ -61,7 +61,7 @@ impl KeyRouter {
     }
 
     /// Resolve a pending sequence whose next key never came.
-    pub(crate) fn flush(&mut self, matches: impl Fn(&[Keystroke]) -> TypedMatch) -> Vec<KeyAction> {
+    pub fn flush(&mut self, matches: impl Fn(&[Keystroke]) -> TypedMatch) -> Vec<KeyAction> {
         self.settle(&matches, true)
     }
 

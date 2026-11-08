@@ -84,11 +84,11 @@ struct CommandCatalogEntry {
     extension_registration: Option<CommandRegistrationId>,
 }
 
-pub(crate) type SharedCommandCatalog = Rc<RefCell<CommandCatalog>>;
+pub type SharedCommandCatalog = Rc<RefCell<CommandCatalog>>;
 
 /// The extension lifetime authorized to receive a named command invocation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct CommandTarget {
+pub struct CommandTarget {
     pub registration: CommandRegistrationId,
     pub extension: ExtensionId,
     pub lifecycle: ExtensionLifecycleId,
@@ -96,13 +96,13 @@ pub(crate) struct CommandTarget {
 
 /// The authoritative dispatch target for one globally owned command name.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum CommandTargetKind {
+pub enum CommandTargetKind {
     Native,
     Extension(CommandTarget),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum CommandCatalogError {
+pub enum CommandCatalogError {
     NameInUse,
     NotFound,
     ViewNotFound,
@@ -121,7 +121,7 @@ impl CommandCatalog {
         }
     }
 
-    pub(crate) fn register_extension(
+    pub fn register_extension(
         &mut self,
         name: CommandName,
         metadata: CommandMetadata,
@@ -155,14 +155,14 @@ impl CommandCatalog {
         Ok(id)
     }
 
-    pub(crate) fn declare_view_kind(&mut self, kind: impl Into<String>) {
+    pub fn declare_view_kind(&mut self, kind: impl Into<String>) {
         self.declared_view_kinds.insert(kind.into());
     }
 
     /// Remove a contributed view kind while retaining view-command registrations.
     /// A later definition with the same ID rebinds those handlers when its
     /// instances attach.
-    pub(crate) fn remove_view_kind(&mut self, kind: &str) {
+    pub fn remove_view_kind(&mut self, kind: &str) {
         self.declared_view_kinds.remove(kind);
         let views = self
             .view_kinds
@@ -175,11 +175,7 @@ impl CommandCatalog {
         }
     }
 
-    pub(crate) fn bind_view(
-        &mut self,
-        kind: &str,
-        view: ViewId,
-    ) -> Result<(), CommandCatalogError> {
+    pub fn bind_view(&mut self, kind: &str, view: ViewId) -> Result<(), CommandCatalogError> {
         if !self.declared_view_kinds.contains(kind) {
             return Err(CommandCatalogError::ViewNotFound);
         }
@@ -195,7 +191,7 @@ impl CommandCatalog {
         Ok(())
     }
 
-    pub(crate) fn register_view_handler(
+    pub fn register_view_handler(
         &mut self,
         kind: String,
         name: CommandName,
@@ -233,16 +229,16 @@ impl CommandCatalog {
         Ok(registration)
     }
 
-    pub(crate) fn resolve_view(&self, view: ViewId, name: &str) -> Option<CommandTarget> {
+    pub fn resolve_view(&self, view: ViewId, name: &str) -> Option<CommandTarget> {
         self.by_view.get(&(view, name.into())).copied()
     }
 
-    pub(crate) fn remove_view(&mut self, view: ViewId) {
+    pub fn remove_view(&mut self, view: ViewId) {
         self.view_kinds.remove(&view);
         self.by_view.retain(|(owner, _), _| *owner != view);
     }
 
-    pub(crate) fn register_native(
+    pub fn register_native(
         &mut self,
         name: CommandName,
         metadata: CommandMetadata,
@@ -264,7 +260,7 @@ impl CommandCatalog {
         self.by_name.values().map(|entry| &entry.definition)
     }
 
-    pub(crate) fn resolve(&self, name: &str) -> Result<CommandTargetKind, CommandCatalogError> {
+    pub fn resolve(&self, name: &str) -> Result<CommandTargetKind, CommandCatalogError> {
         let entry = self
             .by_name
             .get(name)
@@ -284,18 +280,15 @@ impl CommandCatalog {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn resolve_extension(
-        &self,
-        name: &str,
-    ) -> Result<CommandTarget, CommandCatalogError> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn resolve_extension(&self, name: &str) -> Result<CommandTarget, CommandCatalogError> {
         match self.resolve(name)? {
             CommandTargetKind::Native => Err(CommandCatalogError::NotFound),
             CommandTargetKind::Extension(target) => Ok(target),
         }
     }
 
-    pub(crate) fn unregister(
+    pub fn unregister(
         &mut self,
         id: CommandRegistrationId,
         extension: ExtensionId,
@@ -332,11 +325,7 @@ impl CommandCatalog {
         Ok(())
     }
 
-    pub(crate) fn remove_lifecycle(
-        &mut self,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-    ) {
+    pub fn remove_lifecycle(&mut self, extension: ExtensionId, lifecycle: ExtensionLifecycleId) {
         let registrations: Vec<_> = self
             .by_name
             .iter()
