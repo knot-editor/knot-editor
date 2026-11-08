@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 6 next. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 6 awaiting review. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -141,8 +141,10 @@ against the existing target directory exist, and they are noisy.
 | 1. Workspace crates | 3.1 s | 3.8 s | 3.2 s | 34 s (includes test relinking) |
 | 3. Group crates | 3 s | 3 s (`cargo test --no-run`); 2 s (`nextest run -p knot-ext-vim --no-run`) | 3 s | 10 s |
 | 5. knot-model | 2.9 s | 1.4 s | 3.3 s | 12 s |
+| 6. Workbench layout | 2.8 s | 1.4 s | 3.4 s | 12.5 s |
 
-At checkpoint 5, touching `crates/knot-model/src/history.rs` rebuilds in 3.2 s.
+At checkpoint 5, touching `crates/knot-model/src/history.rs` rebuilds in 3.2 s;
+at checkpoint 6, `crates/knot-model/src/workbench.rs` rebuilds in 3.2 s.
 
 Checkpoint 1 changes nothing here as expected. Moving `build.rs` into
 `knot-bundled` alone made a Vim edit 5.4–5.7 s, because the library still
@@ -295,7 +297,28 @@ dependency tree, and its tests are plain tests. Durable consequences:
 - Model test helpers are gated `cfg(any(test, feature = "test-support"))`.
 - `editor/text.rs` waits for D162 with `editor/wrap.rs`; it takes `BufferModel`.
 
-### 6. Workbench layout over identities
+### 6. Workbench layout over identities 🔍
+
+✅ Implemented; the review gate is pending. `crates/knot-model/src/workbench/`
+holds the layout model, and `src/app/workbench.rs` the application entity.
+Scope decisions:
+
+- The view map lives in the application `Workbench` entity, which pairs the
+  model with the view behind each presentation, rather than in `ProductShell`:
+  sessions replace, register, and transfer workbenches as units. Transitions
+  that open tabs or end presentations are its methods; layout-only
+  transitions reach the model through `DerefMut`.
+- Tabs carry a model-allocated `PresentationId` in place of the view's
+  `EntityId`, so captured targets keep rejecting a replaced presentation and
+  plain tests can check it. Document tabs get a fresh one when opened,
+  replaced, or transferred to another window; tool tabs present their tool's.
+  Extension-visible presentation strings are these IDs.
+- `ToolFrameId` is model-allocated; registering a tool whose view is already
+  registered returns the existing tool, as before.
+- The tool-layout record types, `PlanNode`, `Rect`, and `DocumentId` moved
+  with the layout; their persistence formats are unchanged.
+
+Original checkpoint:
 
 - Deliverables: the workbench layout model in `knot-model` with tabs holding
   identities; the product session owns view entities and focus handles and
@@ -314,7 +337,7 @@ dependency tree, and its tests are plain tests. Durable consequences:
   (`WorkbenchTabSnapshot`, `window_layout.rs`, `tool_layout.rs`) already
   carry identities and should not change format.
 - Review gate: a personal-config `post-init.js` with `try.*` commands that
-  split, move, pin, close, and dock tabs; everything behaves as before.
+  split, move, pin, close, and dock tabs; everything behaves as before. ⏳
 
 ### 7. Documentation
 
