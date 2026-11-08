@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 3 awaiting review. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 4 next. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -249,54 +249,22 @@ same files. `projects.rs` and `project_sessions.rs` import only
 
 ### 3. Extension group crates and the knot-app binary
 
-✅ Implemented; awaiting review. Notes for later checkpoints:
+✅ Complete and approved. `knot-ext-{languages,vim,workbench}` compile their
+packages and hold their tests as integration tests; `knot-app` owns the binary;
+the `knot` library has no edge to compiled packages. Durable consequences:
 
-- `BundledSource` is `Copy`; `knot-app` exposes `packages()`, the three
-  groups joined, for `main` and its test.
-- `knot-ext-vim`'s tests also load `knot-ext-languages`: Vim's indentation,
-  contexts, and `o`/`O` cases depend on language configuration.
+- `BundledSource` is `Copy`; `knot-app` exposes `packages()`, the three groups
+  joined, for `main` and its test.
+- `knot-ext-vim`'s tests also load `knot-ext-languages`, because Vim's
+  indentation and key-context cases need language configuration
+  ([D163](../roadmap.md) removes this).
 - The group crates' `build.rs` files run in parallel, so the helper's
   `npm ci` holds a file lock (`scripts/extensions/.npm-ci.lock`).
 - The root package lists every workspace crate in `default-members`, so a plain
-  `cargo test` still covers all of them and `cargo run -p knot-app` runs the app.
-- Moving the tests outside the library exposed a `cfg(test)` gate on the
-  session-ID registry that now follows `test-support`.
-
-- Deliverables: `knot-ext-{languages,vim,workbench}` with their packages and
-  tests; `crates/knot-app` owning `main.rs` and the `knot` binary; the root
-  `knot` package is library-only, with no normal or dev edge to compiled
-  packages; `knot-bundled` reduced to `BundledSource` and the build helper.
-- Validation:
-  - `just test` passes with the same test count.
-  - `scripts/check-bundled-incremental.sh` also asserts that after a Vim
-    `main.ts` edit, `cargo test --no-run` rebuilds `knot-ext-vim` alone (the
-    `knot` library and its test binary stay Fresh), and that a
-    `tsconfig.base.json` change rebuilds every group crate.
-  - `just run` starts the app with every package.
-- **Implementation context:**
-  - Move the compile and fingerprint logic of `crates/knot-bundled/build.rs`
-    into a `pub mod build` of `knot-bundled`, taking package names; each
-    group crate lists it as a build-dependency, calls it from its `build.rs`,
-    and includes the generated table as `knot-bundled/src/lib.rs` does now.
-  - Root `Cargo.toml`: drop `[[bin]]`; keep `knot-bundled` only for the type;
-    add workspace `default-members` so `cargo run` at the root runs
-    `knot-app`; `justfile`'s `run` recipe follows.
-  - `crates/knot-app/src/main.rs` joins the groups' `PACKAGES` and calls
-    `knot::run`.
-  - Move tests into each crate's `tests/`, dev-depending on `knot` and gpui
-    with `test-support`: `src/app/product/tests/vim.rs` → `knot-ext-vim`;
-    `language_{editing,indents,brackets,folds}.rs` and
-    `extensions/host/highlight_tests.rs::bundled_languages_highlight_their_fixtures`
-    → `knot-ext-languages`; `go_to_line.rs`, `status_bar_package.rs`,
-    `projects.rs`, and `project_sessions.rs` → `knot-ext-workbench`;
-    `host.rs::bundled_packages_load_with_product_discovery` and
-    `measure_bundled_package_memory` → `knot-app`, the only crate that sees
-    every package.
-  - `scripts/check-extensions.sh`, the TypeScript package test runner, and
-    the `extensions/@knot` layout are unchanged.
-- Review gate: the [timings](#timings) row for this checkpoint shows a Vim
-  edit followed by `cargo test`, and by `cargo nextest run -p knot-ext-vim`,
-  costing one small crate build and link.
+  `cargo test` covers all of them and `cargo run -p knot-app` runs the app.
+- `scripts/check-bundled-incremental.sh` asserts that a Vim edit leaves the
+  library and the other groups fresh, and that a shared input rebuilds every group.
+- Timings are in [Timings](#timings).
 
 ### 4. Knot-owned keys, colors, and strings
 
