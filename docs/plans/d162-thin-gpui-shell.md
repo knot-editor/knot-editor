@@ -134,9 +134,12 @@ and command-history ranking are plain `knot-model` code
 - The settings, language, and theme globals wrap their registries. The theme
   registry's `select` returns the theme to install; the shell reads the
   settings and system appearance.
-- The state database (`record_store.rs`) and tool-layout store keep their
-  SQLite I/O in the shell, since both run on gpui's executors; command
-  history persists its plain `RecentCommands` through a record store.
+- The state database and its record stores are plain
+  (`crates/knot-model/src/state_database.rs`): `publish` returns the
+  debounced write and `flush_job` the pending writes, and the shell's
+  `record_store.rs` supplies the executor that waits out the debounce and
+  runs them. Command history persists its plain `RecentCommands` through a
+  record store; the tool-layout store is unchanged.
 - Extension handlers wrap moved types that need `HostArguments`
   (`SettingDefinitionArguments`, `ThemeDefinitionArguments`,
   `LanguageArguments`, `LanguageAssociationArguments`), as the orphan rule
@@ -145,9 +148,11 @@ and command-history ranking are plain `knot-model` code
   table stay in the shell. They are entity work, and checkpoint 4 or 5 can
   revisit them if a model function needs them.
 
-Validation limitation: the full suite fails intermittently (different
-product tests, about one run in three) on the checkpoint 2 commit as well as
-after this work; they pass alone.
+Validation limitation: the vim fixture in `terminal/session_tests.rs`
+fails in roughly one full run in thirty (vim never draws). It predates this
+checkpoint, and the terminal is out of scope. Four other flaky product tests
+were races between a test's keys or commands and the extension package's
+worker thread; they now wait for the package to settle.
 
 Review gate: each global is a thin wrapper over its store.
 
