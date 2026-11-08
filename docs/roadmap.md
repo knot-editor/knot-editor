@@ -140,9 +140,9 @@ complete list for that item.
     had trailing whitespace, and needs a notion of modified lines that Knot
     lacks.
   - Reconsider: A VCS or diff layer exists, such as a change gutter or
-    diff view. Then make `files.trimTrailingWhitespace` accept `false`,
-    `true`, or `"modified"` and trim only the lines that differ from the
-    baseline.
+    diff view. Then add `"modified"` to the values of
+    `files.trimTrailingWhitespace` (`"off"`, `"all"`) and trim only the lines
+    that differ from the baseline.
   - Order: after D079 and the diff layer.
 
 - **D149 — Line ending facts and conversion**

@@ -13,9 +13,10 @@ A palette command trims on demand without saving.
 
 ## Design
 
-- **Settings.** `files.trimTrailingWhitespace` and `files.insertFinalNewline`,
-  both boolean and `true` by default, defined natively beside the `editor.*`
-  keys and read with the document's settings context, so a language or one
+- **Settings.** `files.trimTrailingWhitespace`, a string of `"off"` or `"all"`
+  (default `"all"`; other text means `"all"`, as `editor.lineNumbers` does),
+  and `files.insertFinalNewline`, a boolean defaulting to `true`. They are
+  defined natively beside the `editor.*` keys and read with the document's settings context, so a language or one
   document can opt out (Markdown, say). They join a "Files" table in
   [settings.md](../settings.md).
 - **Where it runs.** Save and Save As reach `start_save_to_uri`; the cleanup
@@ -27,9 +28,9 @@ A palette command trims on demand without saving.
   `commit_line_edits` in `src/app/editor/indentation.rs`). Cleanup that
   changes text makes the document dirty until the save completes; edits that
   race the I/O still leave it dirty, as today.
-- **Trim.** Whole file, every line, never "modified lines only": Knot has no
-  VCS layer to define them, and a language or document that must keep its
-  whitespace turns the setting off. Spaces and tabs go; the `\r` of a CRLF
+- **Trim.** `"all"` trims every line; Knot has no VCS layer to define modified
+  lines yet, and the string setting leaves room for a `"modified"` value
+  (D159). A language or document that must keep its whitespace sets `"off"`. Spaces and tabs go; the `\r` of a CRLF
   terminator stays. As in IntelliJ and VS Code with typing in progress, the
   line of each cursor is skipped on save, so saving mid-line never eats the
   indentation just typed.
@@ -47,7 +48,7 @@ A palette command trims on demand without saving.
 - No formatter hook. [D115](../roadmap.md) adds awaited before-save hooks and
   format on save follows with D067; the cleanup is one function called before
   capture so the hooks can run first.
-- No modified-lines mode; it is tracked in the roadmap as D159 and waits for
+- No `"modified"` value; it is tracked in the roadmap as D159 and waits for
   a VCS or diff layer.
 - No collapsing of trailing blank lines, and no line-ending conversion (D149).
 
@@ -58,8 +59,9 @@ A palette command trims on demand without saving.
 Deliver the two settings with their resolver functions, the edit computation,
 and the manual command.
 
-- Add `FILES_TRIM_TRAILING_WHITESPACE` and `FILES_INSERT_FINAL_NEWLINE`
-  definitions and `files_*(context, cx)` resolvers in `src/app/settings.rs`,
+- Add `FILES_TRIM_TRAILING_WHITESPACE` (string) and
+  `FILES_INSERT_FINAL_NEWLINE` (boolean) definitions and `files_*(context, cx)`
+  resolvers in `src/app/settings.rs`,
   beside `editor_soft_wrap`; extend `src/app/settings/tests.rs`.
 - Add a `src/app/editor/` method (new `save_hygiene.rs` next to
   `indentation.rs`) that computes the trim and final-newline edits from the
@@ -81,7 +83,7 @@ restores the text and the cursor (`try.*` command in the personal config).
   resolve the two settings for the document and call the editor method on the
   target's editor view when the model is editable.
 - Product tests in `src/app/product/tests/`: save writes the cleaned text;
-  Undo restores it and marks the document dirty; a per-language and a
+  Undo restores it and marks the document dirty; a per-language `"off"` and a
   per-document opt-out leave the text alone; Save As cleans too; a read-only
   document saves unchanged.
 - Docs: the Saving section of
