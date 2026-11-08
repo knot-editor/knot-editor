@@ -250,7 +250,8 @@ pub(super) fn restart_registry(
     cx: &mut TestAppContext,
 ) {
     host.update(cx, |host, cx| {
-        host.start_product_extensions(extensions.path().to_path_buf(), cx)
+        host.set_bundled_packages(knot_bundled::PACKAGES);
+        host.start_installed_extensions(extensions.path().to_path_buf(), cx)
     });
     let report = wait_for_extension_report(host, cx);
     assert!(report.report.entries.iter().any(|entry| {

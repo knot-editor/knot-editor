@@ -174,10 +174,9 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     });
     assert_eq!(painted_tab(rust, cx), 8);
     assert_eq!(painted_tab(cx.new(|_| BufferModel::from_text("")), cx), 3);
-    // The package's observer, and the bundled Vim package's of vim.enabled.
     assert_eq!(
         cx.read(crate::app::extensions::host::setting_observer_count),
-        2
+        1
     );
 
     // Restart keeps every value: the fresh lifecycle defines its keys again
@@ -209,12 +208,20 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     // Teardown removed the old lifecycle's observer; the new one replaced it.
     assert_eq!(
         cx.read(crate::app::extensions::host::setting_observer_count),
-        2
+        1
     );
 }
 
 const ASSOCIATIONS: &str = r#"
 import { commands, languages } from "knot";
+await languages.register({
+  id: "rust", name: "Rust", grammar: "rust", fileExtensions: ["rs"],
+  queries: { highlights: "(identifier) @variable" },
+});
+await languages.register({
+  id: "python", name: "Python", grammar: "python", fileExtensions: ["py"],
+  queries: { highlights: "(identifier) @variable" },
+});
 let association = null;
 await commands.register("assoc.remap", async () => {
   try {
@@ -266,7 +273,7 @@ fn personal_config_associates_an_extension_and_open_documents_redetect(cx: &mut 
     };
     assert_eq!(language(cx), "rust");
 
-    // The bundled package's registration of "rs" comes back on disposal.
+    // The language's own registration of "rs" comes back on disposal.
     for (command, expected) in [("assoc.remap", "python"), ("assoc.dispose", "rust")] {
         let execution = dispatch_product_command(&shell, window, command, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);

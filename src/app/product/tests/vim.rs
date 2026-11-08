@@ -165,7 +165,7 @@ fn start_over(session: &Session, cx: &mut TestAppContext) {
 
 /// Run the cases of the topic file `topic`.
 fn run_topic(topic: &str, cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let mut failures = Failures::default();
     let mut count = 0;
     // One session shows every case in turn.
@@ -249,7 +249,7 @@ topics!(
 
 #[gpui::test]
 fn the_mode_shows_in_the_status_bar_and_the_caret(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one two", 0, cx);
     let shows = |side: &[String], text: &str| side.iter().any(|item| item == text);
     assert_eq!(session.caret_shape(cx), CaretShape::Block);
@@ -275,7 +275,7 @@ fn the_mode_shows_in_the_status_bar_and_the_caret(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn j_moves_by_buffer_line_and_gj_by_row_under_soft_wrap(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let long = "word ".repeat(400);
     let session = open(&format!("{long}\nnext"), 0, cx);
     let uuid = cx.read(|cx| {
@@ -301,7 +301,7 @@ fn j_moves_by_buffer_line_and_gj_by_row_under_soft_wrap(cx: &mut TestAppContext)
 
 #[gpui::test]
 fn screen_motions_and_scrolls_count_rows_under_soft_wrap(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let long = "word ".repeat(60);
     let lines = [
         "alpha", &long, &long, "beta", &long, "gamma", &long, "delta", "end",
@@ -379,7 +379,7 @@ fn screen_motions_and_scrolls_count_rows_under_soft_wrap(cx: &mut TestAppContext
 
 #[gpui::test]
 fn scrolls_move_through_the_rows_of_one_wrapped_line(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let long = "word ".repeat(400);
     let session = open(&format!("{long}\nend"), 0, cx);
     let uuid = cx.read(|cx| {
@@ -433,6 +433,7 @@ fn scrolls_move_through_the_rows_of_one_wrapped_line(cx: &mut TestAppContext) {
 #[gpui::test]
 fn vim_follows_the_setting_and_a_language_scoped_value(cx: &mut TestAppContext) {
     start_bundled_packages_with_post_init(
+        knot_bundled::PACKAGES,
         Some(
             r#"import { settings } from "knot";
 await settings.set("vim.enabled", true);
@@ -487,7 +488,7 @@ fn restart_vim(session: &Session, cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn registers_persist_across_a_package_restart(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one\ntwo", 0, cx);
     session.press("\"ayy\"byw", cx);
 
@@ -500,7 +501,7 @@ fn registers_persist_across_a_package_restart(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_clipboard_pastes_linewise_only_while_it_holds_the_yanked_line(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one", 0, cx);
     session.press("yy", cx);
     assert_eq!(
@@ -518,7 +519,7 @@ fn the_clipboard_pastes_linewise_only_while_it_holds_the_yanked_line(cx: &mut Te
 
 #[gpui::test]
 fn a_mouse_drag_enters_visual_mode_and_a_click_leaves_it(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let fixture = Windowed::open("one\ntwo\nthree", cx);
     assert_eq!(fixture.session.mode(cx), "normal", "Vim follows the editor");
     let session = &fixture.session;
@@ -569,7 +570,7 @@ fn a_mouse_drag_enters_visual_mode_and_a_click_leaves_it(cx: &mut TestAppContext
 
 #[gpui::test]
 fn a_global_mark_jumps_to_another_open_document(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one\ntwo", 0, cx);
     session.press("jmA", cx);
     session.shell.update(cx, |shell, cx| shell.new_tab(cx));
@@ -597,7 +598,7 @@ fn a_global_mark_jumps_to_another_open_document(cx: &mut TestAppContext) {
 /// bar package's position. Unchanged status items send nothing.
 #[gpui::test]
 fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let fixture = Windowed::open("one two three\nfour five six\n", cx);
     assert_eq!(fixture.session.mode(cx), "normal", "Vim follows the editor");
     // The first key also pays for following the editor.
@@ -626,7 +627,7 @@ fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
 /// register record a restart would read back.
 #[gpui::test]
 fn a_case_starts_without_what_an_earlier_one_left(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let mut session = open("one\ntwo", 0, cx);
     session.press("\"ayyyyfe", cx);
     session.load("xey", None, (2, 2), cx);
@@ -693,7 +694,7 @@ fn served(provider: &MemoryFileSystemProvider, uri: &str) -> String {
 
 #[gpui::test]
 fn ex_writes_and_opens_files_beside_the_document(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let provider = serve_files(cx);
     let session = open_file(&provider, "mem://product/dir/a.txt", cx);
     session.press("x:w<cr>", cx);
@@ -715,7 +716,7 @@ fn ex_writes_and_opens_files_beside_the_document(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn ex_edit_from_an_untitled_document_opens_in_the_first_root(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     serve_files(cx);
     let session = open("", 0, cx);
     session.shell.update(cx, |shell, cx| {
@@ -727,7 +728,7 @@ fn ex_edit_from_an_untitled_document_opens_in_the_first_root(cx: &mut TestAppCon
 
 #[gpui::test]
 fn ex_quit_asks_before_losing_changes_and_quit_bang_does_not(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let fixture = Windowed::open("one", cx);
     assert_eq!(fixture.session.mode(cx), "normal", "Vim follows the editor");
     let document = fixture.session.document;
@@ -763,7 +764,7 @@ fn ex_quit_asks_before_losing_changes_and_quit_bang_does_not(cx: &mut TestAppCon
 #[gpui::test]
 fn ex_set_writes_document_scoped_settings(cx: &mut TestAppContext) {
     use crate::app::settings::{LineNumbers, SettingsScope};
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one", 0, cx);
     let scope = SettingsScope {
         language: None,
@@ -835,7 +836,7 @@ fn focused_pane(session: &Session, cx: &mut TestAppContext) -> crate::app::workb
 /// second key, and Vim follows the editor each leaves focused.
 #[gpui::test]
 fn ctrl_w_splits_moves_between_and_closes_panes(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one\ntwo", 0, cx);
     let first = focused_pane(&session, cx);
 
@@ -901,7 +902,7 @@ fn ctrl_w_splits_moves_between_and_closes_panes(cx: &mut TestAppContext) {
 /// or cancels it without acting as its own command.
 #[gpui::test]
 fn a_pending_ctrl_w_does_not_swallow_the_next_keys_meaning(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one\ntwo", 0, cx);
     session.press("<c-w>", cx);
     assert!(cx.read(|cx| session.status(cx).1.iter().any(|text| text == "^W")));
@@ -918,7 +919,7 @@ fn a_pending_ctrl_w_does_not_swallow_the_next_keys_meaning(cx: &mut TestAppConte
 /// edge, and a pane left without tabs goes away.
 #[gpui::test]
 fn ctrl_w_capital_moves_the_tab_between_panes(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one\ntwo", 0, cx);
     session.shell.update(cx, |shell, cx| shell.new_tab(cx));
     session.settle(cx);
@@ -931,7 +932,7 @@ fn ctrl_w_capital_moves_the_tab_between_panes(cx: &mut TestAppContext) {
 /// A count before or after `ctrl-w` repeats resizing by a step.
 #[gpui::test]
 fn ctrl_w_counts_repeat_resizing(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(Some(ENABLE), cx);
+    start_bundled_packages_with_post_init(knot_bundled::PACKAGES, Some(ENABLE), cx);
     let session = open("one\ntwo", 0, cx);
     session.press("<c-w>v", cx);
     let split = focused_pane(&session, cx);

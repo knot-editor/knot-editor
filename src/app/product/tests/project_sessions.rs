@@ -455,7 +455,7 @@ fn startup_suspends_active_sessions_without_a_window(cx: &mut TestAppContext) {
             shell.replace_workspace_roots(Vec::new(), cx);
         });
         fixture.host.update(cx, |host, cx| {
-            host.start_product_extensions(fixture.extensions.path().to_path_buf(), cx)
+            host.start_installed_extensions(fixture.extensions.path().to_path_buf(), cx)
         });
     });
     let _ = wait_for_extension_report(&fixture.host, cx);

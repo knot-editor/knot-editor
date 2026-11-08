@@ -13,7 +13,7 @@ use super::*;
 
 #[gpui::test]
 fn bundled_fold_cases_find_regions_on_their_registered_languages(cx: &mut TestAppContext) {
-    start_bundled_packages(cx);
+    start_bundled_packages(knot_bundled::PACKAGES, cx);
 
     let mut tested = Vec::new();
     let mut failures = Failures::default();

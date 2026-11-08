@@ -8,15 +8,15 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use knot_bundled::PACKAGES;
+use knot_bundled::BundledSource;
 
 use crate::app::extensions::package::{DiscoveryReport, PackageDiagnostic, bundled_package};
 
 /// Admits every compiled-in package as a discovery result. A malformed bundled
 /// manifest is an authoring defect and is reported like an installed one.
-pub(crate) fn report() -> DiscoveryReport {
+pub(crate) fn report(packages: &[BundledSource]) -> DiscoveryReport {
     let mut report = DiscoveryReport::default();
-    for package in PACKAGES {
+    for package in packages {
         let sources = package
             .sources
             .iter()

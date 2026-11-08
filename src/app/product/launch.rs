@@ -389,7 +389,10 @@ fn open_report_after_failed_startup(cx: &mut App) {
     }
 }
 
-pub(crate) fn run(initial_request: Option<OpenRequest>) {
+pub(crate) fn run(
+    initial_request: Option<OpenRequest>,
+    packages: &'static [knot_bundled::BundledSource],
+) {
     let application = Application::new();
     let (open_requests, mut incoming_requests) = tokio::sync::mpsc::unbounded_channel();
     application.on_open_urls(move |urls| {
@@ -451,6 +454,7 @@ pub(crate) fn run(initial_request: Option<OpenRequest>) {
         let commands = cx.new(ProductCommandDispatcher::new);
         cx.set_global(ApplicationProductCommands(commands));
         let extension_host = crate::app::extensions::host::install(cx);
+        extension_host.update(cx, |host, _| host.set_bundled_packages(packages));
         bind_product_keys(cx);
         cx.set_menus(product_menus());
         // Menu key equivalents are read when the menus are set, so set them

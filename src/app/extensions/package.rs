@@ -179,8 +179,8 @@ pub fn discover(root: &Path) -> DiscoveryReport {
 /// directory that claims a bundled identity becomes a directory conflict rather
 /// than rejecting that identity, so a named diagnostic always means its identity
 /// is genuinely unavailable.
-pub fn discover_all(root: &Path) -> DiscoveryReport {
-    let mut report = super::bundled::report();
+pub fn discover_all(root: &Path, bundled: &[knot_bundled::BundledSource]) -> DiscoveryReport {
+    let mut report = super::bundled::report(bundled);
     let bundled = report
         .packages
         .iter()

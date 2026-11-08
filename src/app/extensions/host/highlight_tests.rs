@@ -95,7 +95,7 @@ fn fixtures() -> Vec<PathBuf> {
 
 #[gpui::test]
 fn bundled_languages_highlight_their_fixtures(cx: &mut TestAppContext) {
-    let (_host, _root) = super::tests::start_bundled_packages(cx);
+    let (_host, _root) = super::tests::start_bundled_packages(knot_bundled::PACKAGES, cx);
     let mut failures = Vec::new();
     let mut checked = 0;
     cx.read(|cx| {

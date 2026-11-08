@@ -27,7 +27,7 @@ fn mark_brackets(text: &str, brackets: Option<[std::ops::Range<usize>; 2]>) -> S
 
 #[gpui::test]
 fn bundled_bracket_cases_run_on_their_registered_languages(cx: &mut TestAppContext) {
-    start_bundled_packages(cx);
+    start_bundled_packages(knot_bundled::PACKAGES, cx);
 
     let mut tested = Vec::new();
     let mut failures = Failures::default();

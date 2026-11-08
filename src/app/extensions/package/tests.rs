@@ -349,21 +349,30 @@ fn permits_file_symlinks_within_package_and_rejects_scope_symlinks() {
     );
 }
 
+/// A compiled-in package as `knot-bundled` supplies one.
+const BUNDLED: &[knot_bundled::BundledSource] = &[knot_bundled::BundledSource {
+    manifest: r#"{"name":"@knot/fixture","apiVersion":1,"version":"0.1.0","main":"dist/main.js"}"#,
+    sources: &[
+        ("dist/main.js", "import './other.js';"),
+        ("dist/other.js", "export {};"),
+    ],
+}];
+
 #[test]
 fn bundled_packages_merge_with_installed_discovery() {
     let temp = tempfile::tempdir().unwrap();
     package(temp.path(), "@example/tools", VALID);
-    let report = discover_all(temp.path());
+    let report = discover_all(temp.path(), BUNDLED);
     assert!(report.diagnostics.is_empty(), "{:?}", report.diagnostics);
     let bundled = report
         .packages
         .iter()
         .find(|package| {
-            package.origin == PackageOrigin::Bundled && package.manifest.name == "@knot/projects"
+            package.origin == PackageOrigin::Bundled && package.manifest.name == "@knot/fixture"
         })
         .expect("bundled package is discovered");
     assert!(bundled.sources.contains_key("dist/main.js"));
-    assert!(bundled.sources.contains_key("dist/switch.js"));
+    assert!(bundled.sources.contains_key("dist/other.js"));
     assert!(
         bundled
             .sources
@@ -372,7 +381,7 @@ fn bundled_packages_merge_with_installed_discovery() {
     );
     assert_eq!(
         bundled.module_root().unwrap(),
-        "file:///knot/bundled/%40knot/projects/"
+        "file:///knot/bundled/%40knot/fixture/"
     );
     assert!(report.packages.iter().any(|package| {
         package.origin == PackageOrigin::Installed && package.manifest.name == "@example/tools"
@@ -384,21 +393,21 @@ fn installed_packages_cannot_claim_the_bundled_identity() {
     let temp = tempfile::tempdir().unwrap();
     package(
         temp.path(),
-        "@knot/projects",
-        r#"{"name":"@knot/projects","apiVersion":1,"version":"1.0.0","main":"dist/main.js"}"#,
+        "@knot/fixture",
+        r#"{"name":"@knot/fixture","apiVersion":1,"version":"1.0.0","main":"dist/main.js"}"#,
     );
-    let report = discover_all(temp.path());
+    let report = discover_all(temp.path(), BUNDLED);
     let claimed = report
         .packages
         .iter()
-        .filter(|package| package.manifest.name == "@knot/projects")
+        .filter(|package| package.manifest.name == "@knot/fixture")
         .collect::<Vec<_>>();
     assert_eq!(claimed.len(), 1);
     assert_eq!(claimed[0].origin, PackageOrigin::Bundled);
     let conflict = report
         .diagnostics
         .iter()
-        .find(|diagnostic| diagnostic.cause.contains("@knot/projects"))
+        .find(|diagnostic| diagnostic.cause.contains("@knot/fixture"))
         .expect("the rejected directory is reported");
     assert_eq!(conflict.name, None);
     assert!(conflict.cause.contains("reserved"));

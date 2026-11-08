@@ -29,6 +29,7 @@ const SETTLE_TIMEOUT: Duration = Duration::from_secs(10);
 /// is `post_init`, when given, with no installed packages, and require that
 /// each one loaded.
 pub(super) fn start_bundled_packages_with_post_init(
+    packages: &'static [knot_bundled::BundledSource],
     post_init: Option<&str>,
     cx: &mut TestAppContext,
 ) {
@@ -43,6 +44,7 @@ pub(super) fn start_bundled_packages_with_post_init(
     install_launch_gate(cx);
     let host = cx.update(crate::app::extensions::host::install);
     host.update(cx, |host, cx| {
+        host.set_bundled_packages(packages);
         host.start_product_startup(
             Ok(config.path().to_path_buf()),
             Ok(extensions.path().to_path_buf()),
@@ -70,8 +72,11 @@ pub(super) fn start_bundled_packages_with_post_init(
 }
 
 /// Start the bundled packages with an empty personal config.
-pub(super) fn start_bundled_packages(cx: &mut TestAppContext) {
-    start_bundled_packages_with_post_init(None, cx);
+pub(super) fn start_bundled_packages(
+    packages: &'static [knot_bundled::BundledSource],
+    cx: &mut TestAppContext,
+) {
+    start_bundled_packages_with_post_init(packages, None, cx);
 }
 
 /// Run until `shell` holds no keys and the extension pool is quiet: no

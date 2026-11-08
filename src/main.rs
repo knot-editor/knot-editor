@@ -1,5 +1,5 @@
 //! Knot editor.
 
 fn main() {
-    knot::run();
+    knot::run(knot_bundled::PACKAGES);
 }

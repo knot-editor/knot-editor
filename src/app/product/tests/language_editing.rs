@@ -45,7 +45,7 @@ fn toggle_block(configuration: &EditingConfiguration, text: &str) -> String {
 
 #[gpui::test]
 fn bundled_comment_cases_toggle_on_their_registered_languages(cx: &mut TestAppContext) {
-    start_bundled_packages(cx);
+    start_bundled_packages(knot_bundled::PACKAGES, cx);
 
     let mut tested = Vec::new();
     let mut failures = Failures::default();

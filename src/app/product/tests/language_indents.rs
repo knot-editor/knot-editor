@@ -33,7 +33,7 @@ pub(super) struct TypeCase {
 
 #[gpui::test]
 fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppContext) {
-    start_bundled_packages(cx);
+    start_bundled_packages(knot_bundled::PACKAGES, cx);
 
     let mut tested = Vec::new();
     let mut failures = Failures::default();

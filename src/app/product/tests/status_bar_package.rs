@@ -17,7 +17,7 @@ fn right_texts(window: gpui::AnyWindowHandle, cx: &gpui::App) -> Vec<String> {
 
 #[gpui::test]
 fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut TestAppContext) {
-    start_bundled_packages(cx);
+    start_bundled_packages(knot_bundled::PACKAGES, cx);
     let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
     let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree é\n"));
     let document = documents.update(cx, |documents, cx| {

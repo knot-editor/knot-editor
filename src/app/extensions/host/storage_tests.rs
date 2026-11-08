@@ -51,7 +51,7 @@ fn write_package(root: &Path, name: &str, source: &str) {
 
 fn startup(host: &Entity<ProductExtensionHost>, root: &Path, cx: &mut TestAppContext) {
     let completed = host.update(cx, |host, cx| {
-        host.start_installed_extensions_with_completion(root.to_owned(), false, cx)
+        host.start_installed_extensions_with_completion(root.to_owned(), cx)
             .unwrap()
     });
     finish(completed, cx).unwrap();
@@ -195,7 +195,7 @@ fn storage_json_validation_and_failed_writes_cross_the_product_host(cx: &mut Tes
     let host = host(&data, cx);
     host.update(cx, |host, _| host.hold_clipboard_writes = true);
     let completed = host.update(cx, |host, cx| {
-        host.start_installed_extensions_with_completion(packages, false, cx)
+        host.start_installed_extensions_with_completion(packages, cx)
             .unwrap()
     });
     let deadline = Instant::now() + Duration::from_secs(5);

@@ -563,6 +563,8 @@ struct SelectionWatch {
 /// Owns the one process-wide extension pool and all foreground protocol state.
 pub(crate) struct ProductExtensionHost {
     pool: Arc<ExtensionPool>,
+    /// The compiled-in packages product discovery admits beside installed ones.
+    bundled: &'static [knot_bundled::BundledSource],
     lifecycles: HashSet<ExtensionKey>,
     storage: Result<crate::app::extensions::storage::ExtensionStorage, String>,
     storage_owners: HashMap<ExtensionKey, crate::app::extensions::storage::StorageOwner>,
@@ -649,6 +651,7 @@ impl ProductExtensionHost {
         });
         Self {
             pool,
+            bundled: &[],
             lifecycles: HashSet::new(),
             owned_editors: HashMap::new(),
             editor_handles: HashMap::new(),
@@ -737,20 +740,21 @@ impl ProductExtensionHost {
         ));
     }
 
-    #[cfg(test)]
-    pub(crate) fn start_installed_extensions(&mut self, root: PathBuf, cx: &mut Context<Self>) {
-        let _ = self.start_installed_extensions_with_completion(root, false, cx);
+    pub(crate) fn set_bundled_packages(
+        &mut self,
+        packages: &'static [knot_bundled::BundledSource],
+    ) {
+        self.bundled = packages;
     }
 
     #[cfg(test)]
-    pub(crate) fn start_product_extensions(&mut self, root: PathBuf, cx: &mut Context<Self>) {
-        let _ = self.start_installed_extensions_with_completion(root, true, cx);
+    pub(crate) fn start_installed_extensions(&mut self, root: PathBuf, cx: &mut Context<Self>) {
+        let _ = self.start_installed_extensions_with_completion(root, cx);
     }
 
     fn start_installed_extensions_with_completion(
         &mut self,
         root: PathBuf,
-        include_bundled: bool,
         cx: &mut Context<Self>,
     ) -> Option<tokio::sync::oneshot::Receiver<()>> {
         if self
@@ -778,13 +782,10 @@ impl ProductExtensionHost {
             report: LoadReport::default(),
         });
         cx.notify();
-        let discovery = cx.background_executor().spawn(async move {
-            if include_bundled {
-                crate::app::extensions::package::discover_all(&root)
-            } else {
-                crate::app::extensions::package::discover(&root)
-            }
-        });
+        let bundled = self.bundled;
+        let discovery = cx
+            .background_executor()
+            .spawn(async move { crate::app::extensions::package::discover_all(&root, bundled) });
         let pool = self.pool.clone();
         let next_extension_id = self.next_extension_id.clone();
         self._startup_task = Some(cx.spawn(async move |this, cx| {
@@ -895,9 +896,10 @@ impl ProductExtensionHost {
             let _ = self.pool.unload(key);
             self.remove_lifecycle(key, cx);
         }
+        let bundled = self.bundled;
         let discovery = cx
             .background_executor()
-            .spawn(async move { crate::app::extensions::package::discover_all(&root) });
+            .spawn(async move { crate::app::extensions::package::discover_all(&root, bundled) });
         let pool = self.pool.clone();
         let next_extension_id = self.next_extension_id.clone();
         cx.spawn(async move |this, cx| {
@@ -1076,7 +1078,7 @@ impl ProductExtensionHost {
                     Ok(root) => {
                         let done = this
                             .update(cx, |host, cx| {
-                                host.start_installed_extensions_with_completion(root, true, cx)
+                                host.start_installed_extensions_with_completion(root, cx)
                             })
                             .map_err(|error| {
                                 ConfigDiagnostic::new(None, &config_root, error.to_string())
@@ -2891,7 +2893,7 @@ mod tests {
 
     #[gpui::test]
     fn bundled_packages_load_with_product_discovery(cx: &mut TestAppContext) {
-        let (host, _root) = start_bundled_packages(cx);
+        let (host, _root) = start_bundled_packages(knot_bundled::PACKAGES, cx);
         cx.read(|cx| {
             let report = host.read(cx).startup_report.as_ref().unwrap();
             for name in [
@@ -2955,7 +2957,7 @@ mod tests {
     #[gpui::test]
     #[ignore = "measurement: run in release with --ignored --nocapture"]
     fn measure_bundled_package_memory(cx: &mut TestAppContext) {
-        let (host, _root) = start_bundled_packages(cx);
+        let (host, _root) = start_bundled_packages(knot_bundled::PACKAGES, cx);
         // Wait until every package is between turns.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while host
@@ -2974,6 +2976,7 @@ mod tests {
     /// packages, and waits for startup to finish. The returned directory holds
     /// their storage.
     pub(super) fn start_bundled_packages(
+        packages: &'static [knot_bundled::BundledSource],
         cx: &mut TestAppContext,
     ) -> (Entity<ProductExtensionHost>, tempfile::TempDir) {
         use std::time::{Duration, Instant};
@@ -2985,17 +2988,14 @@ mod tests {
             crate::app::commands::keymaps::install(cx);
             let host = install(cx);
             host.update(cx, |host, cx| {
+                host.set_bundled_packages(packages);
                 host.set_test_storage_root(root.path().join("storage"), cx)
             });
             host
         });
         let completed = host.update(cx, |host, cx| {
-            host.start_installed_extensions_with_completion(
-                root.path().join("extensions"),
-                true,
-                cx,
-            )
-            .unwrap()
+            host.start_installed_extensions_with_completion(root.path().join("extensions"), cx)
+                .unwrap()
         });
         let (sender, receiver) = std::sync::mpsc::channel();
         cx.spawn(async move |_| {
