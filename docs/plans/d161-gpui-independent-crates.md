@@ -200,7 +200,8 @@ Starts from `knot-bundled` as committed: it owns `build.rs` with per-package
     the package directories become a parameter instead of
     `CARGO_MANIFEST_DIR`), the helpers they use from
     `src/app/product/tests.rs` (`product_window`, `dispatch_product_command`,
-    `wait_for_command`) and `operations.rs` (`empty_product_window`), `host.rs`'s test `start_bundled_packages`, and the
+    `wait_for_command`) and `operations.rs` (`empty_product_window`),
+    `host.rs`'s test `start_bundled_packages`, and the
     roughly 20 `crate::app` items they reach (`extensions::host::{install,
     pool, startup_report}`, `work_counts`, `languages::set_language`,
     `editor::EditorView`, `status_bar`, `EDITOR_KEY_CONTEXT`, …). Mirror the
