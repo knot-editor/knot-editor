@@ -27,6 +27,7 @@ pub mod languages;
 pub mod open;
 pub mod resource;
 pub mod settings;
+pub mod state_database;
 pub mod style;
 pub mod syntax;
 pub mod theme;

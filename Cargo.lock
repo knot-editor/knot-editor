@@ -3852,6 +3852,7 @@ dependencies = [
  "knot-protocol",
  "percent-encoding",
  "pollster 1.0.1",
+ "rusqlite",
  "semver",
  "serde",
  "serde_json",
