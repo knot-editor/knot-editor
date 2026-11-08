@@ -103,40 +103,53 @@ setting, or replace a single icon.
 
 ## Checkpoints
 
-### 1. Native icon registry and the trees
+### 1. Native icon registry and painting
 
 - Deliverables: an application icon registry with the four-level lookup,
   the native default table (`file`, `folder`, `folder.open`, `symbol`,
   `tree.collapsed`, `tree.expanded`, and the fallback) over Lucide, an icon
   element that paints tinted and full-color definitions at the surface's text
-  size and zoom, the content-keyed asset source, and the `icons.pack` setting
-  read on change. The workspace tree and extension tree rows paint icons;
-  `TreeIcon` becomes a validated icon name in the protocol and `knot.d.ts`
-  (`"file" | "folder" | "symbol"` remain valid names). The resolver covers
-  only language and generic candidates here.
+  size and zoom, the content-keyed asset source, the `icons.pack` setting
+  read on change, and a file resolver covering only language and generic
+  candidates. No surface uses icons yet.
 - Validation: unit tests for lookup precedence (override over pack over
   default over fallback, disposal revealing the previous level), for the
-  invalidation of content keys, and for resolver candidates; tree view tests
-  that rows carry the resolved icon name; a test that every native default
-  names an existing Lucide glyph.
+  invalidation of content keys, and for resolver candidates; a gpui test
+  window that paints a tinted and a full-color icon through the asset
+  source; a test that every native default names an existing Lucide glyph.
 - **Implementation context:** add `src/app/icons.rs`, declared in
   `src/app/mod.rs` and exposed as an `ApplicationIcons` global. Mirror the
   registration, owner, and lifecycle structure of `ThemeRegistry` in
   `src/app/themes.rs`, and the native defaults table of
   `native_color_definitions` in `src/app/theme.rs`. Register the asset source
   with `Application::new().with_assets(..)` in `src/app/product/launch.rs`
-  (around line 393). Replace `TreeView::icon` and `disclosure` in
-  `src/app/tree_view.rs` (around line 668), the same pair in
-  `src/app/workspace_tree.rs` (around line 429), and `TreeIcon` in
-  `src/host/protocol.rs:332` with its marshalling. Detection uses
+  (around line 393), and in the test application setup. Detection uses
   `LanguageRegistry::detect(file_name, "")` in `src/app/languages.rs:295`.
   Add the setting beside `THEME_*` in `src/app/settings.rs` and observe it
   like `themes::apply`. Add an `icon` color key, the default icon tint, to the
   native color table.
+- Review gate: the registry shape and the element's sizing API, before
+  any surface depends on them.
+
+### 2. Icons in the workspace and extension trees
+
+- Deliverables: workspace tree rows paint resolved file and folder icons
+  and icon disclosure triangles; extension tree rows paint their named icon.
+  `TreeIcon` becomes a validated icon name in the protocol and `knot.d.ts`
+  (`"file" | "folder" | "symbol"` remain valid names).
+- Validation: tree view and workspace tree tests that rows carry the
+  resolved icon name, including the `.open` variant for expanded folders and
+  the fallback for an unknown name; existing tree keyboard and pointer tests
+  pass unchanged.
+- **Implementation context:** replace `TreeView::icon` and `disclosure` in
+  `src/app/tree_view.rs` (around line 668), the same pair in
+  `src/app/workspace_tree.rs` (around line 429), and `TreeIcon` in
+  `src/host/protocol.rs:332` with its marshalling in
+  `src/host/engine/marshal.rs` and `src/app/extensions/semantics.rs`.
 - Review gate: icons look right at every zoom level in both bundled theme
   appearances, and the tree rows align as before.
 
-### 2. Extension API and pack selection
+### 3. Extension API and pack selection
 
 - Deliverables: `icons.define`, `icons.override`, `icons.registerPack`, and
   `icons.listPacks` in `knot.d.ts`, `knot.js`, and `bootstrap.js`, with SVG
@@ -161,7 +174,7 @@ setting, or replace a single icon.
 - Review gate: a personal-config `post-init.js` with `try.*` commands that
   register a full-color pack, select it, and override one icon.
 
-### 3. File associations, language icons, and tabs
+### 4. File associations, language icons, and tabs
 
 - Deliverables: `icons.associate` and the full resolver (file-name and
   extension associations, language, generic; named folders and `.open`
@@ -182,7 +195,7 @@ setting, or replace a single icon.
 - Review gate: the explorer and tabs in a real Rust/TypeScript project
   look like a familiar colored file tree.
 
-### 4. Action and status bar icons
+### 5. Action and status bar icons
 
 - Deliverables: an optional `icon` on `TreeAction` (row and frame toolbar)
   and on `StatusItemOptions`; icon buttons with label tooltips; status items
@@ -201,7 +214,7 @@ setting, or replace a single icon.
 - Review gate: icon-only toolbars stay discoverable through their tooltips
   and keyboard focus.
 
-### 5. Documentation
+### 6. Documentation
 
 - Deliverables: an icons section in
   `docs/architecture/semantic-ui.md` (lookup levels, resolver, ownership of
