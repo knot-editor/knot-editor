@@ -279,8 +279,8 @@ removes a package's items. The editor a bar describes is `WindowInfo.statusTarge
 ([extension host](extension-host.md#application-metadata-queries)).
 
 The bundled `@knot/status-bar` package registers the built-in items on the right:
-the cursor position with the selection size, the document's indentation, and
-its language. It follows each window's `statusTarget` with an editor handle and
+the cursor position with the selection size, counted in characters up to
+1 MiB and in kilobytes beyond, the document's indentation, and its language. It follows each window's `statusTarget` with an editor handle and
 sets the three items as that window's own values, so two windows show their own
 editors; a window with no target has no values, and the items' empty shared
 text hides them. Position updates from selection notifications, and indentation
