@@ -2,7 +2,30 @@
 //! and directional neighbors.
 
 use super::*;
-use crate::app::window_layout::Rect;
+
+/// A logical-pixel rectangle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl Rect {
+    pub fn intersection(&self, other: &Self) -> Option<Self> {
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let right = (self.x + self.width).min(other.x + other.width);
+        let bottom = (self.y + self.height).min(other.y + other.height);
+        (right > x && bottom > y).then_some(Self {
+            x,
+            y,
+            width: right - x,
+            height: bottom - y,
+        })
+    }
+}
 
 /// The share of a split's extent that one grow or shrink moves.
 const RESIZE_STEP: f32 = 0.05;
@@ -132,7 +155,7 @@ fn place(
 /// The pane beside `from` toward `edge`: of the panes lying entirely on that
 /// side, the one overlapping `from` most along the other axis, then the
 /// nearest.
-pub(crate) fn neighbor(rects: &[(PaneId, Rect)], from: PaneId, edge: SplitEdge) -> Option<PaneId> {
+pub fn neighbor(rects: &[(PaneId, Rect)], from: PaneId, edge: SplitEdge) -> Option<PaneId> {
     const EPSILON: f32 = 0.5;
     let (_, source) = rects.iter().find(|(pane, _)| *pane == from)?;
     let overlap = |a: f32, a_len: f32, b: f32, b_len: f32| (a + a_len).min(b + b_len) - a.max(b);
@@ -166,7 +189,7 @@ pub(crate) fn neighbor(rects: &[(PaneId, Rect)], from: PaneId, edge: SplitEdge) 
 
 impl Workbench {
     /// Every pane's rectangle when the workbench fills `area`.
-    pub(crate) fn pane_rects(&self, area: Rect) -> Vec<(PaneId, Rect)> {
+    pub fn pane_rects(&self, area: Rect) -> Vec<(PaneId, Rect)> {
         let mut result = Vec::new();
         if let Some(layout) = &self.layout {
             place(layout, area, &self.docks, self.dock_sizes, &mut result);
@@ -176,11 +199,11 @@ impl Workbench {
 
     /// The dock a split's divider resizes, or `None` for an ordinary split
     /// that divides its extent by ratio.
-    pub(crate) fn split_dock(&self, layout: &WorkbenchLayout) -> Option<DockLocation> {
+    pub fn split_dock(&self, layout: &WorkbenchLayout) -> Option<DockLocation> {
         dock_of_split(&self.docks, layout)
     }
 
-    pub(crate) fn split_ratio(&self, boundary: PaneId) -> Option<f32> {
+    pub fn split_ratio(&self, boundary: PaneId) -> Option<f32> {
         match find_split(self.layout.as_ref()?, boundary)? {
             WorkbenchLayout::Split { ratio, .. } => Some(*ratio),
             WorkbenchLayout::Pane(_) => None,
@@ -189,7 +212,7 @@ impl Workbench {
 
     /// Set the ratio of the split identified by `boundary`, clamped so
     /// neither side drops below the minimum share.
-    pub(crate) fn set_split_ratio(&mut self, boundary: PaneId, value: f32) -> bool {
+    pub fn set_split_ratio(&mut self, boundary: PaneId, value: f32) -> bool {
         let Some(WorkbenchLayout::Split { ratio, .. }) = self
             .layout
             .as_mut()
@@ -206,12 +229,7 @@ impl Workbench {
     /// `axis`, only a dock or a split along it changes: a horizontal split
     /// sets the width and a vertical one the height. Returns whether
     /// anything changed.
-    pub(crate) fn resize_pane(
-        &mut self,
-        pane: PaneId,
-        grow: bool,
-        axis: Option<SplitDirection>,
-    ) -> bool {
+    pub fn resize_pane(&mut self, pane: PaneId, grow: bool, axis: Option<SplitDirection>) -> bool {
         let sign = if grow { 1. } else { -1. };
         if let Some(dock) = self.dock_location(pane) {
             let dock_axis = match dock {
@@ -251,7 +269,7 @@ impl Workbench {
     }
 
     /// Give every pane of each ordinary split chain an even share.
-    pub(crate) fn equalize_splits(&mut self) {
+    pub fn equalize_splits(&mut self) {
         if let Some(layout) = self.layout.as_mut() {
             equalize(layout, &self.docks);
         }
@@ -260,10 +278,7 @@ impl Workbench {
 
 #[cfg(test)]
 mod tests {
-    use gpui::{AppContext, TestAppContext};
-
     use super::*;
-    use crate::app::{documents::DocumentCollection, model::BufferModel};
 
     fn ratios(layout: &WorkbenchLayout) -> Vec<f32> {
         match layout {
@@ -286,20 +301,18 @@ mod tests {
         (a - b).abs() < 1e-5
     }
 
-    #[gpui::test]
-    fn grow_and_shrink_move_the_nearest_split_and_clamp(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("shared"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
+    #[test]
+    fn grow_and_shrink_move_the_nearest_split_and_clamp() {
+        let document = DocumentId::new(1);
+        let workbench = &mut Workbench::new_for_document(document);
 
-        workbench.update(cx, |workbench, cx| {
+        {
             let left = workbench.focused_pane_id().unwrap();
             let right = workbench
-                .split_focused(SplitDirection::Horizontal, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
                 .unwrap();
             let bottom = workbench
-                .split_focused(SplitDirection::Vertical, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Vertical, SplitPlacement::After)
                 .unwrap();
             assert_eq!(workbench.split_ratio(right), Some(0.5));
 
@@ -330,23 +343,21 @@ mod tests {
                 WorkbenchLayout::MIN_RATIO
             ));
             assert!(!workbench.set_split_ratio(left, 0.3));
-        });
+        }
     }
 
-    #[gpui::test]
-    fn resizing_along_an_axis_skips_splits_of_the_other_one(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("shared"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
+    #[test]
+    fn resizing_along_an_axis_skips_splits_of_the_other_one() {
+        let document = DocumentId::new(2);
+        let workbench = &mut Workbench::new_for_document(document);
 
-        workbench.update(cx, |workbench, cx| {
+        {
             let left = workbench.focused_pane_id().unwrap();
             let right = workbench
-                .split_focused(SplitDirection::Horizontal, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
                 .unwrap();
             let bottom = workbench
-                .split_focused(SplitDirection::Vertical, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Vertical, SplitPlacement::After)
                 .unwrap();
 
             // The bottom pane widens through the outer horizontal split, past
@@ -358,26 +369,24 @@ mod tests {
             assert!(close(workbench.split_ratio(bottom).unwrap(), 0.45));
             // The left pane has no vertical split to change.
             assert!(!workbench.resize_pane(left, true, Some(SplitDirection::Vertical)));
-        });
+        }
     }
 
-    #[gpui::test]
-    fn equalize_gives_each_pane_of_a_chain_an_even_share(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("shared"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
+    #[test]
+    fn equalize_gives_each_pane_of_a_chain_an_even_share() {
+        let document = DocumentId::new(3);
+        let workbench = &mut Workbench::new_for_document(document);
 
-        workbench.update(cx, |workbench, cx| {
+        {
             let first = workbench.focused_pane_id().unwrap();
             let second = workbench
-                .split_focused(SplitDirection::Horizontal, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
                 .unwrap();
             let third = workbench
-                .split_focused(SplitDirection::Horizontal, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
                 .unwrap();
             workbench
-                .split_focused(SplitDirection::Vertical, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Vertical, SplitPlacement::After)
                 .unwrap();
             workbench.set_split_ratio(second, 0.8);
             workbench.set_split_ratio(third, 0.2);
@@ -389,23 +398,21 @@ mod tests {
             assert!(close(found[1], 0.5), "{found:?}");
             assert!(close(found[2], 0.5), "{found:?}");
             assert!(workbench.pane(first).is_some());
-        });
+        }
     }
 
-    #[gpui::test]
-    fn collapsing_a_pane_keeps_its_siblings_ratios(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("shared"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
+    #[test]
+    fn collapsing_a_pane_keeps_its_siblings_ratios() {
+        let document = DocumentId::new(4);
+        let workbench = &mut Workbench::new_for_document(document);
 
-        workbench.update(cx, |workbench, cx| {
+        {
             let first = workbench.focused_pane_id().unwrap();
             let second = workbench
-                .split_focused(SplitDirection::Horizontal, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
                 .unwrap();
             let third = workbench
-                .split_focused(SplitDirection::Vertical, SplitPlacement::After, cx)
+                .split_focused(SplitDirection::Vertical, SplitPlacement::After)
                 .unwrap();
             workbench.set_split_ratio(third, 0.3);
             workbench.set_split_ratio(second, 0.7);
@@ -413,7 +420,7 @@ mod tests {
             workbench.remove_tab(first, tab).unwrap();
             assert_eq!(workbench.split_ratio(third), Some(0.3));
             assert_eq!(ratios(workbench.layout().unwrap()), vec![0.3]);
-        });
+        }
     }
 
     fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
@@ -450,30 +457,17 @@ mod tests {
         assert_eq!(neighbor(&rects, PaneId(9), SplitEdge::Right), None);
     }
 
-    #[gpui::test]
-    fn pane_rects_follow_ratios_and_dock_sizes(cx: &mut TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let model = cx.new(|_| BufferModel::from_text(""));
-            let mut documents = DocumentCollection::new();
-            let document = documents.create_untitled("doc", model.clone(), cx);
-            let (left, _) = workbench.open_document_in_normal_group(document, model, cx);
+    #[test]
+    fn pane_rects_follow_ratios_and_dock_sizes() {
+        let workbench = &mut Workbench::empty();
+        {
+            let document = DocumentId::new(5);
+            let (left, _) = workbench.open_document_in_normal_group(document);
             let right = workbench
-                .split_pane(left, SplitDirection::Horizontal, SplitPlacement::After, cx)
+                .split_pane(left, SplitDirection::Horizontal, SplitPlacement::After)
                 .unwrap();
             workbench.set_split_ratio(right, 0.25);
-            let tree = cx.new(|cx| {
-                crate::app::workspace_tree::WorkspaceTree::new(
-                    crate::app::workspace::WorkspaceState::default().snapshot(),
-                    cx,
-                )
-            });
-            let id = workbench.register_tool(
-                crate::app::tool_layout::EXPLORER_TOOL_ID,
-                "Explorer",
-                ToolContent::Workspace(tree),
-                DockLocation::Left,
-            );
+            let id = workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
             let (dock, _) = workbench.show_tool(id).unwrap();
             workbench.set_dock_size(DockLocation::Left, 200.);
             let rects = workbench.pane_rects(rect(0., 0., 1000., 500.));
@@ -485,29 +479,16 @@ mod tests {
                     (right, rect(400., 0., 600., 500.)),
                 ]
             );
-        });
+        }
     }
 
-    #[gpui::test]
-    fn docks_resize_by_size_and_keep_their_split_out_of_equalize(cx: &mut TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let model = cx.new(|_| BufferModel::from_text(""));
-            let mut documents = DocumentCollection::new();
-            let document = documents.create_untitled("doc", model.clone(), cx);
-            let (pane, _) = workbench.open_document_in_normal_group(document, model, cx);
-            let tree = cx.new(|cx| {
-                crate::app::workspace_tree::WorkspaceTree::new(
-                    crate::app::workspace::WorkspaceState::default().snapshot(),
-                    cx,
-                )
-            });
-            let id = workbench.register_tool(
-                crate::app::tool_layout::EXPLORER_TOOL_ID,
-                "Explorer",
-                ToolContent::Workspace(tree),
-                DockLocation::Left,
-            );
+    #[test]
+    fn docks_resize_by_size_and_keep_their_split_out_of_equalize() {
+        let workbench = &mut Workbench::empty();
+        {
+            let document = DocumentId::new(6);
+            let (pane, _) = workbench.open_document_in_normal_group(document);
+            let id = workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
             let (dock, _) = workbench.show_tool(id).unwrap();
             let before = workbench.dock_size(DockLocation::Left);
             assert!(workbench.resize_pane(dock, true, None));
@@ -521,6 +502,6 @@ mod tests {
             workbench.set_split_ratio(pane, 0.3);
             workbench.equalize_splits();
             assert_eq!(workbench.split_ratio(pane), Some(0.3));
-        });
+        }
     }
 }

@@ -1,56 +1,32 @@
 //! Native tool definitions outlive their visible tab attachments.
 
-use gpui::EntityId;
+use serde::{Deserialize, Serialize};
 
 use super::*;
-use crate::app::tool_layout::{StoredLocation, StoredTool, ToolLayoutSnapshot};
-use crate::app::workspace_tree::WorkspaceTree;
+
+pub const TOOL_LAYOUT_VERSION: u32 = 1;
+pub const EXPLORER_TOOL_ID: &str = "knot.explorer";
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct ToolFrameId(EntityId);
-
-#[derive(Clone)]
-pub(crate) enum ToolContent {
-    Workspace(Entity<WorkspaceTree>),
-    Extension(super::ExtensionView),
-}
-
-impl ToolContent {
-    pub(crate) fn presentation(&self) -> EntityId {
-        match self {
-            Self::Workspace(view) => view.entity_id(),
-            Self::Extension(view) => match view {
-                super::ExtensionView::Tree(view) => view.entity_id(),
-                super::ExtensionView::Text(view) => view.entity_id(),
-            },
-        }
-    }
-
-    pub(crate) fn command_view(&self) -> CommandView {
-        match self {
-            Self::Workspace(view) => CommandView::Workspace(view.clone()),
-            Self::Extension(view) => CommandView::Extension(view.clone()),
-        }
-    }
-}
+pub struct ToolFrameId(u64);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum DockLocation {
+pub enum DockLocation {
     Left,
     Right,
     Bottom,
 }
 
 impl DockLocation {
-    pub(crate) const ALL: [Self; 3] = [Self::Left, Self::Right, Self::Bottom];
+    pub const ALL: [Self; 3] = [Self::Left, Self::Right, Self::Bottom];
 
     /// Usable dock extents in logical pixels. Dividers clamp to this range so
     /// a dragged dock stays visible without squeezing the editor shut.
-    pub(crate) const MIN_SIZE: f32 = 80.;
-    pub(crate) const MAX_SIZE: f32 = 480.;
+    pub const MIN_SIZE: f32 = 80.;
+    pub const MAX_SIZE: f32 = 480.;
 
-    pub(crate) fn index(self) -> usize {
+    pub fn index(self) -> usize {
         match self {
             Self::Left => 0,
             Self::Right => 1,
@@ -60,69 +36,131 @@ impl DockLocation {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ToolPlacement {
+pub enum ToolPlacement {
     Dock(DockLocation),
     Group(PaneId),
     DocumentGroup,
 }
 
-pub(crate) struct ToolFrame {
-    pub(crate) id: ToolFrameId,
-    pub(crate) stable_id: String,
-    pub(crate) title: String,
-    pub(crate) content: ToolContent,
+pub struct ToolFrame {
+    pub id: ToolFrameId,
+    pub stable_id: String,
+    pub title: String,
+    /// The presentation every tab of this tool shows.
+    pub presentation: PresentationId,
     remembered: ToolPlacement,
     index: usize,
 }
 
-impl WorkbenchTab {
-    pub(crate) fn tool_content(&self) -> Option<&ToolContent> {
-        match &self.payload {
-            WorkbenchTabPayload::Tool { content, .. } => Some(content),
-            _ => None,
+/// Where a tool-only layout record places one tool.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StoredLocation {
+    Left,
+    Right,
+    Bottom,
+    DocumentGroup,
+}
+
+impl StoredLocation {
+    pub fn placement(self) -> ToolPlacement {
+        match self {
+            Self::Left => ToolPlacement::Dock(DockLocation::Left),
+            Self::Right => ToolPlacement::Dock(DockLocation::Right),
+            Self::Bottom => ToolPlacement::Dock(DockLocation::Bottom),
+            Self::DocumentGroup => ToolPlacement::DocumentGroup,
+        }
+    }
+}
+
+impl From<DockLocation> for StoredLocation {
+    fn from(dock: DockLocation) -> Self {
+        match dock {
+            DockLocation::Left => Self::Left,
+            DockLocation::Right => Self::Right,
+            DockLocation::Bottom => Self::Bottom,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StoredTool {
+    pub id: String,
+    pub location: StoredLocation,
+    pub index: usize,
+    pub visible: bool,
+}
+
+/// The tool-only layout record: stable tool IDs, locations, order, sizes,
+/// visibility, and each dock's selection, never documents or terminals.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ToolLayoutSnapshot {
+    pub version: u32,
+    pub tools: Vec<StoredTool>,
+    pub dock_sizes: [f32; 3],
+    pub dock_selected: [Option<String>; 3],
+    /// Whether the user has ever customized the arrangement. Fresh windows
+    /// only auto-show stored tools once set, preserving first-run behavior
+    /// (no eager explorer before any folder or toggle) on fresh installs.
+    #[serde(default)]
+    pub customized: bool,
+}
+
+impl ToolLayoutSnapshot {
+    pub fn product_default() -> Self {
+        Self {
+            version: TOOL_LAYOUT_VERSION,
+            tools: vec![StoredTool {
+                id: EXPLORER_TOOL_ID.to_owned(),
+                location: StoredLocation::Left,
+                index: 0,
+                visible: true,
+            }],
+            dock_sizes: [240., 240., 220.],
+            dock_selected: [Some(EXPLORER_TOOL_ID.to_owned()), None, None],
+            customized: false,
         }
     }
 
-    pub(crate) fn presentation(&self) -> Option<EntityId> {
-        self.editor()
-            .map(Entity::entity_id)
-            .or_else(|| self.terminal_view().map(Entity::entity_id))
-            .or_else(|| self.tool_content().map(ToolContent::presentation))
+    pub fn tool(&self, id: &str) -> Option<&StoredTool> {
+        self.tools.iter().find(|tool| tool.id == id)
     }
 }
 
 impl Workbench {
-    pub(crate) fn register_tool(
+    /// Define a hidden tool that first shows in `dock`.
+    pub fn register_tool(
         &mut self,
         stable_id: impl Into<String>,
         title: impl Into<String>,
-        content: ToolContent,
         dock: DockLocation,
     ) -> ToolFrameId {
-        let stable_id = stable_id.into();
-        let id = ToolFrameId(content.presentation());
-        if !self.tools.iter().any(|tool| tool.id == id) {
-            self.tools.push(ToolFrame {
-                id,
-                stable_id,
-                title: title.into(),
-                content,
-                remembered: ToolPlacement::Dock(dock),
-                index: usize::MAX,
-            });
-        }
+        let id = ToolFrameId(self.next_tool_id);
+        self.next_tool_id = self
+            .next_tool_id
+            .checked_add(1)
+            .expect("tool identity space exhausted");
+        let presentation = self.allocate_presentation();
+        self.tools.push(ToolFrame {
+            id,
+            stable_id: stable_id.into(),
+            title: title.into(),
+            presentation,
+            remembered: ToolPlacement::Dock(dock),
+            index: usize::MAX,
+        });
         id
     }
 
-    pub(crate) fn tools(&self) -> &[ToolFrame] {
+    pub fn tools(&self) -> &[ToolFrame] {
         &self.tools
     }
 
-    pub(crate) fn tool(&self, id: ToolFrameId) -> Option<&ToolFrame> {
+    pub fn tool(&self, id: ToolFrameId) -> Option<&ToolFrame> {
         self.tools.iter().find(|tool| tool.id == id)
     }
 
-    pub(crate) fn tool_tab(&self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
+    pub fn tool_tab(&self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
         self.panes.iter().find_map(|pane| {
             pane.tabs
                 .iter()
@@ -131,30 +169,30 @@ impl Workbench {
         })
     }
 
-    pub(crate) fn dock_location(&self, pane: PaneId) -> Option<DockLocation> {
+    pub fn dock_location(&self, pane: PaneId) -> Option<DockLocation> {
         self.docks
             .iter()
             .find(|(id, _)| *id == pane)
             .map(|(_, dock)| *dock)
     }
 
-    pub(crate) fn dock_pane(&self, dock: DockLocation) -> Option<PaneId> {
+    pub fn dock_pane(&self, dock: DockLocation) -> Option<PaneId> {
         self.docks
             .iter()
             .find(|(_, location)| *location == dock)
             .map(|(pane, _)| *pane)
     }
 
-    pub(crate) fn dock_size(&self, dock: DockLocation) -> f32 {
+    pub fn dock_size(&self, dock: DockLocation) -> f32 {
         self.dock_sizes[dock.index()]
     }
 
-    pub(crate) fn set_dock_size(&mut self, dock: DockLocation, size: f32) {
+    pub fn set_dock_size(&mut self, dock: DockLocation, size: f32) {
         self.dock_sizes[dock.index()] = size.clamp(DockLocation::MIN_SIZE, DockLocation::MAX_SIZE);
         self.debug_assert_invariants();
     }
 
-    pub(crate) fn set_dock_sizes(&mut self, sizes: [f32; 3]) {
+    pub fn set_dock_sizes(&mut self, sizes: [f32; 3]) {
         for dock in DockLocation::ALL {
             self.dock_sizes[dock.index()] =
                 sizes[dock.index()].clamp(DockLocation::MIN_SIZE, DockLocation::MAX_SIZE);
@@ -162,7 +200,7 @@ impl Workbench {
         self.debug_assert_invariants();
     }
 
-    pub(crate) fn tool_by_stable_id(&self, stable_id: &str) -> Option<ToolFrameId> {
+    pub fn tool_by_stable_id(&self, stable_id: &str) -> Option<ToolFrameId> {
         self.tools
             .iter()
             .find(|tool| tool.stable_id == stable_id)
@@ -171,7 +209,7 @@ impl Workbench {
 
     /// Remember a placement without showing the tool. Restore uses this for
     /// hidden tools so remembered locations survive without visible tabs.
-    pub(crate) fn remember_tool_placement(
+    pub fn remember_tool_placement(
         &mut self,
         id: ToolFrameId,
         placement: ToolPlacement,
@@ -190,7 +228,7 @@ impl Workbench {
     /// flatten to the document group and vanished panes resolve the same way.
     /// Documents, terminals, and live handles never enter the record, and
     /// selection maps to stable namespaced IDs.
-    pub(crate) fn tool_layout_snapshot(&self) -> ToolLayoutSnapshot {
+    pub fn tool_layout_snapshot(&self) -> ToolLayoutSnapshot {
         let stable = |id: ToolFrameId| {
             self.tools
                 .iter()
@@ -238,7 +276,7 @@ impl Workbench {
             })
             .collect();
         ToolLayoutSnapshot {
-            version: crate::app::tool_layout::TOOL_LAYOUT_VERSION,
+            version: TOOL_LAYOUT_VERSION,
             tools,
             dock_sizes: self.dock_sizes,
             dock_selected: DockLocation::ALL.map(|dock| {
@@ -308,7 +346,7 @@ impl Workbench {
         }
     }
 
-    pub(crate) fn normal_pane(&self) -> Option<PaneId> {
+    pub fn normal_pane(&self) -> Option<PaneId> {
         self.focused_pane
             .filter(|pane| self.dock_location(*pane).is_none())
             .or_else(|| {
@@ -321,7 +359,7 @@ impl Workbench {
 
     /// Remove a tool definition and its visible attachment. Remembered layout
     /// records live outside the workbench and are intentionally left untouched.
-    pub(crate) fn unregister_tool(&mut self, id: ToolFrameId) {
+    pub fn unregister_tool(&mut self, id: ToolFrameId) {
         self.hide_tool(id);
         self.tools.retain(|tool| tool.id != id);
         for selected in &mut self.dock_selected {
@@ -332,7 +370,7 @@ impl Workbench {
         self.debug_assert_invariants();
     }
 
-    pub(crate) fn hide_tool(&mut self, id: ToolFrameId) -> bool {
+    pub fn hide_tool(&mut self, id: ToolFrameId) -> bool {
         let Some((pane, tab)) = self.tool_tab(id) else {
             return false;
         };
@@ -368,7 +406,7 @@ impl Workbench {
         ToolPlacement::Group(pane)
     }
 
-    pub(crate) fn show_tool(&mut self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
+    pub fn show_tool(&mut self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
         if let Some((pane, tab)) = self.tool_tab(id) {
             self.activate_tab(pane, tab);
             return Some((pane, tab));
@@ -376,7 +414,6 @@ impl Workbench {
         let tool = self.tool(id)?;
         let placement = tool.remembered;
         let index = tool.index;
-        let content = tool.content.clone();
         let pane = match placement {
             ToolPlacement::Dock(dock) => self.ensure_dock(dock),
             ToolPlacement::Group(pane) if self.pane(pane).is_some() => pane,
@@ -384,28 +421,21 @@ impl Workbench {
                 .normal_pane()
                 .unwrap_or_else(|| self.create_group(None)),
         };
-        let tab = self.allocate_tab_id();
+        let tab = self.new_tab(TabSurfaceId::Tool(id), false);
+        let tab_id = tab.id;
         let group = self
             .panes
             .iter_mut()
             .find(|group| group.id == pane)
             .unwrap();
-        group.tabs.insert(
-            group.section_index(false, index),
-            WorkbenchTab {
-                id: tab,
-                pinned: false,
-                preview: false,
-                payload: WorkbenchTabPayload::Tool { id, content },
-            },
-        );
-        group.select(tab);
+        group.tabs.insert(group.section_index(false, index), tab);
+        group.select(tab_id);
         self.focused_pane = Some(pane);
         self.debug_assert_invariants();
-        Some((pane, tab))
+        Some((pane, tab_id))
     }
 
-    pub(crate) fn place_tool(&mut self, id: ToolFrameId, placement: ToolPlacement) -> bool {
+    pub fn place_tool(&mut self, id: ToolFrameId, placement: ToolPlacement) -> bool {
         if self.tool(id).is_none()
             || matches!(placement, ToolPlacement::Group(pane) if self.pane(pane).is_none() || self.dock_location(pane).is_some())
         {
@@ -423,7 +453,7 @@ impl Workbench {
         self.show_tool(id).is_some()
     }
 
-    pub(crate) fn toggle_dock(&mut self, dock: DockLocation) {
+    pub fn toggle_dock(&mut self, dock: DockLocation) {
         let visible = self
             .docks
             .iter()
@@ -510,10 +540,9 @@ impl Workbench {
         pane
     }
 
-    pub(crate) fn open_terminal_in_normal_group(
+    pub fn open_terminal_in_normal_group(
         &mut self,
         session: TerminalSessionId,
-        view: Entity<TerminalView>,
     ) -> Option<(PaneId, TabId)> {
         if self.has_terminal_session(session) {
             return None;
@@ -521,22 +550,14 @@ impl Workbench {
         let pane = self
             .normal_pane()
             .unwrap_or_else(|| self.create_group(None));
-        self.open_terminal_tab(pane, session, view)
-            .map(|tab| (pane, tab))
+        self.open_terminal_tab(pane, session).map(|tab| (pane, tab))
     }
 
-    pub(crate) fn open_document_in_normal_group(
-        &mut self,
-        document: DocumentId,
-        model: Entity<super::super::model::BufferModel>,
-        cx: &mut Context<Self>,
-    ) -> (PaneId, TabId) {
+    pub fn open_document_in_normal_group(&mut self, document: DocumentId) -> (PaneId, TabId) {
         let pane = self
             .normal_pane()
             .unwrap_or_else(|| self.create_group(None));
-        let tab = self
-            .open_tab_for_document(pane, document, model, cx)
-            .unwrap();
+        let tab = self.open_tab_for_document(pane, document).unwrap();
         (pane, tab)
     }
 }
@@ -544,29 +565,19 @@ impl Workbench {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{model::BufferModel, workspace::WorkspaceState};
-    use gpui::TestAppContext;
 
-    fn explorer(workbench: &mut Workbench, cx: &mut Context<Workbench>) -> ToolFrameId {
-        let tree = cx.new(|cx| WorkspaceTree::new(WorkspaceState::default().snapshot(), cx));
-        workbench.register_tool(
-            crate::app::tool_layout::EXPLORER_TOOL_ID,
-            "Explorer",
-            ToolContent::Workspace(tree),
-            DockLocation::Left,
-        )
+    fn explorer(workbench: &mut Workbench) -> ToolFrameId {
+        workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left)
     }
 
-    #[gpui::test]
-    fn tools_preserve_native_identity_group_order_and_dock_size(cx: &mut TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let model = cx.new(|_| BufferModel::from_text(""));
-            let mut documents = crate::app::documents::DocumentCollection::new();
-            let document = documents.create_untitled("doc", model.clone(), cx);
-            let (pane, doc_tab) = workbench.open_document_in_normal_group(document, model, cx);
-            let id = explorer(workbench, cx);
-            let presentation = workbench.tool(id).unwrap().content.presentation();
+    #[test]
+    fn tools_preserve_native_identity_group_order_and_dock_size() {
+        let workbench = &mut Workbench::empty();
+        {
+            let document = DocumentId::new(1);
+            let (pane, doc_tab) = workbench.open_document_in_normal_group(document);
+            let id = explorer(workbench);
+            let presentation = workbench.tool(id).unwrap().presentation;
             let (dock, _) = workbench.show_tool(id).unwrap();
             assert_eq!(workbench.dock_location(dock), Some(DockLocation::Left));
             workbench.set_dock_size(DockLocation::Left, 315.);
@@ -576,10 +587,7 @@ mod tests {
             let (reopened, _) = workbench.show_tool(id).unwrap();
             assert_ne!(reopened, dock);
             assert_eq!(workbench.dock_size(DockLocation::Left), 315.);
-            assert_eq!(
-                workbench.tool(id).unwrap().content.presentation(),
-                presentation
-            );
+            assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
             assert!(workbench.place_tool(id, ToolPlacement::Group(pane)));
             let (_, tool_tab) = workbench.tool_tab(id).unwrap();
             let capture = workbench.capture_tab_move(pane, tool_tab).unwrap();
@@ -603,14 +611,14 @@ mod tests {
                 workbench.pane(pane).unwrap().tabs()[1].surface_id(),
                 TabSurfaceId::Tool(id)
             );
-        });
+        }
     }
 
-    #[gpui::test]
-    fn vanished_mixed_group_reopens_without_historical_document_layout(cx: &mut TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let id = explorer(workbench, cx);
+    #[test]
+    fn vanished_mixed_group_reopens_without_historical_document_layout() {
+        let workbench = &mut Workbench::empty();
+        {
+            let id = explorer(workbench);
             workbench.place_tool(id, ToolPlacement::DocumentGroup);
             let old = workbench.tool_tab(id).unwrap().0;
             workbench.hide_tool(id);
@@ -627,40 +635,38 @@ mod tests {
             assert!(workbench.panes().is_empty());
             workbench.toggle_dock(DockLocation::Bottom);
             assert_eq!(workbench.panes().len(), 1);
-            let model = cx.new(|_| BufferModel::from_text(""));
-            let mut documents = crate::app::documents::DocumentCollection::new();
-            let document = documents.create_untitled("doc", model.clone(), cx);
-            workbench.open_document_in_normal_group(document, model, cx);
-            assert!(matches!(workbench.layout(), Some(WorkbenchLayout::Split { direction: SplitDirection::Vertical, second, .. }) if **second == WorkbenchLayout::Pane(workbench.tool_tab(id).unwrap().0)));
-            let capture = workbench.capture_tab_move(workbench.tool_tab(id).unwrap().0, workbench.tool_tab(id).unwrap().1).unwrap();
+            let document = DocumentId::new(2);
+            workbench.open_document_in_normal_group(document);
+            assert!(
+                matches!(workbench.layout(), Some(WorkbenchLayout::Split { direction: SplitDirection::Vertical, second, .. }) if **second == WorkbenchLayout::Pane(workbench.tool_tab(id).unwrap().0))
+            );
+            let capture = workbench
+                .capture_tab_move(
+                    workbench.tool_tab(id).unwrap().0,
+                    workbench.tool_tab(id).unwrap().1,
+                )
+                .unwrap();
             let mut destination = Workbench::empty();
-            assert!(workbench.transfer_tab_to(&mut destination, capture, TabMoveDestination::Empty, |view| view).is_none());
+            assert!(
+                workbench
+                    .transfer_tab_to(&mut destination, capture, TabMoveDestination::Empty)
+                    .is_none()
+            );
             assert!(destination.panes().is_empty());
             assert!(workbench.contains_tab_move(capture));
-        });
+        }
     }
-    #[gpui::test]
-    fn dock_toggle_restores_selector_order_and_selection(cx: &mut gpui::TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
+    #[test]
+    fn dock_toggle_restores_selector_order_and_selection() {
+        let workbench = &mut Workbench::empty();
+        {
             let ids = [
                 ("knot.first", "First"),
                 ("knot.second", "Second"),
                 ("knot.third", "Third"),
             ]
             .map(|(stable_id, title)| {
-                let tree = cx.new(|cx| {
-                    WorkspaceTree::new(
-                        crate::app::workspace::WorkspaceState::default().snapshot(),
-                        cx,
-                    )
-                });
-                let id = workbench.register_tool(
-                    stable_id,
-                    title,
-                    ToolContent::Workspace(tree),
-                    DockLocation::Right,
-                );
+                let id = workbench.register_tool(stable_id, title, DockLocation::Right);
                 workbench.show_tool(id);
                 id
             });
@@ -677,19 +683,17 @@ mod tests {
                 ids.map(TabSurfaceId::Tool)
             );
             assert_eq!(pane.active_tab().surface_id(), TabSurfaceId::Tool(ids[1]));
-        });
+        }
     }
 
-    #[gpui::test]
-    fn tool_moves_between_groups_edges_and_docks_preserve_frame(cx: &mut gpui::TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let model = cx.new(|_| BufferModel::from_text(""));
-            let mut documents = crate::app::documents::DocumentCollection::new();
-            let document = documents.create_untitled("doc", model.clone(), cx);
-            let (doc_pane, _) = workbench.open_document_in_normal_group(document, model, cx);
-            let id = explorer(workbench, cx);
-            let presentation = workbench.tool(id).unwrap().content.presentation();
+    #[test]
+    fn tool_moves_between_groups_edges_and_docks_preserve_frame() {
+        let workbench = &mut Workbench::empty();
+        {
+            let document = DocumentId::new(3);
+            let (doc_pane, _) = workbench.open_document_in_normal_group(document);
+            let id = explorer(workbench);
+            let presentation = workbench.tool(id).unwrap().presentation;
             let (dock, _) = workbench.show_tool(id).unwrap();
             assert_eq!(workbench.dock_location(dock), Some(DockLocation::Left));
 
@@ -710,10 +714,7 @@ mod tests {
                     },
                 )
                 .unwrap();
-            assert_eq!(
-                workbench.tool(id).unwrap().content.presentation(),
-                presentation
-            );
+            assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
             assert_eq!(moved.destination.tab_id, source.tab.tab_id);
             assert!(!workbench.contains_tab_move(source));
             assert!(workbench.pane(dock).is_none());
@@ -729,10 +730,7 @@ mod tests {
                     super::TabMoveDestination::Dock(DockLocation::Bottom),
                 )
                 .unwrap();
-            assert_eq!(
-                workbench.tool(id).unwrap().content.presentation(),
-                presentation
-            );
+            assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
             assert_eq!(
                 workbench.dock_location(docked.destination.pane_id),
                 Some(DockLocation::Bottom)
@@ -760,18 +758,15 @@ mod tests {
             assert_eq!(joined.destination.pane_id, doc_pane);
             assert_eq!(workbench.view_count(document), 1);
             assert!(workbench.pane(docked.destination.pane_id).is_none());
-            assert_eq!(
-                workbench.tool(id).unwrap().content.presentation(),
-                presentation
-            );
-        });
+            assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
+        }
     }
 
-    #[gpui::test]
-    fn dock_sizes_clamp_and_survive_hide_reopen(cx: &mut gpui::TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let id = explorer(workbench, cx);
+    #[test]
+    fn dock_sizes_clamp_and_survive_hide_reopen() {
+        let workbench = &mut Workbench::empty();
+        {
+            let id = explorer(workbench);
             workbench.show_tool(id).unwrap();
             workbench.set_dock_size(DockLocation::Left, 1.);
             assert_eq!(
@@ -791,19 +786,17 @@ mod tests {
             let (pane, _) = workbench.show_tool(id).unwrap();
             assert_eq!(workbench.dock_location(pane), Some(DockLocation::Bottom));
             assert_eq!(workbench.dock_size(DockLocation::Bottom), 200.);
-        });
+        }
     }
 
-    #[gpui::test]
-    fn tool_snapshots_record_only_tools_with_stable_ids(cx: &mut gpui::TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let model = cx.new(|_| BufferModel::from_text(""));
-            let mut documents = crate::app::documents::DocumentCollection::new();
-            let document = documents.create_untitled("doc", model.clone(), cx);
-            let (doc_pane, _) = workbench.open_document_in_normal_group(document, model, cx);
-            workbench.open_terminal_tab_test_double(doc_pane, super::TerminalSessionId(7));
-            let id = explorer(workbench, cx);
+    #[test]
+    fn tool_snapshots_record_only_tools_with_stable_ids() {
+        let workbench = &mut Workbench::empty();
+        {
+            let document = DocumentId::new(4);
+            let (doc_pane, _) = workbench.open_document_in_normal_group(document);
+            workbench.open_terminal_tab(doc_pane, super::TerminalSessionId(7));
+            let id = explorer(workbench);
             workbench.show_tool(id).unwrap();
             workbench.set_dock_size(DockLocation::Left, 311.);
             // A visible tool in an ordinary group flattens to the document group.
@@ -811,9 +804,9 @@ mod tests {
             let snapshot = workbench.tool_layout_snapshot();
             assert_eq!(
                 snapshot.tools,
-                [crate::app::tool_layout::StoredTool {
-                    id: crate::app::tool_layout::EXPLORER_TOOL_ID.to_owned(),
-                    location: crate::app::tool_layout::StoredLocation::DocumentGroup,
+                [StoredTool {
+                    id: EXPLORER_TOOL_ID.to_owned(),
+                    location: StoredLocation::DocumentGroup,
                     index: 2,
                     visible: true,
                 }]
@@ -826,32 +819,26 @@ mod tests {
                     "tool record leaks {forbidden}"
                 );
             }
-            let decoded: crate::app::tool_layout::ToolLayoutSnapshot =
-                serde_json::from_str(&payload).unwrap();
+            let decoded: ToolLayoutSnapshot = serde_json::from_str(&payload).unwrap();
             assert_eq!(decoded, snapshot);
             // Hidden tools keep their remembered dock while staying invisible.
             workbench.place_tool(id, ToolPlacement::Dock(DockLocation::Bottom));
             workbench.hide_tool(id);
             let hidden = workbench.tool_layout_snapshot();
-            assert_eq!(
-                hidden.tools[0].location,
-                crate::app::tool_layout::StoredLocation::Bottom
-            );
+            assert_eq!(hidden.tools[0].location, StoredLocation::Bottom);
             assert!(!hidden.tools[0].visible);
             assert_eq!(doc_pane, workbench.normal_pane().unwrap());
-        });
+        }
     }
 
-    #[gpui::test]
-    fn tool_only_splits_remember_their_side_as_a_dock(cx: &mut gpui::TestAppContext) {
-        use crate::app::tool_layout::{StoredLocation, StoredTool};
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let model = cx.new(|_| BufferModel::from_text(""));
-            let mut documents = crate::app::documents::DocumentCollection::new();
-            let document = documents.create_untitled("doc", model.clone(), cx);
-            let (doc_pane, _) = workbench.open_document_in_normal_group(document, model, cx);
-            let id = explorer(workbench, cx);
+    #[test]
+    fn tool_only_splits_remember_their_side_as_a_dock() {
+        use {StoredLocation, StoredTool};
+        let workbench = &mut Workbench::empty();
+        {
+            let document = DocumentId::new(5);
+            let (doc_pane, _) = workbench.open_document_in_normal_group(document);
+            let id = explorer(workbench);
             workbench.show_tool(id).unwrap();
             let split = |workbench: &mut Workbench, edge: super::SplitEdge| {
                 let (_, tool_tab) = workbench.tool_tab(id).unwrap();
@@ -876,7 +863,7 @@ mod tests {
             assert_eq!(
                 location(workbench),
                 StoredTool {
-                    id: crate::app::tool_layout::EXPLORER_TOOL_ID.to_owned(),
+                    id: EXPLORER_TOOL_ID.to_owned(),
                     location: StoredLocation::Right,
                     index: 0,
                     visible: true,
@@ -895,31 +882,25 @@ mod tests {
             // Top splits have no dock and flatten to the document group.
             split(workbench, super::SplitEdge::Top);
             assert_eq!(location(workbench).location, StoredLocation::DocumentGroup);
-        });
+        }
     }
 
-    #[gpui::test]
-    fn tool_snapshots_flatten_vanished_groups(cx: &mut gpui::TestAppContext) {
-        let workbench = cx.new(|_| Workbench::empty());
-        workbench.update(cx, |workbench, cx| {
-            let id = explorer(workbench, cx);
+    #[test]
+    fn tool_snapshots_flatten_vanished_groups() {
+        let workbench = &mut Workbench::empty();
+        {
+            let id = explorer(workbench);
             workbench.place_tool(id, ToolPlacement::DocumentGroup);
             workbench.hide_tool(id);
             // The remembered pane still exists as an ordinary group.
             let remembered = workbench.tool_layout_snapshot();
-            assert_eq!(
-                remembered.tools[0].location,
-                crate::app::tool_layout::StoredLocation::DocumentGroup
-            );
+            assert_eq!(remembered.tools[0].location, StoredLocation::DocumentGroup);
             // A vanished pane flattens the same way instead of naming a dead group.
             workbench.remember_tool_placement(id, ToolPlacement::Group(PaneId(999)), 3);
             let vanished = workbench.tool_layout_snapshot();
-            assert_eq!(
-                vanished.tools[0].location,
-                crate::app::tool_layout::StoredLocation::DocumentGroup
-            );
+            assert_eq!(vanished.tools[0].location, StoredLocation::DocumentGroup);
             assert_eq!(vanished.tools[0].index, 3);
             assert!(!vanished.tools[0].visible);
-        });
+        }
     }
 }

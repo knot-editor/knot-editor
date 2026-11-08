@@ -9,12 +9,7 @@ fn active_editor(
     cx: &gpui::App,
 ) -> Entity<crate::app::editor::EditorView> {
     let workbench = shell.read(cx).workbench.read(cx);
-    match workbench
-        .focused_pane()
-        .unwrap()
-        .active_tab()
-        .command_view()
-    {
+    match workbench.focused_command_view() {
         Some(CommandView::Editor(editor)) => editor,
         _ => panic!("the active tab is not an editor"),
     }

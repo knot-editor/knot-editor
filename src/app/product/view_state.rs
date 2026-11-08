@@ -31,13 +31,10 @@ impl ProductShell {
 
     /// Observe every editor view presented in this window.
     pub(super) fn observe_editor_view_state(&mut self, cx: &mut Context<Self>) {
-        let editors = self
-            .workbench
-            .read(cx)
-            .panes()
-            .iter()
-            .flat_map(|pane| pane.tabs())
-            .filter_map(|tab| tab.editor())
+        let workbench = self.workbench.read(cx);
+        let editors = workbench
+            .tabs()
+            .filter_map(|tab| workbench.editor(tab))
             .map(|view| view.read(cx).editor().clone())
             .collect::<Vec<_>>();
         self.view_state

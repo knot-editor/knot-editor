@@ -200,8 +200,9 @@ await commands.register("green", async () => { await settings.set("theme.dark", 
 
     let painted = |cx: &mut TestAppContext| {
         cx.read(|cx| {
-            let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
-            let editor = pane.active_tab().editor().unwrap().read(cx);
+            let workbench = shell.read(cx).workbench.read(cx);
+            let pane = workbench.focused_pane().unwrap();
+            let editor = workbench.editor(pane.active_tab()).unwrap().read(cx);
             (
                 editor.underline_colors_for_test(0, cx),
                 editor.gutter_colors_for_test(cx),

@@ -40,15 +40,7 @@ async fn editing_commands_keep_the_captured_view_and_native_clipboard(cx: &mut T
     }
     cx.read(|cx| {
         assert_eq!(model.read(cx).text(), "fn café() {\n    👩‍💻\n}\n");
-        let active = shell
-            .read(cx)
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
-            .unwrap();
+        let active = shell.read(cx).workbench.read(cx).focused_editor().unwrap();
         assert_eq!(active.read(cx).model().read(cx).text(), "");
     });
     let execution = dispatcher.update(cx, |dispatcher, cx| {
@@ -101,10 +93,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
@@ -122,10 +111,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
@@ -380,10 +366,7 @@ fn product_editor_accepts_utf16_composition_and_grapheme_deletion(cx: &mut TestA
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
@@ -477,10 +460,7 @@ fn product_editor_captures_mouse_selection_outside_its_pane(cx: &mut TestAppCont
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });
@@ -715,8 +695,14 @@ fn focus_transfer_and_distinct_views_break_typing_groups(cx: &mut TestAppContext
     let (first, second) = cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         (
-            workbench.panes()[0].active_tab().editor().unwrap().clone(),
-            workbench.panes()[1].active_tab().editor().unwrap().clone(),
+            workbench
+                .editor(workbench.panes()[0].active_tab())
+                .unwrap()
+                .clone(),
+            workbench
+                .editor(workbench.panes()[1].active_tab())
+                .unwrap()
+                .clone(),
         )
     });
     cx.update_window(window_handle, |_, window, cx| {

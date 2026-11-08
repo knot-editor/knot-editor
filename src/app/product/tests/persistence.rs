@@ -111,8 +111,14 @@ fn opening_and_saving_through_a_symlink_keeps_the_link_and_updates_its_target(
     let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let opened = cx.read(|cx| {
-        let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
-        pane.active_tab().editor().unwrap().read(cx).model().clone()
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        workbench
+            .editor(pane.active_tab())
+            .unwrap()
+            .read(cx)
+            .model()
+            .clone()
     });
     assert_eq!(cx.read(|cx| opened.read(cx).text()), "linked text");
     opened.update(cx, |model, cx| {
@@ -881,15 +887,16 @@ fn open_from_terminal_requests_picker_and_preserves_terminal(cx: &mut TestAppCon
     let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| {
-        let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         assert!(
             pane.tabs()
                 .iter()
-                .any(|tab| tab.id() == terminal_tab && tab.terminal_view().is_some())
+                .any(|tab| tab.id() == terminal_tab && workbench.terminal_view(tab).is_some())
         );
         assert_eq!(
-            pane.active_tab()
-                .editor()
+            workbench
+                .editor(pane.active_tab())
                 .unwrap()
                 .read(cx)
                 .model()

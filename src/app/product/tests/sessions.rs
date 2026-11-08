@@ -1007,7 +1007,7 @@ fn editors(
             .panes()
             .iter()
             .flat_map(|pane| pane.tabs())
-            .filter_map(|tab| tab.editor())
+            .filter_map(|tab| workbench.editor(tab))
             .map(|view| view.read(cx).editor().clone())
             .collect()
     })

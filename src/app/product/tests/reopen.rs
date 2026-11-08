@@ -121,15 +121,7 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
         folds: Vec::new(),
     };
     shell.update(cx, |shell, cx| {
-        let editor = shell
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
-            .unwrap()
-            .clone();
+        let editor = shell.workbench.read(cx).focused_editor().unwrap().clone();
         editor.update(cx, |editor, cx| {
             editor.editor().clone().update(cx, |editor, cx| {
                 editor.restore_view_state(state.clone(), cx)
@@ -170,11 +162,12 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
         ]
     );
     cx.read(|cx| {
-        let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         assert_eq!(pane.active_tab_id(), pane.tabs()[2].id());
         assert_eq!(
-            pane.active_tab()
-                .editor()
+            workbench
+                .editor(pane.active_tab())
                 .unwrap()
                 .read(cx)
                 .editor()

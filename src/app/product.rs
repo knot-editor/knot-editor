@@ -82,9 +82,9 @@ use super::{
         InputEvent, InputView, PromptText, TransientOutcome, TransientOwner, TransientSurface,
     },
     workbench::{
-        CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, SplitDirection,
-        SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent, ToolFrameId,
-        ToolPlacement, Workbench, WorkbenchLayout,
+        CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, PresentationId,
+        SplitDirection, SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent,
+        ToolFrameId, ToolPlacement, Workbench, WorkbenchLayout,
     },
     workspace::WorkspaceState,
     workspace_tree::{
@@ -204,7 +204,7 @@ struct ProtectedCloseRequest {
 struct ProtectedViewKey {
     session: EntityId,
     workbench: EntityId,
-    presentation: Option<EntityId>,
+    presentation: PresentationId,
     pane: PaneId,
     tab: TabId,
     surface: TabSurfaceId,
@@ -482,7 +482,7 @@ struct OpenTarget {
     pane: PaneId,
     tab: TabId,
     surface: TabSurfaceId,
-    presentation: Option<EntityId>,
+    presentation: PresentationId,
 }
 
 impl OpenTarget {
@@ -898,7 +898,12 @@ impl ProductShell {
             .panes()
             .iter()
             .flat_map(|pane| pane.tabs())
-            .filter_map(|tab| tab.command_view().map(|view| view.focus_handle(cx)))
+            .filter_map(|tab| {
+                self.workbench
+                    .read(cx)
+                    .command_view(tab)
+                    .map(|view| view.focus_handle(cx))
+            })
             .collect::<Vec<_>>();
         self.application_focus
             .retain(|(handle, _, _)| handles.contains(handle));
@@ -935,11 +940,13 @@ impl ProductShell {
     /// Focus the surface whose view owns `handle`. The window reports focus
     /// a click gives a view the same way.
     pub(crate) fn focus_view(&mut self, handle: &FocusHandle, cx: &mut Context<Self>) {
-        let Some((pane, tab, document)) = self.workbench.read(cx).panes().iter().find_map(|pane| {
+        let workbench = self.workbench.read(cx);
+        let Some((pane, tab, document)) = workbench.panes().iter().find_map(|pane| {
             pane.tabs()
                 .iter()
                 .find(|tab| {
-                    tab.command_view()
+                    workbench
+                        .command_view(tab)
                         .is_some_and(|view| &view.focus_handle(cx) == handle)
                 })
                 .map(|tab| (pane.id(), tab.id(), tab.document_id()))
@@ -1041,10 +1048,7 @@ impl ProductShell {
                     .tabs()
                     .iter()
                     .map(|tab| {
-                        let presentation = tab
-                            .presentation()
-                            .map(|id| id.as_u64().to_string())
-                            .unwrap_or_default();
+                        let presentation = tab.presentation().value().to_string();
                         let view_target = PresentationTarget {
                             pane: pane_target.clone(),
                             tab: tab.id().value().to_string(),
@@ -1205,8 +1209,7 @@ impl ProductShell {
             Focus::Workbench => self
                 .workbench
                 .read(cx)
-                .focused_pane()
-                .and_then(|pane| pane.active_tab().command_view())
+                .focused_command_view()
                 .map(|view| view.focus_handle(cx)),
             Focus::Palette => self
                 .command_palette
@@ -1246,7 +1249,7 @@ impl ProductShell {
         let pane = workbench.focused_pane()?;
         let tab = pane.active_tab();
         let focused = self.focus == Focus::Workbench;
-        let view = match tab.command_view() {
+        let view = match workbench.command_view(tab) {
             Some(super::workbench::CommandView::Extension(extension)) if focused => {
                 Some(extension.instance_id(cx))
             }
@@ -1732,15 +1735,12 @@ impl ProductShell {
                 (pane, tab)
             }
         });
-        let editor = self
+        let presentation = self
             .workbench
             .read(cx)
-            .pane(pane)
+            .tab(pane, tab)
             .unwrap()
-            .active_tab()
-            .editor()
-            .unwrap()
-            .clone();
+            .presentation();
         self.focus_active_surface(cx);
         cx.notify();
         Some((
@@ -1751,7 +1751,7 @@ impl ProductShell {
                 pane,
                 tab,
                 surface: TabSurfaceId::Document(document),
-                presentation: Some(editor.entity_id()),
+                presentation,
             },
         ))
     }
@@ -1766,7 +1766,6 @@ impl ProductShell {
     ) -> Option<OpenTarget> {
         self.workbench.read(cx).pane(pane)?;
         let (id, view) = self.create_terminal_in(directory, cx);
-        let presentation = view.entity_id();
         let Some((pane, tab)) = self.workbench.update(cx, |workbench, _| {
             if workbench.dock_location(pane).is_some() {
                 workbench.open_terminal_in_normal_group(id, view)
@@ -1787,7 +1786,12 @@ impl ProductShell {
             pane,
             tab,
             surface: TabSurfaceId::Terminal(id),
-            presentation: Some(presentation),
+            presentation: self
+                .workbench
+                .read(cx)
+                .tab(pane, tab)
+                .unwrap()
+                .presentation(),
         })
     }
 

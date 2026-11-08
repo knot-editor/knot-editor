@@ -31,7 +31,7 @@ crates/knot-core      UI-, platform-, and scripting-independent text and edit pr
 crates/knot-protocol  Knot-owned serde transport types and operation declarations
 crates/knot-host      V8, bounded scheduling, and module-graph validation
 crates/knot-model     gpui-free editor state and policy: syntax, history, keys, keymaps,
-                      theme values, resources, and package discovery
+                      theme values, resources, package discovery, and workbench layout
 crates/knot-bundled   BundledSource and the build helper that compiles bundled packages
 crates/knot-ext-*     compiled bundled packages by domain, with their integration tests
 crates/knot-app       the knot binary: joins the packages and calls knot::run
@@ -49,7 +49,7 @@ canonical source before reading broadly.
 | --- | --- | --- |
 | Text storage, history, anchored ranges | [core and buffers](docs/architecture/core-and-buffers.md) | `src/core/` |
 | Document identity, dirty state, providers, Open/Save | [documents and persistence](docs/architecture/documents-and-persistence.md) | `src/app/documents.rs`, `crates/knot-model/src/{open,resource}.rs`, `src/app/product/{open,save}.rs`, `src/app/model.rs` |
-| Windows, panes, tabs, closure, terminal, tool layout | [workbench and lifecycle](docs/architecture/workbench-and-lifecycle.md) | `src/app/workbench/`, `src/app/product/` (`closure.rs`, `tools.rs`, `launch.rs`, `render.rs`), `src/app/terminal/` |
+| Windows, panes, tabs, closure, terminal, tool layout | [workbench and lifecycle](docs/architecture/workbench-and-lifecycle.md) | `crates/knot-model/src/workbench/`, `src/app/workbench.rs`, `src/app/product/` (`closure.rs`, `tools.rs`, `launch.rs`, `render.rs`), `src/app/terminal/` |
 | Commands, keymaps, captured targets, focus routing | [commands](docs/architecture/commands.md) | `src/app/commands/`, `src/app/product/commands.rs` |
 | Extension runtime, scheduling, lifecycle, records | [extension host](docs/architecture/extension-host.md) | `crates/knot-host/src/`, `crates/knot-protocol/src/`, `src/app/extensions/` |
 | Contributed UI, trees, completion, generated text | [semantic UI](docs/architecture/semantic-ui.md) | `src/app/extensions/semantics.rs`, `src/app/tree_view.rs`, `src/app/completion.rs` |

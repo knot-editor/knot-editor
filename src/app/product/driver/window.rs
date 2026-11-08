@@ -222,7 +222,7 @@ impl TestWindow {
             let workbench = self.shell.read(cx).workbench.read(cx);
             let pane = workbench.normal_pane().unwrap();
             let tab = workbench.pane(pane).unwrap().active_tab();
-            tab.editor().unwrap().read(cx).model().clone()
+            workbench.editor(tab).unwrap().read(cx).model().clone()
         });
         model.update(cx, |model, cx| {
             let len = model.text().len();
@@ -267,14 +267,10 @@ impl TestWindow {
     /// The editor tabs, in layout order.
     pub fn editors(&self, cx: &mut TestAppContext) -> Vec<EditorTab> {
         cx.read(|cx| {
-            self.shell
-                .read(cx)
-                .workbench
-                .read(cx)
-                .panes()
-                .iter()
-                .flat_map(|pane| pane.tabs())
-                .filter_map(|tab| tab.editor())
+            let workbench = self.shell.read(cx).workbench.read(cx);
+            workbench
+                .tabs()
+                .filter_map(|tab| workbench.editor(tab))
                 .map(|view| {
                     let view = view.read(cx);
                     let state = view.editor().read(cx).view_state(cx);
@@ -320,10 +316,7 @@ impl TestWindow {
                 .read(cx)
                 .workbench
                 .read(cx)
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .editor()
+                .focused_editor()
                 .unwrap()
                 .read(cx)
                 .editor()
@@ -465,8 +458,8 @@ impl TestTree {
             let focus = self.tree.read(cx).focus_handle(cx);
             let workbench = self.shell.read(cx).workbench.read(cx);
             workbench.focused_pane().is_some_and(|pane| {
-                pane.active_tab()
-                    .command_view()
+                workbench
+                    .command_view(pane.active_tab())
                     .is_some_and(|view| view.focus_handle(cx) == focus)
             })
         })
@@ -517,21 +510,17 @@ impl TestTree {
         cx: &gpui::App,
     ) -> Option<(crate::app::workbench::PaneId, crate::app::workbench::TabId)> {
         let focus = self.tree.read(cx).focus_handle(cx);
-        self.shell
-            .read(cx)
-            .workbench
-            .read(cx)
-            .panes()
-            .iter()
-            .find_map(|pane| {
-                pane.tabs()
-                    .iter()
-                    .find(|tab| {
-                        tab.command_view()
-                            .is_some_and(|view| view.focus_handle(cx) == focus)
-                    })
-                    .map(|tab| (pane.id(), tab.id()))
-            })
+        let workbench = self.shell.read(cx).workbench.read(cx);
+        workbench.panes().iter().find_map(|pane| {
+            pane.tabs()
+                .iter()
+                .find(|tab| {
+                    workbench
+                        .command_view(tab)
+                        .is_some_and(|view| view.focus_handle(cx) == focus)
+                })
+                .map(|tab| (pane.id(), tab.id()))
+        })
     }
 
     fn activate_tab(&self, cx: &mut TestAppContext) {
@@ -548,7 +537,8 @@ impl TestTree {
 fn open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarget {
     let session = shell.downgrade();
     let shell = shell.read(cx);
-    let pane = shell.workbench.read(cx).focused_pane().unwrap();
+    let workbench = shell.workbench.read(cx);
+    let pane = workbench.focused_pane().unwrap();
     let tab = pane.active_tab();
     OpenTarget {
         shell: session,

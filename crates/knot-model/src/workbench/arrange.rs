@@ -1,59 +1,67 @@
 //! Installing a restored arrangement into a fresh workbench.
 
 use super::*;
-use crate::app::{editor::EditorViewState, model::BufferModel, window_layout::PlanNode};
 
-/// One tab of a restored arrangement, materialized by its kind's step.
-pub(crate) enum ArrangedTab {
-    Document {
-        document: DocumentId,
-        model: Entity<BufferModel>,
-        view: EditorViewState,
+/// A pruned arrangement whose tabs are materialized per kind before the
+/// workbench installs it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PlanNode<T> {
+    Pane {
+        dock: Option<DockLocation>,
+        selected: usize,
+        focused: bool,
+        /// How many of the leading tabs are pinned.
+        pinned: usize,
+        tabs: Vec<T>,
     },
-    Tool(ToolFrameId),
-    Terminal(TerminalSessionId, Option<Entity<TerminalView>>),
+    Split {
+        direction: SplitDirection,
+        ratio: f32,
+        first: Box<PlanNode<T>>,
+        second: Box<PlanNode<T>>,
+    },
+}
+
+impl<T> PlanNode<T> {
+    pub fn map<U>(self, step: &mut impl FnMut(T) -> U) -> PlanNode<U> {
+        match self {
+            Self::Pane {
+                dock,
+                selected,
+                focused,
+                pinned,
+                tabs,
+            } => PlanNode::Pane {
+                dock,
+                selected,
+                focused,
+                pinned,
+                tabs: tabs.into_iter().map(&mut *step).collect(),
+            },
+            Self::Split {
+                direction,
+                ratio,
+                first,
+                second,
+            } => PlanNode::Split {
+                direction,
+                ratio,
+                first: Box::new(first.map(step)),
+                second: Box::new(second.map(step)),
+            },
+        }
+    }
 }
 
 impl Workbench {
-    fn arranged_payload(&self, tab: ArrangedTab, cx: &mut Context<Self>) -> WorkbenchTabPayload {
-        match tab {
-            ArrangedTab::Document {
-                document,
-                model,
-                view,
-            } => WorkbenchTabPayload::Document {
-                document_id: document,
-                editor: cx.new(|cx| {
-                    let editor = EditorView::new(model, cx);
-                    editor
-                        .editor()
-                        .update(cx, |editor, cx| editor.restore_view_state(view, cx));
-                    editor
-                }),
-            },
-            ArrangedTab::Tool(id) => WorkbenchTabPayload::Tool {
-                id,
-                content: self
-                    .tool(id)
-                    .expect("arranged tools are registered")
-                    .content
-                    .clone(),
-            },
-            ArrangedTab::Terminal(session_id, view) => {
-                WorkbenchTabPayload::Terminal { session_id, view }
-            }
-        }
-    }
-
     /// Install one restored tab at `index` of `pane`, or at the end of the
     /// normal group when that pane is gone, and activate it.
-    pub(crate) fn insert_arranged(
+    pub fn insert_arranged(
         &mut self,
         pane: PaneId,
         index: usize,
-        tab: ArrangedTab,
+        surface: TabSurfaceId,
         pinned: bool,
-        cx: &mut Context<Self>,
     ) -> (PaneId, TabId) {
         let (pane, index) = if self.pane(pane).is_some() {
             (pane, index)
@@ -63,12 +71,7 @@ impl Workbench {
                 .unwrap_or_else(|| self.create_group(None));
             (pane, usize::MAX)
         };
-        let tab = WorkbenchTab {
-            id: self.allocate_tab_id(),
-            pinned,
-            preview: false,
-            payload: self.arranged_payload(tab, cx),
-        };
+        let tab = self.new_tab(surface, pinned);
         let id = tab.id;
         let group = self
             .panes
@@ -83,17 +86,17 @@ impl Workbench {
         (pane, id)
     }
 
-    /// Replace every presentation with a restored arrangement. Visible tools
-    /// are hidden first, keeping their remembered placement, so tools the
-    /// arrangement does not name stay hidden. Each document tab gets its own
-    /// view with its restored state. The focused pane is the marked one, else
-    /// the first ordinary group, else the first pane.
-    pub(crate) fn arrange(
+    /// Replace every tab with a restored arrangement. Visible tools are
+    /// hidden first, keeping their remembered placement, so tools the
+    /// arrangement does not name stay hidden. Each arranged tab carries a value
+    /// the caller gets back with the tab's presentation, in plan order. The
+    /// focused pane is the marked one, else the first ordinary group, else the
+    /// first pane.
+    pub fn arrange<T>(
         &mut self,
-        root: Option<PlanNode<ArrangedTab>>,
+        root: Option<PlanNode<(TabSurfaceId, T)>>,
         dock_sizes: [f32; 3],
-        cx: &mut Context<Self>,
-    ) {
+    ) -> Vec<(PresentationId, T)> {
         let visible = self
             .tools
             .iter()
@@ -108,7 +111,8 @@ impl Workbench {
         self.panes.clear();
         self.docks.clear();
         let mut focused = None;
-        self.layout = root.map(|root| self.install(root, &mut focused, cx));
+        let mut installed = Vec::new();
+        self.layout = root.map(|root| self.install(root, &mut focused, &mut installed));
         self.focused_pane = focused.or_else(|| {
             self.panes
                 .iter()
@@ -117,13 +121,14 @@ impl Workbench {
                 .map(|pane| pane.id)
         });
         self.set_dock_sizes(dock_sizes);
+        installed
     }
 
-    fn install(
+    fn install<T>(
         &mut self,
-        node: PlanNode<ArrangedTab>,
+        node: PlanNode<(TabSurfaceId, T)>,
         focused: &mut Option<PaneId>,
-        cx: &mut Context<Self>,
+        installed: &mut Vec<(PresentationId, T)>,
     ) -> WorkbenchLayout {
         match node {
             PlanNode::Pane {
@@ -137,11 +142,10 @@ impl Workbench {
                 let tabs = tabs
                     .into_iter()
                     .enumerate()
-                    .map(|(index, tab)| WorkbenchTab {
-                        id: self.allocate_tab_id(),
-                        pinned: index < pinned,
-                        preview: false,
-                        payload: self.arranged_payload(tab, cx),
+                    .map(|(index, (surface, value))| {
+                        let tab = self.new_tab(surface, index < pinned);
+                        installed.push((tab.presentation, value));
+                        tab
                     })
                     .collect::<Vec<_>>();
                 let active_tab = tabs[selected.min(tabs.len() - 1)].id;
@@ -162,8 +166,8 @@ impl Workbench {
             } => WorkbenchLayout::Split {
                 direction,
                 ratio: WorkbenchLayout::clamp_ratio(ratio),
-                first: Box::new(self.install(*first, focused, cx)),
-                second: Box::new(self.install(*second, focused, cx)),
+                first: Box::new(self.install(*first, focused, installed)),
+                second: Box::new(self.install(*second, focused, installed)),
             },
         }
     }

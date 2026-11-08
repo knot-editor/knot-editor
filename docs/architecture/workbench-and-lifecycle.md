@@ -83,7 +83,7 @@ controller, and it runs the native editing and movement commands without a
 window. The `EditorView` renders it: it owns focus, painting, pointer gestures,
 the platform input handler, shaped hit testing, and horizontal scrolling, and
 each layout tells the editor its viewport height in rows and its wrap width in
-cells. A document tab owns the view, which owns its editor; commands, editor
+cells. A document tab's presentation owns the view, which owns its editor; commands, editor
 handles, and completion reach the `Editor`. Multiple editors share a model
 while retaining independent presentation state. Completion ownership is
 detailed in [semantic UI](semantic-ui.md#completion-ownership-and-aggregation).
@@ -296,11 +296,17 @@ drives it through the real host.
 
 ## Workbench and protected closure
 
-`Workbench` owns a session's binary split tree, stable pane/tab identities,
-ordered tabs, and focused pane. A document tab strongly owns one `EditorView`
-of an application-owned document. A terminal tab owns the sole attached view of
-an application-owned session, with no document model. A tool tab attaches a
-workbench-owned native frame whose definition and presentation survive hiding.
+The layout model (`knot_model::workbench`) owns a session's binary split tree,
+stable pane/tab identities, ordered tabs, and focused pane. A tab holds the
+identity of what it shows (a document, a terminal session, or a tool) and a
+presentation identity, which captured targets compare. The session's workbench
+entity pairs the layout with the view behind each presentation: it creates a
+view when a transition opens a tab and drops it once no tab or tool presents
+it. A document tab presents one `EditorView` of an application-owned document,
+fresh whenever it opens, shows another document, or moves to another window. A
+terminal tab presents the sole attached view of an application-owned session,
+with no document model. A tool tab presents its tool's native frame, whose
+definition and presentation survive hiding.
 Left/right sidebars and bottom docks are identified groups in the same split
 tree, with window-local sizes and selectors. Tools can also share ordinary
 document groups. Splitting a document

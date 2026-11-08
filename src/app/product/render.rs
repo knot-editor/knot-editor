@@ -164,29 +164,29 @@ impl ProductShell {
         let workbench = self.workbench.read(cx);
         let pane = workbench.pane(pane_id).unwrap();
         let active_tab = pane.active_tab_id();
-        let active_view: Option<AnyElement> = pane
-            .active_tab()
-            .editor()
+        let active_view: Option<AnyElement> = workbench
+            .editor(pane.active_tab())
             .cloned()
             .map(|editor| editor.into_any_element())
             .or_else(|| {
-                pane.active_tab()
-                    .terminal_view()
+                workbench
+                    .terminal_view(pane.active_tab())
                     .cloned()
                     .map(|view| view.into_any_element())
             });
         let active_view = active_view.or_else(|| {
-            pane.active_tab()
-                .tool_content()
-                .map(|content| match content {
-                    ToolContent::Workspace(view) => view.clone().into_any_element(),
-                    ToolContent::Extension(crate::app::workbench::ExtensionView::Tree(view)) => {
-                        view.clone().into_any_element()
-                    }
-                    ToolContent::Extension(crate::app::workbench::ExtensionView::Text(view)) => {
-                        view.clone().into_any_element()
-                    }
-                })
+            let TabSurfaceId::Tool(tool) = pane.active_tab().surface_id() else {
+                return None;
+            };
+            workbench.tool_content(tool).map(|content| match content {
+                ToolContent::Workspace(view) => view.clone().into_any_element(),
+                ToolContent::Extension(crate::app::workbench::ExtensionView::Tree(view)) => {
+                    view.clone().into_any_element()
+                }
+                ToolContent::Extension(crate::app::workbench::ExtensionView::Text(view)) => {
+                    view.clone().into_any_element()
+                }
+            })
         });
         let documents = Self::documents(cx);
         let tabs = pane

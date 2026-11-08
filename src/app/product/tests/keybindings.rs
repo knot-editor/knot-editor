@@ -395,10 +395,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
@@ -1143,10 +1140,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });
@@ -1304,10 +1298,7 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });
@@ -1363,10 +1354,7 @@ fn focused_editor_window(
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {

@@ -102,10 +102,7 @@ fn capture_destination(
         .ok_or(AccessError::InvalidTarget)?;
         let presentation = tab.presentation();
         if let DocumentDestination::View(target) = destination
-            && presentation
-                .map(|id| id.as_u64().to_string())
-                .unwrap_or_default()
-                != target.presentation
+            && presentation.value().to_string() != target.presentation
         {
             return Err(AccessError::InvalidTarget);
         }
@@ -132,10 +129,7 @@ impl OpenTarget {
                 pane: self.pane.value().to_string(),
             },
             tab: self.tab.value().to_string(),
-            presentation: self
-                .presentation
-                .map(|id| id.as_u64().to_string())
-                .unwrap_or_default(),
+            presentation: self.presentation.value().to_string(),
         }
     }
 }
@@ -262,11 +256,9 @@ impl EditorTab {
         }
         let workbench = workbench.read(cx);
         let tab = workbench
-            .pane(target.pane)?
-            .tabs()
-            .iter()
-            .find(|tab| tab.id() == target.tab && tab.surface_id() == target.surface)?;
-        match tab.command_view()? {
+            .tab(target.pane, target.tab)
+            .filter(|tab| tab.surface_id() == target.surface)?;
+        match workbench.command_view(tab)? {
             crate::app::workbench::CommandView::Editor(view) => {
                 Some(view.read(cx).editor().clone())
             }
@@ -469,11 +461,10 @@ pub(crate) fn close_presentation(
         .workbench
         .upgrade()
         .ok_or(CloseError::Access(AccessError::InvalidTarget))?;
-    workbench
-        .read(cx)
-        .pane(target.pane)
-        .and_then(|pane| pane.tabs().iter().find(|tab| tab.id() == target.tab))
-        .and_then(|tab| tab.command_view())
+    let workbench_state = workbench.read(cx);
+    workbench_state
+        .tab(target.pane, target.tab)
+        .and_then(|tab| workbench_state.command_view(tab))
         .ok_or(CloseError::Access(AccessError::InvalidTarget))?;
     let origin = ProductCommandTarget {
         shell: shell.downgrade(),

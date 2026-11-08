@@ -94,12 +94,8 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         assert_eq!(
-            workbench
-                .tool(id_of(workbench))
-                .unwrap()
-                .content
-                .presentation(),
-            tree.entity_id()
+            workbench.tool_presenting(tree.entity_id()),
+            Some(id_of(workbench))
         );
         let pane = workbench.tool_tab(id_of(workbench)).unwrap().0;
         assert!(workbench.dock_location(pane).is_none());
@@ -334,7 +330,8 @@ fn explorer_docks_have_visible_geometry_and_open_files_by_click(cx: &mut TestApp
         visual.run_until_parked();
         visual.read(|cx| {
             let state = shell.read(cx);
-            let pane = state.workbench.read(cx).focused_pane().unwrap();
+            let workbench = state.workbench.read(cx);
+            let pane = workbench.focused_pane().unwrap();
             let document = pane.active_tab().document_id().unwrap();
             assert_eq!(
                 documents.read(cx).get(document).unwrap().resource_uri(),

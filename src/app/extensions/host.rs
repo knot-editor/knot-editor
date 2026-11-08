@@ -2034,15 +2034,11 @@ impl ProductExtensionHost {
         let Some(workbench) = target.workbench.upgrade() else {
             return knot_protocol::CommandOutcome::InvalidTarget;
         };
+        let workbench = workbench.read(cx);
         let Some(editor) = workbench
-            .read(cx)
-            .pane(target.pane)
-            .and_then(|pane| {
-                pane.tabs()
-                    .iter()
-                    .find(|tab| tab.id() == target.tab && tab.surface_id() == target.surface)
-            })
-            .and_then(|tab| tab.editor())
+            .tab(target.pane, target.tab)
+            .filter(|tab| tab.surface_id() == target.surface)
+            .and_then(|tab| workbench.editor(tab))
             .map(|view| view.read(cx).editor().clone())
         else {
             return knot_protocol::CommandOutcome::InvalidTarget;
@@ -2127,16 +2123,11 @@ impl ProductExtensionHost {
         }
         target.document_id(cx).ok()?;
         let workbench = target.workbench.upgrade()?;
-        let model = workbench
-            .read(cx)
-            .pane(target.pane)?
-            .tabs()
-            .iter()
-            .find(|tab| tab.id() == target.tab && tab.surface_id() == target.surface)?
-            .editor()?
-            .read(cx)
-            .model()
-            .clone();
+        let workbench = workbench.read(cx);
+        let tab = workbench
+            .tab(target.pane, target.tab)
+            .filter(|tab| tab.surface_id() == target.surface)?;
+        let model = workbench.editor(tab)?.read(cx).model().clone();
         Some(self.track_buffer(&model, cx))
     }
 

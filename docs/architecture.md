@@ -29,9 +29,10 @@ gpui application and native views
 - `knot-model` owns editor state and policy that need no gpui, V8, or host:
   syntax and the compiled-in grammars, edit history, indentation and language
   editing configuration, key notation, the command catalog, keymap registries
-  and matching, theme values, resource URIs and providers, and package
-  discovery. Its functions take plain data and the models they change and
-  return results as data; application globals wrap its state.
+  and matching, theme values, resource URIs and providers, package
+  discovery, and the workbench layout over tab identities. Its functions take
+  plain data and the models they change and return results as data;
+  application globals and entities wrap its state.
 - `knot-bundled` owns the `BundledSource` type and the build-script helper
   that compiles bundled TypeScript packages. The `knot-ext-*` group crates
   (languages, vim, workbench) compile and expose the packages of one domain,
@@ -62,7 +63,8 @@ it paints with, and the application theme maps color keys and highlight names
 to styles.
 Each product session owns a workbench whose split panes contain typed
 document, terminal, or native tool tabs, along with Knot-side focus and key
-routing; the application keeps the registry of open sessions, and a window
+routing; tabs hold identities, and the session's workbench entity owns the
+view behind each one; the application keeps the registry of open sessions, and a window
 renders one session and forwards raw input to it.
 The workbench retains native tool definitions independently of visible tab
 attachments, including dock placement and hide/reopen state. The application

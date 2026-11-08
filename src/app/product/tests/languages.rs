@@ -127,8 +127,14 @@ fn reported(model: &Entity<BufferModel>, cx: &TestAppContext) -> String {
 
 fn active_model(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Entity<BufferModel> {
     cx.read(|cx| {
-        let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
-        pane.active_tab().editor().unwrap().read(cx).model().clone()
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        workbench
+            .editor(pane.active_tab())
+            .unwrap()
+            .read(cx)
+            .model()
+            .clone()
     })
 }
 

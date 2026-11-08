@@ -51,7 +51,8 @@ pub(super) fn open_product_window_with(
     let shell = cx.new(|cx| ProductShell::new(workbench, cx));
     shell.update(cx, |shell, cx| {
         shell.restore_fresh_window_layout(cx);
-        let pane = shell.workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         let tab = pane.active_tab();
         let target = OpenTarget {
             shell: cx.weak_entity(),

@@ -242,7 +242,7 @@ fn restore_skips_unknown_tools_without_blank_frames(cx: &mut TestAppContext) {
     open_workspace(&shell, cx);
     let before = stored(cx);
     let mut snapshot = ToolLayoutSnapshot::product_default();
-    snapshot.tools.push(crate::app::tool_layout::StoredTool {
+    snapshot.tools.push(knot_model::workbench::StoredTool {
         id: "knot.missing".into(),
         location: StoredLocation::Right,
         index: 0,

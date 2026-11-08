@@ -1,20 +1,18 @@
 //! Atomic relocation of one tab without document or session closure.
 
-use gpui::{Entity, EntityId};
-
 use super::{
-    DockLocation, Pane, PaneId, SplitDirection, SplitPlacement, TabId, TerminalView, Workbench,
-    WorkbenchLayout, WorkbenchTab, WorkbenchTabPayload, WorkbenchTabSnapshot,
+    DockLocation, Pane, PaneId, PresentationId, SplitDirection, SplitPlacement, TabId, Workbench,
+    WorkbenchLayout, WorkbenchTab, WorkbenchTabSnapshot,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct TabMoveCapture {
-    pub(crate) tab: WorkbenchTabSnapshot,
-    pub(crate) presentation: Option<EntityId>,
+pub struct TabMoveCapture {
+    pub tab: WorkbenchTabSnapshot,
+    pub presentation: PresentationId,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SplitEdge {
+pub enum SplitEdge {
     Left,
     Right,
     Top,
@@ -33,7 +31,7 @@ impl SplitEdge {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum TabMovePlacement {
+pub enum TabMovePlacement {
     /// Insert immediately before the captured destination tab.
     Before,
     /// Append to the captured tab's pane.
@@ -42,7 +40,7 @@ pub(crate) enum TabMovePlacement {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum TabMoveDestination {
+pub enum TabMoveDestination {
     At {
         anchor: TabMoveCapture,
         placement: TabMovePlacement,
@@ -56,10 +54,10 @@ pub(crate) enum TabMoveDestination {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct TabMoveTransition {
-    pub(crate) destination: WorkbenchTabSnapshot,
-    pub(crate) removed_pane: Option<PaneId>,
-    pub(crate) source_is_empty: bool,
+pub struct TabMoveTransition {
+    pub destination: WorkbenchTabSnapshot,
+    pub removed_pane: Option<PaneId>,
+    pub source_is_empty: bool,
 }
 
 struct PreparedDestination {
@@ -73,13 +71,13 @@ struct PreparedDestination {
 }
 
 impl Workbench {
-    pub(crate) fn capture_tab_move(&self, pane: PaneId, tab: TabId) -> Option<TabMoveCapture> {
+    pub fn capture_tab_move(&self, pane: PaneId, tab: TabId) -> Option<TabMoveCapture> {
         let tab = self
             .pane(pane)?
             .tabs
             .iter()
             .find(|candidate| candidate.id == tab)?;
-        let presentation = tab.presentation();
+        let presentation = tab.presentation;
         Some(TabMoveCapture {
             tab: WorkbenchTabSnapshot {
                 pane_id: pane,
@@ -90,11 +88,11 @@ impl Workbench {
         })
     }
 
-    pub(crate) fn contains_tab_move(&self, captured: TabMoveCapture) -> bool {
+    pub fn contains_tab_move(&self, captured: TabMoveCapture) -> bool {
         self.capture_tab_move(captured.tab.pane_id, captured.tab.tab_id) == Some(captured)
     }
 
-    pub(crate) fn accepts_tab_move(&self, target: TabMoveDestination) -> bool {
+    pub fn accepts_tab_move(&self, target: TabMoveDestination) -> bool {
         match target {
             TabMoveDestination::Empty => self.layout.is_none() && self.panes.is_empty(),
             TabMoveDestination::Dock(_) => true,
@@ -184,6 +182,9 @@ impl Workbench {
     ) -> WorkbenchTabSnapshot {
         tab.id = prepared.tab;
         tab.preview = false;
+        if prepared.new_tab {
+            tab.presentation = self.allocate_presentation();
+        }
         let snapshot = WorkbenchTabSnapshot {
             pane_id: prepared.pane,
             tab_id: tab.id,
@@ -215,7 +216,7 @@ impl Workbench {
         snapshot
     }
 
-    pub(crate) fn relocate_tab(
+    pub fn relocate_tab(
         &mut self,
         source: TabMoveCapture,
         target: TabMoveDestination,
@@ -261,13 +262,14 @@ impl Workbench {
         })
     }
 
-    /// Validate both layouts before removing a payload or invoking terminal handoff.
-    pub(crate) fn transfer_tab_to(
+    /// Move a document or terminal tab into another workbench, where it
+    /// becomes a fresh tab and presentation. Both layouts are validated before
+    /// anything changes.
+    pub fn transfer_tab_to(
         &mut self,
         destination: &mut Workbench,
         source: TabMoveCapture,
         target: TabMoveDestination,
-        handoff: impl FnOnce(Entity<TerminalView>) -> Entity<TerminalView>,
     ) -> Option<TabMoveTransition> {
         if !self.contains_tab_move(source)
             || matches!(source.tab.surface, super::TabSurfaceId::Tool(_))
@@ -280,14 +282,9 @@ impl Workbench {
             return None;
         }
         let prepared = destination.prepare_destination(target, None)?;
-        let mut removed = self
+        let removed = self
             .remove_tab(source.tab.pane_id, source.tab.tab_id)
             .expect("validated source tab");
-        if let WorkbenchTabPayload::Terminal { view, .. } = &mut removed.tab.payload
-            && let Some(source_view) = view.take()
-        {
-            *view = Some(handoff(source_view));
-        }
         let snapshot = destination.install_moved_tab(removed.tab, prepared);
         self.debug_assert_invariants();
         Some(TabMoveTransition {

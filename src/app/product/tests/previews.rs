@@ -132,15 +132,7 @@ async fn explorer_clicks_replace_one_preview_and_double_clicks_or_edits_keep_tab
         cx.notify();
     });
     shell.update(cx, |shell, cx| {
-        let editor = shell
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
-            .unwrap()
-            .clone();
+        let editor = shell.workbench.read(cx).focused_editor().unwrap().clone();
         editor.update(cx, |_, cx| cx.notify());
     });
     cx.run_until_parked();

@@ -84,10 +84,7 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });
@@ -141,8 +138,8 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
         (
             first.id(),
             second.id(),
-            first.active_tab().editor().unwrap().clone(),
-            second.active_tab().editor().unwrap().clone(),
+            workbench.editor(first.active_tab()).unwrap().clone(),
+            workbench.editor(second.active_tab()).unwrap().clone(),
         )
     });
     let target = cx
@@ -276,7 +273,7 @@ async fn palette_discovers_commands_and_keeps_its_opening_target(cx: &mut TestAp
         (
             first.id(),
             workbench.panes()[1].id(),
-            first.active_tab().editor().unwrap().clone(),
+            workbench.editor(first.active_tab()).unwrap().clone(),
         )
     });
     cx.update_window(window_handle, |_, window, cx| {
@@ -492,9 +489,9 @@ fn closing_the_palette_returns_focus_to_its_origin(cx: &mut TestAppContext) {
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model.clone(), cx);
     let editor = cx.read(|cx| {
-        shell.read(cx).workbench.read(cx).panes()[0]
-            .active_tab()
-            .editor()
+        let workbench = shell.read(cx).workbench.read(cx);
+        workbench
+            .editor(workbench.panes()[0].active_tab())
             .unwrap()
             .clone()
     });
@@ -576,12 +573,7 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
     cx.read(|cx| {
         assert_eq!(model.read(cx).text(), "one\ntw");
         let workbench = shell.read(cx).workbench.read(cx);
-        let view = workbench
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
-            .unwrap();
+        let view = workbench.focused_editor().unwrap();
         assert_eq!(view.read(cx).editor().read(cx).selection(cx), (2, 0));
     });
 

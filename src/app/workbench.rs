@@ -1,253 +1,32 @@
-//! Window-local editor layout and view ownership.
+//! A product session's workbench: the layout model and the views its tabs
+//! present.
 //!
-//! A workbench is a binary split tree whose leaves are tabbed panes. Tabs own
-//! presentation views, while documents and terminal sessions remain application-owned. This module models
-//! layout and lifecycle transitions independently of native windows and
-//! confirmation dialogs.
+//! The layout lives in `knot_model::workbench` and holds only identities.
+//! This entity pairs it with the view entity behind each presentation.
+//! Transitions that open tabs or end presentations are methods here, which
+//! create and drop views; every other transition reaches the layout through
+//! `DerefMut` and leaves the views as they are.
 
-#[cfg(debug_assertions)]
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 
-use gpui::{App, AppContext, Context, Entity, FocusHandle, Focusable};
-
-#[cfg(test)]
-use super::documents::Document;
-use super::{
-    documents::DocumentId, editor::EditorView, terminal::view::TerminalView, text_view::TextView,
-    tree_view::TreeView,
+use gpui::{App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable};
+use knot_model::workbench as layout;
+pub(crate) use knot_model::workbench::{
+    CloseConfirmation, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, DocumentId,
+    PaneId, PlanNode, PresentationId, SplitDirection, SplitEdge, SplitPlacement, TabId,
+    TabMoveCapture, TabMoveDestination, TabMovePlacement, TabSurfaceId, TerminalSessionId,
+    ToolFrameId, ToolPlacement, WorkbenchLayout, WorkbenchTab, neighbor,
 };
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct PaneId(u64);
-
-impl PaneId {
-    pub(crate) fn value(self) -> u64 {
-        self.0
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct TabId(u64);
-
-impl TabId {
-    pub(crate) fn value(self) -> u64 {
-        self.0
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct WorkbenchTabSnapshot {
-    pub(crate) pane_id: PaneId,
-    pub(crate) tab_id: TabId,
-    pub(crate) surface: TabSurfaceId,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct TerminalSessionId(pub(crate) u64);
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum TabSurfaceId {
-    Document(DocumentId),
-    Terminal(TerminalSessionId),
-    Tool(ToolFrameId),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum SplitDirection {
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SplitPlacement {
-    Before,
-    After,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum WorkbenchLayout {
-    Pane(PaneId),
-    Split {
-        direction: SplitDirection,
-        /// The fraction of the split's extent given to `first`.
-        ratio: f32,
-        first: Box<Self>,
-        second: Box<Self>,
-    },
-}
-
-impl WorkbenchLayout {
-    /// Each side of an ordinary split keeps at least this share.
-    pub(crate) const MIN_RATIO: f32 = 0.1;
-
-    pub(crate) fn clamp_ratio(ratio: f32) -> f32 {
-        if ratio.is_finite() {
-            ratio.clamp(Self::MIN_RATIO, 1. - Self::MIN_RATIO)
-        } else {
-            0.5
-        }
-    }
-
-    pub(crate) fn split(direction: SplitDirection, first: Self, second: Self) -> Self {
-        Self::Split {
-            direction,
-            ratio: 0.5,
-            first: Box::new(first),
-            second: Box::new(second),
-        }
-    }
-
-    fn split_pane(
-        &mut self,
-        target: PaneId,
-        new_pane: PaneId,
-        direction: SplitDirection,
-        placement: SplitPlacement,
-    ) -> bool {
-        match self {
-            Self::Pane(pane_id) if *pane_id == target => {
-                let (first, second) = match placement {
-                    SplitPlacement::Before => (new_pane, target),
-                    SplitPlacement::After => (target, new_pane),
-                };
-                *self = Self::split(direction, Self::Pane(first), Self::Pane(second));
-                true
-            }
-            Self::Pane(_) => false,
-            Self::Split { first, second, .. } => {
-                first.split_pane(target, new_pane, direction, placement)
-                    || second.split_pane(target, new_pane, direction, placement)
-            }
-        }
-    }
-
-    fn remove_pane(self, target: PaneId) -> Option<Self> {
-        match self {
-            Self::Pane(pane_id) => (pane_id != target).then_some(Self::Pane(pane_id)),
-            Self::Split {
-                direction,
-                ratio,
-                first,
-                second,
-            } => match (first.remove_pane(target), second.remove_pane(target)) {
-                (Some(first), Some(second)) => Some(Self::Split {
-                    direction,
-                    ratio,
-                    first: Box::new(first),
-                    second: Box::new(second),
-                }),
-                (Some(remaining), None) | (None, Some(remaining)) => Some(remaining),
-                (None, None) => None,
-            },
-        }
-    }
-
-    fn first_pane(&self) -> PaneId {
-        match self {
-            Self::Pane(pane_id) => *pane_id,
-            Self::Split { first, .. } => first.first_pane(),
-        }
-    }
-
-    fn contains_pane(&self, target: PaneId) -> bool {
-        match self {
-            Self::Pane(pane_id) => *pane_id == target,
-            Self::Split { first, second, .. } => {
-                first.contains_pane(target) || second.contains_pane(target)
-            }
-        }
-    }
-
-    fn pane_ids(&self, result: &mut Vec<PaneId>) {
-        match self {
-            Self::Pane(pane_id) => result.push(*pane_id),
-            Self::Split { first, second, .. } => {
-                first.pane_ids(result);
-                second.pane_ids(result);
-            }
-        }
-    }
-
-    /// The pane that identifies a split: the first pane of its second child.
-    /// Exactly one split has a given boundary pane, so dividers can address
-    /// their split without a separate identity.
-    pub(crate) fn boundary(&self) -> Option<PaneId> {
-        match self {
-            Self::Pane(_) => None,
-            Self::Split { second, .. } => Some(second.first_pane()),
-        }
-    }
-
-    fn split_with_boundary_mut(&mut self, boundary: PaneId) -> Option<&mut Self> {
-        if self.boundary() == Some(boundary) {
-            return Some(self);
-        }
-        match self {
-            Self::Pane(_) => None,
-            Self::Split { first, second, .. } => first
-                .split_with_boundary_mut(boundary)
-                .or_else(|| second.split_with_boundary_mut(boundary)),
-        }
-    }
-
-    /// The splits enclosing `target`, outermost first, each with whether
-    /// `target` lies in its second child.
-    fn ancestors(&self, target: PaneId) -> Vec<(&Self, bool)> {
-        let mut ancestors = Vec::new();
-        let mut node = self;
-        while let Self::Split { first, second, .. } = node {
-            if first.contains_pane(target) {
-                ancestors.push((node, false));
-                node = first;
-            } else if second.contains_pane(target) {
-                ancestors.push((node, true));
-                node = second;
-            } else {
-                break;
-            }
-        }
-        ancestors
-    }
-
-    /// How many panes lie side by side along `direction`, counting nested
-    /// splits of the same direction.
-    fn weight(&self, direction: SplitDirection) -> f32 {
-        match self {
-            Self::Split {
-                direction: nested,
-                first,
-                second,
-                ..
-            } if *nested == direction => first.weight(direction) + second.weight(direction),
-            _ => 1.,
-        }
-    }
-}
-
-pub(crate) struct WorkbenchTab {
-    id: TabId,
-    /// Pinned tabs form a prefix of their pane's tabs.
-    pinned: bool,
-    /// A preview document tab is replaced by the pane's next preview.
-    preview: bool,
-    payload: WorkbenchTabPayload,
-}
-
-pub(crate) enum WorkbenchTabPayload {
-    Tool {
-        id: ToolFrameId,
-        content: ToolContent,
-    },
-    Document {
-        document_id: DocumentId,
-        editor: Entity<EditorView>,
-    },
-    Terminal {
-        session_id: TerminalSessionId,
-        view: Option<Entity<TerminalView>>,
-    },
-}
+use super::{
+    editor::{EditorView, EditorViewState},
+    model::BufferModel,
+    terminal::view::TerminalView,
+    text_view::TextView,
+    tree_view::TreeView,
+    workspace_tree::WorkspaceTree,
+};
 
 /// Native content owned by one contributed view instance.
 #[derive(Clone)]
@@ -295,6 +74,36 @@ impl ExtensionView {
             Self::Text(view) => view.read(cx).selected_text(cx),
         }
     }
+
+    fn entity_id(&self) -> EntityId {
+        match self {
+            Self::Tree(view) => view.entity_id(),
+            Self::Text(view) => view.entity_id(),
+        }
+    }
+}
+
+/// The native view of a tool.
+#[derive(Clone)]
+pub(crate) enum ToolContent {
+    Workspace(Entity<WorkspaceTree>),
+    Extension(ExtensionView),
+}
+
+impl ToolContent {
+    fn entity_id(&self) -> EntityId {
+        match self {
+            Self::Workspace(view) => view.entity_id(),
+            Self::Extension(view) => view.entity_id(),
+        }
+    }
+
+    pub(crate) fn command_view(&self) -> CommandView {
+        match self {
+            Self::Workspace(view) => CommandView::Workspace(view.clone()),
+            Self::Extension(view) => CommandView::Extension(view.clone()),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -302,7 +111,7 @@ pub(crate) enum CommandView {
     Editor(Entity<EditorView>),
     Terminal(Entity<TerminalView>),
     Extension(ExtensionView),
-    Workspace(Entity<super::workspace_tree::WorkspaceTree>),
+    Workspace(Entity<WorkspaceTree>),
 }
 
 impl CommandView {
@@ -316,465 +125,256 @@ impl CommandView {
     }
 }
 
-impl WorkbenchTab {
-    pub(crate) fn command_view(&self) -> Option<CommandView> {
-        match &self.payload {
-            WorkbenchTabPayload::Tool { content, .. } => Some(content.command_view()),
-            WorkbenchTabPayload::Document { editor, .. } => {
-                Some(CommandView::Editor(editor.clone()))
-            }
-            WorkbenchTabPayload::Terminal { view, .. } => {
-                view.as_ref().cloned().map(CommandView::Terminal)
-            }
-        }
-    }
+/// The view behind one presentation.
+enum PresentationView {
+    Editor(Entity<EditorView>),
+    Terminal(Entity<TerminalView>),
+    Tool(ToolContent),
+}
 
-    pub(crate) fn id(&self) -> TabId {
-        self.id
-    }
+/// One tab of a restored arrangement, materialized by its kind's step.
+pub(crate) enum ArrangedTab {
+    Document {
+        document: DocumentId,
+        model: Entity<BufferModel>,
+        view: EditorViewState,
+    },
+    Tool(ToolFrameId),
+    Terminal(TerminalSessionId, Option<Entity<TerminalView>>),
+}
 
-    pub(crate) fn is_pinned(&self) -> bool {
-        self.pinned
-    }
-
-    pub(crate) fn is_preview(&self) -> bool {
-        self.preview
-    }
-
-    pub(crate) fn surface_id(&self) -> TabSurfaceId {
-        match &self.payload {
-            WorkbenchTabPayload::Tool { id, .. } => TabSurfaceId::Tool(*id),
-            WorkbenchTabPayload::Document { document_id, .. } => {
-                TabSurfaceId::Document(*document_id)
-            }
-            WorkbenchTabPayload::Terminal { session_id, .. } => TabSurfaceId::Terminal(*session_id),
-        }
-    }
-
-    pub(crate) fn document_id(&self) -> Option<DocumentId> {
-        match self.surface_id() {
-            TabSurfaceId::Document(document_id) => Some(document_id),
-            TabSurfaceId::Terminal(_) | TabSurfaceId::Tool(_) => None,
-        }
-    }
-
-    pub(crate) fn editor(&self) -> Option<&Entity<EditorView>> {
-        match &self.payload {
-            WorkbenchTabPayload::Document { editor, .. } => Some(editor),
-            WorkbenchTabPayload::Terminal { .. } | WorkbenchTabPayload::Tool { .. } => None,
-        }
-    }
-
-    pub(crate) fn terminal_view(&self) -> Option<&Entity<TerminalView>> {
-        match &self.payload {
-            WorkbenchTabPayload::Terminal { view, .. } => view.as_ref(),
-            WorkbenchTabPayload::Document { .. } | WorkbenchTabPayload::Tool { .. } => None,
+impl ArrangedTab {
+    /// The tab's surface, and how to create its view. A tool presents the
+    /// view it was registered with.
+    fn split(self) -> (TabSurfaceId, Option<ArrangedView>) {
+        match self {
+            Self::Document {
+                document,
+                model,
+                view,
+            } => (
+                TabSurfaceId::Document(document),
+                Some(ArrangedView::Editor(model, view)),
+            ),
+            Self::Tool(id) => (TabSurfaceId::Tool(id), None),
+            Self::Terminal(session, view) => (
+                TabSurfaceId::Terminal(session),
+                view.map(ArrangedView::Terminal),
+            ),
         }
     }
 }
 
-pub(crate) struct Pane {
-    id: PaneId,
-    tabs: Vec<WorkbenchTab>,
-    active_tab: TabId,
-    /// Tabs most recently activated first. Tabs never activated, such as
-    /// restored ones, follow in tab order.
-    recent: Vec<TabId>,
+enum ArrangedView {
+    Editor(Entity<BufferModel>, EditorViewState),
+    Terminal(Entity<TerminalView>),
 }
 
-impl Pane {
-    fn new(id: PaneId, tabs: Vec<WorkbenchTab>, active_tab: TabId) -> Self {
-        Self {
-            id,
-            tabs,
-            active_tab,
-            recent: vec![active_tab],
+impl ArrangedView {
+    fn create(self, cx: &mut Context<Workbench>) -> PresentationView {
+        match self {
+            Self::Editor(model, state) => PresentationView::Editor(cx.new(|cx| {
+                let editor = EditorView::new(model, cx);
+                editor
+                    .editor()
+                    .update(cx, |editor, cx| editor.restore_view_state(state, cx));
+                editor
+            })),
+            Self::Terminal(view) => PresentationView::Terminal(view),
         }
-    }
-
-    /// Make a tab active and the most recently used.
-    fn select(&mut self, tab: TabId) {
-        self.active_tab = tab;
-        self.recent.retain(|id| *id != tab);
-        self.recent.insert(0, tab);
-    }
-
-    fn pinned_count(&self) -> usize {
-        self.tabs.iter().take_while(|tab| tab.pinned).count()
-    }
-
-    /// Clamp an insertion index into the pinned or unpinned section.
-    fn section_index(&self, pinned: bool, index: usize) -> usize {
-        let pinned_count = self.pinned_count();
-        if pinned {
-            index.min(pinned_count)
-        } else {
-            index.clamp(pinned_count, self.tabs.len())
-        }
-    }
-
-    /// The pane's tabs in recently activated order.
-    pub(crate) fn recent_tabs(&self) -> Vec<TabId> {
-        let mut order = self
-            .recent
-            .iter()
-            .copied()
-            .filter(|id| self.tabs.iter().any(|tab| tab.id == *id))
-            .collect::<Vec<_>>();
-        for tab in &self.tabs {
-            if !order.contains(&tab.id) {
-                order.push(tab.id);
-            }
-        }
-        order
-    }
-
-    pub(crate) fn id(&self) -> PaneId {
-        self.id
-    }
-
-    pub(crate) fn tabs(&self) -> &[WorkbenchTab] {
-        &self.tabs
-    }
-
-    pub(crate) fn active_tab_id(&self) -> TabId {
-        self.active_tab
-    }
-
-    pub(crate) fn active_tab(&self) -> &WorkbenchTab {
-        self.tabs
-            .iter()
-            .find(|tab| tab.id == self.active_tab)
-            .expect("pane active tab must belong to the pane")
     }
 }
 
 pub(crate) struct Workbench {
-    tools: Vec<ToolFrame>,
-    docks: Vec<(PaneId, DockLocation)>,
-    dock_sizes: [f32; 3],
-    dock_selected: [Option<ToolFrameId>; 3],
-    next_pane_id: u64,
-    next_tab_id: u64,
-    layout: Option<WorkbenchLayout>,
-    panes: Vec<Pane>,
-    focused_pane: Option<PaneId>,
-    /// The pane that had focus before the focused one, for going back.
-    previous_pane: Option<PaneId>,
+    layout: layout::Workbench,
+    views: HashMap<PresentationId, PresentationView>,
+}
+
+impl Deref for Workbench {
+    type Target = layout::Workbench;
+
+    fn deref(&self) -> &Self::Target {
+        &self.layout
+    }
+}
+
+impl DerefMut for Workbench {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.layout
+    }
 }
 
 impl Workbench {
     pub(crate) fn empty() -> Self {
         Self {
-            tools: Vec::new(),
-            docks: Vec::new(),
-            dock_sizes: [240., 240., 220.],
-            dock_selected: [None; 3],
-            next_pane_id: 1,
-            next_tab_id: 1,
-            layout: None,
-            panes: Vec::new(),
-            focused_pane: None,
-            previous_pane: None,
+            layout: layout::Workbench::empty(),
+            views: HashMap::new(),
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new(document: &Document, cx: &mut Context<Self>) -> Self {
-        Self::new_for_document(document.id(), document.model().clone(), cx)
     }
 
     pub(crate) fn new_for_document(
         document_id: DocumentId,
-        model: Entity<super::model::BufferModel>,
+        model: Entity<BufferModel>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let pane_id = PaneId(1);
-        let tab_id = TabId(1);
-        let workbench = Self {
-            tools: Vec::new(),
-            docks: Vec::new(),
-            dock_sizes: [240., 240., 220.],
-            dock_selected: [None; 3],
-            next_pane_id: 2,
-            next_tab_id: 2,
-            layout: Some(WorkbenchLayout::Pane(pane_id)),
-            panes: vec![Pane::new(
-                pane_id,
-                vec![WorkbenchTab {
-                    id: tab_id,
-                    pinned: false,
-                    preview: false,
-                    payload: WorkbenchTabPayload::Document {
-                        document_id,
-                        editor: cx.new(|cx| EditorView::new(model, cx)),
-                    },
-                }],
-                tab_id,
-            )],
-            focused_pane: Some(pane_id),
-            previous_pane: None,
+        let mut workbench = Self {
+            layout: layout::Workbench::new_for_document(document_id),
+            views: HashMap::new(),
         };
-        workbench.debug_assert_invariants();
+        let tab = workbench
+            .focused_pane()
+            .unwrap()
+            .active_tab()
+            .presentation();
+        workbench.attach_editor(tab, model, cx);
         workbench
     }
 
-    pub(crate) fn layout(&self) -> Option<&WorkbenchLayout> {
-        self.layout.as_ref()
-    }
-
-    pub(crate) fn panes(&self) -> &[Pane] {
-        &self.panes
-    }
-
-    pub(crate) fn pane(&self, id: PaneId) -> Option<&Pane> {
-        self.panes.iter().find(|pane| pane.id == id)
-    }
-
-    pub(crate) fn focused_pane_id(&self) -> Option<PaneId> {
-        self.focused_pane
-    }
-
-    pub(crate) fn focused_pane(&self) -> Option<&Pane> {
-        self.focused_pane.and_then(|id| self.pane(id))
-    }
-
-    /// Capture tab identities in layout pane order and then tab order.
-    pub(crate) fn tab_snapshots(&self) -> Vec<WorkbenchTabSnapshot> {
-        let mut pane_ids = Vec::new();
-        if let Some(layout) = &self.layout {
-            layout.pane_ids(&mut pane_ids);
-        }
-        pane_ids
-            .into_iter()
-            .flat_map(|pane_id| {
-                self.pane(pane_id)
-                    .expect("layout pane must belong to the workbench")
-                    .tabs
-                    .iter()
-                    .map(move |tab| WorkbenchTabSnapshot {
-                        pane_id,
-                        tab_id: tab.id,
-                        surface: tab.surface_id(),
-                    })
-            })
-            .collect()
-    }
-
-    /// Focus `pane_id`, remembering the pane it leaves.
-    fn set_focus(&mut self, pane_id: PaneId) {
-        if self.focused_pane != Some(pane_id) {
-            self.previous_pane = self.focused_pane;
-        }
-        self.focused_pane = Some(pane_id);
-    }
-
-    /// The panes in layout order, without the docks' tool panes.
-    fn pane_order(&self) -> Vec<PaneId> {
-        let mut ids = Vec::new();
-        if let Some(layout) = &self.layout {
-            layout.pane_ids(&mut ids);
-        }
-        ids.retain(|pane| self.dock_location(*pane).is_none());
-        ids
-    }
-
-    /// The first pane in layout order, not in a dock.
-    pub(crate) fn first_pane_id(&self) -> Option<PaneId> {
-        self.pane_order().first().copied()
-    }
-
-    /// The last pane in layout order, not in a dock.
-    pub(crate) fn last_pane_id(&self) -> Option<PaneId> {
-        self.pane_order().last().copied()
-    }
-
-    /// The pane after (or before) the focused one in layout order, wrapping
-    /// over panes outside the docks. From a dock, the walk starts at either
-    /// end of the editor area.
-    pub(crate) fn cycle_pane_id(&self, forward: bool) -> Option<PaneId> {
-        let order = self.pane_order();
-        let count = order.len();
-        let Some(index) = order
-            .iter()
-            .position(|pane| Some(*pane) == self.focused_pane)
-        else {
-            return if forward { order.first() } else { order.last() }.copied();
-        };
-        Some(order[(index + if forward { 1 } else { count - 1 }) % count])
-    }
-
-    /// The pane that had focus before the focused one, while it is open.
-    pub(crate) fn previous_pane_id(&self) -> Option<PaneId> {
-        self.previous_pane.filter(|pane| self.pane(*pane).is_some())
-    }
-
-    pub(crate) fn focus_pane(&mut self, pane_id: PaneId) -> bool {
-        if self.pane(pane_id).is_none() {
-            return false;
-        }
-        self.set_focus(pane_id);
-        self.debug_assert_invariants();
-        true
-    }
-
-    /// Make a tab active and its pane focused, recording the activation in
-    /// the pane's recently used order.
-    pub(crate) fn activate_tab(&mut self, pane_id: PaneId, tab_id: TabId) -> bool {
-        self.show_tab(pane_id, tab_id, true)
-    }
-
-    /// Make a tab active and its pane focused. Without `record`, the pane's
-    /// recently used order stays as it was, as a recent-tab walk needs.
-    pub(crate) fn show_tab(&mut self, pane_id: PaneId, tab_id: TabId, record: bool) -> bool {
-        let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == pane_id) else {
-            return false;
-        };
-        if !pane.tabs.iter().any(|tab| tab.id == tab_id) {
-            return false;
-        }
-        if record {
-            pane.select(tab_id);
-        } else {
-            pane.active_tab = tab_id;
-        }
-        self.set_focus(pane_id);
-        self.debug_assert_invariants();
-        true
-    }
-
-    /// The tab after (or before) the active one in tab order, wrapping.
-    pub(crate) fn adjacent_tab(&self, pane_id: PaneId, forward: bool) -> Option<TabId> {
-        let pane = self.pane(pane_id)?;
-        let count = pane.tabs.len();
-        let index = pane.tabs.iter().position(|tab| tab.id == pane.active_tab)?;
-        let next = if forward {
-            (index + 1) % count
-        } else {
-            (index + count - 1) % count
-        };
-        Some(pane.tabs[next].id)
-    }
-
-    /// Pin a tab at the end of its pane's pinned prefix, or unpin it to the
-    /// first unpinned position. Returns whether the tab is now pinned.
-    pub(crate) fn toggle_pin(&mut self, pane_id: PaneId, tab_id: TabId) -> Option<bool> {
-        let pane = self.panes.iter_mut().find(|pane| pane.id == pane_id)?;
-        let index = pane.tabs.iter().position(|tab| tab.id == tab_id)?;
-        let mut tab = pane.tabs.remove(index);
-        tab.pinned = !tab.pinned;
-        tab.preview = false;
-        let pinned = tab.pinned;
-        let destination = pane.pinned_count();
-        pane.tabs.insert(destination, tab);
-        self.debug_assert_invariants();
-        Some(pinned)
-    }
-
-    /// Open a document as the pane's preview tab, replacing its current
-    /// preview in place; a dock opens it in the normal group instead. Returns
-    /// the pane, the tab, and the document the preview replaced.
-    pub(crate) fn open_preview_for_document(
-        &mut self,
-        pane_id: PaneId,
-        document_id: DocumentId,
-        model: Entity<super::model::BufferModel>,
-        cx: &mut Context<Self>,
-    ) -> Option<(PaneId, TabId, Option<DocumentId>)> {
-        self.pane(pane_id)?;
-        if self.dock_location(pane_id).is_some() {
-            let Some(normal) = self.normal_pane() else {
-                let (pane, tab) = self.open_document_in_normal_group(document_id, model, cx);
-                self.panes
-                    .iter_mut()
-                    .find(|item| item.id == pane)?
-                    .tabs
-                    .last_mut()?
-                    .preview = true;
-                return Some((pane, tab, None));
-            };
-            return self.open_preview_for_document(normal, document_id, model, cx);
-        }
-        let preview = self
-            .pane(pane_id)?
-            .tabs
-            .iter()
-            .find(|tab| tab.preview)
-            .map(|tab| (tab.id, tab.document_id()));
-        let (tab, replaced) = match preview {
-            Some((tab, replaced)) => {
-                self.replace_tab_document(pane_id, tab, document_id, model, cx);
-                (tab, replaced)
-            }
-            None => (
-                self.open_tab_for_document(pane_id, document_id, model, cx)?,
-                None,
-            ),
-        };
-        let pane = self.panes.iter_mut().find(|pane| pane.id == pane_id)?;
-        pane.tabs.iter_mut().find(|item| item.id == tab)?.preview = true;
-        Some((pane_id, tab, replaced))
-    }
-
-    /// Make a preview tab regular. Returns whether it was a preview.
-    pub(crate) fn promote_preview(&mut self, pane_id: PaneId, tab_id: TabId) -> bool {
-        let Some(tab) = self
-            .panes
-            .iter_mut()
-            .find(|pane| pane.id == pane_id)
-            .and_then(|pane| pane.tabs.iter_mut().find(|tab| tab.id == tab_id))
-        else {
-            return false;
-        };
-        std::mem::replace(&mut tab.preview, false)
-    }
-
-    /// Make every preview tab whose document `edited` reports regular.
-    pub(crate) fn promote_edited_previews(&mut self, edited: impl Fn(DocumentId) -> bool) -> bool {
-        let mut promoted = false;
-        for tab in self.panes.iter_mut().flat_map(|pane| &mut pane.tabs) {
-            if tab.preview && tab.document_id().is_some_and(&edited) {
-                tab.preview = false;
-                promoted = true;
-            }
-        }
-        promoted
-    }
-
     #[cfg(test)]
-    pub(crate) fn open_tab(
+    pub(crate) fn new(document: &super::documents::Document, cx: &mut Context<Self>) -> Self {
+        Self::new_for_document(document.id(), document.model().clone(), cx)
+    }
+
+    /// The editor a document tab presents.
+    pub(crate) fn editor(&self, tab: &WorkbenchTab) -> Option<&Entity<EditorView>> {
+        match self.views.get(&tab.presentation())? {
+            PresentationView::Editor(editor) => Some(editor),
+            PresentationView::Terminal(_) | PresentationView::Tool(_) => None,
+        }
+    }
+
+    /// The view attached to a terminal tab, if any.
+    pub(crate) fn terminal_view(&self, tab: &WorkbenchTab) -> Option<&Entity<TerminalView>> {
+        match self.views.get(&tab.presentation())? {
+            PresentationView::Terminal(view) => Some(view),
+            PresentationView::Editor(_) | PresentationView::Tool(_) => None,
+        }
+    }
+
+    /// The editor of the focused pane's active tab.
+    pub(crate) fn focused_editor(&self) -> Option<&Entity<EditorView>> {
+        self.editor(self.focused_pane()?.active_tab())
+    }
+
+    /// The view of the focused pane's active terminal tab.
+    #[cfg(test)]
+    pub(crate) fn focused_terminal_view(&self) -> Option<&Entity<TerminalView>> {
+        self.terminal_view(self.focused_pane()?.active_tab())
+    }
+
+    pub(crate) fn focused_command_view(&self) -> Option<CommandView> {
+        self.command_view(self.focused_pane()?.active_tab())
+    }
+
+    pub(crate) fn tool_content(&self, id: ToolFrameId) -> Option<&ToolContent> {
+        match self.views.get(&self.tool(id)?.presentation)? {
+            PresentationView::Tool(content) => Some(content),
+            PresentationView::Editor(_) | PresentationView::Terminal(_) => None,
+        }
+    }
+
+    pub(crate) fn command_view(&self, tab: &WorkbenchTab) -> Option<CommandView> {
+        Some(match self.views.get(&tab.presentation())? {
+            PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
+            PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
+            PresentationView::Tool(content) => content.command_view(),
+        })
+    }
+
+    /// The tool whose view is `content`.
+    pub(crate) fn tool_presenting(&self, content: EntityId) -> Option<ToolFrameId> {
+        self.tools().iter().map(|tool| tool.id).find(|id| {
+            self.tool_content(*id)
+                .is_some_and(|tool| tool.entity_id() == content)
+        })
+    }
+
+    fn presentation_of(&self, pane: PaneId, tab: TabId) -> PresentationId {
+        self.tab(pane, tab)
+            .expect("the layout just reported this tab")
+            .presentation()
+    }
+
+    fn attach_editor(
         &mut self,
-        pane_id: PaneId,
-        document: &Document,
+        presentation: PresentationId,
+        model: Entity<BufferModel>,
         cx: &mut Context<Self>,
-    ) -> Option<TabId> {
-        self.open_tab_for_document(pane_id, document.id(), document.model().clone(), cx)
+    ) {
+        let editor = cx.new(|cx| EditorView::new(model, cx));
+        self.views
+            .insert(presentation, PresentationView::Editor(editor));
+    }
+
+    /// Drop the views whose presentation no tab or tool still shows.
+    fn drop_ended_views(&mut self) {
+        let layout = &self.layout;
+        self.views.retain(|presentation, _| {
+            layout.tabs().any(|tab| tab.presentation() == *presentation)
+                || layout
+                    .tools()
+                    .iter()
+                    .any(|tool| tool.presentation == *presentation)
+        });
     }
 
     pub(crate) fn open_tab_for_document(
         &mut self,
         pane_id: PaneId,
         document_id: DocumentId,
-        model: Entity<super::model::BufferModel>,
+        model: Entity<BufferModel>,
         cx: &mut Context<Self>,
     ) -> Option<TabId> {
-        let pane_index = self.panes.iter().position(|pane| pane.id == pane_id)?;
-        let tab_id = self.allocate_tab_id();
-        let editor = cx.new(|cx| EditorView::new(model, cx));
-        let pane = &mut self.panes[pane_index];
-        pane.tabs.push(WorkbenchTab {
-            id: tab_id,
-            pinned: false,
-            preview: false,
-            payload: WorkbenchTabPayload::Document {
-                document_id,
-                editor,
-            },
-        });
-        pane.select(tab_id);
-        self.set_focus(pane_id);
-        self.debug_assert_invariants();
-        Some(tab_id)
+        let tab = self.layout.open_tab_for_document(pane_id, document_id)?;
+        self.attach_editor(self.presentation_of(pane_id, tab), model, cx);
+        Some(tab)
+    }
+
+    pub(crate) fn open_document_in_normal_group(
+        &mut self,
+        document: DocumentId,
+        model: Entity<BufferModel>,
+        cx: &mut Context<Self>,
+    ) -> (PaneId, TabId) {
+        let (pane, tab) = self.layout.open_document_in_normal_group(document);
+        self.attach_editor(self.presentation_of(pane, tab), model, cx);
+        (pane, tab)
+    }
+
+    /// Open a document as a pane's preview tab; see
+    /// [`layout::Workbench::open_preview_for_document`].
+    pub(crate) fn open_preview_for_document(
+        &mut self,
+        pane_id: PaneId,
+        document_id: DocumentId,
+        model: Entity<BufferModel>,
+        cx: &mut Context<Self>,
+    ) -> Option<(PaneId, TabId, Option<DocumentId>)> {
+        let opened = self
+            .layout
+            .open_preview_for_document(pane_id, document_id)?;
+        self.attach_editor(self.presentation_of(opened.0, opened.1), model, cx);
+        self.drop_ended_views();
+        Some(opened)
+    }
+
+    pub(crate) fn replace_tab_document(
+        &mut self,
+        pane_id: PaneId,
+        tab_id: TabId,
+        document_id: DocumentId,
+        model: Entity<BufferModel>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self
+            .layout
+            .replace_tab_document(pane_id, tab_id, document_id)
+        {
+            return false;
+        }
+        self.attach_editor(self.presentation_of(pane_id, tab_id), model, cx);
+        self.drop_ended_views();
+        true
     }
 
     pub(crate) fn open_terminal_tab(
@@ -783,79 +383,25 @@ impl Workbench {
         session_id: TerminalSessionId,
         view: Entity<TerminalView>,
     ) -> Option<TabId> {
-        self.insert_terminal_tab(pane_id, session_id, Some(view))
+        let tab = self.layout.open_terminal_tab(pane_id, session_id)?;
+        self.views.insert(
+            self.presentation_of(pane_id, tab),
+            PresentationView::Terminal(view),
+        );
+        Some(tab)
     }
 
-    #[cfg(test)]
-    pub(crate) fn open_terminal_tab_test_double(
+    pub(crate) fn open_terminal_in_normal_group(
         &mut self,
-        pane_id: PaneId,
-        session_id: TerminalSessionId,
-    ) -> Option<TabId> {
-        self.insert_terminal_tab(pane_id, session_id, None)
-    }
-
-    fn insert_terminal_tab(
-        &mut self,
-        pane_id: PaneId,
-        session_id: TerminalSessionId,
-        view: Option<Entity<TerminalView>>,
-    ) -> Option<TabId> {
-        if self.has_terminal_session(session_id) {
-            return None;
-        }
-        let pane_index = self.panes.iter().position(|pane| pane.id == pane_id)?;
-        let tab_id = self.allocate_tab_id();
-        let pane = &mut self.panes[pane_index];
-        pane.tabs.push(WorkbenchTab {
-            id: tab_id,
-            pinned: false,
-            preview: false,
-            payload: WorkbenchTabPayload::Terminal { session_id, view },
-        });
-        pane.select(tab_id);
-        self.set_focus(pane_id);
-        self.debug_assert_invariants();
-        Some(tab_id)
-    }
-
-    pub(crate) fn replace_tab_document(
-        &mut self,
-        pane_id: PaneId,
-        tab_id: TabId,
-        document_id: DocumentId,
-        model: Entity<super::model::BufferModel>,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == pane_id) else {
-            return false;
-        };
-        let Some(tab) = pane.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
-            return false;
-        };
-        if !matches!(tab.payload, WorkbenchTabPayload::Document { .. }) {
-            return false;
-        }
-        tab.payload = WorkbenchTabPayload::Document {
-            document_id,
-            editor: cx.new(|cx| EditorView::new(model, cx)),
-        };
-        pane.select(tab_id);
-        self.set_focus(pane_id);
-        self.debug_assert_invariants();
-        true
-    }
-
-    #[cfg(test)]
-    /// Split the focused pane and show its active document in a fresh view.
-    pub(crate) fn split_focused(
-        &mut self,
-        direction: SplitDirection,
-        placement: SplitPlacement,
-        cx: &mut Context<Self>,
-    ) -> Option<PaneId> {
-        let focused_id = self.focused_pane?;
-        self.split_pane(focused_id, direction, placement, cx)
+        session: TerminalSessionId,
+        view: Entity<TerminalView>,
+    ) -> Option<(PaneId, TabId)> {
+        let (pane, tab) = self.layout.open_terminal_in_normal_group(session)?;
+        self.views.insert(
+            self.presentation_of(pane, tab),
+            PresentationView::Terminal(view),
+        );
+        Some((pane, tab))
     }
 
     /// Split one captured pane and show its active document in a fresh view.
@@ -867,36 +413,15 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> Option<PaneId> {
         let active = self.pane(pane_id)?.active_tab();
-        let document_id = active.document_id()?;
-        let model = active.editor()?.read(cx).model().clone();
-        let new_pane_id = self.allocate_pane_id();
-        let tab_id = self.allocate_tab_id();
-        let editor = cx.new(|cx| EditorView::new(model, cx));
-
-        let layout = self.layout.as_mut()?;
-        assert!(
-            layout.split_pane(pane_id, new_pane_id, direction, placement),
-            "captured pane must occur exactly once in the layout"
-        );
-        self.panes.push(Pane::new(
-            new_pane_id,
-            vec![WorkbenchTab {
-                id: tab_id,
-                pinned: false,
-                preview: false,
-                payload: WorkbenchTabPayload::Document {
-                    document_id,
-                    editor,
-                },
-            }],
-            tab_id,
-        ));
-        self.set_focus(new_pane_id);
-        self.debug_assert_invariants();
-        Some(new_pane_id)
+        let model = self.editor(active)?.read(cx).model().clone();
+        let pane = self.layout.split_pane(pane_id, direction, placement)?;
+        let presentation = self.pane(pane).unwrap().active_tab().presentation();
+        self.attach_editor(presentation, model, cx);
+        Some(pane)
     }
 
-    /// Split a captured pane, allocating an independent session for a terminal.
+    /// Split a captured pane, giving a terminal's split the independent
+    /// session `new_session_id` and its view.
     pub(crate) fn split_pane_with_terminal(
         &mut self,
         pane_id: PaneId,
@@ -906,749 +431,165 @@ impl Workbench {
         view: Entity<TerminalView>,
         cx: &mut Context<Self>,
     ) -> Option<PaneId> {
-        self.split_pane_with_terminal_view(
-            pane_id,
-            direction,
-            placement,
-            new_session_id,
-            Some(view),
-            cx,
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn split_pane_with_terminal_test_double(
-        &mut self,
-        pane_id: PaneId,
-        direction: SplitDirection,
-        placement: SplitPlacement,
-        new_session_id: TerminalSessionId,
-        cx: &mut Context<Self>,
-    ) -> Option<PaneId> {
-        self.split_pane_with_terminal_view(pane_id, direction, placement, new_session_id, None, cx)
-    }
-
-    fn split_pane_with_terminal_view(
-        &mut self,
-        pane_id: PaneId,
-        direction: SplitDirection,
-        placement: SplitPlacement,
-        new_session_id: TerminalSessionId,
-        view: Option<Entity<TerminalView>>,
-        cx: &mut Context<Self>,
-    ) -> Option<PaneId> {
-        let active = self.pane(pane_id)?.active_tab();
-        if active.document_id().is_some() {
+        if self.pane(pane_id)?.active_tab().document_id().is_some() {
             return self.split_pane(pane_id, direction, placement, cx);
         }
-        if self.has_terminal_session(new_session_id) {
-            return None;
-        }
-        let new_pane_id = self.allocate_pane_id();
-        let tab_id = self.allocate_tab_id();
-        let layout = self.layout.as_mut()?;
-        assert!(
-            layout.split_pane(pane_id, new_pane_id, direction, placement),
-            "captured pane must occur exactly once in the layout"
-        );
-        self.panes.push(Pane::new(
-            new_pane_id,
-            vec![WorkbenchTab {
-                id: tab_id,
-                pinned: false,
-                preview: false,
-                payload: WorkbenchTabPayload::Terminal {
-                    session_id: new_session_id,
-                    view,
-                },
-            }],
-            tab_id,
-        ));
-        self.set_focus(new_pane_id);
-        self.debug_assert_invariants();
-        Some(new_pane_id)
+        let pane =
+            self.layout
+                .split_pane_with_terminal(pane_id, direction, placement, new_session_id)?;
+        let presentation = self.pane(pane).unwrap().active_tab().presentation();
+        self.views
+            .insert(presentation, PresentationView::Terminal(view));
+        Some(pane)
     }
 
-    /// Remove every document tab without closure decisions, collapsing panes
-    /// that become empty. Terminal and tool tabs stay where they are.
+    /// Define a tool presenting `content`, or return the tool that already
+    /// presents it.
+    pub(crate) fn register_tool(
+        &mut self,
+        stable_id: impl Into<String>,
+        title: impl Into<String>,
+        content: ToolContent,
+        dock: DockLocation,
+    ) -> ToolFrameId {
+        if let Some(id) = self.tool_presenting(content.entity_id()) {
+            return id;
+        }
+        let id = self.layout.register_tool(stable_id, title, dock);
+        let presentation = self.tool(id).unwrap().presentation;
+        self.views
+            .insert(presentation, PresentationView::Tool(content));
+        id
+    }
+
+    pub(crate) fn unregister_tool(&mut self, id: ToolFrameId) {
+        self.layout.unregister_tool(id);
+        self.drop_ended_views();
+    }
+
     pub(crate) fn remove_document_tabs(&mut self) -> Vec<DocumentId> {
-        let tabs = self
-            .panes
-            .iter()
-            .flat_map(|pane| {
-                pane.tabs
-                    .iter()
-                    .filter_map(move |tab| Some((pane.id, tab.id, tab.document_id()?)))
-            })
-            .collect::<Vec<_>>();
-        for (pane, tab, _) in &tabs {
-            self.remove_tab(*pane, *tab);
-        }
-        tabs.into_iter().map(|(_, _, document)| document).collect()
+        let removed = self.layout.remove_document_tabs();
+        self.drop_ended_views();
+        removed
     }
 
-    pub(crate) fn view_count(&self, document_id: DocumentId) -> usize {
-        self.panes
-            .iter()
-            .flat_map(|pane| &pane.tabs)
-            .filter(|tab| tab.document_id() == Some(document_id))
-            .count()
-    }
-
-    fn has_terminal_session(&self, session_id: TerminalSessionId) -> bool {
-        self.panes
-            .iter()
-            .flat_map(|pane| &pane.tabs)
-            .any(|tab| tab.surface_id() == TabSurfaceId::Terminal(session_id))
-    }
-
-    fn allocate_pane_id(&mut self) -> PaneId {
-        let id = PaneId(self.next_pane_id);
-        self.next_pane_id = self
-            .next_pane_id
-            .checked_add(1)
-            .expect("pane identity space exhausted");
-        id
-    }
-
-    fn allocate_tab_id(&mut self) -> TabId {
-        let id = TabId(self.next_tab_id);
-        self.next_tab_id = self
-            .next_tab_id
-            .checked_add(1)
-            .expect("tab identity space exhausted");
-        id
-    }
-
-    fn remove_tab(&mut self, pane_id: PaneId, tab_id: TabId) -> Option<RemovedTab> {
-        let pane_index = self.panes.iter().position(|pane| pane.id == pane_id)?;
-        let tab_index = self.panes[pane_index]
-            .tabs
-            .iter()
-            .position(|tab| tab.id == tab_id)?;
-        let tab = self.panes[pane_index].tabs.remove(tab_index);
-
-        if self.panes[pane_index].tabs.is_empty() {
-            let previous_focus = self.focused_pane;
-            self.panes.remove(pane_index);
-            self.docks.retain(|(pane, _)| *pane != pane_id);
-            self.layout = self
-                .layout
-                .take()
-                .and_then(|layout| layout.remove_pane(pane_id));
-            self.focused_pane = previous_focus
-                .filter(|focused| self.pane(*focused).is_some())
-                .or_else(|| self.layout.as_ref().map(WorkbenchLayout::first_pane));
-            let removed = RemovedTab {
-                tab,
-                removed_pane: Some(pane_id),
-            };
-            self.debug_assert_invariants();
-            Some(removed)
-        } else {
-            let pane = &mut self.panes[pane_index];
-            pane.recent.retain(|id| *id != tab_id);
-            if pane.active_tab == tab_id {
-                pane.select(pane.tabs[tab_index.min(pane.tabs.len() - 1)].id);
-            }
-            let removed = RemovedTab {
-                tab,
-                removed_pane: None,
-            };
-            self.debug_assert_invariants();
-            Some(removed)
-        }
-    }
-
-    pub(crate) fn contains_tab(
-        &self,
+    pub(crate) fn request_close_tab(
+        &mut self,
         pane_id: PaneId,
         tab_id: TabId,
         document_id: DocumentId,
-    ) -> bool {
-        self.pane(pane_id).is_some_and(|pane| {
-            pane.tabs
-                .iter()
-                .any(|tab| tab.id == tab_id && tab.document_id() == Some(document_id))
-        })
+        document_is_dirty: bool,
+        open_view_count: usize,
+    ) -> Option<CloseRequestOutcome> {
+        let outcome = self.layout.request_close_tab(
+            pane_id,
+            tab_id,
+            document_id,
+            document_is_dirty,
+            open_view_count,
+        );
+        self.drop_ended_views();
+        outcome
     }
 
-    pub(crate) fn contains_surface(
-        &self,
+    pub(crate) fn request_close_terminal_tab(
+        &mut self,
         pane_id: PaneId,
         tab_id: TabId,
-        surface: TabSurfaceId,
-    ) -> bool {
-        self.pane(pane_id).is_some_and(|pane| {
-            pane.tabs
-                .iter()
-                .any(|tab| tab.id == tab_id && tab.surface_id() == surface)
-        })
+        session_id: TerminalSessionId,
+    ) -> Option<layout::CloseTransition> {
+        let transition = self
+            .layout
+            .request_close_terminal_tab(pane_id, tab_id, session_id);
+        self.drop_ended_views();
+        transition
     }
 
-    fn debug_assert_invariants(&self) {
-        #[cfg(debug_assertions)]
-        {
-            let mut layout_panes = Vec::new();
-            if let Some(layout) = &self.layout {
-                layout.pane_ids(&mut layout_panes);
-            }
-            let layout_pane_set = layout_panes.iter().copied().collect::<HashSet<_>>();
-            let pane_set = self.panes.iter().map(Pane::id).collect::<HashSet<_>>();
-            debug_assert_eq!(layout_panes.len(), layout_pane_set.len());
-            debug_assert_eq!(layout_pane_set, pane_set);
-            debug_assert_eq!(self.layout.is_none(), self.panes.is_empty());
-            debug_assert_eq!(self.focused_pane.is_none(), self.panes.is_empty());
-            debug_assert!(
-                self.focused_pane
-                    .is_none_or(|focused| pane_set.contains(&focused))
-            );
+    pub(crate) fn resolve_pending_close(
+        &mut self,
+        pending: layout::PendingClose,
+        confirmation: CloseConfirmation,
+        open_view_count: usize,
+    ) -> Option<layout::CloseTransition> {
+        let transition = self
+            .layout
+            .resolve_pending_close(pending, confirmation, open_view_count);
+        self.drop_ended_views();
+        transition
+    }
 
-            let mut tool_ids = HashSet::new();
-            for pane in &self.panes {
-                for tab in &pane.tabs {
-                    if let TabSurfaceId::Tool(id) = tab.surface_id() {
-                        debug_assert!(self.tool(id).is_some());
-                        debug_assert!(tool_ids.insert(id));
-                    }
-                }
+    /// Move a document or terminal tab into `destination` with its view. A
+    /// terminal's view passes through `handoff`, which returns the view the
+    /// destination attaches.
+    pub(crate) fn transfer_tab_to(
+        &mut self,
+        destination: &mut Workbench,
+        source: TabMoveCapture,
+        target: TabMoveDestination,
+        handoff: impl FnOnce(Entity<TerminalView>) -> Entity<TerminalView>,
+    ) -> Option<layout::TabMoveTransition> {
+        let moved = self
+            .layout
+            .transfer_tab_to(&mut destination.layout, source, target)?;
+        let arrived =
+            destination.presentation_of(moved.destination.pane_id, moved.destination.tab_id);
+        let view = match self.views.remove(&source.presentation) {
+            Some(PresentationView::Terminal(view)) => {
+                Some(PresentationView::Terminal(handoff(view)))
             }
-            debug_assert!(self.docks.iter().all(|(pane, _)| pane_set.contains(pane)));
-            let mut tab_ids = HashSet::new();
-            for pane in &self.panes {
-                debug_assert!(!pane.tabs.is_empty());
-                debug_assert!(pane.tabs.iter().any(|tab| tab.id == pane.active_tab));
-                debug_assert!(pane.tabs.iter().all(|tab| tab_ids.insert(tab.id)));
-                debug_assert!(
-                    pane.tabs
-                        .iter()
-                        .skip_while(|tab| tab.pinned)
-                        .all(|tab| !tab.pinned)
-                );
+            view => view,
+        };
+        if let Some(view) = view {
+            destination.views.insert(arrived, view);
+        }
+        Some(moved)
+    }
+
+    /// Install one restored tab; see [`layout::Workbench::insert_arranged`].
+    pub(crate) fn insert_arranged(
+        &mut self,
+        pane: PaneId,
+        index: usize,
+        tab: ArrangedTab,
+        pinned: bool,
+        cx: &mut Context<Self>,
+    ) -> (PaneId, TabId) {
+        let (surface, view) = tab.split();
+        let (pane, tab) = self.layout.insert_arranged(pane, index, surface, pinned);
+        if let Some(view) = view {
+            let view = view.create(cx);
+            self.views.insert(self.presentation_of(pane, tab), view);
+        }
+        (pane, tab)
+    }
+
+    /// Replace every tab with a restored arrangement, each document tab in
+    /// its own view with its restored state; see
+    /// [`layout::Workbench::arrange`].
+    pub(crate) fn arrange(
+        &mut self,
+        root: Option<PlanNode<ArrangedTab>>,
+        dock_sizes: [f32; 3],
+        cx: &mut Context<Self>,
+    ) {
+        let root = root.map(|root| root.map(&mut ArrangedTab::split));
+        let installed = self.layout.arrange(root, dock_sizes);
+        self.drop_ended_views();
+        for (presentation, view) in installed {
+            if let Some(view) = view {
+                let view = view.create(cx);
+                self.views.insert(presentation, view);
             }
         }
     }
 }
-
-struct RemovedTab {
-    tab: WorkbenchTab,
-    removed_pane: Option<PaneId>,
-}
-
-mod tools;
-pub(crate) use tools::{DockLocation, ToolContent, ToolFrame, ToolFrameId, ToolPlacement};
-
-mod arrange;
-mod close;
-mod relocate;
-mod resize;
-pub(crate) use resize::neighbor;
-
-pub(crate) use arrange::ArrangedTab;
-
-pub(crate) use relocate::{SplitEdge, TabMoveCapture, TabMoveDestination, TabMovePlacement};
-
-pub(crate) use close::{CloseConfirmation, CloseRequestOutcome, DocumentCloseDisposition};
 
 #[cfg(test)]
 mod tests {
     use gpui::{AppContext, TestAppContext};
 
     use super::*;
-    use crate::app::{documents::DocumentCollection, model::BufferModel};
-
-    #[gpui::test]
-    fn mixed_tabs_keep_identity_activation_and_document_views(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("document"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Document", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
-
-        workbench.update(cx, |workbench, _| {
-            let pane = workbench.focused_pane_id().unwrap();
-            let document_tab = workbench.focused_pane().unwrap().active_tab_id();
-            let terminal = TerminalSessionId(41);
-            let terminal_tab = workbench
-                .open_terminal_tab_test_double(pane, terminal)
-                .unwrap();
-            assert_eq!(workbench.view_count(document), 1);
-            assert_eq!(
-                workbench.focused_pane().unwrap().active_tab_id(),
-                terminal_tab
-            );
-            assert_eq!(
-                workbench.focused_pane().unwrap().active_tab().editor(),
-                None
-            );
-            assert_eq!(
-                workbench.tab_snapshots(),
-                vec![
-                    WorkbenchTabSnapshot {
-                        pane_id: pane,
-                        tab_id: document_tab,
-                        surface: TabSurfaceId::Document(document),
-                    },
-                    WorkbenchTabSnapshot {
-                        pane_id: pane,
-                        tab_id: terminal_tab,
-                        surface: TabSurfaceId::Terminal(terminal),
-                    },
-                ]
-            );
-            assert!(!workbench.contains_surface(
-                pane,
-                document_tab,
-                TabSurfaceId::Terminal(terminal)
-            ));
-            assert!(workbench.activate_tab(pane, document_tab));
-            assert_eq!(
-                workbench.focused_pane().unwrap().active_tab().document_id(),
-                Some(document)
-            );
-        });
-    }
-
-    #[gpui::test]
-    fn terminal_split_gets_independent_session_and_document_split_keeps_model(
-        cx: &mut TestAppContext,
-    ) {
-        let model = cx.new(|_| BufferModel::from_text("document"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Document", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
-
-        workbench.update(cx, |workbench, cx| {
-            let document_pane = workbench.focused_pane_id().unwrap();
-            let terminal_source = TerminalSessionId(41);
-            workbench
-                .open_terminal_tab_test_double(document_pane, terminal_source)
-                .unwrap();
-            assert!(
-                workbench
-                    .split_pane(
-                        document_pane,
-                        SplitDirection::Horizontal,
-                        SplitPlacement::After,
-                        cx
-                    )
-                    .is_none()
-            );
-            let terminal_pane = workbench
-                .split_pane_with_terminal_test_double(
-                    document_pane,
-                    SplitDirection::Horizontal,
-                    SplitPlacement::After,
-                    TerminalSessionId(42),
-                    cx,
-                )
-                .unwrap();
-            assert_eq!(workbench.view_count(document), 1);
-            assert_eq!(
-                workbench
-                    .pane(terminal_pane)
-                    .unwrap()
-                    .active_tab()
-                    .surface_id(),
-                TabSurfaceId::Terminal(TerminalSessionId(42))
-            );
-            assert_eq!(
-                workbench
-                    .pane(document_pane)
-                    .unwrap()
-                    .active_tab()
-                    .surface_id(),
-                TabSurfaceId::Terminal(terminal_source)
-            );
-            let document_tab = workbench.pane(document_pane).unwrap().tabs()[0].id();
-            assert!(workbench.activate_tab(document_pane, document_tab));
-            workbench
-                .split_pane_with_terminal_test_double(
-                    document_pane,
-                    SplitDirection::Vertical,
-                    SplitPlacement::After,
-                    TerminalSessionId(43),
-                    cx,
-                )
-                .unwrap();
-            assert_eq!(workbench.view_count(document), 2);
-        });
-    }
-
-    #[gpui::test]
-    fn panes_keep_ordered_tabs_and_stable_focus(cx: &mut TestAppContext) {
-        let first_model = cx.new(|_| BufferModel::from_text("first"));
-        let second_model = cx.new(|_| BufferModel::from_text("second"));
-        let mut documents = DocumentCollection::new();
-        let first_document = cx.update(|cx| documents.create_untitled("First", first_model, cx));
-        let second_document = cx.update(|cx| documents.create_untitled("Second", second_model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(first_document).unwrap(), cx));
-
-        workbench.update(cx, |workbench, cx| {
-            let pane_id = workbench.focused_pane_id().unwrap();
-            let first_tab = workbench.focused_pane().unwrap().active_tab_id();
-            let second_tab = workbench
-                .open_tab(pane_id, documents.get(second_document).unwrap(), cx)
-                .unwrap();
-
-            let pane = workbench.focused_pane().unwrap();
-            assert_eq!(
-                pane.tabs().iter().map(WorkbenchTab::id).collect::<Vec<_>>(),
-                vec![first_tab, second_tab]
-            );
-            assert_eq!(pane.active_tab_id(), second_tab);
-            assert!(workbench.activate_tab(pane_id, first_tab));
-            assert_eq!(workbench.focused_pane().unwrap().active_tab_id(), first_tab);
-            assert!(!workbench.activate_tab(PaneId(u64::MAX), first_tab));
-        });
-    }
-
-    #[gpui::test]
-    fn tab_order_wraps_and_recent_order_follows_activation_closure_and_moves(
-        cx: &mut TestAppContext,
-    ) {
-        let model = cx.new(|_| BufferModel::from_text("shared"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
-
-        workbench.update(cx, |workbench, cx| {
-            let pane = workbench.focused_pane_id().unwrap();
-            let first = workbench.focused_pane().unwrap().active_tab_id();
-            let second = workbench
-                .open_tab(pane, documents.get(document).unwrap(), cx)
-                .unwrap();
-            let third = workbench
-                .open_tab(pane, documents.get(document).unwrap(), cx)
-                .unwrap();
-            let recent = |workbench: &Workbench| workbench.pane(pane).unwrap().recent_tabs();
-
-            assert_eq!(workbench.adjacent_tab(pane, true), Some(first));
-            assert_eq!(workbench.adjacent_tab(pane, false), Some(second));
-            assert_eq!(recent(workbench), [third, second, first]);
-            assert!(workbench.activate_tab(pane, first));
-            assert_eq!(workbench.adjacent_tab(pane, false), Some(third));
-            assert_eq!(recent(workbench), [first, third, second]);
-
-            // Showing without recording leaves the order for a walk.
-            assert!(workbench.show_tab(pane, second, false));
-            assert_eq!(recent(workbench), [first, third, second]);
-            assert!(workbench.activate_tab(pane, second));
-            assert_eq!(recent(workbench), [second, first, third]);
-
-            // Closing the active tab activates its neighbor, which becomes
-            // the most recent.
-            workbench.remove_tab(pane, second).unwrap();
-            assert_eq!(workbench.pane(pane).unwrap().active_tab_id(), third);
-            assert_eq!(recent(workbench), [third, first]);
-
-            // A tab moved into another pane is that pane's most recent.
-            let other = workbench
-                .split_pane(pane, SplitDirection::Horizontal, SplitPlacement::After, cx)
-                .unwrap();
-            let source = workbench.capture_tab_move(pane, first).unwrap();
-            let anchor = workbench
-                .capture_tab_move(other, workbench.pane(other).unwrap().active_tab_id())
-                .unwrap();
-            let moved = workbench
-                .relocate_tab(
-                    source,
-                    TabMoveDestination::At {
-                        anchor,
-                        placement: TabMovePlacement::Before,
-                    },
-                )
-                .unwrap();
-            assert_eq!(recent(workbench), [third]);
-            assert_eq!(
-                workbench.pane(other).unwrap().recent_tabs()[0],
-                moved.destination.tab_id
-            );
-        });
-    }
-
-    #[gpui::test]
-    fn pinned_tabs_form_a_prefix_and_moves_stay_in_their_section(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("shared"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
-
-        workbench.update(cx, |workbench, cx| {
-            let pane = workbench.focused_pane_id().unwrap();
-            let a = workbench.focused_pane().unwrap().active_tab_id();
-            let [b, c, d] = [(); 3].map(|_| {
-                workbench
-                    .open_tab(pane, documents.get(document).unwrap(), cx)
-                    .unwrap()
-            });
-            let order = |workbench: &Workbench, pane| {
-                workbench
-                    .pane(pane)
-                    .unwrap()
-                    .tabs()
-                    .iter()
-                    .map(|tab| (tab.id(), tab.is_pinned()))
-                    .collect::<Vec<_>>()
-            };
-
-            assert_eq!(workbench.toggle_pin(pane, c), Some(true));
-            assert_eq!(workbench.toggle_pin(pane, d), Some(true));
-            assert_eq!(
-                order(workbench, pane),
-                [(c, true), (d, true), (a, false), (b, false)]
-            );
-            // Unpinning returns a tab to the first unpinned position.
-            assert_eq!(workbench.toggle_pin(pane, c), Some(false));
-            assert_eq!(
-                order(workbench, pane),
-                [(d, true), (c, false), (a, false), (b, false)]
-            );
-            assert_eq!(workbench.toggle_pin(pane, c), Some(true));
-
-            // A move within the pane stays in its section.
-            let capture =
-                |workbench: &Workbench, pane, tab| workbench.capture_tab_move(pane, tab).unwrap();
-            let source = capture(workbench, pane, b);
-            let anchor = capture(workbench, pane, d);
-            workbench
-                .relocate_tab(
-                    source,
-                    TabMoveDestination::At {
-                        anchor,
-                        placement: TabMovePlacement::Before,
-                    },
-                )
-                .unwrap();
-            assert_eq!(
-                order(workbench, pane),
-                [(d, true), (c, true), (b, false), (a, false)]
-            );
-            let source = capture(workbench, pane, d);
-            let anchor = capture(workbench, pane, a);
-            workbench
-                .relocate_tab(
-                    source,
-                    TabMoveDestination::At {
-                        anchor,
-                        placement: TabMovePlacement::End,
-                    },
-                )
-                .unwrap();
-            assert_eq!(
-                order(workbench, pane),
-                [(c, true), (d, true), (b, false), (a, false)]
-            );
-
-            // Another pane takes a pinned tab at the end of its pinned prefix.
-            let other = workbench
-                .split_pane(pane, SplitDirection::Horizontal, SplitPlacement::After, cx)
-                .unwrap();
-            let first = workbench.pane(other).unwrap().active_tab_id();
-            let source = capture(workbench, pane, c);
-            let anchor = capture(workbench, other, first);
-            let moved = workbench
-                .relocate_tab(
-                    source,
-                    TabMoveDestination::At {
-                        anchor,
-                        placement: TabMovePlacement::End,
-                    },
-                )
-                .unwrap();
-            assert_eq!(
-                order(workbench, other),
-                [(moved.destination.tab_id, true), (first, false)]
-            );
-        });
-    }
-
-    #[gpui::test]
-    fn a_preview_is_replaced_in_place_until_pinning_promotion_or_a_move(cx: &mut TestAppContext) {
-        let mut documents = DocumentCollection::new();
-        let [first, second, third, fourth] = ["one", "two", "three", "four"].map(|text| {
-            let model = cx.new(|_| BufferModel::from_text(text));
-            let document = cx.update(|cx| documents.create_untitled(text, model.clone(), cx));
-            (document, model)
-        });
-        let workbench = cx.new(|cx| Workbench::new(documents.get(first.0).unwrap(), cx));
-
-        workbench.update(cx, |workbench, cx| {
-            let pane = workbench.focused_pane_id().unwrap();
-            let (_, preview, replaced) = workbench
-                .open_preview_for_document(pane, second.0, second.1.clone(), cx)
-                .unwrap();
-            assert_eq!(replaced, None);
-            let (_, again, replaced) = workbench
-                .open_preview_for_document(pane, third.0, third.1.clone(), cx)
-                .unwrap();
-            assert_eq!((again, replaced), (preview, Some(second.0)));
-            let tabs = |workbench: &Workbench| {
-                workbench
-                    .pane(pane)
-                    .unwrap()
-                    .tabs()
-                    .iter()
-                    .map(|tab| (tab.document_id().unwrap(), tab.is_preview()))
-                    .collect::<Vec<_>>()
-            };
-            assert_eq!(tabs(workbench), [(first.0, false), (third.0, true)]);
-
-            // Promotion keeps the tab, and the next preview opens beside it.
-            assert!(workbench.promote_preview(pane, preview));
-            assert!(!workbench.promote_preview(pane, preview));
-            workbench.open_preview_for_document(pane, fourth.0, fourth.1.clone(), cx);
-            assert_eq!(
-                tabs(workbench),
-                [(first.0, false), (third.0, false), (fourth.0, true)]
-            );
-
-            // Edits, pinning, and moves promote too.
-            assert!(workbench.promote_edited_previews(|document| document == fourth.0));
-            assert_eq!(tabs(workbench)[2], (fourth.0, false));
-            let (_, pinned, _) = workbench
-                .open_preview_for_document(pane, second.0, second.1.clone(), cx)
-                .unwrap();
-            workbench.toggle_pin(pane, pinned);
-            assert_eq!(tabs(workbench)[0], (second.0, false));
-            let (_, moved, _) = workbench
-                .open_preview_for_document(pane, second.0, second.1.clone(), cx)
-                .unwrap();
-            let source = workbench.capture_tab_move(pane, moved).unwrap();
-            let anchor = workbench
-                .capture_tab_move(pane, workbench.pane(pane).unwrap().tabs()[1].id())
-                .unwrap();
-            let moved = workbench
-                .relocate_tab(
-                    source,
-                    TabMoveDestination::At {
-                        anchor,
-                        placement: TabMovePlacement::Before,
-                    },
-                )
-                .unwrap();
-            assert!(
-                workbench
-                    .pane(pane)
-                    .unwrap()
-                    .tabs()
-                    .iter()
-                    .all(|tab| tab.id() != moved.destination.tab_id || !tab.is_preview())
-            );
-        });
-    }
-
-    #[gpui::test]
-    fn tab_snapshots_follow_layout_and_tab_order(cx: &mut TestAppContext) {
-        let first_model = cx.new(|_| BufferModel::from_text("first"));
-        let second_model = cx.new(|_| BufferModel::from_text("second"));
-        let third_model = cx.new(|_| BufferModel::from_text("third"));
-        let mut documents = DocumentCollection::new();
-        let first_document = cx.update(|cx| documents.create_untitled("First", first_model, cx));
-        let second_document = cx.update(|cx| documents.create_untitled("Second", second_model, cx));
-        let third_document = cx.update(|cx| documents.create_untitled("Third", third_model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(first_document).unwrap(), cx));
-
-        workbench.update(cx, |workbench, cx| {
-            let first_pane = workbench.focused_pane_id().unwrap();
-            let first_tab = workbench.focused_pane().unwrap().active_tab_id();
-            let second_tab = workbench
-                .open_tab(first_pane, documents.get(second_document).unwrap(), cx)
-                .unwrap();
-            assert!(workbench.activate_tab(first_pane, first_tab));
-            let preceding_pane = workbench
-                .split_focused(SplitDirection::Vertical, SplitPlacement::Before, cx)
-                .unwrap();
-            let preceding_first_tab = workbench.focused_pane().unwrap().active_tab_id();
-            let preceding_second_tab = workbench
-                .open_tab(preceding_pane, documents.get(third_document).unwrap(), cx)
-                .unwrap();
-
-            assert_eq!(
-                workbench.tab_snapshots(),
-                vec![
-                    WorkbenchTabSnapshot {
-                        pane_id: preceding_pane,
-                        tab_id: preceding_first_tab,
-                        surface: TabSurfaceId::Document(first_document),
-                    },
-                    WorkbenchTabSnapshot {
-                        pane_id: preceding_pane,
-                        tab_id: preceding_second_tab,
-                        surface: TabSurfaceId::Document(third_document),
-                    },
-                    WorkbenchTabSnapshot {
-                        pane_id: first_pane,
-                        tab_id: first_tab,
-                        surface: TabSurfaceId::Document(first_document),
-                    },
-                    WorkbenchTabSnapshot {
-                        pane_id: first_pane,
-                        tab_id: second_tab,
-                        surface: TabSurfaceId::Document(second_document),
-                    },
-                ]
-            );
-        });
-    }
-
-    #[gpui::test]
-    fn nested_splits_preserve_tree_order_and_focus(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("shared"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
-
-        workbench.update(cx, |workbench, cx| {
-            let first = workbench.focused_pane_id().unwrap();
-            let second = workbench
-                .split_focused(SplitDirection::Horizontal, SplitPlacement::After, cx)
-                .unwrap();
-            let third = workbench
-                .split_focused(SplitDirection::Vertical, SplitPlacement::Before, cx)
-                .unwrap();
-
-            let mut pane_ids = Vec::new();
-            workbench.layout().unwrap().pane_ids(&mut pane_ids);
-            assert_eq!(pane_ids, vec![first, third, second]);
-            assert_eq!(workbench.focused_pane_id(), Some(third));
-            assert_eq!(workbench.panes().len(), 3);
-            assert_eq!(workbench.view_count(document), 3);
-            assert!(matches!(
-                workbench.layout(),
-                Some(WorkbenchLayout::Split {
-                    direction: SplitDirection::Horizontal,
-                    second,
-                    ..
-                }) if matches!(
-                    second.as_ref(),
-                    WorkbenchLayout::Split {
-                        direction: SplitDirection::Vertical,
-                        ..
-                    }
-                )
-            ));
-        });
-    }
-
-    #[gpui::test]
-    fn split_placement_orders_the_new_pane_without_changing_its_focus(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("shared"));
-        let mut documents = DocumentCollection::new();
-        let document = cx.update(|cx| documents.create_untitled("Shared", model, cx));
-        let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
-
-        workbench.update(cx, |workbench, cx| {
-            let existing = workbench.focused_pane_id().unwrap();
-            let new = workbench
-                .split_focused(SplitDirection::Horizontal, SplitPlacement::Before, cx)
-                .unwrap();
-            let mut pane_ids = Vec::new();
-            workbench.layout().unwrap().pane_ids(&mut pane_ids);
-
-            assert_eq!(pane_ids, vec![new, existing]);
-            assert_eq!(workbench.focused_pane_id(), Some(new));
-        });
-    }
+    use crate::app::documents::DocumentCollection;
 
     #[gpui::test]
     fn tabs_and_splits_own_distinct_views_of_one_model(cx: &mut TestAppContext) {
@@ -1659,36 +600,26 @@ mod tests {
 
         workbench.update(cx, |workbench, cx| {
             let first_pane = workbench.focused_pane_id().unwrap();
-            let first_editor = workbench
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .editor()
-                .unwrap()
-                .clone();
-            let second_tab = workbench
-                .open_tab(first_pane, documents.get(document).unwrap(), cx)
+            let active_editor = |workbench: &Workbench, pane| {
+                workbench
+                    .editor(workbench.pane(pane).unwrap().active_tab())
+                    .unwrap()
+                    .clone()
+            };
+            let first_editor = active_editor(workbench, first_pane);
+            workbench
+                .open_tab_for_document(first_pane, document, model.clone(), cx)
                 .unwrap();
-            let second_editor = workbench
-                .pane(first_pane)
-                .unwrap()
-                .tabs()
-                .iter()
-                .find(|tab| tab.id() == second_tab)
-                .unwrap()
-                .editor()
-                .unwrap()
-                .clone();
+            let second_editor = active_editor(workbench, first_pane);
             let split_pane = workbench
-                .split_focused(SplitDirection::Vertical, SplitPlacement::After, cx)
+                .split_pane(
+                    first_pane,
+                    SplitDirection::Vertical,
+                    SplitPlacement::After,
+                    cx,
+                )
                 .unwrap();
-            let third_editor = workbench
-                .pane(split_pane)
-                .unwrap()
-                .active_tab()
-                .editor()
-                .unwrap()
-                .clone();
+            let third_editor = active_editor(workbench, split_pane);
 
             assert_ne!(first_editor, second_editor);
             assert_ne!(second_editor, third_editor);
@@ -1696,48 +627,118 @@ mod tests {
             assert_eq!(second_editor.read(cx).model(), &model);
             assert_eq!(third_editor.read(cx).model(), &model);
 
-            let state = |caret, scroll_x| crate::app::editor::EditorViewState {
+            let state = |caret, scroll_x| EditorViewState {
                 anchor: caret,
                 caret,
                 top: 0,
                 scroll_x,
                 folds: Vec::new(),
             };
-            let selection = crate::app::editor::EditorViewState {
-                anchor: 4,
-                caret: 6,
-                top: 4,
-                scroll_x: 20.,
-                folds: Vec::new(),
+            for (editor, state) in [
+                (&first_editor, state(1, 10.)),
+                (&second_editor, state(4, 20.)),
+                (&third_editor, state(9, 30.)),
+            ] {
+                editor.update(cx, |editor, cx| {
+                    editor
+                        .editor()
+                        .clone()
+                        .update(cx, |editor, cx| editor.restore_view_state(state, cx))
+                });
+            }
+            let view_state = |editor: &Entity<EditorView>, cx: &App| {
+                editor.read(cx).editor().read(cx).view_state(cx)
             };
-            first_editor.update(cx, |editor, cx| {
-                editor.editor().clone().update(cx, |editor, cx| {
-                    editor.restore_view_state(state(1, 10.), cx)
-                })
-            });
-            second_editor.update(cx, |editor, cx| {
-                editor.editor().clone().update(cx, |editor, cx| {
-                    editor.restore_view_state(selection.clone(), cx)
-                })
-            });
-            third_editor.update(cx, |editor, cx| {
-                editor.editor().clone().update(cx, |editor, cx| {
-                    editor.restore_view_state(state(9, 30.), cx)
-                })
-            });
-
-            assert_eq!(
-                first_editor.read(cx).editor().read(cx).view_state(cx),
-                state(1, 10.)
-            );
-            assert_eq!(
-                second_editor.read(cx).editor().read(cx).view_state(cx),
-                selection
-            );
-            assert_eq!(
-                third_editor.read(cx).editor().read(cx).view_state(cx),
-                state(9, 30.)
-            );
+            assert_eq!(view_state(&first_editor, cx), state(1, 10.));
+            assert_eq!(view_state(&second_editor, cx), state(4, 20.));
+            assert_eq!(view_state(&third_editor, cx), state(9, 30.));
         });
+    }
+
+    #[gpui::test]
+    fn closing_or_replacing_a_tab_drops_its_view_and_keeps_the_document(cx: &mut TestAppContext) {
+        let first_model = cx.new(|_| BufferModel::from_text("first"));
+        let second_model = cx.new(|_| BufferModel::from_text("second"));
+        let second_model_weak = second_model.downgrade();
+        let mut documents = DocumentCollection::new();
+        let first = cx.update(|cx| documents.create_untitled("First", first_model.clone(), cx));
+        let second = cx.update(|cx| documents.create_untitled("Second", second_model.clone(), cx));
+        drop(second_model);
+        let workbench = cx.new(|cx| Workbench::new(documents.get(first).unwrap(), cx));
+
+        let (closed, replaced) = workbench.update(cx, |workbench, cx| {
+            let pane = workbench.focused_pane_id().unwrap();
+            let first_tab = workbench.focused_pane().unwrap().active_tab_id();
+            let replaced = workbench
+                .editor(workbench.focused_pane().unwrap().active_tab())
+                .unwrap()
+                .downgrade();
+            let model = documents.get(second).unwrap().model().clone();
+            let second_tab = workbench
+                .open_tab_for_document(pane, second, model, cx)
+                .unwrap();
+            let closed = workbench
+                .editor(workbench.tab(pane, second_tab).unwrap())
+                .unwrap()
+                .downgrade();
+            let outcome = workbench
+                .request_close_tab(pane, second_tab, second, false, 1)
+                .unwrap();
+            assert!(matches!(outcome, CloseRequestOutcome::Closed(_)));
+            assert_eq!(workbench.focused_pane().unwrap().active_tab_id(), first_tab);
+
+            assert!(workbench.replace_tab_document(
+                pane,
+                first_tab,
+                first,
+                first_model.clone(),
+                cx
+            ));
+            (closed, replaced)
+        });
+        cx.run_until_parked();
+        assert!(closed.upgrade().is_none());
+        assert!(replaced.upgrade().is_none());
+        workbench.read_with(cx, |workbench, _| {
+            let tab = workbench.focused_pane().unwrap().active_tab();
+            assert!(workbench.editor(tab).is_some());
+        });
+        assert!(second_model_weak.upgrade().is_some());
+        assert!(cx.update(|cx| documents.remove(second, cx)));
+        assert!(second_model_weak.upgrade().is_none());
+    }
+
+    #[gpui::test]
+    fn unregistering_a_tool_drops_its_view_but_hiding_keeps_it(cx: &mut TestAppContext) {
+        let workbench = cx.new(|_| Workbench::empty());
+        let tree = cx.new(|cx| {
+            WorkspaceTree::new(
+                crate::app::workspace::WorkspaceState::default().snapshot(),
+                cx,
+            )
+        });
+        let weak = tree.downgrade();
+        workbench.update(cx, |workbench, _| {
+            let id = workbench.register_tool(
+                "knot.explorer",
+                "Explorer",
+                ToolContent::Workspace(tree.clone()),
+                DockLocation::Left,
+            );
+            let again = workbench.register_tool(
+                "knot.explorer",
+                "Explorer",
+                ToolContent::Workspace(tree),
+                DockLocation::Left,
+            );
+            assert_eq!(again, id);
+            workbench.show_tool(id).unwrap();
+            assert!(workbench.hide_tool(id));
+            assert!(workbench.tool_content(id).is_some());
+            workbench.unregister_tool(id);
+            assert!(workbench.tool_content(id).is_none());
+        });
+        cx.run_until_parked();
+        assert!(weak.upgrade().is_none());
     }
 }

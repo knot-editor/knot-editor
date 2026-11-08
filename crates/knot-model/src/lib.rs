@@ -8,6 +8,7 @@
 //! - Input: [`keys`] and [`commands`].
 //! - Presentation values: [`style`] and [`theme`].
 //! - Packages: [`extensions`].
+//! - Layout: [`workbench`].
 
 pub mod commands;
 pub mod editing;
@@ -21,4 +22,5 @@ pub mod resource;
 pub mod style;
 pub mod syntax;
 pub mod theme;
+pub mod workbench;
 pub mod workspace;

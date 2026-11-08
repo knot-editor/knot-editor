@@ -125,7 +125,7 @@ supported. Existing tool commands keep working on the new model.
 - **Review gate:** try commands that open tools stacked in a dock, close every
   document, and switch projects into an empty session; confirm layout feels
   right before docks gain terminals.
-- **Implementation context:** `src/app/workbench.rs` replaces `layout`,
+- **Implementation context:** `crates/knot-model/src/workbench.rs` replaces `layout`,
   `docks`, `dock_sizes`, and `dock_selected` with a center layout and a
   per-`DockLocation` dock state; `workbench/tools.rs` (`ToolPlacement` loses
   `DocumentGroup`/`Group` in favor of dock pane positions), `arrange.rs`,
@@ -134,13 +134,14 @@ supported. Existing tool commands keep working on the new model.
   dividers), `product/navigation.rs` (scoping, maximize), `product/tools.rs`,
   `product/closure.rs` and `product/sessions.rs` (empty-workbench untitled
   replacement), `product/reopen.rs`. Persistence: `src/app/window_layout.rs`,
-  `src/app/window_sessions.rs`, `src/app/tool_layout.rs` (bump
-  `TOOL_LAYOUT_VERSION`). Extension contract: `crates/knot-host/src/js/knot.d.ts`
+  `src/app/window_sessions.rs`, and `TOOL_LAYOUT_VERSION` in
+  `crates/knot-model/src/workbench/tools.rs`; `src/app/workbench.rs` keeps the
+  views. Extension contract: `crates/knot-host/src/js/knot.d.ts`
   (`ViewLocation`, `LayoutNode`, `WindowLayout`), `docs/schemas/knot.schema.json`,
   `src/app/extensions/host/handlers.rs`, and `@knot/projects` callers. Tests
   under `src/app/product/tests/` (`tools.rs`, `tool_layout.rs`,
   `window_restore.rs`, `project_sessions.rs`, `navigation.rs`) and
-  `src/app/workbench/relocate/tests.rs`.
+  `crates/knot-model/src/workbench/relocate/tests.rs`.
 
 ### 2. ⏳ Dock interactions and homes
 

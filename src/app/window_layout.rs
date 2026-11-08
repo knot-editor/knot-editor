@@ -24,6 +24,7 @@ use super::{
         WorkbenchTab,
     },
 };
+pub(crate) use knot_model::workbench::{PlanNode, Rect};
 
 pub(crate) const WINDOW_LAYOUT_VERSION: u32 = 1;
 
@@ -292,8 +293,8 @@ impl WindowLayout {
                     uri: document
                         .and_then(|document| document.resource_uri())
                         .map(ToString::to_string),
-                    view: tab
-                        .editor()
+                    view: workbench
+                        .editor(tab)
                         .map(|editor| editor.read(cx).editor().read(cx).view_state(cx))
                         .unwrap_or_default(),
                     language: model
@@ -482,57 +483,6 @@ impl WindowLayout {
     }
 }
 
-/// A pruned arrangement whose tabs are materialized per kind before the
-/// workbench installs it.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum PlanNode<T> {
-    Pane {
-        dock: Option<DockLocation>,
-        selected: usize,
-        focused: bool,
-        /// How many of the leading tabs are pinned.
-        pinned: usize,
-        tabs: Vec<T>,
-    },
-    Split {
-        direction: SplitDirection,
-        ratio: f32,
-        first: Box<PlanNode<T>>,
-        second: Box<PlanNode<T>>,
-    },
-}
-
-impl<T> PlanNode<T> {
-    pub(crate) fn map<U>(self, step: &mut impl FnMut(T) -> U) -> PlanNode<U> {
-        match self {
-            Self::Pane {
-                dock,
-                selected,
-                focused,
-                pinned,
-                tabs,
-            } => PlanNode::Pane {
-                dock,
-                selected,
-                focused,
-                pinned,
-                tabs: tabs.into_iter().map(&mut *step).collect(),
-            },
-            Self::Split {
-                direction,
-                ratio,
-                first,
-                second,
-            } => PlanNode::Split {
-                direction,
-                ratio,
-                first: Box::new(first.map(step)),
-                second: Box::new(second.map(step)),
-            },
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum PlannedTab<D> {
     Document {
@@ -545,30 +495,6 @@ pub(crate) enum PlannedTab<D> {
     Terminal {
         directory: Option<std::path::PathBuf>,
     },
-}
-
-/// A logical-pixel rectangle.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Rect {
-    pub(crate) x: f32,
-    pub(crate) y: f32,
-    pub(crate) width: f32,
-    pub(crate) height: f32,
-}
-
-impl Rect {
-    fn intersection(&self, other: &Self) -> Option<Self> {
-        let x = self.x.max(other.x);
-        let y = self.y.max(other.y);
-        let right = (self.x + self.width).min(other.x + other.width);
-        let bottom = (self.y + self.height).min(other.y + other.height);
-        (right > x && bottom > y).then_some(Self {
-            x,
-            y,
-            width: right - x,
-            height: bottom - y,
-        })
-    }
 }
 
 /// A connected display: its persisted identity and logical bounds.

@@ -5,7 +5,8 @@ use crate::app::product::relocate::TabRelocationSource;
 fn capture_active_tab(shell: &Entity<ProductShell>, cx: &TestAppContext) -> TabRelocationSource {
     cx.read(|cx| {
         let shell = shell.read(cx);
-        let pane = shell.workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         shell
             .capture_tab_relocation(pane.id(), pane.active_tab().id(), cx)
             .unwrap()
@@ -364,7 +365,8 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
     let (pane, first, document_tab) = cx.read(|cx| {
         let shell = shell.read(cx);
-        let pane = shell.workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         (
             pane.id(),
             pane.active_tab().surface_id(),
@@ -376,10 +378,11 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
     };
     cx.update_window(window, |_, window, cx| {
         let shell = shell.read(cx);
-        let pane = shell.workbench.read(cx).pane(pane).unwrap();
+        let workbench = shell.workbench.read(cx);
+        let pane = workbench.pane(pane).unwrap();
         assert!(
-            pane.active_tab()
-                .terminal_view()
+            workbench
+                .terminal_view(pane.active_tab())
                 .unwrap()
                 .focus_handle(cx)
                 .contains_focused(window, cx)
@@ -549,7 +552,8 @@ async fn closing_the_final_terminal_tab_installs_an_untitled_workbench(cx: &mut 
     );
     let (pane, document_tab, session) = cx.read(|cx| {
         let shell = shell.read(cx);
-        let pane = shell.workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         let TabSurfaceId::Terminal(id) = pane.active_tab().surface_id() else {
             panic!()
         };
@@ -795,12 +799,8 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
     );
     let (id, session, grid, source_view) = cx.read(|cx| {
         let shell = source.read(cx);
-        let tab = shell
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab();
+        let workbench = shell.workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
         let TabSurfaceId::Terminal(id) = tab.surface_id() else {
             panic!()
         };
@@ -811,7 +811,12 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
             .sessions[&id]
             .clone();
         let grid = session.read(cx).terminal().unwrap().clone();
-        (id, session, grid, tab.terminal_view().unwrap().clone())
+        (
+            id,
+            session,
+            grid,
+            workbench.terminal_view(tab).unwrap().clone(),
+        )
     });
     let relocation = capture_active_tab(&source, cx);
     assert_eq!(
@@ -840,10 +845,7 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .terminal_view()
+            .focused_terminal_view()
             .unwrap()
             .clone()
     });
@@ -882,14 +884,10 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
                 .any(|tab| tab.surface == TabSurfaceId::Terminal(id))
         );
         let destination_shell = destination.read(cx);
-        let tab = destination_shell
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab();
+        let workbench = destination_shell.workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
         assert_eq!(tab.surface_id(), TabSurfaceId::Terminal(id));
-        assert_ne!(tab.terminal_view(), Some(&source_view));
+        assert_ne!(workbench.terminal_view(tab), Some(&source_view));
         assert!(std::sync::Arc::ptr_eq(
             session.read(cx).terminal().unwrap(),
             &grid
@@ -958,16 +956,12 @@ async fn failed_terminal_destination_leaves_source_attached(cx: &mut TestAppCont
     assert!(matches!(outcome, CommandOutcome::HandlerFailure { .. }));
     cx.read(|cx| {
         let shell = shell.read(cx);
-        let tab = shell
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab();
+        let workbench = shell.workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
         let TabSurfaceId::Terminal(id) = tab.surface_id() else {
             panic!()
         };
-        assert!(tab.terminal_view().is_some());
+        assert!(workbench.terminal_view(tab).is_some());
         assert!(
             cx.global::<ApplicationTerminalSessions>()
                 .0
@@ -1001,16 +995,12 @@ async fn vanished_terminal_destination_leaves_source_attached(cx: &mut TestAppCo
     assert_eq!(outcome, CommandOutcome::InvalidTarget);
     cx.read(|cx| {
         let shell = shell.read(cx);
-        let tab = shell
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab();
+        let workbench = shell.workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
         let TabSurfaceId::Terminal(id) = tab.surface_id() else {
             panic!()
         };
-        assert!(tab.terminal_view().is_some());
+        assert!(workbench.terminal_view(tab).is_some());
         assert!(
             cx.global::<ApplicationTerminalSessions>()
                 .0

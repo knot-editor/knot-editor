@@ -449,7 +449,8 @@ async fn replaced_or_closed_open_presentations_cannot_accept_in_flight_results(
             );
         } else {
             shell.update(cx, |shell, cx| {
-                let pane = shell.workbench.read(cx).focused_pane().unwrap();
+                let workbench = shell.workbench.read(cx);
+                let pane = workbench.focused_pane().unwrap();
                 let (pane, tab) = (pane.id(), pane.active_tab_id());
                 shell.workbench.update(cx, |workbench, cx| {
                     assert!(workbench.replace_tab_document(pane, tab, document, model.clone(), cx))
@@ -582,7 +583,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
             pane: first_pane.id(),
             tab: tab.id(),
             surface: tab.surface_id(),
-            presentation: tab.editor().map(Entity::entity_id),
+            presentation: tab.presentation(),
         }
     });
     let session = shell.downgrade();
@@ -909,7 +910,8 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
     });
     let source = cx.read(|cx| {
         let shell = first.read(cx);
-        let pane = shell.workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         shell
             .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
             .unwrap()
@@ -1279,10 +1281,7 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });

@@ -161,10 +161,7 @@ await commands.register("api.cross", async (context) => {
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });
@@ -389,10 +386,7 @@ throw new Error("closed buffer accepted operation");
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });
@@ -479,10 +473,7 @@ await commands.register("api.owned-cleanup", async () => {
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });

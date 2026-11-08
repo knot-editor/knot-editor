@@ -49,16 +49,10 @@ impl ProductShell {
                     .sessions
                     .get(&id)
                     .cloned();
-                let view = self
-                    .workbench
-                    .read(cx)
-                    .pane(source.tab.tab.pane_id)
-                    .and_then(|pane| {
-                        pane.tabs()
-                            .iter()
-                            .find(|tab| tab.id() == source.tab.tab.tab_id)
-                    })
-                    .and_then(|tab| tab.terminal_view());
+                let workbench = self.workbench.read(cx);
+                let view = workbench
+                    .tab(source.tab.tab.pane_id, source.tab.tab.tab_id)
+                    .and_then(|tab| workbench.terminal_view(tab));
                 session
                     .zip(view)
                     .is_some_and(|(session, view)| view.read(cx).is_attached_to(&session))
@@ -67,12 +61,7 @@ impl ProductShell {
     }
 
     fn focus_relocated_surface(&mut self, cx: &mut Context<Self>) {
-        let editor = self
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .and_then(|pane| pane.active_tab().editor())
-            .cloned();
+        let editor = self.workbench.read(cx).focused_editor().cloned();
         if let Some(editor) = editor {
             editor.read(cx).editor().clone().update(cx, |editor, cx| {
                 editor.preserve_scroll_for_relocation();

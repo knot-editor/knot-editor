@@ -153,10 +153,7 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
                 .read(cx)
                 .workbench
                 .read(cx)
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .editor()
+                .focused_editor()
                 .unwrap()
                 .clone();
             editor.update(cx, |editor, cx| {
@@ -265,8 +262,14 @@ fn personal_config_associates_an_extension_and_open_documents_redetect(cx: &mut 
     let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let opened = cx.read(|cx| {
-        let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
-        pane.active_tab().editor().unwrap().read(cx).model().clone()
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        workbench
+            .editor(pane.active_tab())
+            .unwrap()
+            .read(cx)
+            .model()
+            .clone()
     });
     let language = |cx: &mut TestAppContext| {
         cx.read(|cx| crate::app::languages::effective_language(opened.read(cx), cx))

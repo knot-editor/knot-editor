@@ -69,13 +69,13 @@ fn new_tab_targets_the_pane_whose_editor_has_focus(cx: &mut TestAppContext) {
         (
             first_pane,
             workbench
-                .pane(first_pane)
-                .unwrap()
-                .active_tab()
-                .editor()
+                .editor(workbench.pane(first_pane).unwrap().active_tab())
                 .unwrap()
                 .clone(),
-            workbench.panes()[1].active_tab().editor().unwrap().clone(),
+            workbench
+                .editor(workbench.panes()[1].active_tab())
+                .unwrap()
+                .clone(),
         )
     });
     cx.update(|window, cx| focus_view(&second_editor.focus_handle(cx), window, cx));
@@ -149,18 +149,15 @@ fn replacing_a_shared_blank_tab_preserves_the_other_windows_document(cx: &mut Te
     let replacement = cx.update(|cx| create_untitled_document(&documents, cx));
     cx.update_window(first_window, |_, _window, cx| {
         first.update(cx, |shell, cx| {
-            let pane = shell.workbench.read(cx).focused_pane().unwrap();
+            let workbench = shell.workbench.read(cx);
+            let pane = workbench.focused_pane().unwrap();
             let target = super::super::OpenTarget {
                 shell: cx.weak_entity(),
                 workbench: shell.workbench.downgrade(),
                 pane: pane.id(),
                 tab: pane.active_tab_id(),
                 surface: pane.active_tab().surface_id(),
-                presentation: pane
-                    .active_tab()
-                    .editor()
-                    .map(Entity::entity_id)
-                    .or_else(|| pane.active_tab().terminal_view().map(Entity::entity_id)),
+                presentation: pane.active_tab().presentation(),
             };
             shell.present_open_document(replacement, &target, true, false, cx);
         });

@@ -13,7 +13,8 @@ use std::sync::Arc;
 
 fn capture(shell: &Entity<ProductShell>, cx: &App) -> TabRelocationSource {
     let shell = shell.read(cx);
-    let pane = shell.workbench.read(cx).focused_pane().unwrap();
+    let workbench = shell.workbench.read(cx);
+    let pane = workbench.focused_pane().unwrap();
     shell
         .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
         .unwrap()
@@ -48,15 +49,7 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
             source.update(cx, |shell, cx| {
                 shell.focus_active_surface(cx);
                 let command = shell.capture_command_target(cx).unwrap();
-                let editor = shell
-                    .workbench
-                    .read(cx)
-                    .focused_pane()
-                    .unwrap()
-                    .active_tab()
-                    .editor()
-                    .unwrap()
-                    .clone();
+                let editor = shell.workbench.read(cx).focused_editor().unwrap().clone();
                 editor.update(cx, |editor, cx| {
                     editor.editor().clone().update(cx, |editor, cx| {
                         editor.restore_view_state(
@@ -100,15 +93,10 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
         })
         .unwrap();
     cx.read(|cx| {
-        let moved = destination
-            .read(cx)
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab();
+        let workbench = destination.read(cx).workbench.read(cx);
+        let moved = workbench.focused_pane().unwrap().active_tab();
         assert_eq!(moved.document_id(), Some(document));
-        assert_eq!(moved.editor(), Some(&editor));
+        assert_eq!(workbench.editor(moved), Some(&editor));
         assert_eq!(
             editor.read(cx).editor().read(cx).view_state(cx),
             crate::app::editor::EditorViewState {
@@ -159,10 +147,7 @@ fn relocation_into_existing_document_pane_keeps_application_view_counts(cx: &mut
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });
@@ -177,13 +162,9 @@ fn relocation_into_existing_document_pane_keeps_application_view_counts(cx: &mut
             cx.global::<ApplicationSessions>().view_count(document, cx),
             2
         );
-        let pane = destination
-            .read(cx)
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap();
-        assert_eq!(pane.tabs()[0].editor(), Some(&original));
+        let workbench = destination.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        assert_eq!(workbench.editor(&pane.tabs()[0]), Some(&original));
         assert_eq!(pane.active_tab_id(), pane.tabs()[0].id());
         assert_eq!(pane.tabs().len(), 2);
     });
@@ -352,7 +333,7 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
                 .unwrap()
                 .id();
             workbench
-                .request_close_tab_with_state(pane_id, document_tab, document, false, 2)
+                .request_close_tab(pane_id, document_tab, document, false, 2)
                 .unwrap();
         })
     });
@@ -363,10 +344,7 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .terminal_view()
+            .focused_terminal_view()
             .unwrap()
             .clone()
     });
@@ -390,14 +368,7 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
     );
     cx.read(|cx| {
         assert_eq!(
-            source
-                .read(cx)
-                .workbench
-                .read(cx)
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .terminal_view(),
+            source.read(cx).workbench.read(cx).focused_terminal_view(),
             Some(&source_view)
         );
         assert!(source_view.read(cx).is_attached_to(&session));
@@ -416,10 +387,7 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .terminal_view()
+            .focused_terminal_view()
             .unwrap()
             .clone()
     });

@@ -73,16 +73,10 @@ fn save_writes_the_cleaned_text_and_undo_restores_it_as_unsaved(cx: &mut TestApp
     assert!(!is_dirty(cx));
 
     cx.update_window(saved.window, |_, _, cx| {
-        let pane = saved
-            .shell
-            .read(cx)
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap();
-        let editor = pane
-            .active_tab()
-            .editor()
+        let workbench = saved.shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        let editor = workbench
+            .editor(pane.active_tab())
             .unwrap()
             .read(cx)
             .editor()

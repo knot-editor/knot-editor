@@ -8,8 +8,7 @@ use super::filesystem::ResourceVersion;
 use super::model::BufferModel;
 use super::resource::ResourceUri;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct DocumentId(u64);
+pub(crate) use knot_model::workbench::DocumentId;
 
 /// A document's persistence relationship.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -361,7 +360,7 @@ impl DocumentCollection {
         identity: uuid::Uuid,
         cx: &mut App,
     ) -> DocumentId {
-        let id = DocumentId(self.next_id);
+        let id = DocumentId::new(self.next_id);
         self.next_id = self
             .next_id
             .checked_add(1)
@@ -649,7 +648,7 @@ mod tests {
             cx
         )));
         assert!(!cx.update(|cx| documents.finish_persistence(
-            DocumentId(u64::MAX),
+            DocumentId::new(u64::MAX),
             &model,
             &current,
             ("notes.txt", uri.clone()),

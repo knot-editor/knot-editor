@@ -517,10 +517,7 @@ fn active_view(shell: &Entity<ProductShell>, cx: &mut TestAppContext) -> Entity<
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     })

@@ -107,10 +107,7 @@ pub(super) fn active_editor(
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .read(cx)
             .editor()

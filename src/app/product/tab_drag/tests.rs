@@ -163,13 +163,7 @@ fn all_edges_split_then_center_move_collapses_source_and_focuses_editor(cx: &mut
                 workbench.tab_snapshots(),
                 vec![before[1], before[2], before[0]]
             );
-            workbench
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .editor()
-                .unwrap()
-                .clone()
+            workbench.focused_editor().unwrap().clone()
         });
         visual.update(|window, cx| assert!(editor.focus_handle(cx).is_focused(window)));
     }
@@ -242,14 +236,15 @@ fn terminal_drag_preserves_live_view_session_and_attachment(cx: &mut TestAppCont
     .unwrap();
     cx.run_until_parked();
     let (tab, view, session) = cx.read(|cx| {
-        let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         let tab = pane.active_tab();
         let TabSurfaceId::Terminal(id) = tab.surface_id() else {
             panic!("expected terminal")
         };
         (
             tab.id(),
-            tab.terminal_view().unwrap().clone(),
+            workbench.terminal_view(tab).unwrap().clone(),
             cx.global::<super::super::ApplicationTerminalSessions>()
                 .0
                 .borrow()
@@ -267,14 +262,7 @@ fn terminal_drag_preserves_live_view_session_and_attachment(cx: &mut TestAppCont
     visual.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         assert_eq!(workbench.panes().len(), 2);
-        assert_eq!(
-            workbench
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .terminal_view(),
-            Some(&view)
-        );
+        assert_eq!(workbench.focused_terminal_view(), Some(&view));
         assert!(view.read(cx).is_attached_to(&session));
     });
     visual.update(|window, cx| assert!(view.focus_handle(cx).is_focused(window)));
@@ -305,11 +293,14 @@ fn tool_tab_id(shell: &Entity<ProductShell>, cx: &TestAppContext) -> u64 {
     })
 }
 
-fn tool_presentation(shell: &Entity<ProductShell>, cx: &TestAppContext) -> gpui::EntityId {
+fn tool_presentation(
+    shell: &Entity<ProductShell>,
+    cx: &TestAppContext,
+) -> crate::app::workbench::PresentationId {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         let id = shell.read(cx).explorer_frame(cx).unwrap();
-        workbench.tool(id).unwrap().content.presentation()
+        workbench.tool(id).unwrap().presentation
     })
 }
 
@@ -359,10 +350,7 @@ fn tool_drag_joins_group_splits_edges_and_docks_with_focus(cx: &mut TestAppConte
         assert_eq!(workbench.panes().len(), 1);
         assert_eq!(workbench.tab_snapshots().len(), 2);
         let id = shell.read(cx).explorer_frame(cx).unwrap();
-        assert_eq!(
-            workbench.tool(id).unwrap().content.presentation(),
-            presentation
-        );
+        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
         assert!(
             workbench
                 .dock_location(workbench.tool_tab(id).unwrap().0)
@@ -392,10 +380,7 @@ fn tool_drag_joins_group_splits_edges_and_docks_with_focus(cx: &mut TestAppConte
         let workbench = shell.read(cx).workbench.read(cx);
         assert_eq!(workbench.panes().len(), 2);
         let id = shell.read(cx).explorer_frame(cx).unwrap();
-        assert_eq!(
-            workbench.tool(id).unwrap().content.presentation(),
-            presentation
-        );
+        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
     });
     assert_tool_focused(&shell, &mut visual);
 
@@ -427,10 +412,7 @@ fn tool_drag_joins_group_splits_edges_and_docks_with_focus(cx: &mut TestAppConte
             workbench.dock_location(workbench.tool_tab(id).unwrap().0),
             Some(DockLocation::Left)
         );
-        assert_eq!(
-            workbench.tool(id).unwrap().content.presentation(),
-            presentation
-        );
+        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
     });
     assert_tool_focused(&shell, &mut visual);
 
@@ -455,10 +437,7 @@ fn tool_drag_joins_group_splits_edges_and_docks_with_focus(cx: &mut TestAppConte
             workbench.dock_location(workbench.tool_tab(id).unwrap().0),
             Some(DockLocation::Bottom)
         );
-        assert_eq!(
-            workbench.tool(id).unwrap().content.presentation(),
-            presentation
-        );
+        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
     });
     assert_tool_focused(&shell, &mut visual);
 

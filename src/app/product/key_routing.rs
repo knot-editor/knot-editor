@@ -192,10 +192,7 @@ impl ProductShell {
 
     /// The view of the focused pane's active tab.
     fn focused_command_view(&self, cx: &App) -> Option<CommandView> {
-        self.workbench
-            .read(cx)
-            .focused_pane()
-            .and_then(|pane| pane.active_tab().command_view())
+        self.workbench.read(cx).focused_command_view()
     }
 
     /// Route a typed key while the workbench has focus; false when the

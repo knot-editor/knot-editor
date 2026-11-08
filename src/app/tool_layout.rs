@@ -16,91 +16,15 @@
 use std::time::Duration;
 
 use gpui::Global;
-use serde::{Deserialize, Serialize};
-
-use super::{
-    record_store::{RecordStore, StateDatabase},
-    workbench::DockLocation,
+pub(crate) use knot_model::workbench::{
+    EXPLORER_TOOL_ID, StoredLocation, TOOL_LAYOUT_VERSION, ToolLayoutSnapshot,
 };
 
-pub(crate) const TOOL_LAYOUT_VERSION: u32 = 1;
-pub(crate) const EXPLORER_TOOL_ID: &str = "knot.explorer";
+use super::record_store::{RecordStore, StateDatabase};
 
 /// Trailing-edge debounce for automatic writes. Pointer-drag resizes publish
 /// on every movement; only the settled arrangement reaches SQLite.
 const WRITE_DEBOUNCE: Duration = Duration::from_millis(300);
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum StoredLocation {
-    Left,
-    Right,
-    Bottom,
-    DocumentGroup,
-}
-
-impl StoredLocation {
-    pub(crate) fn placement(self) -> super::workbench::ToolPlacement {
-        match self {
-            Self::Left => super::workbench::ToolPlacement::Dock(DockLocation::Left),
-            Self::Right => super::workbench::ToolPlacement::Dock(DockLocation::Right),
-            Self::Bottom => super::workbench::ToolPlacement::Dock(DockLocation::Bottom),
-            Self::DocumentGroup => super::workbench::ToolPlacement::DocumentGroup,
-        }
-    }
-}
-
-impl From<DockLocation> for StoredLocation {
-    fn from(dock: DockLocation) -> Self {
-        match dock {
-            DockLocation::Left => Self::Left,
-            DockLocation::Right => Self::Right,
-            DockLocation::Bottom => Self::Bottom,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct StoredTool {
-    pub(crate) id: String,
-    pub(crate) location: StoredLocation,
-    pub(crate) index: usize,
-    pub(crate) visible: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub(crate) struct ToolLayoutSnapshot {
-    pub(crate) version: u32,
-    pub(crate) tools: Vec<StoredTool>,
-    pub(crate) dock_sizes: [f32; 3],
-    pub(crate) dock_selected: [Option<String>; 3],
-    /// Whether the user has ever customized the arrangement. Fresh windows
-    /// only auto-show stored tools once set, preserving first-run behavior
-    /// (no eager explorer before any folder or toggle) on fresh installs.
-    #[serde(default)]
-    pub(crate) customized: bool,
-}
-
-impl ToolLayoutSnapshot {
-    pub(crate) fn product_default() -> Self {
-        Self {
-            version: TOOL_LAYOUT_VERSION,
-            tools: vec![StoredTool {
-                id: EXPLORER_TOOL_ID.to_owned(),
-                location: StoredLocation::Left,
-                index: 0,
-                visible: true,
-            }],
-            dock_sizes: [240., 240., 220.],
-            dock_selected: [Some(EXPLORER_TOOL_ID.to_owned()), None, None],
-            customized: false,
-        }
-    }
-
-    pub(crate) fn tool(&self, id: &str) -> Option<&StoredTool> {
-        self.tools.iter().find(|tool| tool.id == id)
-    }
-}
 
 /// Application-owned tool-layout persistence boundary.
 ///

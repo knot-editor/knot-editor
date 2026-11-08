@@ -600,7 +600,8 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     let (shell, window) = super::operations::empty_product_window(&documents, cx);
     // A live dirty document's own protection is never listed.
     let live = cx.read(|cx| {
-        let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         pane.active_tab().document_id().unwrap()
     });
     let live_model = cx.read(|cx| documents.read(cx).get(live).unwrap().model().clone());
@@ -661,7 +662,8 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     }
     let document = document_by_identity(&documents, restored.document_id, cx);
     cx.read(|cx| {
-        let pane = shell.read(cx).workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         assert_eq!(pane.active_tab().document_id(), Some(document));
     });
     assert!(!cx.has_pending_prompt());
@@ -743,7 +745,8 @@ async fn startup_restores_into_the_launch_window_without_any_extension_host(
     let shell = cx.update(|cx| shell.entity(cx).unwrap());
     cx.read(|cx| {
         let shell = shell.read(cx);
-        let pane = shell.workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         // The restored document takes the place of the untitled placeholder.
         assert_eq!(pane.tabs().len(), 1);
         assert_eq!(pane.active_tab().document_id(), Some(document));

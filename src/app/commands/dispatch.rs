@@ -40,7 +40,7 @@ pub(crate) struct ProductCommandTarget {
     pub(crate) pane: crate::app::workbench::PaneId,
     pub(crate) tab: crate::app::workbench::TabId,
     pub(crate) surface: crate::app::workbench::TabSurfaceId,
-    pub(crate) presentation: Option<EntityId>,
+    pub(crate) presentation: crate::app::workbench::PresentationId,
     /// Whether the tab's view had Knot-side focus when captured; only a
     /// focused view takes its own commands.
     pub(crate) focused: bool,
@@ -111,14 +111,12 @@ impl ProductCommandTarget {
 
     pub(crate) fn command_view(&self, cx: &App) -> Option<crate::app::workbench::CommandView> {
         self.validate_tab(cx).ok()?;
-        self.workbench
-            .upgrade()?
-            .read(cx)
-            .pane(self.pane)?
-            .tabs()
-            .iter()
-            .find(|tab| tab.id() == self.tab && tab.surface_id() == self.surface)?
-            .command_view()
+        let workbench = self.workbench.upgrade()?;
+        let workbench = workbench.read(cx);
+        let tab = workbench
+            .tab(self.pane, self.tab)
+            .filter(|tab| tab.surface_id() == self.surface)?;
+        workbench.command_view(tab)
     }
 
     pub(crate) fn validate_view(&self, cx: &App) -> Result<(), CommandOutcome> {
@@ -280,12 +278,11 @@ pub(crate) fn break_captured_history_group(target: &ProductCommandTarget, cx: &m
     let Some(workbench) = target.workbench.upgrade() else {
         return;
     };
+    let workbench = workbench.read(cx);
     let model = workbench
-        .read(cx)
-        .pane(target.pane)
-        .and_then(|pane| pane.tabs().iter().find(|tab| tab.id() == target.tab))
+        .tab(target.pane, target.tab)
         .filter(|tab| tab.surface_id() == target.surface)
-        .and_then(|tab| tab.editor())
+        .and_then(|tab| workbench.editor(tab))
         .map(|editor| editor.read(cx).model().clone());
     if let Some(model) = model {
         model.update(cx, |model, _| model.break_history_group());

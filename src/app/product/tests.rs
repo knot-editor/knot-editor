@@ -262,7 +262,8 @@ fn memory_filesystems_with_provider() -> (
 fn current_open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarget {
     let session = shell.downgrade();
     let shell = shell.read(cx);
-    let pane = shell.workbench.read(cx).focused_pane().unwrap();
+    let workbench = shell.workbench.read(cx);
+    let pane = workbench.focused_pane().unwrap();
     let tab = pane.active_tab();
     OpenTarget {
         shell: session,

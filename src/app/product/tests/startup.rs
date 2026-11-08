@@ -557,8 +557,8 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .and_then(|pane| pane.active_tab().editor().cloned())
+            .focused_editor()
+            .cloned()
             .expect("document editor is focused before the tree")
     });
     wait_for_api_condition(cx, |cx| {
@@ -593,10 +593,7 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     });

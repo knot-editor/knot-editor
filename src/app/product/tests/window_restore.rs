@@ -214,14 +214,10 @@ fn editors(
     cx: &TestAppContext,
 ) -> Vec<Entity<crate::app::editor::Editor>> {
     cx.read(|cx| {
-        shell
-            .read(cx)
-            .workbench
-            .read(cx)
-            .panes()
-            .iter()
-            .flat_map(|pane| pane.tabs())
-            .filter_map(|tab| tab.editor())
+        let workbench = shell.read(cx).workbench.read(cx);
+        workbench
+            .tabs()
+            .filter_map(|tab| workbench.editor(tab))
             .map(|view| view.read(cx).editor().clone())
             .collect()
     })

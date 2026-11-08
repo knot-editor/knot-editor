@@ -202,13 +202,8 @@ impl ProductShell {
     }
 
     pub(super) fn explorer_frame(&self, cx: &App) -> Option<ToolFrameId> {
-        let presentation = self.workspace_tree.as_ref()?.entity_id();
-        self.workbench
-            .read(cx)
-            .tools()
-            .iter()
-            .find(|tool| tool.content.presentation() == presentation)
-            .map(|tool| tool.id)
+        let tree = self.workspace_tree.as_ref()?.entity_id();
+        self.workbench.read(cx).tool_presenting(tree)
     }
 
     /// Place a tool as an explicit user arrangement, publishing the

@@ -80,10 +80,7 @@ fn focused_editor(shell: &Entity<ProductShell>, cx: &mut TestAppContext) -> Enti
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
+            .focused_editor()
             .unwrap()
             .clone()
     })

@@ -368,12 +368,12 @@ pub(crate) async fn focus_first_pane(
     context: CommandContext,
     (): (),
 ) -> Result<(), CommandOutcome> {
-    focus_chosen(context, Workbench::first_pane_id).await
+    focus_chosen(context, |workbench| workbench.first_pane_id()).await
 }
 
 #[command("workbench.focus-last-pane", title = "Focus Last Pane", description = "Focus the last editor-area pane in layout order.", id = FOCUS_LAST_PANE_COMMAND, participant = Workbench)]
 pub(crate) async fn focus_last_pane(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    focus_chosen(context, Workbench::last_pane_id).await
+    focus_chosen(context, |workbench| workbench.last_pane_id()).await
 }
 
 #[command("workbench.focus-previously-focused-pane", title = "Focus Previously Focused Pane", description = "Go back to the pane that had focus before this one.", id = FOCUS_PREVIOUS_FOCUSED_PANE_COMMAND, participant = Workbench)]
@@ -381,7 +381,7 @@ pub(crate) async fn focus_previously_focused_pane(
     context: CommandContext,
     (): (),
 ) -> Result<(), CommandOutcome> {
-    focus_chosen(context, Workbench::previous_pane_id).await
+    focus_chosen(context, |workbench| workbench.previous_pane_id()).await
 }
 
 async fn focus_chosen(

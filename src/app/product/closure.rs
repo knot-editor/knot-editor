@@ -19,38 +19,35 @@ impl ProductShell {
             let workbench = shell.read(cx).workbench.clone();
             let snapshots = workbench.read(cx).tab_snapshots();
             views.extend(snapshots.into_iter().map(|snapshot| {
-                let (editor, pinned) = {
+                let (has_editor, pinned, presentation) = {
                     let workbench = workbench.read(cx);
-                    let tab = workbench.pane(snapshot.pane_id).and_then(|pane| {
-                        pane.tabs().iter().find(|tab| tab.id() == snapshot.tab_id)
-                    });
+                    let tab = workbench
+                        .tab(snapshot.pane_id, snapshot.tab_id)
+                        .expect("snapshots name live tabs");
                     (
-                        tab.and_then(|tab| tab.editor().cloned()),
-                        tab.is_some_and(|tab| tab.is_pinned()),
+                        workbench.editor(tab).is_some(),
+                        tab.is_pinned(),
+                        tab.presentation(),
                     )
                 };
                 ProtectedView {
                     key: ProtectedViewKey {
                         session,
                         workbench: workbench.entity_id(),
-                        presentation: workbench
-                            .read(cx)
-                            .capture_tab_move(snapshot.pane_id, snapshot.tab_id)
-                            .unwrap()
-                            .presentation,
+                        presentation,
                         pane: snapshot.pane_id,
                         tab: snapshot.tab_id,
                         surface: snapshot.surface,
                     },
                     pinned,
                     dock: workbench.read(cx).dock_location(snapshot.pane_id).is_some(),
-                    target: editor.map(|editor| ProductCommandTarget {
+                    target: has_editor.then(|| ProductCommandTarget {
                         shell: shell.downgrade(),
                         workbench: workbench.downgrade(),
                         pane: snapshot.pane_id,
                         tab: snapshot.tab_id,
                         surface: snapshot.surface,
-                        presentation: Some(editor.entity_id()),
+                        presentation,
                         focused: true,
                         view: None,
                     }),
@@ -225,7 +222,7 @@ impl ProductShell {
             self.hide_tool_from_pointer(id, cx);
             return;
         }
-        if tab.command_view().is_none() {
+        if self.workbench.read(cx).command_view(tab).is_none() {
             return;
         }
         let target = ProductCommandTarget {
@@ -696,13 +693,7 @@ impl ProductShell {
         let documents = Self::documents(cx);
         let document_is_dirty = documents.read(cx).get(document).unwrap().is_dirty(cx);
         let outcome = self.workbench.update(cx, |workbench, _cx| {
-            workbench.request_close_tab_with_state(
-                pane,
-                tab,
-                document,
-                document_is_dirty,
-                open_view_count,
-            )
+            workbench.request_close_tab(pane, tab, document, document_is_dirty, open_view_count)
         });
         let Some(outcome) = outcome else {
             return CommandOutcome::InvalidTarget;
@@ -779,13 +770,7 @@ impl ProductShell {
             .get(document)
             .is_some_and(|document| document.is_dirty(cx));
         let outcome = self.workbench.update(cx, |workbench, _| {
-            workbench.request_close_tab_with_state(
-                pane,
-                tab,
-                document,
-                document_is_dirty,
-                open_view_count,
-            )
+            workbench.request_close_tab(pane, tab, document, document_is_dirty, open_view_count)
         });
         let transition = match outcome {
             Some(CloseRequestOutcome::Closed(transition)) => transition,

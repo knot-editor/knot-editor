@@ -126,7 +126,7 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
             let tab = &workbench.focused_pane().unwrap().tabs()[0];
             (
                 workbench.tab_snapshots(),
-                tab.editor().unwrap().clone(),
+                workbench.editor(tab).unwrap().clone(),
                 tab.document_id().unwrap(),
             )
         });
@@ -168,7 +168,7 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
             assert_eq!(source.read(cx).workbench.read(cx).tab_snapshots(), old[1..]);
             let workbench = destination.read(cx).workbench.read(cx);
             let active = workbench.focused_pane().unwrap().active_tab();
-            assert_eq!(active.editor(), Some(&editor));
+            assert_eq!(workbench.editor(active), Some(&editor));
             assert_eq!(active.document_id(), Some(document));
             assert_eq!(workbench.tab_snapshots().len(), 2);
             assert_eq!(
@@ -181,7 +181,7 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
             );
             if placement == TabMovePlacement::Before {
                 assert_eq!(
-                    workbench.focused_pane().unwrap().tabs()[0].editor(),
+                    workbench.editor(&workbench.focused_pane().unwrap().tabs()[0]),
                     Some(&editor)
                 );
             }
@@ -323,13 +323,9 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
     let (document, editor, command) = cx
         .update_window(source_window, |_, _, cx| {
             source.update(cx, |shell, cx| {
-                let tab = shell
-                    .workbench
-                    .read(cx)
-                    .focused_pane()
-                    .unwrap()
-                    .active_tab();
-                let editor = tab.editor().unwrap().clone();
+                let workbench = shell.workbench.read(cx);
+                let tab = workbench.focused_pane().unwrap().active_tab();
+                let editor = workbench.editor(tab).unwrap().clone();
                 let document = tab.document_id().unwrap();
                 editor.update(cx, |editor, cx| {
                     editor.editor().clone().update(cx, |editor, cx| {
@@ -367,10 +363,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
         .update_window(new_window, |_, window, cx| {
             let shell = window.root::<ProductShell>().flatten().unwrap();
             let workbench = shell.read(cx).workbench.read(cx);
-            assert_eq!(
-                workbench.focused_pane().unwrap().active_tab().editor(),
-                Some(&editor)
-            );
+            assert_eq!(workbench.focused_editor(), Some(&editor));
             assert!(editor.focus_handle(cx).is_focused(window));
             assert_eq!(
                 editor.read(cx).editor().read(cx).view_state(cx),
@@ -441,12 +434,8 @@ fn failed_tear_out_and_stale_or_closed_drop_preserve_source(cx: &mut TestAppCont
         visual.update(|window, cx| {
             let shared = cx.global::<ApplicationTabDrag>().0.clone();
             let active = shared.borrow().active.clone().unwrap();
-            let pane = destination
-                .read(cx)
-                .workbench
-                .read(cx)
-                .focused_pane()
-                .unwrap();
+            let workbench = destination.read(cx).workbench.read(cx);
+            let pane = workbench.focused_pane().unwrap();
             let destination_capture = destination
                 .read(cx)
                 .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
@@ -465,12 +454,8 @@ fn failed_tear_out_and_stale_or_closed_drop_preserve_source(cx: &mut TestAppCont
                     .unwrap();
             } else {
                 destination.update(cx, |shell, cx| {
-                    let tab = shell
-                        .workbench
-                        .read(cx)
-                        .focused_pane()
-                        .unwrap()
-                        .active_tab();
+                    let workbench = shell.workbench.read(cx);
+                    let tab = workbench.focused_pane().unwrap().active_tab();
                     let document = tab.document_id().unwrap();
                     let tab_id = tab.id();
                     let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
@@ -508,13 +493,8 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
     .unwrap();
     cx.run_until_parked();
     let (id, original_view, session, grid) = cx.read(|cx| {
-        let tab = source
-            .read(cx)
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab();
+        let workbench = source.read(cx).workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
         let TabSurfaceId::Terminal(id) = tab.surface_id() else {
             panic!("expected terminal")
         };
@@ -526,7 +506,7 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
             .clone();
         (
             id,
-            tab.terminal_view().unwrap().clone(),
+            workbench.terminal_view(tab).unwrap().clone(),
             session.clone(),
             session.read(cx).terminal().unwrap().clone(),
         )
@@ -545,10 +525,7 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
             .read(cx)
             .workbench
             .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .terminal_view()
+            .focused_terminal_view()
             .unwrap()
             .clone();
         assert_ne!(view, original_view);
@@ -586,10 +563,7 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
                 .read(cx)
                 .workbench
                 .read(cx)
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .terminal_view()
+                .focused_terminal_view()
                 .unwrap()
                 .clone();
             assert_ne!(view, moved_view);
@@ -669,7 +643,8 @@ fn hit_testing_respects_title_bar_occlusion_and_global_content_offsets(cx: &mut 
     );
     cx.read(|cx| {
         let shell = source.read(cx);
-        let pane = shell.workbench.read(cx).focused_pane().unwrap();
+        let workbench = shell.workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
         let document_source = shell
             .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
             .unwrap();
