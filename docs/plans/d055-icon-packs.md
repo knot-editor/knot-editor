@@ -1,7 +1,9 @@
 # D055 — Icon packs
 
 Status: 🚧 approved, not started. Roadmap item
-[D055](../roadmap.md); builds on the theme system (D064).
+[D055](../roadmap.md); builds on the theme system (D064) and waits for
+[D160](d160-gpui-component.md), whose gpui port changes the painting and
+asset APIs this plan uses.
 
 ## Goal
 

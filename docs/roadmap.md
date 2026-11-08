@@ -91,7 +91,7 @@ complete list for that item.
   - D092 → D142, D001, D067
 - **Extension presentation and language tooling:**
   - D114 → D145 → D067 → D022
-  - D064 → D055
+  - D064, D160 → D055
   - D087 → D067, D023
   - D079 → D115 → format on save with D067
   - D145 before D021, which is reconsidered only if D145 falls short.
@@ -515,6 +515,7 @@ complete list for that item.
     fallback, and migrate the fixed `TreeIcon` set and label-only actions
     onto it.
   - 🚧 Planned: [D055 plan](plans/d055-icon-packs.md).
+  - Order: after D160.
 
 - **D022 — Rich completion policy and presentation**
   - Deferred: The prototype validated provider aggregation and replaceable
@@ -837,6 +838,13 @@ Kakoune mode could use it too. The
 
 ## Platforms and accessibility
 
+- **D160 — Current gpui and gpui-component**
+  - Deferred: Knot is on `gpui` 0.2.2, Zed's last crates.io release, and
+    hand-builds every widget.
+  - 🚧 Planned: [D160 plan](plans/d160-gpui-component.md): port to the
+    `gpui-pre` snapshots, then adopt gpui-component for leaf widgets.
+  - Order: before D055 and D030.
+
 - **D062 — Positioning existing windows**
   - Deferred: gpui 0.2.2 sets a window's bounds only at creation and can
     afterwards only resize it. Session restoration and project switching always
@@ -859,5 +867,7 @@ Kakoune mode could use it too. The
 - **D030 — Accessibility bridge**
   - Deferred: gpui lacks the public platform bridge required by the semantic
     state already retained.
+  - Note: the gpui snapshots D160 moves to include AccessKit; re-assess when
+    it lands.
   - Reconsider: The framework exposes a viable bridge or Knot selects an
     implementation strategy.
