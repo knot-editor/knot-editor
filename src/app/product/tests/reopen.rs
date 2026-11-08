@@ -29,7 +29,11 @@ fn files_window(
     let (shell, window) = product_window(untitled, model, cx);
     for uri in &uris {
         let file = pollster::block_on(provider.read(uri.clone())).unwrap();
-        let model = cx.new(|_| BufferModel::from_text(String::from_utf8(file.bytes).unwrap()));
+        let model = cx.new(|_| {
+            Buffer::new(BufferModel::from_text(
+                String::from_utf8(file.bytes).unwrap(),
+            ))
+        });
         let document = documents.update(cx, |documents, cx| {
             documents.create_persisted(
                 uri.to_string(),

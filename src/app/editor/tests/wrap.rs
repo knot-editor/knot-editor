@@ -3,7 +3,7 @@ use gpui::{
 };
 
 use super::super::{
-    BufferModel, Editor, EditorView, EditorViewState, layout::Row, line_end, to_flat_byte,
+    Buffer, BufferModel, Editor, EditorView, EditorViewState, layout::Row, line_end, to_flat_byte,
 };
 use crate::app::settings::{self, ApplicationSettings, EDITOR_SOFT_WRAP, SettingsScope};
 
@@ -53,7 +53,13 @@ fn a_row_shows_the_part_of_a_span_between_its_positions() {
 #[gpui::test]
 fn wrapped_rows_place_the_caret_clicks_ime_bounds_and_line_numbers(cx: &mut TestAppContext) {
     wrap_everything(cx);
-    let model = cx.new(|_| BufferModel::from_text(format!("{}\nshort\n{}", words(60), words(60))));
+    let model = cx.new(|_| {
+        Buffer::new(BufferModel::from_text(format!(
+            "{}\nshort\n{}",
+            words(60),
+            words(60)
+        )))
+    });
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.simulate_resize(size(px(400.), px(300.)));
     cx.run_until_parked();
@@ -120,7 +126,7 @@ fn wrapped_rows_place_the_caret_clicks_ime_bounds_and_line_numbers(cx: &mut Test
 fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppContext) {
     wrap_everything(cx);
     let text = vec![words(60); 40].join("\n");
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.simulate_resize(size(px(400.), px(300.)));
     cx.run_until_parked();
@@ -177,7 +183,7 @@ fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppCo
 fn a_state_restored_before_the_first_layout_keeps_its_row(cx: &mut TestAppContext) {
     wrap_everything(cx);
     let text = vec![words(400); 30].join("\n");
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (measured, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.run_until_parked();
     let measured = cx.read(|cx| measured.read(cx).editor().clone());
@@ -212,12 +218,16 @@ fn toggle_soft_wrap_writes_the_document_value_every_view_follows(cx: &mut TestAp
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text(words(400));
         model.set_document(document);
-        model
+        Buffer::new(model)
     });
     let first = cx.add_window(|_, cx| EditorView::new(model.clone(), cx));
     let second = cx.add_window(|_, cx| EditorView::new(model.clone(), cx));
-    let other =
-        cx.add_window(|_, cx| EditorView::new(cx.new(|_| BufferModel::from_text(words(400))), cx));
+    let other = cx.add_window(|_, cx| {
+        EditorView::new(
+            cx.new(|_| Buffer::new(BufferModel::from_text(words(400)))),
+            cx,
+        )
+    });
     cx.run_until_parked();
     let wraps = |cx: &mut TestAppContext| {
         [first, second, other].map(|window| {
@@ -255,7 +265,11 @@ fn toggle_soft_wrap_writes_the_document_value_every_view_follows(cx: &mut TestAp
 
     // A view without a document has nothing to write the value for.
     let frame = cx.add_window(|_, cx| {
-        EditorView::for_contributed_view(cx.new(|_| BufferModel::from_text("a")), "frame", cx)
+        EditorView::for_contributed_view(
+            cx.new(|_| Buffer::new(BufferModel::from_text("a"))),
+            "frame",
+            cx,
+        )
     });
     assert!(
         !frame
@@ -287,7 +301,7 @@ fn visual_movement_follows_rows_and_logical_twins_follow_lines(cx: &mut TestAppC
     wrap_everything(cx);
     let long = words(60);
     let text = format!("{long}\nshort\n{}", [long.as_str(); 11].join("\n"));
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.simulate_resize(size(px(400.), px(300.)));
     cx.run_until_parked();
@@ -389,7 +403,7 @@ fn without_wrapping_each_movement_and_its_twin_agree(cx: &mut TestAppContext) {
         .map(|line| format!("    line {line} {}", words(line % 7)))
         .collect::<Vec<_>>()
         .join("\n");
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.simulate_resize(size(px(400.), px(300.)));
     cx.run_until_parked();
@@ -425,7 +439,7 @@ fn without_wrapping_each_movement_and_its_twin_agree(cx: &mut TestAppContext) {
 fn row_queries_and_scrolling_follow_wrapped_rows(cx: &mut TestAppContext) {
     wrap_everything(cx);
     let text = ["short", &words(60), "tail", &words(60), "end"].join("\n");
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.simulate_resize(size(px(400.), px(300.)));
     cx.run_until_parked();

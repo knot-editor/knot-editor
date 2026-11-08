@@ -6,7 +6,7 @@ use gpui::{
 };
 
 use super::super::{
-    BufferModel, ContributionSource, EditorContributionAction, EditorView, GutterLayout,
+    Buffer, BufferModel, ContributionSource, EditorContributionAction, EditorView, GutterLayout,
     gutter::GutterLane,
 };
 use crate::app::settings::{
@@ -40,7 +40,7 @@ fn gutter(cx: &mut VisualTestContext, editor: &Entity<EditorView>) -> GutterLayo
 #[gpui::test]
 fn line_numbers_follow_the_setting_for_the_view(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let model = cx.new(|_| BufferModel::from_text("a\nb\nc"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a\nb\nc")));
     let (editor_view, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.run_until_parked();
     let on = gutter(cx, &editor_view);
@@ -73,7 +73,7 @@ fn line_numbers_follow_the_setting_for_the_view(cx: &mut TestAppContext) {
 #[gpui::test]
 fn the_number_lane_widens_with_the_line_count(cx: &mut TestAppContext) {
     let text = "x\n".repeat(98);
-    let model = cx.new(|_| BufferModel::from_text(text.as_str()));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text.as_str())));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.run_until_parked();
     let two_digits = gutter(cx, &editor);
@@ -96,7 +96,7 @@ fn the_number_lane_widens_with_the_line_count(cx: &mut TestAppContext) {
 #[gpui::test]
 fn numbers_and_the_line_highlight_follow_the_cursor(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let model = cx.new(|_| BufferModel::from_text("a\nb\nc\nd\ne"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a\nb\nc\nd\ne")));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.run_until_parked();
     cx.update(|_, cx| {
@@ -239,7 +239,7 @@ fn drag_to(
 
 #[gpui::test]
 fn line_numbers_select_whole_lines(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("one\ntwo\nthree")));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     let number =
@@ -290,7 +290,7 @@ fn the_marker_lane_runs_the_top_marker_command_and_selects_nothing(cx: &mut Test
                 0,
             )
             .unwrap();
-        model
+        Buffer::new(model)
     });
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
@@ -335,7 +335,7 @@ const NESTED: &str = "a\n  b\n    c\n      d\n    e\n  f\ng";
 #[gpui::test]
 fn the_fold_lane_toggles_folds(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let model = cx.new(|_| BufferModel::from_text(NESTED));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(NESTED)));
     let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     let folds = |cx: &mut VisualTestContext| cx.read(|cx| view.read(cx).editor().read(cx).folds());
@@ -391,7 +391,7 @@ fn the_fold_lane_toggles_folds(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn fold_marks_list_visible_foldable_lines(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text(NESTED));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(NESTED)));
     let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     let marks = |cx: &mut VisualTestContext| {
@@ -411,7 +411,7 @@ fn fold_marks_list_visible_foldable_lines(cx: &mut TestAppContext) {
 #[gpui::test]
 fn folding_settings_shape_the_fold_lane(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let model = cx.new(|_| BufferModel::from_text(NESTED));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(NESTED)));
     let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     assert_eq!(gutter(cx, &view).folding, Folding::Mouseover);
@@ -429,7 +429,7 @@ fn folding_settings_shape_the_fold_lane(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_pointer_over_the_gutter_is_tracked(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text(NESTED));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(NESTED)));
     let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     let hover = |cx: &mut VisualTestContext, position| {

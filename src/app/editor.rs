@@ -58,7 +58,9 @@ use super::{
     history::{EditGroupKind, EditGrouping, HistoryViewChange, HistoryViewState},
     indentation::{IndentUnit, leading_whitespace},
     languages,
-    model::{BufferModel, ContributionSource, ResolvedEditorContribution, decoration_precedence},
+    model::{
+        Buffer, BufferModel, ContributionSource, ResolvedEditorContribution, decoration_precedence,
+    },
     settings::{self, ApplicationSettings, SettingsScope},
     theme::{Highlight, Theme, color, theme},
 };
@@ -132,7 +134,7 @@ pub(crate) struct EditorContributionAction {
     pub command: String,
     pub source: ContributionSource,
     pub range: ByteRange,
-    pub model: Entity<BufferModel>,
+    pub model: Entity<Buffer>,
     pub window: AnyWindowHandle,
     pub focus: WeakFocusHandle,
 }
@@ -222,7 +224,7 @@ pub struct Editor {
     view_kind: Arc<str>,
     /// Authoritative document state. Everything below is editor state or
     /// derived from the model's current revision.
-    model: Entity<BufferModel>,
+    model: Entity<Buffer>,
     /// The model's line count as of the last refresh.
     line_count: usize,
     /// The model revision this editor last refreshed from.
@@ -293,7 +295,7 @@ pub struct Editor {
 impl Editor {
     /// Build an editor over `model` whose settings resolve for view `kind`.
     pub(crate) fn new(
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         kind: impl Into<Arc<str>>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -381,7 +383,7 @@ impl Editor {
         }
     }
 
-    pub(crate) fn model(&self) -> &Entity<BufferModel> {
+    pub(crate) fn model(&self) -> &Entity<Buffer> {
         &self.model
     }
 

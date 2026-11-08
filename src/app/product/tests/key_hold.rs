@@ -39,7 +39,7 @@ struct Fixture {
     host: Entity<crate::app::extensions::host::ProductExtensionHost>,
     shell: Entity<ProductShell>,
     window: gpui::AnyWindowHandle,
-    model: Entity<BufferModel>,
+    model: Entity<Buffer>,
     editor: Entity<EditorView>,
 }
 
@@ -57,7 +57,7 @@ fn fixture(text: &str, cx: &mut TestAppContext) -> Fixture {
     wait_for_api_condition(cx, |cx| {
         keymap_command(cx, "f8", Some("editor")).as_deref() == Some("hold.home")
     });
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Held", model.clone(), cx)
     });

@@ -16,7 +16,7 @@ async fn flush(cx: &TestAppContext) {
 #[gpui::test]
 async fn dirty_documents_are_captured_and_persistence_retires_the_record(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let model = cx.new(|_| BufferModel::from_text("initial"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("initial")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Untitled", model.clone(), cx)
     });
@@ -100,7 +100,7 @@ async fn dirty_documents_are_captured_and_persistence_retires_the_record(cx: &mu
 #[gpui::test]
 async fn repeated_edits_keep_one_record_per_document(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let model = cx.new(|_| BufferModel::from_text("initial"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("initial")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Untitled", model.clone(), cx)
     });
@@ -881,7 +881,7 @@ async fn quit_is_a_hot_exit_that_restores_dirty_documents_on_relaunch(cx: &mut T
     cx.set_global(ApplicationFileSystems(filesystems.clone()));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     let opened = provider.read(uri.clone()).await.unwrap();
-    let saved_model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let saved_model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let saved = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -1169,7 +1169,7 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
 
     // A capture of a document that has since closed restores under a fresh
     // identity and is presented in the command's window.
-    let closing = cx.new(|_| BufferModel::from_text("closed text"));
+    let closing = cx.new(|_| Buffer::new(BufferModel::from_text("closed text")));
     let closing = documents.update(cx, |documents, cx| {
         documents.create_untitled("Notes", closing, cx)
     });

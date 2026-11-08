@@ -546,7 +546,7 @@ struct EditorHandle {
 /// editor handle it was opened through; the group ends with that handle.
 struct UndoGroup {
     owner: ExtensionKey,
-    model: gpui::WeakEntity<crate::app::model::BufferModel>,
+    model: gpui::WeakEntity<crate::app::model::Buffer>,
     /// The view that opened the group, whose selection the step restores.
     editor: gpui::WeakEntity<crate::app::editor::Editor>,
     handle: Option<u64>,
@@ -2130,7 +2130,7 @@ impl ProductExtensionHost {
 
     fn track_buffer(
         &mut self,
-        model: &Entity<crate::app::model::BufferModel>,
+        model: &Entity<crate::app::model::Buffer>,
         cx: &mut Context<Self>,
     ) -> knot_protocol::BufferHandle {
         let buffer = self.buffers.open_buffer(model);
@@ -2147,11 +2147,7 @@ impl ProductExtensionHost {
         buffer
     }
 
-    fn route_model_changes(
-        &mut self,
-        model: &Entity<crate::app::model::BufferModel>,
-        cx: &mut App,
-    ) {
+    fn route_model_changes(&mut self, model: &Entity<crate::app::model::Buffer>, cx: &mut App) {
         for dispatch in self.buffers.drain_model_changes(model, cx) {
             let _ = self.pool.dispatch_buffer_change(
                 ExtensionKey::new(dispatch.extension, dispatch.lifecycle),

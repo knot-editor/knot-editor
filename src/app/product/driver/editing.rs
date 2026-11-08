@@ -5,7 +5,7 @@ use std::ops::Range;
 use gpui::{AppContext, TestAppContext};
 
 use crate::app::editor::{Editor, EditorViewState};
-use crate::app::model::BufferModel;
+use crate::app::model::{Buffer, BufferModel};
 use crate::test_support::cases::CARET;
 
 /// In typed text, presses Backspace.
@@ -56,7 +56,7 @@ pub fn run(
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text(text);
         model.set_document(uuid::Uuid::new_v4());
-        model
+        Buffer::new(model)
     });
     cx.update(|cx| crate::app::documents::detect_indentation(&model, cx));
     cx.update(|cx| crate::app::languages::set_language(&model, language.into(), cx));

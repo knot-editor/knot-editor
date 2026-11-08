@@ -381,7 +381,7 @@ impl ProductShell {
         match resource {
             OpenResource::Directory(_) => None,
             OpenResource::Missing(uri) => {
-                let model = cx.new(|_| BufferModel::from_text(""));
+                let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
                 let title = resource_title(&uri);
                 Some(documents.update(cx, |documents, cx| {
                     documents.create_destination(title, model, uri.clone(), cx)
@@ -391,7 +391,7 @@ impl ProductShell {
                 if let Some(document) = documents.read(cx).document_for_resource(&uri) {
                     return Some(document);
                 }
-                let model = cx.new(|_| BufferModel::from_text(text));
+                let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
                 Some(documents.update(cx, |documents, cx| {
                     documents.create_persisted(
                         resource_title(&uri),

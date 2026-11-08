@@ -20,7 +20,7 @@ impl BufferModel {
     /// past the last, ordered by first line and then outermost first. They
     /// come from the language's `folds` query, or from indentation for a
     /// language without one.
-    pub(crate) fn fold_regions(&self) -> Arc<[Range<usize>]> {
+    pub fn fold_regions(&self) -> Arc<[Range<usize>]> {
         let revision = self.revision();
         let syntax = self.syntax_generation();
         if let Some(cached) = &*self.fold_regions.borrow()

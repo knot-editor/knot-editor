@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 approved, not started. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -98,7 +98,24 @@ behavior change.
 
 ## Checkpoints
 
-### 1. Plain buffer model
+### 1. Plain buffer model — ✅ implemented, review pending
+
+- ✅ `BufferModel` and its folds live in `crates/knot-model/src/buffer.rs`
+  with no gpui. `set_syntax` parses within the budget;
+  `start_syntax_parse` hands out a `BackgroundParse` job when the tree lags,
+  and `finish_syntax_parse` accepts, rebases, or rejects its result.
+- ✅ `Buffer` (`src/app/model.rs`) is the entity: it derefs to the model, owns
+  the observe-self syntax driver that runs jobs on the background executor,
+  and notifies on accepted results. `BufferRegistry` holds
+  `WeakEntity<Buffer>`; callers hold `Entity<Buffer>` and build it with
+  `Buffer::new(BufferModel::…)`.
+- ✅ The model tests are plain tests in `knot-model`, including parse jobs
+  rebased over later commits and stale results rejected after replacing or
+  closing the syntax; the registry tests and one driver test stay in the
+  shell. The full workspace suite passes unchanged.
+- Test-only model counters (`whole_text_reads`, `syntax_queries`,
+  `set_syntax_budget`) are behind `knot-model`'s `test-support` feature.
+
 
 - Deliverables: `BufferModel` and its folds in `knot-model` with no gpui; the
   syntax driver as a parse job the shell runs off the foreground; a shell

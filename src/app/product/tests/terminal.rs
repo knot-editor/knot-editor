@@ -1213,7 +1213,7 @@ async fn new_terminals_start_in_the_root_of_the_last_focused_document(cx: &mut T
     std::fs::create_dir_all(&second).unwrap();
     let documents = install_globals(cx);
     let document = cx.update(|cx| {
-        let model = cx.new(|_| BufferModel::from_text(""));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
         let uri = url::Url::from_file_path(second.join("src/lib.rs")).unwrap();
         documents.update(cx, |documents, cx| {
             documents.create_destination(

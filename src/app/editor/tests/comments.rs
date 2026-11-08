@@ -2,7 +2,7 @@
 
 use gpui::{AppContext, Entity, TestAppContext};
 
-use super::{BufferModel, Editor};
+use super::{Buffer, BufferModel, Editor};
 use crate::app::languages::{
     self, LanguageDefinition, LanguageOwner, LanguageQueries,
     editing::{CommentTokens, EditingDefinition},
@@ -69,7 +69,7 @@ fn editor<'a>(
             cx,
         );
     });
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     if let Some(language) = language {
         cx.update(|cx| languages::set_language(&model, language.into(), cx));
     }

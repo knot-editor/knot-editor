@@ -8,7 +8,7 @@ use gpui::{AppContext, Entity, TestAppContext};
 use super::super::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationLaunchGate,
     ApplicationProductCommands, ApplicationProtectedClosure, ApplicationSessions,
-    ApplicationTerminalSessions, BufferModel, DocumentCollection, DocumentId, LaunchGate,
+    ApplicationTerminalSessions, Buffer, DocumentCollection, DocumentId, LaunchGate,
     ProductCommandDispatcher, ProductShell, TerminalSessions, Workbench,
     install_protected_window_close, product_filesystems,
 };
@@ -75,7 +75,7 @@ pub(crate) fn wait_for_product_startup(cx: &mut TestAppContext) -> bool {
 /// A product window over `document`, whose text `model` holds.
 pub(crate) fn product_window(
     document: DocumentId,
-    model: Entity<BufferModel>,
+    model: Entity<Buffer>,
     cx: &mut TestAppContext,
 ) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
     let mut window = None;

@@ -28,7 +28,10 @@ AnchoredRangeStore::stabilize
 
 ## Application buffer ownership
 
-gpui's foreground thread exclusively owns editor state.
+gpui's foreground thread exclusively owns editor state. `BufferModel`
+(`knot-model`) is plain data with plain tests; the application holds each one
+in a `Buffer` entity (`src/app/model.rs`) that observers watch and that runs
+the model's background syntax parses.
 
 Each `BufferModel` owns:
 
@@ -43,8 +46,9 @@ Each `BufferModel` owns:
 - at most one immutable UTF-16 snapshot cache entry.
 
 Presentation metadata stays in `app` and refers to core range IDs. A model
-commit advances the public revision once, invalidates the snapshot cache, and
-notifies every observing view. The model also records the line range each of
+commit advances the public revision once and invalidates the snapshot cache;
+the caller that committed notifies the `Buffer` entity, which reaches every
+observing view. The model also records the line range each of
 its recent revisions replaced, as a `LineChange`, so a view that lays lines
 out, such as a wrapping editor, composes the changes since the revision it
 last followed and updates only those lines, or every line when it fell behind
@@ -121,8 +125,10 @@ BufferEdit log ---> AnchoredRangeStore::stabilize
 
 - The model feeds the syntax state in the same step that stabilizes anchors,
   so node positions describe the current text even before a reparse. Commit
-  paths need no gpui context; the model observes its own notifications and
-  starts a background parse whenever a commit leaves the tree behind.
+  paths need no gpui context: on every notification the `Buffer` entity asks
+  the model for a parse job when the tree lags, runs it off the foreground,
+  and hands the result back to the model, which accepts, rebases, or rejects
+  it.
 - While a background parse runs, highlights come from the edited previous
   trees. A result whose revision no longer matches is edited forward and
   reparsed; one for a replaced or closed state is dropped, and replacing or

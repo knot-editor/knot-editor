@@ -112,7 +112,7 @@ await commands.register("lang.set", async ({ buffer, arguments: language }) => {
 });
 "##;
 
-fn language(model: &Entity<BufferModel>, cx: &TestAppContext) -> (Option<String>, bool) {
+fn language(model: &Entity<Buffer>, cx: &TestAppContext) -> (Option<String>, bool) {
     model.read_with(cx, |model, _| {
         (
             model.language().map(str::to_owned),
@@ -121,11 +121,11 @@ fn language(model: &Entity<BufferModel>, cx: &TestAppContext) -> (Option<String>
     })
 }
 
-fn reported(model: &Entity<BufferModel>, cx: &TestAppContext) -> String {
+fn reported(model: &Entity<Buffer>, cx: &TestAppContext) -> String {
     cx.read(|cx| crate::app::languages::effective_language(model.read(cx), cx))
 }
 
-fn active_model(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Entity<BufferModel> {
+fn active_model(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Entity<Buffer> {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
@@ -296,7 +296,7 @@ fn opened_documents_detect_their_indentation_and_untitled_ones_do_not(cx: &mut T
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let opened = active_model(&shell, cx);
     cx.read(|cx| {
-        let spaces = |model: &Entity<BufferModel>| {
+        let spaces = |model: &Entity<Buffer>| {
             crate::app::settings::editor_insert_spaces(
                 &crate::app::settings::SettingsScope {
                     document: model.read(cx).document().map(|id| id.to_string()),

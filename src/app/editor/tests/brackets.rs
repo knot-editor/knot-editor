@@ -4,7 +4,7 @@
 use gpui::{AppContext, Entity, TestAppContext};
 
 use super::indentation::rust_editor;
-use super::{BufferModel, Editor};
+use super::{Buffer, BufferModel, Editor};
 use crate::app::languages::{
     self, LanguageDefinition, LanguageOwner, LanguageQueries,
     editing::{BracketPair, EditingDefinition, SyntaxFamily},
@@ -91,7 +91,7 @@ fn jump_moves_before_the_partner_and_back(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_document_without_a_language_matches_nothing(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let model = cx.new(|_| BufferModel::from_text(SOURCE));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(SOURCE)));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -158,7 +158,7 @@ fn pairs_editor<'a>(
         };
         languages::register(owner, rust.compile().unwrap(), cx);
     });
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     cx.update(|cx| languages::set_language(&model, "rust".into(), cx));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| editor.update(cx, |view, cx| move_to(view, caret, cx)));

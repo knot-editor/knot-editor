@@ -5,7 +5,7 @@ use gpui::{AppContext, TestAppContext};
 
 use std::time::Duration;
 
-use super::{BufferModel, Editor, check};
+use super::{Buffer, BufferModel, Editor, check};
 use crate::app::languages::{
     self, LanguageDefinition, LanguageOwner, LanguageQueries,
     editing::{BracketPair, EditingDefinition},
@@ -196,7 +196,7 @@ fn detected_indentation_overrides_the_setting(cx: &mut TestAppContext) {
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text("a\n\tb\nc");
         model.set_document(uuid::Uuid::new_v4());
-        model
+        Buffer::new(model)
     });
     cx.update(|cx| crate::app::documents::detect_indentation(&model, cx));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
@@ -219,7 +219,7 @@ pub(super) fn rust_editor<'a>(
     background: bool,
 ) -> (
     gpui::Entity<Editor>,
-    gpui::Entity<BufferModel>,
+    gpui::Entity<Buffer>,
     &'a mut gpui::TestAppContext,
 ) {
     cx.update(|cx| {
@@ -262,7 +262,7 @@ pub(super) fn rust_editor<'a>(
         if background {
             model.set_syntax_budget(Duration::ZERO);
         }
-        model
+        Buffer::new(model)
     });
     cx.update(|cx| languages::set_language(&model, "rust".into(), cx));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
@@ -302,7 +302,7 @@ fn reindent_lines_is_one_step_that_keeps_the_selection_on_its_text(cx: &mut Test
     let text = "fn a() {\nb();\n  c();\n}";
     let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
     let plain = cx.update(|cx| {
-        let model = cx.new(|_| BufferModel::from_text(text));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
         cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx))
     });
     cx.update(|cx| {
@@ -490,7 +490,7 @@ fn convert_indentation_rewrites_every_line_as_one_undoable_step(cx: &mut TestApp
     let model = cx.new(|_| {
         let mut model = BufferModel::from_text(text);
         model.set_document(uuid::Uuid::new_v4());
-        model
+        Buffer::new(model)
     });
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
@@ -538,7 +538,7 @@ fn detecting_indentation_replaces_the_documents_own_settings(cx: &mut TestAppCon
         let model = cx.new(|_| {
             let mut model = BufferModel::from_text(text);
             model.set_document(document);
-            model
+            Buffer::new(model)
         });
         cx.update(|cx| crate::app::settings::set_document_insert_spaces(document, spaces, cx));
         let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));

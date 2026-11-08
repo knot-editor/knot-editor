@@ -676,7 +676,7 @@ fn resolve(
         },
         Staged::Open(OpenResource::File { uri, text, version }) => {
             let documents = ProductShell::documents(cx);
-            let model = cx.new(|_| BufferModel::from_text(text));
+            let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
             let document = documents.update(cx, |documents, cx| {
                 documents.create_persisted(resource_title(&uri), model, uri, 0, version, cx)
             });

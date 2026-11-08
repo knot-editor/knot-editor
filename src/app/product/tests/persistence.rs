@@ -46,7 +46,7 @@ async fn save_creates_a_destination_before_binding_it_as_persisted(cx: &mut Test
     let (filesystems, provider) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/created.txt").unwrap();
-    let model = cx.new(|_| BufferModel::from_text("created text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("created text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_destination("created.txt", model.clone(), uri.clone(), cx)
     });
@@ -159,7 +159,7 @@ async fn edit_racing_save_keeps_the_newer_revision_dirty(cx: &mut TestAppContext
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     let opened = provider.read(uri.clone()).await.unwrap();
-    let model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -211,7 +211,7 @@ async fn save_completion_rejects_a_closed_captured_tab(cx: &mut TestAppContext) 
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     let opened = provider.read(uri.clone()).await.unwrap();
-    let model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -271,7 +271,7 @@ async fn save_as_overwrites_the_selected_file_and_retargets_only_after_success(
     cx.set_global(ApplicationSaveDialog(Arc::new(FixedSaveDialog(
         SaveDialogOutcome::Selected(uri.clone()),
     ))));
-    let model = cx.new(|_| BufferModel::from_text("replacement"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("replacement")));
     let document = cx.update(|cx| {
         documents.update(cx, |documents, cx| {
             documents.create_untitled("Untitled", model.clone(), cx)
@@ -366,7 +366,7 @@ async fn save_as_failure_preserves_text_and_document_identity(cx: &mut TestAppCo
     cx.set_global(ApplicationSaveDialog(Arc::new(FixedSaveDialog(
         SaveDialogOutcome::Selected(ResourceUri::parse("mem://product/src").unwrap()),
     ))));
-    let model = cx.new(|_| BufferModel::from_text("unsaved text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("unsaved text")));
     let document = cx.update(|cx| {
         documents.update(cx, |documents, cx| {
             documents.create_untitled("Untitled", model.clone(), cx)
@@ -416,7 +416,7 @@ async fn external_save_conflict_offers_reload_and_installs_the_external_version(
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     let opened = provider.read(uri.clone()).await.unwrap();
-    let model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -491,7 +491,7 @@ async fn external_conflict_reload_rejects_an_edit_racing_its_read(cx: &mut TestA
     filesystems.register("mem", gated_provider).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
 
-    let model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -540,7 +540,7 @@ async fn cancelling_an_external_save_conflict_preserves_the_dirty_document(
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     let opened = provider.read(uri.clone()).await.unwrap();
-    let model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -607,7 +607,7 @@ async fn save_as_after_an_external_conflict_retargets_only_after_saving(cx: &mut
         SaveDialogOutcome::Selected(alternate_uri.clone()),
     ))));
     let opened = provider.read(original_uri.clone()).await.unwrap();
-    let model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",

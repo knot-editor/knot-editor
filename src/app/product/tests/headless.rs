@@ -9,7 +9,7 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId, PickerItem};
 fn headless_session(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
-) -> (Entity<ProductShell>, Entity<BufferModel>) {
+) -> (Entity<ProductShell>, Entity<Buffer>) {
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());

@@ -21,7 +21,7 @@ pub(crate) use knot_model::workbench::{
 
 use super::{
     editor::{EditorView, EditorViewState},
-    model::BufferModel,
+    model::Buffer,
     terminal::view::TerminalView,
     text_view::TextView,
     tree_view::TreeView,
@@ -136,7 +136,7 @@ enum PresentationView {
 pub(crate) enum ArrangedTab {
     Document {
         document: DocumentId,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         view: EditorViewState,
     },
     Tool(ToolFrameId),
@@ -166,7 +166,7 @@ impl ArrangedTab {
 }
 
 enum ArrangedView {
-    Editor(Entity<BufferModel>, EditorViewState),
+    Editor(Entity<Buffer>, EditorViewState),
     Terminal(Entity<TerminalView>),
 }
 
@@ -214,7 +214,7 @@ impl Workbench {
 
     pub(crate) fn new_for_document(
         document_id: DocumentId,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> Self {
         let mut workbench = Self {
@@ -298,7 +298,7 @@ impl Workbench {
     fn attach_editor(
         &mut self,
         presentation: PresentationId,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         cx: &mut Context<Self>,
     ) {
         let editor = cx.new(|cx| EditorView::new(model, cx));
@@ -322,7 +322,7 @@ impl Workbench {
         &mut self,
         pane_id: PaneId,
         document_id: DocumentId,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> Option<TabId> {
         let tab = self.layout.open_tab_for_document(pane_id, document_id)?;
@@ -333,7 +333,7 @@ impl Workbench {
     pub(crate) fn open_document_in_normal_group(
         &mut self,
         document: DocumentId,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> (PaneId, TabId) {
         let (pane, tab) = self.layout.open_document_in_normal_group(document);
@@ -347,7 +347,7 @@ impl Workbench {
         &mut self,
         pane_id: PaneId,
         document_id: DocumentId,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> Option<(PaneId, TabId, Option<DocumentId>)> {
         let opened = self
@@ -363,7 +363,7 @@ impl Workbench {
         pane_id: PaneId,
         tab_id: TabId,
         document_id: DocumentId,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> bool {
         if !self
@@ -590,10 +590,11 @@ mod tests {
 
     use super::*;
     use crate::app::documents::DocumentCollection;
+    use crate::app::model::BufferModel;
 
     #[gpui::test]
     fn tabs_and_splits_own_distinct_views_of_one_model(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("one\ntwo\nthree")));
         let mut documents = DocumentCollection::new();
         let document = cx.update(|cx| documents.create_untitled("Shared", model.clone(), cx));
         let workbench = cx.new(|cx| Workbench::new(documents.get(document).unwrap(), cx));
@@ -657,8 +658,8 @@ mod tests {
 
     #[gpui::test]
     fn closing_or_replacing_a_tab_drops_its_view_and_keeps_the_document(cx: &mut TestAppContext) {
-        let first_model = cx.new(|_| BufferModel::from_text("first"));
-        let second_model = cx.new(|_| BufferModel::from_text("second"));
+        let first_model = cx.new(|_| Buffer::new(BufferModel::from_text("first")));
+        let second_model = cx.new(|_| Buffer::new(BufferModel::from_text("second")));
         let second_model_weak = second_model.downgrade();
         let mut documents = DocumentCollection::new();
         let first = cx.update(|cx| documents.create_untitled("First", first_model.clone(), cx));

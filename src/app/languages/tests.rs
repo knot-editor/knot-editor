@@ -312,8 +312,8 @@ fn persisted(
     uri: &str,
     text: &str,
     cx: &mut TestAppContext,
-) -> Entity<BufferModel> {
-    let model = cx.new(|_| BufferModel::from_text(text));
+) -> Entity<Buffer> {
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let uri = ResourceUri::parse(uri).unwrap();
     documents.update(cx, |documents, cx| {
         documents.create_persisted("file", model.clone(), uri, 0, ResourceVersion::new([1]), cx)
@@ -321,7 +321,7 @@ fn persisted(
     model
 }
 
-fn state(model: &Entity<BufferModel>, cx: &TestAppContext) -> (Option<String>, bool, bool) {
+fn state(model: &Entity<Buffer>, cx: &TestAppContext) -> (Option<String>, bool, bool) {
     model.read_with(cx, |model, _| {
         (
             model.language().map(str::to_owned),
@@ -388,7 +388,7 @@ fn save_as_redetects_unless_the_language_is_explicit(cx: &mut TestAppContext) {
     register(cx, owner(1), claiming("rust", &["rs"], &[], &[]));
     register(cx, owner(1), claiming("python", &["py"], &[], &[]));
     for explicit in [false, true] {
-        let model = cx.new(|_| BufferModel::from_text("x = 1"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("x = 1")));
         let id = documents.update(cx, |documents, cx| {
             documents.create_untitled("Untitled", model.clone(), cx)
         });
@@ -421,7 +421,7 @@ fn save_as_redetects_unless_the_language_is_explicit(cx: &mut TestAppContext) {
 fn plain_save_keeps_the_detected_language(cx: &mut TestAppContext) {
     let documents = install(cx);
     register(cx, owner(1), claiming("python", &[], &[], &["python3"]));
-    let model = cx.new(|_| BufferModel::from_text("#!/usr/bin/env python3\n"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("#!/usr/bin/env python3\n")));
     let uri = ResourceUri::parse("mem://workspace/run").unwrap();
     let id = documents.update(cx, |documents, cx| {
         documents.create_persisted(
@@ -436,7 +436,8 @@ fn plain_save_keeps_the_detected_language(cx: &mut TestAppContext) {
     assert_eq!(state(&model, cx).0, Some("python".into()));
 
     model.update(cx, |model, _| {
-        model.replace(0..model.len(), "#!/bin/sh\n").unwrap()
+        let len = model.len();
+        model.replace(0..len, "#!/bin/sh\n").unwrap()
     });
     let revision = model.read_with(cx, |model, _| model.revision());
     documents.update(cx, |documents, cx| {
@@ -495,7 +496,7 @@ fn injecting_languages_reparse_when_registrations_change(cx: &mut TestAppContext
 #[gpui::test]
 fn buffers_outside_documents_keep_a_fixed_language(cx: &mut TestAppContext) {
     install(cx);
-    let model = cx.new(|_| BufferModel::from_read_only_text("fn main() {}"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_read_only_text("fn main() {}")));
     cx.update(|cx| super::set_language(&model, "rust".into(), cx));
     assert_eq!(state(&model, cx), (Some("rust".into()), true, false));
     register(cx, owner(1), claiming("rust", &["rs"], &[], &[]));

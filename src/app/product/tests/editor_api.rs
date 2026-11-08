@@ -119,7 +119,7 @@ pub(super) fn active_editor(
 fn buffer_line_lookups_handle_crlf_and_multibyte_text(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     load(cx);
-    let model = cx.new(|_| BufferModel::from_text("a\r\né😀\nthird"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a\r\né😀\nthird")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Lines", model.clone(), cx)
     });
@@ -132,7 +132,7 @@ fn buffer_line_lookups_handle_crlf_and_multibyte_text(cx: &mut TestAppContext) {
 fn clipboard_text_reads_back_what_was_written(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     load(cx);
-    let model = cx.new(|_| BufferModel::from_text("text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Clipboard", model.clone(), cx)
     });
@@ -145,7 +145,7 @@ fn clipboard_text_reads_back_what_was_written(cx: &mut TestAppContext) {
 fn buffer_marks_follow_edits_and_validate_offsets(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     load(cx);
-    let model = cx.new(|_| BufferModel::from_text("a\r\né😀\nthird"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a\r\né😀\nthird")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Marks", model.clone(), cx)
     });
@@ -161,7 +161,7 @@ fn editor_handle_reads_moves_and_restores_the_captured_view(cx: &mut TestAppCont
     let text = (0..200)
         .map(|line| format!("line {line}\n"))
         .collect::<String>();
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Long", model.clone(), cx)
     });
@@ -375,7 +375,7 @@ fn editor_handle_outlives_its_command_and_rejects_once_its_tab_is_gone(cx: &mut 
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
     // A second tab, so that moving the active one leaves its pane occupied.
-    let second_model = cx.new(|_| BufferModel::from_text("abc"));
+    let second_model = cx.new(|_| Buffer::new(BufferModel::from_text("abc")));
     let second = documents.update(cx, |documents, cx| {
         documents.create_untitled("Second", second_model.clone(), cx)
     });
@@ -850,7 +850,7 @@ fn undo_group_fixture(
     Entity<ProductShell>,
     gpui::AnyWindowHandle,
     Entity<crate::app::editor::Editor>,
-    Entity<BufferModel>,
+    Entity<Buffer>,
 ) {
     use knot_protocol::ExtensionKey;
     let documents = install_globals(cx);

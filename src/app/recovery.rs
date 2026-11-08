@@ -49,7 +49,7 @@ use rusqlite::{Connection, OpenFlags, params, types::ToSql};
 use super::{
     documents::{ApplicationDocuments, Document, DocumentId, DocumentState},
     filesystem::{FileSystemProviderRegistry, ResourceKind, ResourceVersion},
-    model::BufferModel,
+    model::{Buffer, BufferModel},
     open::{OpenResource, OpenResourceError, load_resource_kind},
     resource::ResourceUri,
 };
@@ -830,7 +830,7 @@ fn display_error(error: anyhow::Error) -> String {
 }
 
 /// Attach recovery observation to a newly created document.
-pub(crate) fn observe_document(model: &Entity<BufferModel>, identity: uuid::Uuid, cx: &mut App) {
+pub(crate) fn observe_document(model: &Entity<Buffer>, identity: uuid::Uuid, cx: &mut App) {
     let Some(service) = cx
         .try_global::<ApplicationRecovery>()
         .map(|global| global.0.clone())
@@ -1345,7 +1345,7 @@ fn commit_restore(
         return Ok(RestoreOutcome::AlreadyOpen { document });
     }
     if let Some(owner) = by_resource.or(by_identity) {
-        let model = cx.new(|_| BufferModel::from_recovered_text("", &snapshot.text));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_recovered_text("", &snapshot.text)));
         let document = documents.update(cx, |documents, cx| {
             documents
                 .create_recovered(
@@ -1373,7 +1373,7 @@ fn commit_restore(
     // Retained captures restore under a fresh identity: the automatic role may
     // still protect newer text for the original one.
     let identity = (snapshot.kind == SnapshotKind::Automatic).then_some(snapshot.document_id);
-    let model = cx.new(|_| BufferModel::from_recovered_text(baseline, &snapshot.text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_recovered_text(baseline, &snapshot.text)));
     let document = documents.update(cx, |documents, cx| {
         let document = documents
             .create_recovered(snapshot.title.clone(), model, state, identity, cx)
@@ -1445,7 +1445,7 @@ impl RecoveryService {
         &self.store
     }
 
-    fn observe(&self, model: &Entity<BufferModel>, identity: uuid::Uuid, cx: &mut App) {
+    fn observe(&self, model: &Entity<Buffer>, identity: uuid::Uuid, cx: &mut App) {
         let service = self.clone();
         let subscription = cx.observe(model, move |_model, cx| {
             service.capture_registered(identity, cx);

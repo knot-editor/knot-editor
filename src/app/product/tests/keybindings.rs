@@ -1129,7 +1129,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
         }
         super::super::super::commands::keymaps::rebuild(cx);
     });
-    let model = cx.new(|_| BufferModel::from_text("0123456789"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("0123456789")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Probe", model.clone(), cx)
     });
@@ -1288,7 +1288,7 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
     wait_for_api_condition(cx, |cx| {
         keymap_command(cx, "f8", Some("editor")).as_deref() == Some("modal.enter")
     });
-    let model = cx.new(|_| BufferModel::from_text("abc"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("abc")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Modal", model.clone(), cx)
     });
@@ -1343,12 +1343,8 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
 fn focused_editor_window(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
-) -> (
-    Entity<ProductShell>,
-    gpui::AnyWindowHandle,
-    Entity<BufferModel>,
-) {
-    let model = cx.new(|_| BufferModel::from_text("abc"));
+) -> (Entity<ProductShell>, gpui::AnyWindowHandle, Entity<Buffer>) {
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("abc")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Keys", model.clone(), cx)
     });

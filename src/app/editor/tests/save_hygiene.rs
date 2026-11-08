@@ -2,7 +2,7 @@
 
 use gpui::{AppContext, TestAppContext};
 
-use super::{BufferModel, Editor};
+use super::{Buffer, BufferModel, Editor};
 use crate::app::settings::ApplicationSettings;
 
 const TRIM: &str = "editor.trim-trailing-whitespace";
@@ -15,7 +15,7 @@ fn run(
     action: impl FnOnce(&mut Editor, &mut gpui::Context<Editor>),
 ) -> (String, (usize, usize), String) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let model = cx.new(|_| model);
+    let model = cx.new(|_| Buffer::new(model));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -97,7 +97,7 @@ fn save_cleanup_follows_the_settings(cx: &mut TestAppContext) {
             .unwrap();
         cx.set_global(settings);
     });
-    let model = cx.new(|_| BufferModel::from_text("a  \nb"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a  \nb")));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {

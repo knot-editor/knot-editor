@@ -4,8 +4,8 @@ use gpui::{
 };
 
 use super::{
-    BufferModel, CaretShape, ContributionSource, Editor, EditorRenderingOptions, EditorView,
-    EditorViewState, ResolvedEditorContribution, Reveal, flat_utf16_to_position,
+    Buffer, BufferModel, CaretShape, ContributionSource, Editor, EditorRenderingOptions,
+    EditorView, EditorViewState, ResolvedEditorContribution, Reveal, flat_utf16_to_position,
     layout::{HighlightSpan, runs_for, shape_editor_line, x_for_index_dir},
     project_contributions, to_flat_utf16,
 };
@@ -31,7 +31,7 @@ use knot_protocol::{
 fn ordinary_editing_keeps_projection_clipboard_and_composition_synchronous(
     cx: &mut TestAppContext,
 ) {
-    let model = cx.new(|_| BufferModel::from_text(""));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -66,7 +66,7 @@ fn ordinary_editing_keeps_projection_clipboard_and_composition_synchronous(
 
 #[gpui::test]
 fn typing_deletion_and_interaction_boundaries_form_practical_undo_steps(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text(""));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -103,7 +103,7 @@ fn typing_deletion_and_interaction_boundaries_form_practical_undo_steps(cx: &mut
 
 #[gpui::test]
 fn undo_and_redo_restore_the_originating_views_grouped_selection(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("abcdef"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("abcdef")));
     let other = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let origin = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
@@ -152,7 +152,7 @@ fn undo_and_redo_restore_the_originating_views_grouped_selection(cx: &mut TestAp
 
 #[gpui::test]
 fn replay_ignores_view_state_for_an_originating_view_that_was_dropped(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("text")));
     let survivor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let origin = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
@@ -181,7 +181,7 @@ fn replay_ignores_view_state_for_an_originating_view_that_was_dropped(cx: &mut T
 
 #[gpui::test]
 fn a_newer_edit_invalidates_an_unobserved_history_view_restore(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("abcdef"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("abcdef")));
     let other = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let origin = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
@@ -217,7 +217,7 @@ fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut Test
     let text = (0..100)
         .map(|line| format!("line {line}\n"))
         .collect::<String>();
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     let measure = |cx: &mut gpui::VisualTestContext| {
@@ -277,7 +277,7 @@ fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
     let text = (0..100)
         .map(|line| format!("line {line}\n"))
         .collect::<String>();
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let view = cx.new(|cx| EditorView::new(model, cx));
     let editor = cx.read(|cx| view.read(cx).editor().clone());
     editor.update(cx, |editor, _| {
@@ -299,7 +299,7 @@ fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn movement_uses_visual_columns_graphemes_and_pane_height(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("éééx\na\nabcde\nword next\nlast"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("éééx\na\nabcde\nword next\nlast")));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -328,7 +328,7 @@ fn vertical_movement_keeps_the_display_cell_across_tabs_and_wide_characters(
 ) {
     // Cells: a tab reaches the next stop of 4, CJK and emoji take two.
     let text = "abcdefgh\n\tx\n中文字\n😀😀z\nab\nabcdefgh";
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -353,7 +353,7 @@ fn vertical_movement_keeps_the_display_cell_across_tabs_and_wide_characters(
 
 #[gpui::test]
 fn tabs_hit_testing_and_horizontal_reveal_share_geometry(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text(format!("\tx{}", "z".repeat(300))));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(format!("\tx{}", "z".repeat(300)))));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     let state = cx.read(|cx| editor.read(cx).editor().clone());
@@ -420,9 +420,9 @@ fn tab_stops_follow_the_settings_for_each_open_view(cx: &mut TestAppContext) {
     let rust_model = cx.new(|_| {
         let mut model = BufferModel::from_text(text);
         model.set_language(Some("rust".into()), true);
-        model
+        Buffer::new(model)
     });
-    let plain_model = cx.new(|_| BufferModel::from_text(text));
+    let plain_model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let plain = cx.new(|cx| EditorView::new(plain_model, cx));
     let (rust, cx) = cx.add_window_view(|_, cx| EditorView::new(rust_model, cx));
     cx.refresh().unwrap();
@@ -492,7 +492,7 @@ fn tab_stops_follow_the_settings_for_each_open_view(cx: &mut TestAppContext) {
 fn mouse_selection_keeps_press_anchor_across_reversal_and_ignores_foreign_drags(
     cx: &mut TestAppContext,
 ) {
-    let model = cx.new(|_| BufferModel::from_text("alpha beta\nnext"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("alpha beta\nnext")));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     cx.update(|window, cx| {
@@ -569,7 +569,7 @@ fn mouse_selection_keeps_press_anchor_across_reversal_and_ignores_foreign_drags(
 
 #[gpui::test]
 fn crlf_is_one_navigation_and_deletion_boundary(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("a\r\nb"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a\r\nb")));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -585,7 +585,7 @@ fn crlf_is_one_navigation_and_deletion_boundary(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn delete_to_line_end_removes_the_rest_of_the_line_then_its_break(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("hello world\r\nnext"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("hello world\r\nnext")));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -610,7 +610,7 @@ fn delete_to_line_end_removes_the_rest_of_the_line_then_its_break(cx: &mut TestA
 
 #[gpui::test]
 fn inserted_newlines_follow_a_crlf_buffer(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("a\r\nb"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a\r\nb")));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -636,7 +636,7 @@ fn inserted_newlines_follow_a_crlf_buffer(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn composition_is_cleared_by_navigation_and_external_edits(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("abc"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("abc")));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| {
         editor.update(cx, |view, cx| {
@@ -667,7 +667,7 @@ fn editing_a_large_buffer_never_reads_the_whole_text(cx: &mut TestAppContext) {
         .map(|line| format!("line {line} with some words"))
         .collect::<Vec<_>>()
         .join("\n");
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     let (other, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.refresh().unwrap();
@@ -730,7 +730,7 @@ fn editing_a_large_buffer_never_reads_the_whole_text(cx: &mut TestAppContext) {
 #[gpui::test]
 fn horizontal_scroll_is_bounded_by_the_widest_shaped_line(cx: &mut TestAppContext) {
     let text = format!("{}\nshort", "x".repeat(400));
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.refresh().unwrap();
     cx.simulate_event(ScrollEvent {
@@ -757,7 +757,7 @@ fn horizontal_scroll_is_bounded_by_the_widest_shaped_line(cx: &mut TestAppContex
 
 #[gpui::test]
 fn constructs_from_arbitrary_buffer_text(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("generated\ntext"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("generated\ntext")));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
     cx.read(|cx| {
@@ -769,7 +769,7 @@ fn constructs_from_arbitrary_buffer_text(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn completion_acceptance_rechecks_the_captured_revision(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("fo"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("fo")));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let mut registry = CompletionProviderRegistry::new();
     registry.register(
@@ -807,7 +807,7 @@ fn completion_acceptance_rechecks_the_captured_revision(cx: &mut TestAppContext)
 
     cx.read(|cx| assert_eq!(model.read(cx).text(), "xfo"));
 
-    let model = cx.new(|_| BufferModel::from_text("fo"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("fo")));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let request = editor.update(cx, |editor, cx| {
         editor.cursor_col = 2;
@@ -854,7 +854,7 @@ fn action_click_pointer_jitter_does_not_start_text_selection(cx: &mut TestAppCon
                 0,
             )
             .unwrap();
-        model
+        Buffer::new(model)
     });
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
@@ -897,7 +897,7 @@ fn read_only_text_keeps_normal_selection_copy_and_scroll_behavior(cx: &mut TestA
         .map(|line| format!("result {line}"))
         .collect::<Vec<_>>()
         .join("\n");
-    let model = cx.new(|_| BufferModel::from_read_only_text(text.clone()));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_read_only_text(text.clone())));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.refresh().unwrap();
 
@@ -1019,7 +1019,11 @@ async fn flat_utf16_offsets_round_trip_across_emoji_lines(cx: &mut TestAppContex
     let family = "👨‍👩‍👧‍👦";
     let first_line = "a😀b";
     let second_line = format!("{family}z");
-    let model = cx.new(|_| BufferModel::from_text(format!("{first_line}\n{second_line}")));
+    let model = cx.new(|_| {
+        Buffer::new(BufferModel::from_text(format!(
+            "{first_line}\n{second_line}"
+        )))
+    });
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
 
     cx.read(|cx| {
@@ -1055,7 +1059,7 @@ fn set_selection_reveals_nearest_or_centers_an_offscreen_caret(cx: &mut TestAppC
     let text = (0..100)
         .map(|line| format!("line {line}\n"))
         .collect::<String>();
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let line_start = |line: usize| cx.read(|cx| model.read(cx).line_range(line).start);
     let (line_10, line_15, line_50, line_90) = (
@@ -1091,7 +1095,7 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret(cx: &mut TestApp
     let text = (0..100)
         .map(|line| format!("line {line}\n"))
         .collect::<String>();
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let line_start = |line: usize| cx.read(|cx| model.read(cx).line_range(line).start);
     let (line_5, line_50, line_100) = (line_start(5), line_start(50), line_start(100));
@@ -1140,7 +1144,7 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret(cx: &mut TestApp
 
 #[gpui::test]
 fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree\nfour"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("one\ntwo\nthree\nfour")));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let state = EditorViewState {
         anchor: 4,
@@ -1160,7 +1164,7 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
     });
 
     // Offsets past the end clamp, and offsets inside a scalar snap back.
-    let shorter = cx.new(|_| BufferModel::from_text("é😀\nb"));
+    let shorter = cx.new(|_| Buffer::new(BufferModel::from_text("é😀\nb")));
     let editor = cx.new(|cx| Editor::new(shorter, crate::app::EDITOR_KEY_CONTEXT, cx));
     editor.update(cx, |editor, cx| {
         editor.restore_view_state(
@@ -1190,7 +1194,7 @@ fn view_state_round_trips_and_clamps_to_shorter_multibyte_text(cx: &mut TestAppC
 
 #[gpui::test]
 fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("one\ntwo\nthree")));
     let first = cx.new(|cx| EditorView::new(model.clone(), cx));
     let second = cx.new(|cx| {
         EditorView::new_with_options(
@@ -1222,6 +1226,7 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
 
     model.update(cx, |model, cx| {
         assert!(model.replace(0..0, "shared\n").unwrap());
+        let revision = model.revision();
         model
             .replace_contributions(
                 ContributionSource::fixture(),
@@ -1234,7 +1239,7 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
                     gutter: Some("warning".to_owned()),
                     command: None,
                 }],
-                model.revision(),
+                revision,
             )
             .unwrap();
         cx.notify();
@@ -1266,7 +1271,7 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
 
 #[gpui::test]
 fn selection_tracks_a_deletion_from_another_view(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("0123456789"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("0123456789")));
     let first = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let second = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
 
@@ -1412,7 +1417,7 @@ fn layered_runs_merge_equal_styles_and_clip_to_the_line() {
 
 #[gpui::test]
 fn layered_runs_keep_tab_and_rtl_geometry(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text(""));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
     let (_, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     let theme = test_theme();
     cx.update(|window, _| {
@@ -1449,7 +1454,7 @@ fn layered_runs_keep_tab_and_rtl_geometry(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("abcdefgh"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("abcdefgh")));
     let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
     let decoration = |range: std::ops::Range<usize>, token| EditorContribution {
         range: ByteRange {
@@ -1461,6 +1466,7 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
         command: None,
     };
     model.update(cx, |model, cx| {
+        let revision = model.revision();
         model
             .replace_contributions(
                 ContributionSource::fixture(),
@@ -1469,7 +1475,7 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
                     decoration(1..3, "warning"),
                     decoration(2..6, "error"),
                 ],
-                model.revision(),
+                revision,
             )
             .unwrap();
         cx.notify();
@@ -1493,7 +1499,7 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
 
 #[gpui::test]
 fn underline_styles_paint_as_separate_layers(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("abcdefgh"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("abcdefgh")));
     let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
     let decoration = |range: std::ops::Range<usize>, key, style| EditorContribution {
         range: ByteRange {
@@ -1505,6 +1511,7 @@ fn underline_styles_paint_as_separate_layers(cx: &mut TestAppContext) {
         command: None,
     };
     model.update(cx, |model, cx| {
+        let revision = model.revision();
         model
             .replace_contributions(
                 ContributionSource::fixture(),
@@ -1514,7 +1521,7 @@ fn underline_styles_paint_as_separate_layers(cx: &mut TestAppContext) {
                     decoration(6..8, "diff.add", DecorationStyle::Background),
                     decoration(0..8, "diff.add", DecorationStyle::Line),
                 ],
-                model.revision(),
+                revision,
             )
             .unwrap();
         cx.notify();
@@ -1545,7 +1552,7 @@ fn underline_styles_paint_as_separate_layers(cx: &mut TestAppContext) {
 #[gpui::test]
 fn the_gutter_reserves_its_lanes_beside_the_text(cx: &mut TestAppContext) {
     for show_gutter in [true, false] {
-        let model = cx.new(|_| BufferModel::from_text("abc"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("abc")));
         let (editor, cx) = cx.add_window_view(|_, cx| {
             EditorView::new_with_options(model, 0, EditorRenderingOptions { show_gutter }, cx)
         });
@@ -1577,7 +1584,7 @@ fn the_gutter_reserves_its_lanes_beside_the_text(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn syntax_highlights_paint_beneath_decorations(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("fn ab() {}\nlet c;"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("fn ab() {}\nlet c;")));
     let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
     model.update(cx, |model, cx| {
         let highlights = "\"fn\" @keyword\n(function_item name: (identifier) @function)\n";
@@ -1595,8 +1602,9 @@ fn syntax_highlights_paint_beneath_decorations(cx: &mut TestAppContext) {
             gutter: None,
             command: None,
         };
+        let revision = model.revision();
         model
-            .replace_contributions(ContributionSource::fixture(), &[warning], model.revision())
+            .replace_contributions(ContributionSource::fixture(), &[warning], revision)
             .unwrap();
         cx.notify();
     });
@@ -1655,7 +1663,7 @@ fn syntax_highlights_paint_beneath_decorations(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn caret_geometry_and_painting_share_one_syntax_query(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("fn f() {}\n".repeat(200)));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("fn f() {}\n".repeat(200))));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     model.update(cx, |model, cx| {
         // A reparse that overruns the foreground budget on a slow machine
@@ -1697,7 +1705,7 @@ fn caret_geometry_and_painting_share_one_syntax_query(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_caret_blinks_while_focused_and_shows_again_after_typing(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text(""));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     let visible =
         |cx: &mut gpui::VisualTestContext| cx.read(|cx| editor.read(cx).caret_blink.visible);
@@ -1756,7 +1764,7 @@ pub(super) fn check(
             .unwrap();
         cx.set_global(settings);
     });
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     let selection = |view: &Editor| {
         let caret = (view.cursor_line, view.cursor_col);
@@ -1856,7 +1864,11 @@ fn selection(view: &EditorView, cx: &gpui::App) -> (Position, Position) {
 
 #[gpui::test]
 fn dragging_after_a_double_or_triple_click_extends_by_words_or_lines(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("alpha beta gamma\nsecond line\nthird"));
+    let model = cx.new(|_| {
+        Buffer::new(BufferModel::from_text(
+            "alpha beta gamma\nsecond line\nthird",
+        ))
+    });
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     cx.update(|window, cx| {
@@ -1924,7 +1936,7 @@ fn words_split_at_vs_code_separators_and_keep_unicode_segments() {
 
 #[gpui::test]
 fn double_click_and_word_movement_stop_at_separators(cx: &mut TestAppContext) {
-    let model = cx.new(|_| BufferModel::from_text("a.some_thing(x)  end"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a.some_thing(x)  end")));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.refresh().unwrap();
     cx.update(|window, cx| {
@@ -1965,7 +1977,7 @@ fn caret_shape_is_the_latest_lifecycles_and_reverts_when_cleared(cx: &mut TestAp
     use knot_protocol::ExtensionKey;
     let first = ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
     let second = ExtensionKey::new(ExtensionId::new(2), ExtensionLifecycleId::new(1));
-    let model = cx.new(|_| BufferModel::from_text("abc".to_string()));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("abc".to_string())));
     let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     editor.update(cx, |view, cx| {
         assert_eq!(view.caret_shape(), CaretShape::Bar);

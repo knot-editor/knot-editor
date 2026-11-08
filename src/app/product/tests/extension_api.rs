@@ -375,7 +375,7 @@ throw new Error("closed buffer accepted operation");
 "#;
     let documents = install_globals(cx);
     let host = cx.update(super::super::super::extensions::host::install);
-    let model = cx.new(|_| BufferModel::from_text("owned"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("owned")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Clean", model.clone(), cx)
     });

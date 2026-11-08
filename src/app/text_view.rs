@@ -13,14 +13,14 @@ use gpui::{prelude::*, *};
 use knot_protocol::ViewId;
 
 use super::editor::EditorView;
-use super::model::BufferModel;
+use super::model::{Buffer, BufferModel};
 use super::tree_view::NEXT_VIEW_ID;
 
 /// One contributed text frame instance in a product window.
 pub(crate) struct TextView {
     view_id: String,
     instance_id: ViewId,
-    model: Entity<BufferModel>,
+    model: Entity<Buffer>,
     editor: Entity<EditorView>,
 }
 
@@ -32,7 +32,7 @@ impl TextView {
     ) -> Self {
         let _ = window;
         let view_id = view_id.into();
-        let model = cx.new(|_| BufferModel::from_read_only_text(""));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_read_only_text("")));
         let editor =
             cx.new(|cx| EditorView::for_contributed_view(model.clone(), view_id.clone(), cx));
         Self {
@@ -51,7 +51,7 @@ impl TextView {
         self.instance_id
     }
 
-    pub(crate) fn model(&self) -> &Entity<BufferModel> {
+    pub(crate) fn model(&self) -> &Entity<Buffer> {
         &self.model
     }
 
@@ -151,7 +151,7 @@ mod tests {
     fn the_frame_editor_resolves_settings_for_its_view_id(cx: &mut TestAppContext) {
         use crate::app::{
             editor::EditorView,
-            model::BufferModel,
+            model::{Buffer, BufferModel},
             settings::{ApplicationSettings, EDITOR_TAB_SIZE, SettingsScope},
         };
         cx.update(|cx| {
@@ -165,7 +165,7 @@ mod tests {
             cx.set_global(settings);
         });
         let frame = cx.new(|cx| TextView::new("example.log", "1", cx));
-        let document = cx.new(|_| BufferModel::from_text(""));
+        let document = cx.new(|_| Buffer::new(BufferModel::from_text("")));
         let document = cx.new(|cx| EditorView::new(document, cx));
         cx.read(|cx| {
             let frame = frame.read(cx);
@@ -193,7 +193,7 @@ mod tests {
     fn the_frame_editor_resolves_its_font_size_for_its_view_id(cx: &mut TestAppContext) {
         use crate::app::{
             editor::EditorView,
-            model::BufferModel,
+            model::{Buffer, BufferModel},
             settings::{ApplicationSettings, FONT_SIZE, SettingsScope},
         };
         cx.update(|cx| {
@@ -206,7 +206,7 @@ mod tests {
             cx.set_global(settings);
         });
         let frame = cx.new(|cx| TextView::new("example.log", "1", cx));
-        let document = cx.new(|_| BufferModel::from_text(""));
+        let document = cx.new(|_| Buffer::new(BufferModel::from_text("")));
         let document = cx.new(|cx| EditorView::new(document, cx));
         cx.read(|cx| {
             assert_eq!(frame.read(cx).editor.read(cx).metrics().font_size, 18.);
@@ -219,12 +219,12 @@ mod tests {
         use crate::app::{
             documents::DocumentCollection,
             editor::EditorView,
-            model::BufferModel,
+            model::{Buffer, BufferModel},
             settings::{ApplicationSettings, EDITOR_TAB_SIZE, SettingsScope},
         };
         cx.update(|cx| {
             let mut settings = ApplicationSettings::default();
-            let model = cx.new(|_| BufferModel::from_text(""));
+            let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
             let documents = cx.new(|_| DocumentCollection::new());
             documents.update(cx, |documents, cx| {
                 documents.create_untitled("Untitled", model.clone(), cx)

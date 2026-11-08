@@ -116,14 +116,14 @@ impl Harness {
         let file = pollster::block_on(self.provider.read(uri(path))).unwrap();
         let text = String::from_utf8(file.bytes).unwrap();
         let version = file.version;
-        let model = cx.new(|_| BufferModel::from_text(text));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
         self.documents.update(cx, |documents, cx| {
             documents.create_persisted(path.to_owned(), model, uri(path), 0, version, cx)
         })
     }
 
     fn untitled(&self, text: &str, cx: &mut TestAppContext) -> crate::app::documents::DocumentId {
-        let model = cx.new(|_| BufferModel::from_text(""));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
         let document = self.documents.update(cx, |documents, cx| {
             documents.create_untitled("Untitled", model.clone(), cx)
         });
@@ -141,7 +141,7 @@ impl Harness {
         path: &str,
         cx: &mut TestAppContext,
     ) -> crate::app::documents::DocumentId {
-        let model = cx.new(|_| BufferModel::from_text(""));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
         let document = self.documents.update(cx, |documents, cx| {
             documents.create_destination(path.to_owned(), model.clone(), uri(path), cx)
         });
@@ -156,7 +156,7 @@ impl Harness {
         &self,
         document: crate::app::documents::DocumentId,
         cx: &TestAppContext,
-    ) -> Entity<BufferModel> {
+    ) -> Entity<Buffer> {
         cx.read(|cx| {
             self.documents
                 .read(cx)

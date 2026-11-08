@@ -28,7 +28,7 @@ use editing::EditingDefinition;
 
 use super::{
     documents::ApplicationDocuments,
-    model::BufferModel,
+    model::{Buffer, BufferModel},
     resource::ResourceUri,
     syntax::{LanguageResolver, SyntaxLanguage, SyntaxLanguageError, SyntaxState},
 };
@@ -365,7 +365,7 @@ pub(crate) struct ApplicationLanguages {
     registry: LanguageRegistry,
     /// Every live buffer whose language has been resolved, so a registration
     /// change can reattach its syntax.
-    models: HashMap<EntityId, WeakEntity<BufferModel>>,
+    models: HashMap<EntityId, WeakEntity<Buffer>>,
 }
 
 impl Global for ApplicationLanguages {}
@@ -463,11 +463,7 @@ pub(crate) fn get(id: &str, cx: &App) -> Option<LanguageDefinition> {
 
 /// Detect a document's language from its resource name and first line,
 /// unless its language is explicit, and attach the matching syntax.
-pub(crate) fn detect_document(
-    model: &Entity<BufferModel>,
-    uri: Option<&ResourceUri>,
-    cx: &mut App,
-) {
+pub(crate) fn detect_document(model: &Entity<Buffer>, uri: Option<&ResourceUri>, cx: &mut App) {
     redetect(model, uri, cx);
     attach(model, false, cx);
 }
@@ -475,7 +471,7 @@ pub(crate) fn detect_document(
 /// Make `language` a document's explicit language, or return the document to
 /// detection with `None`.
 pub(crate) fn set_document_language(
-    model: &Entity<BufferModel>,
+    model: &Entity<Buffer>,
     uri: Option<&ResourceUri>,
     language: Option<String>,
     cx: &mut App,
@@ -489,12 +485,12 @@ pub(crate) fn set_document_language(
 
 /// Give a buffer that is not a document, such as a text frame's, a fixed
 /// language.
-pub(crate) fn set_language(model: &Entity<BufferModel>, language: String, cx: &mut App) {
+pub(crate) fn set_language(model: &Entity<Buffer>, language: String, cx: &mut App) {
     model.update(cx, |model, _| model.set_language(Some(language), true));
     attach(model, false, cx);
 }
 
-fn redetect(model: &Entity<BufferModel>, uri: Option<&ResourceUri>, cx: &mut App) {
+fn redetect(model: &Entity<Buffer>, uri: Option<&ResourceUri>, cx: &mut App) {
     if model.read(cx).language_is_explicit() {
         return;
     }
@@ -522,7 +518,7 @@ fn shebang_line(model: &BufferModel) -> String {
 /// Give `model` a fresh syntax state when the language its ID resolves to
 /// differs from the one it parses. After a registration change, a language
 /// that injects reparses too, since its injections may resolve differently.
-fn attach(model: &Entity<BufferModel>, registration_changed: bool, cx: &mut App) {
+fn attach(model: &Entity<Buffer>, registration_changed: bool, cx: &mut App) {
     let languages = cx.default_global::<ApplicationLanguages>();
     if !languages.models.contains_key(&model.entity_id()) {
         languages

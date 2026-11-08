@@ -244,7 +244,7 @@ async fn save_as_and_racing_edits_publish_current_metadata_without_changing_iden
     cx.set_global(ApplicationSaveDialog(Arc::new(FixedSaveDialog(
         SaveDialogOutcome::Selected(uri.clone()),
     ))));
-    let model = cx.new(|_| BufferModel::from_text("initial"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("initial")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Untitled", model.clone(), cx)
     });
@@ -344,7 +344,7 @@ async fn completed_save_remains_observable_when_a_later_close_prompt_is_cancelle
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     let file = provider.read(uri.clone()).await.unwrap();
-    let first_model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let first_model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let first = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -356,7 +356,7 @@ async fn completed_save_remains_observable_when_a_later_close_prompt_is_cancelle
         )
     });
     let (shell, window) = product_window(first, first_model.clone(), cx);
-    let second_model = cx.new(|_| BufferModel::from_text(""));
+    let second_model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
     let second = documents.update(cx, |documents, cx| {
         documents.create_untitled("Second", second_model.clone(), cx)
     });
@@ -643,7 +643,7 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
             window.root::<ProductShell>().flatten().unwrap()
         })
         .unwrap();
-    let model = cx.new(|_| BufferModel::from_text("clean"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("clean")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Untitled", model.clone(), cx)
     });
@@ -1231,7 +1231,7 @@ await commands.register("queries.terminal", async () => {
             .resolve("queries.terminal")
             .is_ok()
     });
-    let model = cx.new(|_| BufferModel::from_text("owned"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("owned")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Clean", model.clone(), cx)
     });
@@ -1397,7 +1397,7 @@ await commands.register("indentation.write", async () => {
     // Releasing a document drops its values; the open one keeps them.
     let other = cx.update(|cx| create_untitled_document(&documents, cx));
     let other_model = cx.read(|cx| documents.read(cx).get(other).unwrap().model().clone());
-    let tab_size = |model: &Entity<BufferModel>, cx: &mut TestAppContext| {
+    let tab_size = |model: &Entity<Buffer>, cx: &mut TestAppContext| {
         cx.read(|cx| {
             let scope = SettingsScope {
                 document: model.read(cx).document().map(|id| id.to_string()),

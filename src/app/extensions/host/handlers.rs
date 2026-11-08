@@ -4177,7 +4177,7 @@ mod tests {
     ) {
         use crate::app::{
             documents::{ApplicationDocuments, DocumentCollection},
-            model::BufferModel,
+            model::{Buffer, BufferModel},
             recovery::{ApplicationRecovery, RecoveryService, RecoveryStore, SnapshotKind},
         };
         let root = tempfile::tempdir().unwrap();
@@ -4189,7 +4189,7 @@ mod tests {
             cx.set_global(ApplicationRecovery(RecoveryService::new(
                 RecoveryStore::open(path.clone(), cx.background_executor().clone()),
             )));
-            let model = cx.new(|_| BufferModel::from_text("kept"));
+            let model = cx.new(|_| Buffer::new(BufferModel::from_text("kept")));
             documents.update(cx, |documents, cx| {
                 let document = documents.create_untitled("Untitled", model, cx);
                 documents.get(document).unwrap().identity().to_string()

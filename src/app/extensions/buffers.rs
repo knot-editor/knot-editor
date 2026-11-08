@@ -13,8 +13,8 @@ use crate::app::extensions::host::handlers::AccessError;
 use knot_protocol::declarations::HostError;
 
 use crate::app::model::{
-    BufferAccessError, BufferClosed, BufferModel, BufferRegistry, BufferSubscriptionRegistry,
-    ContributionError, ContributionSource,
+    Buffer, BufferAccessError, BufferClosed, BufferModel, BufferRegistry,
+    BufferSubscriptionRegistry, ContributionError, ContributionSource,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, HostError)]
@@ -82,7 +82,7 @@ impl ExtensionBufferBridge {
         self.lifecycles.insert((extension, lifecycle));
     }
 
-    pub(crate) fn open_buffer(&mut self, model: &Entity<BufferModel>) -> BufferHandle {
+    pub(crate) fn open_buffer(&mut self, model: &Entity<Buffer>) -> BufferHandle {
         self.buffers.open(model)
     }
 
@@ -331,7 +331,7 @@ impl ExtensionBufferBridge {
     /// Drain model commits and fan each change out to its live subscriptions.
     pub(crate) fn drain_model_changes(
         &mut self,
-        model: &Entity<BufferModel>,
+        model: &Entity<Buffer>,
         cx: &mut App,
     ) -> Vec<BufferChangeDispatch> {
         let Some(buffer) = self.buffers.handle_for(model) else {
@@ -412,7 +412,7 @@ mod tests {
     fn snapshots_edits_and_late_cancellation_stay_revisioned(cx: &mut TestAppContext) {
         let extension = ExtensionId::new(7);
         let lifecycle = ExtensionLifecycleId::new(3);
-        let model = cx.new(|_| BufferModel::from_text("aé中z"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("aé中z")));
         cx.update(|cx| {
             let mut bridge = ExtensionBufferBridge::new();
             bridge.admit_lifecycle(extension, lifecycle);
@@ -507,7 +507,7 @@ mod tests {
     fn buffer_policy_and_stale_subscription_failures_are_distinct(cx: &mut TestAppContext) {
         let extension = ExtensionId::new(7);
         let lifecycle = ExtensionLifecycleId::new(3);
-        let model = cx.new(|_| BufferModel::from_read_only_text("generated"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_read_only_text("generated")));
         cx.update(|cx| {
             let mut bridge = ExtensionBufferBridge::new();
             bridge.admit_lifecycle(extension, lifecycle);
@@ -552,7 +552,7 @@ mod tests {
         use crate::app::documents::DocumentCollection;
         let extension = ExtensionId::new(11);
         let lifecycle = ExtensionLifecycleId::new(5);
-        let model = cx.new(|_| BufferModel::from_text("owned"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("owned")));
         cx.update(|cx| {
             let mut documents = DocumentCollection::new();
             let document = documents.create_untitled("owned", model.clone(), cx);
@@ -633,7 +633,7 @@ mod tests {
     fn subscriptions_contributions_and_lifecycle_cleanup_share_one_owner(cx: &mut TestAppContext) {
         let extension = ExtensionId::new(11);
         let lifecycle = ExtensionLifecycleId::new(5);
-        let model = cx.new(|_| BufferModel::from_text("abcdef"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("abcdef")));
         cx.update(|cx| {
             let mut bridge = ExtensionBufferBridge::new();
             bridge.admit_lifecycle(extension, lifecycle);

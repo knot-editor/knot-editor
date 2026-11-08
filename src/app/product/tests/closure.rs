@@ -76,7 +76,7 @@ fn clipboard(cx: &TestAppContext) -> String {
 fn created_document(
     documents: &Entity<DocumentCollection>,
     cx: &TestAppContext,
-) -> (super::super::DocumentId, Entity<BufferModel>) {
+) -> (super::super::DocumentId, Entity<Buffer>) {
     let id = clipboard(cx);
     cx.read(|cx| {
         let document = documents
@@ -689,7 +689,7 @@ async fn saving_a_dirty_tab_uses_existing_persistence_before_closing(cx: &mut Te
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     let opened = provider.read(uri.clone()).await.unwrap();
-    let model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -739,7 +739,7 @@ async fn edit_racing_protected_close_save_preserves_the_document_and_every_view(
     filesystems.register("mem", gated_provider).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
 
-    let model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -891,7 +891,7 @@ async fn multi_document_quit_applies_serial_save_and_discard_decisions(cx: &mut 
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     let opened = provider.read(uri.clone()).await.unwrap();
-    let first_model = cx.new(|_| BufferModel::from_text("loaded text"));
+    let first_model = cx.new(|_| Buffer::new(BufferModel::from_text("loaded text")));
     let first = documents.update(cx, |documents, cx| {
         documents.create_persisted(
             "notes.txt",
@@ -903,7 +903,7 @@ async fn multi_document_quit_applies_serial_save_and_discard_decisions(cx: &mut 
         )
     });
     first_model.update(cx, |model, _| model.replace(0..0, "saved ").unwrap());
-    let second_model = cx.new(|_| BufferModel::from_text("second"));
+    let second_model = cx.new(|_| Buffer::new(BufferModel::from_text("second")));
     let second = documents.update(cx, |documents, cx| {
         documents.create_untitled("Second", second_model.clone(), cx)
     });
@@ -997,7 +997,7 @@ async fn later_window_close_cancellation_preserves_every_tab(cx: &mut TestAppCon
     let first = cx.update(|cx| create_untitled_document(&documents, cx));
     let first_model = cx.read(|cx| documents.read(cx).get(first).unwrap().model().clone());
     first_model.update(cx, |model, _| model.replace(0..0, "first").unwrap());
-    let second_model = cx.new(|_| BufferModel::from_text("second"));
+    let second_model = cx.new(|_| Buffer::new(BufferModel::from_text("second")));
     let second = cx.update(|cx| {
         documents.update(cx, |documents, cx| {
             documents.create_untitled("Second", second_model.clone(), cx)
@@ -1205,7 +1205,7 @@ fn bulk_close_fixture(
     [super::super::DocumentId; 4],
 ) {
     let created = ["shared", "other", "pinned", "focused"].map(|text| {
-        let model = cx.new(|_| BufferModel::from_text(text));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
         let document = documents.update(cx, |documents, cx| {
             documents.create_untitled(text, model.clone(), cx)
         });

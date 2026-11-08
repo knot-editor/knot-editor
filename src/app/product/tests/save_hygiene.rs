@@ -10,7 +10,7 @@ const CLEAN: &str = "x\na\nb\nc\n";
 
 struct Saved {
     document: crate::app::documents::DocumentId,
-    model: Entity<BufferModel>,
+    model: Entity<Buffer>,
     shell: Entity<ProductShell>,
     window: gpui::AnyWindowHandle,
     provider: Arc<MemoryFileSystemProvider>,
@@ -23,7 +23,7 @@ fn saved_document(cx: &mut TestAppContext, model: BufferModel) -> Saved {
     let (filesystems, provider) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/created.txt").unwrap();
-    let model = cx.new(|_| model);
+    let model = cx.new(|_| Buffer::new(model));
     let document = documents.update(cx, |documents, cx| {
         documents.create_destination("created.txt", model.clone(), uri.clone(), cx)
     });

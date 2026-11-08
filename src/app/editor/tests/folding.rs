@@ -2,13 +2,13 @@
 
 use gpui::{AppContext, TestAppContext};
 
-use super::super::{BufferModel, Editor, Reveal};
+use super::super::{Buffer, BufferModel, Editor, Reveal};
 use crate::app::settings::{ApplicationSettings, EDITOR_SOFT_WRAP, SettingsScope};
 
 /// Ten lines, `l0` through `l9`, each three bytes with its terminator.
-fn editor(cx: &mut TestAppContext) -> (gpui::Entity<BufferModel>, gpui::Entity<Editor>) {
+fn editor(cx: &mut TestAppContext) -> (gpui::Entity<Buffer>, gpui::Entity<Editor>) {
     let text: String = (0..10).map(|line| format!("l{line}\n")).collect();
-    let model = cx.new(|_| BufferModel::from_text(text.trim_end()));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text.trim_end())));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     (model, editor)
 }
@@ -182,7 +182,11 @@ fn folds_hide_rows_of_wrapped_lines_too(cx: &mut TestAppContext) {
             .unwrap();
         cx.set_global(settings);
     });
-    let model = cx.new(|_| BufferModel::from_text("aaa bbb ccc ddd\nx\ny\naaa bbb ccc ddd"));
+    let model = cx.new(|_| {
+        Buffer::new(BufferModel::from_text(
+            "aaa bbb ccc ddd\nx\ny\naaa bbb ccc ddd",
+        ))
+    });
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.update(|cx| editor.update(cx, |editor, cx| editor.lay_out_for_test(10., 8, cx)));
     assert_eq!(rows(&editor, cx), 2 + 1 + 1 + 2);
@@ -213,8 +217,8 @@ fn regions(editor: &gpui::Entity<Editor>, cx: &mut TestAppContext) -> Vec<std::o
 fn indented_editor(
     text: &str,
     cx: &mut TestAppContext,
-) -> (gpui::Entity<BufferModel>, gpui::Entity<Editor>) {
-    let model = cx.new(|_| BufferModel::from_text(text));
+) -> (gpui::Entity<Buffer>, gpui::Entity<Editor>) {
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     (model, editor)
 }
@@ -289,7 +293,7 @@ fn rust_regions_editor(cx: &mut TestAppContext, text: &str) -> gpui::Entity<Edit
         };
         languages::register(owner, rust.compile().unwrap(), cx);
     });
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     cx.update(|cx| languages::set_language(&model, "rust".into(), cx));
     cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx))
 }
@@ -333,7 +337,7 @@ fn folds_round_trip_through_view_state(cx: &mut TestAppContext) {
 #[gpui::test]
 fn restored_folds_clamp_to_shorter_text_and_drop_when_empty(cx: &mut TestAppContext) {
     let (_, editor) = editor(cx);
-    let short = cx.new(|_| BufferModel::from_text("l0\nl1\nl2"));
+    let short = cx.new(|_| Buffer::new(BufferModel::from_text("l0\nl1\nl2")));
     let shorter = cx.new(|cx| Editor::new(short, crate::app::EDITOR_KEY_CONTEXT, cx));
     let state = super::super::EditorViewState {
         // The first runs past the end; the second lies within one line; the

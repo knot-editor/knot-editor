@@ -73,7 +73,7 @@ use super::{
         FileSystemProviderRegistry, LocalFileSystemProvider, ResourceError, ResourceKind,
         ResourceStat, ResourceVersion,
     },
-    model::BufferModel,
+    model::{Buffer, BufferModel},
     open::{OpenResource, enumerate_directory, load_resource},
     picker::{Picker, PickerEntry, PickerEvent},
     terminal::session::TerminalSession,
@@ -1720,7 +1720,7 @@ impl ProductShell {
         self.next_open_generation();
         self.workbench.read(cx).pane(pane)?;
         let documents = Self::documents(cx);
-        let model = cx.new(|_| BufferModel::from_text(text));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
         let document = documents.update(cx, |documents, cx| {
             documents.create_untitled(title.to_owned(), model, cx)
         });
@@ -1952,7 +1952,7 @@ pub(super) fn show_notice(
 }
 
 fn create_untitled_document(documents: &Entity<DocumentCollection>, cx: &mut App) -> DocumentId {
-    let model = cx.new(|_| BufferModel::from_text(""));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
     documents.update(cx, |documents, cx| {
         documents.create_untitled("Untitled", model, cx)
     })

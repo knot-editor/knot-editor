@@ -123,9 +123,9 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
             let rust = cx.new(|_| {
                 let mut model = BufferModel::from_text("\tx");
                 model.set_language(Some("rust".into()), true);
-                model
+                Buffer::new(model)
             });
-            let plain = cx.new(|_| BufferModel::from_text("\tx"));
+            let plain = cx.new(|_| Buffer::new(BufferModel::from_text("\tx")));
             [rust, plain].map(|model| {
                 let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
                 editor
@@ -140,7 +140,7 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
 
     // Open product windows paint tab stops at those widths: the caret after
     // the leading tab sits that many character widths in.
-    let painted_tab = |model: Entity<BufferModel>, cx: &mut TestAppContext| {
+    let painted_tab = |model: Entity<Buffer>, cx: &mut TestAppContext| {
         model.update(cx, |model, _| model.replace(0..0, "\tab").unwrap());
         let document = cx.update(|cx| {
             documents.update(cx, |documents, cx| {
@@ -167,10 +167,13 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     let rust = cx.new(|_| {
         let mut model = BufferModel::from_text("");
         model.set_language(Some("rust".into()), true);
-        model
+        Buffer::new(model)
     });
     assert_eq!(painted_tab(rust, cx), 8);
-    assert_eq!(painted_tab(cx.new(|_| BufferModel::from_text("")), cx), 3);
+    assert_eq!(
+        painted_tab(cx.new(|_| Buffer::new(BufferModel::from_text(""))), cx),
+        3
+    );
     assert_eq!(
         cx.read(crate::app::extensions::host::setting_observer_count),
         1

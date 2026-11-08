@@ -51,7 +51,7 @@ pub(super) use super::driver::setup::{
 use super::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationOpenDialog,
     ApplicationProductCommands, ApplicationProtectedClosure, ApplicationSaveDialog,
-    ApplicationSessions, ApplicationTerminalSessions, BufferModel, CLOSE_TAB_COMMAND,
+    ApplicationSessions, ApplicationTerminalSessions, Buffer, BufferModel, CLOSE_TAB_COMMAND,
     CLOSE_WINDOW_COMMAND, DocumentCollection, Entity, LaunchGate, NEW_COMMAND,
     NEW_TERMINAL_COMMAND, OpenDialogFuture, OpenDialogOutcome, OpenRequest, OpenTarget,
     ProductCommandSource, ProductOpenDialog, ProductSaveDialog, ProductShell, QUIT_COMMAND,
@@ -212,7 +212,7 @@ fn two_dirty_untitled_documents_in_one_window(
     let first = cx.update(|cx| create_untitled_document(documents, cx));
     let first_model = cx.read(|cx| documents.read(cx).get(first).unwrap().model().clone());
     first_model.update(cx, |model, _| model.replace(0..0, "first").unwrap());
-    let second_model = cx.new(|_| BufferModel::from_text("second"));
+    let second_model = cx.new(|_| Buffer::new(BufferModel::from_text("second")));
     let second = documents.update(cx, |documents, cx| {
         documents.create_untitled("Second", second_model.clone(), cx)
     });

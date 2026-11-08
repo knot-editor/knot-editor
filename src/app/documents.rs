@@ -5,7 +5,7 @@ use std::sync::Arc;
 use gpui::{App, Entity, Global};
 
 use super::filesystem::ResourceVersion;
-use super::model::BufferModel;
+use super::model::Buffer;
 use super::resource::ResourceUri;
 
 pub(crate) use knot_model::workbench::DocumentId;
@@ -72,7 +72,7 @@ pub(crate) struct Document {
     id: DocumentId,
     identity: uuid::Uuid,
     title: Arc<str>,
-    model: Entity<BufferModel>,
+    model: Entity<Buffer>,
     state: DocumentState,
     persistence_generation: u64,
 }
@@ -91,7 +91,7 @@ impl Document {
         &self.title
     }
 
-    pub(crate) fn model(&self) -> &Entity<BufferModel> {
+    pub(crate) fn model(&self) -> &Entity<Buffer> {
         &self.model
     }
 
@@ -138,7 +138,7 @@ impl DocumentCollection {
     pub(crate) fn create_untitled(
         &mut self,
         title: impl Into<Arc<str>>,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         cx: &mut App,
     ) -> DocumentId {
         let clean_revision = model.read(cx).revision();
@@ -148,7 +148,7 @@ impl DocumentCollection {
     pub(crate) fn create_destination(
         &mut self,
         title: impl Into<Arc<str>>,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         uri: ResourceUri,
         cx: &mut App,
     ) -> DocumentId {
@@ -158,7 +158,7 @@ impl DocumentCollection {
     pub(crate) fn create_persisted(
         &mut self,
         title: impl Into<Arc<str>>,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         uri: ResourceUri,
         persisted_revision: u64,
         version: ResourceVersion,
@@ -182,7 +182,7 @@ impl DocumentCollection {
     pub(crate) fn create_recovered(
         &mut self,
         title: impl Into<Arc<str>>,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         state: DocumentState,
         identity: Option<uuid::Uuid>,
         cx: &mut App,
@@ -247,7 +247,7 @@ impl DocumentCollection {
     pub(crate) fn begin_persistence(
         &mut self,
         id: DocumentId,
-        model: &Entity<BufferModel>,
+        model: &Entity<Buffer>,
     ) -> Option<PersistenceCapture> {
         let document = self
             .documents
@@ -274,7 +274,7 @@ impl DocumentCollection {
     pub(crate) fn finish_persistence(
         &mut self,
         id: DocumentId,
-        model: &Entity<BufferModel>,
+        model: &Entity<Buffer>,
         capture: &PersistenceCapture,
         resource: (impl Into<Arc<str>>, ResourceUri),
         persisted_state: (ResourceVersion, u64),
@@ -326,7 +326,7 @@ impl DocumentCollection {
     fn insert_resource(
         &mut self,
         title: impl Into<Arc<str>>,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         state: DocumentState,
         cx: &mut App,
     ) -> DocumentId {
@@ -345,7 +345,7 @@ impl DocumentCollection {
     fn insert(
         &mut self,
         title: impl Into<Arc<str>>,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         state: DocumentState,
         cx: &mut App,
     ) -> DocumentId {
@@ -355,7 +355,7 @@ impl DocumentCollection {
     fn insert_with_identity(
         &mut self,
         title: impl Into<Arc<str>>,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         state: DocumentState,
         identity: uuid::Uuid,
         cx: &mut App,
@@ -387,7 +387,7 @@ impl DocumentCollection {
 
 /// Record the indentation style a stamped buffer's text uses as its
 /// document's `editor.insertSpaces`, when the text has a clear style.
-pub(crate) fn detect_indentation(model: &Entity<BufferModel>, cx: &mut App) {
+pub(crate) fn detect_indentation(model: &Entity<Buffer>, cx: &mut App) {
     let model = model.read(cx);
     if let (Some(document), Some(style)) = (model.document(), model.detect_indent_style()) {
         super::settings::set_document_insert_spaces(
@@ -408,6 +408,7 @@ mod tests {
     use gpui::{AppContext, TestAppContext};
 
     use super::*;
+    use crate::app::model::BufferModel;
 
     fn version(value: u8) -> ResourceVersion {
         ResourceVersion::new([value])
@@ -429,7 +430,7 @@ mod tests {
 
     #[gpui::test]
     fn collection_strongly_owns_models_until_document_removal(cx: &mut TestAppContext) {
-        let model = cx.new(|_| BufferModel::from_text("owned"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("owned")));
         let weak = model.downgrade();
         let mut documents = DocumentCollection::new();
         let id = cx.update(|cx| documents.create_untitled("Untitled", model, cx));
@@ -446,9 +447,9 @@ mod tests {
         let destination_uri = ResourceUri::parse("mem://workspace/new.txt").unwrap();
         let persisted_uri = ResourceUri::parse("mem://workspace/saved.txt").unwrap();
         let untitled_uri = ResourceUri::parse("mem://workspace/untitled.txt").unwrap();
-        let untitled = cx.new(|_| BufferModel::from_text(""));
-        let destination = cx.new(|_| BufferModel::from_text(""));
-        let persisted = cx.new(|_| BufferModel::from_text("saved"));
+        let untitled = cx.new(|_| Buffer::new(BufferModel::from_text("")));
+        let destination = cx.new(|_| Buffer::new(BufferModel::from_text("")));
+        let persisted = cx.new(|_| Buffer::new(BufferModel::from_text("saved")));
         let mut documents = DocumentCollection::new();
 
         let untitled_id =
@@ -529,10 +530,10 @@ mod tests {
     #[gpui::test]
     fn normalized_resource_identity_is_deduplicated_across_states(cx: &mut TestAppContext) {
         let uri = ResourceUri::parse("MEM://workspace/src/../notes.txt").unwrap();
-        let first_model = cx.new(|_| BufferModel::from_text("first"));
-        let duplicate_model = cx.new(|_| BufferModel::from_text("duplicate"));
+        let first_model = cx.new(|_| Buffer::new(BufferModel::from_text("first")));
+        let duplicate_model = cx.new(|_| Buffer::new(BufferModel::from_text("duplicate")));
         let duplicate_weak = duplicate_model.downgrade();
-        let untitled_model = cx.new(|_| BufferModel::from_text("untitled"));
+        let untitled_model = cx.new(|_| Buffer::new(BufferModel::from_text("untitled")));
         let mut documents = DocumentCollection::new();
 
         let first = cx.update(|cx| {
@@ -573,7 +574,7 @@ mod tests {
         let reopened = cx.update(|cx| {
             documents.create_persisted(
                 "notes.txt",
-                cx.new(|_| BufferModel::from_text("reopened")),
+                cx.new(|_| Buffer::new(BufferModel::from_text("reopened"))),
                 uri,
                 0,
                 version(3),
@@ -589,7 +590,8 @@ mod tests {
         let uri = ResourceUri::parse("mem://workspace/notes.txt").unwrap();
         let identity = uuid::Uuid::new_v4();
         let mut documents = DocumentCollection::new();
-        let recovered = cx.new(|_| BufferModel::from_recovered_text("disk", "recovered"));
+        let recovered =
+            cx.new(|_| Buffer::new(BufferModel::from_recovered_text("disk", "recovered")));
         let id = cx
             .update(|cx| {
                 documents.create_recovered(
@@ -617,7 +619,7 @@ mod tests {
             ),
             (DocumentState::Destination { uri: uri.clone() }, None),
         ] {
-            let model = cx.new(|_| BufferModel::from_text("other"));
+            let model = cx.new(|_| Buffer::new(BufferModel::from_text("other")));
             assert!(
                 cx.update(|cx| documents.create_recovered("other", model, state, identity, cx))
                     .is_none()
@@ -629,8 +631,8 @@ mod tests {
     #[gpui::test]
     fn stale_persistence_completion_cannot_change_document_state(cx: &mut TestAppContext) {
         let uri = ResourceUri::parse("mem://workspace/notes.txt").unwrap();
-        let model = cx.new(|_| BufferModel::from_text("notes"));
-        let other_model = cx.new(|_| BufferModel::from_text("other"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("notes")));
+        let other_model = cx.new(|_| Buffer::new(BufferModel::from_text("other")));
         let mut documents = DocumentCollection::new();
         let id = cx.update(|cx| {
             documents.create_persisted("notes.txt", model.clone(), uri.clone(), 0, version(1), cx)
@@ -665,7 +667,7 @@ mod tests {
     fn save_as_retargets_resource_identity_only_on_a_current_completion(cx: &mut TestAppContext) {
         let old_uri = ResourceUri::parse("mem://workspace/old.txt").unwrap();
         let new_uri = ResourceUri::parse("mem://workspace/new.txt").unwrap();
-        let model = cx.new(|_| BufferModel::from_text("notes"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("notes")));
         let mut documents = DocumentCollection::new();
         let id = cx.update(|cx| {
             documents.create_persisted("old.txt", model.clone(), old_uri.clone(), 0, version(1), cx)
@@ -690,7 +692,7 @@ mod tests {
     #[gpui::test]
     fn edit_racing_save_keeps_persisted_document_dirty(cx: &mut TestAppContext) {
         let uri = ResourceUri::parse("mem://workspace/notes.txt").unwrap();
-        let model = cx.new(|_| BufferModel::from_text("notes"));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("notes")));
         let mut documents = DocumentCollection::new();
         let id = cx.update(|cx| {
             documents.create_persisted("notes.txt", model.clone(), uri.clone(), 0, version(1), cx)

@@ -127,7 +127,7 @@ impl Launch {
     ) -> DocumentId {
         let file = pollster::block_on(self.provider.read(uri(path))).unwrap();
         let text = String::from_utf8(file.bytes).unwrap();
-        let model = cx.new(|_| BufferModel::from_text(text));
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
         let document = cx.read(documents).update(cx, |documents, cx| {
             documents.create_persisted(
                 path.to_owned(),

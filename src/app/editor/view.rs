@@ -8,7 +8,7 @@ pub struct EditorView {
     pub(super) rendering: EditorRenderingOptions,
     pub(super) editor: Entity<Editor>,
     /// The editor's model, which never changes.
-    pub(super) model: Entity<BufferModel>,
+    pub(super) model: Entity<Buffer>,
     /// Text size and line height from the settings in the editor's scope.
     pub(super) metrics: EditorMetrics,
     /// Width of one monospace cell, which wrapping measures rows in.
@@ -48,7 +48,7 @@ pub struct EditorView {
 
 impl EditorView {
     /// Build a view of a new editor over `model`.
-    pub fn new(model: Entity<BufferModel>, cx: &mut Context<Self>) -> Self {
+    pub fn new(model: Entity<Buffer>, cx: &mut Context<Self>) -> Self {
         Self::with_rendering(
             model,
             0,
@@ -61,7 +61,7 @@ impl EditorView {
     /// Build a view of a new editor over `model` inside the contributed view
     /// `kind`, without a gutter until the view asks for one.
     pub(crate) fn for_contributed_view(
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         kind: impl Into<Arc<str>>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -76,7 +76,7 @@ impl EditorView {
 
     #[cfg(test)]
     pub(crate) fn new_with_options(
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         element_id: usize,
         rendering: EditorRenderingOptions,
         cx: &mut Context<Self>,
@@ -85,7 +85,7 @@ impl EditorView {
     }
 
     fn with_rendering(
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         element_id: usize,
         rendering: EditorRenderingOptions,
         kind: impl Into<Arc<str>>,
@@ -147,7 +147,7 @@ impl EditorView {
         &self.editor
     }
 
-    pub(crate) fn model(&self) -> &Entity<BufferModel> {
+    pub(crate) fn model(&self) -> &Entity<Buffer> {
         &self.model
     }
 

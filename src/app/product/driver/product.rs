@@ -14,7 +14,7 @@ use crate::app::extensions::load::LoadResult;
 use crate::app::filesystem::{
     FileSystemProvider, FileSystemProviderRegistry, MemoryFileSystemProvider,
 };
-use crate::app::model::BufferModel;
+use crate::app::model::{Buffer, BufferModel};
 use crate::app::product::{ApplicationDocuments, ApplicationFileSystems};
 use crate::app::resource::ResourceUri;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
@@ -323,7 +323,11 @@ impl TestProduct {
         let uri = ResourceUri::parse(uri).unwrap();
         let opened = pollster::block_on(files.0.read(uri.clone())).unwrap();
         let name = uri.to_string().rsplit('/').next().unwrap().to_owned();
-        let model = cx.new(|_| BufferModel::from_text(String::from_utf8(opened.bytes).unwrap()));
+        let model = cx.new(|_| {
+            Buffer::new(BufferModel::from_text(
+                String::from_utf8(opened.bytes).unwrap(),
+            ))
+        });
         let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
         let document = documents.update(cx, |documents, cx| {
             documents.create_persisted(name.as_str(), model.clone(), uri, 0, opened.version, cx)

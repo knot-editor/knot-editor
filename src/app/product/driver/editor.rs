@@ -17,7 +17,7 @@ use super::setup::product_window;
 use crate::app::convert::keystroke_to_gpui;
 use crate::app::editor::{CaretShape, Editor, EditorView, Reveal};
 use crate::app::keys::Keystroke;
-use crate::app::model::BufferModel;
+use crate::app::model::{Buffer, BufferModel};
 use crate::app::product::{
     ApplicationDocuments, ApplicationProductCommands, ApplicationSessions, DocumentId,
     ProductShell, Workbench,
@@ -36,7 +36,7 @@ const COLUMNS: usize = 100;
 pub struct TestEditor {
     shell: Entity<ProductShell>,
     editor: Entity<Editor>,
-    model: Entity<BufferModel>,
+    model: Entity<Buffer>,
     document: DocumentId,
     window: Option<(gpui::AnyWindowHandle, Entity<EditorView>)>,
 }
@@ -61,7 +61,7 @@ impl TestEditor {
 
     pub(super) fn over(
         document: DocumentId,
-        model: Entity<BufferModel>,
+        model: Entity<Buffer>,
         selection: (usize, usize),
         cx: &mut TestAppContext,
     ) -> Self {
@@ -499,9 +499,9 @@ fn new_document(
     text: &str,
     language: Option<&str>,
     cx: &mut TestAppContext,
-) -> (DocumentId, Entity<BufferModel>) {
+) -> (DocumentId, Entity<Buffer>) {
     let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
-    let model = cx.new(|_| BufferModel::from_text(text));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Case", model.clone(), cx)
     });
