@@ -33,14 +33,11 @@ Surface-specific semantic data lets extensions customize behavior without
 blocking native painting. A general widget tree or WebView needs a concrete
 unmet use case first.
 
-Horizontal movement steps by graphemes, so combining text, CJK, and emoji
-move as one character. Vertical movement keeps a display column measured in
-`unicode-width` cells with tabs expanded, as soft wrap measures rows, rather
-than a shaped x: movement then needs no window, so editor state and its
-commands run headless, and tests check what users get, since the gpui test
-platform never shapes real text. The cost is a cell's drift beside
-proportional fallback glyphs and on right-to-left lines, which Knot's
-monospace text rarely shows.
+Vertical movement measures display cells rather than a shaped x, so movement
+needs no window, editor state and its commands run headless, and tests check
+what users get, since the gpui test platform never shapes real text. The cost
+is a cell's drift beside proportional fallback glyphs and on right-to-left
+lines, which Knot's monospace text rarely shows.
 
 References: [semantic UI](../architecture/semantic-ui.md) and
 [editor views](../architecture/workbench-and-lifecycle.md#editor-views).
@@ -49,12 +46,10 @@ References: [semantic UI](../architecture/semantic-ui.md) and
 
 A product window shows only product surfaces. The prototype toolbar duplicated
 commands, menus, and keys, and its free-form status string was the only place
-some failures appeared. Native failures with no other visible effect use the
-native message prompt, at warning level, that extension messages already use.
-Success and progress notices were dropped because their effect is visible.
-Extension calls get the failure as their result, so a package decides whether
-to tell the user. A failed package startup opens the startup report in each
-launch window, because nothing else passively shows that a package failed.
-Developer tooling shares a `Developer:` title prefix and stays out of the menus.
+some failures appeared, so native failures with no other visible effect use the
+native warning prompt instead. Success and progress notices were dropped because
+their effect is visible. Extension calls get failures as results, so a package
+decides whether to tell the user. A failed package startup opens the startup
+report, because nothing else passively shows that a package failed.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#product-application-launch).
