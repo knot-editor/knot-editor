@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 checkpoint 2 implemented and awaiting review. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 next. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -106,50 +106,19 @@ whose syntax parse continues as a job it hands out and takes back; the
 notifies. See [core and buffers](../architecture/core-and-buffers.md#application-buffer-ownership).
 Test-only model counters sit behind `knot-model`'s `test-support` feature.
 
-### 2. Plain editor state — 🔍 awaiting review
+### 2. Plain editor state — ✅ complete
 
-- ✅ `EditorState` (`crates/knot-model/src/editor.rs` and `editor/`) holds the
-  editor's state and runs the native commands over a `&mut BufferModel` it is
-  given per call. It follows the `EditorSettings` its owner sets and queues
-  clipboard writes and document setting changes as `EditorEffect`s; paste
-  takes the clipboard's text. Completion sessions moved to
-  `crates/knot-model/src/completion.rs`, and only the popup render stays in
-  `src/app/completion.rs`.
-- ✅ The `Editor` entity (`src/app/editor.rs`) derefs to the state. Before each
-  operation it resolves the settings, and afterwards it runs the effects,
-  notifies the buffer when its text changed, and notifies itself. It also
-  follows buffer changes, releases its anchors, and keeps the in-flight
-  completion requests. `EditorView` is unchanged apart from reading the state
-  through accessors.
-- ✅ The single-editor command tests run as plain tests: brackets, comments,
-  folding, indentation, lines, save hygiene, decorations, and the editing,
-  movement, undo-across-editors, composition, completion, reveal, and view
-  state cases. The shell keeps the painting, hit-testing, wrap-layout,
-  gutter, settings-integration, and background-parse cases. A few
-  `test-support` helpers (`place_for_test`, `scroll_to_for_test`,
-  `set_viewport_rows_for_test`) let those reach state they used to set
-  directly.
-- ✅ The editor command names are constants in
-  `knot_model::editor::commands`; `#[command]` takes a constant's path in
-  place of a literal name and `id`, so the declarations and the dispatch
-  share them.
-- Original deliverables: `Editor` in `knot-model`, with settings, theme values, and
-  the clipboard as explicit inputs and outputs; `editor/wrap.rs`,
-  `editor/completion.rs` state, and `completion.rs` aggregation move with it
-  where they need no gpui; `EditorView` keeps rendering and platform input
-  and owns the editor through a wrapper entity.
-- Validation: the `src/app/editor/tests.rs` cases that do not paint or
-  hit-test as plain tests; the rest, Vim cases, and editor API product tests
-  unchanged.
-- **Implementation context:** the `Context<Self>` uses in `editor.rs`
-  (`notify`, `observe` of the model, `on_release`, `try_global`),
-  `editor/{editing,completion,folding,indentation,brackets,lines,comments,gutter}.rs`.
-  The resolved settings read in layout (`settings::ApplicationSettings`,
-  `SettingsScope`) become an input value the view resolves per layout, as
-  the architecture already describes. `zoom::rems` in `completion.rs` stays
-  at the view edge.
-- Review gate: an editor command can be exercised in a plain test in a few
-  lines.
+`EditorState` (`crates/knot-model/src/editor.rs`) runs the native commands
+over a buffer model given per call, follows the `EditorSettings` its owner
+resolves, and queues clipboard and document-setting writes as effects;
+completion sessions live in `crates/knot-model/src/completion.rs`. The
+`Editor` entity (`src/app/editor.rs`) derefs to it, resolves settings, runs
+the effects, and notifies. Command names are constants in
+`knot_model::editor::commands`, which `#[command]` takes by path. See
+[editor views](../architecture/workbench-and-lifecycle.md#editor-views).
+Single-editor command tests are plain; the shell keeps the painting,
+hit-testing, layout, settings-integration, and background-parse cases, which
+reach state through `test-support` helpers.
 
 ### 3. Application stores
 
