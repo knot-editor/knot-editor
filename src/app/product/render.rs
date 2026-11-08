@@ -427,7 +427,7 @@ impl Render for StatusTooltip {
 
 impl Render for ProductShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         crate::app::work_counts::draw();
         self.attach_window(window, cx);
         self.observe_application_focus(window, cx);

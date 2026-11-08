@@ -51,6 +51,17 @@ tree-sitter-yaml = "0.7.2"
 tree-sitter-md = "0.5.4"
 tree-sitter-tsquery = "0.8.0"
 nucleo-matcher = "0.3.1"
+pollster = { version = "1", optional = true }
+
+[features]
+# The product test driver in `knot::test_support`, for tests outside the library.
+test-support = [
+    "dep:pollster",
+    "gpui/test-support",
+    "knot-core/test-support",
+    "knot-host/test-support",
+    "knot-protocol/test-support",
+]
 
 [dev-dependencies]
 knot-core = { path = "crates/knot-core", features = ["test-support"] }

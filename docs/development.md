@@ -62,20 +62,27 @@ with an in-memory host (see the [extension guide](extension-api.md#write-and-tes
 It does not use a global `tsc`. Runtime contracts still require Rust/V8 tests.
 Files under a package's `test/fixtures` are test inputs and are not compiled;
 The bundled language packages keep highlight fixtures there, checked by a Rust test that
-highlights them with the bundled queries (see `src/app/extensions/host/highlight_tests.rs`).
+highlights them with the bundled queries (see `src/app/product/tests/language_highlights.rs`).
 Packages keep behavior cases as JSONC topic files in `test/cases/`. A language
 package's `comments.jsonc` lists comment toggling cases, which
-`src/app/product/tests/language_editing.rs` runs through the native toggle;
-`indents.jsonc` and `brackets.jsonc` list indentation and bracket cases, which
-`language_indents.rs` and `language_brackets.rs` beside it run through an
+`src/app/product/tests/language_editing.rs` runs through the editor's toggle
+commands; `indents.jsonc`, `brackets.jsonc`, and `folds.jsonc` list
+indentation, bracket, and fold cases, which `language_indents.rs`,
+`language_brackets.rs`, and `language_folds.rs` beside it run through an
 editor without a window. `@knot/vim` keeps one file per topic, each its own
-parallel test in `vim.rs`. `src/app/product/tests/cases.rs` holds what every
-runner shares: discovery, parsing, the `KNOT_CASES` name filter, caret
-markers, generated numbered texts, the key notation, and failure reports that
-name the file and line of the case. `vim.rs` runs the cases through the headless harness in `harness.rs`: the bundled
-packages start without a window, one windowless session shows each case in
-a fresh workbench and types its keys through the session's router, and a run
-settles once the session holds no keys and the extension pool is quiet. Each
+parallel test in `vim.rs`.
+
+Tests of bundled packages use only `knot::test_support` (feature
+`test-support`), a driver that starts the real product with chosen packages
+and reports what it shows as plain data, so they need none of the library's
+internals. `test_support::cases` holds what every case runner shares:
+discovery, parsing, the `KNOT_CASES` name filter, caret markers, generated
+numbered texts, the key notation, and failure reports that name the file and
+line of the case. `TestProduct` starts the packages without a window, and a
+`TestEditor` session shows each case in a fresh workbench and types its keys
+through the session's router; a run settles once the session holds no keys
+and the extension pool is quiet, so keys that leave a command waiting on a
+picker or prompt go in unsettled. Each
 Vim case starts from an empty clipboard and the package's hidden
 `vim.reset`, which clears registers, their record, marks, and the last find,
 so case order does not matter. A case may collapse `folds` before its keys

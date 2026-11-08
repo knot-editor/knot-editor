@@ -1,6 +1,6 @@
 //! Runs the indentation cases each bundled language package keeps in
 //! `test/cases/indents.jsonc` through an editor on the registered language,
-//! in the [case](super::cases) format.
+//! in the [case](crate::test_support::cases) format.
 //!
 //! A group lists the `languages` its cases run on. A `reindent` case
 //! reindents the marked lines, or every line without a marker, and expects
@@ -10,9 +10,11 @@
 //! without a window.
 use serde::Deserialize;
 
-use super::cases::{Failures, read_groups, topic_files, unmark};
-use super::harness::{Action, run, start_bundled_packages};
-use super::*;
+use super::bundled::{PACKAGES, language_packages};
+use crate::test_support::TestProduct;
+use crate::test_support::cases::{Failures, read_groups, topic_files, unmark};
+use crate::test_support::editing::{Action, run};
+use gpui::TestAppContext;
 
 /// A case that expects `after` from `before`.
 #[derive(Deserialize)]
@@ -33,11 +35,11 @@ pub(super) struct TypeCase {
 
 #[gpui::test]
 fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppContext) {
-    start_bundled_packages(knot_bundled::PACKAGES, cx);
+    let product = TestProduct::start(PACKAGES, cx);
 
     let mut tested = Vec::new();
     let mut failures = Failures::default();
-    for path in topic_files("indents") {
+    for path in topic_files(&language_packages(), "indents") {
         for group in read_groups(&path, &["languages", "reindent", "enter", "type"]) {
             for id in group.field::<Vec<String>>("languages") {
                 tested.push(id.clone());
@@ -78,17 +80,12 @@ fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppCon
     }
 
     // A language that registers an indent query must have cases.
-    let untested: Vec<String> = cx.read(|cx| {
-        crate::app::languages::list(cx)
-            .into_iter()
-            .map(|language| language.id)
-            .filter(|id| {
-                crate::app::languages::get(id, cx)
-                    .is_some_and(|language| !language.queries.indents.trim().is_empty())
-            })
-            .filter(|id| !tested.contains(id))
-            .collect()
-    });
+    let untested: Vec<String> = product
+        .languages(cx)
+        .into_iter()
+        .filter(|language| language.indents && !tested.contains(&language.id))
+        .map(|language| language.id)
+        .collect();
     failures.assert_none();
     assert!(untested.is_empty(), "no indent cases for {untested:?}");
 }

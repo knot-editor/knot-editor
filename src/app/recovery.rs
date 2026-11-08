@@ -319,7 +319,7 @@ impl RecoveryStore {
 
     /// A store that lives only as long as this value, for tests that need
     /// no file.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn in_memory(executor: BackgroundExecutor) -> Self {
         Self::open(crate::app::record_store::IN_MEMORY.into(), executor)
     }

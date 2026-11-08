@@ -42,7 +42,7 @@ pub(super) struct BracketCache {
 
 impl Editor {
     /// The brackets highlighted at the caret.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn matched_brackets_for_test(&self, cx: &App) -> Option<[Range<usize>; 2]> {
         self.matched_brackets(self.model.read(cx))
     }

@@ -159,7 +159,7 @@ impl EditorView {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn interaction_bounds(&self) -> Bounds<Pixels> {
         self.bounds
     }

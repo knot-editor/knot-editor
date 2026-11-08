@@ -1,58 +1,23 @@
 //! The bundled status bar package, following the editor a window describes.
-use super::editor_api::active_editor;
-use super::harness::start_bundled_packages;
-use super::*;
-use crate::app::status_bar::ApplicationStatusBar;
+use gpui::TestAppContext;
 
-fn right_texts(window: gpui::AnyWindowHandle, cx: &gpui::App) -> Vec<String> {
-    let key = crate::app::product::test_session_id(window);
-    cx.global::<ApplicationStatusBar>()
-        .0
-        .items(&key, &[])
-        .right
-        .into_iter()
-        .map(|bar| bar.item.text)
-        .collect()
-}
+use super::bundled::PACKAGES;
+use crate::test_support::{TestProduct, wait_until};
 
 #[gpui::test]
 fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut TestAppContext) {
-    start_bundled_packages(knot_bundled::PACKAGES, cx);
-    let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
-    let model = cx.new(|_| BufferModel::from_text("one\ntwo\nthree é\n"));
-    let document = documents.update(cx, |documents, cx| {
-        documents.create_untitled("Lines", model.clone(), cx)
-    });
-    let (shell, window) = product_window(document, model, cx);
-    let editor = active_editor(&shell, cx);
-    cx.run_until_parked();
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
-    })
-    .unwrap();
-    wait_for_api_condition(cx, |cx| right_texts(window, cx).len() == 3);
-    assert_eq!(
-        cx.read(|cx| right_texts(window, cx)),
-        ["Ln 1, Col 1", "Spaces: 4", "Plain Text"]
-    );
+    let product = TestProduct::start(PACKAGES, cx);
+    let editor = product.windowed_editor("one\ntwo\nthree é\n", cx);
+    let right = |cx: &mut TestAppContext| editor.status(cx).1;
+    wait_until(cx, |cx| right(cx).len() == 3);
+    assert_eq!(right(cx), ["Ln 1, Col 1", "Spaces: 4", "Plain Text"]);
 
-    let select = |anchor: usize, caret: usize, cx: &mut TestAppContext| {
-        editor.update(cx, |editor, cx| {
-            editor.set_selection(anchor, caret, crate::app::editor::Reveal::Nearest, cx)
-        })
-    };
-    select(6, 6, cx);
-    wait_for_api_condition(cx, |cx| right_texts(window, cx)[0] == "Ln 2, Col 3");
-    select(0, 3, cx);
-    wait_for_api_condition(cx, |cx| {
-        right_texts(window, cx)[0] == "Ln 1, Col 4 (3 selected)"
-    });
+    editor.select(6, 6, cx);
+    wait_until(cx, |cx| right(cx)[0] == "Ln 2, Col 3");
+    editor.select(0, 3, cx);
+    wait_until(cx, |cx| right(cx)[0] == "Ln 1, Col 4 (3 selected)");
 
     // A document-scoped indentation write reaches the bar without a listener.
-    let uuid = cx.read(|cx| documents.read(cx).get(document).unwrap().identity());
-    cx.update(|cx| {
-        crate::app::settings::set_document_insert_spaces(uuid, false, cx);
-        crate::app::application_observation::changed(cx);
-    });
-    wait_for_api_condition(cx, |cx| right_texts(window, cx)[1] == "Tab Size: 4");
+    editor.set_setting("editor.insertSpaces", false.into(), cx);
+    wait_until(cx, |cx| right(cx)[1] == "Tab Size: 4");
 }

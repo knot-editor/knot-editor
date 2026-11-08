@@ -275,7 +275,7 @@ impl LanguageRegistry {
     }
 
     /// The editing configuration of the registration that defines `id`.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn editing(&self, id: &str) -> Option<Arc<editing::EditingConfiguration>> {
         self.resolve(id)
             .map(|language| Arc::clone(language.editing()))
@@ -436,7 +436,7 @@ pub(crate) fn effective_language(model: &BufferModel, cx: &App) -> String {
 }
 
 /// The editing configuration of a registered language ID.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn editing_configuration(
     id: &str,
     cx: &App,
@@ -445,7 +445,7 @@ pub(crate) fn editing_configuration(
         .and_then(|languages| languages.registry.editing(id))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn registry(cx: &App) -> &LanguageRegistry {
     &cx.global::<ApplicationLanguages>().registry
 }

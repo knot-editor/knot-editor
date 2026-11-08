@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 2b in progress. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 2c next. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -201,25 +201,28 @@ window-restore, recovery, and settings tests that started it incidentally
 now run on inline fixtures or none, and the `discover_all` tests inject a
 fixture bundled package.
 
-#### 2b. TestEditor, a minimal TestProduct, and the editor-level extension tests
+#### 2b. TestEditor, a minimal TestProduct, and the editor-level extension tests ✅
 
-- Deliverables: `src/test_support/` with `TestEditor` and the parts of
-  `TestProduct` these tests need; `vim.rs`, `language_{editing,indents,brackets,folds}.rs`,
-  `go_to_line.rs`, `status_bar_package.rs`, the case readers (`cases.rs`),
-  `highlight_tests.rs::bundled_languages_highlight_their_fixtures`, and
-  `host.rs`'s `bundled_packages_load_with_product_discovery` and
-  `measure_bundled_package_memory` use only `crate::test_support`.
-- Validation: `just test` passes with the same test count; `rg
-  'crate::app|super::' ` over the ported files finds nothing.
-- **Implementation context:** grow the driver from
-  `src/app/product/tests/harness.rs` (`Session`, `Windowed`, `run`,
-  `work_per_key`) and `cases.rs`; package case directories become a
-  parameter instead of `CARGO_MANIFEST_DIR`. Vim reaches `Editor::viewport`,
-  `row_start`, folds, `caret_shape`, workbench panes, `settings::*` setters,
-  `languages::set_language`, mouse drags, and a memory filesystem; each
-  becomes a driver method returning plain values.
-- Review gate: the driver's public surface reads as a test API, and the
-  ported tests read as behavior, not internals.
+`knot::test_support` exposes `TestProduct`, `TestEditor`, plain result
+structs, `wait_until`, `cases` (case files, path-parameterized), and
+`editing` (one action in a bare editor). The driver code lives in
+`src/app/product/driver/` so it can use the product's private items, and
+`setup.rs` there also holds the globals and windows the library's own tests
+start from. The Vim, language (comments, indents, brackets, folds,
+highlights), Go to Line, and status bar tests, and the every-package load
+and memory tests, use only `crate::test_support`. The library builds with
+`--features test-support` outside `cfg(test)`, which widened 27 test-only
+gates (`cargo clippy -p knot --lib --features test-support` is clean).
+
+- Comment cases now run through `editor.toggle-line-comment` and
+  `editor.toggle-block-comment` instead of the language's editing
+  configuration. That exposed a product bug: a Markdown HTML block is
+  injected HTML, which declared no comment tokens, so a commented Markdown
+  line could not be uncommented. HTML now declares `<!--`/`-->` and has its
+  own cases in `language-others`.
+- `TestEditor::press` waits until every package is quiet. A command waiting
+  on a picker or prompt keeps its package busy, so Go to Line and Vim's `:q`
+  send those keys with `press_unsettled` and wait for what they show.
 
 #### 2c. TestProduct for the projects tests
 

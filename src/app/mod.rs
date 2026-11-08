@@ -27,6 +27,8 @@ mod personal_config;
 mod personal_config_error;
 mod picker;
 mod product;
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) use product::driver;
 mod record_store;
 mod recovery;
 mod resource;
@@ -44,7 +46,7 @@ mod tree_view;
 mod typography;
 mod window_layout;
 mod window_sessions;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 mod work_counts;
 mod workbench;
 mod workspace;

@@ -27,16 +27,24 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-pub(super) const CARET: char = '‸';
+/// Marks the caret, or both ends of a selection, in a text.
+pub const CARET: char = '‸';
 
-fn repository() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+/// The package directories in `root`, such as `extensions/@knot`.
+pub fn packages_in(root: &Path) -> Vec<PathBuf> {
+    let mut packages: Vec<PathBuf> = std::fs::read_dir(root)
+        .unwrap_or_else(|error| panic!("{}: {error}", root.display()))
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.is_dir())
+        .collect();
+    packages.sort();
+    packages
 }
 
-/// Every bundled package's `test/cases/<topic>.jsonc`.
-pub(super) fn topic_files(topic: &str) -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = packages()
-        .into_iter()
+/// Each of `packages`' `test/cases/<topic>.jsonc` that exists.
+pub fn topic_files(packages: &[PathBuf], topic: &str) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = packages
+        .iter()
         .map(|package| package.join("test/cases").join(format!("{topic}.jsonc")))
         .filter(|path| path.exists())
         .collect();
@@ -44,12 +52,9 @@ pub(super) fn topic_files(topic: &str) -> Vec<PathBuf> {
     files
 }
 
-/// Every case file of the package `@knot/<name>`.
-pub(super) fn package_files(name: &str) -> Vec<PathBuf> {
-    let directory = repository()
-        .join("extensions/@knot")
-        .join(name)
-        .join("test/cases");
+/// Every case file of the package in `package`.
+pub fn package_files(package: &Path) -> Vec<PathBuf> {
+    let directory = package.join("test/cases");
     let mut files: Vec<PathBuf> = std::fs::read_dir(&directory)
         .unwrap_or_else(|error| panic!("{}: {error}", directory.display()))
         .map(|entry| entry.unwrap().path())
@@ -62,16 +67,9 @@ pub(super) fn package_files(name: &str) -> Vec<PathBuf> {
     files
 }
 
-fn packages() -> Vec<PathBuf> {
-    std::fs::read_dir(repository().join("extensions/@knot"))
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .collect()
-}
-
 /// Where a case is written.
 #[derive(Clone)]
-pub(super) struct Location {
+pub struct Location {
     file: String,
     line: usize,
 }
@@ -83,15 +81,15 @@ impl fmt::Display for Location {
 }
 
 /// A case with its name and where it is written.
-pub(super) struct Case<T> {
-    pub(super) at: Location,
-    pub(super) name: String,
-    pub(super) value: T,
+pub struct Case<T> {
+    pub at: Location,
+    pub name: String,
+    pub value: T,
 }
 
 /// One object of a case file: its fields, and the line of each element of
 /// its arrays.
-pub(super) struct Group {
+pub struct Group {
     file: String,
     fields: serde_json::Map<String, Value>,
     lines: HashMap<String, Vec<usize>>,
@@ -99,7 +97,7 @@ pub(super) struct Group {
 
 impl Group {
     /// The group's field `key`, which must be present.
-    pub(super) fn field<T: DeserializeOwned>(&self, key: &str) -> T {
+    pub fn field<T: DeserializeOwned>(&self, key: &str) -> T {
         let value = self
             .fields
             .get(key)
@@ -110,7 +108,7 @@ impl Group {
     }
 
     /// The cases in the array `key`, if any, that the name filter keeps.
-    pub(super) fn cases<T: DeserializeOwned>(&self, key: &str) -> Vec<Case<T>> {
+    pub fn cases<T: DeserializeOwned>(&self, key: &str) -> Vec<Case<T>> {
         let Some(Value::Array(elements)) = self.fields.get(key) else {
             return Vec::new();
         };
@@ -143,12 +141,13 @@ impl Group {
 }
 
 /// The groups of the file at `path`, each holding only the `allowed` fields.
-pub(super) fn read_groups(path: &Path, allowed: &[&str]) -> Vec<Group> {
-    let file = path
-        .strip_prefix(repository())
-        .unwrap_or(path)
-        .display()
-        .to_string();
+pub fn read_groups(path: &Path, allowed: &[&str]) -> Vec<Group> {
+    // Name the file from its package scope on, such as `@knot/vim/test/…`.
+    let shown = path.to_string_lossy();
+    let file = match shown.find("/@") {
+        Some(start) => shown[start + 1..].to_owned(),
+        None => shown.into_owned(),
+    };
     let text = std::fs::read_to_string(path).unwrap_or_else(|error| panic!("{file}: {error}"));
     let parsed = jsonc_parser::parse_to_ast(&text, &Default::default(), &Default::default())
         .unwrap_or_else(|error| panic!("{file}: {error}"));
@@ -196,12 +195,12 @@ pub(super) fn read_groups(path: &Path, allowed: &[&str]) -> Vec<Group> {
 
 /// What went wrong in a run, with the location of each case.
 #[derive(Default)]
-pub(super) struct Failures(Vec<String>);
+pub struct Failures(Vec<String>);
 
 impl Failures {
     /// Record that `actual` is not `expected` for `case`, labelled with
     /// `context` such as a language.
-    pub(super) fn check<T>(&mut self, case: &Case<T>, context: &str, expected: &str, actual: &str) {
+    pub fn check<T>(&mut self, case: &Case<T>, context: &str, expected: &str, actual: &str) {
         if expected != actual {
             self.fail(
                 case,
@@ -211,7 +210,7 @@ impl Failures {
         }
     }
 
-    pub(super) fn fail<T>(&mut self, case: &Case<T>, context: &str, detail: String) {
+    pub fn fail<T>(&mut self, case: &Case<T>, context: &str, detail: String) {
         let context = if context.is_empty() {
             String::new()
         } else {
@@ -222,7 +221,7 @@ impl Failures {
     }
 
     /// Fail the test if anything was recorded.
-    pub(super) fn assert_none(self) {
+    pub fn assert_none(self) {
         assert!(self.0.is_empty(), "\n{}", self.0.join("\n"));
     }
 }
@@ -230,14 +229,14 @@ impl Failures {
 /// A text in a case: lines, or a generated numbered document.
 #[derive(Deserialize)]
 #[serde(untagged)]
-pub(super) enum Text {
+pub enum Text {
     Lines(Vec<String>),
     Numbered(Numbered),
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Numbered {
+pub struct Numbered {
     numbered: usize,
     caret: Option<(usize, usize)>,
     anchor: Option<(usize, usize)>,
@@ -245,7 +244,7 @@ pub(super) struct Numbered {
 
 impl Text {
     /// The lines, with the caret markers in them.
-    pub(super) fn lines(&self) -> Vec<String> {
+    pub fn lines(&self) -> Vec<String> {
         match self {
             Text::Lines(lines) => lines.clone(),
             Text::Numbered(numbered) => {
@@ -266,7 +265,7 @@ impl Text {
 }
 
 /// `lines` joined, without markers, and the selection they mark.
-pub(super) fn unmark(lines: &[String]) -> (String, Option<(usize, usize)>) {
+pub fn unmark(lines: &[String]) -> (String, Option<(usize, usize)>) {
     let marked = lines.join("\n");
     let markers: Vec<usize> = marked
         .match_indices(CARET)
@@ -284,7 +283,7 @@ pub(super) fn unmark(lines: &[String]) -> (String, Option<(usize, usize)>) {
 }
 
 /// gpui keystrokes for the key notation.
-pub(super) fn parse_keys(keys: &str) -> Vec<String> {
+pub fn parse_keys(keys: &str) -> Vec<String> {
     let mut parsed = Vec::new();
     let mut rest = keys;
     while let Some(character) = rest.chars().next() {
@@ -323,8 +322,9 @@ pub(super) fn parse_keys(keys: &str) -> Vec<String> {
 
 /// A test per topic file of `package`, run by `runner(topic, cx)`, so the
 /// topics run in parallel, and a test that every file has one.
+#[macro_export]
 macro_rules! topics {
-    ($package:literal, $runner:ident; $($topic:ident),* $(,)?) => {
+    ($package:expr, $runner:ident; $($topic:ident),* $(,)?) => {
         mod topics {
             use super::*;
             $(
@@ -336,7 +336,9 @@ macro_rules! topics {
 
             #[test]
             fn every_topic_file_has_a_test() {
-                let files: Vec<String> = $crate::app::product::tests::cases::package_files($package)
+                let package = $package;
+                let package: &std::path::Path = package.as_ref();
+                let files: Vec<String> = $crate::test_support::cases::package_files(package)
                     .iter()
                     .map(|path| path.file_stem().unwrap().to_string_lossy().into_owned())
                     .collect();
@@ -344,13 +346,13 @@ macro_rules! topics {
                     files,
                     [$(stringify!($topic)),*],
                     "list each file in {}/test/cases in `topics!`",
-                    $package
+                    package.display()
                 );
             }
         }
     };
 }
-pub(super) use topics;
+pub use crate::topics;
 
 #[cfg(test)]
 mod tests {

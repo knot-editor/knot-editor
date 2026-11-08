@@ -1,6 +1,6 @@
 //! Runs the bracket cases each bundled language package keeps in
 //! `test/cases/brackets.jsonc` through an editor on the registered language, in
-//! the [case](super::cases) format.
+//! the [case](crate::test_support::cases) format.
 //!
 //! Groups list their `languages` as the indentation cases do. A `type` case types `text` one character at a time, `⌫`
 //! pressing Backspace, and expects `after` with its caret or selection. A
@@ -8,10 +8,12 @@
 //! case expects `after` to be the text with `«` and `»` around the brackets
 //! the view highlights at the caret, or without markers when none match.
 
-use super::cases::{Failures, read_groups, topic_files, unmark};
-use super::harness::{Action, run, start_bundled_packages};
+use super::bundled::{PACKAGES, language_packages};
 use super::language_indents::{IndentCase, TypeCase};
-use super::*;
+use crate::test_support::TestProduct;
+use crate::test_support::cases::{Failures, read_groups, topic_files, unmark};
+use crate::test_support::editing::{Action, run};
+use gpui::TestAppContext;
 
 /// `text` with `«` and `»` around each of `brackets`.
 fn mark_brackets(text: &str, brackets: Option<[std::ops::Range<usize>; 2]>) -> String {
@@ -27,11 +29,11 @@ fn mark_brackets(text: &str, brackets: Option<[std::ops::Range<usize>; 2]>) -> S
 
 #[gpui::test]
 fn bundled_bracket_cases_run_on_their_registered_languages(cx: &mut TestAppContext) {
-    start_bundled_packages(knot_bundled::PACKAGES, cx);
+    let product = TestProduct::start(PACKAGES, cx);
 
     let mut tested = Vec::new();
     let mut failures = Failures::default();
-    for path in topic_files("brackets") {
+    for path in topic_files(&language_packages(), "brackets") {
         for group in read_groups(&path, &["languages", "type", "jump", "match"]) {
             for id in group.field::<Vec<String>>("languages") {
                 tested.push(id.clone());
@@ -67,22 +69,12 @@ fn bundled_bracket_cases_run_on_their_registered_languages(cx: &mut TestAppConte
     }
 
     // A language that registers bracket pairs must have cases.
-    let untested: Vec<String> = cx.read(|cx| {
-        crate::app::languages::list(cx)
-            .into_iter()
-            .map(|language| language.id)
-            .filter(|id| {
-                crate::app::languages::get(id, cx).is_some_and(|language| {
-                    language
-                        .editing
-                        .brackets
-                        .as_ref()
-                        .is_some_and(|brackets| !brackets.is_empty())
-                })
-            })
-            .filter(|id| !tested.contains(id))
-            .collect()
-    });
+    let untested: Vec<String> = product
+        .languages(cx)
+        .into_iter()
+        .filter(|language| language.brackets && !tested.contains(&language.id))
+        .map(|language| language.id)
+        .collect();
     failures.assert_none();
     assert!(untested.is_empty(), "no bracket cases for {untested:?}");
 }

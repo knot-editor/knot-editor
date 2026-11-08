@@ -151,7 +151,7 @@ impl Highlight {
             .unwrap_or_else(|| panic!("{name} is not a highlight name"))
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn name(self) -> &'static str {
         CAPTURE_NAMES[self.0 as usize]
     }

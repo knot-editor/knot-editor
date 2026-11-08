@@ -137,7 +137,7 @@ pub(crate) fn entity(cx: &App) -> Option<Entity<ProductExtensionHost>> {
 }
 
 /// The extension pool, for tests that wait until it goes quiet.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn pool(cx: &App) -> Option<Arc<ExtensionPool>> {
     Some(entity(cx)?.read(cx).pool.clone())
 }
@@ -1311,7 +1311,7 @@ impl ProductExtensionHost {
             self.deferred_view_requests.push(request);
             return;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         crate::app::work_counts::request(request.operation.descriptor.name);
         let operation = request.operation.clone();
         let context = handlers::HostContext::new(request.context(), cx);
@@ -2890,132 +2890,7 @@ mod tests {
         drop(host);
         cx.run_until_parked();
     }
-
-    #[gpui::test]
-    fn bundled_packages_load_with_product_discovery(cx: &mut TestAppContext) {
-        let (host, _root) = start_bundled_packages(knot_bundled::PACKAGES, cx);
-        cx.read(|cx| {
-            let report = host.read(cx).startup_report.as_ref().unwrap();
-            for name in [
-                "@knot/projects",
-                "@knot/go-to-line",
-                "@knot/language-markdown",
-                "@knot/language-others",
-                "@knot/language-python",
-                "@knot/language-rust",
-                "@knot/language-toml",
-                "@knot/language-typescript",
-                "@knot/themes",
-                "@knot/vim",
-            ] {
-                let entry = report
-                    .report
-                    .entries
-                    .iter()
-                    .find(|entry| entry.name.as_deref() == Some(name))
-                    .unwrap_or_else(|| panic!("{name} was not discovered"));
-                // A query that fails to compile rejects its registration and
-                // so fails the package's start.
-                assert_eq!(entry.result, LoadResult::Loaded, "{name}");
-            }
-            // Every compiled-in grammar has a language, so every bundled
-            // query compiled against its grammar.
-            let languages = crate::app::languages::list(cx);
-            let mut grammars: Vec<_> = languages
-                .iter()
-                .map(|language| language.grammar.as_str())
-                .collect();
-            grammars.sort();
-            grammars.dedup();
-            assert_eq!(
-                grammars,
-                crate::app::syntax::grammars::grammar_ids().collect::<Vec<_>>()
-            );
-            assert!(
-                languages
-                    .iter()
-                    .any(|language| language.id == "typescriptreact")
-            );
-        });
-
-        // The bundled themes include the native selection's defaults, so
-        // startup resolves One Dark rather than the native fallback colors.
-        cx.update(crate::app::themes::apply_at_startup);
-        cx.read(|cx| {
-            use crate::app::theme::{Appearance, color, parse_color, theme};
-            let theme = theme(cx);
-            assert_eq!(theme.appearance, Appearance::Dark);
-            assert_eq!(
-                Some(theme.color(color::EDITOR_BACKGROUND)),
-                parse_color("#282c34")
-            );
-        });
-    }
-
-    /// Each bundled package's heap once startup settles, as Show Extension
-    /// Memory reports it.
-    #[gpui::test]
-    #[ignore = "measurement: run in release with --ignored --nocapture"]
-    fn measure_bundled_package_memory(cx: &mut TestAppContext) {
-        let (host, _root) = start_bundled_packages(knot_bundled::PACKAGES, cx);
-        // Wait until every package is between turns.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while host
-            .read_with(cx, |host, _| host.pool.heap_usage())
-            .iter()
-            .any(|(_, usage)| usage.is_none())
-        {
-            assert!(std::time::Instant::now() < deadline, "packages never idled");
-            cx.run_until_parked();
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        println!("{}", cx.read(memory_report));
-    }
-
-    /// Starts the bundled packages under product discovery, with no installed
-    /// packages, and waits for startup to finish. The returned directory holds
-    /// their storage.
-    pub(super) fn start_bundled_packages(
-        packages: &'static [knot_bundled::BundledSource],
-        cx: &mut TestAppContext,
-    ) -> (Entity<ProductExtensionHost>, tempfile::TempDir) {
-        use std::time::{Duration, Instant};
-
-        let root = tempfile::tempdir().unwrap();
-        let host = cx.update(|cx| {
-            let commands = cx.new(crate::app::commands::dispatch::ProductCommandDispatcher::new);
-            cx.set_global(ApplicationProductCommands(commands));
-            crate::app::commands::keymaps::install(cx);
-            let host = install(cx);
-            host.update(cx, |host, cx| {
-                host.set_bundled_packages(packages);
-                host.set_test_storage_root(root.path().join("storage"), cx)
-            });
-            host
-        });
-        let completed = host.update(cx, |host, cx| {
-            host.start_installed_extensions_with_completion(root.path().join("extensions"), cx)
-                .unwrap()
-        });
-        let (sender, receiver) = std::sync::mpsc::channel();
-        cx.spawn(async move |_| {
-            let _ = sender.send(completed.await);
-        })
-        .detach();
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            cx.run_until_parked();
-            if receiver.try_recv().is_ok() {
-                break;
-            }
-            assert!(Instant::now() < deadline, "bundled startup did not finish");
-            std::thread::yield_now();
-        }
-        (host, root)
-    }
 }
 
-#[cfg(test)]
-mod highlight_tests;
 #[cfg(test)]
 mod storage_tests;

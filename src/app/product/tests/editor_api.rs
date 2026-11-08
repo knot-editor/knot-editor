@@ -98,25 +98,6 @@ fn load(cx: &mut TestAppContext) -> Entity<crate::app::extensions::host::Product
     host
 }
 
-/// The view of the focused pane's active editor.
-pub(super) fn active_editor_view(
-    shell: &Entity<ProductShell>,
-    cx: &mut TestAppContext,
-) -> Entity<crate::app::editor::EditorView> {
-    cx.read(|cx| {
-        shell
-            .read(cx)
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .editor()
-            .unwrap()
-            .clone()
-    })
-}
-
 pub(super) fn active_editor(
     shell: &Entity<ProductShell>,
     cx: &mut TestAppContext,

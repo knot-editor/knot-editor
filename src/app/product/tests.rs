@@ -1,6 +1,7 @@
 //! Product shell integration tests and their shared fixtures.
 
-mod cases;
+mod bundled;
+mod bundled_packages;
 mod closure;
 mod commands;
 mod editing;
@@ -8,13 +9,13 @@ mod editor_api;
 mod extension_api;
 mod extension_restart;
 mod go_to_line;
-mod harness;
 mod headless;
 mod key_hold;
 mod keybindings;
 mod language_brackets;
 mod language_editing;
 mod language_folds;
+mod language_highlights;
 mod language_indents;
 mod languages;
 mod navigation;
@@ -55,18 +56,20 @@ use knot_protocol::{
     Command, CommandArgumentValue, CommandOutcome, ExtensionId, ExtensionLifecycleId,
 };
 
+pub(super) use super::driver::setup::{
+    install_globals, install_launch_gate, product_window, wait_for_product_startup,
+};
 use super::{
-    ApplicationDocuments, ApplicationFileSystems, ApplicationLaunchGate, ApplicationOpenDialog,
+    ApplicationDocuments, ApplicationFileSystems, ApplicationOpenDialog,
     ApplicationProductCommands, ApplicationProtectedClosure, ApplicationSaveDialog,
     ApplicationSessions, ApplicationTerminalSessions, BufferModel, CLOSE_TAB_COMMAND,
     CLOSE_WINDOW_COMMAND, DocumentCollection, Entity, LaunchGate, NEW_COMMAND,
     NEW_TERMINAL_COMMAND, OpenDialogFuture, OpenDialogOutcome, OpenRequest, OpenTarget,
-    ProductCommandDispatcher, ProductCommandSource, ProductOpenDialog, ProductSaveDialog,
-    ProductShell, QUIT_COMMAND, REDO_COMMAND, RefCell, SAVE_AS_COMMAND, SAVE_COMMAND,
-    SHOW_EXTENSION_REPORT_COMMAND, SPLIT_HORIZONTAL_COMMAND, SaveDialogFuture, SaveDialogOutcome,
-    SplitDirection, TerminalSessions, UNDO_COMMAND, Workbench, WorkbenchLayout,
-    create_untitled_document, install_protected_window_close, open_tab_transfer_window,
-    product_filesystems,
+    ProductCommandSource, ProductOpenDialog, ProductSaveDialog, ProductShell, QUIT_COMMAND,
+    REDO_COMMAND, RefCell, SAVE_AS_COMMAND, SAVE_COMMAND, SHOW_EXTENSION_REPORT_COMMAND,
+    SPLIT_HORIZONTAL_COMMAND, SaveDialogFuture, SaveDialogOutcome, SplitDirection, UNDO_COMMAND,
+    Workbench, WorkbenchLayout, create_untitled_document, install_protected_window_close,
+    open_tab_transfer_window, product_filesystems,
 };
 use crate::app::{
     documents::DocumentState,
@@ -135,32 +138,6 @@ fn focus_view(handle: &gpui::FocusHandle, window: &mut gpui::Window, cx: &mut gp
         .flatten()
         .expect("a product window");
     shell.update(cx, |shell, cx| shell.focus_view(handle, cx));
-}
-
-pub(super) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollection> {
-    let documents = cx.new(|_| DocumentCollection::new());
-    cx.set_global(ApplicationDocuments(documents.clone()));
-    // Each test gets its own in-memory recovery and state databases.
-    cx.set_global(crate::app::recovery::ApplicationRecovery(
-        crate::app::recovery::RecoveryService::new(crate::app::recovery::RecoveryStore::in_memory(
-            cx.background_executor.clone(),
-        )),
-    ));
-    cx.set_global(ApplicationSessions::default());
-    cx.update(super::key_routing::intercept_keys);
-    cx.set_global(ApplicationProtectedClosure(RefCell::new(false)));
-    cx.set_global(ApplicationTerminalSessions(RefCell::new(
-        TerminalSessions::default(),
-    )));
-    cx.set_global(ApplicationFileSystems(product_filesystems()));
-    let commands = cx.new(ProductCommandDispatcher::new);
-    cx.set_global(ApplicationProductCommands(commands));
-    cx.set_global(crate::app::tool_layout::ApplicationToolLayout(
-        crate::app::tool_layout::ToolLayoutStore::open(
-            &crate::app::record_store::StateDatabase::in_memory(cx.background_executor.clone()),
-        ),
-    ));
-    documents
 }
 
 /// Settings under which a save does not touch the text.
@@ -233,56 +210,6 @@ fn keymap_command(cx: &gpui::App, key: &str, view: Option<&str>) -> Option<Strin
         Some(BindingResolution::Unbound) => Some("<unbound>".into()),
         None => None,
     }
-}
-
-fn install_launch_gate(cx: &mut TestAppContext) {
-    cx.set_global(ApplicationLaunchGate(RefCell::new(LaunchGate::Pending(
-        Vec::new(),
-    ))));
-}
-
-fn wait_for_product_startup(cx: &mut TestAppContext) -> bool {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        let state = cx.read(
-            |cx| match &*cx.global::<ApplicationLaunchGate>().0.borrow() {
-                LaunchGate::Pending(_) => None,
-                LaunchGate::Ready => Some(true),
-                LaunchGate::Failed => Some(false),
-            },
-        );
-        if let Some(ready) = state {
-            return ready;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "product startup did not finish"
-        );
-        std::thread::yield_now();
-    }
-}
-
-pub(super) fn product_window(
-    document: super::DocumentId,
-    model: Entity<super::BufferModel>,
-    cx: &mut TestAppContext,
-) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
-    let mut window = None;
-    let (shell, _) = cx.add_window_view(|native, cx| {
-        window = Some(native.window_handle());
-        let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        ProductShell::new(workbench, cx)
-    });
-    let window = window.unwrap();
-    cx.update_window(window, |_, native_window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.observe_extension_host(native_window, cx)
-        });
-        install_protected_window_close(&shell, native_window, cx);
-    })
-    .unwrap();
-    (shell, window)
 }
 
 fn two_dirty_untitled_documents_in_one_window(

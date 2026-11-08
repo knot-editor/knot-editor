@@ -157,7 +157,7 @@ impl Editor {
 
     /// Lay out as a view `rows` rows tall and `columns` cells wide would,
     /// wrapping when `editor.softWrap` is on, for a test without a window.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn lay_out_for_test(&mut self, rows: f32, columns: usize, cx: &App) {
         let scope = self.settings_scope(self.model.read(cx), cx);
         let wrap = settings::editor_soft_wrap(&scope, cx).then(|| WrapWidth {

@@ -14,13 +14,12 @@
 //! //  ^ function
 //! ```
 
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::path::PathBuf;
 
 use gpui::TestAppContext;
 
-use crate::app::syntax::SyntaxState;
-use knot_core::buffer::TextBuffer;
+use super::bundled::{PACKAGES, language_packages};
+use crate::test_support::TestProduct;
 
 const COMMENTS: &[&str] = &["//", "#", "--", "<!--"];
 
@@ -81,10 +80,9 @@ fn assertions(text: &str) -> Vec<Assertion> {
 }
 
 fn fixtures() -> Vec<PathBuf> {
-    let bundled = Path::new(env!("CARGO_MANIFEST_DIR")).join("extensions/@knot");
-    let mut paths: Vec<_> = std::fs::read_dir(bundled)
-        .unwrap()
-        .map(|package| package.unwrap().path().join("test/fixtures"))
+    let mut paths: Vec<_> = language_packages()
+        .into_iter()
+        .map(|package| package.join("test/fixtures"))
         .filter(|directory| directory.is_dir())
         .flat_map(|directory| std::fs::read_dir(directory).unwrap())
         .map(|entry| entry.unwrap().path())
@@ -95,40 +93,32 @@ fn fixtures() -> Vec<PathBuf> {
 
 #[gpui::test]
 fn bundled_languages_highlight_their_fixtures(cx: &mut TestAppContext) {
-    let (_host, _root) = super::tests::start_bundled_packages(knot_bundled::PACKAGES, cx);
+    let product = TestProduct::start(PACKAGES, cx);
     let mut failures = Vec::new();
     let mut checked = 0;
-    cx.read(|cx| {
-        let registry = crate::app::languages::registry(cx);
-        for path in fixtures() {
-            let name = path.file_name().unwrap().to_str().unwrap();
-            let text = std::fs::read_to_string(&path).unwrap();
-            let first_line = text.lines().next().unwrap_or_default();
-            let id = registry
-                .detect(Some(name), first_line)
-                .unwrap_or_else(|| panic!("{name}: no language detected"));
-            let mut state = SyntaxState::new(registry.resolve(&id).unwrap(), registry.resolver());
-            let buffer = TextBuffer::from_text(text.as_str());
-            assert!(state.parse_in_foreground(&buffer.snapshot(), Duration::from_secs(60)));
-            let spans = state.highlights(&buffer.snapshot(), 0..buffer.len());
-            let fixture_assertions = assertions(&text);
-            assert!(!fixture_assertions.is_empty(), "{name}: no assertions");
-            for assertion in fixture_assertions {
-                let actual = spans
-                    .iter()
-                    .find(|(range, _)| range.contains(&assertion.offset))
-                    .map_or("none", |(_, highlight)| highlight.name());
-                if actual != assertion.expected {
-                    let target = text[assertion.offset..].chars().next().unwrap();
-                    failures.push(format!(
-                        "{name}:{}:{}: expected {} at {target:?}, painted {actual}",
-                        assertion.line, assertion.column, assertion.expected
-                    ));
-                }
-                checked += 1;
+    for path in fixtures() {
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let spans = product
+            .highlights(name, &text, cx)
+            .unwrap_or_else(|| panic!("{name}: no language detected"));
+        let fixture_assertions = assertions(&text);
+        assert!(!fixture_assertions.is_empty(), "{name}: no assertions");
+        for assertion in fixture_assertions {
+            let actual = spans
+                .iter()
+                .find(|(range, _)| range.contains(&assertion.offset))
+                .map_or("none", |(_, highlight)| highlight.as_str());
+            if actual != assertion.expected {
+                let target = text[assertion.offset..].chars().next().unwrap();
+                failures.push(format!(
+                    "{name}:{}:{}: expected {} at {target:?}, painted {actual}",
+                    assertion.line, assertion.column, assertion.expected
+                ));
             }
+            checked += 1;
         }
-    });
+    }
     assert!(
         failures.is_empty(),
         "{} of {checked} highlight assertions failed:\n{}",

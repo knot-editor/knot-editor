@@ -180,7 +180,7 @@ impl ProductShell {
         cx.defer(move |cx| release_key_hold(&shell, generation, cx));
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn holds_keys(&self) -> bool {
         self.key_hold.is_some()
     }

@@ -44,7 +44,7 @@ struct Database {
 
 /// SQLite's name for a private in-memory database, which lives as long as
 /// its one connection.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) const IN_MEMORY: &str = ":memory:";
 
 /// Shared handle to the application state database.
@@ -62,7 +62,7 @@ impl StateDatabase {
 
     /// A database that lives only as long as this value, for tests that
     /// need no file.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn in_memory(executor: BackgroundExecutor) -> Self {
         Self::open(IN_MEMORY.into(), executor)
     }

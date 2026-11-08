@@ -46,8 +46,10 @@ use closure::install_protected_window_close;
 pub(super) use launch::bind_product_keys;
 pub(super) use launch::finish_product_startup;
 use launch::open_tab_tear_out_window;
+#[cfg(any(test, feature = "test-support"))]
+use launch::product_filesystems;
 #[cfg(test)]
-use launch::{dispatch_launch_request, open_tab_transfer_window, product_filesystems};
+use launch::{dispatch_launch_request, open_tab_transfer_window};
 pub(crate) use launch::{open_product_window, run};
 
 use super::{
@@ -330,7 +332,7 @@ impl ApplicationSessions {
     }
 
     /// Mark `shell` as the session activated last.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn activate(&self, shell: EntityId) {
         for open in self.0.borrow_mut().iter_mut() {
             open.active = open.shell.entity_id() == shell;
@@ -457,13 +459,13 @@ pub(crate) fn active_session(cx: &App) -> Option<Entity<ProductShell>> {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static TEST_SESSION_IDS: RefCell<HashMap<u64, String>> = RefCell::default();
 }
 
 /// The public ID of the session last shown in `window`.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn test_session_id(window: AnyWindowHandle) -> String {
     TEST_SESSION_IDS.with_borrow(|ids| ids[&window.window_id().as_u64()].clone())
 }
@@ -883,7 +885,7 @@ impl ProductShell {
 
     /// Make this session the active one while no window is active, as
     /// focusing its window would.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn activate(&mut self, cx: &mut Context<Self>) {
         cx.global::<ApplicationSessions>().activate(cx.entity_id());
         super::extensions::host::application_changed(cx);
@@ -1687,7 +1689,7 @@ impl ProductShell {
         cx.global::<ApplicationFileSystems>().0.clone()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn new_tab(&mut self, cx: &mut Context<Self>) {
         let Some(pane) = self.workbench.read(cx).focused_pane_id() else {
             return;
@@ -1851,7 +1853,7 @@ impl ProductShell {
         cx.notify();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn focus_active_editor(&mut self, cx: &mut Context<Self>) {
         self.focus_active_surface(cx);
     }
@@ -1963,5 +1965,7 @@ fn resource_title(uri: &super::resource::ResourceUri) -> String {
         .unwrap_or_else(|| uri.to_string())
 }
 
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) mod driver;
 #[cfg(test)]
 mod tests;
