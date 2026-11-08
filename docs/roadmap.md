@@ -109,6 +109,7 @@ complete list for that item.
   D126; D089 → D125.
 - **Start surface:** D083, D084 → D061.
 - **Launcher:** D164 → D165; D120 → D165, D166.
+- **Website:** D168 → D167.
 - **Terminal:** D063 with or before D041; D121 → D127 → D043; D127, D063 →
   D128.
 
@@ -889,6 +890,14 @@ Kakoune mode could use it too. The
   - Reconsider: now. Give the Vim tests an inline fixture language
     (the simplest that supplies the configuration they use) instead of
     `knot-ext-languages`, and drop that dev-dependency.
+
+- **D168 — Website screenshots and documentation**
+  - Deferred: The landing page has no screenshot, and the user-facing docs
+    (extension guide, settings reference) are readable only on GitHub.
+  - 🚧 Planned: [website plan](plans/website.md): screenshots on the landing
+    page and a generated documentation section covering getting started,
+    configuration, the extension guide, and a feature tour.
+  - Order: independent; D167 follows it.
 
 - **D167 — Website blog and newsletter**
   - Deferred: The [website plan](plans/website.md) covers screenshots and
