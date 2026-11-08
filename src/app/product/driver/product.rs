@@ -195,6 +195,23 @@ impl TestProduct {
         cx.read(|cx| crate::app::theme::theme(cx).paint_color(key))
     }
 
+    /// Each way gpui-component's theme differs from the current theme;
+    /// empty when the bridge follows it.
+    pub fn component_theme_drift(&self, cx: &mut TestAppContext) -> Vec<String> {
+        cx.read(crate::app::components::drift)
+    }
+
+    /// Set the application-wide value of the setting `key`.
+    pub fn set_setting(&self, key: &str, value: Value, cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            cx.default_global::<ApplicationSettings>()
+                .0
+                .set(key, value, SettingsScope::default())
+                .unwrap();
+        });
+        cx.run_until_parked();
+    }
+
     /// A color in theme notation, such as `#282c34`.
     pub fn parse_color(text: &str) -> Option<Hsla> {
         crate::app::style::Color::parse(text).map(crate::app::convert::color_to_gpui)

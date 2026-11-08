@@ -408,6 +408,7 @@ pub(crate) fn run(
         dispatch_launch_request(None, cx);
     });
     application.run(move |cx| {
+        crate::app::components::init(cx);
         let documents = cx.new(|_| DocumentCollection::new());
         cx.set_global(ApplicationDocuments(documents));
         // Install durable recovery before any document exists so every created

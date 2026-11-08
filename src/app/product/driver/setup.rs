@@ -16,6 +16,7 @@ use super::super::{
 /// Install the globals a product session needs, each test with its own
 /// in-memory recovery and state databases.
 pub(crate) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollection> {
+    cx.update(crate::app::components::init);
     let documents = cx.new(|_| DocumentCollection::new());
     cx.set_global(ApplicationDocuments(documents.clone()));
     cx.set_global(crate::app::recovery::ApplicationRecovery(

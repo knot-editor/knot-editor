@@ -17,9 +17,11 @@ pub(crate) fn theme(cx: &App) -> &Theme {
         .map_or(&DEFAULTS, |theme| &theme.0)
 }
 
-/// Replace the application theme and repaint every window.
+/// Replace the application theme, paint gpui-component with it, and repaint
+/// every window.
 pub(crate) fn set_theme(theme: Theme, cx: &mut App) {
     cx.set_global(ApplicationTheme(theme));
+    super::components::apply_theme(cx);
     cx.refresh_windows();
 }
 

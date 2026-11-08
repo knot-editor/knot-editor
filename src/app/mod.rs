@@ -11,6 +11,7 @@ mod command_history;
 mod command_palette;
 mod commands;
 mod completion;
+mod components;
 mod convert;
 mod documents;
 mod editor;
