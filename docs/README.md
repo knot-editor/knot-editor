@@ -33,6 +33,10 @@ and local algorithms belong beside code and tests. Decisions retain the choice,
 its reason, and evidence needed to assess it. Plans retain unfinished work and
 review gates; reduce completed checkpoints to completion notes and current links.
 
+No document has a size budget. The `review-docs` skill in `.agents/skills`
+periodically checks the documentation against the code and these ownership
+rules, and keeps it proportionate.
+
 ## Decisions
 
 [decisions.md](decisions.md) is an index with one line per decision, grouped by
