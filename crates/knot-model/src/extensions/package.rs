@@ -8,7 +8,7 @@ use std::sync::Arc;
 use directories::ProjectDirs;
 use serde::Deserialize;
 
-pub(crate) const SUPPORTED_API_VERSION: u32 = 1;
+pub const SUPPORTED_API_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -48,7 +48,7 @@ pub struct InstalledPackage {
 
 impl InstalledPackage {
     /// Directory file URL used as the immutable module graph root.
-    pub(crate) fn module_root(&self) -> Result<String, String> {
+    pub fn module_root(&self) -> Result<String, String> {
         match self.origin {
             PackageOrigin::Installed => url::Url::from_directory_path(&self.directory)
                 .map(String::from)
@@ -175,12 +175,12 @@ pub fn discover(root: &Path) -> DiscoveryReport {
     report
 }
 
-/// Product discovery: installed packages plus compiled-in packages. An installed
-/// directory that claims a bundled identity becomes a directory conflict rather
-/// than rejecting that identity, so a named diagnostic always means its identity
-/// is genuinely unavailable.
-pub fn discover_all(root: &Path, bundled: &[knot_bundled::BundledSource]) -> DiscoveryReport {
-    let mut report = super::bundled::report(bundled);
+/// Product discovery: installed packages plus the compiled-in packages'
+/// discovery `bundled`. An installed directory that claims a bundled identity
+/// becomes a directory conflict rather than rejecting that identity, so a named
+/// diagnostic always means its identity is genuinely unavailable.
+pub fn discover_all(root: &Path, bundled: DiscoveryReport) -> DiscoveryReport {
+    let mut report = bundled;
     let bundled = report
         .packages
         .iter()
@@ -292,13 +292,13 @@ fn deserialize_api_version<'de, D: serde::Deserializer<'de>>(
     validate_api_version(Some(&value)).map_err(serde::de::Error::custom)
 }
 
-pub(crate) fn validate_package_api(manifest: &Manifest) -> Result<(), String> {
+pub fn validate_package_api(manifest: &Manifest) -> Result<(), String> {
     validate_api_version(Some(&serde_json::Value::from(manifest.api_version))).map(|_| ())
 }
 
 /// Admits a compiled-in package with the same manifest and source rules used for
 /// installed packages. `sources` are relative to the package root.
-pub(crate) fn bundled_package(
+pub fn bundled_package(
     manifest_text: &str,
     sources: BTreeMap<String, Arc<str>>,
 ) -> Result<InstalledPackage, String> {
@@ -361,7 +361,7 @@ pub fn validate_name(name: &str) -> Result<(), String> {
 }
 
 /// Built-in identities supplied by the application must use the reserved scope.
-pub(crate) fn validate_bundled_name(name: &str) -> Result<(), String> {
+pub fn validate_bundled_name(name: &str) -> Result<(), String> {
     validate_name_inner(name, true)?;
     if !name.starts_with("@knot/") {
         return Err(format!(

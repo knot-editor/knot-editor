@@ -7,10 +7,14 @@ publish = false
 
 # Editor state and policy that need no UI toolkit, scripting runtime, or host.
 [dependencies]
+directories = "6"
+jsonc-parser = { version = "0.34", features = ["serde", "serde_json"] }
 knot-core = { path = "../knot-core" }
 knot-protocol = { path = "../knot-protocol" }
 percent-encoding = "2"
+semver = "1"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tempfile = "3"
 tokio = { version = "1.53", features = ["sync"] }
 tree-sitter = "0.27"

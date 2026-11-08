@@ -783,9 +783,12 @@ impl ProductExtensionHost {
         });
         cx.notify();
         let bundled = self.bundled;
-        let discovery = cx
-            .background_executor()
-            .spawn(async move { crate::app::extensions::package::discover_all(&root, bundled) });
+        let discovery = cx.background_executor().spawn(async move {
+            crate::app::extensions::package::discover_all(
+                &root,
+                crate::app::extensions::bundled::report(bundled),
+            )
+        });
         let pool = self.pool.clone();
         let next_extension_id = self.next_extension_id.clone();
         self._startup_task = Some(cx.spawn(async move |this, cx| {
@@ -897,9 +900,12 @@ impl ProductExtensionHost {
             self.remove_lifecycle(key, cx);
         }
         let bundled = self.bundled;
-        let discovery = cx
-            .background_executor()
-            .spawn(async move { crate::app::extensions::package::discover_all(&root, bundled) });
+        let discovery = cx.background_executor().spawn(async move {
+            crate::app::extensions::package::discover_all(
+                &root,
+                crate::app::extensions::bundled::report(bundled),
+            )
+        });
         let pool = self.pool.clone();
         let next_extension_id = self.next_extension_id.clone();
         cx.spawn(async move |this, cx| {
@@ -2889,6 +2895,80 @@ mod tests {
         });
         drop(host);
         cx.run_until_parked();
+    }
+
+    #[test]
+    fn failed_entry_rolls_back_the_existing_host_lifecycle() {
+        use crate::app::extensions::package::{Manifest, PackageOrigin};
+        use knot_host::{
+            lifecycle::ExtensionState,
+            pool::{ExtensionExit, ExtensionPool},
+        };
+
+        let (pool, mut inbox) = ExtensionPool::new(PoolConfig::single_worker());
+        let key = ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+        let plan = DependencyPlan::new(crate::app::extensions::package::DiscoveryReport {
+            packages: vec![crate::app::extensions::package::InstalledPackage {
+                directory: std::path::PathBuf::from("@test/a"),
+                origin: PackageOrigin::Installed,
+                manifest: Manifest {
+                    api_version: 1,
+                    name: "@test/a".into(),
+                    version: "1.0.0".into(),
+                    main: "main.js".into(),
+                    requires: Vec::new(),
+                    display_name: None,
+                    description: None,
+                    author: None,
+                    website: None,
+                    license: None,
+                },
+                sources: BTreeMap::new(),
+            }],
+            diagnostics: Vec::new(),
+        });
+        let graph = ModuleGraph::new(
+            "file:///extensions/%40test/a/",
+            "main.js",
+            BTreeMap::from([(
+                "main.js".into(),
+                Arc::from("throw new Error('startup failed');"),
+            )]),
+        )
+        .unwrap();
+        let owner = pool.clone();
+        let report = pollster::block_on(plan.execute(move |_| {
+            let runner = owner.clone();
+            let rollback = owner.clone();
+            let graph = graph.clone();
+            StartupAttempt::new(
+                async move {
+                    runner
+                        .load_package(key, ExtensionConfig::default(), graph)
+                        .map_err(|error| error.to_string())?
+                        .await
+                        .map_err(|error| error.to_string())?;
+                    Ok(())
+                },
+                move || {
+                    let _ = rollback.unload(key);
+                },
+            )
+        }));
+        assert!(
+            matches!(&report.entries[0].result, LoadResult::Failed(cause) if cause.contains("startup failed"))
+        );
+        assert!(
+            matches!(pollster::block_on(inbox.receive()), Some(ExtensionEvent::LifecycleEnded {
+            key: ended,
+            reason: ExtensionExit::Unloaded,
+        }) if ended == key)
+        );
+        assert_eq!(
+            pool.diagnostics().extensions[0].state,
+            ExtensionState::Stopping
+        );
+        assert!(pool.unload(key).is_err());
     }
 }
 

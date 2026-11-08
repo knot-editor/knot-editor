@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::path::PathBuf;
 
-use crate::app::extensions::package::{DiscoveryReport, InstalledPackage};
+use crate::extensions::package::{DiscoveryReport, InstalledPackage};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LoadResult {
@@ -115,7 +115,7 @@ impl DependencyPlan {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn execute<Start, F, C>(self, start: Start) -> LoadReport
     where
         Start: FnMut(&InstalledPackage) -> StartupAttempt<F, C>,
@@ -276,14 +276,7 @@ mod tests {
     use std::task::{Context, Poll, Waker};
 
     use super::*;
-    use crate::app::extensions::package::{Manifest, PackageOrigin, discover};
-    use knot_host::{
-        lifecycle::ExtensionState,
-        module_graph::ModuleGraph,
-        pool::{ExtensionConfig, ExtensionEvent, ExtensionExit, ExtensionPool},
-        scheduler::PoolConfig,
-    };
-    use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
+    use crate::extensions::package::{Manifest, PackageOrigin, discover};
 
     fn package(name: &str, requires: &[&str]) -> InstalledPackage {
         InstalledPackage {
@@ -465,7 +458,7 @@ mod tests {
     fn rejected_version_causes_propagate_without_skipping_independent_admission() {
         let mut rejected = Vec::new();
         for name in ["@test/rejected", "@test/other", "@test/third"] {
-            rejected.push(crate::app::extensions::package::PackageDiagnostic {
+            rejected.push(crate::extensions::package::PackageDiagnostic {
                 directory: PathBuf::from(name),
                 name: Some(name.into()),
                 cause: "unsupported apiVersion: expected 1, declared 2".into(),
@@ -538,54 +531,5 @@ mod tests {
         ));
         drop(run);
         assert_eq!(rolled_back.load(Ordering::SeqCst), 1);
-    }
-
-    #[test]
-    fn failed_entry_rolls_back_the_existing_host_lifecycle() {
-        let (pool, mut inbox) = ExtensionPool::new(PoolConfig::single_worker());
-        let key = ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
-        let plan = plan(vec![package("@test/a", &[])]);
-        let graph = ModuleGraph::new(
-            "file:///extensions/%40test/a/",
-            "main.js",
-            BTreeMap::from([(
-                "main.js".into(),
-                Arc::from("throw new Error('startup failed');"),
-            )]),
-        )
-        .unwrap();
-        let owner = pool.clone();
-        let report = pollster::block_on(plan.execute(move |_| {
-            let runner = owner.clone();
-            let rollback = owner.clone();
-            let graph = graph.clone();
-            StartupAttempt::new(
-                async move {
-                    runner
-                        .load_package(key, ExtensionConfig::default(), graph)
-                        .map_err(|error| error.to_string())?
-                        .await
-                        .map_err(|error| error.to_string())?;
-                    Ok(())
-                },
-                move || {
-                    let _ = rollback.unload(key);
-                },
-            )
-        }));
-        assert!(
-            matches!(&report.entries[0].result, LoadResult::Failed(cause) if cause.contains("startup failed"))
-        );
-        assert!(
-            matches!(pollster::block_on(inbox.receive()), Some(ExtensionEvent::LifecycleEnded {
-            key: ended,
-            reason: ExtensionExit::Unloaded,
-        }) if ended == key)
-        );
-        assert_eq!(
-            pool.diagnostics().extensions[0].state,
-            ExtensionState::Stopping
-        );
-        assert!(pool.unload(key).is_err());
     }
 }

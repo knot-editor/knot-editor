@@ -3146,7 +3146,6 @@ dependencies = [
  "percent-encoding",
  "pollster 1.0.1",
  "rusqlite",
- "semver",
  "serde",
  "serde_json",
  "tempfile",
@@ -3241,11 +3240,15 @@ dependencies = [
 name = "knot-model"
 version = "0.1.0"
 dependencies = [
+ "directories",
+ "jsonc-parser",
  "knot-core",
  "knot-protocol",
  "percent-encoding",
  "pollster 1.0.1",
+ "semver",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "tree-sitter",

@@ -5,6 +5,7 @@
 
 pub mod commands;
 pub mod editing;
+pub mod extensions;
 pub mod filesystem;
 pub mod history;
 pub mod indentation;

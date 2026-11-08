@@ -4,7 +4,6 @@
 pub(super) mod buffers;
 pub(super) mod bundled;
 pub(super) mod host;
-pub(super) mod load;
-pub(crate) mod package;
+pub(crate) use knot_model::extensions::{load, package};
 pub(super) mod semantics;
 pub(super) mod storage;

@@ -349,20 +349,27 @@ fn permits_file_symlinks_within_package_and_rejects_scope_symlinks() {
     );
 }
 
-/// A compiled-in package as `knot-bundled` supplies one.
-const BUNDLED: &[knot_bundled::BundledSource] = &[knot_bundled::BundledSource {
-    manifest: r#"{"name":"@knot/fixture","apiVersion":1,"version":"0.1.0","main":"dist/main.js"}"#,
-    sources: &[
-        ("dist/main.js", "import './other.js';"),
-        ("dist/other.js", "export {};"),
-    ],
-}];
+/// The discovery of one compiled-in package.
+fn bundled() -> DiscoveryReport {
+    let package = bundled_package(
+        r#"{"name":"@knot/fixture","apiVersion":1,"version":"0.1.0","main":"dist/main.js"}"#,
+        BTreeMap::from([
+            ("dist/main.js".to_owned(), Arc::from("import './other.js';")),
+            ("dist/other.js".to_owned(), Arc::from("export {};")),
+        ]),
+    )
+    .unwrap();
+    DiscoveryReport {
+        packages: vec![package],
+        diagnostics: Vec::new(),
+    }
+}
 
 #[test]
 fn bundled_packages_merge_with_installed_discovery() {
     let temp = tempfile::tempdir().unwrap();
     package(temp.path(), "@example/tools", VALID);
-    let report = discover_all(temp.path(), BUNDLED);
+    let report = discover_all(temp.path(), bundled());
     assert!(report.diagnostics.is_empty(), "{:?}", report.diagnostics);
     let bundled = report
         .packages
@@ -396,7 +403,7 @@ fn installed_packages_cannot_claim_the_bundled_identity() {
         "@knot/fixture",
         r#"{"name":"@knot/fixture","apiVersion":1,"version":"1.0.0","main":"dist/main.js"}"#,
     );
-    let report = discover_all(temp.path(), BUNDLED);
+    let report = discover_all(temp.path(), bundled());
     let claimed = report
         .packages
         .iter()
