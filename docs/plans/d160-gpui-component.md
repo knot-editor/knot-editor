@@ -108,7 +108,7 @@ docks, editor, terminal, single-line text input, and key routing.
   status bar tests unchanged.
 - **Implementation context:** initialize beside the other globals in
   `src/app/product/launch.rs`. The mapping table lives in
-  `src/app/theme.rs` next to `native_color_definitions`, and is applied from
+  `crates/knot-model/src/theme.rs` next to `native_color_definitions`, and is applied from
   `themes::apply` in `src/app/themes.rs`. The current tooltip is the
   `StatusTooltip` view used at `src/app/product/render.rs:404`.
 - Review gate: tooltips look native in both appearances, and the theme
@@ -133,7 +133,7 @@ docks, editor, terminal, single-line text input, and key routing.
   `src/app/tree_view.rs` (`TreeView::render`, action focus, `TREE_KEY_CONTEXT`
   from `src/app/mod.rs:67`). The pass-through goes in the interceptor and
   `FocusTarget` handling of `src/app/product/key_routing.rs`. Register the
-  command and its default binding through `src/app/commands/catalog.rs` and
+  command and its default binding through `crates/knot-model/src/commands/catalog.rs` and
   `src/app/commands/keymaps/presets.rs`.
 - Review gate: a personal-config `post-init.js` with a `try.*` command
   that contributes a tree whose rows have actions; the menu works by

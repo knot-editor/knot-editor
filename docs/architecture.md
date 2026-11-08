@@ -21,11 +21,17 @@ gpui application and native views
 ```
 
 - `knot-core` owns UI-, platform-, and scripting-independent text and edit primitives.
-- The root `knot` package (`src/app`) owns the gpui shell, foreground editor state, native views, resource
-  providers, commands, package discovery, startup, extension storage, the
-  language registry, and native syntax parsing over compiled-in grammars.
+- The root `knot` package (`src/app`) owns the gpui shell, foreground editor
+  state as gpui entities and globals, native views, command dispatch, startup,
+  extension storage, and the language registry.
 - `knot-protocol` owns the Knot-owned serde transport types and the typed
   operation declarations, and depends on neither V8 nor gpui.
+- `knot-model` owns editor state and policy that need no gpui, V8, or host:
+  syntax and the compiled-in grammars, edit history, indentation and language
+  editing configuration, key notation, the command catalog, keymap registries
+  and matching, theme values, resource URIs and providers, and package
+  discovery. Its functions take plain data and the models they change and
+  return results as data; application globals wrap its state.
 - `knot-bundled` owns the `BundledSource` type and the build-script helper
   that compiles bundled TypeScript packages. The `knot-ext-*` group crates
   (languages, vim, workbench) compile and expose the packages of one domain,

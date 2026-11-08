@@ -125,7 +125,7 @@ setting, or replace a single icon.
   `src/app/mod.rs` and exposed as an `ApplicationIcons` global. Mirror the
   registration, owner, and lifecycle structure of `ThemeRegistry` in
   `src/app/themes.rs`, and the native defaults table of
-  `native_color_definitions` in `src/app/theme.rs`. Register the asset source
+  `native_color_definitions` in `crates/knot-model/src/theme.rs`. Register the asset source
   with `Application::new().with_assets(..)` in `src/app/product/launch.rs`
   (around line 393), and in the test application setup. Detection uses
   `LanguageRegistry::detect(file_name, "")` in `src/app/languages.rs:295`.

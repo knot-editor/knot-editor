@@ -214,11 +214,11 @@ starting point.
 
 ## Shared code seams
 
-- `src/app/extensions/package.rs` and `src/app/extensions/package/` — manifest,
+- `crates/knot-model/src/extensions/package.rs` and `package/` — manifest,
   discovery, user extensions root; gain lockfile records, source records,
   archive unpacking, and git fetching. Network and clone work runs on the
   background executor, never on the foreground thread.
-- `src/app/extensions/load.rs` — dependency planning and startup outcomes; gains
+- `crates/knot-model/src/extensions/load.rs` — dependency planning and startup outcomes; gains
   version-constrained resolution and drift diagnostics.
 - `src/app/extensions/host.rs` and `host/` — existing per-package restart and
   unload are the activation path for install, update, and uninstall.

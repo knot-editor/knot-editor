@@ -78,7 +78,7 @@ Knot matches keys itself. Every key-down in a product window passes one
 interceptor, ahead of gpui's key handling and text input, which hands it to
 the session; a session without a window takes keys directly. While the
 workbench has focus, the session's key router
-(`src/app/commands/key_router.rs`) matches the key with the focused view's
+(`crates/knot-model/src/commands/key_router.rs`) matches the key with the focused view's
 kind and live key contexts. A key that begins a binding resolving to a command
 there waits for the rest of its sequence; a completed binding enters command
 dispatch. Any other key goes to the surface with Knot-side focus, whose state
