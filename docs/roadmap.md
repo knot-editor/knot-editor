@@ -890,6 +890,15 @@ Kakoune mode could use it too. The
     (the simplest that supplies the configuration they use) instead of
     `knot-ext-languages`, and drop that dev-dependency.
 
+- **D167 — Website blog and newsletter**
+  - Deferred: The [website plan](plans/website.md) covers screenshots and
+    documentation only. A blog and a newsletter need a publishing workflow, a
+    feed, and a subscriber service, and have nothing to announce before the
+    first release.
+  - Reconsider: Knot approaches a first release (D035). Then choose a static
+    blog under `website/` with an RSS feed, and a newsletter provider that
+    keeps subscriber data out of the repository.
+
 - **D062 — Positioning existing windows**
   - Deferred: gpui 0.2.2 sets a window's bounds only at creation and can
     afterwards only resize it. Session restoration and project switching always
