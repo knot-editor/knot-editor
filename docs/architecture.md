@@ -26,6 +26,8 @@ gpui application and native views
   language registry, and native syntax parsing over compiled-in grammars.
 - `knot-protocol` owns the Knot-owned serde transport types and the typed
   operation declarations, and depends on neither V8 nor gpui.
+- `knot-bundled` owns the build-time compilation of the bundled TypeScript
+  packages and exposes their compiled sources.
 - `knot-host` owns V8, bounded scheduling, and immutable module-graph
   validation. Its public control surface and protocol expose no V8 or gpui
   objects.

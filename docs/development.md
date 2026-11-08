@@ -43,10 +43,14 @@ The workflow has read-only repository permissions and pins external actions to
 commits. [Dependabot](../.github/dependabot.yml) checks for action updates
 weekly.
 
-Building Knot requires Node.js and npm. `build.rs` installs the lockfile-pinned
+Building Knot requires Node.js and npm. The `knot-bundled` crate's `build.rs` installs the lockfile-pinned
 TypeScript compiler in `scripts/extensions` when it is missing or older than the
-lockfile, compiles every bundled package under `extensions/@knot` into Cargo's
-output directory, and embeds the emitted modules. CI installs a pinned Node in
+lockfile, compiles each bundled package under `extensions/@knot` into Cargo's
+output directory, and embeds the emitted modules. It reruns `tsc` only for
+packages whose sources or `tsconfig.json` changed, or for all of them when the
+lockfile, `tsconfig.base.json`, or `knot.d.ts` changed; a TypeScript edit
+therefore rebuilds `knot-bundled` and relinks, not the Rust application crate.
+`scripts/check-bundled-incremental.sh` verifies this. CI installs a pinned Node in
 every job that builds Rust. On macOS, release builds also need the Metal
 Toolchain, because gpui precompiles its shaders outside debug builds:
 `xcodebuild -downloadComponent MetalToolchain`.

@@ -3135,6 +3135,7 @@ dependencies = [
  "gpui",
  "inventory",
  "jsonc-parser",
+ "knot-bundled",
  "knot-core",
  "knot-handler-macros",
  "knot-host",
@@ -3172,6 +3173,10 @@ dependencies = [
  "uuid",
  "v8",
 ]
+
+[[package]]
+name = "knot-bundled"
+version = "0.1.0"
 
 [[package]]
 name = "knot-core"

@@ -38,7 +38,7 @@ duplicates and rejected dependencies remain diagnosable. Discovery runs on gpui'
 background executor; the foreground admits valid packages in dependency order
 and awaits entry completion before loading dependents.
 
-Bundled packages are written in TypeScript, compiled by `build.rs` into the
+Bundled packages are written in TypeScript, compiled by the `knot-bundled` crate's `build.rs` into the
 binary, and merged into the same discovery result, without reading sources from
 disk. They use canonical `@knot/...`
 identities, the same manifest, API-version, dependency, and rollback rules, and a

@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 2 awaiting its review gate. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -140,6 +140,17 @@ in their dependency trees. Durable consequences for later checkpoints:
 - Timings are in [Timings](#timings); a clean build could not be measured.
 
 ### 2. knot-bundled with per-package compilation
+
+🚧 Implemented, review gate pending. `crates/knot-bundled` owns `build.rs`,
+`BundledSource`, and `PACKAGES`; fingerprints (path, size, mtime of the package's
+`src/`, its `tsconfig.json`, and the shared inputs) live in
+`OUT_DIR/extensions/<name>.fingerprint`. `scripts/check-bundled-incremental.sh`
+passes: a Vim edit recompiles only Vim (0.6 s for the whole `knot-bundled`
+rebuild), and a `tsconfig.base.json` change recompiles every package.
+**Not verified:** the application crate against the new dependency (one import
+in `src/app/extensions/bundled.rs`) and the Vim-edit relink time, because the V8
+prebuilt can no longer be fetched in the sandbox and the local V8 build output
+is gone. Run `just test` and time a Vim edit on a machine with network access.
 
 - Deliverables: `build.rs` and the generated table in `knot-bundled`; only
   changed packages recompile.

@@ -10,6 +10,7 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 inventory = "0.3"
+knot-bundled = { path = "crates/knot-bundled" }
 knot-core = { path = "crates/knot-core" }
 knot-handler-macros = { path = "crates/knot-handler-macros" }
 knot-host = { path = "crates/knot-host" }
