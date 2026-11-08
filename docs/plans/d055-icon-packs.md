@@ -54,8 +54,10 @@ setting, or replace a single icon.
   from the `lucide-static-svg` crate (ISC icons, MIT wrapper, no dependencies,
   tracking upstream releases; `Icon::all()`, `name()`, `svg_bytes()`). If it
   stops tracking upstream, vendor `lucide-static` through the existing npm
-  toolchain in `build.rs` instead. `lucide-gpui` is rejected because it pulls
-  in `gpui-kit`.
+  toolchain in `build.rs` instead. `lucide-gpui` is rejected: it depends on
+  `gpui-kit`, Longbridge's component bundle, which builds on a separate
+  `gpui-pre` fork rather than Knot's `gpui`, and its own value is only an
+  asset source over the same SVGs.
 - **File icons** are resolved apart from the icons themselves. For a file,
   the resolver tries, in order, the names that a registered association gives
   for the exact file name and for the extension, then `file.<languageId>`
