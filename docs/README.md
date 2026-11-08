@@ -51,6 +51,10 @@ that revisits a choice reads the index, then only the topic files it touches.
   reasoning allows.
 - Leave behavior out: keys, wording, defaults, edge-case rules, and how a
   feature works belong in architecture references or code. Link them instead.
+  A sentence belongs in a decision only if removing it would lose a reason, a
+  rejected alternative, or deciding evidence; describe behavior only as far as
+  the reason needs it. Behavior a decision explains must also be stated in its
+  owner, so the architecture never depends on reading decisions.
 - Revise the existing section when a choice extends or changes a topic, and
   replace a superseded choice rather than appending to it. Never record
   history; Git keeps it.
