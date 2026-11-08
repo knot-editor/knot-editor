@@ -108,12 +108,28 @@ complete list for that item.
 - **Projects and workspaces:** D070, D084 → D120; D122 → D123; D087 → D125,
   D126; D089 → D125.
 - **Start surface:** D083, D084 → D061.
+- **Launcher:** D164 → D165; D120 → D165, D166.
 - **Terminal:** D063 with or before D041; D121 → D127 → D043; D127, D063 →
   D128.
 
 ## Deferred register
 
 ## Editing and workbench
+
+- **D164 — Command-line launcher**
+  - Deferred: Knot starts only from the app bundle or `cargo run`; there is
+    no `knot <file>...` helper on the `PATH` like VS Code's `code`.
+  - Reconsider: Daily use from a terminal. Then add a small `knot` helper
+    that passes the paths to the running instance, or starts one, and an
+    install command for the `PATH` entry.
+  - Order: before D165.
+
+- **D165 — Launcher files open in a new window unless in an open project**
+  - Deferred: Files given on the command line (D164) need a placement rule.
+  - Reconsider: With D164. Open them in a new window, except that a file
+    inside the roots of an already-open project opens in that project's
+    window.
+  - Order: after D164; uses the projects of D120.
 
 - **D001 — Replace and advanced Find modes**
   - Deferred: These modes depend on current-file Find (D031, in the
@@ -330,6 +346,15 @@ complete list for that item.
   - Reconsider: Knot opens untrusted workspaces under a security boundary.
 
 ## Extensions and automation
+
+- **D166 — Guided personal configuration**
+  - Deferred: A new user gets no hint that Knot is customized through
+    personal config and extensions.
+  - Reconsider: Before Knot is offered to other users. Then, on first launch,
+    create an `AGENTS.md` in the user config folder that tells coding agents
+    how to customize Knot, and present that folder as a special built-in
+    project so it is one click away.
+  - Order: after D120.
 
 - **D129 — Refactor builtin language extensions**
   - Deferred: Each bundled language package is named `@knot/language-<name>`
