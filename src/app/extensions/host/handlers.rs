@@ -3159,9 +3159,12 @@ impl LanguageError {
     }
 }
 
-impl HostArguments for LanguageDefinition {
+#[derive(Clone, Debug, PartialEq)]
+struct LanguageArguments(LanguageDefinition);
+
+impl HostArguments for LanguageArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
+        Ok(Self(LanguageDefinition {
             info: LanguageInfo {
                 id: reader.text(2, "language id must be text")?,
                 name: reader.text(3, "language name must be text")?,
@@ -3180,15 +3183,16 @@ impl HostArguments for LanguageDefinition {
                 reader.command_arguments(12)?,
             ))
             .map_err(|_| DecodeError::Type("invalid language editing data"))?,
-        })
+        }))
     }
 }
 
 #[host_operation("registerLanguage")]
 async fn register_language(
     context: HostContext,
-    arguments: LanguageDefinition,
+    arguments: LanguageArguments,
 ) -> Result<u64, LanguageError> {
+    let arguments = arguments.0;
     let request = context.request;
     // Large queries take tens of milliseconds to compile, and a package
     // registers many languages, so they compile in parallel off the foreground.
@@ -3208,14 +3212,17 @@ async fn register_language(
         .map_err(LanguageError::from)
 }
 
-impl HostArguments for crate::app::languages::LanguageAssociation {
+#[derive(Clone, Debug, PartialEq)]
+struct LanguageAssociationArguments(crate::app::languages::LanguageAssociation);
+
+impl HostArguments for LanguageAssociationArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
+        Ok(Self(crate::app::languages::LanguageAssociation {
             language: reader.text(2, "language id must be text")?,
             file_extensions: reader.text_list(3)?,
             file_names: reader.text_list(4)?,
             interpreters: reader.text_list(5)?,
-        })
+        }))
     }
 }
 
@@ -3224,8 +3231,9 @@ impl HostArguments for crate::app::languages::LanguageAssociation {
 #[host_operation("associateLanguage")]
 async fn associate_language(
     context: HostContext,
-    arguments: crate::app::languages::LanguageAssociation,
+    arguments: LanguageAssociationArguments,
 ) -> Result<u64, AccessError> {
+    let arguments = arguments.0;
     let owner = crate::app::languages::LanguageOwner {
         extension: context.request.extension,
         lifecycle: context.request.lifecycle,
