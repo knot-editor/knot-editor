@@ -9,7 +9,7 @@
 
 use std::time::Duration;
 
-use gpui::Keystroke;
+use crate::app::keys::Keystroke;
 
 use knot_protocol::Command;
 

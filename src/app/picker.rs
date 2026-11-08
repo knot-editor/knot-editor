@@ -12,6 +12,8 @@
 use std::ops::Range;
 
 use gpui::{prelude::*, *};
+
+use super::keys::Keystroke;
 use nucleo_matcher::{
     Config, Matcher, Utf32Str,
     pattern::{CaseMatching, Normalization, Pattern},
@@ -418,7 +420,8 @@ impl Render for Picker {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use gpui::{AppContext as _, Entity, Keystroke, TestAppContext};
+    use crate::app::keys::Keystroke;
+    use gpui::{AppContext as _, Entity, TestAppContext};
 
     use super::{Picker, PickerEntry, PickerEvent};
 

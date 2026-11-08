@@ -11,7 +11,9 @@
 
 use std::collections::BTreeMap;
 
-use gpui::{App, Global, Keystroke};
+use gpui::{App, Global};
+
+use crate::app::keys::{Keystroke, Modifiers};
 use serde::{Deserialize, Serialize};
 
 use super::{ApplicationKeymaps, canonical_key, rebuild};
@@ -313,11 +315,7 @@ fn reaches_the_shell(key: &str) -> bool {
         .and_then(|stroke| Keystroke::parse(stroke).ok())
         .is_some_and(|stroke| {
             let mut characters = stroke.key.chars();
-            stroke.modifiers
-                == gpui::Modifiers {
-                    control: true,
-                    ..Default::default()
-                }
+            stroke.modifiers == Modifiers::control()
                 && characters.next().is_some_and(|key| key != '`')
                 && characters.next().is_none()
         })

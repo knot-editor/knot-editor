@@ -8,6 +8,8 @@
 //! without a window, and pointer click/drag selection.
 
 use gpui::{prelude::*, *};
+
+use super::keys::Keystroke;
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -579,7 +581,8 @@ impl Render for TextInput {
 
 #[cfg(test)]
 mod tests {
-    use gpui::{AppContext as _, EntityInputHandler, Keystroke, TestAppContext};
+    use crate::app::keys::Keystroke;
+    use gpui::{AppContext as _, EntityInputHandler, TestAppContext};
 
     use super::{TextInput, TextInputEvent};
 

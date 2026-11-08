@@ -1,7 +1,7 @@
 //! Input that arrives while a key-invoked extension command runs, kept in
 //! arrival order so it can be delivered once the command has committed.
 
-use gpui::Keystroke;
+use crate::app::keys::Keystroke;
 
 pub(crate) enum HeldInput {
     Key(Keystroke),

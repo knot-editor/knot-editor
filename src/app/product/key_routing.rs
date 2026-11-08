@@ -12,7 +12,9 @@ use std::collections::VecDeque;
 
 use super::*;
 use crate::app::commands::key_router::{KeyAction, KeyRouter, SEQUENCE_TIMEOUT};
+use crate::app::convert::{keystroke_from_gpui, keystroke_to_gpui};
 use crate::app::editor::EditorView;
+use crate::app::keys::Keystroke;
 use crate::app::transient::TransientSurface;
 use crate::app::workbench::{CommandView, ExtensionView};
 use knot_protocol::Command;
@@ -50,7 +52,7 @@ pub(in crate::app) fn intercept_keys(cx: &mut App) {
         };
         // An unhandled key propagates to the window's text input.
         let handled = shell.update(cx, |shell, cx| {
-            shell.key_down(event.keystroke.clone(), Some(window), cx)
+            shell.key_down(keystroke_from_gpui(&event.keystroke), Some(window), cx)
         });
         if handled {
             cx.stop_propagation();
@@ -81,7 +83,7 @@ impl ProductShell {
     /// Press a key in a session without a window, as `key_down` takes it,
     /// typing its text when nothing does.
     pub(crate) fn press_key(&mut self, keystroke: Keystroke, cx: &mut Context<Self>) {
-        let keystroke = keystroke.with_simulated_ime();
+        let keystroke = keystroke.with_simulated_text();
         if !self.key_down(keystroke.clone(), None, cx) {
             self.type_key_text(&keystroke, cx);
         }
@@ -380,7 +382,7 @@ fn deliver_natively(
         return;
     };
     shell.update(cx, |shell, _| shell.keys.native = true);
-    window.dispatch_keystroke(keystroke, cx);
+    window.dispatch_keystroke(keystroke_to_gpui(&keystroke), cx);
     shell.update(cx, |shell, cx| {
         shell.keys.native = false;
         shell.perform_key_actions(rest, Some(window), cx);

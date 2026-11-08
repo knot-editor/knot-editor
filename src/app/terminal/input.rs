@@ -1,7 +1,7 @@
 //! Legacy xterm keyboard encoding from the emulator's current modes.
 
+use crate::app::keys::Keystroke;
 use alacritty_terminal::term::TermMode;
-use gpui::Keystroke;
 
 pub(crate) fn terminal_key_bytes(stroke: &Keystroke, mode: TermMode) -> Vec<u8> {
     if stroke.modifiers.platform {
@@ -110,6 +110,7 @@ fn control_byte(key: &str) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::keys::Modifiers;
 
     #[test]
     fn cursor_function_and_navigation_modes_and_every_modifier() {
@@ -134,7 +135,7 @@ mod tests {
                 for bits in 0..8 {
                     let stroke = Keystroke {
                         key: key.into(),
-                        modifiers: gpui::Modifiers {
+                        modifiers: Modifiers {
                             shift: bits & 1 != 0,
                             alt: bits & 2 != 0,
                             control: bits & 4 != 0,
@@ -174,7 +175,7 @@ mod tests {
             for bits in 0..8 {
                 let stroke = Keystroke {
                     key: key.into(),
-                    modifiers: gpui::Modifiers {
+                    modifiers: Modifiers {
                         shift: bits & 1 != 0,
                         alt: bits & 2 != 0,
                         control: bits & 4 != 0,
@@ -238,7 +239,7 @@ mod tests {
         let stroke = Keystroke {
             key: "b".into(),
             key_char: Some("∫".into()),
-            modifiers: gpui::Modifiers {
+            modifiers: Modifiers {
                 alt: true,
                 ..Default::default()
             },

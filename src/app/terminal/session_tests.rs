@@ -12,6 +12,7 @@ use alacritty_terminal::{grid::Dimensions, tty};
 use gpui::{AppContext, Entity, TestAppContext};
 
 use crate::app::{
+    keys::Keystroke,
     terminal::session::{TerminalSession, TerminalSize, TerminalStatus},
     terminal::view::TerminalView,
 };
@@ -593,19 +594,16 @@ fn keys_reach_the_program_in_its_keyboard_modes_without_a_window(cx: &mut TestAp
     let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
     view.update(cx, |view, cx| {
         for key in ["up", "shift-left", "f5", "alt-b", "ctrl-space"] {
-            assert!(
-                view.key_down(&gpui::Keystroke::parse(key).unwrap(), cx),
-                "{key}"
-            );
+            assert!(view.key_down(&Keystroke::parse(key).unwrap(), cx), "{key}");
         }
-        let accented = gpui::Keystroke {
+        let accented = Keystroke {
             key: "é".into(),
             key_char: Some("é".into()),
             ..Default::default()
         };
         assert!(view.key_down(&accented, cx));
         // A key with no encoding is left to the caller.
-        assert!(!view.key_down(&gpui::Keystroke::parse("cmd-k").unwrap(), cx));
+        assert!(!view.key_down(&Keystroke::parse("cmd-k").unwrap(), cx));
         view.insert_text("x", cx);
     });
     wait_for(cx, &session, |session| {

@@ -1,4 +1,5 @@
-use gpui::{Keystroke, Modifiers, TestAppContext};
+use crate::app::keys::{Keystroke, Modifiers};
+use gpui::TestAppContext;
 
 use super::terminal_key_bytes;
 

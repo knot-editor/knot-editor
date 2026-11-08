@@ -6,7 +6,7 @@
 //! gone quiet. Keys use the [case](crate::test_support::cases) notation.
 
 use gpui::{
-    AppContext, Bounds, Entity, Keystroke, Modifiers, MouseButton, Pixels, Point, TestAppContext,
+    AppContext, Bounds, Entity, Modifiers, MouseButton, Pixels, Point, TestAppContext,
     VisualTestContext,
 };
 use knot_protocol::{Command, CommandArgumentValue, CommandOutcome};
@@ -14,7 +14,9 @@ use serde_json::Value;
 
 use super::settle;
 use super::setup::product_window;
+use crate::app::convert::keystroke_to_gpui;
 use crate::app::editor::{CaretShape, Editor, EditorView, Reveal};
+use crate::app::keys::Keystroke;
 use crate::app::model::BufferModel;
 use crate::app::product::{
     ApplicationDocuments, ApplicationProductCommands, ApplicationSessions, DocumentId,
@@ -164,7 +166,7 @@ impl TestEditor {
         for key in parse_keys(keys) {
             let keystroke = Keystroke::parse(&key).unwrap();
             match &self.window {
-                Some((window, _)) => cx.dispatch_keystroke(*window, keystroke),
+                Some((window, _)) => cx.dispatch_keystroke(*window, keystroke_to_gpui(&keystroke)),
                 None => self
                     .shell
                     .update(cx, |shell, cx| shell.press_key(keystroke, cx)),

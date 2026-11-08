@@ -2,8 +2,8 @@
 //! through its router, unclaimed keys to the surface with Knot-side focus,
 //! and text to that surface's input.
 use super::*;
+use crate::app::keys::Keystroke;
 use crate::app::transient::{TransientOutcome, TransientOwner};
-use gpui::Keystroke;
 use knot_protocol::{ExtensionId, ExtensionLifecycleId, PickerItem};
 
 fn headless_session(

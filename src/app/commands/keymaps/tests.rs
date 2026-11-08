@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::commands::dispatch::*;
+use crate::app::keys::Modifiers;
 use gpui::{KeyContext, TestAppContext};
 
 const PLATFORMS: [Platform; 3] = [Platform::MacOs, Platform::Windows, Platform::Linux];
@@ -564,7 +565,7 @@ fn bare_uppercase_key_preserves_implicit_shift() {
 
 fn typed(keys: &str) -> Vec<Keystroke> {
     keys.split_whitespace()
-        .map(|key| Keystroke::parse(key).unwrap().with_simulated_ime())
+        .map(|key| Keystroke::parse(key).unwrap().with_simulated_text())
         .collect()
 }
 
@@ -677,7 +678,7 @@ fn a_typed_character_matches_the_binding_of_that_character() {
         .unwrap();
     let question = Keystroke {
         key: "/".into(),
-        modifiers: gpui::Modifiers::shift(),
+        modifiers: Modifiers::shift(),
         key_char: Some("?".into()),
     };
     assert_eq!(
@@ -710,7 +711,7 @@ fn rebuilt_map_retains_fixed_config_error_binding(cx: &mut TestAppContext) {
     cx.read(|cx| {
         let keymap = cx.key_bindings();
         let keymap = keymap.borrow();
-        let input = [Keystroke::parse(quit_key).unwrap()];
+        let input = [gpui::Keystroke::parse(quit_key).unwrap()];
         let contexts = [KeyContext::parse("config-error").unwrap()];
         let (bindings, _) = keymap.bindings_for_input(&input, &contexts);
         assert_eq!(bindings.len(), 1);

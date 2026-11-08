@@ -11,6 +11,7 @@ mod command_history;
 mod command_palette;
 mod commands;
 mod completion;
+mod convert;
 mod documents;
 mod editor;
 mod entry;
@@ -29,6 +30,7 @@ mod picker;
 mod product;
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) use product::driver;
+mod keys;
 mod record_store;
 mod recovery;
 mod resource;

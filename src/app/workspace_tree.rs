@@ -2,6 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use gpui::{prelude::FluentBuilder, *};
 
+use super::keys::Keystroke;
+
 use super::theme::{color, theme};
 
 use super::{

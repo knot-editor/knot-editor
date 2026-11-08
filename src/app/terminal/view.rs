@@ -8,6 +8,8 @@ use alacritty_terminal::{
 use gpui::*;
 use std::rc::Rc;
 
+use crate::app::keys::Keystroke;
+
 use crate::app::{
     TERMINAL_KEY_CONTEXT,
     settings::{self, ApplicationSettings, SettingsScope},

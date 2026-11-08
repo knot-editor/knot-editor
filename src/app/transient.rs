@@ -10,6 +10,8 @@ use std::path::PathBuf;
 
 use gpui::{prelude::*, *};
 
+use super::keys::Keystroke;
+
 use knot_protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId};
 
 use super::picker::Picker;

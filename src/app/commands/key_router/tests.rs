@@ -10,7 +10,7 @@ fn command(name: &str) -> Command {
 }
 
 fn key(source: &str) -> Keystroke {
-    Keystroke::parse(source).unwrap().with_simulated_ime()
+    Keystroke::parse(source).unwrap().with_simulated_text()
 }
 
 /// A registry binding `cmd-k right`, `cmd-k`, `g g`, and, in the editor's

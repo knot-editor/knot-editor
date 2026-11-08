@@ -14,7 +14,9 @@ use std::collections::VecDeque;
 
 use super::*;
 use crate::app::commands::key_hold::{HeldInput, TypedTextRouter};
+use crate::app::convert::keystroke_to_gpui;
 use crate::app::editor::Editor;
+use crate::app::keys::Keystroke;
 use knot_protocol::CommandOutcome;
 use knot_protocol::{Command, CommandArgumentValue};
 
@@ -246,7 +248,9 @@ fn replay(
     match input {
         HeldInput::Key(keystroke) => match shell.read(cx).window {
             Some(window) => {
-                let _ = window.update(cx, |_, window, cx| window.dispatch_keystroke(keystroke, cx));
+                let _ = window.update(cx, |_, window, cx| {
+                    window.dispatch_keystroke(keystroke_to_gpui(&keystroke), cx)
+                });
             }
             None => shell.update(cx, |shell, cx| shell.press_key(keystroke, cx)),
         },

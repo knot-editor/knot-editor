@@ -367,7 +367,7 @@ fn arrow_keys_move_selection_across_visible_rows(cx: &mut TestAppContext) {
         ));
     });
     let press = |key: &str, cx: &mut TestAppContext| {
-        let keystroke = gpui::Keystroke::parse(key).unwrap();
+        let keystroke = crate::app::keys::Keystroke::parse(key).unwrap();
         tree.update(cx, |tree, cx| tree.key_down(&keystroke, cx));
         cx.read(|cx| tree.read(cx).selected.clone())
     };

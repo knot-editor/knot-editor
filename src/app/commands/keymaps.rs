@@ -5,7 +5,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use gpui::{App, Global, KeyBinding, Keystroke, Modifiers};
+use gpui::{App, Global, KeyBinding};
+
+use crate::app::keys::Keystroke;
 
 use knot_protocol::{
     Command, CommandArgumentValue, CommandName, ExtensionId, ExtensionLifecycleId,
@@ -500,10 +502,8 @@ impl BindingRegistry {
     }
 
     /// How `typed` matches the bindings that resolve to a command in
-    /// `view` holding `contexts`. A keystroke matches a binding's as gpui
-    /// matches them: by key and modifiers, or by the character it typed
-    /// with only its control and command modifiers. Among exact matches a
-    /// direct one wins.
+    /// `view` holding `contexts`. A keystroke triggers a binding as
+    /// [`Keystroke::triggers`] decides. Among exact matches a direct one wins.
     pub(crate) fn match_typed(
         &self,
         typed: &[Keystroke],
@@ -518,7 +518,7 @@ impl BindingRegistry {
                 || !typed
                     .iter()
                     .zip(strokes)
-                    .all(|(typed, bound)| typed_matches(typed, bound))
+                    .all(|(typed, bound)| typed.triggers(bound))
             {
                 continue;
             }
@@ -801,30 +801,6 @@ fn canonical_key(source: &str) -> Result<String, BindingError> {
         .collect::<Result<Vec<_>, _>>()?
         .join(" ");
     Ok(canonical)
-}
-
-/// Whether a typed keystroke matches a binding's, as gpui's
-/// `Keystroke::should_match` decides: directly, or by the character it
-/// typed, which already reflects its other modifiers.
-fn typed_matches(typed: &Keystroke, bound: &Keystroke) -> bool {
-    if let Some(key_char) = typed
-        .key_char
-        .as_ref()
-        .filter(|key_char| **key_char != typed.key)
-    {
-        #[cfg(not(windows))]
-        let modifiers = Modifiers {
-            control: typed.modifiers.control,
-            platform: typed.modifiers.platform,
-            ..Default::default()
-        };
-        #[cfg(windows)]
-        let modifiers = Modifiers::none();
-        if bound.key == *key_char && bound.modifiers == modifiers {
-            return true;
-        }
-    }
-    bound.modifiers == typed.modifiers && bound.key == typed.key
 }
 
 pub(crate) struct ApplicationKeymaps(pub(crate) BindingRegistry);
