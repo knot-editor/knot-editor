@@ -13,7 +13,7 @@ use std::ops::Range;
 use tree_sitter::{Language, Node, Query, QueryCursor};
 
 use super::{Layer, StreamingIterator, SyntaxLanguageError, SyntaxQuery, SyntaxState, clamp};
-use crate::core::buffer::TextSnapshot;
+use knot_core::buffer::TextSnapshot;
 
 /// A compiled `folds` query.
 pub(crate) struct FoldQuery {

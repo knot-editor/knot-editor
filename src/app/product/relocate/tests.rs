@@ -7,8 +7,8 @@ use crate::app::{
     product::tests::{install_globals, product_window},
     workbench::{SplitEdge, TabMoveDestination, TabMovePlacement, TabSurfaceId},
 };
-use crate::host::protocol::CommandOutcome;
 use gpui::{App, AppContext, Entity, Focusable, TestAppContext};
+use knot_protocol::CommandOutcome;
 use std::sync::Arc;
 
 fn capture(shell: &Entity<ProductShell>, cx: &App) -> TabRelocationSource {

@@ -48,7 +48,7 @@ jobs:
       - name: Test
         run: |
           cargo nextest run --locked --workspace --all-targets --profile ci
-          cargo test --locked --doc
+          cargo test --locked --workspace --doc
 
   handler-platforms:
     strategy:
@@ -71,9 +71,10 @@ jobs:
       - name: Check handler declarations and linked discovery
         run: |
           cargo test --locked -p knot-handler-macros
-          cargo test --locked --lib host::declarations
+          cargo test --locked -p knot-protocol
+          cargo test --locked --lib extensions::host::declaration_tests
           cargo test --locked --lib app::command_declarations
           cargo test --locked --test handler_linking
-          cargo test --locked --doc
+          cargo test --locked --workspace --doc
       - name: Build product
         run: cargo build --locked --bin knot

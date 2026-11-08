@@ -12,7 +12,7 @@ use crate::app::languages::{
 use crate::app::settings::{
     ApplicationSettings, EDITOR_AUTO_CLOSING_BRACKETS, EDITOR_AUTO_SURROUND, SettingsScope,
 };
-use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
 const JUMP: &str = "editor.jump-to-matching-bracket";
 

@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use gpui::{App, Global};
 use serde_json::Value;
 
-use crate::host::protocol::{ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Base text size in pixels of editors, text frames, and terminals.
 pub(crate) const FONT_SIZE: &str = "font.size";

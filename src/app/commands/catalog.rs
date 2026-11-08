@@ -7,7 +7,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::host::protocol::{
+use knot_protocol::{
     CommandName, CommandRegistrationId, ExtensionId, ExtensionLifecycleId, ViewId,
 };
 

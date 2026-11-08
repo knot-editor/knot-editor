@@ -36,7 +36,7 @@ impl ProductShell {
     ) {
         let window_id = session_id(cx.entity_id());
         let (content, event, observer) = match definition.content {
-            crate::host::protocol::ViewContentKind::Tree => {
+            knot_protocol::ViewContentKind::Tree => {
                 let view = cx.new(|cx| {
                     crate::app::tree_view::TreeView::new(
                         definition.id.clone(),
@@ -56,7 +56,7 @@ impl ProductShell {
                     observer,
                 )
             }
-            crate::host::protocol::ViewContentKind::Text => {
+            knot_protocol::ViewContentKind::Text => {
                 let view = cx.new(|cx| {
                     crate::app::text_view::TextView::new(
                         definition.id.clone(),

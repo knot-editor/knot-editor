@@ -107,12 +107,12 @@ impl AnchoredRangeStore {
     }
 
     /// Number of anchored ranges currently held.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn len(&self) -> usize {
         self.anchored_ranges.len()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn is_empty(&self) -> bool {
         self.anchored_ranges.is_empty()
     }
@@ -293,7 +293,7 @@ impl AnchoredRangeStore {
     }
 
     /// Iterate over all live anchored ranges.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn iter_live(&self) -> impl Iterator<Item = (&AnchoredRangeId, &AnchoredRange)> {
         self.anchored_ranges.iter()
     }

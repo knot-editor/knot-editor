@@ -1,5 +1,9 @@
 //! Product ownership and foreground routing for the pooled extension host.
 
+#[cfg(test)]
+mod declaration_tests;
+#[cfg(test)]
+mod engine_tests;
 pub(crate) mod handlers;
 
 use std::{
@@ -16,16 +20,16 @@ use std::collections::BTreeMap;
 
 use gpui::{App, AppContext, Context, Entity, Global, Subscription, Task};
 
-use crate::host::{
+use knot_host::{
     lifecycle::ExtensionKey,
     module_graph::{ConfigPhase as HostConfigPhase, ModuleGraph},
     pool::{
         ExtensionConfig, ExtensionEvent, ExtensionEventInbox, ExtensionExecution, ExtensionPool,
     },
-    protocol::{
-        Command, CommandInvocationId, ExtensionId, ExtensionLifecycleId, HostRequest, ViewId,
-    },
     scheduler::PoolConfig,
+};
+use knot_protocol::{
+    Command, CommandInvocationId, ExtensionId, ExtensionLifecycleId, HostRequest, ViewId,
 };
 
 use crate::app::{
@@ -144,11 +148,11 @@ pub(crate) fn application_changed(cx: &mut App) {
 
 /// Publish a window's settled view-state change after committing any pending
 /// metadata changes, so the event follows the window's structural events.
-pub(crate) fn view_state_changed(window: crate::host::protocol::WindowTarget, cx: &mut App) {
+pub(crate) fn view_state_changed(window: knot_protocol::WindowTarget, cx: &mut App) {
     if let Some(host) = entity(cx) {
         host.update(cx, |host, cx| {
             host.publish_application_change(
-                crate::host::protocol::ApplicationChange::ViewStateChanged { window },
+                knot_protocol::ApplicationChange::ViewStateChanged { window },
                 cx,
             )
         });
@@ -196,7 +200,7 @@ pub(crate) fn memory_report(cx: &App) -> String {
         format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
     }
     let resident =
-        crate::host::pool::process_resident_bytes().map_or_else(|| "unavailable".into(), mib);
+        knot_host::pool::process_resident_bytes().map_or_else(|| "unavailable".into(), mib);
     let mut report = format!("Process resident size: {resident}\n");
     let Some(host) = entity(cx) else {
         return report;
@@ -297,7 +301,7 @@ pub(crate) fn quit_after_storage(cx: &mut App) {
 }
 
 pub(crate) fn install(cx: &mut App) -> Entity<ProductExtensionHost> {
-    crate::host::declarations::registry()
+    knot_protocol::declarations::registry()
         .validate_context::<handlers::HostContext>()
         .expect("valid application handler contexts");
     let (pool, inbox) = ExtensionPool::new(PoolConfig::default());
@@ -312,7 +316,7 @@ pub(crate) fn install(cx: &mut App) -> Entity<ProductExtensionHost> {
 pub(crate) fn start_completion(
     target: ProductCommandTarget,
     cx: &mut App,
-) -> crate::host::protocol::CommandOutcome {
+) -> knot_protocol::CommandOutcome {
     let host = cx.global::<ApplicationExtensionHost>()._host.clone();
     host.update(cx, |host, cx| host.start_completion(target, cx))
 }
@@ -384,10 +388,10 @@ pub(crate) fn start_view_command(
     handler: CommandTarget,
     completion: crate::app::CommandCompletion,
     cx: &mut App,
-) -> Result<(), crate::host::protocol::CommandOutcome> {
+) -> Result<(), knot_protocol::CommandOutcome> {
     target.validate_tab(cx)?;
     target.validate_view(cx)?;
-    let host = entity(cx).ok_or(crate::host::protocol::CommandOutcome::InvalidTarget)?;
+    let host = entity(cx).ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
     host.update(cx, |host, cx| {
         host.start_view_command(command, target, handler, completion, cx)
     })
@@ -399,8 +403,8 @@ pub(crate) fn start_global_command(
     handler: CommandTarget,
     completion: crate::app::CommandCompletion,
     cx: &mut App,
-) -> Result<(), crate::host::protocol::CommandOutcome> {
-    let host = entity(cx).ok_or(crate::host::protocol::CommandOutcome::InvalidTarget)?;
+) -> Result<(), knot_protocol::CommandOutcome> {
+    let host = entity(cx).ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
     host.update(cx, |host, cx| {
         host.start_global_command(command, target, handler, completion, cx)
     })
@@ -409,7 +413,7 @@ pub(crate) fn start_global_command(
 fn complete_nested_command(
     host: &Entity<ProductExtensionHost>,
     child: CommandInvocationId,
-    outcome: crate::host::protocol::CommandOutcome,
+    outcome: knot_protocol::CommandOutcome,
     cx: &mut App,
 ) {
     host.update(cx, |host, cx| {
@@ -419,12 +423,12 @@ fn complete_nested_command(
 }
 
 fn route_nested_command(
-    request: crate::host::protocol::RequestContext,
-    command: crate::host::protocol::Command,
+    request: knot_protocol::RequestContext,
+    command: knot_protocol::Command,
     sender: crate::app::commands::extension::CommandReply,
     cx: &mut App,
 ) {
-    use crate::host::protocol::{CommandInvokeDispatch, CommandOutcome};
+    use knot_protocol::{CommandInvokeDispatch, CommandOutcome};
     let mut reply = Some(sender);
 
     let Some(host) = entity(cx) else { return };
@@ -564,14 +568,13 @@ pub(crate) struct ProductExtensionHost {
     storage_owners: HashMap<ExtensionKey, crate::app::extensions::storage::StorageOwner>,
     storage_stopping: bool,
     storage_callers: Vec<(
-        crate::host::protocol::RequestContext,
+        knot_protocol::RequestContext,
         std::sync::Weak<std::sync::atomic::AtomicBool>,
     )>,
     buffers: ExtensionBufferBridge,
     application_observation: crate::app::application_observation::ApplicationObservation,
     /// Lifecycle-owned observers of one setting key each.
-    setting_observers:
-        HashMap<crate::host::protocol::SettingsSubscriptionId, (String, ExtensionKey)>,
+    setting_observers: HashMap<knot_protocol::SettingsSubscriptionId, (String, ExtensionKey)>,
     next_setting_observer: u64,
     /// Pickers whose callers preview highlights, between pulls.
     transient_sessions: HashMap<u64, handlers::TransientSession>,
@@ -588,15 +591,15 @@ pub(crate) struct ProductExtensionHost {
     undo_groups: HashMap<u64, UndoGroup>,
     next_undo_group: u64,
     #[cfg(test)]
-    application_events: Vec<crate::host::protocol::ApplicationEvent>,
+    application_events: Vec<knot_protocol::ApplicationEvent>,
     _application_window_closed: Subscription,
     _application_signal: Subscription,
-    buffer_observers: HashMap<crate::host::protocol::BufferHandle, Subscription>,
+    buffer_observers: HashMap<knot_protocol::BufferHandle, Subscription>,
     commands: ExtensionCommandBridge,
     completion_editors: Vec<gpui::WeakEntity<crate::app::editor::Editor>>,
     command_targets: HashMap<CommandInvocationId, ProductCommandTarget>,
     view_command_handlers:
-        HashMap<CommandInvocationId, (CommandTarget, crate::host::protocol::CommandName)>,
+        HashMap<CommandInvocationId, (CommandTarget, knot_protocol::CommandName)>,
     #[cfg(test)]
     hold_clipboard_writes: bool,
     #[cfg(test)]
@@ -1218,9 +1221,7 @@ impl ProductExtensionHost {
     }
 
     #[cfg(test)]
-    pub(crate) fn take_test_application_events(
-        &mut self,
-    ) -> Vec<crate::host::protocol::ApplicationEvent> {
+    pub(crate) fn take_test_application_events(&mut self) -> Vec<knot_protocol::ApplicationEvent> {
         std::mem::take(&mut self.application_events)
     }
 
@@ -1240,8 +1241,8 @@ impl ProductExtensionHost {
             let id = self.next_extension_id.fetch_add(1, Ordering::Relaxed);
             assert_ne!(id, u64::MAX, "extension identity exhausted");
             let key = ExtensionKey::new(
-                crate::host::protocol::ExtensionId::new(id),
-                crate::host::protocol::ExtensionLifecycleId::new(1),
+                knot_protocol::ExtensionId::new(id),
+                knot_protocol::ExtensionLifecycleId::new(1),
             );
             let graph = ModuleGraph::new(
                 &format!("file:///fixtures/product-{index}/"),
@@ -1275,7 +1276,7 @@ impl ProductExtensionHost {
         &mut self,
         key: ExtensionKey,
         config: ExtensionConfig,
-    ) -> Result<(), crate::host::pool::ExtensionPoolError> {
+    ) -> Result<(), knot_host::pool::ExtensionPoolError> {
         self.pool.load(key, config)?;
         self.admit_lifecycle(key);
         Ok(())
@@ -1286,7 +1287,7 @@ impl ProductExtensionHost {
         &mut self,
         key: ExtensionKey,
         cx: &mut Context<Self>,
-    ) -> Result<(), crate::host::pool::ExtensionPoolError> {
+    ) -> Result<(), knot_host::pool::ExtensionPoolError> {
         self.pool.unload(key)?;
         self.remove_lifecycle(key, cx);
         Ok(())
@@ -1315,7 +1316,7 @@ impl ProductExtensionHost {
         let pool = self.pool.clone();
         cx.spawn(async move |_, _| {
             let result = operation.run(context).await;
-            let _ = pool.respond(crate::host::protocol::HostResponse {
+            let _ = pool.respond(knot_protocol::HostResponse {
                 extension: request.extension,
                 lifecycle: request.lifecycle,
                 id: request.id,
@@ -1345,7 +1346,7 @@ impl ProductExtensionHost {
 
     fn context_target(
         &self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         explicit: Option<CommandInvocationId>,
         cx: &App,
     ) -> Result<&ProductCommandTarget, handlers::AccessError> {
@@ -1364,10 +1365,10 @@ impl ProductExtensionHost {
 
     fn contextual_buffer(
         &self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         explicit: Option<CommandInvocationId>,
         cx: &App,
-    ) -> Result<Option<crate::host::protocol::BufferHandle>, handlers::AccessError> {
+    ) -> Result<Option<knot_protocol::BufferHandle>, handlers::AccessError> {
         self.context_target(request, explicit, cx)?;
         Ok(self.commands.captured_buffer(request.invocation.unwrap()))
     }
@@ -1375,7 +1376,7 @@ impl ProductExtensionHost {
     /// The editor an authority names, while its tab presentation is live.
     pub(super) fn contextual_editor(
         &self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         authority: handlers::EditorAuthority,
         cx: &App,
     ) -> Result<Entity<crate::app::editor::Editor>, handlers::AccessError> {
@@ -1408,7 +1409,7 @@ impl ProductExtensionHost {
     pub(super) fn open_editor(
         &mut self,
         owner: ExtensionKey,
-        target: &crate::host::protocol::PresentationTarget,
+        target: &knot_protocol::PresentationTarget,
         cx: &mut App,
     ) -> Result<u64, handlers::AccessError> {
         let tab = crate::app::product::operations::capture_editor_tab(target, cx)?;
@@ -1429,7 +1430,7 @@ impl ProductExtensionHost {
     /// Idempotent.
     pub(super) fn watch_editor_selection(
         &mut self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         authority: handlers::EditorAuthority,
         cx: &mut Context<Self>,
     ) -> Result<(), handlers::AccessError> {
@@ -1474,7 +1475,7 @@ impl ProductExtensionHost {
             let _ = self.pool.dispatch_editor_event(
                 handle.owner,
                 handlers::EditorAuthority::handle_wire(id),
-                crate::host::protocol::EditorEvent::SelectionChanged,
+                knot_protocol::EditorEvent::SelectionChanged,
             );
         }
     }
@@ -1599,7 +1600,7 @@ impl ProductExtensionHost {
             let _ = self.pool.dispatch_editor_event(
                 owner,
                 handlers::EditorAuthority::handle_wire(id),
-                crate::host::protocol::EditorEvent::Closed,
+                knot_protocol::EditorEvent::Closed,
             );
         }
     }
@@ -1648,7 +1649,7 @@ impl ProductExtensionHost {
 
     fn contextual_selected_text(
         &self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         explicit: Option<CommandInvocationId>,
         cx: &App,
     ) -> Result<Option<String>, handlers::ContextError> {
@@ -1703,7 +1704,7 @@ impl ProductExtensionHost {
                         buffer,
                     } => {
                         invocation.capture = self.command_targets.get(&root).map(|target| {
-                            crate::host::protocol::CommandCapture {
+                            knot_protocol::CommandCapture {
                                 authority: root,
                                 window: crate::app::product::session_id(target.shell.entity_id()),
                                 view: target.view.map(|view| format!("{view:?}")),
@@ -1719,13 +1720,13 @@ impl ProductExtensionHost {
                         let Ok(execution) = self.pool.invoke_command(key, invocation, buffer)
                         else {
                             self.commands
-                                .complete(id, crate::host::protocol::CommandOutcome::Unavailable);
+                                .complete(id, knot_protocol::CommandOutcome::Unavailable);
                             continue;
                         };
                         cx.spawn(async move |this, cx| {
                             let outcome = execution
                                 .await
-                                .unwrap_or(crate::host::protocol::CommandOutcome::Cancelled);
+                                .unwrap_or(knot_protocol::CommandOutcome::Cancelled);
                             let _ = this.update(cx, |this, cx| {
                                 let outcome =
                                     this.validate_view_command_outcome(id, root, outcome, cx);
@@ -1751,10 +1752,10 @@ impl ProductExtensionHost {
         &self,
         invocation: CommandInvocationId,
         root: CommandInvocationId,
-        outcome: crate::host::protocol::CommandOutcome,
+        outcome: knot_protocol::CommandOutcome,
         cx: &App,
-    ) -> crate::host::protocol::CommandOutcome {
-        use crate::host::protocol::CommandOutcome;
+    ) -> knot_protocol::CommandOutcome {
+        use knot_protocol::CommandOutcome;
 
         if invocation == root {
             return outcome;
@@ -1797,13 +1798,13 @@ impl ProductExtensionHost {
                     Ok(execution) => {
                         cx.spawn(async move |this, cx| {
                             let response = execution.await.unwrap_or_else(|error| {
-                                crate::host::protocol::TreeChildrenResponse {
+                                knot_protocol::TreeChildrenResponse {
                                     registration: fallback.registration,
                                     window: fallback.window.clone(),
                                     view: fallback.view,
                                     parent_id: fallback.parent_id.clone(),
                                     generation: fallback.generation,
-                                    result: Err(crate::host::protocol::TreeProviderError {
+                                    result: Err(knot_protocol::TreeProviderError {
                                         message: error.to_string(),
                                     }),
                                 }
@@ -1816,13 +1817,13 @@ impl ProductExtensionHost {
                     }
                     Err(error) => {
                         self.semantics.apply_tree_response(
-                            crate::host::protocol::TreeChildrenResponse {
+                            knot_protocol::TreeChildrenResponse {
                                 registration: fallback.registration,
                                 window: fallback.window.clone(),
                                 view: fallback.view,
                                 parent_id: fallback.parent_id.clone(),
                                 generation: fallback.generation,
-                                result: Err(crate::host::protocol::TreeProviderError {
+                                result: Err(knot_protocol::TreeProviderError {
                                     message: error.to_string(),
                                 }),
                             },
@@ -1877,8 +1878,8 @@ impl ProductExtensionHost {
         handler: CommandTarget,
         completion: crate::app::CommandCompletion,
         cx: &mut Context<Self>,
-    ) -> Result<(), crate::host::protocol::CommandOutcome> {
-        use crate::host::protocol::CommandOutcome;
+    ) -> Result<(), knot_protocol::CommandOutcome> {
+        use knot_protocol::CommandOutcome;
 
         target.validate_tab(cx)?;
         target.validate_view(cx)?;
@@ -1945,10 +1946,10 @@ impl ProductExtensionHost {
         handler: CommandTarget,
         completion: crate::app::CommandCompletion,
         cx: &mut Context<Self>,
-    ) -> Result<(), crate::host::protocol::CommandOutcome> {
+    ) -> Result<(), knot_protocol::CommandOutcome> {
         let view = target
             .view
-            .ok_or(crate::host::protocol::CommandOutcome::InvalidTarget)?;
+            .ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
         let active = self
             .commands
             .catalog()
@@ -1959,7 +1960,7 @@ impl ProductExtensionHost {
                 .lifecycles
                 .contains(&ExtensionKey::new(handler.extension, handler.lifecycle))
         {
-            return Err(crate::host::protocol::CommandOutcome::InvalidTarget);
+            return Err(knot_protocol::CommandOutcome::InvalidTarget);
         }
         let buffer = self.open_target_buffer(&target, cx);
         let name = command.name.clone();
@@ -1974,11 +1975,11 @@ impl ProductExtensionHost {
             let outcome = execution
                 .completion
                 .await
-                .unwrap_or(crate::host::protocol::CommandOutcome::Cancelled);
+                .unwrap_or(knot_protocol::CommandOutcome::Cancelled);
             let outcome = cx
                 .update(|cx| {
                     let Some(host) = this.upgrade() else {
-                        return crate::host::protocol::CommandOutcome::Cancelled;
+                        return knot_protocol::CommandOutcome::Cancelled;
                     };
                     // A dead lifecycle cancels the command even when its frame
                     // was detached first; a live lifecycle with an invalid
@@ -1988,7 +1989,7 @@ impl ProductExtensionHost {
                         .lifecycles
                         .contains(&ExtensionKey::new(handler.extension, handler.lifecycle))
                     {
-                        return crate::host::protocol::CommandOutcome::Cancelled;
+                        return knot_protocol::CommandOutcome::Cancelled;
                     }
                     if let Err(invalid) = target.validate_view(cx) {
                         return invalid;
@@ -2000,11 +2001,11 @@ impl ProductExtensionHost {
                             .resolve_view(view, name.as_ref())
                             != Some(handler)
                     }) {
-                        return crate::host::protocol::CommandOutcome::Cancelled;
+                        return knot_protocol::CommandOutcome::Cancelled;
                     }
                     outcome
                 })
-                .unwrap_or(crate::host::protocol::CommandOutcome::InvalidTarget);
+                .unwrap_or(knot_protocol::CommandOutcome::InvalidTarget);
             completion.complete(outcome);
         })
         .detach();
@@ -2015,15 +2016,15 @@ impl ProductExtensionHost {
         &mut self,
         target: ProductCommandTarget,
         cx: &mut Context<Self>,
-    ) -> crate::host::protocol::CommandOutcome {
+    ) -> knot_protocol::CommandOutcome {
         if let Err(outcome) = target.document_id(cx) {
             return outcome;
         }
         let Some(buffer) = self.open_target_buffer(&target, cx) else {
-            return crate::host::protocol::CommandOutcome::InvalidTarget;
+            return knot_protocol::CommandOutcome::InvalidTarget;
         };
         let Some(workbench) = target.workbench.upgrade() else {
-            return crate::host::protocol::CommandOutcome::InvalidTarget;
+            return knot_protocol::CommandOutcome::InvalidTarget;
         };
         let Some(editor) = workbench
             .read(cx)
@@ -2036,7 +2037,7 @@ impl ProductExtensionHost {
             .and_then(|tab| tab.editor())
             .map(|view| view.read(cx).editor().clone())
         else {
-            return crate::host::protocol::CommandOutcome::InvalidTarget;
+            return knot_protocol::CommandOutcome::InvalidTarget;
         };
         self.completion_editors
             .retain(|editor| editor.upgrade().is_some());
@@ -2060,26 +2061,27 @@ impl ProductExtensionHost {
             );
             let editor_for_task = editor.clone();
             let task = cx.spawn(async move |_, cx| {
-                let response = match execution {
-                    Ok(execution) => execution.await.unwrap_or_else(|error| {
-                        crate::host::protocol::CompletionResponse {
+                let response =
+                    match execution {
+                        Ok(execution) => execution.await.unwrap_or_else(|error| {
+                            knot_protocol::CompletionResponse {
+                                registration: fallback.registration,
+                                revision: fallback.revision,
+                                generation: fallback.generation,
+                                result: Err(knot_protocol::CompletionProviderError {
+                                    message: error.to_string(),
+                                }),
+                            }
+                        }),
+                        Err(error) => knot_protocol::CompletionResponse {
                             registration: fallback.registration,
                             revision: fallback.revision,
                             generation: fallback.generation,
-                            result: Err(crate::host::protocol::CompletionProviderError {
+                            result: Err(knot_protocol::CompletionProviderError {
                                 message: error.to_string(),
                             }),
-                        }
-                    }),
-                    Err(error) => crate::host::protocol::CompletionResponse {
-                        registration: fallback.registration,
-                        revision: fallback.revision,
-                        generation: fallback.generation,
-                        result: Err(crate::host::protocol::CompletionProviderError {
-                            message: error.to_string(),
-                        }),
-                    },
-                };
+                        },
+                    };
                 let _ = editor_for_task.update(cx, |editor, cx| {
                     editor.apply_completion_response(buffer, response, cx);
                 });
@@ -2088,12 +2090,12 @@ impl ProductExtensionHost {
                 editor.retain_completion_task(generation, registration, task)
             });
         }
-        crate::host::protocol::CommandOutcome::Completed
+        knot_protocol::CommandOutcome::Completed
     }
 
     fn cancel_completion_provider(
         &mut self,
-        registration: crate::host::protocol::CompletionProviderRegistrationId,
+        registration: knot_protocol::CompletionProviderRegistrationId,
         cx: &mut App,
     ) {
         self.completion_editors.retain(|editor| {
@@ -2111,7 +2113,7 @@ impl ProductExtensionHost {
         &mut self,
         target: &ProductCommandTarget,
         cx: &mut Context<Self>,
-    ) -> Option<crate::host::protocol::BufferHandle> {
+    ) -> Option<knot_protocol::BufferHandle> {
         if target.view.is_some() {
             return None;
         }
@@ -2134,7 +2136,7 @@ impl ProductExtensionHost {
         &mut self,
         model: &Entity<crate::app::model::BufferModel>,
         cx: &mut Context<Self>,
-    ) -> crate::host::protocol::BufferHandle {
+    ) -> knot_protocol::BufferHandle {
         let buffer = self.buffers.open_buffer(model);
         self.buffer_observers.entry(buffer).or_insert_with(|| {
             let _ = self.buffers.drain_model_changes(model, cx);
@@ -2166,9 +2168,9 @@ impl ProductExtensionHost {
     fn application_snapshot(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> crate::host::protocol::ApplicationSnapshot {
+    ) -> knot_protocol::ApplicationSnapshot {
         use crate::app::documents::ApplicationDocuments;
-        use crate::host::protocol::ApplicationSnapshot;
+        use knot_protocol::ApplicationSnapshot;
         let Some(documents) = cx
             .try_global::<ApplicationDocuments>()
             .map(|global| global.0.clone())
@@ -2231,7 +2233,7 @@ impl ProductExtensionHost {
 
     fn publish_application_change(
         &mut self,
-        change: crate::host::protocol::ApplicationChange,
+        change: knot_protocol::ApplicationChange,
         cx: &mut Context<Self>,
     ) {
         self.refresh_application_observation(cx);
@@ -2249,17 +2251,16 @@ impl ProductExtensionHost {
         &mut self,
         setting: String,
         key: ExtensionKey,
-    ) -> crate::host::protocol::SettingsSubscriptionId {
+    ) -> knot_protocol::SettingsSubscriptionId {
         self.next_setting_observer += 1;
-        let subscription =
-            crate::host::protocol::SettingsSubscriptionId::new(self.next_setting_observer);
+        let subscription = knot_protocol::SettingsSubscriptionId::new(self.next_setting_observer);
         self.setting_observers.insert(subscription, (setting, key));
         subscription
     }
 
     pub(crate) fn unobserve_setting(
         &mut self,
-        subscription: crate::host::protocol::SettingsSubscriptionId,
+        subscription: knot_protocol::SettingsSubscriptionId,
         key: ExtensionKey,
     ) -> bool {
         if self
@@ -2300,11 +2301,11 @@ impl ProductExtensionHost {
 
     fn document_destination(
         &self,
-        request: &crate::host::protocol::RequestContext,
-        target: Option<crate::host::protocol::DocumentDestination>,
+        request: &knot_protocol::RequestContext,
+        target: Option<knot_protocol::DocumentDestination>,
         cx: &App,
-    ) -> Result<crate::host::protocol::DocumentDestination, handlers::AccessError> {
-        use crate::host::protocol::DocumentDestination;
+    ) -> Result<knot_protocol::DocumentDestination, handlers::AccessError> {
+        use knot_protocol::DocumentDestination;
         if let Some(target) = target {
             return Ok(target);
         }
@@ -2315,11 +2316,11 @@ impl ProductExtensionHost {
 
     fn operation_window(
         &self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         cx: &App,
-    ) -> Result<crate::host::protocol::WindowTarget, handlers::AccessError> {
-        use crate::host::protocol::WindowTarget;
+    ) -> Result<knot_protocol::WindowTarget, handlers::AccessError> {
         use handlers::AccessError;
+        use knot_protocol::WindowTarget;
         let shell = if let Some(invocation) = request.invocation {
             let root = self
                 .commands
@@ -2351,11 +2352,11 @@ impl ProductExtensionHost {
     fn document_presentation(
         &mut self,
         id: crate::app::documents::DocumentId,
-        target: crate::host::protocol::PresentationTarget,
+        target: knot_protocol::PresentationTarget,
         cx: &mut Context<Self>,
-    ) -> Result<crate::host::protocol::DocumentPresentation, handlers::OpenError> {
+    ) -> Result<knot_protocol::DocumentPresentation, handlers::OpenError> {
         use crate::app::documents::ApplicationDocuments;
-        use crate::host::protocol::{DocumentPresentation, PresentationInfo, SurfaceKind};
+        use knot_protocol::{DocumentPresentation, PresentationInfo, SurfaceKind};
         let documents = cx.global::<ApplicationDocuments>().0.clone();
         let model = documents
             .read(cx)
@@ -2383,11 +2384,11 @@ impl ProductExtensionHost {
 
     pub(crate) fn register_view(
         &mut self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         arguments: handlers::TreeArguments,
         cx: &mut Context<Self>,
     ) -> Result<
-        crate::host::protocol::TreeProviderRegistrationId,
+        knot_protocol::TreeProviderRegistrationId,
         crate::app::extensions::semantics::SemanticError,
     > {
         let id = arguments.id.clone();
@@ -2407,7 +2408,7 @@ impl ProductExtensionHost {
 
     pub(crate) fn unregister_view(
         &mut self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         arguments: handlers::TreeRegistrationArguments,
         cx: &mut Context<Self>,
     ) -> Result<(), crate::app::extensions::semantics::SemanticError> {
@@ -2433,7 +2434,7 @@ impl ProductExtensionHost {
 
     fn transient_session(
         &self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         explicit: Option<&str>,
         cx: &App,
     ) -> Result<gpui::Entity<ProductShell>, handlers::AccessError> {
@@ -2450,7 +2451,7 @@ impl ProductExtensionHost {
     /// Run one transient interaction install against the resolved session.
     fn with_transient_window<R>(
         &self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         explicit: Option<&str>,
         access: impl FnOnce(
             &mut ProductShell,
@@ -2507,8 +2508,8 @@ impl ProductExtensionHost {
     /// one explicit window. Programmatic presentation never publishes defaults.
     pub(crate) fn present_view(
         &mut self,
-        request: &crate::host::protocol::RequestContext,
-        registration: crate::host::protocol::TreeProviderRegistrationId,
+        request: &knot_protocol::RequestContext,
+        registration: knot_protocol::TreeProviderRegistrationId,
         window: Option<&str>,
         action: crate::app::extensions::semantics::ViewPresentation,
         cx: &mut Context<Self>,
@@ -2553,7 +2554,7 @@ impl ProductExtensionHost {
     /// hide, or focus.
     fn publish_command_layout(
         &self,
-        request: &crate::host::protocol::RequestContext,
+        request: &knot_protocol::RequestContext,
         cx: &mut Context<Self>,
     ) {
         let Ok(target) = self.operation_window(request, cx) else {
@@ -2634,11 +2635,11 @@ impl ProductExtensionHost {
 
 fn application_document_info(
     document: &crate::app::documents::Document,
-    buffer: crate::host::protocol::BufferHandle,
+    buffer: knot_protocol::BufferHandle,
     cx: &App,
-) -> crate::host::protocol::DocumentInfo {
+) -> knot_protocol::DocumentInfo {
     use crate::app::documents::DocumentState;
-    use crate::host::protocol::{DocumentInfo, DocumentKind, IndentationInfo, IndentationStyle};
+    use knot_protocol::{DocumentInfo, DocumentKind, IndentationInfo, IndentationStyle};
     let language = crate::app::languages::effective_language(document.model().read(cx), cx);
     let scope = crate::app::settings::SettingsScope {
         language: Some(language.clone()),
@@ -2676,7 +2677,7 @@ mod tests {
 
     #[gpui::test]
     fn application_context_failures_have_distinct_results(cx: &mut TestAppContext) {
-        use crate::host::protocol::{RequestContext, RequestId};
+        use knot_protocol::{RequestContext, RequestId};
         cx.update(|cx| {
             let commands = cx.new(crate::app::commands::dispatch::ProductCommandDispatcher::new);
             cx.set_global(ApplicationProductCommands(commands));
@@ -2734,7 +2735,7 @@ mod tests {
 
     #[gpui::test]
     fn nested_view_result_rejects_a_detached_captured_target(cx: &mut TestAppContext) {
-        use crate::host::protocol::{CommandOutcome, CommandRegistrationId};
+        use knot_protocol::{CommandOutcome, CommandRegistrationId};
 
         cx.update(|cx| {
             let commands = cx.new(crate::app::commands::dispatch::ProductCommandDispatcher::new);
@@ -2785,7 +2786,7 @@ mod tests {
 
     #[gpui::test]
     fn product_host_owns_reload_identity_and_foreground_teardown(cx: &mut TestAppContext) {
-        use crate::host::protocol::{ExtensionId, ExtensionLifecycleId};
+        use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
         cx.update(|cx| {
             let commands = cx.new(crate::app::commands::dispatch::ProductCommandDispatcher::new);
@@ -2864,12 +2865,12 @@ mod tests {
         });
         cx.update(|cx| {
             let first = ExtensionKey::new(
-                crate::host::protocol::ExtensionId::new(1),
-                crate::host::protocol::ExtensionLifecycleId::new(1),
+                knot_protocol::ExtensionId::new(1),
+                knot_protocol::ExtensionLifecycleId::new(1),
             );
             let second = ExtensionKey::new(
-                crate::host::protocol::ExtensionId::new(2),
-                crate::host::protocol::ExtensionLifecycleId::new(1),
+                knot_protocol::ExtensionId::new(2),
+                knot_protocol::ExtensionLifecycleId::new(1),
             );
             host.update(cx, |host, cx| {
                 host.unload(first, cx).unwrap();

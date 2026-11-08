@@ -4,7 +4,7 @@ use std::rc::Rc;
 use gpui::{AppContext, Subscription, TestAppContext};
 
 use super::{TreeProviderIdentity, TreeView, TreeViewEvent, TreeViewRegistrationError};
-use crate::host::protocol::{
+use knot_protocol::{
     CommandArgumentValue, ExtensionId, ExtensionLifecycleId, TreeAction, TreeChildrenResponse,
     TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderRegistrationId,
 };
@@ -147,7 +147,7 @@ fn stale_and_disposed_tree_responses_are_ignored(cx: &mut TestAppContext) {
                     icon: None,
                     collapsible_state: TreeCollapsibleState::None,
                     command: None,
-                    kind: crate::host::protocol::TreeItemKind::Item,
+                    kind: knot_protocol::TreeItemKind::Item,
                     status_text: None,
                     badge: None,
                     actions: Vec::new(),
@@ -205,7 +205,7 @@ fn owner(registration: TreeProviderRegistrationId) -> TreeProviderIdentity {
 
 fn response(
     registration: TreeProviderRegistrationId,
-    view: crate::host::protocol::ViewId,
+    view: knot_protocol::ViewId,
     parent_id: Option<String>,
     generation: u64,
     items: Vec<TreeItem>,
@@ -386,7 +386,7 @@ fn arrow_keys_move_selection_across_visible_rows(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn loading_and_error_states_are_local_to_one_parent(cx: &mut TestAppContext) {
-    use crate::host::protocol::TreeProviderError;
+    use knot_protocol::TreeProviderError;
 
     let registration = TreeProviderRegistrationId::new(8);
     let tree = cx.new(|cx| TreeView::new("example.git", "1", cx));

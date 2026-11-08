@@ -5,7 +5,7 @@ use std::time::Duration;
 use super::*;
 use crate::app::languages::editing::{BracketPair as RegisteredPair, EditingDefinition};
 use crate::app::syntax::{LanguageResolver, SyntaxLanguage};
-use crate::core::buffer::TextBuffer;
+use knot_core::buffer::TextBuffer;
 
 const MARKDOWN_INJECTIONS: &str = r#"
 (fenced_code_block

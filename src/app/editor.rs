@@ -41,8 +41,8 @@ use std::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::core::anchored_range::AnchoredRangeId;
-use crate::host::protocol::{
+use knot_core::anchored_range::AnchoredRangeId;
+use knot_protocol::{
     BufferHandle, ByteRange, CompletionProviderRegistrationId, CompletionRequest,
     CompletionResponse, DecorationStyle, TextEdit,
 };
@@ -280,10 +280,10 @@ pub struct Editor {
     auto_closed: Vec<brackets::AutoClosed>,
     /// Named key contexts keybindings can require, each owned by the
     /// extension lifecycle that set it. Presentation state, never recorded.
-    key_contexts: Vec<(crate::host::lifecycle::ExtensionKey, SharedString)>,
+    key_contexts: Vec<(knot_host::lifecycle::ExtensionKey, SharedString)>,
     /// Caret shapes lifecycles have set; the latest one wins and each belongs
     /// to its lifecycle. Presentation state, never recorded.
-    caret_shapes: Vec<(crate::host::lifecycle::ExtensionKey, CaretShape)>,
+    caret_shapes: Vec<(knot_host::lifecycle::ExtensionKey, CaretShape)>,
     _model_subscription: Subscription,
     _release_subscription: Subscription,
 }
@@ -478,7 +478,7 @@ impl Editor {
     /// contexts independently, so one clearing a name leaves another's.
     pub(crate) fn set_key_context(
         &mut self,
-        owner: crate::host::lifecycle::ExtensionKey,
+        owner: knot_host::lifecycle::ExtensionKey,
         name: &str,
         active: bool,
     ) {
@@ -501,7 +501,7 @@ impl Editor {
     /// previous lifecycle's.
     pub(crate) fn set_caret_shape(
         &mut self,
-        owner: crate::host::lifecycle::ExtensionKey,
+        owner: knot_host::lifecycle::ExtensionKey,
         shape: Option<CaretShape>,
         cx: &mut Context<Self>,
     ) {
@@ -518,7 +518,7 @@ impl Editor {
     }
 
     /// The command a text binding routes this editor's typed text to.
-    pub(crate) fn text_command(&self, cx: &App) -> Option<crate::host::protocol::CommandName> {
+    pub(crate) fn text_command(&self, cx: &App) -> Option<knot_protocol::CommandName> {
         cx.try_global::<crate::app::commands::keymaps::ApplicationKeymaps>()?
             .0
             .resolve_text(&self.view_kind, &self.key_contexts())
@@ -527,7 +527,7 @@ impl Editor {
     /// Clear every key context and caret shape `owner` set.
     pub(crate) fn remove_owner_state(
         &mut self,
-        owner: crate::host::lifecycle::ExtensionKey,
+        owner: knot_host::lifecycle::ExtensionKey,
         cx: &mut Context<Self>,
     ) {
         self.key_contexts.retain(|(key, _)| *key != owner);

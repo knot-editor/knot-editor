@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpui::{prelude::FluentBuilder, *};
 
-use crate::host::protocol::{
+use knot_protocol::{
     Command, CommandArgumentValue, ExtensionId, ExtensionLifecycleId, TreeAction,
     TreeChildrenRequest, TreeChildrenResponse, TreeCollapsibleState, TreeIcon, TreeItem,
     TreeItemKind, TreeProviderRegistrationId, ViewId,

@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::host::protocol::CommandOutcome;
+use knot_protocol::CommandOutcome;
 
 use gpui::*;
 
@@ -119,7 +119,7 @@ impl CommandCompletion {
     )
 )]
 struct CommandExecution {
-    id: crate::host::protocol::CommandInvocationId,
+    id: knot_protocol::CommandInvocationId,
     completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
 }
 

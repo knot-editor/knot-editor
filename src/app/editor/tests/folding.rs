@@ -263,7 +263,7 @@ fn fold_commands_collapse_the_innermost_region_at_the_caret(cx: &mut TestAppCont
 fn rust_regions_editor(cx: &mut TestAppContext, text: &str) -> gpui::Entity<Editor> {
     use crate::app::languages::editing::EditingDefinition;
     use crate::app::languages::{self, LanguageDefinition, LanguageOwner, LanguageQueries};
-    use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
+    use knot_protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
     cx.update(|cx| {
         cx.set_global(ApplicationSettings::default());
         let rust = LanguageDefinition {

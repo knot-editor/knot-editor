@@ -2,7 +2,7 @@
 
 use super::*;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(super) fn validate_root_module_specifier(specifier: &str) -> Result<String, RuntimeError> {
     let parsed = Url::parse(specifier).map_err(|_| RuntimeError {
         kind: RuntimeErrorKind::InvalidModuleSpecifier,
@@ -169,10 +169,7 @@ pub(super) fn clear_module_registry(state: &RuntimeLocalState) {
 
 /// Check syntax and static imports without evaluating user code. The caller
 /// supplies an immutable graph and runs this away from the foreground thread.
-pub(crate) fn validate_module_graph_entry(
-    graph: &ModuleGraph,
-    entry: &str,
-) -> Result<(), RuntimeError> {
+pub fn validate_module_graph_entry(graph: &ModuleGraph, entry: &str) -> Result<(), RuntimeError> {
     let entry = graph.entry_url(entry).ok_or_else(|| {
         RuntimeError::fatal(
             RuntimeErrorKind::InvalidModuleSpecifier,

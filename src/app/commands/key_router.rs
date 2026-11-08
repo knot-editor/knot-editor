@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use gpui::Keystroke;
 
-use crate::host::protocol::Command;
+use knot_protocol::Command;
 
 /// How long a pending sequence waits for its next key.
 pub(crate) const SEQUENCE_TIMEOUT: Duration = Duration::from_secs(1);

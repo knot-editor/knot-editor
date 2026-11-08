@@ -1,11 +1,11 @@
-use crate::host::protocol::{
+use knot_protocol::{
     CommandArgumentValue, CommandName, CommandRegistrationId, ExtensionLifecycleId,
 };
 
 use super::*;
 use crate::app::declared_host as declared;
-use crate::host::declarations::{DeclaredRequest, Handler};
-use crate::host::protocol::{HostRequest, RequestId};
+use knot_protocol::declarations::{DeclaredRequest, Handler};
+use knot_protocol::{HostRequest, RequestId};
 fn operation<H: Handler>(args: H::Arguments) -> DeclaredRequest {
     DeclaredRequest::new::<H>(args)
 }
@@ -28,7 +28,7 @@ fn request(
     identity: Lifecycle,
     id: u64,
     invocation: Option<CommandInvocationId>,
-    operation: crate::host::declarations::DeclaredRequest,
+    operation: knot_protocol::declarations::DeclaredRequest,
 ) -> HostRequest {
     HostRequest {
         extension: identity.0,

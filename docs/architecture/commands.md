@@ -1,7 +1,7 @@
 # Commands and keymaps
 
 Part of the [architecture](../architecture.md). [Decisions](../decisions.md)
-records rationale. Public API contracts live in [knot.d.ts](../../src/host/js/knot.d.ts).
+records rationale. Public API contracts live in [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts).
 
 ## Dispatch
 

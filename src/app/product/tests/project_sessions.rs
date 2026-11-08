@@ -754,7 +754,7 @@ fn arrangement(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> Value 
             }
         }
     }
-    let target = crate::host::protocol::WindowTarget {
+    let target = knot_protocol::WindowTarget {
         window: crate::app::product::test_session_id(window),
     };
     let layout = cx

@@ -10,13 +10,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 use std::sync::mpsc;
 
-use super::{
-    lifecycle::{ExtensionKey, ExtensionState, Failure},
-    protocol::{ExtensionId, ExtensionLifecycleId},
-};
+use super::lifecycle::{ExtensionKey, ExtensionState, Failure};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Fixed worker count for one scheduler pool lifetime.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,7 +27,7 @@ impl PoolConfig {
         Self { workers }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub const fn single_worker() -> Self {
         Self::new(NonZeroUsize::MIN)
     }
@@ -77,7 +75,7 @@ pub struct Turn<W> {
 pub enum TurnOutcome {
     Completed,
     AwaitingHostWork,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     ReadyForContinuation,
     Fatal(Failure),
 }
@@ -90,7 +88,7 @@ pub enum CompletionOutcome {
     Failed(Failure),
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 /// Point-in-time scheduler diagnostics for one extension lifetime.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExtensionDiagnostics {
@@ -103,7 +101,7 @@ pub struct ExtensionDiagnostics {
     pub max_enqueue_to_start_lag: Duration,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 /// Point-in-time diagnostics for one bounded scheduler pool.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SchedulerDiagnostics {
@@ -120,7 +118,7 @@ pub struct SchedulerDiagnostics {
 
 /// Whether any extension has work in progress, and how many turns have
 /// finished, so a test can tell when the pool has gone quiet.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Activity {
     /// Some extension is loading, queued, running, or awaiting host work.
@@ -146,7 +144,7 @@ pub enum SchedulerError {
         received: RootId,
     },
     DuplicateOrStaleTurn(TurnId),
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     NoContinuation,
     Stopping,
     Failed(Failure),
@@ -161,20 +159,20 @@ impl std::fmt::Display for SchedulerError {
 impl std::error::Error for SchedulerError {}
 
 struct CompletionSlot {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     blocking: Option<mpsc::Sender<CompletionOutcome>>,
     asynchronous: Option<tokio::sync::oneshot::Sender<CompletionOutcome>>,
 }
 
 /// Awaitable view of one root's terminal disposition. Tests may also block on it.
 pub struct CompletionReceiver {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     blocking: mpsc::Receiver<CompletionOutcome>,
     asynchronous: tokio::sync::oneshot::Receiver<CompletionOutcome>,
 }
 
 impl CompletionReceiver {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn recv(&self) -> Result<CompletionOutcome, mpsc::RecvError> {
         self.blocking.recv()
     }
@@ -195,7 +193,7 @@ impl Future for CompletionReceiver {
 
 impl CompletionSlot {
     fn settle(&mut self, outcome: CompletionOutcome) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(blocking) = self.blocking.take() {
             let _ = blocking.send(outcome.clone());
         }
@@ -249,7 +247,7 @@ pub struct StateMachine<W> {
     turn_count: u64,
     worker_movements: u64,
     max_enqueue_to_start_lag: Duration,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     finished_turns: u64,
 }
 
@@ -265,7 +263,7 @@ impl<W> Default for StateMachine<W> {
             turn_count: 0,
             worker_movements: 0,
             max_enqueue_to_start_lag: Duration::ZERO,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             finished_turns: 0,
         }
     }
@@ -333,7 +331,7 @@ impl<W> StateMachine<W> {
         }
         let id = RootId::new(self.next_root);
         self.next_root += 1;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         let (sender, receiver) = mpsc::channel();
         let (async_sender, async_receiver) = tokio::sync::oneshot::channel();
         let was_idle = {
@@ -352,7 +350,7 @@ impl<W> StateMachine<W> {
                     enqueued_at: Instant::now(),
                 },
                 completion: CompletionSlot {
-                    #[cfg(test)]
+                    #[cfg(any(test, feature = "test-support"))]
                     blocking: Some(sender),
                     asynchronous: Some(async_sender),
                 },
@@ -366,7 +364,7 @@ impl<W> StateMachine<W> {
         Ok((
             id,
             CompletionReceiver {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 blocking: receiver,
                 asynchronous: async_receiver,
             },
@@ -414,7 +412,7 @@ impl<W> StateMachine<W> {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn next_turn(&mut self) -> Option<Turn<W>> {
         self.next_turn_on_worker(0)
     }
@@ -472,7 +470,7 @@ impl<W> StateMachine<W> {
         turn: TurnId,
         outcome: TurnOutcome,
     ) -> Result<(), SchedulerError> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         {
             self.finished_turns += 1;
         }
@@ -513,7 +511,7 @@ impl<W> StateMachine<W> {
                     self.extension_mut(key)?.state = ExtensionState::AwaitingHostWork;
                 }
             }
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             TurnOutcome::ReadyForContinuation => {
                 if self
                     .extension(key)?
@@ -566,7 +564,7 @@ impl<W> StateMachine<W> {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn state(&self, key: ExtensionKey) -> Result<&ExtensionState, SchedulerError> {
         Ok(&self.extension(key)?.state)
     }
@@ -575,7 +573,7 @@ impl<W> StateMachine<W> {
         self.shutting_down
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn activity(&self) -> Activity {
         Activity {
             busy: self.extensions.values().any(|extension| {
@@ -591,7 +589,7 @@ impl<W> StateMachine<W> {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn diagnostics(&self, worker_count: usize) -> SchedulerDiagnostics {
         let mut extensions = self
             .extensions
@@ -731,9 +729,9 @@ struct Shared<W> {
     ready: Condvar,
     /// Signalled after every finished turn, apart from `ready` so a waiting
     /// test never takes a wakeup meant for a worker.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     turn_finished: Condvar,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     worker_count: usize,
 }
 
@@ -800,19 +798,19 @@ impl<W> SchedulerHandle<W> {
         self.shared.state.lock().unwrap().stop(key)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn state(&self, key: ExtensionKey) -> Result<ExtensionState, SchedulerError> {
         self.shared.state.lock().unwrap().state(key).cloned()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn activity(&self) -> Activity {
         self.shared.state.lock().unwrap().activity()
     }
 
     /// Block until more than `finished` turns have finished, or `timeout`
     /// passes; false on timeout.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn wait_for_turn(&self, finished: u64, timeout: Duration) -> bool {
         let state = self.shared.state.lock().unwrap();
         let (_state, result) = self
@@ -823,7 +821,7 @@ impl<W> SchedulerHandle<W> {
         !result.timed_out()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn diagnostics(&self) -> SchedulerDiagnostics {
         self.shared
             .state
@@ -850,9 +848,9 @@ impl<W: Send + 'static> SchedulerPool<W> {
         let shared = Arc::new(Shared {
             state: Mutex::new(StateMachine::default()),
             ready: Condvar::new(),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             turn_finished: Condvar::new(),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             worker_count: config.workers().get(),
         });
         let executor = Arc::new(executor);
@@ -877,12 +875,12 @@ impl<W: Send + 'static> SchedulerPool<W> {
         self.handle.clone()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn worker_count(&self) -> usize {
         self.handle.shared.worker_count
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn diagnostics(&self) -> SchedulerDiagnostics {
         self.handle.diagnostics()
     }
@@ -944,7 +942,7 @@ fn worker_loop<W: Send + 'static>(
         }
         drop(state);
         shared.ready.notify_all();
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         shared.turn_finished.notify_all();
     }
 }

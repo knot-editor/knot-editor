@@ -7,7 +7,7 @@ use std::time::Duration;
 use super::*;
 use crate::app::languages::editing::{BracketPair, EditingDefinition};
 use crate::app::syntax::{LanguageResolver, SyntaxLanguage, SyntaxState};
-use crate::core::buffer::TextBuffer;
+use knot_core::buffer::TextBuffer;
 
 const BLOCKS: &str = r#"
 (block) @indent.begin

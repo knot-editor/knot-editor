@@ -10,16 +10,14 @@ use std::{
 
 use gpui::{AppContext, Context, Entity, Subscription, WeakEntity};
 
-use crate::{
-    core::{
-        anchored_range::{AnchoredRangeId, AnchoredRangeStore},
-        buffer::{BufferEdit, TextBuffer},
-    },
-    host::lifecycle::ExtensionKey,
-    host::protocol::{
-        BufferHandle, BufferSubscriptionId, ByteRange, Decoration, EditorContribution, ExtensionId,
-        ExtensionLifecycleId, SnapshotText,
-    },
+use knot_core::{
+    anchored_range::{AnchoredRangeId, AnchoredRangeStore},
+    buffer::{BufferEdit, TextBuffer},
+};
+use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::{
+    BufferHandle, BufferSubscriptionId, ByteRange, Decoration, EditorContribution, ExtensionId,
+    ExtensionLifecycleId, SnapshotText,
 };
 
 use super::{
@@ -253,7 +251,7 @@ impl LineChange {
 pub(crate) struct CommittedBufferChange {
     pub before_revision: u64,
     pub revision: u64,
-    pub edits: Vec<crate::host::protocol::TextEdit>,
+    pub edits: Vec<knot_protocol::TextEdit>,
 }
 
 impl BufferModel {
@@ -872,7 +870,7 @@ impl BufferModel {
     pub(crate) fn snapshot(
         &self,
         range: Option<ByteRange>,
-    ) -> Result<crate::host::protocol::TextSnapshot, BufferAccessError> {
+    ) -> Result<knot_protocol::TextSnapshot, BufferAccessError> {
         let range = range.unwrap_or(ByteRange {
             start_byte_offset: 0,
             end_byte_offset: self.buffer.len(),
@@ -881,7 +879,7 @@ impl BufferModel {
             && cached.revision == self.revision
             && cached.range == range
         {
-            return Ok(crate::host::protocol::TextSnapshot {
+            return Ok(knot_protocol::TextSnapshot {
                 text: SnapshotText(Arc::clone(&cached.text)),
                 range,
                 revision: self.revision,
@@ -894,7 +892,7 @@ impl BufferModel {
             range,
             text: Arc::clone(&text),
         });
-        Ok(crate::host::protocol::TextSnapshot {
+        Ok(knot_protocol::TextSnapshot {
             text: SnapshotText(text),
             range,
             revision: self.revision,
@@ -907,7 +905,7 @@ impl BufferModel {
     /// from the final range backwards.
     pub(crate) fn apply_edits(
         &mut self,
-        edits: &[crate::host::protocol::TextEdit],
+        edits: &[knot_protocol::TextEdit],
         if_revision: u64,
     ) -> Result<bool, BufferAccessError> {
         if !self.open {
@@ -957,7 +955,7 @@ impl BufferModel {
         let edits = edits
             .into_iter()
             .filter(|(range, text)| self.buffer.read_range(range.clone()) != *text)
-            .map(|(range, text)| crate::host::protocol::TextEdit {
+            .map(|(range, text)| knot_protocol::TextEdit {
                 range: ByteRange {
                     start_byte_offset: range.start,
                     end_byte_offset: range.end,
@@ -988,7 +986,7 @@ impl BufferModel {
         let edits: Vec<_> = edits
             .into_iter()
             .filter(|(range, text)| self.buffer.read_range(range.clone()) != *text)
-            .map(|(range, text)| crate::host::protocol::TextEdit {
+            .map(|(range, text)| knot_protocol::TextEdit {
                 range: ByteRange {
                     start_byte_offset: range.start,
                     end_byte_offset: range.end,
@@ -1055,7 +1053,7 @@ impl BufferModel {
 
     fn commit_batch(
         &mut self,
-        edits: Vec<crate::host::protocol::TextEdit>,
+        edits: Vec<knot_protocol::TextEdit>,
         view: Option<HistoryViewChange>,
     ) {
         let before_state = self.content_state;
@@ -1144,7 +1142,7 @@ impl BufferModel {
         if range.is_empty() && text.is_empty() {
             return false;
         }
-        let edit = crate::host::protocol::TextEdit {
+        let edit = knot_protocol::TextEdit {
             range: ByteRange {
                 start_byte_offset: range.start,
                 end_byte_offset: range.end,
@@ -1315,7 +1313,7 @@ impl BufferModel {
 
     /// One replacement, in pre-edit coordinates, covering every primitive
     /// applied since `seq`. Reads only the replaced span.
-    fn covering_edit(&self, seq: usize) -> crate::host::protocol::TextEdit {
+    fn covering_edit(&self, seq: usize) -> knot_protocol::TextEdit {
         // `start..end` is the changed span in current coordinates, and
         // `before_len` its length before the first primitive.
         let mut span: Option<(usize, usize, usize)> = None;
@@ -1337,7 +1335,7 @@ impl BufferModel {
             });
         }
         let (start, end, before_len) = span.expect("history replay applied no primitive");
-        crate::host::protocol::TextEdit {
+        knot_protocol::TextEdit {
             range: ByteRange {
                 start_byte_offset: start,
                 end_byte_offset: start + before_len,

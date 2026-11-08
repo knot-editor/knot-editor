@@ -11,20 +11,18 @@ use super::{
 };
 use std::sync::Arc;
 
-use crate::{
-    app::{
-        completion::CompletionProviderRegistry,
-        languages::{self, LanguageDefinition, LanguageOwner},
-        settings::{
-            ApplicationSettings, EDITOR_INSERT_SPACES, EDITOR_TAB_SIZE, FONT_SIZE, SettingsScope,
-        },
-        syntax::{SyntaxLanguage, SyntaxState},
-        theme::{Appearance, Highlight, Theme, color, native_color_definitions, theme},
+use crate::app::{
+    completion::CompletionProviderRegistry,
+    languages::{self, LanguageDefinition, LanguageOwner},
+    settings::{
+        ApplicationSettings, EDITOR_INSERT_SPACES, EDITOR_TAB_SIZE, FONT_SIZE, SettingsScope,
     },
-    host::protocol::{
-        BufferHandle, ByteRange, CompletionResponse, CompletionResultItem, Decoration,
-        DecorationStyle, EditorContribution, ExtensionId, ExtensionLifecycleId, LanguageInfo,
-    },
+    syntax::{SyntaxLanguage, SyntaxState},
+    theme::{Appearance, Highlight, Theme, color, native_color_definitions, theme},
+};
+use knot_protocol::{
+    BufferHandle, ByteRange, CompletionResponse, CompletionResultItem, Decoration, DecorationStyle,
+    EditorContribution, ExtensionId, ExtensionLifecycleId, LanguageInfo,
 };
 
 #[gpui::test]
@@ -1956,7 +1954,7 @@ fn double_click_and_word_movement_stop_at_separators(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn caret_shape_is_the_latest_lifecycles_and_reverts_when_cleared(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     let first = ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
     let second = ExtensionKey::new(ExtensionId::new(2), ExtensionLifecycleId::new(1));
     let model = cx.new(|_| BufferModel::from_text("abc".to_string()));

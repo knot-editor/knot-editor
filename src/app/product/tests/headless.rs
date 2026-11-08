@@ -3,8 +3,8 @@
 //! and text to that surface's input.
 use super::*;
 use crate::app::transient::{TransientOutcome, TransientOwner};
-use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, PickerItem};
 use gpui::Keystroke;
+use knot_protocol::{ExtensionId, ExtensionLifecycleId, PickerItem};
 
 fn headless_session(
     documents: &Entity<DocumentCollection>,

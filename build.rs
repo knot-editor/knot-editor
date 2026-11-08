@@ -16,7 +16,7 @@ fn main() {
     println!("cargo::rerun-if-changed=extensions/@knot");
     println!("cargo::rerun-if-changed=scripts/extensions/package-lock.json");
     println!("cargo::rerun-if-changed=scripts/extensions/tsconfig.base.json");
-    println!("cargo::rerun-if-changed=src/host/js/knot.d.ts");
+    println!("cargo::rerun-if-changed=crates/knot-host/src/js/knot.d.ts");
 
     install_tools(&tools);
 

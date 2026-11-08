@@ -6,8 +6,7 @@
 //!
 //! A declaration supplies its typed adapter and linked descriptor:
 //! ```no_run
-//! mod host { pub use knot::declarations; }
-//! use host::declarations::*;
+//! use knot_protocol::declarations::*;
 //! #[derive(Clone, Debug, PartialEq)]
 //! struct Arguments;
 //! impl HostArguments for Arguments {
@@ -22,16 +21,14 @@
 //!
 //! Declarations require owned contexts and asynchronous handlers:
 //! ```compile_fail
-//! mod host { pub use knot::declarations; }
-//! use host::declarations::host_operation;
+//! use knot_protocol::declarations::host_operation;
 //! #[host_operation("invalid")]
 //! async fn invalid(context: &str, arguments: ()) -> Result<(), ()> { Ok(()) }
 //! fn main() {}
 //! ```
 //!
 //! ```compile_fail
-//! mod host { pub use knot::declarations; }
-//! use host::declarations::host_operation;
+//! use knot_protocol::declarations::host_operation;
 //! #[host_operation("invalid")]
 //! fn invalid(context: (), arguments: ()) -> Result<(), ()> { Ok(()) }
 //! fn main() {}
@@ -39,8 +36,7 @@
 //!
 //! Error codes must be declared explicitly:
 //! ```compile_fail
-//! mod host { pub use knot::declarations; }
-//! use host::declarations::HostError;
+//! use knot_protocol::declarations::HostError;
 //! #[derive(HostError)]
 //! enum Error { RenamableRustVariant }
 //! fn main() {}
@@ -48,8 +44,7 @@
 //!
 //! Typed responders cannot accept another success type:
 //! ```compile_fail
-//! mod host { pub use knot::declarations; }
-//! use host::declarations::*;
+//! use knot_protocol::declarations::*;
 //! #[derive(Clone, Debug, PartialEq)]
 //! struct Arguments;
 //! impl HostArguments for Arguments {
@@ -64,7 +59,7 @@
 
 use std::{any::Any, collections::BTreeMap, fmt, future::Future, pin::Pin, sync::Arc};
 
-use super::protocol::DocumentDestination;
+use crate::DocumentDestination;
 
 pub use knot_handler_macros::{HostError, host_operation};
 
@@ -76,14 +71,14 @@ pub trait ArgumentReader {
     fn command_arguments(
         &mut self,
         index: usize,
-    ) -> Result<super::protocol::CommandArgumentValue, DecodeError>;
-    fn outcome(&mut self, index: usize) -> Result<super::protocol::CommandOutcome, DecodeError>;
-    fn range(&mut self, index: usize) -> Result<Option<super::protocol::ByteRange>, DecodeError>;
-    fn edits(&mut self, index: usize) -> Result<Vec<super::protocol::TextEdit>, DecodeError>;
+    ) -> Result<crate::CommandArgumentValue, DecodeError>;
+    fn outcome(&mut self, index: usize) -> Result<crate::CommandOutcome, DecodeError>;
+    fn range(&mut self, index: usize) -> Result<Option<crate::ByteRange>, DecodeError>;
+    fn edits(&mut self, index: usize) -> Result<Vec<crate::TextEdit>, DecodeError>;
     fn contributions(
         &mut self,
         index: usize,
-    ) -> Result<Vec<super::protocol::EditorContribution>, DecodeError>;
+    ) -> Result<Vec<crate::EditorContribution>, DecodeError>;
     fn optional_text(
         &mut self,
         index: usize,
@@ -109,7 +104,7 @@ pub enum DecodeError {
 
 pub trait HostArguments: Clone + fmt::Debug + PartialEq + Send + Sync + 'static {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError>;
-    fn provider_mutation(&self) -> Option<super::protocol::ProviderIdentity> {
+    fn provider_mutation(&self) -> Option<crate::ProviderIdentity> {
         None
     }
 }
@@ -121,7 +116,7 @@ pub trait HostSuccess: 'static {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EncodedValue {
     Undefined,
-    Snapshot(super::protocol::TextSnapshot),
+    Snapshot(crate::TextSnapshot),
     Json(serde_json::Value),
 }
 
@@ -155,25 +150,49 @@ impl<T: serde::Serialize + 'static> HostSuccess for Option<T> {
     }
 }
 
-impl HostSuccess for super::protocol::WorkbenchObservation {
+impl HostSuccess for crate::DocumentPresentation {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::WorkspaceInfo {
+impl HostSuccess for crate::PresentationInfo {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::WindowInfo {
+impl HostSuccess for crate::ByteRange {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::PresentationCloseOutcome {
+impl HostSuccess for crate::LanguageInfo {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+impl HostSuccess for crate::WorkbenchObservation {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+impl HostSuccess for crate::WorkspaceInfo {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+impl HostSuccess for crate::WindowInfo {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+impl HostSuccess for crate::PresentationCloseOutcome {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
@@ -184,75 +203,75 @@ impl HostSuccess for u64 {
         encode_json(self)
     }
 }
-impl HostSuccess for super::protocol::BufferSubscriptionId {
+impl HostSuccess for crate::BufferSubscriptionId {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
-impl HostSuccess for super::protocol::SettingsSubscriptionId {
+impl HostSuccess for crate::SettingsSubscriptionId {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
-impl HostSuccess for super::protocol::TextSnapshot {
+impl HostSuccess for crate::TextSnapshot {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         Ok(EncodedValue::Snapshot(self))
     }
 }
 
-impl HostSuccess for super::protocol::TreeProviderRegistrationId {
+impl HostSuccess for crate::TreeProviderRegistrationId {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
-impl HostSuccess for super::protocol::CompletionProviderRegistrationId {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
-    }
-}
-
-impl HostSuccess for super::protocol::CommandRegistrationId {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
-    }
-}
-impl HostSuccess for super::protocol::CommandInvokeDispatch {
+impl HostSuccess for crate::CompletionProviderRegistrationId {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::PickerResult {
+impl HostSuccess for crate::CommandRegistrationId {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+impl HostSuccess for crate::CommandInvokeDispatch {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::PickerUpdate {
+impl HostSuccess for crate::PickerResult {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::InputUpdate {
+impl HostSuccess for crate::PickerUpdate {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::InputResult {
+impl HostSuccess for crate::InputUpdate {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::ConfirmationResult {
+impl HostSuccess for crate::InputResult {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
 }
 
-impl HostSuccess for super::protocol::FolderPickerResult {
+impl HostSuccess for crate::ConfirmationResult {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+impl HostSuccess for crate::FolderPickerResult {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)
     }
@@ -362,11 +381,11 @@ pub struct DeclaredResponse {
 trait ErasedArguments: fmt::Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
     fn equals(&self, other: &dyn ErasedArguments) -> bool;
-    fn provider_mutation(&self) -> Option<super::protocol::ProviderIdentity>;
+    fn provider_mutation(&self) -> Option<crate::ProviderIdentity>;
 }
 
 impl<A: HostArguments> ErasedArguments for A {
-    fn provider_mutation(&self) -> Option<super::protocol::ProviderIdentity> {
+    fn provider_mutation(&self) -> Option<crate::ProviderIdentity> {
         HostArguments::provider_mutation(self)
     }
 
@@ -392,11 +411,11 @@ impl PartialEq for DeclaredRequest {
 }
 
 impl DeclaredRequest {
-    pub fn provider_mutation(&self) -> Option<super::protocol::ProviderIdentity> {
+    pub fn provider_mutation(&self) -> Option<crate::ProviderIdentity> {
         self.arguments.provider_mutation()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn new<H: Handler>(arguments: H::Arguments) -> Self {
         let descriptor = registry().get(H::NAME).expect("registered handler");
         assert_eq!((descriptor.handler_type)(), std::any::TypeId::of::<H>());
@@ -406,7 +425,7 @@ impl DeclaredRequest {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn arguments<H: Handler>(&self) -> Option<&H::Arguments> {
         (self.descriptor.name == H::NAME)
             .then(|| self.arguments.as_any().downcast_ref::<H::Arguments>())
@@ -427,7 +446,7 @@ pub struct OperationDescriptor {
     invoke: InvokeAdapter,
     pub error_codes: fn() -> Vec<&'static str>,
     context_type: fn() -> std::any::TypeId,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     handler_type: fn() -> std::any::TypeId,
     argument_type: fn() -> std::any::TypeId,
 }
@@ -469,7 +488,7 @@ impl OperationDescriptor {
             },
             error_codes: H::Error::codes,
             context_type: std::any::TypeId::of::<H::Context>,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             handler_type: std::any::TypeId::of::<H>,
             argument_type: std::any::TypeId::of::<H::Arguments>,
         }
@@ -693,44 +712,5 @@ mod tests {
         };
         assert_eq!(response.result, Ok(Ok(EncodedValue::Undefined)));
         assert!(committed.get());
-    }
-
-    #[test]
-    fn linked_product_handlers_are_discovered_in_test_binaries() {
-        let registry = registry();
-        assert!(registry.get("openDocument").is_some());
-        assert!(registry.get("writeClipboardText").is_some());
-        assert!(registry.error_codes().contains(&"Cancelled"));
-        assert!(registry.error_codes().contains(&"ResourceNotFound"));
-    }
-}
-
-#[cfg(test)]
-mod declaration_contract {
-    use super::*;
-
-    #[test]
-    fn declaration_codes_match_public_typescript() {
-        let mut codes = registry().error_codes();
-        codes.extend(TransportError::codes());
-        codes.sort_unstable();
-        codes.dedup();
-        let declaration = include_str!("js/knot.d.ts")
-            .split("export type HostErrorCode =")
-            .nth(1)
-            .unwrap()
-            .split(';')
-            .next()
-            .unwrap();
-        let mut declared = declaration
-            .split('"')
-            .enumerate()
-            .filter_map(|(index, value)| (index % 2 == 1).then_some(value))
-            .collect::<Vec<_>>();
-        declared.sort_unstable();
-        assert_eq!(
-            codes, declared,
-            "update HostErrorCode from handler and transport descriptors"
-        );
     }
 }

@@ -6,12 +6,12 @@ fmt:
 
 # Lint all Rust targets
 lint:
-    cargo clippy --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets -- -D warnings
 
 # Run all Rust tests, each in its own process, then doc tests
 test:
-    cargo nextest run --all-targets
-    cargo test --doc
+    cargo nextest run --workspace --all-targets
+    cargo test --workspace --doc
 
 # Run Knot
 run:

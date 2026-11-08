@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use gpui::{App, Global, KeyBinding, Keystroke, Modifiers};
 
-use crate::host::protocol::{
+use knot_protocol::{
     Command, CommandArgumentValue, CommandName, ExtensionId, ExtensionLifecycleId,
     KeybindingMutation,
 };

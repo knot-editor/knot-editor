@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use gpui::{prelude::*, *};
 
-use crate::host::protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId};
 
 use super::picker::Picker;
 use super::text_input::{TextInput, TextInputEvent};

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use gpui::Global;
 use serde::Deserialize;
 
-use crate::host::protocol::{CommandArgumentValue, ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{CommandArgumentValue, ExtensionId, ExtensionLifecycleId};
 
 /// Which end of the bar an item sits at.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize)]

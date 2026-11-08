@@ -1442,7 +1442,7 @@ fn close_discarding(
     shell: &Entity<ProductShell>,
     between: impl FnOnce(&mut gpui::App),
     cx: &mut TestAppContext,
-) -> Result<crate::host::protocol::PresentationCloseOutcome, ProtectedCloseFailure> {
+) -> Result<knot_protocol::PresentationCloseOutcome, ProtectedCloseFailure> {
     let result = std::rc::Rc::new(std::cell::RefCell::new(None));
     let sink = result.clone();
     cx.update(|cx| {
@@ -1515,7 +1515,7 @@ async fn a_discarding_close_skips_the_prompt_and_recovery_keeps_the_text_until_i
     let closed = close_discarding(&shell, |_| {}, cx);
     assert!(matches!(
         closed,
-        Ok(crate::host::protocol::PresentationCloseOutcome::Closed)
+        Ok(knot_protocol::PresentationCloseOutcome::Closed)
     ));
     assert!(cx.read(|cx| documents.read(cx).get(document).is_none()));
     recovery(cx).flush().await.unwrap();

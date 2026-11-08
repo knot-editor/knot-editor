@@ -390,7 +390,7 @@ impl ProductShell {
                         let name = command.name.clone();
                         let arguments = command.arguments.clone();
                         this.dispatch_command(
-                            crate::host::protocol::Command {
+                            knot_protocol::Command {
                                 name: name.into(),
                                 arguments,
                             },

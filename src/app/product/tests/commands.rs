@@ -364,8 +364,8 @@ async fn native_participants_reject_arguments_before_mutation(cx: &mut TestAppCo
 fn palette_shows_titles_descriptions_and_bindings_and_hides_opted_out_commands(
     cx: &mut TestAppContext,
 ) {
-    use crate::host::lifecycle::ExtensionKey;
-    use crate::host::protocol::{ExtensionId, ExtensionLifecycleId};
+    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
     const SOURCE: &str = r#"
 import { commands, keymaps } from "knot";

@@ -271,7 +271,7 @@ impl ExtensionView {
         }
     }
 
-    pub(crate) fn instance_id(&self, cx: &App) -> crate::host::protocol::ViewId {
+    pub(crate) fn instance_id(&self, cx: &App) -> knot_protocol::ViewId {
         match self {
             Self::Tree(view) => view.read(cx).instance_id(),
             Self::Text(view) => view.read(cx).instance_id(),
@@ -280,7 +280,7 @@ impl ExtensionView {
 
     pub(crate) fn handle_command(
         &self,
-        command: &crate::host::protocol::Command,
+        command: &knot_protocol::Command,
         cx: &mut App,
     ) -> super::commands::dispatch::CommandClaim {
         match self {

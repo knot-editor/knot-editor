@@ -21,32 +21,27 @@ use std::{
 
 use url::Url;
 
-#[cfg(test)]
-use super::protocol::{
-    CommandInvokeDispatch, CommandRegistrationId, CompletionProviderRegistrationId,
-    TreeProviderRegistrationId,
-};
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 use std::sync::mpsc;
 
 use super::{
-    declarations::{HostError, HostFailure, TransportError},
     lifecycle::{ExtensionKey, Failure},
     module_graph::{ConfigPhase, ModuleGraph},
-    protocol::{
-        ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
-        ByteRange, Command, CommandArgumentValue, CommandInvocation, CommandInvocationId,
-        CommandOutcome, CompletionProviderError, CompletionRequest, CompletionResponse,
-        CompletionResultItem, Decoration, DecorationStyle, EditorContribution, EditorEvent,
-        ExtensionId, HostRequest, HostResponse, KeybindingMutation, ProviderIdentity, RequestId,
-        SettingsSubscriptionId, SnapshotText, TextEdit, TextSnapshot, TreeAction,
-        TreeChildrenRequest, TreeChildrenResponse, TreeCollapsibleState, TreeIcon, TreeItem,
-        TreeItemKind, TreeProviderError, WorkbenchSubscriptionId,
-    },
     scheduler::{
         CompletionOutcome, CompletionReceiver, PoolConfig, RootId, SchedulerError, SchedulerHandle,
         SchedulerPool, Turn, TurnOutcome,
     },
+};
+use knot_protocol::declarations::{HostError, HostFailure, TransportError};
+use knot_protocol::{
+    ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
+    ByteRange, Command, CommandArgumentValue, CommandInvocation, CommandInvocationId,
+    CommandOutcome, CompletionProviderError, CompletionRequest, CompletionResponse,
+    CompletionResultItem, Decoration, DecorationStyle, EditorContribution, EditorEvent,
+    ExtensionId, HostRequest, HostResponse, KeybindingMutation, ProviderIdentity, RequestId,
+    SettingsSubscriptionId, SnapshotText, TextEdit, TextSnapshot, TreeAction, TreeChildrenRequest,
+    TreeChildrenResponse, TreeCollapsibleState, TreeIcon, TreeItem, TreeItemKind,
+    TreeProviderError, WorkbenchSubscriptionId,
 };
 
 static V8_INITIALIZATION: Once = Once::new();
@@ -54,7 +49,7 @@ const DEFAULT_HEAP_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 const ACTIVE: u8 = 0;
 const TERMINATED: u8 = 1;
 const HEAP_LIMIT_EXCEEDED: u8 = 2;
-const DISPOSED: u8 = 3;
+pub const DISPOSED: u8 = 3;
 /// A turn at least this long has probably left garbage behind, so the worker
 /// releases the isolate's memory after it.
 const LONG_TURN: Duration = Duration::from_millis(100);
@@ -68,7 +63,7 @@ type ResultSender<T> = tokio::sync::oneshot::Sender<Result<T, RuntimeError>>;
 type ResultReceiver<T> = tokio::sync::oneshot::Receiver<Result<T, RuntimeError>>;
 
 /// Initializes V8 before any extension worker thread is created.
-pub(crate) fn initialize() {
+pub fn initialize() {
     V8_INITIALIZATION.call_once(|| {
         let platform = v8::new_default_platform(0, false).make_shared();
         v8::V8::initialize_platform(platform);
@@ -78,21 +73,21 @@ pub(crate) fn initialize() {
 
 /// Engine configuration for one extension lifetime.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct IsolateConfig {
+pub struct IsolateConfig {
     heap_limit_bytes: usize,
     /// Names the extension in its console output.
     name: Option<Arc<str>>,
 }
 
 impl IsolateConfig {
-    pub(crate) const fn with_heap_limit(heap_limit_bytes: usize) -> Self {
+    pub const fn with_heap_limit(heap_limit_bytes: usize) -> Self {
         Self {
             heap_limit_bytes,
             name: None,
         }
     }
 
-    pub(crate) fn named(name: &str) -> Self {
+    pub fn named(name: &str) -> Self {
         Self {
             name: Some(Arc::from(name)),
             ..Self::default()
@@ -108,15 +103,15 @@ impl Default for IsolateConfig {
 
 /// V8 heap statistics of one isolate, in bytes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct HeapUsage {
-    pub(crate) used: usize,
-    pub(crate) total: usize,
-    pub(crate) external: usize,
+pub struct HeapUsage {
+    pub used: usize,
+    pub total: usize,
+    pub external: usize,
 }
 
 /// Stable, Knot-owned classification of a JavaScript runtime failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RuntimeErrorKind {
+pub enum RuntimeErrorKind {
     Compilation,
     InvalidModuleSpecifier,
     ModuleResolution,
@@ -132,7 +127,7 @@ pub(crate) enum RuntimeErrorKind {
 
 /// A runtime failure containing no V8-owned values or handles.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct RuntimeError {
+pub struct RuntimeError {
     kind: RuntimeErrorKind,
     message: Arc<str>,
     source: Option<Arc<str>>,
@@ -142,28 +137,28 @@ pub(crate) struct RuntimeError {
 }
 
 impl RuntimeError {
-    #[cfg(test)]
-    pub(crate) fn kind(&self) -> RuntimeErrorKind {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn kind(&self) -> RuntimeErrorKind {
         self.kind
     }
 
-    pub(crate) fn message(&self) -> &str {
+    pub fn message(&self) -> &str {
         &self.message
     }
 
-    pub(crate) fn source(&self) -> Option<&str> {
+    pub fn source(&self) -> Option<&str> {
         self.source.as_deref()
     }
 
-    pub(crate) fn line(&self) -> Option<u32> {
+    pub fn line(&self) -> Option<u32> {
         self.line
     }
 
-    pub(crate) fn column(&self) -> Option<u32> {
+    pub fn column(&self) -> Option<u32> {
         self.column
     }
 
-    pub(crate) fn stack(&self) -> Option<&str> {
+    pub fn stack(&self) -> Option<&str> {
         self.stack.as_deref()
     }
 
@@ -195,14 +190,14 @@ impl RuntimeError {
 
 /// A failure to admit or address a runtime lifecycle.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum RuntimePoolError {
+pub enum RuntimePoolError {
     Scheduler(SchedulerError),
     Runtime(RuntimeError),
 }
 
 /// A host response that cannot address one live pending request.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum RuntimeResponseError {
+pub enum RuntimeResponseError {
     Scheduler(SchedulerError),
     WrongExtension,
     UnknownRequest,
@@ -251,9 +246,9 @@ impl std::error::Error for RuntimePoolError {}
 
 /// Knot-owned result diagnostics for one isolate turn.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ExecutionReport {
-    pub(crate) value: Arc<str>,
-    pub(crate) worker: ThreadId,
+pub struct ExecutionReport {
+    pub value: Arc<str>,
+    pub worker: ThreadId,
 }
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -268,31 +263,31 @@ enum RuntimeCallback {
     Completion,
 }
 
-struct RuntimeLocalState {
+pub struct RuntimeLocalState {
     key: ExtensionKey,
     name: Option<Arc<str>>,
-    status: Arc<AtomicU8>,
+    pub status: Arc<AtomicU8>,
     next_request: AtomicU64,
     event_sender: Mutex<Option<tokio::sync::mpsc::UnboundedSender<EngineEvent>>>,
     current_root: Mutex<Option<RootId>>,
-    pending: Mutex<HashMap<RequestId, PendingRequest>>,
+    pub pending: Mutex<HashMap<RequestId, PendingRequest>>,
     active: Mutex<Option<ActiveExecution>>,
     rejections: Mutex<Vec<RejectionReport>>,
     modules: Mutex<ModuleRegistry>,
     callbacks: Mutex<HashMap<RuntimeCallback, v8::Global<v8::Function>>>,
     buffer_changes: Mutex<BufferChangeQueueState>,
     cancelled_commands: Mutex<HashSet<CommandInvocationId>>,
-    #[cfg(test)]
-    command_start_gate: Mutex<Option<Arc<std::sync::Barrier>>>,
+    #[cfg(any(test, feature = "test-support"))]
+    pub command_start_gate: Mutex<Option<Arc<std::sync::Barrier>>>,
     keybinding_mutations: Mutex<Vec<KeybindingMutation>>,
     keybinding_batch_pending: Mutex<Option<RequestId>>,
     deferred_responses: Mutex<Vec<HostResponse>>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     host_error: Mutex<Option<HostFailure>>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     barrier: Mutex<Option<Arc<TestGate>>>,
-    #[cfg(test)]
-    entered: Mutex<Option<mpsc::Sender<()>>>,
+    #[cfg(any(test, feature = "test-support"))]
+    pub entered: Mutex<Option<mpsc::Sender<()>>>,
 }
 
 impl RuntimeLocalState {
@@ -316,16 +311,16 @@ impl RuntimeLocalState {
             callbacks: Mutex::new(HashMap::new()),
             buffer_changes: Mutex::new(BufferChangeQueueState::default()),
             cancelled_commands: Mutex::new(HashSet::new()),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             command_start_gate: Mutex::new(None),
             keybinding_mutations: Mutex::new(Vec::new()),
             keybinding_batch_pending: Mutex::new(None),
             deferred_responses: Mutex::new(Vec::new()),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             host_error: Mutex::new(None),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             barrier: Mutex::new(None),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             entered: Mutex::new(None),
         }
     }
@@ -362,13 +357,13 @@ impl RuntimeLocalState {
             .max(enqueued_at.elapsed());
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn buffer_change_queue_metrics(&self) -> BufferChangeQueueMetrics {
         self.buffer_changes.lock().unwrap().metrics
     }
 }
 
-struct PendingRequest {
+pub struct PendingRequest {
     root: RootId,
     invocation: Option<CommandInvocationId>,
     operation: &'static str,
@@ -402,9 +397,9 @@ enum ActiveCompletion {
 
 /// Observed buffer-change callback pressure for one extension lifetime.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) struct BufferChangeQueueMetrics {
-    pub(crate) max_depth: usize,
-    pub(crate) max_enqueue_to_start_lag: Duration,
+pub struct BufferChangeQueueMetrics {
+    pub max_depth: usize,
+    pub max_enqueue_to_start_lag: Duration,
 }
 
 #[derive(Default)]
@@ -414,7 +409,7 @@ struct BufferChangeQueueState {
 }
 
 enum RootEvaluation {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     Script {
         source: Arc<str>,
     },
@@ -592,17 +587,17 @@ impl ModuleCompileFailure {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Default)]
-struct TestGate {
-    entered: Mutex<usize>,
-    ready: std::sync::Condvar,
-    timed_out: AtomicBool,
+pub struct TestGate {
+    pub entered: Mutex<usize>,
+    pub ready: std::sync::Condvar,
+    pub timed_out: AtomicBool,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl TestGate {
-    fn wait(&self) {
+    pub fn wait(&self) {
         let mut entered = self
             .entered
             .lock()
@@ -631,13 +626,13 @@ struct RejectionReport {
 }
 
 struct HeapLimitState {
-    status: Arc<AtomicU8>,
+    pub status: Arc<AtomicU8>,
     isolate: v8::IsolateHandle,
 }
 
-struct IsolateData {
-    isolate: v8::SharedIsolate,
-    context: v8::Global<v8::Context>,
+pub struct IsolateData {
+    pub isolate: v8::SharedIsolate,
+    pub context: v8::Global<v8::Context>,
 }
 
 mod capsule;
@@ -645,12 +640,14 @@ mod execution;
 mod marshal;
 mod modules;
 mod pool;
-#[cfg(test)]
-mod tests;
 
-pub(crate) use capsule::*;
-pub(crate) use execution::*;
+pub use capsule::*;
+pub use execution::*;
 use marshal::*;
-pub(crate) use modules::validate_module_graph_entry;
+#[cfg(any(test, feature = "test-support"))]
+pub use marshal::{
+    BoundaryError, MAX_JS_INTEGER, host_request_callback, string_property, value_u64,
+};
+pub use modules::validate_module_graph_entry;
 use modules::*;
-pub(crate) use pool::*;
+pub use pool::*;

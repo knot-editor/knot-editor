@@ -30,7 +30,7 @@ use tree_sitter::{Language, Node, Point, Query, QueryCursor, QueryMatch, QueryPr
 
 use super::{StreamingIterator, SyntaxLanguageError, SyntaxQuery, clamp};
 use crate::app::languages::editing::Bracket;
-use crate::core::buffer::TextSnapshot;
+use knot_core::buffer::TextSnapshot;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Capture {

@@ -135,7 +135,7 @@ impl EditTransaction {
     ///
     /// History owns the ordering proof; the transaction still rejects a
     /// different buffer instance.
-    pub(crate) fn prepare_for_history_replay(&mut self, buffer: &TextBuffer) {
+    pub fn prepare_for_history_replay(&mut self, buffer: &TextBuffer) {
         if let Some(checkpoint) = self.checkpoint {
             assert_eq!(
                 buffer.instance_id(),
@@ -296,7 +296,7 @@ impl Default for EditTransaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::buffer::TextBuffer;
+    use crate::buffer::TextBuffer;
 
     fn s(b: &TextBuffer) -> String {
         b.read_range(0..b.len())
@@ -524,7 +524,7 @@ mod tests {
 
     #[test]
     fn anchored_ranges_survive_or_get_consumed_through_forward_undo_redo() {
-        use crate::core::anchored_range::AnchoredRangeStore;
+        use crate::anchored_range::AnchoredRangeStore;
 
         // "hello world": h0 e1 l2 l3 o4 SP5 w6 o7 r8 l9 d10. len 11.
         let mut b = TextBuffer::from_text("hello world");

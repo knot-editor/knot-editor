@@ -249,8 +249,8 @@ enum ProtectedCloseFailure {
 }
 
 impl ProtectedCloseFailure {
-    fn command_outcome(self) -> crate::host::protocol::CommandOutcome {
-        use crate::host::protocol::CommandOutcome;
+    fn command_outcome(self) -> knot_protocol::CommandOutcome {
+        use knot_protocol::CommandOutcome;
         match self {
             Self::InvalidTarget => CommandOutcome::InvalidTarget,
             Self::InProgress => CommandOutcome::Unavailable,
@@ -261,10 +261,7 @@ impl ProtectedCloseFailure {
 }
 
 type ProtectedCloseCompletion = Box<
-    dyn FnOnce(
-        Result<crate::host::protocol::PresentationCloseOutcome, ProtectedCloseFailure>,
-        &mut App,
-    ),
+    dyn FnOnce(Result<knot_protocol::PresentationCloseOutcome, ProtectedCloseFailure>, &mut App),
 >;
 
 struct ApplicationFileSystems(Arc<FileSystemProviderRegistry>);
@@ -533,8 +530,8 @@ enum OpenFailure {
 }
 
 impl OpenFailure {
-    fn command_outcome(self) -> crate::host::protocol::CommandOutcome {
-        use crate::host::protocol::CommandOutcome;
+    fn command_outcome(self) -> knot_protocol::CommandOutcome {
+        use knot_protocol::CommandOutcome;
         match self {
             Self::InvalidTarget => CommandOutcome::InvalidTarget,
             Self::Cancelled => CommandOutcome::Cancelled,
@@ -652,7 +649,7 @@ struct ContributedView {
 }
 
 impl ContributedView {
-    fn instance_id(&self, cx: &App) -> crate::host::protocol::ViewId {
+    fn instance_id(&self, cx: &App) -> knot_protocol::ViewId {
         self.content.instance_id(cx)
     }
 
@@ -1010,10 +1007,10 @@ impl ProductShell {
     pub(crate) fn application_window(
         &self,
         session: EntityId,
-        buffers: &std::collections::HashMap<DocumentId, crate::host::protocol::BufferHandle>,
+        buffers: &std::collections::HashMap<DocumentId, knot_protocol::BufferHandle>,
         cx: &App,
-    ) -> crate::host::protocol::WindowInfo {
-        use crate::host::protocol::{
+    ) -> knot_protocol::WindowInfo {
+        use knot_protocol::{
             PaneInfo, PaneTarget, PresentationInfo, PresentationTarget, SurfaceKind, WindowInfo,
             WindowTarget,
         };
@@ -1267,7 +1264,7 @@ impl ProductShell {
 
     fn dispatch_command(
         &mut self,
-        command: crate::host::protocol::Command,
+        command: knot_protocol::Command,
         target: ProductCommandTarget,
         cx: &mut Context<Self>,
     ) {
@@ -1427,7 +1424,7 @@ impl ProductShell {
         &mut self,
         owner: TransientOwner,
         title: String,
-        items: Vec<crate::host::protocol::PickerItem>,
+        items: Vec<knot_protocol::PickerItem>,
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
@@ -1441,7 +1438,7 @@ impl ProductShell {
         &mut self,
         owner: Option<TransientOwner>,
         title: String,
-        items: Vec<crate::host::protocol::PickerItem>,
+        items: Vec<knot_protocol::PickerItem>,
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {

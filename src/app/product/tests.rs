@@ -51,7 +51,7 @@ use gpui::{
 };
 
 use super::super::commands::keymaps::{ApplicationKeymaps, BindingOwner, BindingResolution};
-use crate::host::protocol::{
+use knot_protocol::{
     Command, CommandArgumentValue, CommandOutcome, ExtensionId, ExtensionLifecycleId,
 };
 

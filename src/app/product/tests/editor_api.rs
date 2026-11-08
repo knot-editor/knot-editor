@@ -72,7 +72,7 @@ await commands.register("api.noeditor", async ({ editor }) => {
 "#;
 
 fn load(cx: &mut TestAppContext) -> Entity<crate::app::extensions::host::ProductExtensionHost> {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
         let execution = host
@@ -357,9 +357,9 @@ fn load_handle_extension(
     cx: &mut TestAppContext,
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
-    crate::host::lifecycle::ExtensionKey,
+    knot_host::lifecycle::ExtensionKey,
 ) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     let host = cx.update(super::super::super::extensions::host::install);
     let key = ExtensionKey::new(ExtensionId::new(721), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
@@ -662,7 +662,7 @@ fn clipboard_text(cx: &gpui::App) -> Option<String> {
 
 #[gpui::test]
 fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     let documents = install_globals(cx);
     let host = cx.update(super::super::super::extensions::host::install);
     let key = ExtensionKey::new(ExtensionId::new(722), ExtensionLifecycleId::new(1));
@@ -727,7 +727,7 @@ fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAp
 #[gpui::test]
 #[ignore = "measurement: run in release with --ignored --nocapture"]
 fn measure_selection_notification_latency(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     use std::time::{Duration, Instant};
     const MOVES: usize = 1000;
     const BURSTS: usize = 200;
@@ -868,13 +868,13 @@ fn undo_group_fixture(
     cx: &mut TestAppContext,
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
-    crate::host::lifecycle::ExtensionKey,
+    knot_host::lifecycle::ExtensionKey,
     Entity<ProductShell>,
     gpui::AnyWindowHandle,
     Entity<crate::app::editor::Editor>,
     Entity<BufferModel>,
 ) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     let documents = install_globals(cx);
     let host = cx.update(super::super::super::extensions::host::install);
     let key = ExtensionKey::new(ExtensionId::new(722), ExtensionLifecycleId::new(1));

@@ -899,8 +899,8 @@ mod tests {
 pub(crate) async fn copy_selected_uri(
     context: crate::app::commands::declarations::CommandContext,
     (): (),
-) -> Result<(), crate::host::protocol::CommandOutcome> {
-    use crate::host::protocol::CommandOutcome;
+) -> Result<(), knot_protocol::CommandOutcome> {
+    use knot_protocol::CommandOutcome;
     context
         .foreground(|target, cx| {
             let Some(crate::app::workbench::CommandView::Workspace(view)) = target.command_view(cx)

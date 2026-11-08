@@ -11,7 +11,7 @@ use super::*;
 use crate::app::recovery::{
     RestoreError, RestoreOutcome, SnapshotKind, SnapshotState, StoredSnapshot,
 };
-use crate::host::protocol::PickerItem;
+use knot_protocol::PickerItem;
 
 pub(super) const LISTING_TITLE: &str = "Recover Unsaved Documents";
 

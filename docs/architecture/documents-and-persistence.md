@@ -210,7 +210,7 @@ owner's release or the user's explicit discard. Restore follows the rules above
 and presents the document in the caller's destination; the capture stays in
 place until released.
 
-Contracts live in [knot.d.ts](../../src/host/js/knot.d.ts); implementation and
+Contracts live in [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts); implementation and
 physical schema live in [recovery.rs](../../src/app/recovery.rs).
 
 ## Observation

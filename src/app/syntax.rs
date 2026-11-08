@@ -47,7 +47,7 @@ use tree_sitter::{
     StreamingIterator, Tree,
 };
 
-use crate::core::buffer::{BufferEdit, TextPoint, TextSnapshot};
+use knot_core::buffer::{BufferEdit, TextPoint, TextSnapshot};
 
 use super::languages::editing::{EditingConfiguration, SyntaxFamily};
 use super::theme::Highlight;

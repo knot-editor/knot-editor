@@ -7,7 +7,7 @@ use crate::app::languages::{
     self, LanguageDefinition, LanguageOwner, LanguageQueries,
     editing::{CommentTokens, EditingDefinition},
 };
-use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
 const LINE: &str = "editor.toggle-line-comment";
 const BLOCK: &str = "editor.toggle-block-comment";

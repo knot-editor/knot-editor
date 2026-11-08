@@ -1,4 +1,4 @@
-use crate::host::protocol::{DecorationStyle, TextEdit};
+use knot_protocol::{DecorationStyle, TextEdit};
 
 use super::*;
 

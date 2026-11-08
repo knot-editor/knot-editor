@@ -6,13 +6,13 @@ use std::sync::Arc;
 use url::Url;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ConfigPhase {
+pub enum ConfigPhase {
     PreInit,
     PostInit,
 }
 
 impl ConfigPhase {
-    pub(crate) const fn entry(self) -> &'static str {
+    pub const fn entry(self) -> &'static str {
         match self {
             Self::PreInit => "pre-init.js",
             Self::PostInit => "post-init.js",
@@ -21,7 +21,7 @@ impl ConfigPhase {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ModuleGraph {
+pub struct ModuleGraph {
     root: Arc<str>,
     entry: Arc<str>,
     entries: Arc<BTreeMap<String, Arc<str>>>,
@@ -30,15 +30,11 @@ pub(crate) struct ModuleGraph {
 
 impl ModuleGraph {
     /// `root` is a directory file URL; file names and `entry` are relative to it.
-    pub(crate) fn new(
-        root: &str,
-        entry: &str,
-        files: BTreeMap<String, Arc<str>>,
-    ) -> Result<Self, String> {
+    pub fn new(root: &str, entry: &str, files: BTreeMap<String, Arc<str>>) -> Result<Self, String> {
         Self::with_entries(root, &[entry], files)
     }
 
-    pub(crate) fn with_entries(
+    pub fn with_entries(
         root: &str,
         entries: &[&str],
         files: BTreeMap<String, Arc<str>>,
@@ -88,23 +84,23 @@ impl ModuleGraph {
         })
     }
 
-    pub(crate) fn root(&self) -> &str {
+    pub fn root(&self) -> &str {
         &self.root
     }
 
-    pub(crate) fn entry(&self) -> &str {
+    pub fn entry(&self) -> &str {
         &self.entry
     }
 
-    pub(crate) fn entry_url(&self, name: &str) -> Option<&str> {
+    pub fn entry_url(&self, name: &str) -> Option<&str> {
         self.entries.get(name).map(AsRef::as_ref)
     }
 
-    pub(crate) fn entries(&self) -> &BTreeMap<String, Arc<str>> {
+    pub fn entries(&self) -> &BTreeMap<String, Arc<str>> {
         &self.entries
     }
 
-    pub(crate) fn sources(&self) -> &BTreeMap<String, Arc<str>> {
+    pub fn sources(&self) -> &BTreeMap<String, Arc<str>> {
         &self.sources
     }
 }

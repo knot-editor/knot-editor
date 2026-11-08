@@ -31,9 +31,9 @@ use crate::app::commands::dispatch::{
     ApplicationProductCommands, CommandClaim, ProductCommandTarget,
 };
 use crate::app::product::ProductShell;
-use crate::host::declarations::{AsyncHandler, HandlerFuture};
-use crate::host::protocol::{Command, CommandArgumentValue, CommandOutcome};
 use gpui::{App, Context};
+use knot_protocol::declarations::{AsyncHandler, HandlerFuture};
+use knot_protocol::{Command, CommandArgumentValue, CommandOutcome};
 
 /// Declares name/title, the routing participant, and a generated name constant.
 /// Repeated attributes share a typed async implementation. Optional claim

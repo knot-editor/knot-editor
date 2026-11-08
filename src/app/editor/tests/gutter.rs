@@ -13,7 +13,7 @@ use crate::app::settings::{
     ApplicationSettings, EDITOR_FOLDING, EDITOR_LINE_NUMBERS, EDITOR_SHOW_FOLDING_CONTROLS,
     Folding, LineNumbers, SettingsScope,
 };
-use crate::host::protocol::{ByteRange, EditorContribution};
+use knot_protocol::{ByteRange, EditorContribution};
 
 fn set_line_numbers(cx: &mut VisualTestContext, value: &str, view: Option<&str>) {
     cx.update(|_, cx| {

@@ -99,7 +99,7 @@ impl TerminalView {
             self.session
                 .update(cx, |session, cx| session.toggle_mouse_reporting(cx));
             cx.notify();
-            return CommandClaim::Finished(crate::host::protocol::CommandOutcome::Completed);
+            return CommandClaim::Finished(knot_protocol::CommandOutcome::Completed);
         }
         if command == TerminalCommand::Paste {
             if self.session.read(cx).status() != TerminalStatus::Running {
@@ -119,7 +119,7 @@ impl TerminalView {
                 };
                 self.send_user_input(text.into_bytes(), cx);
             }
-            return CommandClaim::Finished(crate::host::protocol::CommandOutcome::Completed);
+            return CommandClaim::Finished(knot_protocol::CommandOutcome::Completed);
         }
         let selected = self
             .session
@@ -129,7 +129,7 @@ impl TerminalView {
             .filter(|text| !text.is_empty());
         if let Some(text) = selected {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
-            CommandClaim::Finished(crate::host::protocol::CommandOutcome::Completed)
+            CommandClaim::Finished(knot_protocol::CommandOutcome::Completed)
         } else {
             CommandClaim::Declined
         }
@@ -1106,7 +1106,7 @@ mod mouse_tests;
 
 use crate::app::commands::declarations::{CommandContext, command};
 use crate::app::commands::dispatch::ProductCommandTarget;
-use crate::host::protocol::{Command, CommandArgumentValue, CommandOutcome};
+use knot_protocol::{Command, CommandArgumentValue, CommandOutcome};
 
 fn claim_terminal(command: &Command, target: &ProductCommandTarget, cx: &App) -> bool {
     let Some(crate::app::workbench::CommandView::Terminal(view)) = target.command_view(cx) else {

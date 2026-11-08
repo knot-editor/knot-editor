@@ -3,7 +3,7 @@
 use super::*;
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum BoundaryError {
+pub enum BoundaryError {
     Type(&'static str),
     Range(&'static str),
     Host(TransportError),
@@ -44,16 +44,16 @@ pub(super) fn boundary_exception<'s>(
     }
 }
 
-pub(super) fn host_request_callback<'s, 'i>(
+pub fn host_request_callback<'s, 'i>(
     scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
     arguments: v8::FunctionCallbackArguments<'s>,
     mut result: v8::ReturnValue,
 ) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     let configured_error = scope
         .get_slot::<Arc<RuntimeLocalState>>()
         .and_then(|state| state.host_error.lock().ok()?.take());
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let configured_error: Option<HostFailure> = None;
     let resolver = v8::PromiseResolver::new(scope).unwrap();
     if let Some(error) = configured_error {
@@ -283,10 +283,8 @@ pub(super) fn parse_keybinding_mutation<'s, 'i>(
 pub(super) fn document_destination_from_v8<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     value: v8::Local<'s, v8::Value>,
-) -> Result<Option<crate::host::protocol::DocumentDestination>, BoundaryError> {
-    use crate::host::protocol::{
-        DocumentDestination, PaneTarget, PresentationTarget, WindowTarget,
-    };
+) -> Result<Option<knot_protocol::DocumentDestination>, BoundaryError> {
+    use knot_protocol::{DocumentDestination, PaneTarget, PresentationTarget, WindowTarget};
     if value.is_null_or_undefined() {
         return Ok(None);
     }
@@ -340,11 +338,11 @@ pub(super) struct DeclarationReader<'a, 's, 'i> {
     arguments: &'a v8::FunctionCallbackArguments<'s>,
 }
 
-impl crate::host::declarations::ArgumentReader for DeclarationReader<'_, '_, '_> {
+impl knot_protocol::declarations::ArgumentReader for DeclarationReader<'_, '_, '_> {
     fn optional_integer(
         &mut self,
         index: usize,
-    ) -> Result<Option<u64>, crate::host::declarations::DecodeError> {
+    ) -> Result<Option<u64>, knot_protocol::declarations::DecodeError> {
         optional_u64(
             self.scope,
             self.arguments.get(index as i32),
@@ -355,35 +353,35 @@ impl crate::host::declarations::ArgumentReader for DeclarationReader<'_, '_, '_>
     fn command_arguments(
         &mut self,
         index: usize,
-    ) -> Result<CommandArgumentValue, crate::host::declarations::DecodeError> {
+    ) -> Result<CommandArgumentValue, knot_protocol::declarations::DecodeError> {
         command_argument_from_v8(self.scope, self.arguments.get(index as i32))
             .map_err(declaration_decode_error)
     }
     fn outcome(
         &mut self,
         index: usize,
-    ) -> Result<CommandOutcome, crate::host::declarations::DecodeError> {
+    ) -> Result<CommandOutcome, knot_protocol::declarations::DecodeError> {
         command_outcome_from_v8(self.scope, self.arguments.get(index as i32))
-            .map_err(|_| crate::host::declarations::DecodeError::Type("UnsupportedOperation"))
+            .map_err(|_| knot_protocol::declarations::DecodeError::Type("UnsupportedOperation"))
     }
 
     fn range(
         &mut self,
         index: usize,
-    ) -> Result<Option<ByteRange>, crate::host::declarations::DecodeError> {
+    ) -> Result<Option<ByteRange>, knot_protocol::declarations::DecodeError> {
         optional_byte_range(self.scope, self.arguments.get(index as i32))
             .map_err(declaration_decode_error)
     }
     fn edits(
         &mut self,
         index: usize,
-    ) -> Result<Vec<TextEdit>, crate::host::declarations::DecodeError> {
+    ) -> Result<Vec<TextEdit>, knot_protocol::declarations::DecodeError> {
         text_edits(self.scope, self.arguments.get(index as i32)).map_err(declaration_decode_error)
     }
     fn contributions(
         &mut self,
         index: usize,
-    ) -> Result<Vec<EditorContribution>, crate::host::declarations::DecodeError> {
+    ) -> Result<Vec<EditorContribution>, knot_protocol::declarations::DecodeError> {
         editor_contributions(self.scope, self.arguments.get(index as i32))
             .map_err(declaration_decode_error)
     }
@@ -392,7 +390,7 @@ impl crate::host::declarations::ArgumentReader for DeclarationReader<'_, '_, '_>
         &mut self,
         index: usize,
         message: &'static str,
-    ) -> Result<Option<String>, crate::host::declarations::DecodeError> {
+    ) -> Result<Option<String>, knot_protocol::declarations::DecodeError> {
         optional_string(self.scope, self.arguments.get(index as i32), message)
             .map_err(declaration_decode_error)
     }
@@ -400,25 +398,25 @@ impl crate::host::declarations::ArgumentReader for DeclarationReader<'_, '_, '_>
         &mut self,
         index: usize,
         message: &'static str,
-    ) -> Result<Option<bool>, crate::host::declarations::DecodeError> {
+    ) -> Result<Option<bool>, knot_protocol::declarations::DecodeError> {
         let value = self.arguments.get(index as i32);
         if value.is_null_or_undefined() {
             Ok(None)
         } else if value.is_boolean() {
             Ok(Some(value.is_true()))
         } else {
-            Err(crate::host::declarations::DecodeError::Type(message))
+            Err(knot_protocol::declarations::DecodeError::Type(message))
         }
     }
     fn text_list(
         &mut self,
         index: usize,
-    ) -> Result<Vec<String>, crate::host::declarations::DecodeError> {
+    ) -> Result<Vec<String>, knot_protocol::declarations::DecodeError> {
         workspace_root_uris(self.scope, self.arguments.get(index as i32))
             .map_err(declaration_decode_error)
     }
 
-    fn integer(&mut self, index: usize) -> Result<u64, crate::host::declarations::DecodeError> {
+    fn integer(&mut self, index: usize) -> Result<u64, knot_protocol::declarations::DecodeError> {
         argument_u64(self.scope, self.arguments, index as i32).map_err(declaration_decode_error)
     }
 
@@ -426,17 +424,15 @@ impl crate::host::declarations::ArgumentReader for DeclarationReader<'_, '_, '_>
         &mut self,
         index: usize,
         message: &'static str,
-    ) -> Result<String, crate::host::declarations::DecodeError> {
+    ) -> Result<String, knot_protocol::declarations::DecodeError> {
         required_string(self.scope, self.arguments.get(index as i32), message)
             .map_err(declaration_decode_error)
     }
     fn destination(
         &mut self,
         index: usize,
-    ) -> Result<
-        Option<crate::host::protocol::DocumentDestination>,
-        crate::host::declarations::DecodeError,
-    > {
+    ) -> Result<Option<knot_protocol::DocumentDestination>, knot_protocol::declarations::DecodeError>
+    {
         document_destination_from_v8(self.scope, self.arguments.get(index as i32))
             .map_err(declaration_decode_error)
     }
@@ -444,20 +440,20 @@ impl crate::host::declarations::ArgumentReader for DeclarationReader<'_, '_, '_>
 
 pub(super) fn declaration_decode_error(
     error: BoundaryError,
-) -> crate::host::declarations::DecodeError {
+) -> knot_protocol::declarations::DecodeError {
     match error {
-        BoundaryError::Type(message) => crate::host::declarations::DecodeError::Type(message),
-        BoundaryError::Range(message) => crate::host::declarations::DecodeError::Range(message),
+        BoundaryError::Type(message) => knot_protocol::declarations::DecodeError::Type(message),
+        BoundaryError::Range(message) => knot_protocol::declarations::DecodeError::Range(message),
         BoundaryError::Host(_) => unreachable!("argument decoding returns author errors"),
     }
 }
 
-impl From<crate::host::declarations::DecodeError> for BoundaryError {
-    fn from(error: crate::host::declarations::DecodeError) -> Self {
+impl From<knot_protocol::declarations::DecodeError> for BoundaryError {
+    fn from(error: knot_protocol::declarations::DecodeError) -> Self {
         match error {
-            crate::host::declarations::DecodeError::Type(message) => Self::Type(message),
-            crate::host::declarations::DecodeError::Range(message) => Self::Range(message),
-            crate::host::declarations::DecodeError::Host(error) => Self::Host(error),
+            knot_protocol::declarations::DecodeError::Type(message) => Self::Type(message),
+            knot_protocol::declarations::DecodeError::Range(message) => Self::Range(message),
+            knot_protocol::declarations::DecodeError::Host(error) => Self::Host(error),
         }
     }
 }
@@ -465,9 +461,9 @@ impl From<crate::host::declarations::DecodeError> for BoundaryError {
 pub(super) fn parse_host_operation<'s, 'i>(
     scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
     arguments: &v8::FunctionCallbackArguments<'s>,
-) -> Result<(crate::host::declarations::DeclaredRequest, &'static str), BoundaryError> {
+) -> Result<(knot_protocol::declarations::DeclaredRequest, &'static str), BoundaryError> {
     let operation = required_string(scope, arguments.get(1), "operation must be text")?;
-    if let Some(descriptor) = crate::host::declarations::registry().get(&operation) {
+    if let Some(descriptor) = knot_protocol::declarations::registry().get(&operation) {
         let request = descriptor.decode(&mut DeclarationReader { scope, arguments })?;
         return Ok((request, descriptor.name));
     }
@@ -494,7 +490,7 @@ pub(super) fn argument_u64(
     value_u64(scope, arguments.get(index), "UnsupportedOperation")
 }
 
-pub(super) fn value_u64(
+pub fn value_u64(
     scope: &mut v8::PinnedRef<'_, v8::HandleScope>,
     value: v8::Local<'_, v8::Value>,
     _error: &'static str,
@@ -910,7 +906,7 @@ pub(super) fn command_outcome_from_v8<'s>(
     })
 }
 
-pub(super) fn string_property<'s>(
+pub fn string_property<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     object: v8::Local<'s, v8::Object>,
     name: &str,
@@ -1077,7 +1073,7 @@ pub(super) fn completion_response_from_v8<'s>(
     }
 }
 
-pub(super) const MAX_JS_INTEGER: u64 = 9_007_199_254_740_991;
+pub const MAX_JS_INTEGER: u64 = 9_007_199_254_740_991;
 
 pub(super) fn exact_number<'s>(
     scope: &mut v8::PinScope<'s, '_>,
@@ -1089,10 +1085,10 @@ pub(super) fn exact_number<'s>(
     Ok(v8::Number::new(scope, value as f64).into())
 }
 
-pub(super) fn application_document_is_exact(info: &crate::host::protocol::DocumentInfo) -> bool {
+pub(super) fn application_document_is_exact(info: &knot_protocol::DocumentInfo) -> bool {
     info.revision <= MAX_JS_INTEGER && info.buffer.value() <= MAX_JS_INTEGER
 }
-pub(super) fn application_window_is_exact(info: &crate::host::protocol::WindowInfo) -> bool {
+pub(super) fn application_window_is_exact(info: &knot_protocol::WindowInfo) -> bool {
     info.workspace.generation <= MAX_JS_INTEGER
         && info.panes.iter().flat_map(|pane| &pane.tabs).all(|tab| {
             tab.buffer
@@ -1128,9 +1124,9 @@ pub(super) fn application_event_to_v8<'s>(
 
 pub(super) fn host_failure_exception<'s>(
     scope: &mut v8::PinScope<'s, '_>,
-    error: &crate::host::declarations::HostFailure,
+    error: &knot_protocol::declarations::HostFailure,
 ) -> v8::Local<'s, v8::Value> {
-    if let Err(error) = crate::host::declarations::encode_json(&error.details) {
+    if let Err(error) = knot_protocol::declarations::encode_json(&error.details) {
         return boundary_exception(scope, error.into());
     }
 
@@ -1150,9 +1146,9 @@ pub(super) fn host_failure_exception<'s>(
 
 pub(super) fn declared_response_to_v8<'s>(
     scope: &mut v8::PinScope<'s, '_>,
-    response: &crate::host::declarations::DeclaredResponse,
+    response: &knot_protocol::declarations::DeclaredResponse,
 ) -> Result<v8::Local<'s, v8::Value>, v8::Local<'s, v8::Value>> {
-    use crate::host::declarations::{EncodedValue, encode_json};
+    use knot_protocol::declarations::{EncodedValue, encode_json};
     let json_value = |scope: &mut v8::PinScope<'s, '_>, value: &serde_json::Value| {
         encode_json(value).map_err(|error| boundary_exception(scope, error.into()))?;
         let json = serde_json::to_string(value).expect("encoded host data");

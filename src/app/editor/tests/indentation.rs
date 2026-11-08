@@ -11,7 +11,7 @@ use crate::app::languages::{
     editing::{BracketPair, EditingDefinition},
 };
 use crate::app::settings::ApplicationSettings;
-use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
 const NEWLINE: &str = "editor.insert-newline";
 const TAB: &str = "editor.insert-tab";

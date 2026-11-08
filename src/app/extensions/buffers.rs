@@ -4,13 +4,13 @@ use std::collections::HashSet;
 
 use gpui::{App, Entity};
 
-use crate::host::protocol::{
+use knot_protocol::{
     BufferChange, BufferHandle, BufferSubscriptionId, ExtensionId, ExtensionLifecycleId,
     RequestContext, TextSnapshot,
 };
 
 use crate::app::extensions::host::handlers::AccessError;
-use crate::host::declarations::HostError;
+use knot_protocol::declarations::HostError;
 
 use crate::app::model::{
     BufferAccessError, BufferClosed, BufferModel, BufferRegistry, BufferSubscriptionRegistry,
@@ -393,7 +393,7 @@ mod tests {
 
     use gpui::{AppContext, TestAppContext};
 
-    use crate::host::protocol::{
+    use knot_protocol::{
         ByteRange, Decoration, DecorationStyle, EditorContribution, RequestId, TextEdit,
     };
 

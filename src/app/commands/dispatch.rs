@@ -6,7 +6,7 @@ use super::catalog::{CommandCatalog, CommandDefinition, CommandMetadata, SharedC
 use crate::app::product::ProductShell;
 use crate::app::workbench::CommandView;
 use crate::app::{CommandCompletion, CommandExecution};
-use crate::host::protocol::{Command, CommandArgumentValue, CommandOutcome, ViewId};
+use knot_protocol::{Command, CommandArgumentValue, CommandOutcome, ViewId};
 
 pub(crate) use crate::app::editor::native_commands::*;
 pub(crate) use crate::app::product::commands::*;
@@ -205,7 +205,7 @@ impl ProductCommandDispatcher {
         target: ProductCommandTarget,
         cx: &mut Context<Self>,
     ) -> CommandExecution {
-        let id = crate::host::protocol::CommandInvocationId::new(self.next_invocation);
+        let id = knot_protocol::CommandInvocationId::new(self.next_invocation);
         self.next_invocation = self
             .next_invocation
             .checked_add(1)

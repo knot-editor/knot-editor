@@ -5,7 +5,7 @@ Neovim, VS Code, and Zed, and tests the proposal that building a complete Vim
 mode in JavaScript (D058) is a good way to bring Knot to Neovim-level
 extensibility. The new and reordered items are in the
 [roadmap](../roadmap.md#editor-extensibility). The current contract is
-`src/host/js/knot.d.ts`; extension runtime behavior is owned by
+`crates/knot-host/src/js/knot.d.ts`; extension runtime behavior is owned by
 [extension host](../architecture/extension-host.md) and
 [commands](../architecture/commands.md).
 

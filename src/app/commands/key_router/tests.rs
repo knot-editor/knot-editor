@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::commands::keymaps::{BindingOwner, BindingRegistry};
-use crate::host::protocol::{CommandArgumentValue, ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{CommandArgumentValue, ExtensionId, ExtensionLifecycleId};
 
 fn command(name: &str) -> Command {
     Command {

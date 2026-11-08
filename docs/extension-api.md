@@ -1,6 +1,6 @@
 # Writing extensions for Knot
 
-The [TypeScript declarations](../src/host/js/knot.d.ts) are the API version 1
+The [TypeScript declarations](../crates/knot-host/src/js/knot.d.ts) are the API version 1
 reference for parameters, defaults, errors, completion, and lifetime rules.
 This guide covers setup and common workflows. Knot runs JavaScript; TypeScript
 is the recommended authoring language and compiles before installation.

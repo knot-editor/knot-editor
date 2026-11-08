@@ -6,7 +6,7 @@ impl ProductShell {
     pub(super) fn finish_save_command(
         &mut self,
         completion: CommandCompletion,
-        outcome: crate::host::protocol::CommandOutcome,
+        outcome: knot_protocol::CommandOutcome,
         cx: &mut Context<Self>,
     ) {
         completion.complete(outcome.clone());
@@ -29,28 +29,16 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) {
         if !self.target_is_live(&target, cx) {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         }
         let documents = Self::documents(cx);
         let Some(document_id) = target_document(&target) else {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::Unavailable,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::Unavailable, cx);
             return;
         };
         let Some(document) = documents.read(cx).get(document_id) else {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         };
 
@@ -103,7 +91,7 @@ impl ProductShell {
                     SaveDialogOutcome::Cancelled => {
                         this.finish_save_command(
                             completion,
-                            crate::host::protocol::CommandOutcome::Cancelled,
+                            knot_protocol::CommandOutcome::Cancelled,
                             cx,
                         );
                         cx.notify();
@@ -117,7 +105,7 @@ impl ProductShell {
                         );
                         this.finish_save_command(
                             completion,
-                            crate::host::protocol::CommandOutcome::HandlerFailure { message },
+                            knot_protocol::CommandOutcome::HandlerFailure { message },
                             cx,
                         );
                         cx.notify();
@@ -125,7 +113,7 @@ impl ProductShell {
                 })
                 .is_err()
             {
-                fallback.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                fallback.complete(knot_protocol::CommandOutcome::InvalidTarget);
             }
         });
         self.tasks.push(task);
@@ -140,11 +128,7 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) {
         if !self.target_is_live(&target, cx) {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         }
         let documents = Self::documents(cx);
@@ -155,7 +139,7 @@ impl ProductShell {
             else {
                 self.finish_save_command(
                     completion,
-                    crate::host::protocol::CommandOutcome::InvalidTarget,
+                    knot_protocol::CommandOutcome::InvalidTarget,
                     cx,
                 );
                 return;
@@ -180,7 +164,7 @@ impl ProductShell {
             );
             self.finish_save_command(
                 completion,
-                crate::host::protocol::CommandOutcome::HandlerFailure { message },
+                knot_protocol::CommandOutcome::HandlerFailure { message },
                 cx,
             );
             cx.notify();
@@ -201,11 +185,7 @@ impl ProductShell {
                 &model,
             )
         }) else {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         };
         cx.notify();
@@ -272,9 +252,9 @@ impl ProductShell {
                             )
                         });
                         let outcome = if committed {
-                            crate::host::protocol::CommandOutcome::Completed
+                            knot_protocol::CommandOutcome::Completed
                         } else {
-                            crate::host::protocol::CommandOutcome::InvalidTarget
+                            knot_protocol::CommandOutcome::InvalidTarget
                         };
                         this.finish_save_command(completion, outcome, cx);
                         cx.notify();
@@ -282,7 +262,7 @@ impl ProductShell {
                     Ok(_) => {
                         this.finish_save_command(
                             completion,
-                            crate::host::protocol::CommandOutcome::InvalidTarget,
+                            knot_protocol::CommandOutcome::InvalidTarget,
                             cx,
                         );
                     }
@@ -302,7 +282,7 @@ impl ProductShell {
                         );
                         this.finish_save_command(
                             completion,
-                            crate::host::protocol::CommandOutcome::HandlerFailure { message },
+                            knot_protocol::CommandOutcome::HandlerFailure { message },
                             cx,
                         );
                         cx.notify();
@@ -310,7 +290,7 @@ impl ProductShell {
                 })
                 .is_err()
             {
-                fallback.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                fallback.complete(knot_protocol::CommandOutcome::InvalidTarget);
             }
         });
         self.tasks.push(task);
@@ -324,11 +304,7 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) {
         if !self.target_is_live(&target, cx) {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         }
         let prompt = self.prompt(
@@ -356,7 +332,7 @@ impl ProductShell {
                     _ => {
                         this.finish_save_command(
                             completion,
-                            crate::host::protocol::CommandOutcome::Cancelled,
+                            knot_protocol::CommandOutcome::Cancelled,
                             cx,
                         );
                         cx.notify();
@@ -364,7 +340,7 @@ impl ProductShell {
                 })
                 .is_err()
             {
-                fallback.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                fallback.complete(knot_protocol::CommandOutcome::InvalidTarget);
             }
         });
         self.tasks.push(task);
@@ -378,11 +354,7 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) {
         if !self.target_is_live(&target, cx) {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         }
         let documents = Self::documents(cx);
@@ -391,11 +363,7 @@ impl ProductShell {
             .get(target_document(&target).expect("save target is a document"))
             .map(|document| (document.model().clone(), document.title().clone()))
         else {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         };
         let revision = model.read(cx).revision();
@@ -405,11 +373,7 @@ impl ProductShell {
                 &model,
             )
         }) else {
-            self.finish_save_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         };
         cx.notify();
@@ -446,20 +410,18 @@ impl ProductShell {
                                             cx,
                                         )
                                     }) {
-                                        crate::host::protocol::CommandOutcome::Completed
+                                        knot_protocol::CommandOutcome::Completed
                                     } else {
-                                        crate::host::protocol::CommandOutcome::InvalidTarget
+                                        knot_protocol::CommandOutcome::InvalidTarget
                                     }
                                 }
-                                Err(error) => {
-                                    crate::host::protocol::CommandOutcome::HandlerFailure {
-                                        message: format!("{error:?}"),
-                                    }
-                                }
+                                Err(error) => knot_protocol::CommandOutcome::HandlerFailure {
+                                    message: format!("{error:?}"),
+                                },
                             }
                         }
-                        Ok(_) => crate::host::protocol::CommandOutcome::InvalidTarget,
-                        Err(error) => crate::host::protocol::CommandOutcome::HandlerFailure {
+                        Ok(_) => knot_protocol::CommandOutcome::InvalidTarget,
+                        Err(error) => knot_protocol::CommandOutcome::HandlerFailure {
                             message: error.to_string(),
                         },
                     };
@@ -468,7 +430,7 @@ impl ProductShell {
                 })
                 .is_err()
             {
-                fallback.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                fallback.complete(knot_protocol::CommandOutcome::InvalidTarget);
             }
         });
         self.tasks.push(task);

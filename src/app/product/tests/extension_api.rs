@@ -5,7 +5,7 @@ use super::*;
 fn public_api_capture_survives_focus_and_nested_handlers_without_leaking_to_callbacks(
     cx: &mut TestAppContext,
 ) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     const SOURCE: &str = r#"
 import { commands, editor, workbench } from "knot";
 async function expectCode(operation, code) {
@@ -205,7 +205,7 @@ await commands.register("api.cross", async (context) => {
 fn public_api_context_rejects_replaced_closed_and_transferred_presentations(
     cx: &mut TestAppContext,
 ) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     const SOURCE: &str = r#"
 import { commands, editor, workbench } from "knot";
 await commands.register("api.stale", async (context) => {
@@ -353,7 +353,7 @@ await commands.register("api.nontext", async (context) => {
 
 #[gpui::test]
 fn final_document_close_invalidates_js_buffer_even_with_retained_editor(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     const SOURCE: &str = r#"
 import { commands } from "knot";
 let saved;
@@ -439,7 +439,7 @@ throw new Error("closed buffer accepted operation");
 
 #[gpui::test]
 fn public_api_disposal_and_unload_release_foreground_ownership(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     const SOURCE: &str = r#"
 import { commands, editor, workbench, keymaps } from "knot";
 let owned;
@@ -613,7 +613,7 @@ await commands.register("api.owned-cleanup", async () => {
 
 #[gpui::test]
 fn contributed_view_registered_before_the_window_attaches_on_open(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
 
     const SOURCE: &str = r#"
 import { workbench } from "knot";
@@ -651,7 +651,7 @@ getChildren() { return [{ id: "root", label: "Deferred", collapsibleState: "none
 
 #[gpui::test]
 fn focused_extension_tree_claims_copy_and_unload_removes_its_handler(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
 
     const SOURCE: &str = r#"
 import * as knot from "knot"; const { commands, workbench } = knot;
@@ -950,7 +950,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
 
 #[gpui::test]
 fn startup_script_command_cannot_borrow_the_focused_product_window(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
 
     let documents = install_globals(cx);
     let host = cx.update(super::super::super::extensions::host::install);
@@ -1017,7 +1017,7 @@ if (!rejected) throw new Error("startup borrowed focus");
 
 #[gpui::test]
 fn extension_command_with_editor_prefix_keeps_its_arguments(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
 
     let documents = install_globals(cx);
     let host = cx.update(super::super::super::extensions::host::install);
@@ -1087,7 +1087,7 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
 
 #[gpui::test]
 fn nested_script_waits_for_a_pending_native_command(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
 
     let documents = install_globals(cx);
     cx.set_global(ApplicationOpenDialog(Arc::new(FixedOpenDialog(
@@ -1143,7 +1143,7 @@ await commands.register("test.nested-open", async () => {
 
 #[gpui::test]
 fn delayed_clipboard_write_survives_presentation_closure_but_not_unload(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
 
     const SOURCE: &str = r#"
 import * as knot from "knot"; const { commands, workbench } = knot;

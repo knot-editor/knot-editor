@@ -7,7 +7,7 @@ use crate::app::extensions::host::handlers::{AccessError, OpenError, ReplaceErro
 use crate::app::product::sessions::{EntryOutcome, ReplaceWindowsResult};
 use crate::app::recovery::{ApplicationRecovery, SnapshotKind};
 use crate::app::workbench::{DockLocation, SplitPlacement, ToolPlacement};
-use crate::host::lifecycle::ExtensionKey;
+use knot_host::lifecycle::ExtensionKey;
 use serde_json::json;
 
 const OWNER: &str = "@example/sessions";
@@ -43,7 +43,7 @@ fn harness(cx: &mut TestAppContext) -> Harness {
     let host = cx.update(crate::app::extensions::host::install);
     let key = ExtensionKey::new(ExtensionId::new(901), ExtensionLifecycleId::new(1));
     host.update(cx, |host, _| {
-        host.load(key, crate::host::pool::ExtensionConfig::default())
+        host.load(key, knot_host::pool::ExtensionConfig::default())
             .unwrap()
     });
     Harness {
@@ -795,7 +795,7 @@ fn committed_replacement_publishes_one_set_of_events(cx: &mut TestAppContext) {
     let opened = events
         .iter()
         .find_map(|event| match &event.change {
-            crate::host::protocol::ApplicationChange::WindowOpened { window } => Some(window),
+            knot_protocol::ApplicationChange::WindowOpened { window } => Some(window),
             _ => None,
         })
         .unwrap();
@@ -982,7 +982,7 @@ fn interrupted_switch_restores_every_text_exactly_once(cx: &mut TestAppContext) 
 }
 
 fn capture_layout(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> serde_json::Value {
-    let target = crate::host::protocol::WindowTarget {
+    let target = knot_protocol::WindowTarget {
         window: window_id(window),
     };
     let layout = cx

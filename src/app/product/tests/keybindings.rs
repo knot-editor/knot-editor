@@ -535,7 +535,7 @@ fn invalid_extension_keybinding_batch_does_not_block_other_extensions(cx: &mut T
 
 #[gpui::test]
 fn unloading_a_script_lifecycle_removes_its_keybindings(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
 
     install_globals(cx);
     cx.update(super::super::bind_product_keys);
@@ -1071,7 +1071,7 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
 #[gpui::test]
 #[ignore = "measurement: run in release with --ignored --nocapture"]
 fn measure_extension_key_latency(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     use std::time::{Duration, Instant};
     const KEYS: usize = 1000;
     const RACES: usize = 200;
@@ -1265,7 +1265,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
 /// keys the context leaves unbound still type, and teardown clears it.
 #[gpui::test]
 fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     const SOURCE: &str = r#"
         import { commands, keymaps } from "knot";
         await commands.register("modal.enter", ({ editor }) => editor.setKeyContext("modal", true));
@@ -1386,7 +1386,7 @@ fn focused_editor_window(
 /// pending. Once that context is on, the sequence runs its command.
 #[gpui::test]
 fn a_sequence_bound_in_another_context_leaves_keys_to_a_modal_package(cx: &mut TestAppContext) {
-    use crate::host::lifecycle::ExtensionKey;
+    use knot_host::lifecycle::ExtensionKey;
     const MODAL: &str = r#"
         import { commands, keymaps, workbench } from "knot";
         const typed = [];

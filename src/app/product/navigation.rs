@@ -13,7 +13,7 @@ use super::relocate::TabRelocationDestination;
 use super::*;
 use crate::app::window_layout::Rect;
 use crate::app::workbench::{SplitEdge, TabMoveDestination, TabMovePlacement};
-use crate::host::protocol::CommandOutcome;
+use knot_protocol::CommandOutcome;
 
 /// An uncommitted walk through one pane's recently used tabs.
 pub(super) struct RecentWalk {

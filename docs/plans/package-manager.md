@@ -229,5 +229,5 @@ starting point.
   commands and the transient picker used by the startup report and restart.
 - `extensions/@knot/` — the bundled manager surface alongside
   `@knot/projects`; `scripts/extensions` gains archive production.
-- `src/app/extensions/host/handlers.rs` and `src/host/js/knot.d.ts` — only the
+- `src/app/extensions/host/handlers.rs` and `crates/knot-host/src/js/knot.d.ts` — only the
   surface's calls into the application-owned package service.

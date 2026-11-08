@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::app::workbench::ExtensionView;
-use crate::host::lifecycle::ExtensionKey;
+use knot_host::lifecycle::ExtensionKey;
 
 const SOURCE: &str = r#"
 import { workbench } from "knot";

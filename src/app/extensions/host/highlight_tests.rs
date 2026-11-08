@@ -20,7 +20,7 @@ use std::time::Duration;
 use gpui::TestAppContext;
 
 use crate::app::syntax::SyntaxState;
-use crate::core::buffer::TextBuffer;
+use knot_core::buffer::TextBuffer;
 
 const COMMENTS: &[&str] = &["//", "#", "--", "<!--"];
 

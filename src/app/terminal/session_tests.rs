@@ -366,7 +366,7 @@ fn sustained_output_keeps_foreground_updates_responsive(cx: &mut TestAppContext)
 #[gpui::test]
 fn paste_command_delivers_plain_and_bracketed_clipboard_bytes(cx: &mut TestAppContext) {
     use crate::app::commands::dispatch::CommandClaim;
-    use crate::host::protocol::CommandOutcome;
+    use knot_protocol::CommandOutcome;
     for bracketed in [false, true] {
         let temp = tempfile::tempdir().unwrap();
         let destination = temp.path().join("input.hex");
@@ -623,11 +623,11 @@ fn keys_reach_the_program_in_its_keyboard_modes_without_a_window(cx: &mut TestAp
 #[gpui::test]
 fn stopped_terminal_keeps_copy_and_declines_paste_and_detached_commands(cx: &mut TestAppContext) {
     use crate::app::commands::dispatch::CommandClaim;
-    use crate::host::protocol::CommandOutcome;
     use alacritty_terminal::{
         index::{Column, Line, Point, Side},
         selection::{Selection, SelectionType},
     };
+    use knot_protocol::CommandOutcome;
     let session = cx.new(|cx| TerminalSession::new_with_options(shell("printf 'copy me'"), cx));
     wait_for(cx, &session, |session| {
         matches!(session.status(), TerminalStatus::Exited(_))

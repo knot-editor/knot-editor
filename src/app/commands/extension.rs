@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::host::protocol::{
+use knot_protocol::{
     BufferHandle, Command, CommandInvocation, CommandInvocationId, CommandInvokeDispatch,
     CommandName, CommandOutcome, CommandRegistrationId, ExtensionId, ExtensionLifecycleId,
     RequestContext,
@@ -17,7 +17,7 @@ use super::catalog::CommandCatalog;
 #[cfg(test)]
 use super::catalog::CommandDefinition;
 use crate::app::extensions::host::handlers::AccessError;
-use crate::host::declarations::HostError;
+use knot_protocol::declarations::HostError;
 
 use crate::app::{
     CommandCompletion, CommandExecution,

@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, HashMap};
 use gpui::{App, Global, HighlightStyle, UnderlineStyle, WindowAppearance, px};
 use serde::{Deserialize, Serialize};
 
-use crate::host::protocol::{ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 use super::{
     settings::{self, ApplicationSettings, THEME_DARK, THEME_LIGHT, THEME_MODE},

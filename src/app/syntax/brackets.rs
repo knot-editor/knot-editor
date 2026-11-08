@@ -13,7 +13,7 @@ use tree_sitter::Node;
 
 use super::{Layer, SyntaxState};
 use crate::app::languages::editing::Bracket;
-use crate::core::buffer::TextSnapshot;
+use knot_core::buffer::TextSnapshot;
 
 /// The longest bracket token read; longer leaves are never brackets.
 const MAX_BRACKET_LEN: usize = 16;

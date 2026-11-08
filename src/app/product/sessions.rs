@@ -16,7 +16,8 @@ use super::*;
 use crate::app::recovery::{RestoreOutcome, RestoredResource, StagedRestore};
 use crate::app::window_layout::{PlannedTab, WindowLayout};
 use crate::app::workbench::ArrangedTab;
-use crate::host::{declarations::HostError as _, protocol::WindowTarget};
+use knot_protocol::WindowTarget;
+use knot_protocol::declarations::HostError as _;
 
 /// One document presented in a window leaving its current session, with the
 /// capture that retains its text when its final view is removed.

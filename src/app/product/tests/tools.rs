@@ -77,7 +77,7 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
             .panes
             .iter()
             .flat_map(|pane| &pane.tabs)
-            .find(|tab| tab.kind == crate::host::protocol::SurfaceKind::Tool)
+            .find(|tab| tab.kind == knot_protocol::SurfaceKind::Tool)
             .unwrap();
         assert!(tool.buffer.is_none());
         assert!(tool.document.is_none());

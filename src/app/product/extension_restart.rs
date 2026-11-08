@@ -7,7 +7,7 @@
 
 use super::*;
 use crate::app::extensions::load::LoadResult;
-use crate::host::protocol::PickerItem;
+use knot_protocol::PickerItem;
 
 pub(super) const RESTART_TITLE: &str = "Restart Extension";
 

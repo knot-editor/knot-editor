@@ -1,7 +1,7 @@
 # Extension host
 
 Part of the [architecture](../architecture.md). [Decisions](../decisions.md)
-records rationale; public API contracts live in [knot.d.ts](../../src/host/js/knot.d.ts).
+records rationale; public API contracts live in [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts).
 
 ## Boundaries
 
@@ -107,7 +107,7 @@ One application-owned `ProductExtensionHost` owns the pool, foreground bridges,
 and awaitable event-inbox task. Each lifecycle has a persistent runtime capsule,
 one FIFO root queue, and at most one active logical command tree. The pool has
 fixed worker capacity; defaults and state transitions live in
-[scheduler.rs](../../src/host/scheduler.rs).
+[scheduler.rs](../../crates/knot-host/src/scheduler.rs).
 
 V8 initialization must precede worker creation: every thread that may lock a
 shared isolate must be created after initialization. A worker locks a capsule
@@ -154,7 +154,7 @@ expose semantic methods independently of request envelopes. Generated adapters
 own decoding and response transport rather than per-operation routing tables.
 Native commands share this async contract with command-specific adapters.
 Implementation contracts live in
-[declarations](../../src/host/declarations.rs) and
+[declarations](../../crates/knot-protocol/src/declarations.rs) and
 [application handlers](../../src/app/extensions/host/handlers.rs).
 
 Owned contexts retain weak host/application access and caller authority. Short
@@ -309,7 +309,7 @@ through a reused connection per database. Native transactions never span a JS
 await. Caller lifetime is checked before database work starts; once started,
 work finishes normally even if its caller disappears. Failures preserve damaged
 or incompatible databases. Public value, ordering, and error contracts live in
-[knot.d.ts](../../src/host/js/knot.d.ts); implementation and physical schema live in
+[knot.d.ts](../../crates/knot-host/src/js/knot.d.ts); implementation and physical schema live in
 [extensions/storage.rs](../../src/app/extensions/storage.rs).
 
 Product and config-diagnostic quit stop storage admission synchronously, then

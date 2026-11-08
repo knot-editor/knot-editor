@@ -199,7 +199,7 @@ fn expand_handler(
             ident.clone(),
             quote! { #function },
             quote! {
-                crate::host::declarations::OperationDescriptor::new::<#ident>()
+                ::knot_protocol::declarations::OperationDescriptor::new::<#ident>()
             },
             quote! { #name },
         )
@@ -210,14 +210,14 @@ fn expand_handler(
         #[allow(non_camel_case_types)]
         #visibility enum #marker {}
         #(#conditions)*
-        impl crate::host::declarations::AsyncHandler for #marker {
+        impl ::knot_protocol::declarations::AsyncHandler for #marker {
             type Context = #context;
             type Arguments = #arguments;
             type Success = #success;
             type Error = #error;
             const NAME: &'static str = #handler_name;
             fn call(context: Self::Context, arguments: Self::Arguments)
-                -> crate::host::declarations::HandlerFuture<Result<Self::Success, Self::Error>>
+                -> ::knot_protocol::declarations::HandlerFuture<Result<Self::Success, Self::Error>>
             {
                 Box::pin(#ident(context, arguments))
             }
@@ -289,11 +289,11 @@ fn expand_error(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
             }
             let ty = &fields.unnamed[0].ty;
             code_arms.push(
-                quote! { Self::#ident(error) => crate::host::declarations::HostError::code(error) },
+                quote! { Self::#ident(error) => ::knot_protocol::declarations::HostError::code(error) },
             );
-            arms.push(quote! { Self::#ident(error) => crate::host::declarations::HostError::into_failure(error) });
+            arms.push(quote! { Self::#ident(error) => ::knot_protocol::declarations::HostError::into_failure(error) });
             codes.push(
-                quote! { result.extend(<#ty as crate::host::declarations::HostError>::codes()); },
+                quote! { result.extend(<#ty as ::knot_protocol::declarations::HostError>::codes()); },
             );
             continue;
         }
@@ -344,7 +344,7 @@ fn expand_error(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
             quote! { #message.into() }
         };
         arms.push(
-            quote! { #pattern => crate::host::declarations::HostFailure {
+            quote! { #pattern => ::knot_protocol::declarations::HostFailure {
                 code: #code, message: #diagnostic, details: #details,
             } },
         );
@@ -352,11 +352,11 @@ fn expand_error(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     }
     let ident = input.ident;
     Ok(quote! {
-        impl crate::host::declarations::HostError for #ident {
+        impl ::knot_protocol::declarations::HostError for #ident {
             fn code(&self) -> &'static str {
                 match self { #(#code_arms),* }
             }
-            fn into_failure(self) -> crate::host::declarations::HostFailure {
+            fn into_failure(self) -> ::knot_protocol::declarations::HostFailure {
                 match self { #(#arms),* }
             }
             fn codes() -> Vec<&'static str> {

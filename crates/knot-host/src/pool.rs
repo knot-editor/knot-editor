@@ -6,14 +6,14 @@ use super::{
     engine::{self, EngineEvent, LifecycleEnd, RuntimePool},
     lifecycle::ExtensionKey,
     module_graph::{ConfigPhase, ModuleGraph},
-    protocol::{
-        BufferChange, BufferHandle, BufferSubscriptionId, CommandInvocation, CommandInvocationId,
-        CompletionRequest, HostRequest, HostResponse, TreeChildrenRequest,
-    },
     scheduler::PoolConfig,
 };
+use knot_protocol::{
+    BufferChange, BufferHandle, BufferSubscriptionId, CommandInvocation, CommandInvocationId,
+    CompletionRequest, HostRequest, HostResponse, TreeChildrenRequest,
+};
 
-pub(crate) use super::engine::{
+pub use super::engine::{
     HeapUsage as ExtensionHeapUsage, RuntimeCommandExecution as ExtensionCommandExecution,
     RuntimeExecution as ExtensionExecution, RuntimePoolError as ExtensionPoolError,
     RuntimeProviderExecution as ExtensionProviderExecution,
@@ -22,23 +22,23 @@ pub(crate) use super::engine::{
 
 /// Configuration for one persistent extension isolate.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ExtensionConfig(engine::IsolateConfig);
+pub struct ExtensionConfig(engine::IsolateConfig);
 
 impl ExtensionConfig {
     /// Names the extension in its console output.
-    pub(crate) fn named(name: &str) -> Self {
+    pub fn named(name: &str) -> Self {
         Self(engine::IsolateConfig::named(name))
     }
 
-    #[cfg(test)]
-    pub(crate) const fn with_heap_limit(heap_limit_bytes: usize) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub const fn with_heap_limit(heap_limit_bytes: usize) -> Self {
         Self(engine::IsolateConfig::with_heap_limit(heap_limit_bytes))
     }
 }
 
 /// Why one admitted extension lifetime ended.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ExtensionExit {
+pub enum ExtensionExit {
     StartupFailed,
     Unloaded,
     Failed(super::lifecycle::Failure),
@@ -47,7 +47,7 @@ pub(crate) enum ExtensionExit {
 
 /// Event emitted by the pool for foreground processing.
 #[derive(Clone, Debug)]
-pub(crate) enum ExtensionEvent {
+pub enum ExtensionEvent {
     Request(HostRequest),
     LifecycleEnded {
         key: ExtensionKey,
@@ -56,10 +56,10 @@ pub(crate) enum ExtensionEvent {
 }
 
 /// Unique, awaitable event stream for the application foreground.
-pub(crate) struct ExtensionEventInbox(engine::EngineEventInbox);
+pub struct ExtensionEventInbox(engine::EngineEventInbox);
 
 impl ExtensionEventInbox {
-    pub(crate) async fn receive(&mut self) -> Option<ExtensionEvent> {
+    pub async fn receive(&mut self) -> Option<ExtensionEvent> {
         self.0.receive().await.map(|event| match event {
             EngineEvent::Request(request) => ExtensionEvent::Request(request),
             EngineEvent::LifecycleEnded { key, reason } => ExtensionEvent::LifecycleEnded {
@@ -92,12 +92,12 @@ impl ExtensionEventInbox {
 }
 
 /// One application-owned bounded worker pool.
-pub(crate) struct ExtensionPool {
+pub struct ExtensionPool {
     engine: RuntimePool,
 }
 
 impl ExtensionPool {
-    pub(crate) fn new(config: PoolConfig) -> (Arc<Self>, ExtensionEventInbox) {
+    pub fn new(config: PoolConfig) -> (Arc<Self>, ExtensionEventInbox) {
         let engine = RuntimePool::new(config);
         let inbox = engine
             .take_event_inbox()
@@ -105,8 +105,8 @@ impl ExtensionPool {
         (Arc::new(Self { engine }), ExtensionEventInbox(inbox))
     }
 
-    #[cfg(test)]
-    pub(crate) fn load(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn load(
         &self,
         key: ExtensionKey,
         config: ExtensionConfig,
@@ -114,8 +114,8 @@ impl ExtensionPool {
         self.engine.load(key, config.0)
     }
 
-    #[cfg(test)]
-    pub(crate) fn execute_fixture_module(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn execute_fixture_module(
         &self,
         key: ExtensionKey,
         specifier: impl Into<Arc<str>>,
@@ -124,7 +124,7 @@ impl ExtensionPool {
         self.engine.execute_fixture_module(key, specifier, source)
     }
 
-    pub(crate) fn load_package(
+    pub fn load_package(
         &self,
         key: ExtensionKey,
         config: ExtensionConfig,
@@ -133,7 +133,7 @@ impl ExtensionPool {
         self.engine.load_package(key, config.0, graph)
     }
 
-    pub(crate) fn load_personal_config(
+    pub fn load_personal_config(
         &self,
         key: ExtensionKey,
         config: ExtensionConfig,
@@ -142,7 +142,7 @@ impl ExtensionPool {
         self.engine.load_personal_config(key, config.0, graph)
     }
 
-    pub(crate) fn evaluate_personal_config_phase(
+    pub fn evaluate_personal_config_phase(
         &self,
         key: ExtensionKey,
         phase: ConfigPhase,
@@ -158,7 +158,7 @@ impl ExtensionPool {
         self.engine.panic_worker_turn(key)
     }
 
-    pub(crate) fn invoke_command(
+    pub fn invoke_command(
         &self,
         key: ExtensionKey,
         invocation: CommandInvocation,
@@ -167,25 +167,25 @@ impl ExtensionPool {
         self.engine.invoke_command(key, invocation, active_buffer)
     }
 
-    pub(crate) fn request_tree_children(
+    pub fn request_tree_children(
         &self,
         key: ExtensionKey,
         request: TreeChildrenRequest,
-    ) -> Result<ExtensionProviderExecution<super::protocol::TreeChildrenResponse>, ExtensionPoolError>
+    ) -> Result<ExtensionProviderExecution<knot_protocol::TreeChildrenResponse>, ExtensionPoolError>
     {
         self.engine.request_tree_children(key, request)
     }
 
-    pub(crate) fn request_completions(
+    pub fn request_completions(
         &self,
         key: ExtensionKey,
         request: CompletionRequest,
-    ) -> Result<ExtensionProviderExecution<super::protocol::CompletionResponse>, ExtensionPoolError>
+    ) -> Result<ExtensionProviderExecution<knot_protocol::CompletionResponse>, ExtensionPoolError>
     {
         self.engine.request_completions(key, request)
     }
 
-    pub(crate) fn cancel_command(
+    pub fn cancel_command(
         &self,
         key: ExtensionKey,
         invocation: CommandInvocationId,
@@ -193,40 +193,40 @@ impl ExtensionPool {
         self.engine.cancel_command(key, invocation)
     }
 
-    pub(crate) fn respond(&self, response: HostResponse) -> Result<(), ExtensionResponseError> {
+    pub fn respond(&self, response: HostResponse) -> Result<(), ExtensionResponseError> {
         self.engine.respond(response)
     }
 
-    pub(crate) fn dispatch_application_change(
+    pub fn dispatch_application_change(
         &self,
         key: ExtensionKey,
-        subscription: super::protocol::WorkbenchSubscriptionId,
-        event: super::protocol::ApplicationEvent,
+        subscription: knot_protocol::WorkbenchSubscriptionId,
+        event: knot_protocol::ApplicationEvent,
     ) -> Result<(), ExtensionPoolError> {
         self.engine
             .dispatch_application_change(key, subscription, event)
     }
 
-    pub(crate) fn dispatch_setting_change(
+    pub fn dispatch_setting_change(
         &self,
         key: ExtensionKey,
-        subscription: super::protocol::SettingsSubscriptionId,
+        subscription: knot_protocol::SettingsSubscriptionId,
         setting: String,
     ) -> Result<(), ExtensionPoolError> {
         self.engine
             .dispatch_setting_change(key, subscription, setting)
     }
 
-    pub(crate) fn dispatch_editor_event(
+    pub fn dispatch_editor_event(
         &self,
         key: ExtensionKey,
         handle: u64,
-        event: super::protocol::EditorEvent,
+        event: knot_protocol::EditorEvent,
     ) -> Result<(), ExtensionPoolError> {
         self.engine.dispatch_editor_event(key, handle, event)
     }
 
-    pub(crate) fn dispatch_buffer_change(
+    pub fn dispatch_buffer_change(
         &self,
         key: ExtensionKey,
         subscription: BufferSubscriptionId,
@@ -238,24 +238,24 @@ impl ExtensionPool {
 
     /// Heap statistics of every live lifecycle, read between turns; `None`
     /// for one running a turn.
-    pub(crate) fn heap_usage(&self) -> Vec<(ExtensionKey, Option<ExtensionHeapUsage>)> {
+    pub fn heap_usage(&self) -> Vec<(ExtensionKey, Option<ExtensionHeapUsage>)> {
         self.engine.heap_usage()
     }
 
-    #[cfg(test)]
-    pub(crate) fn diagnostics(&self) -> super::scheduler::SchedulerDiagnostics {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn diagnostics(&self) -> super::scheduler::SchedulerDiagnostics {
         self.engine.diagnostics()
     }
 
-    #[cfg(test)]
-    pub(crate) fn activity(&self) -> super::scheduler::Activity {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn activity(&self) -> super::scheduler::Activity {
         self.engine.activity()
     }
 
     /// Block until more than `finished` turns have finished, or `timeout`
     /// passes; false on timeout.
-    #[cfg(test)]
-    pub(crate) fn wait_for_turn(&self, finished: u64, timeout: std::time::Duration) -> bool {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait_for_turn(&self, finished: u64, timeout: std::time::Duration) -> bool {
         self.engine.wait_for_turn(finished, timeout)
     }
 
@@ -263,28 +263,25 @@ impl ExtensionPool {
         dead_code,
         reason = "per-turn timeouts (D019) issue it; Restart Extension unloads instead"
     )]
-    pub(crate) fn watchdog(
-        &self,
-        key: ExtensionKey,
-    ) -> Result<ExtensionWatchdog, ExtensionPoolError> {
+    pub fn watchdog(&self, key: ExtensionKey) -> Result<ExtensionWatchdog, ExtensionPoolError> {
         self.engine
             .termination_handle(key)
             .map(|handle| ExtensionWatchdog { handle })
     }
 
-    pub(crate) fn unload(&self, key: ExtensionKey) -> Result<(), ExtensionPoolError> {
+    pub fn unload(&self, key: ExtensionKey) -> Result<(), ExtensionPoolError> {
         self.engine.unload(key)
     }
 
-    #[cfg(test)]
-    pub(crate) fn shutdown(self) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn shutdown(self) {
         self.engine.shutdown();
     }
 }
 
 /// The process's resident memory in bytes, where the platform reports it.
 #[cfg(target_os = "macos")]
-pub(crate) fn process_resident_bytes() -> Option<u64> {
+pub fn process_resident_bytes() -> Option<u64> {
     let mut info = std::mem::MaybeUninit::<libc::proc_taskinfo>::zeroed();
     let size = std::mem::size_of::<libc::proc_taskinfo>() as libc::c_int;
     // SAFETY: the buffer is a zeroed `proc_taskinfo` of exactly `size` bytes,
@@ -304,7 +301,7 @@ pub(crate) fn process_resident_bytes() -> Option<u64> {
 
 /// The process's resident memory in bytes, where the platform reports it.
 #[cfg(target_os = "linux")]
-pub(crate) fn process_resident_bytes() -> Option<u64> {
+pub fn process_resident_bytes() -> Option<u64> {
     let statm = std::fs::read_to_string("/proc/self/statm").ok()?;
     let pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
     // SAFETY: `sysconf` has no preconditions.
@@ -314,7 +311,7 @@ pub(crate) fn process_resident_bytes() -> Option<u64> {
 
 /// The process's resident memory in bytes, where the platform reports it.
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-pub(crate) fn process_resident_bytes() -> Option<u64> {
+pub fn process_resident_bytes() -> Option<u64> {
     None
 }
 
@@ -323,7 +320,7 @@ pub(crate) fn process_resident_bytes() -> Option<u64> {
     dead_code,
     reason = "per-turn timeouts (D019) issue it; Restart Extension unloads instead"
 )]
-pub(crate) struct ExtensionWatchdog {
+pub struct ExtensionWatchdog {
     handle: engine::TerminationHandle,
 }
 
@@ -332,7 +329,7 @@ pub(crate) struct ExtensionWatchdog {
     reason = "per-turn timeouts (D019) issue it; Restart Extension unloads instead"
 )]
 impl ExtensionWatchdog {
-    pub(crate) fn terminate(&self) -> bool {
+    pub fn terminate(&self) -> bool {
         self.handle.terminate()
     }
 }
@@ -341,7 +338,7 @@ impl ExtensionWatchdog {
 mod tests {
     use std::{num::NonZeroUsize, time::Duration};
 
-    use crate::host::protocol::{ExtensionId, ExtensionLifecycleId};
+    use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
     use super::*;
 

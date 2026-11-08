@@ -3,9 +3,9 @@
 use super::*;
 
 /// Engine-owned composition of persistent capsules and the bounded scheduler.
-pub(crate) struct RuntimePool {
+pub struct RuntimePool {
     scheduler: Option<SchedulerPool<EngineTurn>>,
-    pub(super) scheduler_handle: SchedulerHandle<EngineTurn>,
+    pub scheduler_handle: SchedulerHandle<EngineTurn>,
     finalizer: LifecycleFinalizer,
     events: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<EngineEvent>>>,
 }
@@ -59,7 +59,7 @@ impl LifecycleFinalizer {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum LifecycleEnd {
+pub enum LifecycleEnd {
     StartupFailed,
     Unloaded,
     Failed(Failure),
@@ -67,7 +67,7 @@ pub(crate) enum LifecycleEnd {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum EngineEvent {
+pub enum EngineEvent {
     Request(HostRequest),
     LifecycleEnded {
         key: ExtensionKey,
@@ -75,17 +75,17 @@ pub(crate) enum EngineEvent {
     },
 }
 
-pub(crate) struct EngineEventInbox {
+pub struct EngineEventInbox {
     receiver: tokio::sync::mpsc::UnboundedReceiver<EngineEvent>,
 }
 
 impl EngineEventInbox {
-    pub(crate) async fn receive(&mut self) -> Option<EngineEvent> {
+    pub async fn receive(&mut self) -> Option<EngineEvent> {
         self.receiver.recv().await
     }
 
-    #[cfg(test)]
-    pub(crate) fn receive_timeout(&mut self, timeout: Duration) -> Option<EngineEvent> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn receive_timeout(&mut self, timeout: Duration) -> Option<EngineEvent> {
         let deadline = Instant::now() + timeout;
         loop {
             match self.receiver.try_recv() {
@@ -103,7 +103,7 @@ impl EngineEventInbox {
 }
 
 impl RuntimePool {
-    pub(crate) fn new(config: PoolConfig) -> Self {
+    pub fn new(config: PoolConfig) -> Self {
         initialize();
         let runtimes = Arc::new(Mutex::new(HashMap::new()));
         let (event_sender, events) = tokio::sync::mpsc::unbounded_channel();
@@ -124,7 +124,7 @@ impl RuntimePool {
         }
     }
 
-    pub(crate) fn take_event_inbox(&self) -> Option<EngineEventInbox> {
+    pub fn take_event_inbox(&self) -> Option<EngineEventInbox> {
         self.events
             .lock()
             .unwrap()
@@ -132,12 +132,8 @@ impl RuntimePool {
             .map(|receiver| EngineEventInbox { receiver })
     }
 
-    #[cfg(test)]
-    pub(crate) fn load(
-        &self,
-        key: ExtensionKey,
-        config: IsolateConfig,
-    ) -> Result<(), RuntimePoolError> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn load(&self, key: ExtensionKey, config: IsolateConfig) -> Result<(), RuntimePoolError> {
         self.load_with_graph(key, config, None)
     }
 
@@ -180,7 +176,7 @@ impl RuntimePool {
         Ok(())
     }
 
-    pub(crate) fn load_package(
+    pub fn load_package(
         &self,
         key: ExtensionKey,
         config: IsolateConfig,
@@ -210,7 +206,7 @@ impl RuntimePool {
         Ok(RuntimeExecution { result, completion })
     }
 
-    pub(crate) fn load_personal_config(
+    pub fn load_personal_config(
         &self,
         key: ExtensionKey,
         config: IsolateConfig,
@@ -228,7 +224,7 @@ impl RuntimePool {
         self.load_with_graph(key, config, Some(&graph))
     }
 
-    pub(crate) fn evaluate_personal_config_phase(
+    pub fn evaluate_personal_config_phase(
         &self,
         key: ExtensionKey,
         phase: ConfigPhase,
@@ -257,8 +253,8 @@ impl RuntimePool {
         Ok(RuntimeExecution { result, completion })
     }
 
-    #[cfg(test)]
-    pub(crate) fn execute(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn execute(
         &self,
         key: ExtensionKey,
         source_name: impl Into<Arc<str>>,
@@ -285,8 +281,8 @@ impl RuntimePool {
         Ok(RuntimeExecution { result, completion })
     }
 
-    #[cfg(test)]
-    pub(crate) fn execute_fixture_module(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn execute_fixture_module(
         &self,
         key: ExtensionKey,
         specifier: impl Into<Arc<str>>,
@@ -313,8 +309,8 @@ impl RuntimePool {
         Ok(RuntimeExecution { result, completion })
     }
 
-    #[cfg(test)]
-    pub(crate) fn panic_worker_turn(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn panic_worker_turn(
         &self,
         key: ExtensionKey,
     ) -> Result<RuntimeExecution, RuntimePoolError> {
@@ -332,7 +328,7 @@ impl RuntimePool {
         Ok(RuntimeExecution { result, completion })
     }
 
-    pub(crate) fn invoke_command(
+    pub fn invoke_command(
         &self,
         key: ExtensionKey,
         invocation: CommandInvocation,
@@ -361,7 +357,7 @@ impl RuntimePool {
         Ok(RuntimeCommandExecution { result, completion })
     }
 
-    pub(crate) fn request_tree_children(
+    pub fn request_tree_children(
         &self,
         key: ExtensionKey,
         request: TreeChildrenRequest,
@@ -398,7 +394,7 @@ impl RuntimePool {
         })
     }
 
-    pub(crate) fn request_completions(
+    pub fn request_completions(
         &self,
         key: ExtensionKey,
         request: CompletionRequest,
@@ -435,7 +431,7 @@ impl RuntimePool {
         })
     }
 
-    pub(crate) fn cancel_command(
+    pub fn cancel_command(
         &self,
         key: ExtensionKey,
         invocation: CommandInvocationId,
@@ -477,7 +473,7 @@ impl RuntimePool {
     /// request: that always means the fixture never reached the expected call,
     /// and hiding the failure behind a generic missing-request panic makes the
     /// cause much harder to find.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn lifecycle_failure_while_waiting(reason: &LifecycleEnd) {
         match reason {
             LifecycleEnd::Failed(failure) => panic!(
@@ -491,8 +487,8 @@ impl RuntimePool {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn receive_request(&self) -> Option<HostRequest> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn receive_request(&self) -> Option<HostRequest> {
         loop {
             let event = self.events.lock().unwrap().as_mut()?.blocking_recv()?;
             match event {
@@ -504,11 +500,8 @@ impl RuntimePool {
         }
     }
 
-    #[cfg(test)]
-    pub(super) fn receive_request_timeout(
-        &self,
-        timeout: std::time::Duration,
-    ) -> Option<HostRequest> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn receive_request_timeout(&self, timeout: std::time::Duration) -> Option<HostRequest> {
         let deadline = Instant::now() + timeout;
         loop {
             let event = self.events.lock().unwrap().as_mut()?.try_recv();
@@ -528,7 +521,7 @@ impl RuntimePool {
         }
     }
 
-    pub(crate) fn respond(&self, response: HostResponse) -> Result<(), RuntimeResponseError> {
+    pub fn respond(&self, response: HostResponse) -> Result<(), RuntimeResponseError> {
         let request_id = response.id;
         let capsule = {
             let runtimes = self.finalizer.runtimes.lock().unwrap();
@@ -573,7 +566,7 @@ impl RuntimePool {
         Ok(())
     }
 
-    pub(crate) fn dispatch_application_change(
+    pub fn dispatch_application_change(
         &self,
         key: ExtensionKey,
         subscription: WorkbenchSubscriptionId,
@@ -593,7 +586,7 @@ impl RuntimePool {
         Ok(())
     }
 
-    pub(crate) fn dispatch_setting_change(
+    pub fn dispatch_setting_change(
         &self,
         key: ExtensionKey,
         subscription: SettingsSubscriptionId,
@@ -613,7 +606,7 @@ impl RuntimePool {
         Ok(())
     }
 
-    pub(crate) fn dispatch_editor_event(
+    pub fn dispatch_editor_event(
         &self,
         key: ExtensionKey,
         handle: u64,
@@ -630,7 +623,7 @@ impl RuntimePool {
         Ok(())
     }
 
-    pub(crate) fn dispatch_buffer_change(
+    pub fn dispatch_buffer_change(
         &self,
         key: ExtensionKey,
         subscription: BufferSubscriptionId,
@@ -656,8 +649,8 @@ impl RuntimePool {
         Ok(())
     }
 
-    #[cfg(test)]
-    pub(crate) fn buffer_change_queue_metrics(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn buffer_change_queue_metrics(
         &self,
         key: ExtensionKey,
     ) -> Result<BufferChangeQueueMetrics, RuntimePoolError> {
@@ -665,7 +658,7 @@ impl RuntimePool {
     }
 
     /// Heap statistics of every live lifecycle; `None` for one running a turn.
-    pub(crate) fn heap_usage(&self) -> Vec<(ExtensionKey, Option<HeapUsage>)> {
+    pub fn heap_usage(&self) -> Vec<(ExtensionKey, Option<HeapUsage>)> {
         self.finalizer
             .capsules()
             .into_iter()
@@ -673,22 +666,22 @@ impl RuntimePool {
             .collect()
     }
 
-    #[cfg(test)]
-    pub(crate) fn diagnostics(&self) -> crate::host::scheduler::SchedulerDiagnostics {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn diagnostics(&self) -> crate::scheduler::SchedulerDiagnostics {
         self.scheduler_handle.diagnostics()
     }
 
-    #[cfg(test)]
-    pub(crate) fn activity(&self) -> crate::host::scheduler::Activity {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn activity(&self) -> crate::scheduler::Activity {
         self.scheduler_handle.activity()
     }
 
-    #[cfg(test)]
-    pub(crate) fn wait_for_turn(&self, finished: u64, timeout: std::time::Duration) -> bool {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait_for_turn(&self, finished: u64, timeout: std::time::Duration) -> bool {
         self.scheduler_handle.wait_for_turn(finished, timeout)
     }
 
-    pub(crate) fn termination_handle(
+    pub fn termination_handle(
         &self,
         key: ExtensionKey,
     ) -> Result<TerminationHandle, RuntimePoolError> {
@@ -704,7 +697,7 @@ impl RuntimePool {
         })
     }
 
-    pub(crate) fn unload(&self, key: ExtensionKey) -> Result<(), RuntimePoolError> {
+    pub fn unload(&self, key: ExtensionKey) -> Result<(), RuntimePoolError> {
         {
             let runtimes = self.finalizer.runtimes.lock().unwrap();
             let Some(capsule) = runtimes.get(&key.extension) else {
@@ -728,15 +721,12 @@ impl RuntimePool {
         Ok(())
     }
 
-    #[cfg(test)]
-    pub(crate) fn shutdown(mut self) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn shutdown(mut self) {
         self.shutdown_inner();
     }
 
-    pub(super) fn capsule(
-        &self,
-        key: ExtensionKey,
-    ) -> Result<Arc<RuntimeCapsule>, RuntimePoolError> {
+    pub fn capsule(&self, key: ExtensionKey) -> Result<Arc<RuntimeCapsule>, RuntimePoolError> {
         let runtimes = self.finalizer.runtimes.lock().unwrap();
         let Some(capsule) = runtimes.get(&key.extension) else {
             return Err(SchedulerError::UnknownExtension(key.extension).into());

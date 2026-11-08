@@ -15,8 +15,8 @@ use std::collections::VecDeque;
 use super::*;
 use crate::app::commands::key_hold::{HeldInput, TypedTextRouter};
 use crate::app::editor::Editor;
-use crate::host::protocol::CommandOutcome;
-use crate::host::protocol::{Command, CommandArgumentValue};
+use knot_protocol::CommandOutcome;
+use knot_protocol::{Command, CommandArgumentValue};
 
 /// How long a command may hold later input before it is released anyway.
 pub(super) const KEY_HOLD_TIMEOUT: Duration = Duration::from_secs(1);

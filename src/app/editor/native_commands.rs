@@ -2,7 +2,7 @@
 use super::*;
 use crate::app::commands::declarations::{CommandContext, command};
 use crate::app::commands::dispatch::ProductCommandTarget;
-use crate::host::protocol::{Command, CommandArgumentValue, CommandOutcome};
+use knot_protocol::{Command, CommandArgumentValue, CommandOutcome};
 
 fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> bool {
     if command.name.as_ref() != COPY_COMMAND || command.arguments != CommandArgumentValue::Null {

@@ -4,11 +4,9 @@ use super::super::extensions::host::handlers::{
     AccessError, CloseError, OpenError, WorkspaceError,
 };
 use super::*;
-use crate::host::{
-    lifecycle::ExtensionKey,
-    protocol::{
-        CommandInvocationId, DocumentDestination, PaneTarget, PresentationTarget, WindowTarget,
-    },
+use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::{
+    CommandInvocationId, DocumentDestination, PaneTarget, PresentationTarget, WindowTarget,
 };
 
 #[derive(Clone)]
@@ -56,8 +54,8 @@ pub(super) fn capture_session(
 pub(super) fn workspace_info(
     window: WindowTarget,
     snapshot: &super::super::workspace::WorkspaceSnapshot,
-) -> crate::host::protocol::WorkspaceInfo {
-    use crate::host::protocol::{WorkspaceInfo, WorkspaceRootInfo};
+) -> knot_protocol::WorkspaceInfo {
+    use knot_protocol::{WorkspaceInfo, WorkspaceRootInfo};
     WorkspaceInfo {
         window,
         generation: snapshot.generation(),
@@ -384,7 +382,7 @@ pub(crate) fn replace_roots(
     roots: Vec<String>,
     window_target: WindowTarget,
     caller: OperationCaller,
-    completion: impl FnOnce(Result<crate::host::protocol::WorkspaceInfo, WorkspaceError>) + 'static,
+    completion: impl FnOnce(Result<knot_protocol::WorkspaceInfo, WorkspaceError>) + 'static,
     cx: &mut App,
 ) -> Result<(), WorkspaceError> {
     let roots = roots
@@ -463,8 +461,7 @@ pub(crate) fn close_presentation(
     presentation: PresentationTarget,
     discard: bool,
     caller: OperationCaller,
-    completion: impl FnOnce(Result<crate::host::protocol::PresentationCloseOutcome, CloseError>)
-    + 'static,
+    completion: impl FnOnce(Result<knot_protocol::PresentationCloseOutcome, CloseError>) + 'static,
     cx: &mut App,
 ) -> Result<(), CloseError> {
     let (shell, target) = capture_destination(&DocumentDestination::View(presentation), cx)?;

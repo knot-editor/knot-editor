@@ -20,7 +20,7 @@ use gpui::{
     px, rgb, rgba,
 };
 
-use crate::host::protocol::DecorationStyle;
+use knot_protocol::DecorationStyle;
 
 /// Every name a syntax capture or semantic token can resolve to.
 pub(crate) const CAPTURE_NAMES: &[&str] = &[
@@ -589,7 +589,7 @@ mod tests {
             .map(str::to_owned)
             .collect::<Vec<_>>();
         assert_eq!(fake, native);
-        let declared = include_str!("../host/js/knot.d.ts")
+        let declared = include_str!("../../crates/knot-host/src/js/knot.d.ts")
             .split("export interface ThemeColors {")
             .nth(1)
             .unwrap()

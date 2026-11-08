@@ -6,19 +6,19 @@ use super::*;
 ///
 /// All state attached to the shared isolate is `Send`; this is the safety
 /// condition required by `v8::Isolate::try_into_shared`.
-pub(crate) struct RuntimeCapsule {
+pub struct RuntimeCapsule {
     key: ExtensionKey,
-    pub(super) data: Mutex<Option<IsolateData>>,
-    pub(super) local_state: Arc<RuntimeLocalState>,
+    pub data: Mutex<Option<IsolateData>>,
+    pub local_state: Arc<RuntimeLocalState>,
     pub(super) heap_state: Box<HeapLimitState>,
-    pub(super) status: Arc<AtomicU8>,
+    pub status: Arc<AtomicU8>,
     /// The root evaluating the package or config entry, until it settles.
     startup_root: Mutex<Option<RootId>>,
 }
 
 impl RuntimeCapsule {
-    #[cfg(test)]
-    pub(crate) fn new(key: ExtensionKey, config: IsolateConfig) -> Result<Self, RuntimeError> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn new(key: ExtensionKey, config: IsolateConfig) -> Result<Self, RuntimeError> {
         Self::new_with_graph(key, config, None)
     }
 
@@ -94,14 +94,14 @@ impl RuntimeCapsule {
         })
     }
 
-    pub(crate) fn key(&self) -> ExtensionKey {
+    pub fn key(&self) -> ExtensionKey {
         self.key
     }
 
     /// Reads the isolate's heap statistics between turns. A turn holds the
     /// isolate data for its whole duration, so a running or disposed isolate
     /// reports `None` instead of waiting.
-    pub(crate) fn heap_usage(&self) -> Option<HeapUsage> {
+    pub fn heap_usage(&self) -> Option<HeapUsage> {
         let data = self.data.try_lock().ok()?;
         let data = data.as_ref()?;
         let statistics = data.isolate.lock().get_heap_statistics();
@@ -124,7 +124,7 @@ impl RuntimeCapsule {
         }
     }
 
-    pub(crate) fn termination_handle(&self) -> TerminationHandle {
+    pub fn termination_handle(&self) -> TerminationHandle {
         TerminationHandle {
             isolate: self.heap_state.isolate.clone(),
             status: Arc::clone(&self.status),
@@ -132,8 +132,8 @@ impl RuntimeCapsule {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn execute(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn execute(
         &self,
         source_name: &str,
         source: &str,
@@ -227,8 +227,8 @@ impl RuntimeCapsule {
         })
     }
 
-    #[cfg(test)]
-    pub(crate) fn execute_fixture_module(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn execute_fixture_module(
         &self,
         specifier: &str,
         source: &str,
@@ -261,7 +261,7 @@ impl RuntimeCapsule {
         })
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn start_script_turn(
         &self,
         root: RootId,
@@ -272,7 +272,7 @@ impl RuntimeCapsule {
         self.run_root_turn(root, source_name, result, RootEvaluation::Script { source })
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn start_module_turn(
         &self,
         root: RootId,
@@ -506,7 +506,7 @@ impl RuntimeCapsule {
             resolver.get_promise(try_catch)
         };
         promise.mark_as_handled();
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(gate) = self.local_state.command_start_gate.lock().unwrap().take() {
             gate.wait();
             gate.wait();
@@ -773,7 +773,7 @@ impl RuntimeCapsule {
         let scope = &mut v8::ContextScope::new(&mut scope, context);
         v8::tc_scope!(let try_catch, scope);
         let evaluated = match evaluation {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             RootEvaluation::Script {
                 source: script_source,
             } => {
@@ -926,7 +926,7 @@ impl RuntimeCapsule {
             *self.local_state.keybinding_batch_pending.lock().unwrap() = None;
             let error = match response.result {
                 Ok(reply) if reply.operation == pending.operation => match reply.result {
-                    Ok(Ok(crate::host::declarations::EncodedValue::Undefined)) => None,
+                    Ok(Ok(knot_protocol::declarations::EncodedValue::Undefined)) => None,
                     Err(error) => Some(error.message),
                     _ => Some("invalid keybinding batch response".into()),
                 },
@@ -1226,10 +1226,10 @@ impl RuntimeCapsule {
                 RuntimeError::fatal(RuntimeErrorKind::Engine, "request identity exhausted")
             })?;
         let id = RequestId::new(request_value);
-        let operation = crate::host::declarations::registry()
+        let operation = knot_protocol::declarations::registry()
             .get("mutateKeybindings")
             .expect("native keymap handler")
-            .request(crate::host::protocol::KeybindingArguments { mutations });
+            .request(knot_protocol::KeybindingArguments { mutations });
         self.local_state.pending.lock().unwrap().insert(
             id,
             PendingRequest {
@@ -1398,8 +1398,8 @@ impl RuntimeCapsule {
         *self.local_state.current_root.lock().unwrap() = None;
     }
 
-    #[cfg(test)]
-    pub(crate) fn hold_external_utf16(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn hold_external_utf16(
         &self,
         global_name: &str,
         text: Arc<[u16]>,
@@ -1432,7 +1432,7 @@ impl RuntimeCapsule {
         Ok(())
     }
 
-    pub(crate) fn dispose(&self) {
+    pub fn dispose(&self) {
         self.dispose_with_error(RuntimeError::fatal(
             RuntimeErrorKind::Cancelled,
             "extension JavaScript execution was cancelled",
@@ -1517,8 +1517,8 @@ impl RuntimeCapsule {
         }
     }
 
-    #[cfg(test)]
-    pub(super) fn install_test_barrier(&self, barrier: Arc<TestGate>) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn install_test_barrier(&self, barrier: Arc<TestGate>) {
         *self.local_state.barrier.lock().unwrap() = Some(barrier);
         let data = self.data.lock().unwrap();
         let data = data.as_ref().unwrap();
@@ -1534,8 +1534,8 @@ impl RuntimeCapsule {
             .set(scope, name.into(), function.into());
     }
 
-    #[cfg(test)]
-    pub(super) fn install_test_entered_signal(&self, entered: mpsc::Sender<()>) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn install_test_entered_signal(&self, entered: mpsc::Sender<()>) {
         *self.local_state.entered.lock().unwrap() = Some(entered);
         let data = self.data.lock().unwrap();
         let data = data.as_ref().unwrap();
@@ -1551,8 +1551,8 @@ impl RuntimeCapsule {
             .set(scope, name.into(), function.into());
     }
 
-    #[cfg(test)]
-    pub(super) fn set_test_host_error(&self, error: HostFailure) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_test_host_error(&self, error: HostFailure) {
         *self.local_state.host_error.lock().unwrap() = Some(error);
     }
 }
@@ -1584,13 +1584,13 @@ pub(super) fn execute_engine_turn(
     }
     let started = Instant::now();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match work.work {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         EngineWork::Script {
             source_name,
             source,
             result,
         } => capsule.start_script_turn(root, source_name, source, result),
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         EngineWork::FixtureModule {
             specifier,
             source,
@@ -1640,7 +1640,7 @@ pub(super) fn execute_engine_turn(
         EngineWork::Provider(call) => capsule.start_provider_turn(root, call),
         EngineWork::CancelProvider => capsule.cancel_provider_turn(root),
         EngineWork::Termination => capsule.finish_termination_turn(root),
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         EngineWork::Panic { result } => {
             let _result = result;
             panic!("injected extension worker panic")
@@ -1810,7 +1810,7 @@ pub(super) unsafe extern "C" fn drop_external_utf16(buffer: *mut u16, length: us
     drop(unsafe { Arc::<[u16]>::from_raw(slice) });
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(super) fn test_barrier_callback(
     scope: &mut v8::PinnedRef<'_, v8::HandleScope>,
     _arguments: v8::FunctionCallbackArguments,
@@ -1826,7 +1826,7 @@ pub(super) fn test_barrier_callback(
     result.set(v8::undefined(scope).into());
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(super) fn test_entered_callback(
     scope: &mut v8::PinnedRef<'_, v8::HandleScope>,
     _arguments: v8::FunctionCallbackArguments,

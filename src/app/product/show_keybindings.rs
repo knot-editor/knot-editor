@@ -9,7 +9,7 @@ use super::*;
 use crate::app::commands::keymaps::{
     ApplicationKeymapPresets, BindingOwner, ListedBinding, display_key,
 };
-use crate::host::protocol::PickerItem;
+use knot_protocol::PickerItem;
 
 pub(super) const SHOW_KEYBINDINGS_TITLE: &str = "Show Keybindings";
 

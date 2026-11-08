@@ -135,7 +135,7 @@ supported. Existing tool commands keep working on the new model.
   `product/closure.rs` and `product/sessions.rs` (empty-workbench untitled
   replacement), `product/reopen.rs`. Persistence: `src/app/window_layout.rs`,
   `src/app/window_sessions.rs`, `src/app/tool_layout.rs` (bump
-  `TOOL_LAYOUT_VERSION`). Extension contract: `src/host/js/knot.d.ts`
+  `TOOL_LAYOUT_VERSION`). Extension contract: `crates/knot-host/src/js/knot.d.ts`
   (`ViewLocation`, `LayoutNode`, `WindowLayout`), `docs/schemas/knot.schema.json`,
   `src/app/extensions/host/handlers.rs`, and `@knot/projects` callers. Tests
   under `src/app/product/tests/` (`tools.rs`, `tool_layout.rs`,

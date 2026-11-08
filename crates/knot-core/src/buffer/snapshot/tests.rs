@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::*;
-use crate::core::buffer::ADD_CHUNK_SIZE;
+use crate::buffer::ADD_CHUNK_SIZE;
 
 /// Deterministic xorshift generator for edit sequences.
 struct Rng(u64);

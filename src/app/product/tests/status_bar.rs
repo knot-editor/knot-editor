@@ -5,7 +5,7 @@ use crate::app::{
     settings::{ApplicationSettings, STATUS_BAR_HIDDEN_ITEMS, SettingsScope},
     status_bar::ApplicationStatusBar,
 };
-use crate::host::lifecycle::ExtensionKey;
+use knot_host::lifecycle::ExtensionKey;
 
 const SOURCE: &str = r##"
 import { commands, windows, workbench } from "knot";

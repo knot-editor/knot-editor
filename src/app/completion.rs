@@ -8,7 +8,7 @@ use gpui::{prelude::*, *};
 
 use super::theme::{Theme, color};
 
-use crate::host::protocol::{
+use knot_protocol::{
     BufferHandle, CompletionProviderRegistrationId, CompletionRequest, CompletionResponse,
     CompletionResultItem, ExtensionId, ExtensionLifecycleId,
 };
@@ -482,7 +482,7 @@ mod tests {
         CompletionController, CompletionItem, CompletionItemId, CompletionProviderRegistry,
         CompletionSnapshot, CompletionSurface,
     };
-    use crate::host::protocol::{
+    use knot_protocol::{
         BufferHandle, CompletionProviderError, CompletionResponse, CompletionResultItem,
         ExtensionId, ExtensionLifecycleId,
     };

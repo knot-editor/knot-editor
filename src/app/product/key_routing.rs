@@ -15,7 +15,7 @@ use crate::app::commands::key_router::{KeyAction, KeyRouter, SEQUENCE_TIMEOUT};
 use crate::app::editor::EditorView;
 use crate::app::transient::TransientSurface;
 use crate::app::workbench::{CommandView, ExtensionView};
-use crate::host::protocol::Command;
+use knot_protocol::Command;
 
 #[derive(Default)]
 pub(super) struct KeyRouting {

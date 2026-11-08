@@ -406,7 +406,7 @@ impl TextBuffer {
     ///
     /// This is crate-visible rather than public API: it guards recorded edit
     /// transactions against being replayed against another buffer.
-    pub(crate) fn instance_id(&self) -> u64 {
+    pub fn instance_id(&self) -> u64 {
         self.instance_id
     }
 
@@ -811,8 +811,8 @@ impl TextBuffer {
         &self.edits[start..]
     }
 
-    #[cfg(test)]
-    pub(crate) fn retained_edits(&self) -> usize {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn retained_edits(&self) -> usize {
         self.edits.len()
     }
 
@@ -899,7 +899,7 @@ impl TextBuffer {
     /// This is crate-visible so the editor host can validate untrusted byte
     /// ranges before calling the buffer's assertion-based mutation and read
     /// operations.
-    pub(crate) fn is_char_boundary(&self, offset: usize) -> bool {
+    pub fn is_char_boundary(&self, offset: usize) -> bool {
         // Walk the pieces and stitch a logical view; reading a full char
         // would be wasteful, so we reconstruct boundary-ness by inspecting
         // the byte at the piece boundary. Cheap path: the offset falls

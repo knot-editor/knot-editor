@@ -2,7 +2,7 @@
 use super::*;
 use crate::app::commands::declarations::{CommandContext, command};
 use crate::app::workbench::{PaneId, SplitDirection, SplitEdge, Workbench};
-use crate::host::protocol::CommandOutcome;
+use knot_protocol::CommandOutcome;
 
 #[command("file.new", title = "New Document", description = "Open an untitled document.", id = NEW_COMMAND, participant = Workbench)]
 pub(crate) async fn new(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {

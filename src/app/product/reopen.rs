@@ -8,7 +8,7 @@
 use super::*;
 use crate::app::window_layout::{LayoutTab, WindowLayout};
 use crate::app::workbench::ArrangedTab;
-use crate::host::protocol::CommandOutcome;
+use knot_protocol::CommandOutcome;
 
 const CLOSED_TAB_LIMIT: usize = 20;
 

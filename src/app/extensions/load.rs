@@ -277,13 +277,13 @@ mod tests {
 
     use super::*;
     use crate::app::extensions::package::{Manifest, PackageOrigin, discover};
-    use crate::host::{
+    use knot_host::{
         lifecycle::{ExtensionKey, ExtensionState},
         module_graph::ModuleGraph,
         pool::{ExtensionConfig, ExtensionEvent, ExtensionExit, ExtensionPool},
-        protocol::{ExtensionId, ExtensionLifecycleId},
         scheduler::PoolConfig,
     };
+    use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
     fn package(name: &str, requires: &[&str]) -> InstalledPackage {
         InstalledPackage {

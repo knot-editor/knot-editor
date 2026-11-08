@@ -15,22 +15,22 @@
 
 use super::*;
 use crate::app::extensions::storage::{OwnerStorage, StorageError};
-use crate::host::declarations::{
+use gpui::WeakEntity;
+use knot_protocol::declarations::{
     ArgumentReader, DecodeError, EncodedValue, HostArguments, HostError, HostSuccess, encode_json,
     host_operation,
 };
-use gpui::WeakEntity;
 
 #[derive(Clone)]
 pub(crate) struct HostContext {
     host: WeakEntity<ProductExtensionHost>,
     application: gpui::AsyncApp,
-    request: crate::host::protocol::RequestContext,
+    request: knot_protocol::RequestContext,
 }
 
 impl HostContext {
     pub(crate) fn new(
-        request: crate::host::protocol::RequestContext,
+        request: knot_protocol::RequestContext,
         cx: &mut Context<ProductExtensionHost>,
     ) -> Self {
         Self {
@@ -190,7 +190,7 @@ async fn read_clipboard(context: HostContext, _: ()) -> Result<Option<String>, A
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct OpenArguments {
     uri: String,
-    target: Option<crate::host::protocol::DocumentDestination>,
+    target: Option<knot_protocol::DocumentDestination>,
     preview: bool,
 }
 
@@ -206,17 +206,11 @@ impl HostArguments for OpenArguments {
     }
 }
 
-impl HostSuccess for crate::host::protocol::DocumentPresentation {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
-    }
-}
-
 #[host_operation("openDocument")]
 async fn open_document(
     context: HostContext,
     arguments: OpenArguments,
-) -> Result<crate::host::protocol::DocumentPresentation, OpenError> {
+) -> Result<knot_protocol::DocumentPresentation, OpenError> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let host = context.host.clone();
     let request = context.request;
@@ -247,7 +241,7 @@ async fn open_document(
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TerminalArguments {
     pub cwd: Option<String>,
-    pub target: Option<crate::host::protocol::DocumentDestination>,
+    pub target: Option<knot_protocol::DocumentDestination>,
 }
 
 impl HostArguments for TerminalArguments {
@@ -259,17 +253,11 @@ impl HostArguments for TerminalArguments {
     }
 }
 
-impl HostSuccess for crate::host::protocol::PresentationInfo {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
-    }
-}
-
 #[host_operation("openTerminal")]
 async fn open_terminal(
     context: HostContext,
     arguments: TerminalArguments,
-) -> Result<crate::host::protocol::PresentationInfo, OpenError> {
+) -> Result<knot_protocol::PresentationInfo, OpenError> {
     let request = context.request;
     let destination = context
         .foreground(|host, cx| host.document_destination(&request, arguments.target, cx))??;
@@ -292,9 +280,9 @@ async fn open_terminal(
     let target = context.foreground(move |_, cx| {
         product::operations::open_terminal(destination, directory, cx)
     })??;
-    Ok(crate::host::protocol::PresentationInfo {
+    Ok(knot_protocol::PresentationInfo {
         target,
-        kind: crate::host::protocol::SurfaceKind::Terminal,
+        kind: knot_protocol::SurfaceKind::Terminal,
         document: None,
         buffer: None,
         tool: None,
@@ -316,13 +304,13 @@ impl HostArguments for DocumentLookup {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct WindowLookup {
-    pub target: crate::host::protocol::WindowTarget,
+    pub target: knot_protocol::WindowTarget,
 }
 
 impl HostArguments for WindowLookup {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         Ok(Self {
-            target: crate::host::protocol::WindowTarget {
+            target: knot_protocol::WindowTarget {
                 window: reader.text(2, "window target must be text")?,
             },
         })
@@ -333,7 +321,7 @@ impl HostArguments for WindowLookup {
 pub(crate) async fn list_documents(
     context: HostContext,
     _: (),
-) -> Result<Vec<crate::host::protocol::DocumentInfo>, AccessError> {
+) -> Result<Vec<knot_protocol::DocumentInfo>, AccessError> {
     context.foreground(|host, cx| host.application_snapshot(cx).documents)
 }
 
@@ -341,7 +329,7 @@ pub(crate) async fn list_documents(
 pub(crate) async fn get_document(
     context: HostContext,
     arguments: DocumentLookup,
-) -> Result<Option<crate::host::protocol::DocumentInfo>, AccessError> {
+) -> Result<Option<knot_protocol::DocumentInfo>, AccessError> {
     context.foreground(|host, cx| {
         host.application_snapshot(cx)
             .documents
@@ -354,7 +342,7 @@ pub(crate) async fn get_document(
 pub(crate) async fn list_windows(
     context: HostContext,
     _: (),
-) -> Result<Vec<crate::host::protocol::WindowInfo>, AccessError> {
+) -> Result<Vec<knot_protocol::WindowInfo>, AccessError> {
     context.foreground(|host, cx| host.application_snapshot(cx).windows)
 }
 
@@ -362,7 +350,7 @@ pub(crate) async fn list_windows(
 pub(crate) async fn get_window(
     context: HostContext,
     arguments: WindowLookup,
-) -> Result<Option<crate::host::protocol::WindowInfo>, AccessError> {
+) -> Result<Option<knot_protocol::WindowInfo>, AccessError> {
     context.foreground(|host, cx| {
         host.application_snapshot(cx)
             .windows
@@ -375,7 +363,7 @@ pub(crate) async fn get_window(
 pub(crate) async fn get_workspace(
     context: HostContext,
     arguments: WindowLookup,
-) -> Result<Option<crate::host::protocol::WorkspaceInfo>, AccessError> {
+) -> Result<Option<knot_protocol::WorkspaceInfo>, AccessError> {
     context.foreground(|host, cx| {
         host.application_snapshot(cx)
             .windows
@@ -389,7 +377,7 @@ pub(crate) async fn get_workspace(
 pub(crate) async fn observe_workbench(
     context: HostContext,
     _: (),
-) -> Result<crate::host::protocol::WorkbenchObservation, AccessError> {
+) -> Result<knot_protocol::WorkbenchObservation, AccessError> {
     let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
     context.foreground(|host, cx| {
         host.refresh_application_observation(cx);
@@ -399,13 +387,13 @@ pub(crate) async fn observe_workbench(
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct WorkbenchSubscription {
-    pub subscription: crate::host::protocol::WorkbenchSubscriptionId,
+    pub subscription: knot_protocol::WorkbenchSubscriptionId,
 }
 
 impl HostArguments for WorkbenchSubscription {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         Ok(Self {
-            subscription: crate::host::protocol::WorkbenchSubscriptionId::new(reader.integer(2)?),
+            subscription: knot_protocol::WorkbenchSubscriptionId::new(reader.integer(2)?),
         })
     }
 }
@@ -430,7 +418,7 @@ pub(crate) async fn unobserve_workbench(
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct DestinationArguments {
-    pub target: Option<crate::host::protocol::DocumentDestination>,
+    pub target: Option<knot_protocol::DocumentDestination>,
 }
 
 impl HostArguments for DestinationArguments {
@@ -445,7 +433,7 @@ impl HostArguments for DestinationArguments {
 pub(crate) async fn create_untitled(
     context: HostContext,
     arguments: DestinationArguments,
-) -> Result<crate::host::protocol::DocumentPresentation, OpenError> {
+) -> Result<knot_protocol::DocumentPresentation, OpenError> {
     let request = context.request;
     context.foreground(|host, cx| {
         let destination = host.document_destination(&request, arguments.target, cx)?;
@@ -457,7 +445,7 @@ pub(crate) async fn create_untitled(
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PresentArguments {
     pub id: String,
-    pub target: Option<crate::host::protocol::DocumentDestination>,
+    pub target: Option<knot_protocol::DocumentDestination>,
 }
 
 impl HostArguments for PresentArguments {
@@ -473,7 +461,7 @@ impl HostArguments for PresentArguments {
 pub(crate) async fn present_document(
     context: HostContext,
     arguments: PresentArguments,
-) -> Result<crate::host::protocol::DocumentPresentation, OpenError> {
+) -> Result<knot_protocol::DocumentPresentation, OpenError> {
     let request = context.request;
     context.foreground(|host, cx| {
         let destination = host.document_destination(&request, arguments.target, cx)?;
@@ -504,16 +492,16 @@ impl From<OpenError> for WorkspaceError {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct WorkspaceArguments {
     pub roots: Vec<String>,
-    pub target: Option<crate::host::protocol::WindowTarget>,
+    pub target: Option<knot_protocol::WindowTarget>,
 }
 
 fn read_window(
     reader: &mut dyn ArgumentReader,
     index: usize,
-) -> Result<Option<crate::host::protocol::WindowTarget>, DecodeError> {
+) -> Result<Option<knot_protocol::WindowTarget>, DecodeError> {
     Ok(reader
         .optional_text(index, "window target must be text")?
-        .map(|window| crate::host::protocol::WindowTarget { window }))
+        .map(|window| knot_protocol::WindowTarget { window }))
 }
 
 impl HostArguments for WorkspaceArguments {
@@ -529,7 +517,7 @@ impl HostArguments for WorkspaceArguments {
 pub(crate) async fn replace_workspace_roots(
     context: HostContext,
     arguments: WorkspaceArguments,
-) -> Result<crate::host::protocol::WorkspaceInfo, WorkspaceError> {
+) -> Result<knot_protocol::WorkspaceInfo, WorkspaceError> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let request = context.request;
     let caller = product::operations::OperationCaller {
@@ -559,7 +547,7 @@ pub(crate) async fn replace_workspace_roots(
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct FolderArguments {
     pub uri: String,
-    pub target: Option<crate::host::protocol::WindowTarget>,
+    pub target: Option<knot_protocol::WindowTarget>,
 }
 
 impl HostArguments for FolderArguments {
@@ -575,7 +563,7 @@ impl HostArguments for FolderArguments {
 pub(crate) async fn open_folder(
     context: HostContext,
     arguments: FolderArguments,
-) -> Result<crate::host::protocol::WorkspaceInfo, WorkspaceError> {
+) -> Result<knot_protocol::WorkspaceInfo, WorkspaceError> {
     replace_workspace_roots(
         context,
         WorkspaceArguments {
@@ -604,13 +592,13 @@ impl From<AccessError> for CloseError {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ViewTargetArguments {
-    pub target: crate::host::protocol::PresentationTarget,
+    pub target: knot_protocol::PresentationTarget,
 }
 
 impl HostArguments for ViewTargetArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         match reader.destination(2)? {
-            Some(crate::host::protocol::DocumentDestination::View(target)) => Ok(Self { target }),
+            Some(knot_protocol::DocumentDestination::View(target)) => Ok(Self { target }),
             _ => Err(DecodeError::Type("close requires an exact view target")),
         }
     }
@@ -618,7 +606,7 @@ impl HostArguments for ViewTargetArguments {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CloseArguments {
-    target: crate::host::protocol::PresentationTarget,
+    target: knot_protocol::PresentationTarget,
     discard: bool,
 }
 
@@ -638,7 +626,7 @@ impl HostArguments for CloseArguments {
 pub(crate) async fn close_presentation(
     context: HostContext,
     arguments: CloseArguments,
-) -> Result<crate::host::protocol::PresentationCloseOutcome, CloseError> {
+) -> Result<knot_protocol::PresentationCloseOutcome, CloseError> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let caller = product::operations::OperationCaller {
         host: context.host.clone(),
@@ -661,7 +649,7 @@ pub(crate) async fn close_presentation(
 }
 
 pub(crate) use crate::app::extensions::buffers::BufferError;
-use crate::host::protocol::{
+use knot_protocol::{
     BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, TextEdit, TextSnapshot,
 };
 
@@ -759,12 +747,6 @@ impl HostArguments for LineArguments {
             buffer: BufferHandle::new(reader.integer(2)?),
             value: reader.integer(3)?,
         })
-    }
-}
-
-impl HostSuccess for ByteRange {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
     }
 }
 
@@ -1010,7 +992,7 @@ pub(crate) async fn dispose_editor_contributions(
 }
 
 use crate::app::extensions::semantics::{SemanticError, ViewPresentation};
-use crate::host::protocol::{
+use knot_protocol::{
     CompletionProviderRegistrationId, ConfirmationResult, FolderPickerResult, InputResult,
     InputUpdate, PickerItem, PickerResult, PickerUpdate, ProviderIdentity, TreeAction,
     TreeProviderRegistrationId, ViewContentKind,
@@ -1230,7 +1212,7 @@ impl HostArguments for MessageArguments {
     }
 }
 
-fn transient_owner(request: &crate::host::protocol::RequestContext) -> TransientOwner {
+fn transient_owner(request: &knot_protocol::RequestContext) -> TransientOwner {
     TransientOwner {
         extension: request.extension,
         lifecycle: request.lifecycle,
@@ -1755,7 +1737,7 @@ pub(crate) async fn unregister_completion_provider(
 
 use crate::app::commands::catalog::CommandMetadata;
 use crate::app::commands::extension::CommandError;
-use crate::host::protocol::{
+use knot_protocol::{
     Command, CommandInvokeDispatch, CommandName, CommandOutcome, CommandRegistrationId,
 };
 
@@ -2270,9 +2252,7 @@ pub(crate) struct ScrollByArguments {
 impl HostArguments for ScrollByArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         let authority = EditorAuthority::decode(reader, 2)?;
-        let crate::host::protocol::CommandArgumentValue::Number(rows) =
-            reader.command_arguments(3)?
-        else {
+        let knot_protocol::CommandArgumentValue::Number(rows) = reader.command_arguments(3)? else {
             return Err(DecodeError::Type("scroll rows must be a number"));
         };
         Ok(Self {
@@ -2550,8 +2530,7 @@ impl HostArguments for RestoreViewStateArguments {
         let anchor = offset(reader, 3)?;
         let caret = offset(reader, 4)?;
         let top = offset(reader, 5)?;
-        let crate::host::protocol::CommandArgumentValue::Number(scroll_x) =
-            reader.command_arguments(6)?
+        let knot_protocol::CommandArgumentValue::Number(scroll_x) = reader.command_arguments(6)?
         else {
             return Err(DecodeError::Type("view state scrollX must be a number"));
         };
@@ -2588,7 +2567,7 @@ pub(crate) async fn editor_restore_view_state(
     })?
 }
 
-pub(crate) use crate::host::protocol::KeybindingArguments;
+pub(crate) use knot_protocol::KeybindingArguments;
 
 #[derive(Debug, HostError)]
 pub(crate) enum KeymapError {
@@ -2854,7 +2833,7 @@ impl HostArguments for CaptureLookup {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CaptureRestore {
     id: String,
-    target: Option<crate::host::protocol::DocumentDestination>,
+    target: Option<knot_protocol::DocumentDestination>,
 }
 
 impl HostArguments for CaptureRestore {
@@ -2868,7 +2847,7 @@ impl HostArguments for CaptureRestore {
 
 pub(crate) struct RecoveryRestore {
     outcome: serde_json::Value,
-    presentation: crate::host::protocol::DocumentPresentation,
+    presentation: knot_protocol::DocumentPresentation,
 }
 
 impl HostSuccess for RecoveryRestore {
@@ -3072,7 +3051,7 @@ impl HostArguments for OpenWindowArguments {
 async fn open_window(
     context: HostContext,
     arguments: OpenWindowArguments,
-) -> Result<crate::host::protocol::WindowInfo, WorkspaceError> {
+) -> Result<knot_protocol::WindowInfo, WorkspaceError> {
     // The window's shell observes the host, so it opens after this host update.
     let (sender, receiver) = tokio::sync::oneshot::channel();
     context.foreground(|_, cx| {
@@ -3125,7 +3104,7 @@ async fn focus_window(context: HostContext, arguments: WindowLookup) -> Result<(
 
 use crate::app::languages::{LanguageDefinition, LanguageQueries, editing::EditingDefinition};
 use crate::app::syntax::{SyntaxLanguageError, SyntaxQuery};
-use crate::host::protocol::LanguageInfo;
+use knot_protocol::LanguageInfo;
 
 /// Failures of a language registration.
 #[derive(Debug, HostError)]
@@ -3207,12 +3186,6 @@ impl HostArguments for LanguageDefinition {
             ))
             .map_err(|_| DecodeError::Type("invalid language editing data"))?,
         })
-    }
-}
-
-impl HostSuccess for LanguageInfo {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
     }
 }
 
@@ -3376,7 +3349,7 @@ async fn set_document_language(
 use crate::app::settings::{
     ApplicationSettings, SettingDefinition, SettingOwner, SettingType, SettingsError, SettingsScope,
 };
-use crate::host::protocol::SettingsSubscriptionId;
+use knot_protocol::SettingsSubscriptionId;
 
 /// Failures of a settings operation.
 #[derive(Debug, HostError)]
@@ -3412,7 +3385,7 @@ impl SettingError {
 
 /// A JSON value from JavaScript, whose numbers all arrive as doubles, with
 /// integral numbers restored as integers so they satisfy `integer`.
-fn setting_value(value: crate::host::protocol::CommandArgumentValue) -> serde_json::Value {
+fn setting_value(value: knot_protocol::CommandArgumentValue) -> serde_json::Value {
     fn integral(value: serde_json::Value) -> serde_json::Value {
         match value {
             serde_json::Value::Number(number) => match number.as_f64() {
@@ -3900,9 +3873,7 @@ fn status_owner(context: &HostContext) -> StatusOwner {
     }
 }
 
-fn status_item(
-    value: crate::host::protocol::CommandArgumentValue,
-) -> Result<StatusItem, DecodeError> {
+fn status_item(value: knot_protocol::CommandArgumentValue) -> Result<StatusItem, DecodeError> {
     serde_json::from_value(setting_value(value))
         .map_err(|_| DecodeError::Type("invalid status item"))
 }
@@ -3947,7 +3918,7 @@ pub(crate) struct StatusItemUpdate {
 impl HostArguments for StatusItemUpdate {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         let item = match reader.command_arguments(3)? {
-            crate::host::protocol::CommandArgumentValue::Null => None,
+            knot_protocol::CommandArgumentValue::Null => None,
             value => Some(status_item(value)?),
         };
         Ok(Self {
@@ -4094,12 +4065,12 @@ async fn define_color(context: HostContext, arguments: ColorDefinition) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host::protocol::RequestId;
     use gpui::TestAppContext;
+    use knot_protocol::RequestId;
 
     #[test]
     fn setting_values_restore_integers_from_javascript_doubles() {
-        use crate::host::protocol::CommandArgumentValue as Js;
+        use knot_protocol::CommandArgumentValue as Js;
         let value = Js::Object(
             [
                 ("integer".into(), Js::Number(4.0)),
@@ -4126,7 +4097,7 @@ mod tests {
             let context = host.update(cx, |host, cx| {
                 host.load(key, ExtensionConfig::default()).unwrap();
                 HostContext::new(
-                    crate::host::protocol::RequestContext {
+                    knot_protocol::RequestContext {
                         extension: key.extension,
                         lifecycle: key.lifecycle,
                         id: RequestId::new(1),
@@ -4184,7 +4155,7 @@ mod tests {
                     crate::app::extensions::storage::StorageOwner::personal_config(),
                 );
                 HostContext::new(
-                    crate::host::protocol::RequestContext {
+                    knot_protocol::RequestContext {
                         extension: key.extension,
                         lifecycle: key.lifecycle,
                         id: RequestId::new(1),
@@ -4303,9 +4274,9 @@ mod tests {
                 .unwrap();
             host.commands
                 .enqueue_extension_root(
-                    crate::host::protocol::Command {
+                    knot_protocol::Command {
                         name: "storage-test".into(),
-                        arguments: crate::host::protocol::CommandArgumentValue::Null,
+                        arguments: knot_protocol::CommandArgumentValue::Null,
                     },
                     CommandTarget {
                         registration,

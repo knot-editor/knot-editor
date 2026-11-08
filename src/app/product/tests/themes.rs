@@ -2,7 +2,7 @@
 //! extension API.
 use super::*;
 use crate::app::theme::{Appearance, color, theme};
-use crate::host::lifecycle::ExtensionKey;
+use knot_host::lifecycle::ExtensionKey;
 
 const SOURCE: &str = r##"
 import { commands, settings, themes } from "knot";

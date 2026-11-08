@@ -2,7 +2,7 @@
 //! window's transient picker.
 
 use super::*;
-use crate::host::protocol::{CommandOutcome, PickerItem};
+use knot_protocol::{CommandOutcome, PickerItem};
 
 pub(super) const MOVE_TOOL_TITLE: &str = "Move Tool to Dock";
 

@@ -102,7 +102,7 @@ pub(super) fn activate_tree_tab(
 fn invoke_tree_action(
     shell: &Entity<ProductShell>,
     tree: &Entity<crate::app::tree_view::TreeView>,
-    action: crate::host::protocol::TreeAction,
+    action: knot_protocol::TreeAction,
     window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) {

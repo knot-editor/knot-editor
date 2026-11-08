@@ -5,10 +5,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{
-    core::{buffer::TextBuffer, transaction::EditTransaction},
-    host::lifecycle::ExtensionKey,
-};
+use knot_core::{buffer::TextBuffer, transaction::EditTransaction};
+use knot_host::lifecycle::ExtensionKey;
 
 const GROUPING_TIMEOUT: Duration = Duration::from_secs(1);
 

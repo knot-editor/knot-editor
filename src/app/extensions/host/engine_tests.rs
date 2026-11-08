@@ -7,15 +7,15 @@ fn test_failure(code: &'static str) -> HostFailure {
 }
 
 use crate::app::declared_host as declared;
-use crate::host::declarations::{DeclaredRequest, Handler, Responder};
+use knot_protocol::declarations::{DeclaredRequest, Handler, Responder};
 fn operation<H: Handler>(args: H::Arguments) -> DeclaredRequest {
     DeclaredRequest::new::<H>(args)
 }
-fn success<H: Handler>(value: H::Success) -> super::super::declarations::DeclaredResponse {
+fn success<H: Handler>(value: H::Success) -> knot_protocol::declarations::DeclaredResponse {
     Responder::<H>::new().respond(Ok(value))
 }
 
-fn keybindings_applied(error: Option<String>) -> super::super::declarations::DeclaredResponse {
+fn keybindings_applied(error: Option<String>) -> knot_protocol::declarations::DeclaredResponse {
     Responder::<declared::mutate_keybindings>::new().respond(error.map_or(Ok(()), |message| {
         Err(declared::KeymapError::invalid(message))
     }))
@@ -23,42 +23,42 @@ fn keybindings_applied(error: Option<String>) -> super::super::declarations::Dec
 
 fn clipboard_operation(text: &str) -> DeclaredRequest {
     struct Reader(String);
-    impl super::super::declarations::ArgumentReader for Reader {
+    impl knot_protocol::declarations::ArgumentReader for Reader {
         fn optional_integer(
             &mut self,
             _: usize,
-        ) -> Result<Option<u64>, super::super::declarations::DecodeError> {
+        ) -> Result<Option<u64>, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
         fn command_arguments(
             &mut self,
             _: usize,
-        ) -> Result<CommandArgumentValue, super::super::declarations::DecodeError> {
+        ) -> Result<CommandArgumentValue, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
         fn outcome(
             &mut self,
             _: usize,
-        ) -> Result<CommandOutcome, super::super::declarations::DecodeError> {
+        ) -> Result<CommandOutcome, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
 
         fn range(
             &mut self,
             _: usize,
-        ) -> Result<Option<ByteRange>, super::super::declarations::DecodeError> {
+        ) -> Result<Option<ByteRange>, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
         fn edits(
             &mut self,
             _: usize,
-        ) -> Result<Vec<TextEdit>, super::super::declarations::DecodeError> {
+        ) -> Result<Vec<TextEdit>, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
         fn contributions(
             &mut self,
             _: usize,
-        ) -> Result<Vec<EditorContribution>, super::super::declarations::DecodeError> {
+        ) -> Result<Vec<EditorContribution>, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
 
@@ -66,24 +66,24 @@ fn clipboard_operation(text: &str) -> DeclaredRequest {
             &mut self,
             _: usize,
             _: &'static str,
-        ) -> Result<Option<String>, super::super::declarations::DecodeError> {
+        ) -> Result<Option<String>, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
         fn optional_boolean(
             &mut self,
             _: usize,
             _: &'static str,
-        ) -> Result<Option<bool>, super::super::declarations::DecodeError> {
+        ) -> Result<Option<bool>, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
         fn text_list(
             &mut self,
             _: usize,
-        ) -> Result<Vec<String>, super::super::declarations::DecodeError> {
+        ) -> Result<Vec<String>, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
 
-        fn integer(&mut self, _: usize) -> Result<u64, super::super::declarations::DecodeError> {
+        fn integer(&mut self, _: usize) -> Result<u64, knot_protocol::declarations::DecodeError> {
             unreachable!()
         }
 
@@ -91,45 +91,56 @@ fn clipboard_operation(text: &str) -> DeclaredRequest {
             &mut self,
             _: usize,
             _: &'static str,
-        ) -> Result<String, super::super::declarations::DecodeError> {
+        ) -> Result<String, knot_protocol::declarations::DecodeError> {
             Ok(self.0.clone())
         }
         fn destination(
             &mut self,
             _: usize,
         ) -> Result<
-            Option<super::super::protocol::DocumentDestination>,
-            super::super::declarations::DecodeError,
+            Option<knot_protocol::DocumentDestination>,
+            knot_protocol::declarations::DecodeError,
         > {
             unreachable!()
         }
     }
-    super::super::declarations::registry()
+    knot_protocol::declarations::registry()
         .get("writeClipboardText")
         .unwrap()
         .decode(&mut Reader(text.into()))
         .unwrap()
 }
 
-fn clipboard_written() -> super::super::declarations::DeclaredResponse {
-    super::super::declarations::DeclaredResponse {
+fn clipboard_written() -> knot_protocol::declarations::DeclaredResponse {
+    knot_protocol::declarations::DeclaredResponse {
         operation: "writeClipboardText",
-        result: Ok(Ok(super::super::declarations::EncodedValue::Undefined)),
+        result: Ok(Ok(knot_protocol::declarations::EncodedValue::Undefined)),
     }
 }
 
-use super::*;
-use std::{
-    collections::{BTreeMap, HashSet},
-    num::NonZeroUsize,
-    process::Command,
-    sync::mpsc,
-    time::{Duration, Instant},
+use knot_host::{
+    engine::*,
+    lifecycle::{ExtensionKey, ExtensionState},
+    module_graph::{ConfigPhase, ModuleGraph},
+    scheduler::{CompletionOutcome, PoolConfig, SchedulerError, SchedulerPool, Turn, TurnOutcome},
 };
-
-use crate::host::lifecycle::ExtensionState;
-use crate::host::protocol::{
-    BufferHandle, ExtensionId, ExtensionLifecycleId, HostResponse, RequestId,
+use knot_protocol::ExtensionLifecycleId;
+use knot_protocol::{
+    ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
+    ByteRange, CommandArgumentValue, CommandInvocation, CommandInvocationId, CommandInvokeDispatch,
+    CommandOutcome, CommandRegistrationId, CompletionProviderRegistrationId, CompletionRequest,
+    Decoration, DecorationStyle, EditorContribution, ExtensionId, HostResponse, KeybindingMutation,
+    RequestId, SnapshotText, TextEdit, TextSnapshot, TreeChildrenRequest,
+    TreeProviderRegistrationId, WorkbenchSubscriptionId, declarations::HostFailure,
+};
+use std::{
+    collections::BTreeMap, num::NonZeroUsize, process::Command, sync::mpsc, thread::ThreadId,
+};
+use std::{
+    collections::HashSet,
+    pin::pin,
+    sync::{Arc, atomic::Ordering},
+    time::{Duration, Instant},
 };
 
 fn key(extension: u64) -> ExtensionKey {
@@ -899,7 +910,7 @@ fn execute_captured_fixture(
             extension: runtime.extension,
             lifecycle: runtime.lifecycle,
             arguments: CommandArgumentValue::Null,
-            capture: Some(crate::host::protocol::CommandCapture {
+            capture: Some(knot_protocol::CommandCapture {
                 authority: CommandInvocationId::new(900),
                 window: "fixture-window".into(),
                 view: None,
@@ -1185,7 +1196,7 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
                 TreeChildrenRequest {
                     registration: TreeProviderRegistrationId::new(903),
                     window: "1".into(),
-                    view: crate::host::protocol::ViewId::new(1),
+                    view: knot_protocol::ViewId::new(1),
                     parent_id: None,
                     generation: 1,
                 },
@@ -1380,7 +1391,7 @@ fn provider_self_disposal_acknowledges_without_waiting_for_its_callback() {
             TreeChildrenRequest {
                 registration: TreeProviderRegistrationId::new(906),
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: None,
                 generation: 1,
             },
@@ -1399,7 +1410,7 @@ fn provider_self_disposal_acknowledges_without_waiting_for_its_callback() {
             TreeChildrenRequest {
                 registration: TreeProviderRegistrationId::new(906),
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: None,
                 generation: 2,
             },
@@ -1541,7 +1552,7 @@ fn provider_results_require_iterables_and_validate_only_recognized_item_fields()
                 TreeChildrenRequest {
                     registration: TreeProviderRegistrationId::new(908),
                     window: "1".into(),
-                    view: crate::host::protocol::ViewId::new(1),
+                    view: knot_protocol::ViewId::new(1),
                     parent_id: Some(parent.into()),
                     generation: 1,
                 },
@@ -1652,7 +1663,7 @@ fn registration_response_racing_unload_cannot_publish_late_ownership() {
 
 #[test]
 fn application_observation_installs_before_queued_delivery_and_self_disposes() {
-    use super::super::protocol::{ApplicationSnapshot, WorkbenchObservation};
+    use knot_protocol::{ApplicationSnapshot, WorkbenchObservation};
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(209);
     pool.load(runtime, IsolateConfig::default()).unwrap();
@@ -2816,7 +2827,7 @@ fn host_response_resumes_a_pending_root_and_drains_microtasks() {
 
 #[test]
 fn declared_responses_preserve_structured_errors_precision_and_operation_pairing() {
-    use crate::host::declarations::{DeclaredResponse, EncodedValue, HostError};
+    use knot_protocol::declarations::{DeclaredResponse, EncodedValue, HostError};
     #[derive(knot_handler_macros::HostError)]
     enum ProbeError {
         #[error(code = "ProbeFailed", message = "probe diagnostic")]
@@ -2845,7 +2856,7 @@ fn declared_responses_preserve_structured_errors_precision_and_operation_pairing
             "error-detail-precision",
             DeclaredResponse {
                 operation: "writeClipboardText",
-                result: Err(crate::host::declarations::HostFailure {
+                result: Err(knot_protocol::declarations::HostFailure {
                     code: "ProbeFailed",
                     message: "probe diagnostic".into(),
                     details: serde_json::json!({"revision": MAX_JS_INTEGER + 1}),
@@ -3347,7 +3358,7 @@ fn awaited_queued_executions_report_unload_cancellation() {
             TreeChildrenRequest {
                 registration: TreeProviderRegistrationId::new(1),
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: None,
                 generation: 1,
             },
@@ -3427,7 +3438,7 @@ fn awaited_queued_executions_report_shutdown_and_fatal_failure() {
 #[test]
 fn facade_maps_every_host_error_to_a_stable_javascript_name() {
     let capsule = RuntimeCapsule::new(key(1), IsolateConfig::default()).unwrap();
-    for (index, wire_name) in super::super::declarations::registry()
+    for (index, wire_name) in knot_protocol::declarations::registry()
         .error_codes()
         .into_iter()
         .enumerate()
@@ -3893,7 +3904,7 @@ fn install_semantic_providers(
         operation::<declared::register_tree_provider>(declared::TreeArguments {
             id: "example.outline".into(),
             title: "Outline".into(),
-            content: crate::host::protocol::ViewContentKind::Tree,
+            content: knot_protocol::ViewContentKind::Tree,
             actions: Vec::new(),
             location: crate::app::tool_layout::StoredLocation::Left,
             order: None,
@@ -3947,7 +3958,7 @@ fn semantic_provider_callbacks_preserve_typed_generations_and_recover_from_failu
             TreeChildrenRequest {
                 registration: tree_registration,
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: None,
                 generation: 8,
             },
@@ -3959,10 +3970,10 @@ fn semantic_provider_callbacks_preserve_typed_generations_and_recover_from_failu
     assert_eq!(tree.generation, 8);
     let item = &tree.result.unwrap()[0];
     assert_eq!(item.id, "root");
-    assert_eq!(item.icon, Some(crate::host::protocol::TreeIcon::Symbol));
+    assert_eq!(item.icon, Some(knot_protocol::TreeIcon::Symbol));
     assert_eq!(
         item.collapsible_state,
-        crate::host::protocol::TreeCollapsibleState::Expanded
+        knot_protocol::TreeCollapsibleState::Expanded
     );
 
     let tree_failure = pool
@@ -3971,7 +3982,7 @@ fn semantic_provider_callbacks_preserve_typed_generations_and_recover_from_failu
             TreeChildrenRequest {
                 registration: tree_registration,
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: Some("failure".into()),
                 generation: 9,
             },
@@ -4076,7 +4087,7 @@ fn provider_roots_queue_serially_and_a_waiting_callback_releases_the_worker() {
             TreeChildrenRequest {
                 registration: tree_registration,
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: Some("await".into()),
                 generation: 1,
             },
@@ -4148,7 +4159,7 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
             TreeChildrenRequest {
                 registration: tree_registration,
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: Some("await".into()),
                 generation: 2,
             },
@@ -4200,7 +4211,7 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
             TreeChildrenRequest {
                 registration: tree_registration,
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: Some("await".into()),
                 generation: 4,
             },
@@ -4274,7 +4285,7 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
             TreeChildrenRequest {
                 registration: tree_registration,
                 window: "1".into(),
-                view: crate::host::protocol::ViewId::new(1),
+                view: knot_protocol::ViewId::new(1),
                 parent_id: None,
                 generation: 5,
             },

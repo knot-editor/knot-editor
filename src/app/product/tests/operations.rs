@@ -142,7 +142,7 @@ async fn semantic_open_rejects_a_replaced_presentation_without_creating_a_docume
 }
 
 use crate::app::extensions::{self, host::ProductExtensionHost};
-use crate::host::lifecycle::ExtensionKey;
+use knot_host::lifecycle::ExtensionKey;
 
 pub(super) fn install_operation_fixture(
     host: &Entity<ProductExtensionHost>,

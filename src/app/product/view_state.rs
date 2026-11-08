@@ -116,7 +116,7 @@ impl ProductShell {
         match previous {
             Some(previous) if previous == settled => Settled::Unchanged,
             Some((_, layout)) if layout == settled.1 => Settled::Roots,
-            _ => Settled::Layout(crate::host::protocol::WindowTarget {
+            _ => Settled::Layout(knot_protocol::WindowTarget {
                 window: session_id(cx.entity_id()),
             }),
         }
@@ -127,5 +127,5 @@ enum Settled {
     Unchanged,
     /// Only the roots changed; workspace events already report them.
     Roots,
-    Layout(crate::host::protocol::WindowTarget),
+    Layout(knot_protocol::WindowTarget),
 }

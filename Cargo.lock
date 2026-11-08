@@ -3135,7 +3135,10 @@ dependencies = [
  "gpui",
  "inventory",
  "jsonc-parser",
+ "knot-core",
  "knot-handler-macros",
+ "knot-host",
+ "knot-protocol",
  "libc",
  "nucleo-matcher",
  "percent-encoding",
@@ -3171,12 +3174,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "knot-core"
+version = "0.1.0"
+
+[[package]]
 name = "knot-handler-macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "knot-host"
+version = "0.1.0"
+dependencies = [
+ "knot-protocol",
+ "libc",
+ "pollster 1.0.1",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+ "v8",
+]
+
+[[package]]
+name = "knot-protocol"
+version = "0.1.0"
+dependencies = [
+ "inventory",
+ "knot-handler-macros",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

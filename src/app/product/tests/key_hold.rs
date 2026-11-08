@@ -1,8 +1,8 @@
 //! Ordered key delivery around key-invoked extension commands.
 use super::*;
 use crate::app::editor::{EditorView, Reveal};
-use crate::host::lifecycle::ExtensionKey;
 use gpui::EntityInputHandler;
+use knot_host::lifecycle::ExtensionKey;
 
 const SOURCE: &str = r#"
     import { commands, keymaps, workbench } from "knot";

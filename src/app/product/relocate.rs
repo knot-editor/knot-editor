@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::app::workbench::{TabMoveCapture, TabMoveDestination};
-use crate::host::protocol::CommandOutcome;
+use knot_protocol::CommandOutcome;
 
 #[derive(Clone)]
 pub(super) struct TabRelocationSource {

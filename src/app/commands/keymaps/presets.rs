@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use super::{ApplicationKeymaps, canonical_key, rebuild};
 use crate::app::commands::dispatch::*;
 use crate::app::settings::{self, ApplicationSettings, KEYMAP_PRESET};
-use crate::host::protocol::{Command, CommandArgumentValue, ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{Command, CommandArgumentValue, ExtensionId, ExtensionLifecycleId};
 
 /// The name of the native preset, which registrations cannot replace.
 pub(crate) const KNOT_PRESET: &str = "knot";

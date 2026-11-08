@@ -46,7 +46,7 @@ cargo test --release --lib -- --ignored --nocapture measure_isolate_cost
 cargo test --release --lib -- --ignored --nocapture measure_bundled
 ```
 
-- `measure_isolate_cost` (`src/host/pool.rs`) loads one warm-up package, then
+- `measure_isolate_cost` (`crates/knot-host/src/pool.rs`) loads one warm-up package, then
   50 packages on a single worker for each of two sources: an empty module, and
   one that allocates about 8 MiB of temporary objects at startup. It reports
   isolate creation, time through the settled startup, resident size per added
@@ -74,7 +74,7 @@ cargo test --release --lib -- --ignored --nocapture measure_bundled
   crate can snapshot an evaluated module; otherwise turn the bootstrap into a
   classic script, or fall back to a code cache, which removes compile cost but
   not heap. Decide between building it in `build.rs` and once per process from
-  measured cost. `initialize_extension_context` in `src/host/engine/pool.rs`
+  measured cost. `initialize_extension_context` in `crates/knot-host/src/engine/pool.rs`
   holds the per-isolate work it replaces.
 - **Sharing or unloading, only if the above fall short.** Several bundled
   packages per isolate with one context each would pay the floor once, but

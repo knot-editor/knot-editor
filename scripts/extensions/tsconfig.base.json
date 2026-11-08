@@ -16,5 +16,5 @@
     "noEmitOnError": true,
     "skipLibCheck": false
   },
-  "files": ["../../src/host/js/knot.d.ts"]
+  "files": ["../../crates/knot-host/src/js/knot.d.ts"]
 }

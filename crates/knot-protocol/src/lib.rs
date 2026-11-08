@@ -4,6 +4,10 @@
 //! boundary that extension isolates use to ask the foreground editor to access
 //! native state; neither side exposes V8, gpui, or Rust editor-model objects.
 
+extern crate self as knot_protocol;
+
+pub mod declarations;
+
 use std::{borrow::Borrow, collections::BTreeMap, fmt, sync::Arc};
 
 /// An extension-owned identity, opaque outside the host boundary.
@@ -11,12 +15,11 @@ use std::{borrow::Borrow, collections::BTreeMap, fmt, sync::Arc};
 pub struct ExtensionId(u64);
 
 impl ExtensionId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    #[cfg(test)]
-    pub(crate) const fn value(self) -> u64 {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
@@ -26,7 +29,7 @@ impl ExtensionId {
 pub struct RequestId(u64);
 
 impl RequestId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 }
@@ -38,7 +41,7 @@ impl RequestId {
 pub struct ExtensionLifecycleId(u64);
 
 impl ExtensionLifecycleId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 }
@@ -48,11 +51,11 @@ impl ExtensionLifecycleId {
 pub struct CommandRegistrationId(u64);
 
 impl CommandRegistrationId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    pub(crate) const fn value(self) -> u64 {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
@@ -62,11 +65,11 @@ impl CommandRegistrationId {
 pub struct ViewId(u64);
 
 impl ViewId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    pub(crate) const fn value(self) -> u64 {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
@@ -76,11 +79,11 @@ impl ViewId {
 pub struct CommandInvocationId(u64);
 
 impl CommandInvocationId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    pub(crate) const fn value(self) -> u64 {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
@@ -90,11 +93,11 @@ impl CommandInvocationId {
 pub struct BufferSubscriptionId(u64);
 
 impl BufferSubscriptionId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    pub(crate) const fn value(self) -> u64 {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
@@ -104,11 +107,11 @@ impl BufferSubscriptionId {
 pub struct TreeProviderRegistrationId(u64);
 
 impl TreeProviderRegistrationId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    pub(crate) const fn value(self) -> u64 {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
@@ -118,11 +121,11 @@ impl TreeProviderRegistrationId {
 pub struct CompletionProviderRegistrationId(u64);
 
 impl CompletionProviderRegistrationId {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    pub(crate) const fn value(self) -> u64 {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
@@ -132,11 +135,11 @@ impl CompletionProviderRegistrationId {
 pub struct BufferHandle(u64);
 
 impl BufferHandle {
-    pub(crate) const fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    pub(crate) const fn value(self) -> u64 {
+    pub const fn value(self) -> u64 {
         self.0
     }
 }
@@ -231,11 +234,11 @@ pub struct KeybindingArguments {
     pub mutations: Vec<KeybindingMutation>,
 }
 
-impl super::declarations::HostArguments for KeybindingArguments {
+impl crate::declarations::HostArguments for KeybindingArguments {
     fn decode(
-        _: &mut dyn super::declarations::ArgumentReader,
-    ) -> Result<Self, super::declarations::DecodeError> {
-        Err(super::declarations::DecodeError::Type(
+        _: &mut dyn crate::declarations::ArgumentReader,
+    ) -> Result<Self, crate::declarations::DecodeError> {
+        Err(crate::declarations::DecodeError::Type(
             "keybinding batches require native turn admission",
         ))
     }
@@ -305,7 +308,6 @@ pub struct Decoration {
     pub style: DecorationStyle,
 }
 
-#[cfg(test)]
 impl Decoration {
     pub fn new(color: &str, style: DecorationStyle) -> Self {
         Self {
@@ -687,10 +689,10 @@ pub enum PresentationCloseOutcome {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize)]
 pub struct WorkbenchSubscriptionId(u64);
 impl WorkbenchSubscriptionId {
-    pub(crate) fn new(value: u64) -> Self {
+    pub fn new(value: u64) -> Self {
         Self(value)
     }
-    pub(crate) fn value(self) -> u64 {
+    pub fn value(self) -> u64 {
         self.0
     }
 }
@@ -699,10 +701,10 @@ impl WorkbenchSubscriptionId {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize)]
 pub struct SettingsSubscriptionId(u64);
 impl SettingsSubscriptionId {
-    pub(crate) fn new(value: u64) -> Self {
+    pub fn new(value: u64) -> Self {
         Self(value)
     }
-    pub(crate) fn value(self) -> u64 {
+    pub fn value(self) -> u64 {
         self.0
     }
 }
@@ -716,7 +718,7 @@ pub enum EditorEvent {
     SelectionChanged,
 }
 impl EditorEvent {
-    pub(crate) fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Self::Closed => "closed",
             Self::SelectionChanged => "selection",
@@ -814,7 +816,7 @@ pub struct HostRequest {
     pub lifecycle: ExtensionLifecycleId,
     pub id: RequestId,
     pub invocation: Option<CommandInvocationId>,
-    pub operation: super::declarations::DeclaredRequest,
+    pub operation: crate::declarations::DeclaredRequest,
 }
 
 /// A reply sent back to the extension runtime for one [`HostRequest`].
@@ -823,7 +825,7 @@ pub struct HostResponse {
     pub extension: ExtensionId,
     pub lifecycle: ExtensionLifecycleId,
     pub id: RequestId,
-    pub result: Result<super::declarations::DeclaredResponse, super::declarations::HostFailure>,
+    pub result: Result<crate::declarations::DeclaredResponse, crate::declarations::HostFailure>,
 }
 
 /// Opaque presentation authority shared by one admitted command tree.
@@ -854,12 +856,11 @@ pub struct CommandInvocation {
 pub struct SnapshotText(pub Arc<[u16]>);
 
 impl SnapshotText {
-    pub(crate) fn from_utf8(text: &str) -> Self {
+    pub fn from_utf8(text: &str) -> Self {
         Self(text.encode_utf16().collect::<Vec<_>>().into())
     }
 
-    #[cfg(test)]
-    pub(crate) fn to_utf8(&self) -> String {
+    pub fn to_utf8(&self) -> String {
         String::from_utf16(&self.0).expect("snapshot UTF-16 is well formed")
     }
 }
@@ -884,11 +885,9 @@ pub struct BufferChange {
 #[cfg(test)]
 mod tests {
     use super::{
-        BufferHandle, ByteRange, Command, CommandArgumentValue, CommandInvocationId,
-        CommandInvokeDispatch, CommandOutcome, CommandRegistrationId, ExtensionId,
-        ExtensionLifecycleId, HostRequest, HostResponse, RequestId, TextEdit,
+        ByteRange, Command, CommandArgumentValue, CommandInvocationId, CommandInvokeDispatch,
+        CommandOutcome, CommandRegistrationId, TextEdit,
     };
-    use crate::host::declarations::HostError;
 
     #[test]
     fn command_round_trips_json_compatible_arguments() {
@@ -923,28 +922,6 @@ mod tests {
                 }
             })
         );
-    }
-
-    #[test]
-    fn response_keeps_the_extension_and_request_identity() {
-        use crate::app::declared_host::{ContextArguments, active_buffer};
-        use crate::host::declarations::{DeclaredRequest, Responder};
-        let request = HostRequest {
-            extension: ExtensionId::new(7),
-            lifecycle: ExtensionLifecycleId::new(3),
-            id: RequestId::new(11),
-            invocation: None,
-            operation: DeclaredRequest::new::<active_buffer>(ContextArguments { target: None }),
-        };
-        let response = HostResponse {
-            extension: request.extension,
-            lifecycle: request.lifecycle,
-            id: request.id,
-            result: Ok(Responder::<active_buffer>::new().respond(Ok(Some(BufferHandle::new(3))))),
-        };
-        assert_eq!(response.extension, request.extension);
-        assert_eq!(response.lifecycle, request.lifecycle);
-        assert_eq!(response.id, request.id);
     }
 
     #[test]
@@ -988,15 +965,6 @@ mod tests {
                 "range": { "startByteOffset": 2, "endByteOffset": 5 },
                 "text": "λ",
             })
-        );
-        assert_eq!(
-            serde_json::to_value(
-                crate::app::declared_host::BufferError::RevisionConflict
-                    .into_failure()
-                    .code
-            )
-            .unwrap(),
-            serde_json::json!("RevisionConflict")
         );
     }
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::core::buffer::TextBuffer;
+use knot_core::buffer::TextBuffer;
 
 const RUST_HIGHLIGHTS: &str = r#"
 (identifier) @variable

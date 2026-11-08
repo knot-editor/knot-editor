@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use gpui::{App, AppContext as _, Entity};
 
-use crate::host::protocol::{Command, CommandArgumentValue, CommandName};
+use knot_protocol::{Command, CommandArgumentValue, CommandName};
 
 use super::{
     PALETTE_KEY_CONTEXT,

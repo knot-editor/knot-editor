@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::buffer::TextPoint;
+use crate::buffer::TextPoint;
 
 // Expected byte-offset transform for the randomized correctness oracle.
 fn transform_offset(off: usize, edit: &BufferEdit) -> usize {

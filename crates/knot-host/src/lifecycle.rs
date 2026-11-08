@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::protocol::{ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Identifies one load of an extension.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

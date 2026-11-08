@@ -10,7 +10,7 @@ use std::sync::atomic::Ordering;
 
 use gpui::{prelude::*, *};
 
-use crate::host::protocol::ViewId;
+use knot_protocol::ViewId;
 
 use super::editor::EditorView;
 use super::model::BufferModel;
@@ -87,7 +87,7 @@ impl TextView {
 
     pub(crate) fn handle_command(
         &self,
-        command: &crate::host::protocol::Command,
+        command: &knot_protocol::Command,
         cx: &mut Context<Self>,
     ) -> super::commands::dispatch::CommandClaim {
         use super::commands::dispatch::{COPY_COMMAND, CommandClaim};
@@ -96,7 +96,7 @@ impl TextView {
             && let Some(text) = self.selected_text(cx)
         {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
-            return CommandClaim::Finished(crate::host::protocol::CommandOutcome::Completed);
+            return CommandClaim::Finished(knot_protocol::CommandOutcome::Completed);
         }
         CommandClaim::Declined
     }

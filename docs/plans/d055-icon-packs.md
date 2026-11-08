@@ -148,8 +148,8 @@ setting, or replace a single icon.
 - **Implementation context:** replace `TreeView::icon` and `disclosure` in
   `src/app/tree_view.rs` (around line 668), the same pair in
   `src/app/workspace_tree.rs` (around line 429), and `TreeIcon` in
-  `src/host/protocol.rs:332` with its marshalling in
-  `src/host/engine/marshal.rs` and `src/app/extensions/semantics.rs`.
+  `crates/knot-protocol/src/lib.rs:332` with its marshalling in
+  `crates/knot-host/src/engine/marshal.rs` and `src/app/extensions/semantics.rs`.
 - Review gate: icons look right at every zoom level in both bundled theme
   appearances, and the tree rows align as before.
 
@@ -170,8 +170,8 @@ setting, or replace a single icon.
   `unregister_theme`, and `define_color` in
   `src/app/extensions/host/handlers.rs` (around line 3774), with
   `#[host_operation]`. The JavaScript side follows `registerTheme` and
-  `defineColor` in `src/host/js/bootstrap.js:1355` and the `themes` export in
-  `src/host/js/knot.js:83`. Call teardown next to
+  `defineColor` in `crates/knot-host/src/js/bootstrap.js:1355` and the `themes` export in
+  `crates/knot-host/src/js/knot.js:83`. Call teardown next to
   `themes::remove_lifecycle` in `src/app/extensions/host.rs:2612`. Update
   `docs/schemas/knot.schema.json` for the setting. Select Theme lives in
   `extensions/@knot/themes/src/selection.ts`.

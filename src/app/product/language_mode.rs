@@ -5,7 +5,7 @@
 //! followed by every registered language.
 
 use super::*;
-use crate::host::protocol::{CommandOutcome, PickerItem};
+use knot_protocol::{CommandOutcome, PickerItem};
 
 pub(super) const LANGUAGE_MODE_TITLE: &str = "Set Language Mode";
 

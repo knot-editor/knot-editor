@@ -14,7 +14,7 @@ impl ProductShell {
     pub(super) fn finish_open_command(
         &mut self,
         completion: CommandCompletion,
-        outcome: crate::host::protocol::CommandOutcome,
+        outcome: knot_protocol::CommandOutcome,
         cx: &mut Context<Self>,
     ) {
         completion.complete(outcome.clone());
@@ -30,11 +30,7 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) {
         if !self.target_is_live(&target, cx) {
-            self.finish_open_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_open_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         }
         if cx.try_global::<ApplicationOpenDialog>().is_none()
@@ -78,7 +74,7 @@ impl ProductShell {
                         _ => {
                             this.finish_open_command(
                                 completion,
-                                crate::host::protocol::CommandOutcome::Cancelled,
+                                knot_protocol::CommandOutcome::Cancelled,
                                 cx,
                             );
                             cx.notify();
@@ -86,7 +82,7 @@ impl ProductShell {
                     })
                     .is_err()
                 {
-                    fallback.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                    fallback.complete(knot_protocol::CommandOutcome::InvalidTarget);
                 }
             });
             self.tasks.push(task);
@@ -113,11 +109,7 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) {
         if !self.target_is_live(&target, cx) {
-            self.finish_open_command(
-                completion,
-                crate::host::protocol::CommandOutcome::InvalidTarget,
-                cx,
-            );
+            self.finish_open_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;
         }
         let open_target = OpenTarget::from_command(&target);
@@ -149,14 +141,14 @@ impl ProductShell {
                         .update(cx, |this, cx| {
                             this.finish_open_command(
                                 delivered,
-                                crate::host::protocol::CommandOutcome::Cancelled,
+                                knot_protocol::CommandOutcome::Cancelled,
                                 cx,
                             );
                             cx.notify();
                         })
                         .is_err()
                     {
-                        completion.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                        completion.complete(knot_protocol::CommandOutcome::InvalidTarget);
                     }
                     return;
                 }
@@ -172,14 +164,14 @@ impl ProductShell {
                             );
                             this.finish_open_command(
                                 delivered,
-                                crate::host::protocol::CommandOutcome::HandlerFailure { message },
+                                knot_protocol::CommandOutcome::HandlerFailure { message },
                                 cx,
                             );
                             cx.notify();
                         })
                         .is_err()
                     {
-                        completion.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                        completion.complete(knot_protocol::CommandOutcome::InvalidTarget);
                     }
                     return;
                 }
@@ -198,14 +190,14 @@ impl ProductShell {
                             );
                             this.finish_open_command(
                                 delivered,
-                                crate::host::protocol::CommandOutcome::HandlerFailure { message },
+                                knot_protocol::CommandOutcome::HandlerFailure { message },
                                 cx,
                             );
                             cx.notify();
                         })
                         .is_err()
                     {
-                        completion.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                        completion.complete(knot_protocol::CommandOutcome::InvalidTarget);
                     }
                     return;
                 }
@@ -217,7 +209,7 @@ impl ProductShell {
                 })
                 .is_err()
             {
-                completion.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                completion.complete(knot_protocol::CommandOutcome::InvalidTarget);
             }
         });
         self.tasks.push(task);
@@ -234,9 +226,9 @@ impl ProductShell {
         let result = self.start_open_operation(request, target, replace_target, cx);
         let task = cx.spawn(async move |this, cx| {
             let outcome = match result.await {
-                Ok(Ok(_)) => crate::host::protocol::CommandOutcome::Completed,
+                Ok(Ok(_)) => knot_protocol::CommandOutcome::Completed,
                 Ok(Err(error)) => error.command_outcome(),
-                Err(_) => crate::host::protocol::CommandOutcome::InvalidTarget,
+                Err(_) => knot_protocol::CommandOutcome::InvalidTarget,
             };
             if let Some(completion) = completion {
                 let fallback = completion.clone();
@@ -246,7 +238,7 @@ impl ProductShell {
                     })
                     .is_err()
                 {
-                    fallback.complete(crate::host::protocol::CommandOutcome::InvalidTarget);
+                    fallback.complete(knot_protocol::CommandOutcome::InvalidTarget);
                 }
             }
         });

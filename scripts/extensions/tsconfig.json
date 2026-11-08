@@ -12,7 +12,7 @@
     "skipLibCheck": false
   },
   "include": [
-    "../../src/host/js/knot.d.ts",
+    "../../crates/knot-host/src/js/knot.d.ts",
     "examples/*.js",
     "contract.test.ts"
   ]

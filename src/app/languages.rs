@@ -20,7 +20,7 @@ use std::{collections::HashMap, sync::Arc};
 use gpui::{App, Entity, EntityId, Global, WeakEntity};
 use serde::Serialize;
 
-use crate::host::protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
 pub(crate) mod editing;
 

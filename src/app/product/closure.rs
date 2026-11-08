@@ -192,7 +192,7 @@ impl ProductShell {
                 discard: false,
             },
             Box::new(move |result, cx| {
-                use crate::host::protocol::{CommandOutcome, PresentationCloseOutcome};
+                use knot_protocol::{CommandOutcome, PresentationCloseOutcome};
                 let outcome = match result {
                     Ok(PresentationCloseOutcome::Closed) => CommandOutcome::Completed,
                     Ok(PresentationCloseOutcome::Cancelled) => CommandOutcome::Cancelled,
@@ -310,7 +310,7 @@ impl ProductShell {
         completion: ProtectedCloseCompletion,
         cx: &mut Context<Self>,
     ) {
-        use crate::host::protocol::{CommandOutcome, PresentationCloseOutcome};
+        use knot_protocol::{CommandOutcome, PresentationCloseOutcome};
 
         cx.spawn(async move |this, cx| {
             let mut approvals = plan.discarded.clone();
@@ -516,7 +516,7 @@ impl ProductShell {
 
     pub(super) fn finish_protected_close_completion(
         completion: Option<CommandCompletion>,
-        outcome: crate::host::protocol::CommandOutcome,
+        outcome: knot_protocol::CommandOutcome,
         cx: &mut App,
     ) {
         let Some(completion) = completion else {
@@ -686,8 +686,8 @@ impl ProductShell {
         document: DocumentId,
         _: &mut Window,
         cx: &mut Context<Self>,
-    ) -> crate::host::protocol::CommandOutcome {
-        use crate::host::protocol::CommandOutcome;
+    ) -> knot_protocol::CommandOutcome {
+        use knot_protocol::CommandOutcome;
 
         if !self.workbench.read(cx).contains_tab(pane, tab, document) {
             return CommandOutcome::InvalidTarget;

@@ -2,12 +2,10 @@
 
 use std::collections::HashMap;
 
-use crate::host::{
-    lifecycle::ExtensionKey,
-    protocol::{
-        ApplicationChange, ApplicationEvent, ApplicationSnapshot, WorkbenchObservation,
-        WorkbenchSubscriptionId,
-    },
+use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::{
+    ApplicationChange, ApplicationEvent, ApplicationSnapshot, WorkbenchObservation,
+    WorkbenchSubscriptionId,
 };
 
 struct ApplicationChanges(gpui::Entity<()>);
@@ -176,7 +174,7 @@ impl ApplicationObservation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host::protocol::*;
+    use knot_protocol::*;
 
     fn document(revision: u64, dirty: bool) -> DocumentInfo {
         DocumentInfo {

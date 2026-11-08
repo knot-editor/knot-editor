@@ -4,20 +4,20 @@
 use super::*;
 
 /// Thread-safe, V8-free control surface for forced termination.
-pub(crate) struct TerminationHandle {
-    pub(super) isolate: v8::IsolateHandle,
-    pub(super) status: Arc<AtomicU8>,
+pub struct TerminationHandle {
+    pub isolate: v8::IsolateHandle,
+    pub status: Arc<AtomicU8>,
     pub(super) wake: Option<TerminationWake>,
 }
 
 pub(super) struct TerminationWake {
     pub(super) key: ExtensionKey,
-    pub(super) capsule: Arc<RuntimeCapsule>,
+    pub capsule: Arc<RuntimeCapsule>,
     pub(super) scheduler: SchedulerHandle<EngineTurn>,
 }
 
 impl TerminationHandle {
-    pub(crate) fn terminate(&self) -> bool {
+    pub fn terminate(&self) -> bool {
         if self
             .status
             .compare_exchange(ACTIVE, TERMINATED, Ordering::AcqRel, Ordering::Acquire)
@@ -50,8 +50,8 @@ impl TerminationHandle {
     }
 }
 
-pub(super) struct EngineTurn {
-    pub(super) capsule: Arc<RuntimeCapsule>,
+pub struct EngineTurn {
+    pub capsule: Arc<RuntimeCapsule>,
     pub(super) work: EngineWork,
 }
 
@@ -76,13 +76,13 @@ pub(super) enum EngineWork {
         handle: u64,
         event: EditorEvent,
     },
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     Script {
         source_name: Arc<str>,
         source: Arc<str>,
         result: ResultSender<ExecutionReport>,
     },
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     FixtureModule {
         specifier: Arc<str>,
         source: Arc<str>,
@@ -107,21 +107,21 @@ pub(super) enum EngineWork {
     Provider(ProviderCall),
     CancelProvider,
     Termination,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     Panic {
         result: ResultSender<ExecutionReport>,
     },
 }
 
 /// Completion side of one scheduled JavaScript turn.
-pub(crate) struct RuntimeExecution {
+pub struct RuntimeExecution {
     pub(super) result: ResultReceiver<ExecutionReport>,
     pub(super) completion: CompletionReceiver,
 }
 
 impl RuntimeExecution {
-    #[cfg(test)]
-    pub(crate) fn wait(self) -> Result<ExecutionReport, RuntimeError> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait(self) -> Result<ExecutionReport, RuntimeError> {
         match self.result.blocking_recv() {
             Ok(result) => {
                 let _ = self.completion.recv();
@@ -176,14 +176,14 @@ impl std::future::Future for RuntimeExecution {
 }
 
 /// Completion side of one scheduled extension command handler.
-pub(crate) struct RuntimeCommandExecution {
+pub struct RuntimeCommandExecution {
     pub(super) result: ResultReceiver<CommandOutcome>,
     pub(super) completion: CompletionReceiver,
 }
 
 impl RuntimeCommandExecution {
-    #[cfg(test)]
-    pub(crate) fn wait(self) -> Result<CommandOutcome, RuntimeError> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait(self) -> Result<CommandOutcome, RuntimeError> {
         match self.result.blocking_recv() {
             Ok(result) => {
                 let _ = self.completion.recv();
@@ -232,7 +232,7 @@ impl std::future::Future for RuntimeCommandExecution {
 }
 
 /// Completion side of one native-to-extension semantic provider callback.
-pub(crate) struct RuntimeProviderExecution<T> {
+pub struct RuntimeProviderExecution<T> {
     pub(super) result: Option<ResultReceiver<T>>,
     pub(super) completion: CompletionReceiver,
     pub(super) cancellation: Option<ProviderCancellation>,
@@ -244,15 +244,15 @@ pub(super) struct ProviderCancellation {
     pub(super) provider: ProviderIdentity,
     pub(super) key: ExtensionKey,
     pub(super) root: RootId,
-    pub(super) capsule: Arc<RuntimeCapsule>,
+    pub capsule: Arc<RuntimeCapsule>,
     pub(super) scheduler: SchedulerHandle<EngineTurn>,
     pub(super) cancelled: Arc<AtomicBool>,
     pub(super) completed: Arc<AtomicBool>,
 }
 
 impl<T> RuntimeProviderExecution<T> {
-    #[cfg(test)]
-    pub(crate) fn wait(mut self) -> Result<T, RuntimeError> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn wait(mut self) -> Result<T, RuntimeError> {
         let result = match self
             .result
             .take()

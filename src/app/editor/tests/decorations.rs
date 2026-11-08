@@ -5,7 +5,7 @@ use super::super::{
     layout::{Row, decoration_fills},
     project_contributions,
 };
-use crate::host::protocol::{ByteRange, Decoration, DecorationStyle};
+use knot_protocol::{ByteRange, Decoration, DecorationStyle};
 
 use DecorationStyle::{Background, Line};
 

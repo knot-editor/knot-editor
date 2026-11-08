@@ -7,7 +7,7 @@
 
 use super::*;
 use crate::app::resource::ResourceUri;
-use crate::host::protocol::CommandOutcome;
+use knot_protocol::CommandOutcome;
 
 impl ProductShell {
     /// Choose a directory in the session's transient slot and append it.
@@ -46,7 +46,7 @@ impl ProductShell {
             let _ = this.update(cx, |shell, cx| match result {
                 Ok(uri) => shell.add_workspace_root(uri, cx),
                 Err(error) => {
-                    use crate::host::declarations::HostError;
+                    use knot_protocol::declarations::HostError;
                     shell.show_notice(
                         PromptLevel::Warning,
                         "Cannot add folder",

@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 
 use gpui::{App, Entity, WeakEntity};
 
-use crate::host::protocol::CompletionProviderRegistrationId;
-use crate::host::protocol::{
+use knot_protocol::CompletionProviderRegistrationId;
+use knot_protocol::{
     ExtensionId, ExtensionLifecycleId, RequestContext, TreeAction, TreeChildrenResponse,
     TreeProviderRegistrationId, ViewContentKind, ViewId,
 };
@@ -19,7 +19,7 @@ use crate::app::extensions::host::handlers::{
     TreeArguments, TreeInvalidationArguments, TreeRegistrationArguments,
 };
 use crate::app::tool_layout::StoredLocation;
-use crate::host::declarations::HostError;
+use knot_protocol::declarations::HostError;
 
 use crate::app::{
     completion::{CompletionProviderRegistration, CompletionProviderRegistry},
@@ -538,8 +538,8 @@ fn map_tree_error(error: TreeViewRegistrationError) -> SemanticError {
 mod tests {
     use super::*;
     use crate::app::text_view::TextView;
-    use crate::host::protocol::{RequestId, TreeCollapsibleState, TreeItem, TreeProviderError};
     use gpui::{AppContext, TestAppContext};
+    use knot_protocol::{RequestId, TreeCollapsibleState, TreeItem, TreeProviderError};
 
     fn request(extension: ExtensionId, lifecycle: ExtensionLifecycleId, id: u64) -> RequestContext {
         RequestContext {
@@ -631,7 +631,7 @@ mod tests {
                         icon: None,
                         collapsible_state: TreeCollapsibleState::None,
                         command: None,
-                        kind: crate::host::protocol::TreeItemKind::Item,
+                        kind: knot_protocol::TreeItemKind::Item,
                         status_text: None,
                         badge: None,
                         actions: Vec::new(),

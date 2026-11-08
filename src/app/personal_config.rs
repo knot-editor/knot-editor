@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use directories::{BaseDirs, ProjectDirs};
 
-use crate::host::engine::RuntimeError;
-use crate::host::{engine::validate_module_graph_entry, module_graph::ModuleGraph};
+use knot_host::engine::RuntimeError;
+use knot_host::{engine::validate_module_graph_entry, module_graph::ModuleGraph};
 
 const PRE_INIT: &str = "pre-init.js";
 const POST_INIT: &str = "post-init.js";
