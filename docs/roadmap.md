@@ -167,9 +167,10 @@ complete list for that item.
   - Deferred: D073 supplies comment and bracket data only for
     the languages with their own packages (Rust, TypeScript and JavaScript,
     Python, TOML, Markdown). The languages in `@knot/language-others` (C,
-    C++, CSS, Go, HTML, Java, JSON, JSONC, tree-sitter query, shell script,
-    YAML) register without it, so editing commands treat them as having no
-    comments or brackets.
+    C++, CSS, Go, Java, JSON, JSONC, tree-sitter query, shell script, YAML)
+    register without it, so editing commands treat them as having no
+    comments or brackets. HTML has its block comment, which Markdown's
+    injected HTML blocks need, but no brackets.
   - Reconsider: Daily editing in one of those languages misses toggle
     comment or auto-closing, or the languages move into their own packages
     (D129). Then add the data with per-language behavior tests like
