@@ -254,7 +254,7 @@ fn memory_filesystems_with_provider() -> (
     provider
         .seed_directory(ResourceUri::parse("mem://product/src").unwrap())
         .unwrap();
-    let mut providers = FileSystemProviderRegistry::new();
+    let mut providers = FileSystemProviderRegistry::default();
     providers.register("mem", provider.clone()).unwrap();
     (Arc::new(providers), provider)
 }

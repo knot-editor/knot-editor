@@ -287,7 +287,7 @@ impl TestProduct {
     ) -> ServedFiles {
         let root = ResourceUri::parse("mem://product/").unwrap();
         let provider = Arc::new(MemoryFileSystemProvider::new(root).unwrap());
-        let mut filesystems = FileSystemProviderRegistry::new();
+        let mut filesystems = FileSystemProviderRegistry::default();
         filesystems.register("mem", provider.clone()).unwrap();
         provider
             .seed_directory(ResourceUri::parse(directory).unwrap())

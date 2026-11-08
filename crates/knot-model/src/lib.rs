@@ -4,9 +4,13 @@
 //! drives them.
 
 pub mod editing;
+pub mod filesystem;
 pub mod history;
 pub mod indentation;
 pub mod keys;
+pub mod open;
+pub mod resource;
 pub mod style;
 pub mod syntax;
 pub mod theme;
+pub mod workspace;

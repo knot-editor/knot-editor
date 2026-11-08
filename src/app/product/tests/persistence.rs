@@ -481,7 +481,7 @@ async fn external_conflict_reload_rejects_an_edit_racing_its_read(cx: &mut TestA
         read_release: Mutex::new(Some(gated_read)),
         replace_release: Mutex::new(None),
     });
-    let mut filesystems = FileSystemProviderRegistry::new();
+    let mut filesystems = FileSystemProviderRegistry::default();
     filesystems.register("mem", gated_provider).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
 

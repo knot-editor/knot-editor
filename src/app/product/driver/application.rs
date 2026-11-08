@@ -112,7 +112,7 @@ impl TestProduct {
     /// Hold the next local file read until the returned handle releases it.
     pub fn hold_file_reads(&self, cx: &mut TestAppContext) -> HeldReads {
         let (release, held) = tokio::sync::oneshot::channel();
-        let mut providers = FileSystemProviderRegistry::new();
+        let mut providers = FileSystemProviderRegistry::default();
         providers
             .register(
                 "file",

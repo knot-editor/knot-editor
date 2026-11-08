@@ -6,7 +6,7 @@ pub(super) fn product_filesystems() -> Arc<FileSystemProviderRegistry> {
     static FILESYSTEMS: OnceLock<Arc<FileSystemProviderRegistry>> = OnceLock::new();
     FILESYSTEMS
         .get_or_init(|| {
-            let mut providers = FileSystemProviderRegistry::new();
+            let mut providers = FileSystemProviderRegistry::default();
             providers
                 .register("file", Arc::new(LocalFileSystemProvider::unrestricted()))
                 .expect("the product file provider is unique");

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::{
+use crate::{
     filesystem::{
         FileSystemProviderRegistry, ResourceEntry, ResourceError, ResourceKind, ResourceStat,
         ResourceVersion,
@@ -11,7 +11,7 @@ use super::{
 };
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) enum OpenResource {
+pub enum OpenResource {
     Missing(ResourceUri),
     File {
         uri: ResourceUri,
@@ -22,7 +22,7 @@ pub(crate) enum OpenResource {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum OpenResourceError {
+pub enum OpenResourceError {
     Provider(ResourceError),
     InvalidUtf8 { uri: ResourceUri },
 }
@@ -42,7 +42,7 @@ impl From<ResourceError> for OpenResourceError {
     }
 }
 
-pub(crate) async fn load_resource(
+pub async fn load_resource(
     providers: Arc<FileSystemProviderRegistry>,
     uri: ResourceUri,
 ) -> Result<OpenResource, OpenResourceError> {
@@ -50,7 +50,7 @@ pub(crate) async fn load_resource(
 }
 
 /// File-only opens admit missing destinations; directory-only opens require a root.
-pub(crate) async fn load_resource_kind(
+pub async fn load_resource_kind(
     providers: Arc<FileSystemProviderRegistry>,
     uri: ResourceUri,
     expected: Option<ResourceKind>,
@@ -96,7 +96,7 @@ pub(crate) async fn load_resource_kind(
     }
 }
 
-pub(crate) async fn enumerate_directory(
+pub async fn enumerate_directory(
     providers: Arc<FileSystemProviderRegistry>,
     uri: ResourceUri,
 ) -> Result<Vec<ResourceEntry>, ResourceError> {
@@ -116,7 +116,7 @@ pub(crate) async fn enumerate_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::filesystem::{FileSystemProviderRegistry, MemoryFileSystemProvider};
+    use crate::filesystem::{FileSystemProviderRegistry, MemoryFileSystemProvider};
 
     fn fixture() -> (Arc<FileSystemProviderRegistry>, ResourceUri) {
         let root = ResourceUri::parse("mem://open/").unwrap();
@@ -136,7 +136,7 @@ mod tests {
         provider
             .seed_directory(ResourceUri::parse("mem://open/src").unwrap())
             .unwrap();
-        let mut providers = FileSystemProviderRegistry::new();
+        let mut providers = FileSystemProviderRegistry::default();
         providers.register("mem", provider).unwrap();
         (Arc::new(providers), root)
     }

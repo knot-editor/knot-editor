@@ -184,7 +184,7 @@ async fn stale_open_does_not_publish_or_leak_a_document(cx: &mut TestAppContext)
         read_release: std::sync::Mutex::new(Some(gate)),
         replace_release: std::sync::Mutex::new(None),
     });
-    let mut filesystems = FileSystemProviderRegistry::new();
+    let mut filesystems = FileSystemProviderRegistry::default();
     filesystems.register("mem", gated.clone()).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -237,7 +237,7 @@ async fn save_as_and_racing_edits_publish_current_metadata_without_changing_iden
         read_release: std::sync::Mutex::new(None),
         replace_release: std::sync::Mutex::new(Some(gate)),
     });
-    let mut filesystems = FileSystemProviderRegistry::new();
+    let mut filesystems = FileSystemProviderRegistry::default();
     filesystems.register("mem", gated.clone()).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
@@ -424,7 +424,7 @@ async fn replaced_or_closed_open_presentations_cannot_accept_in_flight_results(
             read_release: std::sync::Mutex::new(Some(gate)),
             replace_release: std::sync::Mutex::new(None),
         });
-        let mut filesystems = FileSystemProviderRegistry::new();
+        let mut filesystems = FileSystemProviderRegistry::default();
         filesystems.register("mem", gated.clone()).unwrap();
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let document = cx.update(|cx| create_untitled_document(&documents, cx));

@@ -119,7 +119,7 @@ async fn semantic_open_rejects_a_replaced_presentation_without_creating_a_docume
         read_release: Mutex::new(Some(gate)),
         replace_release: Mutex::new(None),
     });
-    let mut filesystems = FileSystemProviderRegistry::new();
+    let mut filesystems = FileSystemProviderRegistry::default();
     filesystems.register("mem", provider.clone()).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -249,7 +249,7 @@ fn public_open_keeps_the_admitted_window_when_focus_changes_during_read(cx: &mut
         read_release: Mutex::new(Some(gate)),
         replace_release: Mutex::new(None),
     });
-    let mut filesystems = FileSystemProviderRegistry::new();
+    let mut filesystems = FileSystemProviderRegistry::default();
     filesystems.register("mem", provider.clone()).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let host = cx.update(extensions::host::install);
@@ -300,7 +300,7 @@ fn public_open_rejects_replaced_targets_and_unloaded_callers_after_io(cx: &mut T
             read_release: Mutex::new(Some(gate)),
             replace_release: Mutex::new(None),
         });
-        let mut filesystems = FileSystemProviderRegistry::new();
+        let mut filesystems = FileSystemProviderRegistry::default();
         filesystems.register("mem", provider.clone()).unwrap();
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let host = cx.update(extensions::host::install);
@@ -645,7 +645,7 @@ fn public_open_rejects_pane_or_window_loss_and_command_cancellation_without_leak
             read_release: Mutex::new(Some(gate)),
             replace_release: Mutex::new(None),
         });
-        let mut filesystems = FileSystemProviderRegistry::new();
+        let mut filesystems = FileSystemProviderRegistry::default();
         filesystems.register("mem", provider.clone()).unwrap();
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let host = cx.update(extensions::host::install);

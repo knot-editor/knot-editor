@@ -10,21 +10,21 @@ use super::{
     FileSystemProvider, ProviderFuture, ResourceEntry, ResourceError, ResourceFile, ResourceKind,
     ResourceStat, ResourceVersion, validate_and_normalize_uri,
 };
-use crate::app::resource::ResourceUri;
+use crate::resource::ResourceUri;
 
 /// A provider for one trusted local folder.
 ///
 /// Containment is lexical. Filesystem operations follow symlinks, including
 /// symlinks whose targets are outside the selected folder. Each operation runs
 /// blocking `std::fs` calls on its own short-lived thread.
-pub(crate) struct LocalFileSystemProvider {
+pub struct LocalFileSystemProvider {
     root: Option<ResourceUri>,
     mutation_lock: Arc<Mutex<()>>,
 }
 
 impl LocalFileSystemProvider {
-    #[cfg(test)]
-    pub(crate) fn new(root_path: impl AsRef<Path>) -> Result<Self, ResourceError> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn new(root_path: impl AsRef<Path>) -> Result<Self, ResourceError> {
         let root_path = root_path.as_ref().to_path_buf();
         if !root_path.is_absolute() {
             return Err(ResourceError::InvalidUri {
@@ -45,15 +45,15 @@ impl LocalFileSystemProvider {
 
     /// Creates the application-wide provider for user-selected local resources.
     /// Workspace containment remains a workspace consumer concern.
-    pub(crate) fn unrestricted() -> Self {
+    pub fn unrestricted() -> Self {
         Self {
             root: None,
             mutation_lock: Arc::default(),
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn root(&self) -> &ResourceUri {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn root(&self) -> &ResourceUri {
         self.root
             .as_ref()
             .expect("an unrestricted local provider has no root")
@@ -392,7 +392,7 @@ fn atomic_replace(
     sync_parent(path, uri)
 }
 
-pub(crate) fn normalize_file_uri(uri: ResourceUri) -> Result<ResourceUri, ResourceError> {
+pub fn normalize_file_uri(uri: ResourceUri) -> Result<ResourceUri, ResourceError> {
     if uri.as_url().host_str().is_some() {
         return Err(ResourceError::InvalidUri {
             uri: uri.to_string(),

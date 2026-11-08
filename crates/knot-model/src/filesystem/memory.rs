@@ -10,7 +10,7 @@ use super::{
     FileSystemProvider, ProviderFuture, ResourceEntry, ResourceError, ResourceFile, ResourceKind,
     ResourceStat, ResourceVersion, child_uri, validate_and_normalize_uri,
 };
-use crate::app::resource::ResourceUri;
+use crate::resource::ResourceUri;
 
 #[derive(Default)]
 struct MemoryDirectory {
@@ -22,14 +22,14 @@ enum MemoryNode {
     Directory(MemoryDirectory),
 }
 
-pub(crate) struct MemoryFileSystemProvider {
+pub struct MemoryFileSystemProvider {
     root: ResourceUri,
     hierarchy: RwLock<MemoryDirectory>,
     next_version: AtomicU64,
 }
 
 impl MemoryFileSystemProvider {
-    pub(crate) fn new(root: ResourceUri) -> Result<Self, ResourceError> {
+    pub fn new(root: ResourceUri) -> Result<Self, ResourceError> {
         let root = normalize_memory_uri(root)?;
         if root.as_url().host_str().is_none() {
             return Err(ResourceError::InvalidUri {
@@ -44,7 +44,7 @@ impl MemoryFileSystemProvider {
         })
     }
 
-    pub(crate) fn seed_directory(&self, uri: ResourceUri) -> Result<(), ResourceError> {
+    pub fn seed_directory(&self, uri: ResourceUri) -> Result<(), ResourceError> {
         let uri = self.normalize_scoped(uri)?;
         let path = relative_segments(&self.root, &uri);
         let mut hierarchy = self
@@ -54,8 +54,8 @@ impl MemoryFileSystemProvider {
         ensure_directory(&mut hierarchy, &path, &uri)
     }
 
-    #[cfg(test)]
-    pub(crate) fn remove(&self, uri: ResourceUri) -> Result<(), ResourceError> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn remove(&self, uri: ResourceUri) -> Result<(), ResourceError> {
         let uri = self.normalize_scoped(uri)?;
         let mut path = relative_segments(&self.root, &uri);
         let name = path.pop().unwrap_or_default();
@@ -69,7 +69,7 @@ impl MemoryFileSystemProvider {
         Ok(())
     }
 
-    pub(crate) fn seed_file(
+    pub fn seed_file(
         &self,
         uri: ResourceUri,
         bytes: impl Into<Vec<u8>>,

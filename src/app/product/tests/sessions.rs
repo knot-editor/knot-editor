@@ -37,7 +37,7 @@ fn harness(cx: &mut TestAppContext) -> Harness {
         read_release: Mutex::new(None),
         replace_release: Mutex::new(None),
     });
-    let mut providers = FileSystemProviderRegistry::new();
+    let mut providers = FileSystemProviderRegistry::default();
     providers.register("mem", read_gate.clone()).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(providers)));
     let host = cx.update(crate::app::extensions::host::install);

@@ -9,7 +9,10 @@ publish = false
 [dependencies]
 knot-core = { path = "../knot-core" }
 knot-protocol = { path = "../knot-protocol" }
+percent-encoding = "2"
 serde = { version = "1", features = ["derive"] }
+tempfile = "3"
+tokio = { version = "1.53", features = ["sync"] }
 tree-sitter = "0.27"
 tree-sitter-html = "0.23.2"
 tree-sitter-css = "0.25.0"
@@ -27,9 +30,12 @@ tree-sitter-toml-ng = "0.7.0"
 tree-sitter-yaml = "0.7.2"
 tree-sitter-md = "0.5.4"
 tree-sitter-tsquery = "0.8.0"
+url = "2"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 knot-core = { path = "../knot-core", features = ["test-support"] }
+pollster = "1"
 
 [features]
 # Test-only helpers for the application's tests.

@@ -3,7 +3,7 @@ use std::{fmt, str::FromStr};
 use url::Url;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ResourceUriError {
+pub struct ResourceUriError {
     input: String,
     reason: String,
 }
@@ -26,10 +26,10 @@ impl std::error::Error for ResourceUriError {}
 /// providers. This type preserves the generic URI boundary and provides
 /// segment-aware containment for already-normalized identities.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct ResourceUri(Url);
+pub struct ResourceUri(Url);
 
 impl ResourceUri {
-    pub(crate) fn parse(input: &str) -> Result<Self, ResourceUriError> {
+    pub fn parse(input: &str) -> Result<Self, ResourceUriError> {
         let url = Url::parse(input).map_err(|error| ResourceUriError {
             input: input.to_owned(),
             reason: error.to_string(),
@@ -43,19 +43,19 @@ impl ResourceUri {
         Ok(Self(url))
     }
 
-    pub(crate) fn scheme(&self) -> &str {
+    pub fn scheme(&self) -> &str {
         self.0.scheme()
     }
 
-    pub(crate) fn as_url(&self) -> &Url {
+    pub fn as_url(&self) -> &Url {
         &self.0
     }
 
-    pub(crate) fn is_within(&self, root: &Self) -> bool {
+    pub fn is_within(&self, root: &Self) -> bool {
         self.same_authority(root) && path_segments(root).is_prefix_of(&path_segments(self))
     }
 
-    pub(super) fn from_url(url: Url) -> Self {
+    pub fn from_url(url: Url) -> Self {
         Self(url)
     }
 

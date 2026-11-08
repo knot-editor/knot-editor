@@ -18,11 +18,11 @@ mod entry;
 #[cfg(test)]
 pub(crate) use extensions::host::handlers as declared_host;
 mod extensions;
-use knot_model::{history, indentation, keys, style, syntax};
-mod filesystem;
+use knot_model::{
+    filesystem, history, indentation, keys, open, resource, style, syntax, workspace,
+};
 mod languages;
 pub mod model;
-mod open;
 mod personal_config;
 mod personal_config_error;
 mod picker;
@@ -31,7 +31,6 @@ mod product;
 pub(crate) use product::driver;
 mod record_store;
 mod recovery;
-mod resource;
 mod settings;
 mod status_bar;
 mod terminal;
@@ -48,7 +47,6 @@ mod window_sessions;
 #[cfg(any(test, feature = "test-support"))]
 mod work_counts;
 mod workbench;
-mod workspace;
 mod workspace_tree;
 mod zoom;
 

@@ -1,33 +1,33 @@
 use std::{collections::HashMap, fmt, future::Future, pin::Pin, sync::Arc};
 
-use super::resource::ResourceUri;
+use crate::resource::ResourceUri;
 
 mod local;
 #[cfg(any(test, feature = "test-support"))]
 mod memory;
 
-pub(crate) use local::{LocalFileSystemProvider, normalize_file_uri};
+pub use local::{LocalFileSystemProvider, normalize_file_uri};
 #[cfg(any(test, feature = "test-support"))]
-pub(crate) use memory::MemoryFileSystemProvider;
+pub use memory::MemoryFileSystemProvider;
 
-pub(crate) type ProviderFuture<'a, T> =
+pub type ProviderFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, ResourceError>> + Send + 'a>>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ResourceKind {
+pub enum ResourceKind {
     File,
     Directory,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ResourceEntry {
-    pub(crate) uri: ResourceUri,
-    pub(crate) name: String,
-    pub(crate) kind: ResourceKind,
+pub struct ResourceEntry {
+    pub uri: ResourceUri,
+    pub name: String,
+    pub kind: ResourceKind,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ResourceStat {
+pub enum ResourceStat {
     Missing,
     File,
     Directory,
@@ -35,26 +35,26 @@ pub(crate) enum ResourceStat {
 
 /// Opaque provider-owned identity for one observed file version.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ResourceVersion(Vec<u8>);
+pub struct ResourceVersion(Vec<u8>);
 
 impl ResourceVersion {
-    pub(crate) fn new(value: impl Into<Vec<u8>>) -> Self {
+    pub fn new(value: impl Into<Vec<u8>>) -> Self {
         Self(value.into())
     }
 
-    pub(crate) fn as_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ResourceFile {
-    pub(crate) bytes: Vec<u8>,
-    pub(crate) version: ResourceVersion,
+pub struct ResourceFile {
+    pub bytes: Vec<u8>,
+    pub version: ResourceVersion,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ResourceError {
+pub enum ResourceError {
     InvalidUri {
         uri: String,
         reason: String,
@@ -135,7 +135,7 @@ impl fmt::Display for ResourceError {
 
 impl std::error::Error for ResourceError {}
 
-pub(crate) trait FileSystemProvider: Send + Sync {
+pub trait FileSystemProvider: Send + Sync {
     fn normalize(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceUri>;
     fn enumerate(&self, uri: ResourceUri) -> ProviderFuture<'_, Vec<ResourceEntry>>;
     fn read(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceFile>;
@@ -149,18 +149,13 @@ pub(crate) trait FileSystemProvider: Send + Sync {
     fn stat(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceStat>;
 }
 
-pub(crate) struct FileSystemProviderRegistry {
+#[derive(Default)]
+pub struct FileSystemProviderRegistry {
     providers: HashMap<String, Arc<dyn FileSystemProvider>>,
 }
 
 impl FileSystemProviderRegistry {
-    pub(crate) fn new() -> Self {
-        Self {
-            providers: HashMap::new(),
-        }
-    }
-
-    pub(crate) fn register(
+    pub fn register(
         &mut self,
         scheme: impl Into<String>,
         provider: Arc<dyn FileSystemProvider>,
@@ -186,7 +181,7 @@ impl FileSystemProviderRegistry {
         Ok(())
     }
 
-    pub(crate) fn provider(
+    pub fn provider(
         &self,
         uri: &ResourceUri,
     ) -> Result<Arc<dyn FileSystemProvider>, ResourceError> {
@@ -198,7 +193,7 @@ impl FileSystemProviderRegistry {
             })
     }
 
-    pub(crate) fn normalize(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceUri> {
+    pub fn normalize(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceUri> {
         match self.provider(&uri) {
             Ok(provider) => Box::pin(async move { provider.normalize(uri).await }),
             Err(error) => Box::pin(async move { Err(error) }),
@@ -336,7 +331,7 @@ mod tests {
 
     #[test]
     fn registry_routes_by_scheme_and_rejects_duplicates() {
-        let mut registry = FileSystemProviderRegistry::new();
+        let mut registry = FileSystemProviderRegistry::default();
         assert!(matches!(
             registry.register("not a scheme", Arc::new(IdentityProvider)),
             Err(ResourceError::InvalidUri { .. })

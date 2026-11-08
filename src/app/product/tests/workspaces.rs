@@ -120,7 +120,7 @@ fn workspace_validation_retains_window_and_rejects_superseded_or_unloaded_work(
             inner,
             release: Mutex::new(Some(gate)),
         });
-        let mut filesystems = FileSystemProviderRegistry::new();
+        let mut filesystems = FileSystemProviderRegistry::default();
         filesystems.register("mem", provider.clone()).unwrap();
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let host = cx.update(extensions::host::install);

@@ -358,7 +358,7 @@ fn an_edit_racing_a_public_close_save_preserves_the_live_dirty_document(cx: &mut
         read_release: Mutex::new(None),
         replace_release: Mutex::new(Some(gate)),
     });
-    let mut filesystems = FileSystemProviderRegistry::new();
+    let mut filesystems = FileSystemProviderRegistry::default();
     filesystems.register("mem", gated.clone()).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let host = cx.update(extensions::host::install);
@@ -735,7 +735,7 @@ async fn edit_racing_protected_close_save_preserves_the_document_and_every_view(
         read_release: Mutex::new(None),
         replace_release: Mutex::new(Some(gated_replace)),
     });
-    let mut filesystems = FileSystemProviderRegistry::new();
+    let mut filesystems = FileSystemProviderRegistry::default();
     filesystems.register("mem", gated_provider).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
 

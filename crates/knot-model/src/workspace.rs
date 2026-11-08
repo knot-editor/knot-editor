@@ -1,57 +1,57 @@
-use super::resource::ResourceUri;
+use crate::resource::ResourceUri;
 
 /// One normalized root in a window's ordered root set.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct WorkspaceRoot {
-    pub(crate) id: uuid::Uuid,
-    pub(crate) uri: ResourceUri,
+pub struct WorkspaceRoot {
+    pub id: uuid::Uuid,
+    pub uri: ResourceUri,
 }
 
 /// Identity captured by asynchronous workspace operations.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct WorkspaceSnapshot {
+pub struct WorkspaceSnapshot {
     roots: Vec<WorkspaceRoot>,
     generation: u64,
 }
 
 impl WorkspaceSnapshot {
-    #[cfg(test)]
-    pub(crate) fn first_root(&self) -> Option<&ResourceUri> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn first_root(&self) -> Option<&ResourceUri> {
         self.roots().first().map(|root| &root.uri)
     }
 
-    pub(crate) fn roots(&self) -> &[WorkspaceRoot] {
+    pub fn roots(&self) -> &[WorkspaceRoot] {
         &self.roots
     }
 
-    pub(crate) fn generation(&self) -> u64 {
+    pub fn generation(&self) -> u64 {
         self.generation
     }
 }
 
 /// Foreground-owned roots and generation for the entire lifetime of a window.
 #[derive(Default)]
-pub(crate) struct WorkspaceState {
+pub struct WorkspaceState {
     roots: Vec<WorkspaceRoot>,
     generation: u64,
 }
 
 impl WorkspaceState {
-    #[cfg(test)]
-    pub(crate) fn new(root: ResourceUri) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn new(root: ResourceUri) -> Self {
         let mut state = Self::default();
         state.replace_roots(vec![root]);
         state
     }
 
-    pub(crate) fn snapshot(&self) -> WorkspaceSnapshot {
+    pub fn snapshot(&self) -> WorkspaceSnapshot {
         WorkspaceSnapshot {
             roots: self.roots.clone(),
             generation: self.generation,
         }
     }
 
-    pub(crate) fn is_current(&self, snapshot: &WorkspaceSnapshot) -> bool {
+    pub fn is_current(&self, snapshot: &WorkspaceSnapshot) -> bool {
         self.roots == snapshot.roots && self.generation == snapshot.generation()
     }
 
@@ -59,7 +59,7 @@ impl WorkspaceState {
     /// roots, keeping the first of any duplicates. Retained roots keep their
     /// identity; every replacement invalidates captured work, and clearing
     /// preserves the generation.
-    pub(crate) fn replace_roots(&mut self, roots: Vec<ResourceUri>) -> WorkspaceSnapshot {
+    pub fn replace_roots(&mut self, roots: Vec<ResourceUri>) -> WorkspaceSnapshot {
         let mut unique = Vec::with_capacity(roots.len());
         for uri in roots {
             if !unique.contains(&uri) {

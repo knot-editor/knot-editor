@@ -3243,7 +3243,11 @@ version = "0.1.0"
 dependencies = [
  "knot-core",
  "knot-protocol",
+ "percent-encoding",
+ "pollster 1.0.1",
  "serde",
+ "tempfile",
+ "tokio",
  "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-c",
@@ -3261,6 +3265,8 @@ dependencies = [
  "tree-sitter-tsquery",
  "tree-sitter-typescript",
  "tree-sitter-yaml",
+ "url",
+ "uuid",
 ]
 
 [[package]]
