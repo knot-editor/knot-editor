@@ -6,7 +6,7 @@ use std::{
 };
 
 use knot_core::{buffer::TextBuffer, transaction::EditTransaction};
-use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::ExtensionKey;
 
 const GROUPING_TIMEOUT: Duration = Duration::from_secs(1);
 

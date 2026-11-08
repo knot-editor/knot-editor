@@ -4,13 +4,12 @@ use std::sync::Arc;
 
 use super::{
     engine::{self, EngineEvent, LifecycleEnd, RuntimePool},
-    lifecycle::ExtensionKey,
     module_graph::{ConfigPhase, ModuleGraph},
     scheduler::PoolConfig,
 };
 use knot_protocol::{
     BufferChange, BufferHandle, BufferSubscriptionId, CommandInvocation, CommandInvocationId,
-    CompletionRequest, HostRequest, HostResponse, TreeChildrenRequest,
+    CompletionRequest, ExtensionKey, HostRequest, HostResponse, TreeChildrenRequest,
 };
 
 pub use super::engine::{

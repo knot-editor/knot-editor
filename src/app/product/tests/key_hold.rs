@@ -2,7 +2,7 @@
 use super::*;
 use crate::app::editor::{EditorView, Reveal};
 use gpui::EntityInputHandler;
-use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::ExtensionKey;
 
 const SOURCE: &str = r#"
     import { commands, keymaps, workbench } from "knot";

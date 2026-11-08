@@ -7,7 +7,7 @@ use crate::app::extensions::host::handlers::{AccessError, OpenError, ReplaceErro
 use crate::app::product::sessions::{EntryOutcome, ReplaceWindowsResult};
 use crate::app::recovery::{ApplicationRecovery, SnapshotKind};
 use crate::app::workbench::{DockLocation, SplitPlacement, ToolPlacement};
-use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::ExtensionKey;
 use serde_json::json;
 
 const OWNER: &str = "@example/sessions";

@@ -1,24 +1,6 @@
-//! Extension lifecycle identity and scheduler-visible state.
+//! Scheduler-visible extension lifecycle state.
 
 use std::sync::Arc;
-
-use knot_protocol::{ExtensionId, ExtensionLifecycleId};
-
-/// Identifies one load of an extension.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ExtensionKey {
-    pub extension: ExtensionId,
-    pub lifecycle: ExtensionLifecycleId,
-}
-
-impl ExtensionKey {
-    pub const fn new(extension: ExtensionId, lifecycle: ExtensionLifecycleId) -> Self {
-        Self {
-            extension,
-            lifecycle,
-        }
-    }
-}
 
 /// The scheduler-visible state of one extension lifetime.
 #[derive(Clone, Debug, Eq, PartialEq)]

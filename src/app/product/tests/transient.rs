@@ -314,7 +314,7 @@ fn window_closure_releases_the_pending_interaction(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn unloading_the_extension_settles_its_transient(cx: &mut TestAppContext) {
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
 
     const SOURCE: &str = r#"
 import { commands, workbench } from "knot";
@@ -354,7 +354,7 @@ await commands.register("transient.await-picker", async () => {
 
 #[gpui::test]
 fn context_free_transient_requires_a_target(cx: &mut TestAppContext) {
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
 
     const SOURCE: &str = r#"
 import { commands, workbench } from "knot";
@@ -429,12 +429,12 @@ fn start_preview(
     cx: &mut TestAppContext,
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
-    knot_host::lifecycle::ExtensionKey,
+    knot_protocol::ExtensionKey,
     Entity<ProductShell>,
     gpui::AnyWindowHandle,
     crate::app::CommandExecution,
 ) {
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
 
     let documents = install_globals(cx);
     let host = cx.update(crate::app::extensions::host::install);
@@ -611,12 +611,12 @@ fn start_live_input(
     cx: &mut TestAppContext,
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
-    knot_host::lifecycle::ExtensionKey,
+    knot_protocol::ExtensionKey,
     Entity<ProductShell>,
     gpui::AnyWindowHandle,
     crate::app::CommandExecution,
 ) {
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
 
     let documents = install_globals(cx);
     let host = cx.update(crate::app::extensions::host::install);

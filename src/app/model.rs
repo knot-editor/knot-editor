@@ -14,7 +14,7 @@ use knot_core::{
     anchored_range::{AnchoredRangeId, AnchoredRangeStore},
     buffer::{BufferEdit, TextBuffer},
 };
-use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::ExtensionKey;
 use knot_protocol::{
     BufferHandle, BufferSubscriptionId, ByteRange, Decoration, EditorContribution, ExtensionId,
     ExtensionLifecycleId, SnapshotText,

@@ -1959,7 +1959,7 @@ fn double_click_and_word_movement_stop_at_separators(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn caret_shape_is_the_latest_lifecycles_and_reverts_when_cleared(cx: &mut TestAppContext) {
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
     let first = ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
     let second = ExtensionKey::new(ExtensionId::new(2), ExtensionLifecycleId::new(1));
     let model = cx.new(|_| BufferModel::from_text("abc".to_string()));

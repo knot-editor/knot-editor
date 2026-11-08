@@ -4,7 +4,7 @@ use super::super::extensions::host::handlers::{
     AccessError, CloseError, OpenError, WorkspaceError,
 };
 use super::*;
-use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::ExtensionKey;
 use knot_protocol::{
     CommandInvocationId, DocumentDestination, PaneTarget, PresentationTarget, WindowTarget,
 };

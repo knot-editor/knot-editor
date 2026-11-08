@@ -21,13 +21,13 @@ use std::collections::BTreeMap;
 use gpui::{App, AppContext, Context, Entity, Global, Subscription, Task};
 
 use knot_host::{
-    lifecycle::ExtensionKey,
     module_graph::{ConfigPhase as HostConfigPhase, ModuleGraph},
     pool::{
         ExtensionConfig, ExtensionEvent, ExtensionEventInbox, ExtensionExecution, ExtensionPool,
     },
     scheduler::PoolConfig,
 };
+use knot_protocol::ExtensionKey;
 use knot_protocol::{
     Command, CommandInvocationId, ExtensionId, ExtensionLifecycleId, HostRequest, ViewId,
 };

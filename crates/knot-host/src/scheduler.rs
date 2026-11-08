@@ -13,7 +13,8 @@ use std::{
 #[cfg(any(test, feature = "test-support"))]
 use std::sync::mpsc;
 
-use super::lifecycle::{ExtensionKey, ExtensionState, Failure};
+use super::lifecycle::{ExtensionState, Failure};
+use knot_protocol::ExtensionKey;
 use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Fixed worker count for one scheduler pool lifetime.

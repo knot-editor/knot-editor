@@ -282,10 +282,10 @@ pub struct Editor {
     auto_closed: Vec<brackets::AutoClosed>,
     /// Named key contexts keybindings can require, each owned by the
     /// extension lifecycle that set it. Presentation state, never recorded.
-    key_contexts: Vec<(knot_host::lifecycle::ExtensionKey, Arc<str>)>,
+    key_contexts: Vec<(knot_protocol::ExtensionKey, Arc<str>)>,
     /// Caret shapes lifecycles have set; the latest one wins and each belongs
     /// to its lifecycle. Presentation state, never recorded.
-    caret_shapes: Vec<(knot_host::lifecycle::ExtensionKey, CaretShape)>,
+    caret_shapes: Vec<(knot_protocol::ExtensionKey, CaretShape)>,
     _model_subscription: Subscription,
     _release_subscription: Subscription,
 }
@@ -480,7 +480,7 @@ impl Editor {
     /// contexts independently, so one clearing a name leaves another's.
     pub(crate) fn set_key_context(
         &mut self,
-        owner: knot_host::lifecycle::ExtensionKey,
+        owner: knot_protocol::ExtensionKey,
         name: &str,
         active: bool,
     ) {
@@ -502,7 +502,7 @@ impl Editor {
     /// previous lifecycle's.
     pub(crate) fn set_caret_shape(
         &mut self,
-        owner: knot_host::lifecycle::ExtensionKey,
+        owner: knot_protocol::ExtensionKey,
         shape: Option<CaretShape>,
         cx: &mut Context<Self>,
     ) {
@@ -528,7 +528,7 @@ impl Editor {
     /// Clear every key context and caret shape `owner` set.
     pub(crate) fn remove_owner_state(
         &mut self,
-        owner: knot_host::lifecycle::ExtensionKey,
+        owner: knot_protocol::ExtensionKey,
         cx: &mut Context<Self>,
     ) {
         self.key_contexts.retain(|(key, _)| *key != owner);

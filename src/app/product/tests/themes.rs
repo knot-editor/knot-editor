@@ -3,7 +3,7 @@
 use super::*;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{Appearance, color, theme};
-use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::ExtensionKey;
 
 const SOURCE: &str = r##"
 import { commands, settings, themes } from "knot";

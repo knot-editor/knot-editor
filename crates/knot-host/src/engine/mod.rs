@@ -25,13 +25,14 @@ use url::Url;
 use std::sync::mpsc;
 
 use super::{
-    lifecycle::{ExtensionKey, Failure},
+    lifecycle::Failure,
     module_graph::{ConfigPhase, ModuleGraph},
     scheduler::{
         CompletionOutcome, CompletionReceiver, PoolConfig, RootId, SchedulerError, SchedulerHandle,
         SchedulerPool, Turn, TurnOutcome,
     },
 };
+use knot_protocol::ExtensionKey;
 use knot_protocol::declarations::{HostError, HostFailure, TransportError};
 use knot_protocol::{
     ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,

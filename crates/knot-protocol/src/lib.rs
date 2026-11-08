@@ -46,6 +46,22 @@ impl ExtensionLifecycleId {
     }
 }
 
+/// Identifies one load of an extension.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ExtensionKey {
+    pub extension: ExtensionId,
+    pub lifecycle: ExtensionLifecycleId,
+}
+
+impl ExtensionKey {
+    pub const fn new(extension: ExtensionId, lifecycle: ExtensionLifecycleId) -> Self {
+        Self {
+            extension,
+            lifecycle,
+        }
+    }
+}
+
 /// An opaque identity for one extension command registration.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct CommandRegistrationId(u64);

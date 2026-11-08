@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::ExtensionKey;
 use knot_protocol::{
     ApplicationChange, ApplicationEvent, ApplicationSnapshot, WorkbenchObservation,
     WorkbenchSubscriptionId,

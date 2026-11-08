@@ -755,7 +755,7 @@ fn deactivation_publishes_null_targets_without_repaint_events(cx: &mut TestAppCo
 
 #[gpui::test]
 fn application_metadata_and_buffer_listeners_share_each_edit_once(cx: &mut TestAppContext) {
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
     let documents = install_globals(cx);
     let host = cx.update(extensions::host::install);
     let key = ExtensionKey::new(ExtensionId::new(709), ExtensionLifecycleId::new(1));
@@ -1094,7 +1094,7 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
 fn application_listener_can_query_edit_fail_and_dispose_without_blocking_queued_roots(
     cx: &mut TestAppContext,
 ) {
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
     const SOURCE: &str = r#"
 import { commands, documents, workbench } from "knot";
 let count = 0, last = 0;
@@ -1159,7 +1159,7 @@ await commands.register("observation.install-for-unload", async () => { await wo
 fn application_queries_use_live_product_state_and_distinct_target_authority(
     cx: &mut TestAppContext,
 ) {
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
     const SOURCE: &str = r#"
 import { commands, documents, windows, workspaces, editor } from "knot";
 if ((await documents.list()).length || (await windows.list()).length) throw new Error("startup catalog not empty");
@@ -1341,7 +1341,7 @@ fn document_scoped_settings_publish_document_changed_and_end_with_the_document(
     cx: &mut TestAppContext,
 ) {
     use crate::app::settings::{ApplicationSettings, EDITOR_TAB_SIZE, SettingsScope};
-    use knot_host::lifecycle::ExtensionKey;
+    use knot_protocol::ExtensionKey;
     use knot_protocol::{IndentationInfo, IndentationStyle};
     let documents = install_globals(cx);
     let host = cx.update(extensions::host::install);

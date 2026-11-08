@@ -120,11 +120,10 @@ fn clipboard_written() -> knot_protocol::declarations::DeclaredResponse {
 
 use knot_host::{
     engine::*,
-    lifecycle::{ExtensionKey, ExtensionState},
+    lifecycle::ExtensionState,
     module_graph::{ConfigPhase, ModuleGraph},
     scheduler::PoolConfig,
 };
-use knot_protocol::ExtensionLifecycleId;
 use knot_protocol::{
     ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
     ByteRange, CommandArgumentValue, CommandInvocation, CommandInvocationId, CommandInvokeDispatch,
@@ -133,6 +132,7 @@ use knot_protocol::{
     RequestId, SnapshotText, TextEdit, TextSnapshot, TreeChildrenRequest,
     TreeProviderRegistrationId, WorkbenchSubscriptionId, declarations::HostFailure,
 };
+use knot_protocol::{ExtensionKey, ExtensionLifecycleId};
 use std::{collections::BTreeMap, num::NonZeroUsize, process::Command, sync::mpsc};
 use std::{
     pin::pin,

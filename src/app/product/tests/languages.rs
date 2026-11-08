@@ -3,7 +3,7 @@
 //! paths.
 use super::*;
 use crate::app::workbench::ExtensionView;
-use knot_host::lifecycle::ExtensionKey;
+use knot_protocol::ExtensionKey;
 
 const SOURCE: &str = r##"
 import { commands, documents, languages, workbench } from "knot";
