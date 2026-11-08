@@ -94,6 +94,7 @@ fn public_close_preserves_cancel_and_invalidates_the_final_document_after_save_o
 ) {
     for answer in ["Cancel", "Don't Save", "Save"] {
         let documents = install_globals(cx);
+        cx.set_global(save_without_cleanup());
         let (filesystems, provider) = memory_filesystems_with_provider();
         cx.set_global(ApplicationFileSystems(filesystems));
         let destination = ResourceUri::parse("mem://product/closed.txt").unwrap();
@@ -206,6 +207,7 @@ fn public_close_rejects_concurrent_closure_and_save_failure_without_removing_the
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     cx.set_global(ApplicationSaveDialog(Arc::new(FixedSaveDialog(
         SaveDialogOutcome::Selected(ResourceUri::parse("mem://product/src").unwrap()),
@@ -348,6 +350,7 @@ fn public_close_cancellation_before_commit_keeps_the_presentation(cx: &mut TestA
 #[gpui::test]
 fn an_edit_racing_a_public_close_save_preserves_the_live_dirty_document(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
     let (_, provider) = memory_filesystems_with_provider();
     let (release, gate) = tokio::sync::oneshot::channel();
     let gated = Arc::new(GatedFileSystemProvider {
@@ -681,6 +684,7 @@ fn middle_clicking_an_inactive_dirty_tab_closes_it_after_its_save_decision(
 #[gpui::test]
 async fn saving_a_dirty_tab_uses_existing_persistence_before_closing(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
     let (filesystems, provider) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
@@ -719,6 +723,7 @@ async fn edit_racing_protected_close_save_preserves_the_document_and_every_view(
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
     let root = ResourceUri::parse("mem://product/").unwrap();
     let provider = Arc::new(MemoryFileSystemProvider::new(root).unwrap());
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
@@ -880,6 +885,7 @@ async fn quit_prompts_once_for_a_document_shared_across_windows(cx: &mut TestApp
 #[gpui::test]
 async fn multi_document_quit_applies_serial_save_and_discard_decisions(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
     install_failing_recovery(cx);
     let (filesystems, provider) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));

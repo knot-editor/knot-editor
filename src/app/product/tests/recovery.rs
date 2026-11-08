@@ -298,6 +298,7 @@ async fn changed_and_deleted_resources_restore_dirty_and_save_reaches_the_confli
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
     let (filesystems, provider) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems.clone()));
     let notes = ResourceUri::parse("mem://product/notes.txt").unwrap();

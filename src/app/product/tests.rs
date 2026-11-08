@@ -26,6 +26,7 @@ mod project_sessions;
 mod projects;
 mod recovery;
 mod reopen;
+mod save_hygiene;
 mod sessions;
 mod settings;
 mod startup;
@@ -160,6 +161,32 @@ pub(super) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollect
         ),
     ));
     documents
+}
+
+/// Settings under which a save does not touch the text.
+pub(super) fn save_without_cleanup() -> crate::app::settings::ApplicationSettings {
+    use crate::app::settings::{
+        ApplicationSettings, FILES_INSERT_FINAL_NEWLINE, FILES_TRIM_TRAILING_WHITESPACE,
+        SettingsScope,
+    };
+    let mut settings = ApplicationSettings::default();
+    settings
+        .0
+        .set(
+            FILES_TRIM_TRAILING_WHITESPACE,
+            "off".into(),
+            SettingsScope::default(),
+        )
+        .unwrap();
+    settings
+        .0
+        .set(
+            FILES_INSERT_FINAL_NEWLINE,
+            false.into(),
+            SettingsScope::default(),
+        )
+        .unwrap();
+    settings
 }
 
 /// Replace recovery with a store that cannot write, so quit falls back to

@@ -1,6 +1,6 @@
 # D079 — Save hygiene
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 both checkpoints implemented; waiting on the review gates. Item of the
 [daily-driver plan](daily-driver.md); depends on D070 (settings).
 
 ## Goal
@@ -54,7 +54,7 @@ A palette command trims on demand without saving.
 
 ## Checkpoints
 
-### 1. Cleanup edits and settings
+### 1. ✅ Cleanup edits and settings
 
 Deliver the two settings with their resolver functions, the edit computation,
 and the manual command.
@@ -74,14 +74,14 @@ and the manual command.
   cursor-line skip, empty buffer, existing final newline, CRLF final newline,
   one undo step, read-only no-op.
 
-**Review gate:** the manual command behaves right in the real app and Undo
+**Review gate** (`Try: Save hygiene sample` in the personal config): the manual command behaves right in the real app and Undo
 restores the text and the cursor (`try.*` command in the personal config).
 
-### 2. Cleanup on save
+### 2. ✅ Cleanup on save
 
 - In `src/app/product/save.rs`, before the capture in `start_save_to_uri`,
-  resolve the two settings for the document and call the editor method on the
-  target's editor view when the model is editable.
+  call `Editor::clean_up_for_save` on the target's editor view, which resolves
+  the two settings for the document and does nothing for a read-only model.
 - Product tests in `src/app/product/tests/`: save writes the cleaned text;
   Undo restores it and marks the document dirty; a per-language `"off"` and a
   per-document opt-out leave the text alone; Save As cleans too; a read-only

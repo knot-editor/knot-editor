@@ -228,6 +228,7 @@ async fn save_as_and_racing_edits_publish_current_metadata_without_changing_iden
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
     let host = cx.update(extensions::host::install);
     let (_, provider) = memory_filesystems_with_provider();
     let (release, gate) = tokio::sync::oneshot::channel();

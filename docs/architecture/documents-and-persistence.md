@@ -113,6 +113,14 @@ Successful create/conditional replacement records the new provider version and
 only the captured content state after revalidating the presentation, native window,
 and document. Edits racing I/O therefore remain dirty.
 
+Before capturing, Save and Save As clean up the text through the target's
+editor view when the model is editable: `files.trimTrailingWhitespace` trims
+every line but the cursor's, and `files.insertFinalNewline` ends non-empty text
+with the buffer's line terminator, both resolved for the document. The cleanup
+is one ordinary undo step, so the written text is what the editor shows, Undo
+restores it, and the document is dirty again until the next save. Recovery
+snapshots never run it.
+
 Save As uses the native panel, checks application-wide URI ownership, and changes
 resource association only after successful I/O. Overwrite consent does not bypass
 provider-version checks. Conflicts offer Reload, Save As, and Cancel; Reload also

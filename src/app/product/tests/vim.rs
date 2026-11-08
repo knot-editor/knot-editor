@@ -697,7 +697,7 @@ fn ex_writes_and_opens_files_beside_the_document(cx: &mut TestAppContext) {
     let provider = serve_files(cx);
     let session = open_file(&provider, "mem://product/dir/a.txt", cx);
     session.press("x:w<cr>", cx);
-    assert_eq!(served(&provider, "mem://product/dir/a.txt"), "ne");
+    assert_eq!(served(&provider, "mem://product/dir/a.txt"), "ne\n");
     let dirty = |cx: &mut TestAppContext| {
         cx.read(|cx| {
             let documents = cx.global::<ApplicationDocuments>().0.read(cx);

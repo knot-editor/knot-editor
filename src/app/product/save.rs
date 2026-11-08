@@ -186,6 +186,14 @@ impl ProductShell {
             cx.notify();
             return;
         }
+        // The cleanup is an ordinary edit of the target's editor, so what is
+        // captured is what the editor shows and Undo takes it back.
+        if let Some(crate::app::workbench::CommandView::Editor(view)) = target.command_view(cx) {
+            let editor = view.read(cx).editor().clone();
+            if editor.read(cx).model() == &model {
+                editor.update(cx, |editor, cx| editor.clean_up_for_save(cx));
+            }
+        }
         let (text, revision) = model.read_with(cx, |model, _| (model.text(), model.revision()));
         let Some(capture) = documents.update(cx, |documents, _| {
             documents.begin_persistence(
