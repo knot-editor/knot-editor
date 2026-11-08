@@ -2,182 +2,158 @@
 
 use super::*;
 
-impl Editor {
+impl EditorState {
     /// Run the native editing or movement command `command`; `false` when
-    /// it is not one or does not apply.
-    pub(crate) fn execute_editing_command(
-        &mut self,
-        command: &str,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if command == commands::UNDO_COMMAND || command == commands::REDO_COMMAND {
-            self.break_history_group(cx);
+    /// it is not one or does not apply. Paste, which needs the clipboard's
+    /// text, is [`Self::paste`].
+    pub fn execute_editing_command(&mut self, command: &str, buffer: &mut BufferModel) -> bool {
+        if command == "editor.undo" || command == "editor.redo" {
+            self.break_history_group(buffer);
             self.marked_range_utf16 = None;
             self.preferred_column = None;
-            let changed = self.model.update(cx, |model, cx| {
-                let changed = if command == commands::UNDO_COMMAND {
-                    model.undo()
-                } else {
-                    model.redo()
-                }
-                .unwrap_or(false);
-                if changed {
-                    cx.notify();
-                }
-                changed
-            });
+            let changed = if command == "editor.undo" {
+                buffer.undo()
+            } else {
+                buffer.redo()
+            }
+            .unwrap_or(false);
             if changed {
-                let model = self.model.read(cx);
+                let model = &*buffer;
                 self.seen_revision = model.revision();
                 self.refresh(model, model.resolve_view_position(self.position_range));
                 if let Some(restore) = model.history_view_restore() {
                     self.apply_history_view_restore(model, restore.generation, &restore.state);
                 }
-                self.sync_view_position(cx);
-                cx.notify();
+                self.sync_view_position(buffer);
             }
             return true;
         }
-        if matches!(command, commands::COPY_COMMAND | commands::CUT_COMMAND) {
-            if command == commands::COPY_COMMAND && !self.has_selection() {
+        if matches!(command, "copy" | "editor.cut") {
+            if command == "copy" && !self.has_selection() {
                 return false;
             }
-            self.break_history_group(cx);
+            self.break_history_group(buffer);
             self.marked_range_utf16 = None;
-            if command == commands::CUT_COMMAND && !self.model.read(cx).is_editable() {
+            if command == "editor.cut" && !buffer.is_editable() {
                 return true;
             }
-            if let Some(range) = self.selected_byte_range(cx) {
-                let text = self.model.read(cx).read(range);
-                cx.write_to_clipboard(ClipboardItem::new_string(text));
-                if command == commands::CUT_COMMAND {
-                    self.replace_text_with_grouping(None, "", None, cx);
+            if let Some(range) = self.selected_byte_range(buffer) {
+                let text = buffer.read(range);
+                self.effects.push(EditorEffect::WriteClipboard(text));
+                if command == "editor.cut" {
+                    self.replace_text_with_grouping(None, "", None, buffer);
                 }
             }
             return true;
         }
-        if command == commands::PASTE_COMMAND {
-            self.break_history_group(cx);
-            if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                self.replace_text_with_grouping(None, &text, None, cx);
-            }
-            return true;
-        }
-        if command == commands::SELECT_ALL_COMMAND {
-            self.break_history_group(cx);
+        if command == "editor.select-all" {
+            self.break_history_group(buffer);
             self.marked_range_utf16 = None;
             self.anchor_line = 0;
             self.anchor_col = 0;
             self.cursor_line = self.line_count - 1;
-            self.cursor_col = line_end(self.model.read(cx), self.cursor_line);
+            self.cursor_col = line_end(&*buffer, self.cursor_line);
             self.has_selection = self.cursor_line != 0 || self.cursor_col != 0;
             self.preferred_column = None;
-            self.finish_position_change(cx);
+            self.finish_position_change(buffer);
             return true;
         }
         match command {
-            commands::INSERT_NEWLINE_COMMAND => {
-                self.insert_newline(cx);
+            "editor.insert-newline" => {
+                self.insert_newline(buffer);
                 return true;
             }
-            commands::INSERT_TAB_COMMAND => {
-                self.insert_tab(cx);
+            "editor.insert-tab" => {
+                self.insert_tab(buffer);
                 return true;
             }
-            commands::INDENT_LINES_COMMAND => {
-                self.indent_lines(cx);
+            "editor.indent-lines" => {
+                self.indent_lines(buffer);
                 return true;
             }
-            commands::OUTDENT_LINES_COMMAND => {
-                self.outdent_lines(cx);
+            "editor.outdent-lines" => {
+                self.outdent_lines(buffer);
                 return true;
             }
-            commands::REINDENT_BUFFER_COMMAND | commands::REINDENT_SELECTED_LINES_COMMAND => {
-                self.reindent_lines(command == commands::REINDENT_SELECTED_LINES_COMMAND, cx);
+            "editor.reindent-buffer" | "editor.reindent-selected-lines" => {
+                self.reindent_lines(command == "editor.reindent-selected-lines", buffer);
                 return true;
             }
-            commands::DETECT_INDENTATION_COMMAND => {
-                self.detect_indentation(cx);
+            "editor.detect-indentation" => {
+                self.detect_indentation(buffer);
                 return true;
             }
-            commands::CONVERT_INDENTATION_TO_SPACES_COMMAND
-            | commands::CONVERT_INDENTATION_TO_TABS_COMMAND => {
-                self.convert_indentation(
-                    command == commands::CONVERT_INDENTATION_TO_TABS_COMMAND,
-                    cx,
-                );
+            "editor.convert-indentation-to-spaces" | "editor.convert-indentation-to-tabs" => {
+                self.convert_indentation(command == "editor.convert-indentation-to-tabs", buffer);
                 return true;
             }
-            commands::TRIM_TRAILING_WHITESPACE_COMMAND => {
-                self.trim_trailing_whitespace(cx);
+            "editor.trim-trailing-whitespace" => {
+                self.trim_trailing_whitespace(buffer);
                 return true;
             }
-            commands::COPY_LINES_UP_COMMAND | commands::COPY_LINES_DOWN_COMMAND => {
-                self.copy_lines(command == commands::COPY_LINES_DOWN_COMMAND, cx);
+            "editor.copy-lines-up" | "editor.copy-lines-down" => {
+                self.copy_lines(command == "editor.copy-lines-down", buffer);
                 return true;
             }
-            commands::MOVE_LINES_UP_COMMAND | commands::MOVE_LINES_DOWN_COMMAND => {
-                self.move_lines(command == commands::MOVE_LINES_DOWN_COMMAND, cx);
+            "editor.move-lines-up" | "editor.move-lines-down" => {
+                self.move_lines(command == "editor.move-lines-down", buffer);
                 return true;
             }
-            commands::DELETE_LINES_COMMAND => {
-                self.delete_lines(cx);
+            "editor.delete-lines" => {
+                self.delete_lines(buffer);
                 return true;
             }
-            commands::JOIN_LINES_COMMAND => {
-                self.join_lines(cx);
+            "editor.join-lines" => {
+                self.join_lines(buffer);
                 return true;
             }
-            commands::JUMP_TO_MATCHING_BRACKET_COMMAND => {
-                self.jump_to_matching_bracket(cx);
+            "editor.jump-to-matching-bracket" => {
+                self.jump_to_matching_bracket(buffer);
                 return true;
             }
-            commands::TOGGLE_LINE_COMMENT_COMMAND => {
-                self.toggle_line_comment(cx);
+            "editor.toggle-line-comment" => {
+                self.toggle_line_comment(buffer);
                 return true;
             }
-            commands::TOGGLE_BLOCK_COMMENT_COMMAND => {
-                self.toggle_block_comment(cx);
+            "editor.toggle-block-comment" => {
+                self.toggle_block_comment(buffer);
                 return true;
             }
-            commands::TOGGLE_SOFT_WRAP_COMMAND => return self.toggle_soft_wrap(cx),
-            commands::FOLD_COMMAND => {
-                self.fold_at_caret(cx);
+            "editor.toggle-soft-wrap" => return self.toggle_soft_wrap(buffer),
+            "editor.fold" => {
+                self.fold_at_caret(buffer);
                 return true;
             }
-            commands::UNFOLD_COMMAND => {
-                self.unfold_at_caret(cx);
+            "editor.unfold" => {
+                self.unfold_at_caret(buffer);
                 return true;
             }
-            commands::TOGGLE_FOLD_COMMAND => {
-                if !self.unfold_at_caret(cx) {
-                    self.fold_at_caret(cx);
+            "editor.toggle-fold" => {
+                if !self.unfold_at_caret(buffer) {
+                    self.fold_at_caret(buffer);
                 }
                 return true;
             }
-            commands::FOLD_ALL_COMMAND => {
-                self.fold_all_regions(cx);
+            "editor.fold-all" => {
+                self.fold_all_regions(buffer);
                 return true;
             }
-            commands::UNFOLD_ALL_COMMAND => {
-                self.unfold_all_folds(cx);
+            "editor.unfold-all" => {
+                self.unfold_all_folds(buffer);
                 return true;
             }
             _ => {}
         }
-        if matches!(
-            command,
-            commands::DELETE_BACKWARD_COMMAND | commands::DELETE_FORWARD_COMMAND
-        ) {
+        if matches!(command, "editor.delete-backward" | "editor.delete-forward") {
             if self.has_selection || self.marked_range_utf16.is_some() {
-                self.replace_text_with_grouping(None, "", None, cx);
+                self.replace_text_with_grouping(None, "", None, buffer);
             } else {
                 let backward = command.ends_with("backward");
-                let model = self.model.read(cx);
+                let model = &*buffer;
                 let range = backward
                     .then(|| {
                         self.auto_closed_deletion_range(model)
-                            .or_else(|| self.tab_stop_deletion_range(model, cx))
+                            .or_else(|| self.tab_stop_deletion_range(model))
                     })
                     .flatten()
                     .unwrap_or_else(|| self.grapheme_deletion_range(model, backward));
@@ -190,18 +166,18 @@ impl Editor {
                         } else {
                             EditGroupKind::DeleteForward
                         }),
-                        cx,
+                        buffer,
                     );
                 }
             }
             return true;
         }
-        if command == commands::DELETE_TO_LINE_END_COMMAND {
+        if command == "editor.delete-to-line-end" {
             if self.has_selection || self.marked_range_utf16.is_some() {
-                self.replace_text_with_grouping(None, "", None, cx);
+                self.replace_text_with_grouping(None, "", None, buffer);
                 return true;
             }
-            let model = self.model.read(cx);
+            let model = &*buffer;
             let caret = to_flat_byte(model, self.cursor_line, self.cursor_col);
             let end = to_flat_byte(model, self.cursor_line, line_end(model, self.cursor_line));
             let range = if caret < end {
@@ -210,28 +186,27 @@ impl Editor {
                 self.grapheme_deletion_range(model, false)
             };
             if !range.is_empty() {
-                self.break_history_group(cx);
-                self.replace_text_with_grouping(Some(range), "", None, cx);
+                self.break_history_group(buffer);
+                self.replace_text_with_grouping(Some(range), "", None, buffer);
             }
             return true;
         }
-        let (movement, extend) =
-            if let Some(movement) = command.strip_prefix(commands::EDITOR_MOVE_PREFIX) {
-                (movement, false)
-            } else if let Some(movement) = command.strip_prefix(commands::EDITOR_SELECT_PREFIX) {
-                (movement, true)
-            } else {
-                return false;
-            };
+        let (movement, extend) = if let Some(movement) = command.strip_prefix(EDITOR_MOVE_PREFIX) {
+            (movement, false)
+        } else if let Some(movement) = command.strip_prefix(EDITOR_SELECT_PREFIX) {
+            (movement, true)
+        } else {
+            return false;
+        };
         // A `-logical` twin moves by buffer lines; the plain command moves by
         // the rows wrapping shows, which are the lines while nothing wraps.
         let (movement, logical) = match movement.strip_suffix("-logical") {
             Some(movement) => (movement, true),
             None => (movement, false),
         };
-        self.break_history_group(cx);
+        self.break_history_group(buffer);
         self.marked_range_utf16 = None;
-        let model = self.model.read(cx);
+        let model = &*buffer;
         let last = self.line_count - 1;
         let row = self.row(model, self.caret_row());
         let forward = matches!(
@@ -303,9 +278,9 @@ impl Editor {
                 };
                 let column = self
                     .preferred_column
-                    .unwrap_or_else(|| self.caret_column(model, cx));
+                    .unwrap_or_else(|| self.caret_column(model));
                 self.preferred_column = Some(column);
-                self.position_at_column(model, target, column, cx)
+                self.position_at_column(model, target, column)
             }
             _ => return false,
         };
@@ -329,13 +304,13 @@ impl Editor {
         if !vertical {
             self.preferred_column = None;
         }
-        self.finish_position_change(cx);
+        self.finish_position_change(buffer);
         true
     }
 
     /// The byte range one grapheme before or after the caret. At a line edge
     /// it covers the whole line terminator, `\n` or `\r\n`.
-    pub(super) fn grapheme_deletion_range(
+    pub(crate) fn grapheme_deletion_range(
         &self,
         model: &BufferModel,
         backward: bool,
@@ -361,17 +336,26 @@ impl Editor {
 
     /// Write the opposite of the resolved `editor.softWrap` for this view's
     /// document, so every view of it follows. `false` without a document.
-    fn toggle_soft_wrap(&mut self, cx: &mut Context<Self>) -> bool {
-        let model = self.model.read(cx);
-        let Some(document) = model.document() else {
+    fn toggle_soft_wrap(&mut self, buffer: &BufferModel) -> bool {
+        let Some(document) = buffer.document() else {
             return false;
         };
-        let wrap = settings::editor_soft_wrap(&self.settings_scope(model, cx), cx);
-        settings::set_document_soft_wrap(document, !wrap, cx);
+        self.effects.push(EditorEffect::SetDocumentSoftWrap {
+            document,
+            wrap: !self.settings.soft_wrap,
+        });
         true
     }
 
-    pub(crate) fn has_selection(&self) -> bool {
+    /// Replace the selection with the clipboard's `text`, as one undo step.
+    pub fn paste(&mut self, text: Option<&str>, buffer: &mut BufferModel) {
+        self.break_history_group(buffer);
+        if let Some(text) = text {
+            self.replace_text_with_grouping(None, text, None, buffer);
+        }
+    }
+
+    pub fn has_selection(&self) -> bool {
         self.selection_range().is_some()
     }
 }

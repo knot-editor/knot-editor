@@ -76,11 +76,19 @@ on a window resize.
 
 ## Editor views
 
-An editor is two entities in `src/app/editor/`. The `Editor` owns one
+An editor is two entities in `src/app/editor/` over plain state in
+`knot-model` (`crates/knot-model/src/editor.rs`). `EditorState` holds one
 presentation's state: cursor and selection, scroll and the viewport in rows,
-wrapping, IME preedit, key contexts, the caret shape, and its completion
-controller, and it runs the native editing and movement commands without a
-window. The `EditorView` renders it: it owns focus, painting, pointer gestures,
+wrapping, folds, IME preedit, key contexts, the caret shape, and its
+completion controller, and it runs the native editing and movement commands
+without a window or runtime. Each operation takes the buffer model it reads
+or edits; the editor follows the settings its owner resolves for it and
+queues clipboard writes and document setting changes as effects, and paste
+receives the clipboard's text. The `Editor` entity wraps the state: before
+each operation it resolves the settings for the editor's scope, then runs the
+effects, notifies the buffer when its text changed, and notifies itself; it
+also follows buffer changes and keeps the in-flight completion requests. The
+`EditorView` renders it: it owns focus, painting, pointer gestures,
 the platform input handler, shaped hit testing, and horizontal scrolling, and
 each layout tells the editor its viewport height in rows and its wrap width in
 cells. A document tab's presentation owns the view, which owns its editor; commands, editor
@@ -117,7 +125,7 @@ the top line in place.
 
 With `editor.softWrap` resolved true for its scope, a view lays each line out
 as rows that fit the text area, measured in monospace cells rather than shaped
-(`src/app/editor/wrap.rs`). Every geometry path counts rows: scrolling and
+(`crates/knot-model/src/editor/wrap.rs`). Every geometry path counts rows: scrolling and
 clamping, painting, the caret, selections, hit testing, IME bounds, the
 completion popup, and the gutter, which shows a line's number and marker on
 its first row. Each row is shaped as its own slice of the line, and nothing

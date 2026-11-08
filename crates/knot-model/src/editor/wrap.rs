@@ -13,19 +13,19 @@ use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::model::LineChange;
+use crate::buffer::LineChange;
 
 /// What a view wraps lines to.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct WrapWidth {
+pub struct WrapWidth {
     /// Cells per row, at least 1.
-    pub(super) columns: usize,
-    pub(super) tab_size: usize,
+    pub columns: usize,
+    pub tab_size: usize,
 }
 
 /// Where one line breaks.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(super) struct LineWrap {
+pub struct LineWrap {
     /// Byte offsets where continuation rows start, ascending.
     breaks: Vec<usize>,
     /// Cells continuation rows are indented by.
@@ -42,7 +42,7 @@ fn cells(grapheme: &str, column: usize, tab_size: usize) -> usize {
 
 /// The cells `text`, the start of a row, takes, with tabs expanded from the
 /// row's start.
-pub(super) fn cells_before(text: &str, tab_size: usize) -> usize {
+pub fn cells_before(text: &str, tab_size: usize) -> usize {
     let tab_size = tab_size.max(1);
     text.graphemes(true).fold(0, |column, grapheme| {
         column + cells(grapheme, column, tab_size)
@@ -51,7 +51,7 @@ pub(super) fn cells_before(text: &str, tab_size: usize) -> usize {
 
 /// The grapheme boundary of `text`, a row, nearest `column` cells from its
 /// start, the earlier one on a tie. The row's end counts only with `end`.
-pub(super) fn index_at_cells(text: &str, column: usize, tab_size: usize, end: bool) -> usize {
+pub fn index_at_cells(text: &str, column: usize, tab_size: usize, end: bool) -> usize {
     let tab_size = tab_size.max(1);
     let mut best = (0, column);
     let mut used: usize = 0;
@@ -70,7 +70,7 @@ pub(super) fn index_at_cells(text: &str, column: usize, tab_size: usize, end: bo
 /// The grapheme of `text`, a row, that covers display cell `column` from its
 /// start, the last one when the row is shorter, or 0 on an empty row. A tab
 /// covers every cell up to its stop.
-pub(super) fn index_at_or_before_cells(text: &str, column: usize, tab_size: usize) -> usize {
+pub fn index_at_or_before_cells(text: &str, column: usize, tab_size: usize) -> usize {
     let tab_size = tab_size.max(1);
     let mut start = 0;
     let mut used: usize = 0;
@@ -85,7 +85,7 @@ pub(super) fn index_at_or_before_cells(text: &str, column: usize, tab_size: usiz
 }
 
 /// Break `text`, one line without its terminator, into rows of `width`.
-pub(super) fn wrap_line(text: &str, width: WrapWidth) -> LineWrap {
+pub fn wrap_line(text: &str, width: WrapWidth) -> LineWrap {
     let columns = width.columns.max(1);
     let tab_size = width.tab_size.max(1);
     let graphemes: Vec<(usize, &str)> = text.grapheme_indices(true).collect();
@@ -140,7 +140,7 @@ pub(super) fn wrap_line(text: &str, width: WrapWidth) -> LineWrap {
 /// The rows of every line of one view's buffer. Lines a fold hides have no
 /// rows. Without a width or hidden lines, each line is one row and nothing is
 /// stored per line.
-pub(super) struct WrapMap {
+pub struct WrapMap {
     width: Option<WrapWidth>,
     line_count: usize,
     /// Each line's breaks while wrapping.
@@ -153,7 +153,7 @@ pub(super) struct WrapMap {
 }
 
 impl WrapMap {
-    pub(super) fn new(line_count: usize) -> Self {
+    pub fn new(line_count: usize) -> Self {
         Self {
             width: None,
             line_count,
@@ -169,12 +169,12 @@ impl WrapMap {
     }
 
     /// Whether `line` has no rows.
-    pub(super) fn is_hidden(&self, line: usize) -> bool {
+    pub fn is_hidden(&self, line: usize) -> bool {
         self.hidden_range(line).is_some()
     }
 
     /// The run of hidden lines holding `line`.
-    pub(super) fn hidden_range(&self, line: usize) -> Option<Range<usize>> {
+    pub fn hidden_range(&self, line: usize) -> Option<Range<usize>> {
         let at = self.hidden.partition_point(|range| range.end <= line);
         self.hidden
             .get(at)
@@ -183,7 +183,7 @@ impl WrapMap {
     }
 
     /// Give the lines in `hidden`, ascending and disjoint, no rows.
-    pub(super) fn set_hidden(&mut self, hidden: Vec<Range<usize>>) {
+    pub fn set_hidden(&mut self, hidden: Vec<Range<usize>>) {
         if hidden == self.hidden {
             return;
         }
@@ -209,15 +209,15 @@ impl WrapMap {
         }
     }
 
-    pub(super) fn width(&self) -> Option<WrapWidth> {
+    pub fn width(&self) -> Option<WrapWidth> {
         self.width
     }
 
-    pub(super) fn row_count(&self) -> usize {
+    pub fn row_count(&self) -> usize {
         self.first_rows.last().copied().unwrap_or(self.line_count)
     }
 
-    pub(super) fn first_row(&self, line: usize) -> usize {
+    pub fn first_row(&self, line: usize) -> usize {
         if self.mapped() {
             self.first_rows[line.min(self.line_count)]
         } else {
@@ -226,12 +226,12 @@ impl WrapMap {
     }
 
     /// The rows `line` occupies.
-    pub(super) fn rows(&self, line: usize) -> Range<usize> {
+    pub fn rows(&self, line: usize) -> Range<usize> {
         self.first_row(line)..self.first_row(line + 1)
     }
 
     /// The line `row` belongs to and its index among that line's rows.
-    pub(super) fn position(&self, row: usize) -> (usize, usize) {
+    pub fn position(&self, row: usize) -> (usize, usize) {
         let row = row.min(self.row_count().saturating_sub(1));
         if !self.mapped() {
             return (row, 0);
@@ -242,7 +242,7 @@ impl WrapMap {
 
     /// The row showing byte `col` of `line`. An offset where a row breaks
     /// starts the next row.
-    pub(super) fn row_of(&self, line: usize, col: usize) -> usize {
+    pub fn row_of(&self, line: usize, col: usize) -> usize {
         self.first_row(line)
             + self
                 .lines
@@ -252,14 +252,14 @@ impl WrapMap {
 
     /// The bytes of `line` that its row `sub` shows, for a line with `len`
     /// bytes of content.
-    pub(super) fn row_range(&self, line: usize, sub: usize, len: usize) -> Range<usize> {
+    pub fn row_range(&self, line: usize, sub: usize, len: usize) -> Range<usize> {
         let breaks = self.lines.get(line).map_or(&[][..], |wrap| &wrap.breaks);
         let start = if sub == 0 { 0 } else { breaks[sub - 1] };
         start..breaks.get(sub).copied().unwrap_or(len)
     }
 
     /// Cells row `sub` of `line` is indented by.
-    pub(super) fn indent(&self, line: usize, sub: usize) -> usize {
+    pub fn indent(&self, line: usize, sub: usize) -> usize {
         match self.lines.get(line) {
             Some(wrap) if sub > 0 => wrap.indent,
             _ => 0,
@@ -268,7 +268,7 @@ impl WrapMap {
 
     /// Wrap to `width`, or stop wrapping with `None`, rebuilding every line
     /// when it changes. Returns whether it changed.
-    pub(super) fn set_width(
+    pub fn set_width(
         &mut self,
         width: Option<WrapWidth>,
         line_count: usize,
@@ -284,7 +284,7 @@ impl WrapMap {
 
     /// Follow commits that left `line_count` lines, rewrapping the lines
     /// `change` covers, or every line without one.
-    pub(super) fn edit(
+    pub fn edit(
         &mut self,
         line_count: usize,
         change: Option<LineChange>,
@@ -326,7 +326,7 @@ impl WrapMap {
     }
 
     #[cfg(test)]
-    pub(super) fn lines(&self) -> &[LineWrap] {
+    pub fn lines(&self) -> &[LineWrap] {
         &self.lines
     }
 }
@@ -334,7 +334,7 @@ impl WrapMap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::model::BufferModel;
+    use crate::buffer::BufferModel;
 
     fn rows(text: &str, columns: usize) -> Vec<&str> {
         let wrap = wrap_line(

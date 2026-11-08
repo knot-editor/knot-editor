@@ -2060,11 +2060,6 @@ impl HostSuccess for EditorSelection {
         encode_json(self)
     }
 }
-impl HostSuccess for crate::app::editor::EditorViewState {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
-    }
-}
 
 #[host_operation("editorSelection")]
 pub(crate) async fn editor_selection(

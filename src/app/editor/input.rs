@@ -51,7 +51,7 @@ impl EditorView {
                 return;
             }
             None => editor
-                .contribution_actions
+                .contribution_actions()
                 .iter()
                 .rev()
                 .find(|action| {
@@ -94,13 +94,10 @@ impl EditorView {
             return;
         }
         let editor = self.editor.read(cx);
-        let caret = (editor.cursor_line, editor.cursor_col);
-        let anchor = if !ev.modifiers.shift {
-            (line, col)
-        } else if editor.has_selection {
-            (editor.anchor_line, editor.anchor_col)
+        let anchor = if ev.modifiers.shift {
+            editor.anchor()
         } else {
-            caret
+            (line, col)
         };
         self.drag_anchor = Some(DragAnchor {
             unit,
@@ -164,128 +161,16 @@ impl EditorView {
         cx: &App,
     ) -> (usize, usize) {
         let origin = self.text_bounds().origin;
-        let row = (f32::from(p.y - origin.y) / self.metrics.line_height + editor.scroll_top)
+        let row = (f32::from(p.y - origin.y) / self.metrics.line_height + editor.scroll_top())
             .floor()
             .max(0.) as usize;
         self.column_for_x(
             editor,
             row,
-            p.x - origin.x + px(editor.scroll_x),
+            p.x - origin.x + px(editor.scroll_x()),
             window,
             cx,
         )
-    }
-}
-
-impl Editor {
-    /// The selection as document-wide UTF-16 offsets, a caret-only range
-    /// without one. `reversed` when the caret is before the anchor.
-    fn selected_utf16(&self, cx: &App) -> UTF16Selection {
-        let model = self.model.read(cx);
-        let caret = to_flat_utf16(model, self.cursor_line, self.cursor_col);
-        if !self.has_selection {
-            return UTF16Selection {
-                range: caret..caret,
-                reversed: false,
-            };
-        }
-        let anchor = to_flat_utf16(model, self.anchor_line, self.anchor_col);
-        if anchor <= caret {
-            UTF16Selection {
-                range: anchor..caret,
-                reversed: false,
-            }
-        } else {
-            UTF16Selection {
-                range: caret..anchor,
-                reversed: true,
-            }
-        }
-    }
-
-    /// Commit the preedit marking without changing its text or selection.
-    pub(super) fn unmark_text(&mut self, cx: &mut Context<Self>) {
-        if self.marked_range_utf16.take().is_some() {
-            self.break_history_group(cx);
-            cx.notify();
-        }
-    }
-
-    /// Insert typed or committed `text` at a UTF-16 range, or over the
-    /// marked text, selection, or caret: a composition commits in its own
-    /// undo group, while typing groups with typing and may close a bracket
-    /// or outdent the line.
-    pub(crate) fn type_text(
-        &mut self,
-        range: Option<Range<usize>>,
-        text: &str,
-        cx: &mut Context<Self>,
-    ) {
-        let grouping = if self.marked_range_utf16.is_some() {
-            EditGroupKind::Composition
-        } else {
-            EditGroupKind::Typing
-        };
-        let range = self.bytes_for_utf16(range, cx);
-        let bracket =
-            grouping == EditGroupKind::Typing && self.type_bracket(range.clone(), text, cx);
-        if !bracket {
-            self.replace_text_with_grouping(range, text, Some(grouping), cx);
-        }
-        if grouping == EditGroupKind::Typing && !text.contains(['\n', '\r']) {
-            self.outdent_typed_line(cx);
-        }
-    }
-
-    /// Replace a UTF-16 range, or the marked text, selection, or caret,
-    /// with composing `new_text` and mark it; `new_selected_range`, relative
-    /// to the marked text, becomes the selection. Nothing changes where a
-    /// text binding claims typed text.
-    pub(super) fn mark_text(
-        &mut self,
-        range: Option<Range<usize>>,
-        new_text: &str,
-        new_selected_range: Option<Range<usize>>,
-        cx: &mut Context<Self>,
-    ) {
-        // Text a binding claims never reaches the buffer, so neither does
-        // its composition; the commit arrives as ordinary text.
-        if !self.model.read(cx).is_editable() || self.text_command(cx).is_some() {
-            return;
-        }
-        self.preferred_column = None;
-        let range = self.bytes_for_utf16(range, cx);
-        let model = self.model.read(cx);
-        let range = range.unwrap_or_else(|| self.implicit_replacement_range(model));
-        let marked_start_utf16 = model.utf16_of_offset(range.start);
-        let marked_utf16_len: usize = new_text.chars().map(char::len_utf16).sum();
-        let selected = new_selected_range.unwrap_or(marked_utf16_len..marked_utf16_len);
-        let anchor = range.start + utf16_to_byte_col(new_text, selected.start);
-        let caret = range.start + utf16_to_byte_col(new_text, selected.end);
-        let before = self.history_view_state(model);
-
-        self.splice(
-            range,
-            new_text,
-            Some(EditGroupKind::Composition),
-            HistoryViewChange {
-                before,
-                after: HistoryViewState {
-                    context: self.history_context,
-                    anchor,
-                    caret,
-                },
-            },
-            cx,
-        );
-
-        self.marked_range_utf16 = Some(marked_start_utf16..marked_start_utf16 + marked_utf16_len);
-        let model = self.model.read(cx);
-        (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
-        (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
-        self.has_selection = anchor != caret;
-
-        self.finish_position_change(cx);
     }
 }
 
@@ -323,7 +208,7 @@ impl EntityInputHandler for EditorView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Range<usize>> {
-        self.editor.read(cx).marked_range_utf16.clone()
+        self.editor.read(cx).marked_range_utf16()
     }
 
     fn unmark_text(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -378,9 +263,9 @@ impl EntityInputHandler for EditorView {
         let model = self.model.read(cx);
         let start = flat_utf16_to_position(model, range_utf16.start);
         let end = flat_utf16_to_position(model, range_utf16.end);
-        let row = editor.row(model, editor.wrap.row_of(start.0, start.1));
+        let row = editor.row(model, editor.wrap().row_of(start.0, start.1));
         let top = element_bounds.origin.y
-            + px((row.index as f32 - editor.scroll_top) * self.metrics.line_height);
+            + px((row.index as f32 - editor.scroll_top()) * self.metrics.line_height);
         let x0 = self.x_in_row(editor, &row, start.1, window, cx);
         let x1 = if row.holds(end) {
             self.x_in_row(editor, &row, end.1, window, cx)
@@ -407,30 +292,5 @@ impl EntityInputHandler for EditorView {
     ) -> Option<usize> {
         let (line, col) = self.hit_test(self.editor.read(cx), point, window, cx);
         Some(to_flat_utf16(self.model.read(cx), line, col))
-    }
-}
-
-/// The `unit` containing the caret position `(line, col)`, as start and end
-/// positions: the position itself, the word segment at it (see
-/// [`word_segments`]), or the whole line
-/// with its terminator.
-pub(super) fn unit_range(
-    model: &BufferModel,
-    unit: SelectionUnit,
-    line: usize,
-    col: usize,
-) -> ((usize, usize), (usize, usize)) {
-    match unit {
-        SelectionUnit::Character => ((line, col), (line, col)),
-        SelectionUnit::Word => {
-            let text = line_text(model, line);
-            let (start, end) = word_segments(&text)
-                .into_iter()
-                .find(|(_, end, _)| col < *end)
-                .map_or((text.len(), text.len()), |(start, end, _)| (start, end));
-            ((line, start), (line, end))
-        }
-        SelectionUnit::Line if line + 1 < model.line_count() => ((line, 0), (line + 1, 0)),
-        SelectionUnit::Line => ((line, 0), (line, line_end(model, line))),
     }
 }

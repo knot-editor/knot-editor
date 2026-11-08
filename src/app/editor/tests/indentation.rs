@@ -1,236 +1,92 @@
-//! Enter, Tab, indent and outdent lines, and Backspace to a tab stop, in
-//! both indentation styles.
-
-use gpui::{AppContext, TestAppContext};
+//! Indentation that follows the application: detected and converted styles
+//! write the document's settings, and Enter waits for a background parse.
 
 use std::time::Duration;
 
-use super::{Buffer, BufferModel, Editor, check};
+use gpui::{AppContext, Entity, TestAppContext};
+
+use super::{Buffer, BufferModel, Editor, Reveal};
 use crate::app::languages::{
-    self, LanguageDefinition, LanguageOwner, LanguageQueries,
-    editing::{BracketPair, EditingDefinition},
+    self, LanguageDefinition, LanguageOwner, LanguageQueries, editing::EditingDefinition,
 };
-use crate::app::settings::ApplicationSettings;
+use crate::app::settings::{self, ApplicationSettings};
 use knot_protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
-const NEWLINE: &str = "editor.insert-newline";
-const TAB: &str = "editor.insert-tab";
-const INDENT: &str = "editor.indent-lines";
-const OUTDENT: &str = "editor.outdent-lines";
-const BACKSPACE: &str = "editor.delete-backward";
-const REINDENT: &str = "editor.reindent-selected-lines";
+const BLOCKS: &str = "(block) @indent.begin\n\"}\" @indent.branch";
 
-#[gpui::test]
-fn enter_keeps_the_indentation_before_the_caret(cx: &mut TestAppContext) {
-    for spaces in [true, false] {
-        check(
-            cx,
-            spaces,
-            ("    foo", (0, 7), (0, 7)),
-            NEWLINE,
-            ("    foo\n    ", (1, 4), (1, 4)),
-        );
-        check(
-            cx,
-            spaces,
-            ("\t\tfoo bar", (0, 6), (0, 9)),
-            NEWLINE,
-            ("\t\tfoo \n\t\t", (1, 2), (1, 2)),
-        );
-        check(
-            cx,
-            spaces,
-            ("    foo", (0, 2), (0, 2)),
-            NEWLINE,
-            ("  \n    foo", (1, 2), (1, 2)),
-        );
-        check(
-            cx,
-            spaces,
-            ("  a\r\nb", (0, 3), (0, 3)),
-            NEWLINE,
-            ("  a\r\n  \r\nb", (1, 2), (1, 2)),
-        );
-    }
+fn document_editor(text: &str, cx: &mut TestAppContext) -> Entity<Editor> {
+    let model = cx.new(|_| {
+        let mut model = BufferModel::from_text(text);
+        model.set_document(uuid::Uuid::new_v4());
+        Buffer::new(model)
+    });
+    cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx))
 }
 
-#[gpui::test]
-fn tab_inserts_one_unit_within_a_line(cx: &mut TestAppContext) {
-    check(
-        cx,
-        true,
-        ("ab", (0, 2), (0, 2)),
-        TAB,
-        ("ab  ", (0, 4), (0, 4)),
-    );
-    check(
-        cx,
-        true,
-        ("abcd", (0, 1), (0, 3)),
-        TAB,
-        ("a   d", (0, 4), (0, 4)),
-    );
-    check(
-        cx,
-        false,
-        ("abcd", (0, 3), (0, 1)),
-        TAB,
-        ("a\td", (0, 2), (0, 2)),
-    );
+/// Whether `editor` indents with tabs, as its settings now resolve.
+fn indents_with_tabs(editor: &Entity<Editor>, cx: &mut TestAppContext) -> bool {
+    cx.read(|cx| {
+        let editor = editor.read(cx);
+        let scope = editor.settings_scope(editor.model().read(cx), cx);
+        !settings::editor_insert_spaces(&scope, cx)
+    })
 }
 
-#[gpui::test]
-fn tab_and_indent_lines_indent_every_selected_line(cx: &mut TestAppContext) {
-    // A selection across lines; the empty line is skipped and the start at
-    // column 0 keeps covering the new indentation.
-    check(
-        cx,
-        true,
-        ("a\n\n  b\nc", (0, 0), (2, 3)),
-        TAB,
-        ("    a\n\n    b\nc", (0, 0), (2, 5)),
-    );
-    check(
-        cx,
-        false,
-        ("a\n\n  b\nc", (2, 3), (0, 0)),
-        TAB,
-        ("\ta\n\n\t  b\nc", (2, 4), (0, 0)),
-    );
-    // A selection ending at column 0 leaves that line alone.
-    check(
-        cx,
-        true,
-        ("a\nb\nc", (0, 1), (2, 0)),
-        INDENT,
-        ("    a\n    b\nc", (0, 5), (2, 0)),
-    );
-    // With no selection, the caret's line, even an empty one.
-    check(
-        cx,
-        true,
-        ("a\nbc", (1, 1), (1, 1)),
-        INDENT,
-        ("a\n    bc", (1, 5), (1, 5)),
-    );
-    check(
-        cx,
-        false,
-        ("", (0, 0), (0, 0)),
-        INDENT,
-        ("\t", (0, 1), (0, 1)),
-    );
+fn text(editor: &Entity<Editor>, cx: &mut TestAppContext) -> String {
+    cx.read(|cx| editor.read(cx).text(cx))
 }
 
-#[gpui::test]
-fn outdent_removes_one_unit_from_every_selected_line(cx: &mut TestAppContext) {
-    for spaces in [true, false] {
-        check(
-            cx,
-            spaces,
-            ("\t\ta\n      b\nc\n  d", (0, 0), (3, 3)),
-            OUTDENT,
-            ("\ta\n    b\nc\nd", (0, 0), (3, 1)),
-        );
-        check(
-            cx,
-            spaces,
-            ("    ab", (0, 2), (0, 2)),
-            OUTDENT,
-            ("ab", (0, 0), (0, 0)),
-        );
-        check(
-            cx,
-            spaces,
-            ("\ta\n\tb", (0, 2), (1, 0)),
-            OUTDENT,
-            ("a\n\tb", (0, 1), (1, 0)),
-        );
-        check(
-            cx,
-            spaces,
-            ("a", (0, 1), (0, 1)),
-            OUTDENT,
-            ("a", (0, 1), (0, 1)),
-        );
-    }
-}
-
-#[gpui::test]
-fn backspace_in_leading_spaces_deletes_to_the_previous_tab_stop(cx: &mut TestAppContext) {
-    for spaces in [true, false] {
-        check(
-            cx,
-            spaces,
-            ("      a", (0, 6), (0, 6)),
-            BACKSPACE,
-            ("    a", (0, 4), (0, 4)),
-        );
-        check(
-            cx,
-            spaces,
-            ("        a", (0, 8), (0, 8)),
-            BACKSPACE,
-            ("    a", (0, 4), (0, 4)),
-        );
-    }
-    check(
-        cx,
-        true,
-        ("  a  b", (0, 5), (0, 5)),
-        BACKSPACE,
-        ("  a b", (0, 4), (0, 4)),
-    );
-    check(
-        cx,
-        true,
-        ("\t\ta", (0, 2), (0, 2)),
-        BACKSPACE,
-        ("\ta", (0, 1), (0, 1)),
-    );
+fn run(editor: &Entity<Editor>, command: &str, cx: &mut TestAppContext) -> bool {
+    editor.update(cx, |editor, cx| editor.execute_editing_command(command, cx))
 }
 
 #[gpui::test]
 fn detected_indentation_overrides_the_setting(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let model = cx.new(|_| {
-        let mut model = BufferModel::from_text("a\n\tb\nc");
-        model.set_document(uuid::Uuid::new_v4());
-        Buffer::new(model)
-    });
+    let editor = document_editor("a\n\tb\nc", cx);
+    let model = cx.read(|cx| editor.read(cx).model().clone());
     cx.update(|cx| crate::app::documents::detect_indentation(&model, cx));
-    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            view.cursor_line = 2;
-            view.execute_editing_command(TAB, cx);
-            assert_eq!(view.text(cx), "a\n\tb\n\tc");
-        })
+    editor.update(cx, |editor, cx| {
+        editor.set_selection(5, 5, Reveal::Nearest, cx)
     });
+    run(&editor, "editor.insert-tab", cx);
+    assert_eq!(text(&editor, cx), "a\n\tb\n\tc");
 }
 
-/// Register Rust with `indents` and bracket pairs, then open an editor
-/// over `text` in it whose parses all run in the background when
-/// `background`.
-pub(super) fn rust_editor<'a>(
-    cx: &'a mut TestAppContext,
-    indents: &str,
-    text: &str,
-    background: bool,
-) -> (
-    gpui::Entity<Editor>,
-    gpui::Entity<Buffer>,
-    &'a mut gpui::TestAppContext,
-) {
+#[gpui::test]
+fn converting_indentation_sets_the_documents_style(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let editor = document_editor("a\n\tb", cx);
+    assert!(run(&editor, "editor.convert-indentation-to-spaces", cx));
+    assert_eq!(text(&editor, cx), "a\n    b");
+    assert!(!indents_with_tabs(&editor, cx));
+    assert!(run(&editor, "editor.convert-indentation-to-tabs", cx));
+    assert_eq!(text(&editor, cx), "a\n\tb");
+    assert!(indents_with_tabs(&editor, cx));
+}
+
+#[gpui::test]
+fn detecting_indentation_replaces_the_documents_own_settings(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    // The user chose the opposite of what the first text shows and chose
+    // tabs for the second, which shows no style.
+    for (text, spaces, expect_tabs) in [
+        ("a\n\tb\n\tc\n\td\n", true, true),
+        ("a\nb\nc\n", false, false),
+    ] {
+        let editor = document_editor(text, cx);
+        let document = cx.read(|cx| editor.read(cx).model().read(cx).document().unwrap());
+        cx.update(|cx| settings::set_document_insert_spaces(document, spaces, cx));
+        assert_eq!(indents_with_tabs(&editor, cx), !spaces);
+        assert!(run(&editor, "editor.detect-indentation", cx));
+        assert_eq!(indents_with_tabs(&editor, cx), expect_tabs);
+    }
+}
+
+#[gpui::test]
+fn enter_indents_once_a_background_parse_covers_it(cx: &mut TestAppContext) {
     cx.update(|cx| {
         cx.set_global(ApplicationSettings::default());
-        let pair = |open: &str, close: &str| BracketPair {
-            open: open.into(),
-            close: close.into(),
-            auto_close: None,
-            newline: None,
-            not_in: None,
-        };
         let rust = LanguageDefinition {
             info: LanguageInfo {
                 id: "rust".into(),
@@ -243,13 +99,10 @@ pub(super) fn rust_editor<'a>(
             queries: LanguageQueries {
                 highlights: String::new(),
                 injections: String::new(),
-                indents: indents.into(),
+                indents: BLOCKS.into(),
                 folds: String::new(),
             },
-            editing: EditingDefinition {
-                brackets: Some(vec![pair("{", "}"), pair("(", ")"), pair("\"", "\"")]),
-                ..Default::default()
-            },
+            editing: EditingDefinition::default(),
         };
         let owner = LanguageOwner {
             extension: ExtensionId::new(1),
@@ -257,305 +110,34 @@ pub(super) fn rust_editor<'a>(
         };
         languages::register(owner, rust.compile().unwrap(), cx);
     });
+    // Large enough that a parse never finishes inside a zero budget.
+    let rest = "fn b() { let x = 1; }\n".repeat(5_000);
+    let source = format!("fn a() {{\n}}\n{rest}");
     let model = cx.new(|_| {
-        let mut model = BufferModel::from_text(text);
-        if background {
-            model.set_syntax_budget(Duration::ZERO);
-        }
+        let mut model = BufferModel::from_text(source.clone());
+        model.set_syntax_budget(Duration::ZERO);
         Buffer::new(model)
     });
     cx.update(|cx| languages::set_language(&model, "rust".into(), cx));
-    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
-    (editor, model, cx)
-}
-
-const BLOCKS: &str = "(block) @indent.begin\n\"}\" @indent.branch";
-
-type Selection = (usize, usize, usize, usize);
-
-fn selection(view: &Editor) -> Selection {
-    if view.has_selection {
-        (
-            view.anchor_line,
-            view.anchor_col,
-            view.cursor_line,
-            view.cursor_col,
-        )
-    } else {
-        (
-            view.cursor_line,
-            view.cursor_col,
-            view.cursor_line,
-            view.cursor_col,
-        )
-    }
-}
-
-fn place(view: &mut Editor, (line, col): (usize, usize), cx: &mut gpui::Context<Editor>) {
-    (view.cursor_line, view.cursor_col) = (line, col);
-    view.has_selection = false;
-    view.sync_view_position(cx);
-}
-
-#[gpui::test]
-fn reindent_lines_is_one_step_that_keeps_the_selection_on_its_text(cx: &mut TestAppContext) {
-    let text = "fn a() {\nb();\n  c();\n}";
-    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
-    let plain = cx.update(|cx| {
-        let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
-        cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx))
-    });
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            (view.anchor_line, view.anchor_col) = (1, 1);
-            (view.cursor_line, view.cursor_col) = (2, 3);
-            view.has_selection = true;
-            view.sync_view_position(cx);
-            assert!(view.execute_editing_command(REINDENT, cx));
-            assert_eq!(view.text(cx), "fn a() {\n    b();\n    c();\n}");
-            assert_eq!(selection(view), (1, 5, 2, 5));
-
-            view.execute_editing_command("editor.undo", cx);
-            assert_eq!(view.text(cx), text);
-            assert_eq!(selection(view), (1, 1, 2, 3));
-        });
-        // Without a language, nothing changes.
-        plain.update(cx, |view, cx| {
-            view.has_selection = true;
-            (view.cursor_line, view.cursor_col) = (3, 1);
-            view.sync_view_position(cx);
-            assert!(view.execute_editing_command(REINDENT, cx));
-            assert_eq!(view.text(cx), text);
-        });
-    });
-}
-
-#[gpui::test]
-fn enter_indents_from_the_query_in_the_same_undo_step(cx: &mut TestAppContext) {
-    let text = "fn a() {\n    b();\n}";
-    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            place(view, (1, 8), cx);
-            view.execute_editing_command(NEWLINE, cx);
-            assert_eq!(view.text(cx), "fn a() {\n    b();\n    \n}");
-            assert_eq!(selection(view), (2, 4, 2, 4));
-            // Over-indented text corrects on the new line.
-            place(view, (0, 8), cx);
-            view.execute_editing_command(NEWLINE, cx);
-            assert_eq!(view.text(cx), "fn a() {\n    \n    b();\n    \n}");
-
-            view.execute_editing_command("editor.undo", cx);
-            assert_eq!(view.text(cx), "fn a() {\n    b();\n    \n}");
-            assert_eq!(selection(view), (0, 8, 0, 8));
-            view.execute_editing_command("editor.undo", cx);
-            assert_eq!(view.text(cx), text);
-            assert_eq!(selection(view), (1, 8, 1, 8));
-            view.execute_editing_command("editor.redo", cx);
-            assert_eq!(view.text(cx), "fn a() {\n    b();\n    \n}");
-            assert_eq!(selection(view), (2, 4, 2, 4));
-        });
-    });
-}
-
-#[gpui::test]
-fn enter_indents_once_a_background_parse_covers_it(cx: &mut TestAppContext) {
-    // Large enough that a parse never finishes inside a zero budget.
-    let rest = "fn b() { let x = 1; }\n".repeat(5_000);
-    let text = &format!("fn a() {{\n}}\n{rest}");
-    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, true);
+    let editor = cx.new(|cx| Editor::new(model, crate::app::EDITOR_KEY_CONTEXT, cx));
     cx.run_until_parked();
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            place(view, (0, 8), cx);
-            view.execute_editing_command(NEWLINE, cx);
-            // The break keeps the line's indentation until the tree covers it.
-            assert_eq!(view.text(cx), format!("fn a() {{\n\n}}\n{rest}"));
-        });
+
+    editor.update(cx, |editor, cx| {
+        editor.set_selection(8, 8, Reveal::Nearest, cx)
     });
+    run(&editor, "editor.insert-newline", cx);
+    // The break keeps the line's indentation until the tree covers it.
+    assert_eq!(text(&editor, cx), format!("fn a() {{\n\n}}\n{rest}"));
     cx.run_until_parked();
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            assert_eq!(view.text(cx), format!("fn a() {{\n    \n}}\n{rest}"));
-            assert_eq!(selection(view), (1, 4, 1, 4));
-            view.execute_editing_command("editor.undo", cx);
-            assert_eq!(view.text(cx), *text);
-            assert_eq!(selection(view), (0, 8, 0, 8));
+    assert_eq!(text(&editor, cx), format!("fn a() {{\n    \n}}\n{rest}"));
+    assert_eq!(cx.read(|cx| editor.read(cx).caret()), (1, 4));
+    run(&editor, "editor.undo", cx);
+    assert_eq!(text(&editor, cx), source);
+    assert_eq!(cx.read(|cx| editor.read(cx).caret()), (0, 8));
 
-            // An edit before the parse finishes drops the request.
-            view.execute_editing_command(NEWLINE, cx);
-            view.type_text(None, "x", cx);
-        });
-    });
+    // An edit before the parse finishes drops the request.
+    run(&editor, "editor.insert-newline", cx);
+    editor.update(cx, |editor, cx| editor.type_text(None, "x", cx));
     cx.run_until_parked();
-    cx.read(|cx| {
-        assert_eq!(
-            editor.read(cx).text(cx),
-            format!("fn a() {{\nx\n}}\n{rest}")
-        )
-    });
-}
-
-#[gpui::test]
-fn enter_between_a_bracket_pair_opens_an_indented_middle_line(cx: &mut TestAppContext) {
-    // Without an indent query, the middle line is one unit deeper.
-    let (editor, _, cx) = rust_editor(cx, "", "  f(a, {});", false);
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            place(view, (0, 8), cx);
-            view.execute_editing_command(NEWLINE, cx);
-            assert_eq!(view.text(cx), "  f(a, {\n      \n  });");
-            assert_eq!(selection(view), (1, 6, 1, 6));
-            view.execute_editing_command("editor.undo", cx);
-            assert_eq!(view.text(cx), "  f(a, {});");
-            assert_eq!(selection(view), (0, 8, 0, 8));
-
-            // Whitespace inside the pair goes; a mismatched pair or quotes
-            // only break the line.
-            view.type_text(None, " ", cx);
-            view.execute_editing_command(NEWLINE, cx);
-            assert_eq!(view.text(cx), "  f(a, {\n      \n  });");
-            view.execute_editing_command("editor.undo", cx);
-            view.execute_editing_command("editor.undo", cx);
-            place(view, (0, 7), cx);
-            view.execute_editing_command(NEWLINE, cx);
-            assert_eq!(view.text(cx), "  f(a, \n  {});");
-        });
-    });
-}
-
-#[gpui::test]
-fn enter_on_a_whitespace_only_line_clears_it(cx: &mut TestAppContext) {
-    for spaces in [true, false] {
-        check(
-            cx,
-            spaces,
-            ("a\n    \nb", (1, 4), (1, 4)),
-            NEWLINE,
-            ("a\n\n    \nb", (2, 4), (2, 4)),
-        );
-        check(
-            cx,
-            spaces,
-            ("a\n  \t  \nb", (1, 2), (1, 2)),
-            NEWLINE,
-            ("a\n\n  \nb", (2, 2), (2, 2)),
-        );
-    }
-}
-
-#[gpui::test]
-fn a_typed_closer_outdents_within_the_typing_undo_step(cx: &mut TestAppContext) {
-    let text = "fn a() {\n    if x {\n        b();\n        \n}";
-    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            place(view, (3, 8), cx);
-            view.type_text(None, "}", cx);
-            assert_eq!(
-                view.text(cx),
-                "fn a() {\n    if x {\n        b();\n    }\n}"
-            );
-            assert_eq!(selection(view), (3, 5, 3, 5));
-            // Typing goes on in the same step.
-            view.type_text(None, " ", cx);
-            view.execute_editing_command("editor.undo", cx);
-            assert_eq!(view.text(cx), text);
-            assert_eq!(selection(view), (3, 8, 3, 8));
-        });
-    });
-}
-
-#[gpui::test]
-fn composition_never_outdents(cx: &mut TestAppContext) {
-    let text = "fn a() {\n    if x {\n        b();\n        \n}";
-    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            place(view, (3, 8), cx);
-            view.mark_text(None, "}", None, cx);
-            view.type_text(None, "}", cx);
-            assert_eq!(
-                view.text(cx),
-                "fn a() {\n    if x {\n        b();\n        }\n}"
-            );
-        });
-    });
-}
-
-#[gpui::test]
-fn convert_indentation_rewrites_every_line_as_one_undoable_step(cx: &mut TestAppContext) {
-    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let text = "a\n\tb\n\t\tc\n  \td\n    e";
-    let model = cx.new(|_| {
-        let mut model = BufferModel::from_text(text);
-        model.set_document(uuid::Uuid::new_v4());
-        Buffer::new(model)
-    });
-    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            assert!(view.execute_editing_command("editor.convert-indentation-to-spaces", cx));
-            assert_eq!(view.text(cx), "a\n    b\n        c\n    d\n    e");
-            assert!(!view.indent_unit(view.model.read(cx), cx).tabs);
-
-            view.execute_editing_command("editor.undo", cx);
-            assert_eq!(view.text(cx), text);
-
-            assert!(view.execute_editing_command("editor.convert-indentation-to-tabs", cx));
-            assert_eq!(view.text(cx), "a\n\tb\n\t\tc\n\td\n\te");
-            assert!(view.indent_unit(view.model.read(cx), cx).tabs);
-        });
-    });
-}
-
-#[gpui::test]
-fn reindent_buffer_covers_the_whole_document_regardless_of_the_selection(cx: &mut TestAppContext) {
-    let text = "fn a() {\nb();\n  c();\n}";
-    let (editor, _, cx) = rust_editor(cx, BLOCKS, text, false);
-    cx.update(|cx| {
-        editor.update(cx, |view, cx| {
-            place(view, (1, 0), cx);
-            assert!(view.execute_editing_command("editor.reindent-buffer", cx));
-            assert_eq!(view.text(cx), "fn a() {\n    b();\n    c();\n}");
-            view.execute_editing_command("editor.undo", cx);
-            assert_eq!(view.text(cx), text);
-            // The selected variant leaves the other lines alone.
-            place(view, (1, 0), cx);
-            assert!(view.execute_editing_command(REINDENT, cx));
-            assert_eq!(view.text(cx), "fn a() {\n    b();\n  c();\n}");
-        });
-    });
-}
-
-#[gpui::test]
-fn detecting_indentation_replaces_the_documents_own_settings(cx: &mut TestAppContext) {
-    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    // The user chose the opposite of what the first text shows and chose
-    // tabs for the second, which shows no style.
-    let open = |text: &str, spaces: bool, cx: &mut TestAppContext| {
-        let document = uuid::Uuid::new_v4();
-        let model = cx.new(|_| {
-            let mut model = BufferModel::from_text(text);
-            model.set_document(document);
-            Buffer::new(model)
-        });
-        cx.update(|cx| crate::app::settings::set_document_insert_spaces(document, spaces, cx));
-        let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
-        (editor, cx.clone())
-    };
-    for (text, spaces, expect_tabs) in [
-        ("a\n\tb\n\tc\n\td\n", true, true),
-        ("a\nb\nc\n", false, false),
-    ] {
-        let (editor, cx) = open(text, spaces, cx);
-        let cx = cx;
-        cx.update(|cx| {
-            editor.update(cx, |view, cx| {
-                assert_eq!(view.indent_unit(view.model.read(cx), cx).tabs, !spaces);
-                assert!(view.execute_editing_command("editor.detect-indentation", cx));
-                assert_eq!(view.indent_unit(view.model.read(cx), cx).tabs, expect_tabs);
-            });
-        });
-    }
+    assert_eq!(text(&editor, cx), format!("fn a() {{\nx\n}}\n{rest}"));
 }

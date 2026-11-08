@@ -1,117 +1,12 @@
 //! Row shaping and the geometry shared by caret, selection, hit testing,
 //! and painting.
 
-use super::wrap::WrapWidth;
 use super::*;
 use crate::app::convert::ThemePaint as _;
 
 /// Pixels a wrapped row leaves free at the right edge, for the caret and the
 /// scrollbar.
 const WRAP_MARGIN: f32 = 8.;
-
-/// One visual row: the bytes of a buffer line that it shows.
-#[derive(Clone, Debug, PartialEq)]
-pub(super) struct Row {
-    pub(super) index: usize,
-    pub(super) line: usize,
-    /// Bytes of the line's content.
-    pub(super) range: Range<usize>,
-    /// Whether the row ends its line, so it also shows the line's end.
-    pub(super) last: bool,
-    /// How many cells right of the text area's edge the row's text starts.
-    pub(super) indent: usize,
-}
-
-impl Row {
-    /// Whether the caret at byte `col` of `line` shows on this row.
-    pub(super) fn holds(&self, (line, col): (usize, usize)) -> bool {
-        self.line == line && self.range.start <= col && (col < self.range.end || self.last)
-    }
-
-    /// The first position after this row's positions.
-    fn after(&self) -> (usize, usize) {
-        if self.last {
-            (self.line + 1, 0)
-        } else {
-            (self.line, self.range.end)
-        }
-    }
-
-    /// The part of `start..end` that this row shows: whether it begins and
-    /// ends here, or `None` when the row shows none of it.
-    pub(super) fn span(
-        &self,
-        start: (usize, usize),
-        end: (usize, usize),
-    ) -> Option<(Option<usize>, Option<usize>)> {
-        let first = (self.line, self.range.start);
-        (start < self.after() && end > first).then(|| {
-            (
-                (start >= first).then_some(start.1),
-                (end < self.after()).then_some(end.1),
-            )
-        })
-    }
-}
-
-/// A background one decoration paints on one row.
-#[derive(Debug, PartialEq)]
-pub(super) struct DecorationFill<'a> {
-    /// The row's position among the rows painted.
-    pub(super) row: usize,
-    /// The byte columns of the row's line it covers, or `None` for a band
-    /// across the whole text area.
-    pub(super) columns: Option<Range<usize>>,
-    pub(super) key: &'a str,
-}
-
-/// The backgrounds `decorations` paint on `rows`, in paint order: `line`
-/// bands, then `background` spans that end at the text on each row, each
-/// group with the most severe keys last so they land on top.
-pub(super) fn decoration_fills<'a, 'r>(
-    decorations: &'a [RenderedDecoration],
-    rows: impl IntoIterator<Item = &'r Row>,
-) -> Vec<DecorationFill<'a>> {
-    let rows: Vec<&Row> = rows.into_iter().collect();
-    let (Some(first), Some(last)) = (rows.first(), rows.last()) else {
-        return Vec::new();
-    };
-    let lines = first.line..=last.line;
-    let mut fills = Vec::new();
-    for style in [DecorationStyle::Line, DecorationStyle::Background] {
-        let mut painted: Vec<&RenderedDecoration> = decorations
-            .iter()
-            .filter(|decoration| decoration.style == style && lines.contains(&decoration.line))
-            .collect();
-        painted.sort_by_key(|decoration| decoration_precedence(&decoration.key));
-        for decoration in painted {
-            for (position, row) in rows.iter().enumerate() {
-                if row.line != decoration.line {
-                    continue;
-                }
-                let columns = if style == DecorationStyle::Line {
-                    None
-                } else {
-                    let start = (decoration.line, decoration.start);
-                    let end = (decoration.line, decoration.end);
-                    let Some((begins, ends)) = row.span(start, end) else {
-                        continue;
-                    };
-                    Some(begins.unwrap_or(row.range.start)..ends.unwrap_or(row.range.end))
-                        .filter(|columns| !columns.is_empty())
-                };
-                if style == DecorationStyle::Line || columns.is_some() {
-                    fills.push(DecorationFill {
-                        row: position,
-                        columns,
-                        key: &decoration.key,
-                    });
-                }
-            }
-        }
-    }
-    fills
-}
 
 /// The text size and line height one view lays out with, from the
 /// `font.size` setting in its scope and the application zoom.
@@ -133,142 +28,6 @@ impl EditorMetrics {
     /// The size relative to the default text, for chrome drawn beside it.
     pub(super) fn scale(self) -> f32 {
         self.font_size / crate::app::typography::TEXT_SIZE
-    }
-}
-
-impl Editor {
-    /// Wrap lines to `wrap`, or stop wrapping with `None`, keeping the top
-    /// row's text at the top when the rows change.
-    pub(super) fn set_wrap(&mut self, wrap: Option<WrapWidth>, cx: &App) {
-        let restored = self.restored_top.take();
-        if wrap == self.wrap.width() {
-            return;
-        }
-        let model = self.model.read(cx);
-        self.sync_wrap(model);
-        let top = restored.unwrap_or_else(|| self.top_offset(model));
-        self.wrap
-            .set_width(wrap, model.line_count(), |line| line_text(model, line));
-        let (line, col) = flat_byte_to_position(model, top);
-        self.scroll_top = self.wrap.row_of(line, col) as f32;
-        if wrap.is_some() {
-            self.scroll_x = 0.;
-        }
-    }
-
-    /// Lay out as a view `rows` rows tall and `columns` cells wide would,
-    /// wrapping when `editor.softWrap` is on, for a test without a window.
-    #[cfg(any(test, feature = "test-support"))]
-    pub(crate) fn lay_out_for_test(&mut self, rows: f32, columns: usize, cx: &App) {
-        let scope = self.settings_scope(self.model.read(cx), cx);
-        let wrap = settings::editor_soft_wrap(&scope, cx).then(|| WrapWidth {
-            columns,
-            tab_size: settings::editor_tab_size(&scope, cx),
-        });
-        self.set_wrap(wrap, cx);
-        self.lay_out(rows, true);
-    }
-
-    /// Visual row `index`, clamped to the last row.
-    pub(super) fn row(&self, model: &BufferModel, index: usize) -> Row {
-        let (line, sub) = self.wrap.position(index);
-        let rows = self.wrap.rows(line);
-        Row {
-            index: rows.start + sub,
-            line,
-            range: self.wrap.row_range(line, sub, line_end(model, line)),
-            last: rows.start + sub + 1 == rows.end,
-            indent: self.wrap.indent(line, sub),
-        }
-    }
-
-    /// The settings context of this editor's view kind and its buffer's
-    /// language.
-    pub(super) fn settings_scope(&self, model: &BufferModel, cx: &App) -> SettingsScope {
-        SettingsScope {
-            language: Some(languages::effective_language(model, cx)),
-            view: Some(self.view_kind.to_string()),
-            document: model.document().map(|document| document.to_string()),
-        }
-    }
-
-    /// Columns per tab stop for this editor's view kind and its buffer's
-    /// language.
-    pub(crate) fn tab_size(&self, model: &BufferModel, cx: &App) -> usize {
-        settings::editor_tab_size(&self.settings_scope(model, cx), cx)
-    }
-
-    /// One indentation level from the `editor.insertSpaces` and
-    /// `editor.tabSize` settings in this editor's scope.
-    pub(super) fn indent_unit(&self, model: &BufferModel, cx: &App) -> IndentUnit {
-        let scope = self.settings_scope(model, cx);
-        IndentUnit {
-            tabs: !settings::editor_insert_spaces(&scope, cx),
-            size: settings::editor_tab_size(&scope, cx),
-        }
-    }
-
-    /// The display cell the caret shows at: the caret's row's indentation
-    /// plus the cells of the row's text before it, with tabs expanded.
-    pub(super) fn caret_column(&self, model: &BufferModel, cx: &App) -> usize {
-        let row = self.row(model, self.caret_row());
-        let text = line_text(model, row.line);
-        let col = self.cursor_col.clamp(row.range.start, row.range.end);
-        row.indent + wrap::cells_before(&text[row.range.start..col], self.tab_size(model, cx))
-    }
-
-    /// The display cells from the start of buffer line `line` to byte `column`
-    /// in it, with tabs expanded from the line's start, measured as soft wrap
-    /// measures rows. `None` past the last line or off a character boundary.
-    pub(crate) fn line_cells_before(&self, line: usize, column: usize, cx: &App) -> Option<usize> {
-        let model = self.model().read(cx);
-        if line >= model.line_count() {
-            return None;
-        }
-        let text = line_text(model, line);
-        let prefix = text.get(..column)?;
-        Some(wrap::cells_before(prefix, self.tab_size(model, cx)))
-    }
-
-    /// The byte column of the character covering display cell `cells` in buffer
-    /// line `line`, or the line's last character when it is shorter. `None`
-    /// past the last line.
-    pub(crate) fn line_column_at_cells(
-        &self,
-        line: usize,
-        cells: usize,
-        cx: &App,
-    ) -> Option<usize> {
-        let model = self.model().read(cx);
-        if line >= model.line_count() {
-            return None;
-        }
-        let text = line_text(model, line);
-        Some(wrap::index_at_or_before_cells(
-            &text,
-            cells,
-            self.tab_size(model, cx),
-        ))
-    }
-
-    /// The caret position on row `index` nearest display cell `column`. A
-    /// row that does not end its line leaves its end to the next row.
-    pub(super) fn position_at_column(
-        &self,
-        model: &BufferModel,
-        index: usize,
-        column: usize,
-        cx: &App,
-    ) -> (usize, usize) {
-        let row = self.row(model, index);
-        let text = line_text(model, row.line);
-        let col = wrap::index_at_cells(
-            &text[row.range.clone()],
-            column.saturating_sub(row.indent),
-            self.tab_size(model, cx),
-            row.last,
-        );
-        (row.line, row.range.start + col)
     }
 }
 
@@ -485,7 +244,7 @@ impl EditorView {
     /// The caret's x within the text area, before horizontal scroll.
     pub(super) fn caret_x(&self, editor: &Editor, window: &Window, cx: &App) -> Pixels {
         let row = editor.row(self.model.read(cx), editor.caret_row());
-        self.x_in_row(editor, &row, editor.cursor_col, window, cx) + px(editor.scroll_x)
+        self.x_in_row(editor, &row, editor.caret().1, window, cx) + px(editor.scroll_x())
     }
 
     /// The caret position on row `index` nearest `x`, measured within the
@@ -508,7 +267,7 @@ impl EditorView {
         let shaped = self.shape_row(editor, &row, &text, window, cx);
         let row_text = &text[row.range.clone()];
         let tab_size = editor.tab_size(model, cx);
-        let offset = self.row_x(editor, &row, row_text, shaped.width) + px(editor.scroll_x);
+        let offset = self.row_x(editor, &row, row_text, shaped.width) + px(editor.scroll_x());
         let col = row_text
             .grapheme_indices(true)
             .map(|(i, _)| i)
@@ -542,7 +301,7 @@ impl EditorView {
             (pane_w - shaped_w).max(px(0.))
         } else {
             px(0.)
-        }) - px(editor.scroll_x)
+        }) - px(editor.scroll_x())
     }
 }
 
@@ -551,7 +310,7 @@ impl EditorView {
 /// where they overlap. Backgrounds paint as quads.
 fn decoration_layers(editor: &Editor, line: usize, theme: &Theme) -> Vec<Vec<HighlightSpan>> {
     let underlines = || {
-        editor.decorations.iter().filter(move |decoration| {
+        editor.decorations().iter().filter(move |decoration| {
             decoration.line == line
                 && matches!(
                     decoration.style,

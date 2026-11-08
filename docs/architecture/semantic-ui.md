@@ -245,7 +245,7 @@ revision-checked prefix replacement.
 
 - Completion composition is feature-specific and independent of arrival timing.
   Filtering, ranking, and deduplication rules live in the
-  [completion controller](../../src/app/completion.rs).
+  [completion controller](../../crates/knot-model/src/completion.rs).
 - Recoverable failure is local to one provider and request. Other candidates
   remain visible, and the provider participates again on the next invocation
   without re-registration.

@@ -3,8 +3,8 @@
 //! and return results as data; the application shell owns the runtime that
 //! drives them, and its globals wrap this crate's plain state.
 //!
-//! - Text: [`buffer`], [`history`], [`indentation`], [`editing`], and
-//!   [`syntax`].
+//! - Text: [`buffer`], [`editor`], [`history`], [`indentation`], [`editing`],
+//!   and [`syntax`].
 //! - Resources: [`resource`], [`filesystem`], [`open`], and [`workspace`].
 //! - Input: [`keys`], [`commands`], and [`completion`].
 //! - Presentation values: [`style`] and [`theme`].
@@ -15,6 +15,7 @@ pub mod buffer;
 pub mod commands;
 pub mod completion;
 pub mod editing;
+pub mod editor;
 pub mod extensions;
 pub mod filesystem;
 pub mod history;

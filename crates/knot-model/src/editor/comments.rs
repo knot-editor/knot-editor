@@ -3,10 +3,10 @@
 
 use super::*;
 
-impl Editor {
+impl EditorState {
     /// Toggle line comments on the selected lines.
-    pub(super) fn toggle_line_comment(&mut self, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
+    pub(crate) fn toggle_line_comment(&mut self, buffer: &mut BufferModel) {
+        let model = &*buffer;
         let Some(editing) = model.editing_at(self.selection_start(model)) else {
             return;
         };
@@ -25,14 +25,14 @@ impl Editor {
                 )
             })
             .collect();
-        self.commit_line_edits(edits, cx);
+        self.commit_line_edits(edits, buffer);
     }
 
     /// Wrap the selection in a block comment or unwrap it, keeping the same
     /// text selected. With nothing selected, insert an empty comment with
     /// the caret inside.
-    pub(super) fn toggle_block_comment(&mut self, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
+    pub(crate) fn toggle_block_comment(&mut self, buffer: &mut BufferModel) {
+        let model = &*buffer;
         let state = self.history_view_state(model);
         let range = state.anchor.min(state.caret)..state.anchor.max(state.caret);
         let Some(editing) = model.editing_at(range.start) else {
@@ -71,7 +71,7 @@ impl Editor {
         } else {
             (start, end)
         };
-        self.commit_edits(edits, anchor, caret, cx);
+        self.commit_edits(edits, anchor, caret, buffer);
     }
 
     fn selection_start(&self, model: &BufferModel) -> usize {

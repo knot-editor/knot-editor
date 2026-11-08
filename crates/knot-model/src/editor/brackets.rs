@@ -8,7 +8,7 @@ use super::*;
 
 /// A pair auto-closing inserted, anchored from the opener's start to the
 /// closer's end.
-pub(super) struct AutoClosed {
+pub struct AutoClosed {
     range: Option<AnchoredRangeId>,
     open: String,
     close: String,
@@ -34,22 +34,16 @@ impl AutoClosed {
 
 /// The brackets matched at a caret, valid while the syntax generation and
 /// the caret stay the same.
-pub(super) struct BracketCache {
+pub struct BracketCache {
     generation: u64,
     caret: usize,
     matched: Option<[Range<usize>; 2]>,
 }
 
-impl Editor {
-    /// The brackets highlighted at the caret.
-    #[cfg(any(test, feature = "test-support"))]
-    pub(crate) fn matched_brackets_for_test(&self, cx: &App) -> Option<[Range<usize>; 2]> {
-        self.matched_brackets(self.model.read(cx))
-    }
-
+impl EditorState {
     /// The byte ranges of the bracket touching the caret and its partner, as
     /// the highlight paints them.
-    pub(super) fn matched_brackets(&self, model: &BufferModel) -> Option<[Range<usize>; 2]> {
+    pub fn matched_brackets(&self, model: &BufferModel) -> Option<[Range<usize>; 2]> {
         let generation = model.syntax_generation()?;
         let caret = to_flat_byte(model, self.cursor_line, self.cursor_col);
         let mut cache = self.bracket_cache.borrow_mut();
@@ -73,9 +67,9 @@ impl Editor {
     /// Move the caret before the partner of the bracket it touches, or
     /// before the closer of the innermost pair around it, as VS Code's Go to
     /// Bracket does. Clears the selection.
-    pub(super) fn jump_to_matching_bracket(&mut self, cx: &mut Context<Self>) {
-        self.break_history_group(cx);
-        let model = self.model.read(cx);
+    pub(crate) fn jump_to_matching_bracket(&mut self, buffer: &mut BufferModel) {
+        self.break_history_group(buffer);
+        let model = &*buffer;
         let caret = to_flat_byte(model, self.cursor_line, self.cursor_col);
         let target = match model.bracket_at(caret) {
             // Between an adjacent pair, go before the opener.
@@ -90,20 +84,20 @@ impl Editor {
         self.has_selection = false;
         self.marked_range_utf16 = None;
         self.preferred_column = None;
-        self.finish_position_change(cx);
+        self.finish_position_change(buffer);
     }
 
     /// Handle typed `text` replacing `range`, or the selection when `None`,
     /// as a bracket: wrap the selection in the pair it opens, step over a
     /// tracked closer, or insert the closer of the pair it opens. Returns
     /// whether it handled the input.
-    pub(super) fn type_bracket(
+    pub(crate) fn type_bracket(
         &mut self,
         range: Option<Range<usize>>,
         text: &str,
-        cx: &mut Context<Self>,
+        buffer: &mut BufferModel,
     ) -> bool {
-        let model = self.model.read(cx);
+        let model = &*buffer;
         if !model.is_editable() || text.is_empty() || text.contains(['\n', '\r']) {
             return false;
         }
@@ -111,12 +105,11 @@ impl Editor {
         if range.is_some_and(|range| range != implicit) {
             return false;
         }
-        let scope = self.settings_scope(model, cx);
         let Some(editing) = model.editing_at(implicit.start) else {
             return false;
         };
         if !implicit.is_empty() {
-            if !settings::editor_auto_surround(&scope, cx) {
+            if !self.settings.auto_surround {
                 return false;
             }
             let Some(bracket) = editing.surround(text) else {
@@ -133,10 +126,10 @@ impl Editor {
                 (implicit.start..implicit.start, bracket.open.clone()),
                 (implicit.end..implicit.end, bracket.close.clone()),
             ];
-            self.commit_edits(edits, anchor, caret, cx);
+            self.commit_edits(edits, anchor, caret, buffer);
             return true;
         }
-        if !settings::editor_auto_closing_brackets(&scope, cx) {
+        if !self.settings.auto_closing_brackets {
             return false;
         }
         let caret = implicit.start;
@@ -147,13 +140,12 @@ impl Editor {
                     .is_some_and(|(_, close)| close.start == caret)
         }) {
             let pair = self.auto_closed.remove(index);
-            self.model
-                .update(cx, |model, _| model.remove_view_position(pair.range));
-            let model = self.model.read(cx);
+            buffer.remove_view_position(pair.range);
+            let model = &*buffer;
             (self.cursor_line, self.cursor_col) =
                 flat_byte_to_position(model, caret + pair.close.len());
             self.preferred_column = None;
-            self.finish_position_change(cx);
+            self.finish_position_change(buffer);
             return true;
         }
         let line = model.line_of_offset(caret);
@@ -179,23 +171,21 @@ impl Editor {
             &format!("{text}{close}"),
             Some(EditGroupKind::Typing),
             view,
-            cx,
+            buffer,
         );
         self.marked_range_utf16 = None;
-        (self.cursor_line, self.cursor_col) = flat_byte_to_position(self.model.read(cx), typed_end);
+        (self.cursor_line, self.cursor_col) = flat_byte_to_position(&*buffer, typed_end);
         self.has_selection = false;
-        self.finish_position_change(cx);
+        self.finish_position_change(buffer);
         let tracked = typed_end - open.len()..typed_end + close.len();
-        let range = self
-            .model
-            .update(cx, |model, _| model.add_view_position(tracked));
+        let range = buffer.add_view_position(tracked);
         self.auto_closed.push(AutoClosed { range, open, close });
         true
     }
 
     /// The range Backspace deletes when the caret sits between a tracked
     /// opener and its closer: both of them.
-    pub(super) fn auto_closed_deletion_range(&self, model: &BufferModel) -> Option<Range<usize>> {
+    pub(crate) fn auto_closed_deletion_range(&self, model: &BufferModel) -> Option<Range<usize>> {
         let caret = to_flat_byte(model, self.cursor_line, self.cursor_col);
         self.auto_closed.iter().find_map(|pair| {
             let (open, close) = pair.resolve(model)?;
@@ -205,11 +195,11 @@ impl Editor {
 
     /// Stop tracking the pairs the caret has left, whose text changed, or
     /// all of them while text is selected.
-    pub(super) fn prune_auto_closed(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn prune_auto_closed(&mut self, buffer: &mut BufferModel) {
         if self.auto_closed.is_empty() {
             return;
         }
-        let model = self.model.read(cx);
+        let model = &*buffer;
         let caret = to_flat_byte(model, self.cursor_line, self.cursor_col);
         let selected = self.has_selection;
         let (kept, dropped): (Vec<_>, Vec<_>) = std::mem::take(&mut self.auto_closed)
@@ -221,17 +211,12 @@ impl Editor {
                         .is_some_and(|(open, close)| open.end <= caret && caret <= close.start)
             });
         self.auto_closed = kept;
-        self.release_auto_closed(dropped, cx);
+        self.release_auto_closed(dropped, buffer);
     }
 
-    pub(super) fn release_auto_closed(&self, pairs: Vec<AutoClosed>, cx: &mut App) {
-        if pairs.is_empty() {
-            return;
+    pub(crate) fn release_auto_closed(&self, pairs: Vec<AutoClosed>, buffer: &mut BufferModel) {
+        for pair in pairs {
+            buffer.remove_view_position(pair.range);
         }
-        self.model.update(cx, |model, _| {
-            for pair in pairs {
-                model.remove_view_position(pair.range);
-            }
-        });
     }
 }

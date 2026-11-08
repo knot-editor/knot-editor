@@ -3,11 +3,11 @@
 
 use super::*;
 
-impl Editor {
+impl EditorState {
     /// Duplicate the selected lines below them, moving the selection to the
     /// copy, or above them, leaving it on the copy that now takes their place.
-    pub(super) fn copy_lines(&mut self, down: bool, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
+    pub(crate) fn copy_lines(&mut self, down: bool, buffer: &mut BufferModel) {
+        let model = &*buffer;
         let lines = self.selected_lines();
         let start = line_start(model, lines.start);
         let end = content_end(model, lines.end - 1);
@@ -20,22 +20,22 @@ impl Editor {
                 vec![(end..end, format!("{ending}{block}"))],
                 state.anchor + shift,
                 state.caret + shift,
-                cx,
+                buffer,
             );
         } else {
             self.commit_edits(
                 vec![(start..start, format!("{block}{ending}"))],
                 state.anchor,
                 state.caret,
-                cx,
+                buffer,
             );
         }
     }
 
     /// Delete the selected lines with their terminator, leaving the caret in
     /// its column on the line that takes their place.
-    pub(super) fn delete_lines(&mut self, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
+    pub(crate) fn delete_lines(&mut self, buffer: &mut BufferModel) {
+        let model = &*buffer;
         let lines = self.selected_lines();
         let (range, next) = if lines.end < model.line_count() {
             let range = line_start(model, lines.start)..line_start(model, lines.end);
@@ -52,13 +52,13 @@ impl Editor {
         let caret = next.map_or(0, |(at, line)| {
             at + floor_char_boundary(&line_text(model, line), self.cursor_col)
         });
-        self.commit_edits(vec![(range, String::new())], caret, caret, cx);
+        self.commit_edits(vec![(range, String::new())], caret, caret, buffer);
     }
 
     /// Swap the selected lines with the line below or above them; nothing at
     /// the document edge. The selection moves with the lines.
-    pub(super) fn move_lines(&mut self, down: bool, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
+    pub(crate) fn move_lines(&mut self, down: bool, buffer: &mut BufferModel) {
+        let model = &*buffer;
         let lines = self.selected_lines();
         let start = line_start(model, lines.start);
         let end = content_end(model, lines.end - 1);
@@ -120,14 +120,14 @@ impl Editor {
             )
         };
         let (anchor, caret) = (map(state.anchor), map(state.caret));
-        self.commit_edits(edits, anchor, caret, cx);
+        self.commit_edits(edits, anchor, caret, buffer);
     }
 
     /// Join the selected lines, or the caret's line and the next, replacing
     /// each break and the next line's indentation with one space, or with
     /// nothing before a blank line.
-    pub(super) fn join_lines(&mut self, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
+    pub(crate) fn join_lines(&mut self, buffer: &mut BufferModel) {
+        let model = &*buffer;
         let (first, last) = match self.selection_range() {
             Some((start, end)) => (start.0, end.0.max(start.0 + 1)),
             None => (self.cursor_line, self.cursor_line + 1),
@@ -157,7 +157,7 @@ impl Editor {
             let join = edits[0].0.start;
             (join, join)
         };
-        self.commit_edits(edits, anchor, caret, cx);
+        self.commit_edits(edits, anchor, caret, buffer);
     }
 }
 

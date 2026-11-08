@@ -176,8 +176,8 @@ impl EditorView {
     /// The caret's x position with the caret moved to `col` on the first line.
     #[cfg(test)]
     pub(crate) fn caret_x_at(&mut self, col: usize, window: &Window, cx: &mut App) -> Pixels {
-        self.editor.update(cx, |editor, _| {
-            (editor.cursor_line, editor.cursor_col) = (0, col)
+        self.editor.update(cx, |editor, cx| {
+            editor.place_for_test((0, col), (0, col), cx)
         });
         self.caret_x(self.editor.read(cx), window, cx)
     }
@@ -204,7 +204,7 @@ impl EditorView {
         use crate::app::convert::ThemePaint as _;
         self.editor
             .read(cx)
-            .gutter_markers
+            .gutter_markers()
             .iter()
             .map(|marker| (marker.line, theme(cx).paint_color(&marker.key)))
             .collect()
@@ -234,10 +234,10 @@ impl EditorView {
     pub(super) fn update_caret_blink(&mut self, focused: bool, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx);
         let key = focused.then_some((
-            editor.cursor_line,
-            editor.cursor_col,
-            editor.has_selection,
-            editor.seen_revision,
+            editor.caret().0,
+            editor.caret().1,
+            editor.has_selection(),
+            editor.seen_revision(),
         ));
         if key == self.caret_blink.key {
             return;

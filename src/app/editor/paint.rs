@@ -16,10 +16,10 @@ impl Render for EditorView {
         let editor = self.editor.read(cx);
         let mut key_context = KeyContext::default();
         key_context.add(EDITOR_KEY_CONTEXT);
-        if editor.completion.is_some() {
+        if editor.completion_surface().is_some() {
             key_context.add("editor_completion");
         }
-        let completion = editor.completion_surface.as_ref().map(|surface| {
+        let completion = editor.completion_surface().map(|surface| {
             let anchor = self.completion_anchor(editor, window, cx);
             crate::app::completion::render_completion(surface, anchor, theme(cx))
         });
@@ -58,7 +58,7 @@ impl Render for EditorView {
                 let rows = -dy / this.metrics.line_height;
                 let max_x = this.max_line_width + 2. - f32::from(this.text_bounds().size.width);
                 this.editor.update(cx, |editor, cx| {
-                    let max_x = if editor.wrap.width().is_some() {
+                    let max_x = if editor.wrap().width().is_some() {
                         0.
                     } else {
                         max_x
@@ -132,15 +132,15 @@ impl Element for EditorElement {
             let rows = editor.visible_rows();
             let line_height = view.metrics.line_height;
             let markers = editor
-                .gutter_markers
+                .gutter_markers()
                 .iter()
-                .filter(|marker| marker.command.is_some() && !editor.wrap.is_hidden(marker.line))
-                .map(|marker| editor.wrap.first_row(marker.line))
+                .filter(|marker| marker.command.is_some() && !editor.wrap().is_hidden(marker.line))
+                .map(|marker| editor.wrap().first_row(marker.line))
                 .filter(|row| rows.contains(row))
                 .map(|row| Bounds {
                     origin: point(
                         bounds.origin.x,
-                        bounds.origin.y + px((row as f32 - editor.scroll_top) * line_height),
+                        bounds.origin.y + px((row as f32 - editor.scroll_top()) * line_height),
                     ),
                     size: size(px(view.gutter.markers_width), px(line_height)),
                 })
@@ -207,7 +207,11 @@ impl Element for EditorElement {
         });
         let (scroll_x, metrics, cell_width) = {
             let view = self.entity.read(cx);
-            (view.editor.read(cx).scroll_x, view.metrics, view.cell_width)
+            (
+                view.editor.read(cx).scroll_x(),
+                view.metrics,
+                view.cell_width,
+            )
         };
         // Read the view state, compute the visible rows, then read just the
         // visible lines and their runs out of the model before painting:
@@ -235,7 +239,7 @@ impl Element for EditorElement {
             let editor = view.editor.read(cx);
             let model = view.model.read(cx);
             let theme = theme(cx);
-            let max = (editor.wrap.row_count() as f32) * metrics.line_height;
+            let max = (editor.wrap().row_count() as f32) * metrics.line_height;
             let rows = editor.visible_rows();
             let lines = editor.visible_lines();
             view.cache_syntax(model, lines.clone());
@@ -261,10 +265,10 @@ impl Element for EditorElement {
             // visible row; otherwise it is clipped anyway, so skip the
             // shaping cost.
             let caret = (view.caret_blink.visible && rows.contains(&editor.caret_row()))
-                .then(|| (editor.cursor_line, editor.cursor_col, editor.caret_shape()));
+                .then(|| (editor.caret().0, editor.caret().1, editor.caret_shape()));
             // Convert marked UTF-16 range to (line, byte_col) start/end for
             // underline painting.
-            let marked = editor.marked_range_utf16.as_ref().map(|mr| {
+            let marked = editor.marked_range_utf16().as_ref().map(|mr| {
                 let s = flat_utf16_to_position(model, mr.start);
                 let e = flat_utf16_to_position(model, mr.end);
                 (s, e)
@@ -279,14 +283,14 @@ impl Element for EditorElement {
                 })
                 .filter(|(line, ..)| lines.contains(line))
                 .collect();
-            let fills = decoration_fills(&editor.decorations, vis.iter().map(|row| &row.row))
+            let fills = decoration_fills(editor.decorations(), vis.iter().map(|row| &row.row))
                 .into_iter()
                 .map(|fill| (fill.row, fill.columns, theme.paint_color(fill.key)))
                 .collect();
             // Numbers and markers show on each line's first row.
             let first_row = |line: usize| {
-                Some(editor.wrap.first_row(line))
-                    .filter(|row| rows.contains(row) && !editor.wrap.is_hidden(line))
+                Some(editor.wrap().first_row(line))
+                    .filter(|row| rows.contains(row) && !editor.wrap().is_hidden(line))
             };
             let folds = match view.gutter.folding {
                 crate::app::settings::Folding::Off => Vec::new(),
@@ -311,7 +315,7 @@ impl Element for EditorElement {
                     .collect(),
                 markers: if view.rendering.show_gutter {
                     editor
-                        .gutter_markers
+                        .gutter_markers()
                         .iter()
                         .filter_map(|marker| {
                             Some((first_row(marker.line)?, theme.paint_color(&marker.key)))
@@ -326,11 +330,11 @@ impl Element for EditorElement {
             };
             let line_highlight = editor
                 .highlighted_line()
-                .map(|line| editor.wrap.rows(line))
+                .map(|line| editor.wrap().rows(line))
                 .map(|lit| lit.start.max(rows.start)..lit.end.min(rows.end))
                 .filter(|lit| !lit.is_empty());
             (
-                editor.scroll_top * metrics.line_height,
+                editor.scroll_top() * metrics.line_height,
                 max,
                 vis,
                 editor.tab_size(model, cx),

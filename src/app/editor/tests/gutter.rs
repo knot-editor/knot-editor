@@ -100,10 +100,11 @@ fn numbers_and_the_line_highlight_follow_the_cursor(cx: &mut TestAppContext) {
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.run_until_parked();
     cx.update(|_, cx| {
-        editor.read(cx).editor().clone().update(cx, |editor, cx| {
-            editor.cursor_line = 2;
-            editor.sync_view_position(cx);
-        })
+        editor
+            .read(cx)
+            .editor()
+            .clone()
+            .update(cx, |editor, cx| editor.place_for_test((2, 0), (2, 0), cx))
     });
     let numbers = |cx: &mut VisualTestContext| {
         cx.read(|cx| {
@@ -141,9 +142,8 @@ fn numbers_and_the_line_highlight_follow_the_cursor(cx: &mut TestAppContext) {
     // A selection hides the line highlight but keeps the active number.
     cx.update(|_, cx| {
         editor.read(cx).editor().clone().update(cx, |editor, cx| {
-            (editor.anchor_line, editor.anchor_col) = (1, 0);
-            editor.has_selection = true;
-            editor.sync_view_position(cx);
+            let caret = editor.caret();
+            editor.place_for_test((1, 0), caret, cx)
         })
     });
     assert_eq!(highlighted(cx), None);

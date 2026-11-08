@@ -10,8 +10,6 @@ use knot_protocol::{Command, CommandArgumentValue, CommandOutcome, ViewId};
 
 pub(crate) use crate::app::editor::native_commands::*;
 pub(crate) use crate::app::product::commands::*;
-pub(crate) const EDITOR_MOVE_PREFIX: &str = "editor.move-";
-pub(crate) const EDITOR_SELECT_PREFIX: &str = "editor.select-";
 
 #[derive(Clone, PartialEq, Action)]
 #[action(namespace = knot, no_json)]

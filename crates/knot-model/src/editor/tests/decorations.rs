@@ -1,8 +1,7 @@
 use std::ops::Range;
 
 use super::super::{
-    BufferModel, ContributionSource, ResolvedEditorContribution,
-    layout::{Row, decoration_fills},
+    BufferModel, ContributionSource, ResolvedEditorContribution, Row, decoration_fills,
     project_contributions,
 };
 use knot_protocol::{ByteRange, Decoration, DecorationStyle};

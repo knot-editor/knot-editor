@@ -1,11 +1,15 @@
 //! Line, position, and boundary queries over the model's text. Positions are
 //! `(line, byte_col)` carets or document byte and UTF-16 offsets.
 
-use super::*;
+use std::ops::Range;
+
+use unicode_segmentation::UnicodeSegmentation;
+
+use crate::buffer::BufferModel;
 
 /// Byte range of `line`'s content: the line without its terminator, so a
 /// `\r` before `\n` is excluded. The caret never sits inside a terminator.
-pub(super) fn content_range(model: &BufferModel, line: usize) -> Range<usize> {
+pub fn content_range(model: &BufferModel, line: usize) -> Range<usize> {
     let range = model.line_range(line);
     let crlf = line + 1 < model.line_count()
         && range.end > range.start
@@ -15,40 +19,40 @@ pub(super) fn content_range(model: &BufferModel, line: usize) -> Range<usize> {
 }
 
 /// Text of `line`'s content.
-pub(super) fn line_text(model: &BufferModel, line: usize) -> String {
+pub fn line_text(model: &BufferModel, line: usize) -> String {
     model.read(content_range(model, line))
 }
 
 /// Last caret column on `line`.
-pub(super) fn line_end(model: &BufferModel, line: usize) -> usize {
+pub fn line_end(model: &BufferModel, line: usize) -> usize {
     content_range(model, line).len()
 }
 
-pub(super) fn to_flat_byte(model: &BufferModel, line: usize, byte_col: usize) -> usize {
+pub fn to_flat_byte(model: &BufferModel, line: usize, byte_col: usize) -> usize {
     model.line_range(line).start + byte_col
 }
 
 /// The (line, byte_col) caret for a byte offset, clamped to the text and kept
 /// out of line terminators.
-pub(super) fn flat_byte_to_position(model: &BufferModel, offset: usize) -> (usize, usize) {
+pub fn flat_byte_to_position(model: &BufferModel, offset: usize) -> (usize, usize) {
     let offset = offset.min(model.len());
     let line = model.line_of_offset(offset);
     let content = content_range(model, line);
     (line, (offset - content.start).min(content.len()))
 }
 
-pub(super) fn to_flat_utf16(model: &BufferModel, line: usize, byte_col: usize) -> usize {
+pub fn to_flat_utf16(model: &BufferModel, line: usize, byte_col: usize) -> usize {
     model.utf16_of_offset(to_flat_byte(model, line, byte_col))
 }
 
-pub(super) fn flat_utf16_to_position(model: &BufferModel, offset: usize) -> (usize, usize) {
+pub fn flat_utf16_to_position(model: &BufferModel, offset: usize) -> (usize, usize) {
     flat_byte_to_position(model, model.offset_of_utf16(offset))
 }
 
 /// Previous grapheme-cluster boundary before `col` on `line`; 0 if already at
 /// the start. This keeps the caret out of emoji ZWJ and modifier sequences,
 /// which must be edited as a single user-perceived character.
-pub(super) fn prev_boundary(model: &BufferModel, line: usize, col: usize) -> usize {
+pub fn prev_boundary(model: &BufferModel, line: usize, col: usize) -> usize {
     if col == 0 {
         return 0;
     }
@@ -60,7 +64,7 @@ pub(super) fn prev_boundary(model: &BufferModel, line: usize, col: usize) -> usi
 }
 
 /// Next grapheme-cluster boundary after `col` on `line`; line end if at the end.
-pub(super) fn next_boundary(model: &BufferModel, line: usize, col: usize) -> usize {
+pub fn next_boundary(model: &BufferModel, line: usize, col: usize) -> usize {
     let text = line_text(model, line);
     text.grapheme_indices(true)
         .map(|(start, _)| start)
@@ -73,7 +77,7 @@ pub(super) fn next_boundary(model: &BufferModel, line: usize, col: usize) -> usi
 const WORD_SEPARATORS: &str = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum WordClass {
+pub enum WordClass {
     Whitespace,
     Separator,
     Word,
@@ -94,7 +98,7 @@ fn word_class(character: char) -> WordClass {
 /// split wherever the character class changes, with runs of separators and
 /// of whitespace merged. Word characters keep Unicode segmentation, so
 /// ideographs and emoji stay separate units.
-pub(super) fn word_segments(text: &str) -> Vec<(usize, usize, WordClass)> {
+pub fn word_segments(text: &str) -> Vec<(usize, usize, WordClass)> {
     let mut segments: Vec<(usize, usize, WordClass)> = Vec::new();
     for (start, segment) in text.split_word_bound_indices() {
         for (offset, character) in segment.char_indices() {
@@ -119,12 +123,7 @@ pub(super) fn word_segments(text: &str) -> Vec<(usize, usize, WordClass)> {
 /// The nearest word or separator-run end after `caret`, or start before it,
 /// skipping whitespace. Words never span lines, so the scan reads lines
 /// outward from the caret's line.
-pub(super) fn word_boundary(
-    model: &BufferModel,
-    line: usize,
-    caret: usize,
-    forward: bool,
-) -> usize {
+pub fn word_boundary(model: &BufferModel, line: usize, caret: usize, forward: bool) -> usize {
     let words = |line: usize| {
         let range = model.line_range(line);
         let text = model.read(range.clone());
@@ -158,7 +157,7 @@ pub(super) fn word_boundary(
 }
 
 /// Convert a UTF-16 offset within `s` to a UTF-8 byte offset.
-pub(super) fn utf16_to_byte_col(s: &str, utf16_off: usize) -> usize {
+pub fn utf16_to_byte_col(s: &str, utf16_off: usize) -> usize {
     let mut utf16_count = 0usize;
     for (byte_idx, ch) in s.char_indices() {
         if utf16_count >= utf16_off {

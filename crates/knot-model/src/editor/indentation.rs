@@ -5,11 +5,11 @@
 //! tab stop.
 
 use super::*;
-use crate::app::syntax::indent::LineIndent;
+use crate::syntax::indent::LineIndent;
 
 /// A line whose indentation waits for the indent query, valid while the
 /// buffer stays at `revision`.
-pub(super) struct PendingIndent {
+pub struct PendingIndent {
     revision: u64,
     line: usize,
     /// For typing, the caret column the typed text reached: the line only
@@ -17,14 +17,14 @@ pub(super) struct PendingIndent {
     typed: Option<usize>,
 }
 
-impl Editor {
+impl EditorState {
     /// Replace the selection with a line break followed by the indentation
     /// before it on its line, then let the indent query correct the new
     /// line once the tree covers the edit. Between a bracket pair that opens
     /// lines, the break opens an indented middle line with the closer below
     /// it. A line holding only whitespace keeps none of it.
-    pub(super) fn insert_newline(&mut self, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
+    pub(crate) fn insert_newline(&mut self, buffer: &mut BufferModel) {
+        let model = &*buffer;
         if !model.is_editable() {
             return;
         }
@@ -49,7 +49,7 @@ impl Editor {
             let caret = text.len();
             (line_start..line_end, text, caret)
         } else if between_pair {
-            let unit = self.indent_unit(model, cx);
+            let unit = self.indent_unit();
             let middle = indent.clone() + &unit.whitespace(unit.size);
             let text = format!("{ending}{middle}{ending}{indent}");
             let caret = ending.len() + middle.len();
@@ -61,9 +61,9 @@ impl Editor {
             (range, text, caret)
         };
         let caret = range.start + caret;
-        self.break_history_group(cx);
+        self.break_history_group(buffer);
         let view = HistoryViewChange {
-            before: self.history_view_state(self.model.read(cx)),
+            before: self.history_view_state(&*buffer),
             after: HistoryViewState {
                 context: self.history_context,
                 anchor: caret,
@@ -71,40 +71,40 @@ impl Editor {
             },
         };
         self.preferred_column = None;
-        self.splice(range, &text, None, view, cx);
+        self.splice(range, &text, None, view, buffer);
         self.marked_range_utf16 = None;
-        (self.cursor_line, self.cursor_col) = flat_byte_to_position(self.model.read(cx), caret);
+        (self.cursor_line, self.cursor_col) = flat_byte_to_position(&*buffer, caret);
         self.has_selection = false;
-        self.finish_position_change(cx);
+        self.finish_position_change(buffer);
         self.pending_indent = Some(PendingIndent {
-            revision: self.model.read(cx).revision(),
+            revision: buffer.revision(),
             line: self.cursor_line,
             typed: None,
         });
-        self.apply_pending_indent(cx);
+        self.apply_pending_indent(buffer);
     }
 
     /// After typing, outdent the caret's line when the typed text completed
     /// a node that closes or branches an indented one at the start of the
     /// line's content, such as `}` or `else`.
-    pub(super) fn outdent_typed_line(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn outdent_typed_line(&mut self, buffer: &mut BufferModel) {
         self.pending_indent = Some(PendingIndent {
-            revision: self.model.read(cx).revision(),
+            revision: buffer.revision(),
             line: self.cursor_line,
             typed: Some(self.cursor_col),
         });
-        self.apply_pending_indent(cx);
+        self.apply_pending_indent(buffer);
     }
 
     /// Indent the line a line break or typing left for the indent query,
     /// once the tree is a parse of the text the edit produced, as part of the
     /// edit's undo step. A later edit drops the request, leaving the
     /// indentation as it was.
-    pub(super) fn apply_pending_indent(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn apply_pending_indent(&mut self, buffer: &mut BufferModel) {
         let Some(pending) = &self.pending_indent else {
             return;
         };
-        let model = self.model.read(cx);
+        let model = &*buffer;
         if model.revision() != pending.revision || model.syntax_language().is_none() {
             self.pending_indent = None;
             return;
@@ -117,7 +117,7 @@ impl Editor {
         if typed.is_some_and(|col| !model.closes_line(line, col)) {
             return;
         }
-        let unit = self.indent_unit(model, cx);
+        let unit = self.indent_unit();
         let Some(LineIndent::Columns(columns)) = model.line_indent(line, unit.size) else {
             return;
         };
@@ -139,52 +139,46 @@ impl Editor {
             anchor,
             caret,
         };
-        let changed = self.model.update(cx, |model, cx| {
-            let changed = model
-                .amend_last_edit_from_view(edits, after)
-                .unwrap_or(false);
-            if changed {
-                cx.notify();
-            }
-            changed
-        });
+        let changed = buffer
+            .amend_last_edit_from_view(edits, after)
+            .unwrap_or(false);
         if !changed {
             return;
         }
-        let model = self.model.read(cx);
+        let model = &*buffer;
         self.seen_revision = model.revision();
         self.refresh(model, None);
         (self.anchor_line, self.anchor_col) = flat_byte_to_position(model, anchor);
         (self.cursor_line, self.cursor_col) = flat_byte_to_position(model, caret);
         self.has_selection = anchor != caret;
         self.preferred_column = None;
-        self.finish_position_change(cx);
+        self.finish_position_change(buffer);
     }
 
     /// Indent the selected lines when the selection spans lines; otherwise
     /// replace the selection with one indentation unit.
-    pub(super) fn insert_tab(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn insert_tab(&mut self, buffer: &mut BufferModel) {
         if self
             .selection_range()
             .is_some_and(|(start, end)| start.0 != end.0)
         {
-            self.indent_lines(cx);
+            self.indent_lines(buffer);
             return;
         }
-        let model = self.model.read(cx);
+        let model = &*buffer;
         let range = self.implicit_replacement_range(model);
         let text = self
-            .indent_unit(model, cx)
+            .indent_unit()
             .insertion(&text_before_on_line(model, range.start));
-        self.break_history_group(cx);
-        self.replace_text_with_grouping(Some(range), &text, None, cx);
+        self.break_history_group(buffer);
+        self.replace_text_with_grouping(Some(range), &text, None, buffer);
     }
 
     /// Indent each selected line by one unit, skipping empty lines when there
     /// are several.
-    pub(super) fn indent_lines(&mut self, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
-        let unit = self.indent_unit(model, cx);
+    pub(crate) fn indent_lines(&mut self, buffer: &mut BufferModel) {
+        let model = &*buffer;
+        let unit = self.indent_unit();
         let lines = self.selected_lines();
         let several = lines.len() > 1;
         let edits = lines
@@ -198,13 +192,13 @@ impl Editor {
                 Some((at..at, indent))
             })
             .collect();
-        self.commit_line_edits(edits, cx);
+        self.commit_line_edits(edits, buffer);
     }
 
     /// Outdent each selected line by one unit.
-    pub(super) fn outdent_lines(&mut self, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
-        let unit = self.indent_unit(model, cx);
+    pub(crate) fn outdent_lines(&mut self, buffer: &mut BufferModel) {
+        let model = &*buffer;
+        let unit = self.indent_unit();
         let edits = self
             .selected_lines()
             .filter_map(|line| {
@@ -218,14 +212,14 @@ impl Editor {
                 })
             })
             .collect();
-        self.commit_line_edits(edits, cx);
+        self.commit_line_edits(edits, buffer);
     }
 
     /// Indent the selected lines, or every line, from the indent query of the
     /// language at each, leaving lines of a language without one as they are.
-    pub(super) fn reindent_lines(&mut self, selected_only: bool, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
-        let unit = self.indent_unit(model, cx);
+    pub(crate) fn reindent_lines(&mut self, selected_only: bool, buffer: &mut BufferModel) {
+        let model = &*buffer;
+        let unit = self.indent_unit();
         let lines = if selected_only {
             self.selected_lines()
         } else {
@@ -243,31 +237,30 @@ impl Editor {
                 )
             })
             .collect();
-        self.commit_line_edits(edits, cx);
+        self.commit_line_edits(edits, buffer);
     }
 
     /// Indent with the style the text uses, dropping the document's own
     /// indentation settings first so a text with no clear style follows the
     /// language and global settings again.
-    pub(super) fn detect_indentation(&mut self, cx: &mut Context<Self>) {
-        if let Some(document) = self.model.read(cx).document() {
-            settings::reset_document_indentation(document, cx);
+    pub(crate) fn detect_indentation(&mut self, buffer: &BufferModel) {
+        if let Some(document) = buffer.document() {
+            self.effects
+                .push(EditorEffect::DetectIndentation { document });
         }
-        crate::app::documents::detect_indentation(&self.model, cx);
-        crate::app::application_observation::changed(cx);
     }
 
     /// Rewrite the leading whitespace of every line with tabs or spaces at
     /// the same columns, as one undo step, and make that the document's
     /// indentation style.
-    pub(super) fn convert_indentation(&mut self, tabs: bool, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
+    pub(crate) fn convert_indentation(&mut self, tabs: bool, buffer: &mut BufferModel) {
+        let model = &*buffer;
         if !model.is_editable() {
             return;
         }
         let unit = IndentUnit {
             tabs,
-            ..self.indent_unit(model, cx)
+            ..self.indent_unit()
         };
         let edits = (0..model.line_count())
             .filter_map(|line| {
@@ -282,23 +275,21 @@ impl Editor {
             .collect::<Vec<_>>();
         let document = model.document();
         if !edits.is_empty() {
-            self.commit_line_edits(edits, cx);
+            self.commit_line_edits(edits, buffer);
         }
         if let Some(document) = document {
-            settings::set_document_insert_spaces(document, !tabs, cx);
-            crate::app::application_observation::changed(cx);
+            self.effects.push(EditorEffect::SetDocumentInsertSpaces {
+                document,
+                spaces: !tabs,
+            });
         }
     }
 
     /// The range Backspace deletes when only spaces precede the caret on its
     /// line: back to the previous tab stop.
-    pub(super) fn tab_stop_deletion_range(
-        &self,
-        model: &BufferModel,
-        cx: &App,
-    ) -> Option<Range<usize>> {
+    pub(crate) fn tab_stop_deletion_range(&self, model: &BufferModel) -> Option<Range<usize>> {
         let caret = to_flat_byte(model, self.cursor_line, self.cursor_col);
-        self.indent_unit(model, cx)
+        self.indent_unit()
             .backspace(&text_before_on_line(model, caret))
             .map(|length| caret - length..caret)
     }
@@ -306,24 +297,24 @@ impl Editor {
     /// Commit edits to whole lines, keeping the selection on the same text. A
     /// selection that starts at a line start keeps starting there, so it
     /// still covers the lines' new indentation.
-    pub(super) fn commit_line_edits(
+    pub(crate) fn commit_line_edits(
         &mut self,
         edits: Vec<(Range<usize>, String)>,
-        cx: &mut Context<Self>,
+        buffer: &mut BufferModel,
     ) {
-        let state = self.history_view_state(self.model.read(cx));
+        let state = self.history_view_state(&*buffer);
         let start = state.anchor.min(state.caret);
         let start_stays = self
             .selection_range()
             .is_some_and(|(start, _)| start.1 == 0);
         let map = |offset| map_offset(&edits, offset, start_stays && offset == start);
         let (anchor, caret) = (map(state.anchor), map(state.caret));
-        self.commit_edits(edits, anchor, caret, cx);
+        self.commit_edits(edits, anchor, caret, buffer);
     }
 
     /// The lines a line command acts on: those the selection touches, except
     /// a last line it reaches only at column 0, or else the caret's line.
-    pub(super) fn selected_lines(&self) -> Range<usize> {
+    pub(crate) fn selected_lines(&self) -> Range<usize> {
         let lines = match self.selection_range() {
             Some((start, end)) if end.0 > start.0 && end.1 == 0 => start.0..end.0,
             Some((start, end)) => start.0..end.0 + 1,

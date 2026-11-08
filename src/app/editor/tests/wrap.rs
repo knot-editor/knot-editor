@@ -3,7 +3,7 @@ use gpui::{
 };
 
 use super::super::{
-    Buffer, BufferModel, Editor, EditorView, EditorViewState, layout::Row, line_end, to_flat_byte,
+    Buffer, BufferModel, Editor, EditorView, EditorViewState, Row, line_end, to_flat_byte,
 };
 use crate::app::settings::{self, ApplicationSettings, EDITOR_SOFT_WRAP, SettingsScope};
 
@@ -65,11 +65,11 @@ fn wrapped_rows_place_the_caret_clicks_ime_bounds_and_line_numbers(cx: &mut Test
     cx.run_until_parked();
     let state = cx.read(|cx| editor.read(cx).editor().clone());
     let second = state.update(cx, |state, cx| {
-        let width = state.wrap.width().expect("the view wraps");
-        let rows = state.wrap.rows(0).len();
+        let width = state.wrap().width().expect("the view wraps");
+        let rows = state.wrap().rows(0).len();
         assert!(rows > 2);
-        assert_eq!(state.wrap.rows(1).len(), 1);
-        assert_eq!(state.wrap.row_count(), 2 * rows + 1);
+        assert_eq!(state.wrap().rows(1).len(), 1);
+        assert_eq!(state.wrap().row_count(), 2 * rows + 1);
         let model = state.model.read(cx);
         let (first, second) = (state.row(model, 0), state.row(model, 1));
         // Rows break after whole words and their space.
@@ -78,14 +78,14 @@ fn wrapped_rows_place_the_caret_clicks_ime_bounds_and_line_numbers(cx: &mut Test
         assert!(first.range.len() <= width.columns + 1);
         assert!(first.range.len() + 3 > width.columns);
 
-        state.cursor_col = second.range.start;
+        state.place_for_test((0, second.range.start), (0, second.range.start), cx);
         assert_eq!(state.caret_row(), 1);
         second
     });
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
             let state = view.editor().read(cx);
-            let rows = state.wrap.rows(0).len();
+            let rows = state.wrap().rows(0).len();
             assert_eq!(view.caret_x(state, window, cx), px(0.));
 
             let text = view.text_bounds();
@@ -103,7 +103,7 @@ fn wrapped_rows_place_the_caret_clicks_ime_bounds_and_line_numbers(cx: &mut Test
             assert_eq!(hit(text.size.width - px(1.), rows), (1, 5));
             assert_eq!(hit(px(1.), rows + 1), (2, 0));
 
-            let numbers = view.gutter_numbers(state, 0..state.wrap.row_count());
+            let numbers = view.gutter_numbers(state, 0..state.wrap().row_count());
             let numbers = numbers
                 .iter()
                 .map(|(row, label, _)| (*row, *label))
@@ -132,22 +132,21 @@ fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppCo
     cx.run_until_parked();
     let state = cx.read(|cx| editor.read(cx).editor().clone());
     let top = state.update(cx, |view, cx| {
-        let rows = view.wrap.rows(0).len();
-        view.scroll_top = 1e9;
-        view.clamp_scroll();
+        let rows = view.wrap().rows(0).len();
+        view.scroll_to_for_test(1e9);
         assert_eq!(
-            view.scroll_top,
-            view.wrap.row_count() as f32 - view.viewport_rows
+            view.scroll_top(),
+            view.wrap().row_count() as f32 - view.viewport_rows()
         );
-        assert_eq!(view.visible_rows().end, view.wrap.row_count());
+        assert_eq!(view.visible_rows().end, view.wrap().row_count());
 
         // The view state's top is the start of the top row, mid-line.
-        view.scroll_top = (3 * rows + 2) as f32;
+        view.scroll_to_for_test((3 * rows + 2) as f32);
         let model = view.model.read(cx);
-        let start = view.wrap.row_range(3, 2, line_end(model, 3)).start;
+        let start = view.wrap().row_range(3, 2, line_end(model, 3)).start;
         let top = to_flat_byte(model, 3, start);
         // A resize keeps the caret visible, so park it on the top row.
-        (view.cursor_line, view.cursor_col) = (3, start);
+        view.place_for_test((3, start), (3, start), cx);
         assert_eq!(view.view_state(cx).top, top);
         // The top row is mid-line, so the first wholly visible row is the
         // next one, still on line 3.
@@ -162,18 +161,18 @@ fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppCo
         ..Default::default()
     });
     cx.run_until_parked();
-    assert_eq!(cx.read(|cx| state.read(cx).scroll_x), 0.);
+    assert_eq!(cx.read(|cx| state.read(cx).scroll_x()), 0.);
 
     // Narrowing rewraps into more rows and keeps the top row's text on top.
-    let rows = cx.read(|cx| state.read(cx).wrap.row_count());
+    let rows = cx.read(|cx| state.read(cx).wrap().row_count());
     cx.simulate_resize(size(px(250.), px(300.)));
     cx.run_until_parked();
     cx.read(|cx| {
         let view = state.read(cx);
-        assert!(view.wrap.row_count() > rows);
+        assert!(view.wrap().row_count() > rows);
         let model = view.model.read(cx);
-        let (line, sub) = view.wrap.position(view.visible_rows().start);
-        let range = view.wrap.row_range(line, sub, line_end(model, line));
+        let (line, sub) = view.wrap().position(view.visible_rows().start);
+        let range = view.wrap().row_range(line, sub, line_end(model, line));
         assert_eq!(line, 3);
         assert!((range.start..range.end).contains(&(top - to_flat_byte(model, 3, 0))));
     });
@@ -188,8 +187,9 @@ fn a_state_restored_before_the_first_layout_keeps_its_row(cx: &mut TestAppContex
     cx.run_until_parked();
     let measured = cx.read(|cx| measured.read(cx).editor().clone());
     let state = measured.update(cx, |view, cx| {
-        assert!(view.wrap.rows(0).len() > 2);
-        view.scroll_top = (view.wrap.first_row(5) + 2) as f32;
+        assert!(view.wrap().rows(0).len() > 2);
+        let top = (view.wrap().first_row(5) + 2) as f32;
+        view.scroll_to_for_test(top);
         EditorViewState {
             anchor: 0,
             caret: 0,
@@ -207,7 +207,7 @@ fn a_state_restored_before_the_first_layout_keeps_its_row(cx: &mut TestAppContex
     cx.read(|cx| {
         let view = restored.read(cx).editor().read(cx);
         assert_eq!(view.view_state(cx).top, state.top);
-        assert_eq!(view.visible_rows().start, view.wrap.first_row(5) + 2);
+        assert_eq!(view.visible_rows().start, view.wrap().first_row(5) + 2);
     });
 }
 
@@ -232,7 +232,9 @@ fn toggle_soft_wrap_writes_the_document_value_every_view_follows(cx: &mut TestAp
     let wraps = |cx: &mut TestAppContext| {
         [first, second, other].map(|window| {
             window
-                .read_with(cx, |view, cx| view.editor().read(cx).wrap.width().is_some())
+                .read_with(cx, |view, cx| {
+                    view.editor().read(cx).wrap().width().is_some()
+                })
                 .unwrap()
         })
     };
@@ -289,11 +291,9 @@ fn run(
     command: &str,
     cx: &mut gpui::Context<Editor>,
 ) -> (usize, usize) {
-    (view.cursor_line, view.cursor_col) = from;
-    view.has_selection = false;
-    view.preferred_column = None;
+    view.place_for_test(from, from, cx);
     assert!(view.execute_editing_command(command, cx), "{command}");
-    (view.cursor_line, view.cursor_col)
+    (view.caret().0, view.caret().1)
 }
 
 #[gpui::test]
@@ -309,13 +309,13 @@ fn visual_movement_follows_rows_and_logical_twins_follow_lines(cx: &mut TestAppC
     state.update(cx, |view, cx| {
         {
             let model = view.model.read(cx);
-            let rows = view.wrap.rows(0).len();
+            let rows = view.wrap().rows(0).len();
             let [first, second, third, last] =
                 [0, 1, 2, rows - 1].map(|index| view.row(model, index));
             let end = line_end(model, 0);
-            let page = view.viewport_rows.floor() as usize;
+            let page = view.viewport_rows().floor() as usize;
             let last_line = model.line_count() - 1;
-            let late_row = view.wrap.first_row(last_line);
+            let late_row = view.wrap().first_row(last_line);
             let on_second = (0, second.range.start + 16);
 
             // Up and Down keep the caret's x across rows; the twins move by
@@ -337,7 +337,7 @@ fn visual_movement_follows_rows_and_logical_twins_follow_lines(cx: &mut TestAppC
             for _ in 1..rows {
                 view.execute_editing_command("editor.move-down", cx);
             }
-            assert_eq!((view.cursor_line, view.cursor_col), (2, 16));
+            assert_eq!((view.caret().0, view.caret().1), (2, 16));
 
             // Home and End reach the caret's row edges; a row that does not
             // end its line ends before the space its break follows.
@@ -409,7 +409,7 @@ fn without_wrapping_each_movement_and_its_twin_agree(cx: &mut TestAppContext) {
     cx.run_until_parked();
     let state = cx.read(|cx| editor.read(cx).editor().clone());
     state.update(cx, |view, cx| {
-        assert_eq!(view.wrap.width(), None);
+        assert_eq!(view.wrap().width(), None);
         for movement in [
             "up",
             "down",
@@ -422,9 +422,7 @@ fn without_wrapping_each_movement_and_its_twin_agree(cx: &mut TestAppContext) {
             for prefix in ["move", "select"] {
                 let mut results = Vec::new();
                 for suffix in ["", "-logical"] {
-                    (view.cursor_line, view.cursor_col) = (30, 6);
-                    view.has_selection = false;
-                    view.preferred_column = None;
+                    view.place_for_test((30, 6), (30, 6), cx);
                     let command = format!("editor.{prefix}-{movement}{suffix}");
                     assert!(view.execute_editing_command(&command, cx), "{command}");
                     results.push(view.selection(cx));
@@ -445,11 +443,11 @@ fn row_queries_and_scrolling_follow_wrapped_rows(cx: &mut TestAppContext) {
     cx.run_until_parked();
     let state = cx.read(|cx| editor.read(cx).editor().clone());
     state.update(cx, |view, cx| {
-        let long = view.wrap.rows(1).len();
+        let long = view.wrap().rows(1).len();
         assert!(long > 3);
-        let count = view.wrap.row_count();
+        let count = view.wrap().row_count();
         assert_eq!(count, 3 + 2 * long);
-        view.viewport_rows = 4.;
+        view.set_viewport_rows_for_test(4.);
 
         // Rows map to their lines, and past the end to the last line.
         assert_eq!(view.row_start(0, cx).0, 0);
@@ -458,7 +456,7 @@ fn row_queries_and_scrolling_follow_wrapped_rows(cx: &mut TestAppContext) {
         assert_eq!(view.row_start(long + 1, cx).0, 2);
         assert_eq!(view.row_start(1_000_000, cx).0, 4);
         // A continuation row starts where the line breaks.
-        let second = view.wrap.row_range(1, 1, 239).start;
+        let second = view.wrap().row_range(1, 1, 239).start;
         assert_eq!(view.row_start(2, cx), (1, second));
         assert_eq!(view.row_start(long + 1, cx), (2, 0));
 
@@ -483,7 +481,7 @@ fn row_queries_and_scrolling_follow_wrapped_rows(cx: &mut TestAppContext) {
         assert_eq!(view.viewport().0, count - 5);
 
         // A scrolled view shows a partial top row only when scrolled by hand.
-        view.scroll_top = 1.5;
+        view.scroll_to_for_test(1.5);
         assert_eq!(view.viewport(), (2, 3));
     });
 }

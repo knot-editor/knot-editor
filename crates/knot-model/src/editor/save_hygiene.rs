@@ -3,40 +3,39 @@
 
 use super::*;
 
-impl Editor {
+impl EditorState {
     /// Clean the text up for a save as the settings of this editor's document
     /// ask. The line of the cursor keeps its trailing whitespace, so saving
     /// mid-line never eats indentation just typed.
-    pub(crate) fn clean_up_for_save(&mut self, cx: &mut Context<Self>) {
-        let model = self.model.read(cx);
-        let scope = self.settings_scope(model, cx);
-        let mut edits = if settings::files_trim_trailing_whitespace(&scope, cx) {
+    pub fn clean_up_for_save(&mut self, buffer: &mut BufferModel) {
+        let model = &*buffer;
+        let mut edits = if self.settings.trim_trailing_whitespace {
             trailing_whitespace_edits(model, Some(self.cursor_line))
         } else {
             Vec::new()
         };
-        if settings::files_insert_final_newline(&scope, cx) {
+        if self.settings.insert_final_newline {
             add_final_newline(model, &mut edits);
         }
-        self.commit_cleanup(edits, cx);
+        self.commit_cleanup(edits, buffer);
     }
 
     /// Remove the spaces and tabs that end every line, the cursor's included.
-    pub(super) fn trim_trailing_whitespace(&mut self, cx: &mut Context<Self>) {
-        let edits = trailing_whitespace_edits(self.model.read(cx), None);
-        self.commit_cleanup(edits, cx);
+    pub(crate) fn trim_trailing_whitespace(&mut self, buffer: &mut BufferModel) {
+        let edits = trailing_whitespace_edits(&*buffer, None);
+        self.commit_cleanup(edits, buffer);
     }
 
     /// Commit the cleanup as one undo step, keeping the selection on the same
     /// text. An offset at an insertion stays before it, so a caret at the end
     /// of the text does not move to a new line.
-    fn commit_cleanup(&mut self, edits: Vec<(Range<usize>, String)>, cx: &mut Context<Self>) {
-        let state = self.history_view_state(self.model.read(cx));
+    fn commit_cleanup(&mut self, edits: Vec<(Range<usize>, String)>, buffer: &mut BufferModel) {
+        let state = self.history_view_state(&*buffer);
         let (anchor, caret) = (
             map_offset(&edits, state.anchor, true),
             map_offset(&edits, state.caret, true),
         );
-        self.commit_edits(edits, anchor, caret, cx);
+        self.commit_edits(edits, anchor, caret, buffer);
     }
 }
 
