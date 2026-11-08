@@ -91,8 +91,6 @@ complete list for that item.
   - D092 → D142, D001, D067
 - **Extension presentation and language tooling:**
   - D114 → D145 → D067 → D022
-  - D064, D160 → D055
-  - D160 → D162
   - D087 → D067, D023
   - D079 → D115 → format on save with D067
   - D145 before D021, which is reconsidered only if D145 falls short.
@@ -543,7 +541,6 @@ complete list for that item.
     fallback, and migrate the fixed `TreeIcon` set and label-only actions
     onto it.
   - 🚧 Planned: [D055 plan](plans/d055-icon-packs.md).
-  - Order: after D160.
 
 - **D022 — Rich completion policy and presentation**
   - Deferred: The prototype validated provider aggregation and replaceable
@@ -866,13 +863,6 @@ Kakoune mode could use it too. The
 
 ## Platforms and accessibility
 
-- **D160 — Current gpui and gpui-component**
-  - Deferred: Knot is on `gpui` 0.2.2, Zed's last crates.io release, and
-    hand-builds every widget.
-  - 🚧 Planned: [D160 plan](plans/d160-gpui-component.md): port to the
-    `gpui-pre` snapshots, then adopt gpui-component for leaf widgets.
-  - Order: before D162, D055, and D030.
-
 - **D162 — Plain models and a thin gpui shell**
   - Deferred: the buffer model, editor state, application stores, extension
     handlers, and product operations mix behavior with gpui runtime use, so
@@ -881,7 +871,6 @@ Kakoune mode could use it too. The
   - 🚧 Planned: [D162 plan](plans/d162-thin-gpui-shell.md): move that
     behavior into the model crate and keep a shell that resolves entities,
     calls the model, runs effects, and notifies.
-  - Order: after D160.
 
 - **D163 — Vim tests on a minimal language fixture**
   - Deferred: `knot-ext-vim`'s tests load the real language packages,
