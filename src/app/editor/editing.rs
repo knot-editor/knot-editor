@@ -109,7 +109,7 @@ impl Editor {
                 return true;
             }
             commands::TRIM_TRAILING_WHITESPACE_COMMAND => {
-                self.clean_up(true, false, false, cx);
+                self.trim_trailing_whitespace(cx);
                 return true;
             }
             commands::COPY_LINES_UP_COMMAND | commands::COPY_LINES_DOWN_COMMAND => {
