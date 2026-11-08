@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoint 2 implemented and awaiting review. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -106,9 +106,30 @@ whose syntax parse continues as a job it hands out and takes back; the
 notifies. See [core and buffers](../architecture/core-and-buffers.md#application-buffer-ownership).
 Test-only model counters sit behind `knot-model`'s `test-support` feature.
 
-### 2. Plain editor state
+### 2. Plain editor state — 🔍 awaiting review
 
-- Deliverables: `Editor` in `knot-model`, with settings, theme values, and
+- ✅ `EditorState` (`crates/knot-model/src/editor.rs` and `editor/`) holds the
+  editor's state and runs the native commands over a `&mut BufferModel` it is
+  given per call. It follows the `EditorSettings` its owner sets and queues
+  clipboard writes and document setting changes as `EditorEffect`s; paste
+  takes the clipboard's text. Completion sessions moved to
+  `crates/knot-model/src/completion.rs`, and only the popup render stays in
+  `src/app/completion.rs`.
+- ✅ The `Editor` entity (`src/app/editor.rs`) derefs to the state. Before each
+  operation it resolves the settings, and afterwards it runs the effects,
+  notifies the buffer when its text changed, and notifies itself. It also
+  follows buffer changes, releases its anchors, and keeps the in-flight
+  completion requests. `EditorView` is unchanged apart from reading the state
+  through accessors.
+- ✅ The single-editor command tests run as plain tests: brackets, comments,
+  folding, indentation, lines, save hygiene, decorations, and the editing,
+  movement, undo-across-editors, composition, completion, reveal, and view
+  state cases. The shell keeps the painting, hit-testing, wrap-layout,
+  gutter, settings-integration, and background-parse cases. A few
+  `test-support` helpers (`place_for_test`, `scroll_to_for_test`,
+  `set_viewport_rows_for_test`) let those reach state they used to set
+  directly.
+- Original deliverables: `Editor` in `knot-model`, with settings, theme values, and
   the clipboard as explicit inputs and outputs; `editor/wrap.rs`,
   `editor/completion.rs` state, and `completion.rs` aggregation move with it
   where they need no gpui; `EditorView` keeps rendering and platform input
