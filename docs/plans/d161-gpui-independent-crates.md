@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 2 awaiting its review gate. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 2 next. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -11,8 +11,11 @@ compiler instead of by convention. Knot becomes a Cargo workspace whose text,
 transport, extension-runtime, and model crates cannot see gpui. The model code
 that is already gpui-free moves there, Knot-owned key, color, and string types
 replace gpui's in non-view code, and the workbench layout holds identities
-instead of view entities. A TypeScript edit no longer rebuilds the Rust
-application crate. Users see no behavior change.
+instead of view entities. Editing a bundled extension's TypeScript rebuilds
+and retests only its group crate: the application library and its test
+binary stay fresh, so `cargo test` after a Vim edit costs one small crate.
+`cargo run` may rebuild more; it is not on the test loop. Users see no
+behavior change.
 
 ## Background
 
@@ -32,9 +35,10 @@ application crate. Users see no behavior change.
 - `src/host` depends on `src/app` only in tests (`protocol.rs` and
   `engine/tests.rs` use `app::declared_host`). `src/app` uses
   `host::protocol` 317 times, and editor code imports its wire types.
-- `build.rs` sits on the application crate with
-  `rerun-if-changed=extensions/@knot` and runs `tsc` over all 12 bundled
-  packages on every rerun.
+- Cargo recompiles every dependent of a crate whose output changed, and a
+  package's lib and bin share one dependency list. Any edge from the library
+  (normal or dev) to compiled extension output therefore recompiles the
+  library and its test binary on a TypeScript edit.
 - gpui's own code will not vanish while Zed uses it; the realistic risks are
   release cadence and API churn, and a migration is the unlikely case. A
   narrower gpui surface reduces both the port's reach and a migration's.
@@ -42,15 +46,17 @@ application crate. Users see no behavior change.
 ## Design
 
 - **Workspace layout.** Crates live under `crates/`; the root package stays
-  the `knot` gpui application and binary.
+  the `knot` gpui application library, and `knot-app` builds the binary.
 
   ```text
   knot-core       text storage, anchored ranges, transactions
   knot-protocol   host::protocol: Knot-owned serde transport types (leaf)
   knot-host       V8, scheduler, module graph, declarations   → protocol
   knot-model      gpui-free editor state and policy           → core, protocol
-  knot-bundled    build.rs and the compiled package table     (leaf)
-  knot            gpui shell, views, sessions, extension bridge → all
+  knot-bundled    BundledSource and the tsc build helper      (leaf)
+  knot            gpui shell, views, sessions, extension bridge → all above
+  knot-ext-*      compiled bundled packages and their tests   → bundled; dev → knot
+  knot-app        the knot binary                             → knot, knot-ext-*
   knot-handler-macros  (unchanged)
   ```
 
@@ -75,10 +81,29 @@ application crate. Users see no behavior change.
   entity and focus handle, and creates or drops views as the workbench
   reports tabs opened or closed. Layout transitions (split, move, resize,
   close, pin, preview, docks) become plain `knot-model` code.
-- **Bundled packages.** `knot-bundled` owns `build.rs` and exposes the
-  compiled sources. `build.rs` keeps a per-package fingerprint of its inputs
-  in `OUT_DIR` and runs `tsc` only for packages whose inputs changed. Package
-  admission (`bundled_package`, diagnostics) stays in the application.
+- **Bundled packages.** The library never depends on compiled extension
+  output. It receives packages as `&'static [BundledSource]`, through
+  `knot::run` and a `test-support` entry point. `knot-bundled` is a stable
+  leaf holding `BundledSource` and a `build` module whose per-package
+  fingerprints in `OUT_DIR` rerun `tsc` only for changed packages. Packages
+  are grouped into crates by domain, each with a `build.rs` calling that
+  helper and a `PACKAGES` table:
+
+  | Crate | Packages |
+  | --- | --- |
+  | `knot-ext-languages` | `language-{markdown,others,python,rust,toml,typescript}` |
+  | `knot-ext-vim` | `vim` |
+  | `knot-ext-workbench` | `projects`, `status-bar`, `go-to-line`, `themes` |
+
+  One crate per package is too fine, and one for all too coarse as packages
+  grow; a new package joins the group of its domain or starts one. Package
+  admission (`bundled_package`, diagnostics) stays in the library.
+- **Extension tests are integration tests.** A group crate's tests run the
+  real editor (the library with `test-support`) and the real packages they
+  need, never stubs. A group may load another group's packages and accept
+  that an edit there reruns its tests. A test about an extension lives in
+  its group crate; a core test that needs only some package uses an inline
+  fixture or none. `knot-app` holds the tests that need every package.
 
 ## Exclusions
 
@@ -92,7 +117,7 @@ application crate. Users see no behavior change.
 ## Deferred decisions
 
 - Which keymap-registry state moves with the matching logic, and which stays
-  in the `ApplicationKeymaps` global. Decide in checkpoint 4 from the code.
+  in the `ApplicationKeymaps` global. Decide in checkpoint 5 from the code.
 - Whether terminal-emulator state (alacritty) has a gpui-free part worth
   moving. Decide in D162 if a terminal change needs it.
 
@@ -115,8 +140,9 @@ against the existing target directory exist, and they are noisy.
 | Baseline (`e158c9e`) | 3.3 s | 4.0 s | 3.5 s | 23 s |
 | 1. Workspace crates | 3.1 s | 3.8 s | 3.2 s | 34 s (includes test relinking) |
 
-Checkpoint 1 changes nothing here as expected: `build.rs` still sits on the
-application crate, so a TypeScript edit rebuilds it until checkpoint 2.
+Checkpoint 1 changes nothing here as expected. Moving `build.rs` into
+`knot-bundled` alone made a Vim edit 5.4–5.7 s, because the library still
+depends on it; checkpoint 3 removes that edge.
 
 ### 1. Workspace with knot-core, knot-protocol, and knot-host
 
@@ -139,38 +165,89 @@ in their dependency trees. Durable consequences for later checkpoints:
   three 60 s periods. Plain `cargo test` has only the 30 s bounds.
 - Timings are in [Timings](#timings); a clean build could not be measured.
 
-### 2. knot-bundled with per-package compilation
+### 2. Core tests without the bundled packages
 
-🚧 Implemented and tested; review gate pending. `crates/knot-bundled` owns
-`build.rs`, `BundledSource`, and `PACKAGES`; fingerprints (path, size, mtime of
-the package's `src/`, its `tsconfig.json`, and the shared inputs) live in
-`OUT_DIR/extensions/<name>.fingerprint`. `scripts/check-bundled-incremental.sh`
-passes (a Vim edit recompiles Vim alone; a `tsconfig.base.json` change
-recompiles every package), and `just test` passes (1255 tests plus doc tests).
+Starts from `knot-bundled` as committed: it owns `build.rs` with per-package
+`tsc` fingerprints (`scripts/check-bundled-incremental.sh` verifies them),
+`BundledSource`, and `PACKAGES`, and the library imports `PACKAGES`.
 
-**Finding:** the crate split does not stop the application crate from
-rebuilding. Cargo recompiles every dependent of a crate whose output changed, so
-a Vim edit rebuilds `knot-bundled` and then `knot`: 5.4–5.7 s, against 4.0 s
-before the split and 3.4 s for an `editor.rs` edit. The fingerprints save only
-the `tsc` runs of unchanged packages, which were never the dominant cost.
+- Deliverables: no library test needs a real bundled package except the
+  extension tests that checkpoint 3 moves; the library receives its bundled
+  packages as data; the harness and its helpers are a `test-support` API that
+  takes the packages to start explicitly.
+- Validation: `just test` passes with unchanged behavior and test count; the
+  tests below start fixtures or no packages.
+- **Implementation context:**
+  - Switch to inline fixtures or no packages (they start the bundled set only
+    incidentally): `src/app/product/tests/startup.rs` (6 tests),
+    `keybindings.rs` (7), `window_restore.rs` (3), `recovery.rs` (1), and the
+    two `discover_all` tests in `src/app/extensions/package/tests.rs`, which
+    inject a fixture bundled package. Callers of `start_product_extensions`
+    and `start_product_startup` locate them.
+  - `settings.rs::config_and_packages_share_settings_across_phases_and_restart`
+    asserts one setting observer, not two (Vim's `vim.enabled` observer goes);
+    `settings.rs::personal_config_associates_an_extension_and_open_documents_redetect`
+    registers its `rust` and `python` languages inline, as
+    `window_restore.rs` already does.
+  - Discovery takes the bundled packages as data: `discover_all`
+    (`src/app/extensions/package.rs`) and `bundled::report` receive the
+    `&'static [BundledSource]` the extension host holds, instead of importing
+    `knot_bundled::PACKAGES`. `knot::run(packages)` supplies them, and
+    `src/main.rs` passes `knot_bundled::PACKAGES` until checkpoint 3.
+  - Export under a `test-support` feature of `knot`, taking packages
+    explicitly: `src/app/product/tests/harness.rs`
+    (`start_bundled_packages*`), `cases.rs` (`topic_files`, `package_files`;
+    the package directories become a parameter instead of
+    `CARGO_MANIFEST_DIR`), the helpers they use from
+    `src/app/product/tests.rs` (`product_window`, `dispatch_product_command`,
+    `wait_for_command`) and `operations.rs` (`empty_product_window`), `host.rs`'s test `start_bundled_packages`, and the
+    roughly 20 `crate::app` items they reach (`extensions::host::{install,
+    pool, startup_report}`, `work_counts`, `languages::set_language`,
+    `editor::EditorView`, `status_bar`, `EDITOR_KEY_CONTEXT`, …). Mirror the
+    `test-support` features of `knot-core`, `knot-host`, and `knot-protocol`,
+    and expose only what the moved tests call.
+- Review gate: the exported `test-support` surface is small and reads as a
+  test API, not a dump of internals.
 
-- Deliverables: `build.rs` and the generated table in `knot-bundled`; only
-  changed packages recompile.
-- Validation: the bundled-package startup tests unchanged; a build test or
-  script check that touching one package's source reruns `tsc` for that
-  package alone, and that a lockfile or `tsconfig.base.json` change reruns
-  all; `scripts/check-extensions.sh` unchanged.
-- **Implementation context:** move `build.rs` to `crates/knot-bundled/` with
-  paths relative to the workspace root; it exposes `PACKAGES` and
-  `BundledSource` from the include in `src/app/extensions/bundled.rs`, which
-  keeps `report()`. Fingerprint each package directory (paths, sizes, and
-  mtimes are enough) plus the shared inputs into
-  `OUT_DIR/extensions/<name>.fingerprint`, and skip `compile` when it
-  matches and `dist` exists.
-- Review gate: an edit to the Vim package rebuilds in the time of one `tsc`
-  run plus a relink.
+### 3. Extension group crates and the knot-app binary
 
-### 3. Knot-owned keys, colors, and strings
+- Deliverables: `knot-ext-{languages,vim,workbench}` with their packages and
+  tests; `crates/knot-app` owning `main.rs` and the `knot` binary; the root
+  `knot` package is library-only, with no normal or dev edge to compiled
+  packages; `knot-bundled` reduced to `BundledSource` and the build helper.
+- Validation:
+  - `just test` passes with the same test count.
+  - `scripts/check-bundled-incremental.sh` also asserts that after a Vim
+    `main.ts` edit, `cargo test --no-run` rebuilds `knot-ext-vim` alone (the
+    `knot` library and its test binary stay Fresh), and that a
+    `tsconfig.base.json` change rebuilds every group crate.
+  - `just run` starts the app with every package.
+- **Implementation context:**
+  - Move the compile and fingerprint logic of `crates/knot-bundled/build.rs`
+    into a `pub mod build` of `knot-bundled`, taking package names; each
+    group crate lists it as a build-dependency, calls it from its `build.rs`,
+    and includes the generated table as `knot-bundled/src/lib.rs` does now.
+  - Root `Cargo.toml`: drop `[[bin]]`; keep `knot-bundled` only for the type;
+    add workspace `default-members` so `cargo run` at the root runs
+    `knot-app`; `justfile`'s `run` recipe follows.
+  - `crates/knot-app/src/main.rs` joins the groups' `PACKAGES` and calls
+    `knot::run`.
+  - Move tests into each crate's `tests/`, dev-depending on `knot` and gpui
+    with `test-support`: `src/app/product/tests/vim.rs` → `knot-ext-vim`;
+    `language_{editing,indents,brackets,folds}.rs` and
+    `extensions/host/highlight_tests.rs::bundled_languages_highlight_their_fixtures`
+    → `knot-ext-languages`; `go_to_line.rs`, `status_bar_package.rs`,
+    `projects.rs`, and `project_sessions.rs` → `knot-ext-workbench`;
+    `host.rs::bundled_packages_load_with_product_discovery` and
+    `measure_bundled_package_memory` → `knot-app`, the only crate that sees
+    every package.
+  - `scripts/check-extensions.sh`, the TypeScript package test runner, and
+    the `extensions/@knot` layout are unchanged.
+- Review gate: the [timings](#timings) row for this checkpoint shows a Vim
+  edit followed by `cargo test`, and by `cargo nextest run -p knot-ext-vim`,
+  costing one small crate build and link.
+
+### 4. Knot-owned keys, colors, and strings
 
 - Deliverables: Knot `Keystroke`/`Modifiers`, color, and highlight-style
   types; the key router, keymaps, presets, key hold, theme resolution, and
@@ -190,10 +267,10 @@ the `tsc` runs of unchanged packages, which were never the dominant cost.
   448, the highlight styles); painting code in `src/app/editor/paint.rs`,
   `terminal/`, and the views converts. `SharedString` appears 41 times
   outside tests, mostly `documents.rs`. Types are created in `src/app` here
-  and move with checkpoint 4.
+  and move with checkpoint 5.
 - Review gate: the conversion edge is small and obviously placed.
 
-### 4. knot-model with the gpui-free modules
+### 5. knot-model with the gpui-free modules
 
 - Deliverables: `knot-model` holding the modules that need no gpui, with no
   gpui, V8, or host dependency in its manifest, and their tests as plain
@@ -208,7 +285,7 @@ the `tsc` runs of unchanged packages, which were never the dominant cost.
   `commands/key_router.rs`, the keymap matching from `commands/keymaps.rs`,
   `extensions/package.rs` and `extensions/load.rs` (whose `bundled::report`
   call moves to the caller), theme resolution from `theme.rs`, and the
-  checkpoint 3 types. `completion.rs` (uses `zoom::rems`) and `editor/wrap.rs`
+  checkpoint 4 types. `completion.rs` (uses `zoom::rems`) and `editor/wrap.rs`
   (depends on `model`) wait for D162. Globals such as `ApplicationLanguages`
   and `ApplicationKeymaps` stay in `src/app` and wrap the moved plain state.
   `pub(crate)` items crossing the boundary become `pub`; keep the public
@@ -216,7 +293,7 @@ the `tsc` runs of unchanged packages, which were never the dominant cost.
 - Review gate: the crate's contents and public surface read as one
   coherent layer, not a grab bag.
 
-### 5. Workbench layout over identities
+### 6. Workbench layout over identities
 
 - Deliverables: the workbench layout model in `knot-model` with tabs holding
   identities; the product session owns view entities and focus handles and
@@ -237,15 +314,17 @@ the `tsc` runs of unchanged packages, which were never the dominant cost.
 - Review gate: a personal-config `post-init.js` with `try.*` commands that
   split, move, pin, close, and dock tabs; everything behaves as before.
 
-### 6. Documentation
+### 7. Documentation
 
 - Deliverables: `docs/architecture.md` system map and ownership describe the
   crates and the `knot-model` rule; `AGENTS.md`'s repository map and routing
-  table follow the new paths; `docs/development.md` covers workspace
-  commands and the bundled-package rebuild; a decision in
+  table follow the new paths, including `knot-ext-*` and `knot-app`;
+  `docs/development.md` covers workspace commands and the bundled-package
+  rebuild; a decision in
   `docs/decisions/platform.md` with its index line (crate-enforced gpui
-  boundary, `knot-protocol` below model and host, one bundled crate with
-  per-package fingerprints, no runtime abstraction, measured build times);
+  boundary, `knot-protocol` below model and host, bundled packages in
+  domain group crates injected into a library-only `knot`, the `knot-app`
+  binary, per-package fingerprints, no runtime abstraction, measured build times);
   the D160 and D162 plans' order lines updated to say D161 is complete, with
   a link to that decision; this plan and D161's roadmap entry removed.
 - Validation: the `review-docs` checks for the touched files.
