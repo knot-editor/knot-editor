@@ -222,6 +222,8 @@ fn show_extension_memory_lists_each_live_package(cx: &mut TestAppContext) {
         ],
         cx,
     );
+    // Startup turns finish first, so only the spinning package reports a turn.
+    crate::app::product::driver::settle(&fixture.shell, cx);
     let spin = fixture.command("loop.spin", cx);
     // The spin turn starts on a worker thread; wait until it is running.
     wait_for_api_condition(cx, |cx| {

@@ -41,6 +41,7 @@ await commands.register("close.concurrent", async () => {
   const first = workbench.close(created.presentation.target);
   try { await workbench.close(created.presentation.target); throw new Error("concurrent close accepted"); }
   catch (error) { if (error.code !== "OperationInProgress") throw error; }
+  await workbench.writeClipboardText("second close rejected");
   const result = await first;
   await workbench.writeClipboardText(`${result.kind}:OperationInProgress`);
 });
@@ -234,6 +235,11 @@ fn public_close_rejects_concurrent_closure_and_save_failure_without_removing_the
     );
     let pending = dispatch_product_command(&control, control_window, "close.concurrent", cx);
     wait_prompt(cx);
+    // Answer only once the second close was rejected while the first waits.
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .is_some_and(|item| item.text().as_deref() == Some("second close rejected"))
+    });
     cx.simulate_prompt_answer("Cancel");
     assert_eq!(wait_for_command(pending, cx), CommandOutcome::Completed);
     assert_eq!(clipboard(cx), "cancelled:OperationInProgress");
