@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 4 next. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 4 awaiting review. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -266,7 +266,7 @@ the `knot` library has no edge to compiled packages. Durable consequences:
   library and the other groups fresh, and that a shared input rebuilds every group.
 - Timings are in [Timings](#timings).
 
-### 4. Knot-owned keys, colors, and strings
+### 4. Knot-owned keys, colors, and strings ✅ (awaiting review)
 
 - Deliverables: Knot `Keystroke`/`Modifiers`, color, and highlight-style
   types; the key router, keymaps, presets, key hold, theme resolution, and
@@ -287,6 +287,16 @@ the `knot` library has no edge to compiled packages. Durable consequences:
   `terminal/`, and the views converts. `SharedString` appears 41 times
   outside tests, mostly `documents.rs`. Types are created in `src/app` here
   and move with checkpoint 5.
+- **Done:** `src/app/keys.rs` (`Keystroke`, `Modifiers`, with gpui's notation
+  and matching), `src/app/style.rs` (`Color`, `FontStyle`, `HighlightStyle`),
+  and `src/app/convert.rs`, the one conversion edge: keystrokes and
+  modifiers both ways, `Color` and `HighlightStyle` to gpui, and the
+  `ThemePaint` trait views call (`paint_color`, `highlight_style`,
+  `decoration_style`). Documents, editor view kinds, and the save dialog use
+  `String`/`Arc<str>`. The key router, keymaps, presets, key hold,
+  terminal key encoding, theme, and themes are gpui-free; `convert.rs` tests
+  assert the parser and matcher agree with gpui's. Remaining gpui names sit
+  in view code, `terminal/colors.rs`, the test driver, and tests.
 - Review gate: the conversion edge is small and obviously placed.
 
 ### 5. knot-model with the gpui-free modules
