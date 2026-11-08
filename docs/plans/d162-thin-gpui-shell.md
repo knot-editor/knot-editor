@@ -129,6 +129,10 @@ Test-only model counters sit behind `knot-model`'s `test-support` feature.
   `test-support` helpers (`place_for_test`, `scroll_to_for_test`,
   `set_viewport_rows_for_test`) let those reach state they used to set
   directly.
+- ✅ The editor command names are constants in
+  `knot_model::editor::commands`; `#[command]` takes a constant's path in
+  place of a literal name and `id`, so the declarations and the dispatch
+  share them.
 - Original deliverables: `Editor` in `knot-model`, with settings, theme values, and
   the clipboard as explicit inputs and outputs; `editor/wrap.rs`,
   `editor/completion.rs` state, and `completion.rs` aggregation move with it
