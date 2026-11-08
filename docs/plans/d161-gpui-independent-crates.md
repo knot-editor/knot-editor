@@ -141,16 +141,18 @@ in their dependency trees. Durable consequences for later checkpoints:
 
 ### 2. knot-bundled with per-package compilation
 
-🚧 Implemented, review gate pending. `crates/knot-bundled` owns `build.rs`,
-`BundledSource`, and `PACKAGES`; fingerprints (path, size, mtime of the package's
-`src/`, its `tsconfig.json`, and the shared inputs) live in
+🚧 Implemented and tested; review gate pending. `crates/knot-bundled` owns
+`build.rs`, `BundledSource`, and `PACKAGES`; fingerprints (path, size, mtime of
+the package's `src/`, its `tsconfig.json`, and the shared inputs) live in
 `OUT_DIR/extensions/<name>.fingerprint`. `scripts/check-bundled-incremental.sh`
-passes: a Vim edit recompiles only Vim (0.6 s for the whole `knot-bundled`
-rebuild), and a `tsconfig.base.json` change recompiles every package.
-**Not verified:** the application crate against the new dependency (one import
-in `src/app/extensions/bundled.rs`) and the Vim-edit relink time, because the V8
-prebuilt can no longer be fetched in the sandbox and the local V8 build output
-is gone. Run `just test` and time a Vim edit on a machine with network access.
+passes (a Vim edit recompiles Vim alone; a `tsconfig.base.json` change
+recompiles every package), and `just test` passes (1255 tests plus doc tests).
+
+**Finding:** the crate split does not stop the application crate from
+rebuilding. Cargo recompiles every dependent of a crate whose output changed, so
+a Vim edit rebuilds `knot-bundled` and then `knot`: 5.4–5.7 s, against 4.0 s
+before the split and 3.4 s for an `editor.rs` edit. The fingerprints save only
+the `tsc` runs of unchanged packages, which were never the dominant cost.
 
 - Deliverables: `build.rs` and the generated table in `knot-bundled`; only
   changed packages recompile.
