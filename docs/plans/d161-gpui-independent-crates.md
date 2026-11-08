@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 5 next. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 5 implemented, awaiting review. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -116,8 +116,8 @@ behavior change.
 
 ## Deferred decisions
 
-- Which keymap-registry state moves with the matching logic, and which stays
-  in the `ApplicationKeymaps` global. Decide in checkpoint 5 from the code.
+- ✅ Which keymap-registry state moves with the matching logic: decided in
+  checkpoint 5 (below).
 - Whether terminal-emulator state (alacritty) has a gpui-free part worth
   moving. Decide in D162 if a terminal change needs it.
 
@@ -140,6 +140,9 @@ against the existing target directory exist, and they are noisy.
 | Baseline (`e158c9e`) | 3.3 s | 4.0 s | 3.5 s | 23 s |
 | 1. Workspace crates | 3.1 s | 3.8 s | 3.2 s | 34 s (includes test relinking) |
 | 3. Group crates | 3 s | 3 s (`cargo test --no-run`); 2 s (`nextest run -p knot-ext-vim --no-run`) | 3 s | 10 s |
+| 5. knot-model | 2.9 s | 1.4 s | 3.3 s | 12 s |
+
+At checkpoint 5, touching `crates/knot-model/src/history.rs` rebuilds in 3.2 s.
 
 Checkpoint 1 changes nothing here as expected. Moving `build.rs` into
 `knot-bundled` alone made a Vim edit 5.4–5.7 s, because the library still
@@ -277,26 +280,41 @@ with checkpoint 5; conversions stay in the shell.
 
 ### 5. knot-model with the gpui-free modules
 
-- Deliverables: `knot-model` holding the modules that need no gpui, with no
-  gpui, V8, or host dependency in its manifest, and their tests as plain
-  tests there.
-- Validation: `cargo test -p knot-model` builds without gpui or V8; the full
-  suite unchanged.
-- **Implementation context:** candidates, whose intra-app imports were
-  checked: `history.rs`, `syntax.rs` and `syntax/` (imports
-  `languages::editing` and `theme`), `indentation.rs`,
-  `languages/editing.rs`, `filesystem/`, `resource.rs`, `open.rs`,
-  `workspace.rs`, `editor/text.rs`, `commands/catalog.rs`,
-  `commands/key_router.rs`, the keymap matching from `commands/keymaps.rs`,
-  `extensions/package.rs` and `extensions/load.rs` (whose `bundled::report`
-  call moves to the caller), theme resolution from `theme.rs`, and the
-  checkpoint 4 types. `completion.rs` (uses `zoom::rems`) and `editor/wrap.rs`
-  (depends on `model`) wait for D162. Globals such as `ApplicationLanguages`
-  and `ApplicationKeymaps` stay in `src/app` and wrap the moved plain state.
-  `pub(crate)` items crossing the boundary become `pub`; keep the public
-  surface to what the application uses.
+🔍 Implemented; awaiting the review gate.
+
+- ✅ `crates/knot-model` holds `keys`, `style`, `history`, `indentation`,
+  `editing` (language editing configuration), `syntax` with the grammars,
+  `theme` values, `filesystem`, `resource`, `open`, `workspace`,
+  `commands::{catalog, key_router, keymaps}`, and
+  `extensions::{package, load}`. Its manifest and dev-dependencies have no
+  gpui, V8, or host; `cargo test -p knot-model` runs 171 plain tests, and the
+  full suite still runs 1,271.
+- ✅ The application re-exports each wholly moved module at its old path
+  (`use knot_model::{resource, …}` in `src/app/mod.rs`), so callers did not
+  change. Split modules keep only their runtime part: `theme.rs` holds the
+  `ApplicationTheme` global; `commands/keymaps.rs` holds `ApplicationKeymaps`,
+  the gpui menu bindings, and `presets.rs` the Knot preset tables,
+  `ApplicationKeymapPresets`, and selection from settings.
+- Keymap decision: the binding registry, preset registry, matching, display,
+  validation, and menu-shortcut policy are model code; `PresetRegistry::new`
+  receives the native Knot preset's bindings, because those tables name
+  application commands. `select` replaces the global's direct field access.
+- `ExtensionKey` moved to `knot-protocol`: history keys entries by it, and the
+  model cannot see the host.
+- Protocol traits cannot be implemented in the application for model types
+  (orphan rule), so `defineColor` and `registerKeymapPreset` decode into local
+  newtypes (`DefinedColor`, `RegisteredPreset`).
+- `discover_all` takes the bundled discovery report; `extensions::bundled`
+  stays in the application. The load-plan rollback test that needs a real
+  pool moved to `src/app/extensions/host.rs`.
+- Model items gated `cfg(test)` that application tests use are now
+  `cfg(any(test, feature = "test-support"))`; the application enables the
+  feature as a dev-dependency and under its own `test-support`.
+- `editor/text.rs` stays with `editor/wrap.rs` until D162: its queries take
+  `BufferModel`. `entry.rs` (launch arguments) and the terminal helpers stay
+  with the shell they serve.
 - Review gate: the crate's contents and public surface read as one
-  coherent layer, not a grab bag.
+  coherent layer, not a grab bag (`crates/knot-model/src/lib.rs` groups them).
 
 ### 6. Workbench layout over identities
 
