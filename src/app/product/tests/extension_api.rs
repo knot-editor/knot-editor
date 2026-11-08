@@ -925,7 +925,9 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
             cx.global::<ApplicationKeymaps>()
                 .0
                 .resolve(
-                    &gpui::Keystroke::parse("cmd-j").unwrap().unparse(),
+                    &crate::app::keys::Keystroke::parse("cmd-j")
+                        .unwrap()
+                        .unparse(),
                     Some("example.outline")
                 )
                 .is_none()

@@ -59,7 +59,7 @@ impl Global for ApplicationWindowSessions {}
 /// Load the record and observe window closure.
 pub(crate) fn install(database: &StateDatabase, cx: &mut App) {
     let store = database.record("window_session", WINDOW_SESSION_VERSION, WRITE_DEBOUNCE);
-    let closed = cx.on_window_closed(|cx| cx.defer(record));
+    let closed = cx.on_window_closed(|cx, _| cx.defer(record));
     cx.set_global(ApplicationWindowSessions {
         store,
         recording: Cell::new(Recording::Waiting),

@@ -48,12 +48,10 @@ impl ProductShell {
             let Ok(TransientOutcome::Picker(name)) = receiver.await else {
                 return;
             };
-            let Ok(restart) = cx.update(|cx| {
+            let restart = cx.update(|cx| {
                 super::super::extensions::host::entity(cx)
                     .map(|host| host.update(cx, |host, cx| host.restart_package(name.clone(), cx)))
-            }) else {
-                return;
-            };
+            });
             let Some(restart) = restart else { return };
             let entry = restart.await;
             let (title, message) = match entry.result {

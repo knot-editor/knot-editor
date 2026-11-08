@@ -268,11 +268,9 @@ pub(in crate::app) fn finish_product_startup(
                 crate::app::recovery::restore_at_startup(ProductShell::filesystems(cx), cx);
             cx.spawn(async move |cx| {
                 let recovery = recovery.await;
-                let record = match cx.update(|cx| crate::app::window_sessions::take_for_restore(cx))
-                {
-                    Ok(task) => task.await,
-                    Err(_) => None,
-                };
+                let record = cx
+                    .update(|cx| crate::app::window_sessions::take_for_restore(cx))
+                    .await;
                 let restored = match record {
                     Some(record) => {
                         let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -286,13 +284,13 @@ pub(in crate::app) fn finish_product_startup(
                             )
                         });
                         match started {
-                            Ok(Ok(())) => receiver.await.ok().and_then(Result::ok),
-                            _ => None,
+                            Ok(()) => receiver.await.ok().and_then(Result::ok),
+                            Err(_) => None,
                         }
                     }
                     None => None,
                 };
-                let _ = cx.update(|cx| open_launch_windows(restored, recovery, cx));
+                cx.update(|cx| open_launch_windows(restored, recovery, cx));
             })
             .detach();
         }
@@ -394,7 +392,7 @@ pub(crate) fn run(
     initial_request: Option<OpenRequest>,
     packages: &'static [knot_bundled::BundledSource],
 ) {
-    let application = Application::new();
+    let application = gpui_platform::application();
     let (open_requests, mut incoming_requests) = tokio::sync::mpsc::unbounded_channel();
     application.on_open_urls(move |urls| {
         for url in urls {
@@ -451,6 +449,7 @@ pub(crate) fn run(
         cx.set_global(ApplicationLaunchGate(RefCell::new(LaunchGate::Pending(
             Vec::new(),
         ))));
+        crate::app::allow_thread_wakeups(cx);
         cx.set_global(ApplicationFileSystems(product_filesystems()));
         let commands = cx.new(ProductCommandDispatcher::new);
         cx.set_global(ApplicationProductCommands(commands));
@@ -470,7 +469,7 @@ pub(crate) fn run(
         }
         cx.spawn(async move |cx| {
             while let Some(request) = incoming_requests.recv().await {
-                let _ = cx.update(|cx| dispatch_launch_request(Some(request), cx));
+                cx.update(|cx| dispatch_launch_request(Some(request), cx));
             }
         })
         .detach();
@@ -490,6 +489,7 @@ fn product_menus() -> Vec<Menu> {
                 "Quit Knot",
                 ProductCommandSource::new(QUIT_COMMAND),
             )],
+            disabled: false,
         },
         Menu {
             name: "File".into(),
@@ -520,6 +520,7 @@ fn product_menus() -> Vec<Menu> {
                     ProductCommandSource::new(CLOSE_WINDOW_COMMAND),
                 ),
             ],
+            disabled: false,
         },
         Menu {
             name: "Edit".into(),
@@ -531,6 +532,7 @@ fn product_menus() -> Vec<Menu> {
                 MenuItem::action("Paste", ProductCommandSource::new(PASTE_COMMAND)),
                 MenuItem::action("Select All", ProductCommandSource::new(SELECT_ALL_COMMAND)),
             ],
+            disabled: false,
         },
         Menu {
             name: "View".into(),
@@ -548,6 +550,7 @@ fn product_menus() -> Vec<Menu> {
                 MenuItem::action("Zoom Out", ProductCommandSource::new(ZOOM_OUT_COMMAND)),
                 MenuItem::action("Reset Zoom", ProductCommandSource::new(RESET_ZOOM_COMMAND)),
             ],
+            disabled: false,
         },
     ]
 }

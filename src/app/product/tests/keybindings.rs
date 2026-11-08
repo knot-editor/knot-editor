@@ -69,7 +69,7 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
         assert_eq!(keymap_command(cx, "cmd-x", Some("editor")).as_deref(), Some("<unbound>"));
         assert_eq!(keymap_command(cx, "cmd-l", Some("editor")), None);
         assert!(matches!(
-            cx.global::<ApplicationKeymaps>().0.resolve(&gpui::Keystroke::parse("cmd-j").unwrap().unparse(), Some("editor")),
+            cx.global::<ApplicationKeymaps>().0.resolve(&crate::app::keys::Keystroke::parse("cmd-j").unwrap().unparse(), Some("editor")),
             Some(BindingResolution::Command(Command { arguments: CommandArgumentValue::Object(arguments), .. }))
                 if arguments.get("marker") == Some(&CommandArgumentValue::Number(42.0))
         ));
@@ -103,7 +103,9 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
     let command = cx.read(|cx| {
         let Some(BindingResolution::Command(command)) =
             cx.global::<ApplicationKeymaps>().0.resolve(
-                &gpui::Keystroke::parse("cmd-j").unwrap().unparse(),
+                &crate::app::keys::Keystroke::parse("cmd-j")
+                    .unwrap()
+                    .unparse(),
                 Some("editor"),
             )
         else {
@@ -993,7 +995,9 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
         shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
     })
     .unwrap();
-    let save = gpui::Keystroke::parse("secondary-s").unwrap().unparse();
+    let save = crate::app::keys::Keystroke::parse("secondary-s")
+        .unwrap()
+        .unparse();
     cx.update(|cx| {
         cx.global_mut::<ApplicationKeymaps>()
             .0

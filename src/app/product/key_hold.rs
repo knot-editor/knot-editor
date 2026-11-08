@@ -70,12 +70,12 @@ impl ProductShell {
     ) {
         cx.spawn(async move |this, cx| {
             let _ = completion.await;
-            let _ = cx.update(|cx| release_key_hold(&this, generation, cx));
+            cx.update(|cx| release_key_hold(&this, generation, cx));
         })
         .detach();
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(KEY_HOLD_TIMEOUT).await;
-            let _ = cx.update(|cx| release_key_hold(&this, generation, cx));
+            cx.update(|cx| release_key_hold(&this, generation, cx));
         })
         .detach();
     }

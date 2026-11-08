@@ -379,7 +379,7 @@ impl Render for Picker {
                 })
                 .collect()
         })
-        .track_scroll(self.scroll.clone())
+        .track_scroll(&self.scroll)
         .h(px(list_height));
 
         div()

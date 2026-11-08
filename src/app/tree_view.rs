@@ -750,7 +750,7 @@ impl Render for TreeView {
                         .child(action.label)
                         .on_click(move |_, window, cx| {
                             entity.update(cx, |tree, cx| {
-                                tree.focus_handle(cx).focus(window);
+                                tree.focus_handle(cx).focus(window, cx);
                                 tree.invoke_action(target.clone(), cx);
                             });
                             cx.stop_propagation();
@@ -846,7 +846,7 @@ impl Render for TreeView {
                                     .child(action.label.clone())
                                     .on_click(move |_, window, cx| {
                                         entity.update(cx, |tree, cx| {
-                                            tree.focus_handle(cx).focus(window);
+                                            tree.focus_handle(cx).focus(window, cx);
                                             tree.invoke_action(target.clone(), cx);
                                         });
                                         cx.stop_propagation();
@@ -857,7 +857,7 @@ impl Render for TreeView {
                             let entity = entity.clone();
                             move |_, window, cx| {
                                 entity.update(cx, |tree, cx| {
-                                    tree.focus_handle(cx).focus(window);
+                                    tree.focus_handle(cx).focus(window, cx);
                                     tree.activate(&id, cx);
                                 });
                             }
@@ -885,7 +885,7 @@ impl Render for TreeView {
                 .collect()
         })
         .flex_1()
-        .track_scroll(self.scroll.clone())
+        .track_scroll(&self.scroll)
         .track_focus(&self.focus)
         .key_context(key_context);
 

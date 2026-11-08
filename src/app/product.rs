@@ -785,7 +785,7 @@ impl ProductShell {
             ids.insert(handle.window_id().as_u64(), session_id(cx.entity_id()))
         });
         let shell = cx.weak_entity();
-        self._window_closed = Some(cx.on_window_closed(move |cx| {
+        self._window_closed = Some(cx.on_window_closed(move |cx, _| {
             let shell = shell.clone();
             cx.defer(move |cx| {
                 let Some(shell) = shell.upgrade() else { return };
@@ -1236,7 +1236,7 @@ impl ProductShell {
             else {
                 return;
             };
-            let _ = window.update(cx, |_, window, _| window.focus(&handle));
+            let _ = window.update(cx, |_, window, cx| window.focus(&handle, cx));
         });
     }
 

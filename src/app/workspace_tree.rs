@@ -579,7 +579,8 @@ impl Render for WorkspaceTree {
                         .on_click({
                             let entity = entity.clone();
                             move |event: &ClickEvent, window, cx| {
-                                window.focus(&entity.read(cx).focus);
+                                let focus = entity.read(cx).focus.clone();
+                                window.focus(&focus, cx);
                                 let preview = event.click_count() < 2;
                                 entity.update(cx, |tree, cx| tree.activate(&key, preview, cx));
                             }
@@ -589,7 +590,7 @@ impl Render for WorkspaceTree {
                 .collect()
         })
         .h_full()
-        .track_scroll(self.scroll.clone())
+        .track_scroll(&self.scroll)
         .track_focus(&self.focus)
         .key_context(WORKSPACE_TREE_KEY_CONTEXT)
     }

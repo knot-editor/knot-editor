@@ -372,7 +372,7 @@ pub(super) fn coordinator(cx: &mut App) -> Rc<RefCell<TabDragCoordinator>> {
         let state = Rc::new(RefCell::new(TabDragCoordinator::default()));
         cx.set_global(ApplicationTabDrag(state.clone()));
         let closed = state.clone();
-        cx.on_window_closed(move |cx| {
+        cx.on_window_closed(move |cx, _| {
             let live = cx.windows();
             let cancelled = closed.borrow_mut().prune(&live);
             if cancelled && let Some(window) = live.first() {

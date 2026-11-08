@@ -3,7 +3,7 @@
 //! Knot matches keys itself (see `key_router`), so gpui holds bindings only
 //! to label menus with their key equivalents.
 
-use gpui::{App, Global, KeyBinding};
+use gpui::{App, Global, KeyBinding, KeyBindingContextPredicate};
 
 pub(crate) use knot_model::commands::keymaps::*;
 
@@ -32,20 +32,29 @@ pub(crate) fn install(cx: &mut App) {
 pub(crate) fn rebuild(cx: &mut App) {
     cx.clear_key_bindings();
     let shortcuts = menu_shortcuts(&cx.global::<ApplicationKeymaps>().0);
-    cx.bind_keys(shortcuts.into_iter().map(|(name, key)| {
-        KeyBinding::new(
-            &key,
-            ProductCommandSource {
-                name: name.to_string().into(),
-            },
-            Some(MENU_SHORTCUT_CONTEXT),
-        )
-    }));
-    cx.bind_keys([KeyBinding::new(
-        "secondary-q",
-        ProductCommandSource::new(QUIT_COMMAND),
-        Some("config-error"),
-    )]);
+    let bindings: Vec<_> = shortcuts
+        .into_iter()
+        .filter_map(|(name, key)| binding(&key, name.as_ref(), MENU_SHORTCUT_CONTEXT, cx))
+        .chain(binding("secondary-q", QUIT_COMMAND, "config-error", cx))
+        .collect();
+    cx.bind_keys(bindings);
+}
+
+/// A gpui binding of `key` to a product command in `context`, resolving
+/// `secondary` for the host.
+fn binding(key: &str, command: &str, context: &str, cx: &App) -> Option<KeyBinding> {
+    let context = KeyBindingContextPredicate::parse(context).ok()?;
+    KeyBinding::load(
+        key,
+        Box::new(ProductCommandSource {
+            name: command.to_owned().into(),
+        }),
+        Some(context.into()),
+        false,
+        None,
+        cx,
+    )
+    .ok()
 }
 
 mod presets;

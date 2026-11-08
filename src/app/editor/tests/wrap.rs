@@ -1,5 +1,5 @@
 use gpui::{
-    AppContext, EntityInputHandler, ScrollDelta, ScrollWheelEvent, TestAppContext, point, px, size,
+    AppContext, EntityInputHandler, ScrollDelta, ScrollEvent, TestAppContext, point, px, size,
 };
 
 use super::super::{
@@ -150,7 +150,7 @@ fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppCo
     });
 
     // Sideways scrolling stays off while rows fit the width.
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: cx.read(|cx| editor.read(cx).interaction_bounds().center()),
         delta: ScrollDelta::Pixels(point(px(-200.), px(0.))),
         ..Default::default()

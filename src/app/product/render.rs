@@ -48,7 +48,7 @@ impl ProductShell {
                         }
                         None if dock.is_some() => element = element.flex_1(),
                         None => {
-                            element = element.flex_basis(px(0.)).flex_shrink();
+                            element = element.flex_basis(px(0.)).flex_shrink(1.);
                             element.style().flex_grow = Some(grow);
                         }
                     }

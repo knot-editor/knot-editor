@@ -214,17 +214,15 @@ pub(crate) fn replace_windows(
             )
         });
         let (result, restored) = match committed {
-            Ok(Ok(committed)) => committed,
-            Ok(Err(error)) => return completion(Err(error)),
-            Err(_) => return completion(Err(AccessError::Cancelled.into())),
+            Ok(committed) => committed,
+            Err(error) => return completion(Err(error)),
         };
         // Restored dirty documents are durably protected before resolution so
         // the caller may release the captures they came from.
         let protected = if restored {
-            match cx.update(|cx| crate::app::recovery::drain(cx)) {
-                Ok(drain) => drain.await.is_ok(),
-                Err(_) => false,
-            }
+            cx.update(|cx| crate::app::recovery::drain(cx))
+                .await
+                .is_ok()
         } else {
             true
         };
@@ -336,9 +334,6 @@ async fn stage_entry(
                 cx,
             )
         });
-        let Ok(restore) = restore else {
-            return Staged::Failed(AccessError::Cancelled.into(), "cancelled".into());
-        };
         return match restore.await {
             Ok(staged) => Staged::Restore(staged),
             Err(RestoreError::Unavailable) => Staged::Failed(

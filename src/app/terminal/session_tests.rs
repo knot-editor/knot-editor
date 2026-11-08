@@ -480,18 +480,24 @@ fn focus_reports_follow_gpui_focus_activation_and_detachment(cx: &mut TestAppCon
     cx.refresh().unwrap();
     cx.update(|window, cx| {
         window.activate_window();
-        view.read(cx).focus_handle(cx).focus(window);
+        view.read(cx).focus_handle(cx).focus(window, cx);
     });
     cx.run_until_parked();
     // Repaint and repeated focus do not describe a new focus transition.
     cx.refresh().unwrap();
-    cx.update(|window, cx| view.read(cx).focus_handle(cx).focus(window));
+    cx.update(|window, cx| {
+        let focus = view.read(cx).focus_handle(cx).clone();
+        focus.focus(window, cx);
+    });
     cx.deactivate_window();
     cx.update(|window, _| window.activate_window());
     cx.run_until_parked();
-    cx.update(|window, _| window.blur());
+    cx.update(|window, cx| window.blur(cx));
     cx.run_until_parked();
-    cx.update(|window, cx| view.read(cx).focus_handle(cx).focus(window));
+    cx.update(|window, cx| {
+        let focus = view.read(cx).focus_handle(cx).clone();
+        focus.focus(window, cx);
+    });
     cx.run_until_parked();
     cx.update(|_, cx| view.update(cx, |view, cx| view.detach(cx)));
     wait_for(cx, &session, |session| {
@@ -523,7 +529,7 @@ fn focus_handoff_reports_each_owner_once_and_detached_keys_are_ignored(cx: &mut 
     cx.refresh().unwrap();
     let source_window = cx.update(|window, cx| {
         window.activate_window();
-        source.read(cx).focus_handle(cx).focus(window);
+        source.read(cx).focus_handle(cx).focus(window, cx);
         window.window_handle()
     });
     cx.run_until_parked();
@@ -532,7 +538,7 @@ fn focus_handoff_reports_each_owner_once_and_detached_keys_are_ignored(cx: &mut 
     cx.refresh().unwrap();
     cx.update(|window, cx| {
         window.activate_window();
-        target.read(cx).focus_handle(cx).focus(window);
+        target.read(cx).focus_handle(cx).focus(window, cx);
     });
     cx.run_until_parked();
     cx.cx.simulate_keystrokes(source_window, "ctrl-z");

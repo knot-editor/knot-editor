@@ -31,7 +31,7 @@ impl ProductShell {
                 _ => return,
             };
             let (sender, resolved) = tokio::sync::oneshot::channel();
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 operations::resolve_directory(
                     path,
                     move |result| {

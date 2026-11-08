@@ -339,8 +339,7 @@ impl ProductShell {
                 })
                 .is_err()
             {
-                let _ =
-                    cx.update(|cx| completion.take().unwrap()(Err(OpenFailure::InvalidTarget), cx));
+                cx.update(|cx| completion.take().unwrap()(Err(OpenFailure::InvalidTarget), cx));
             }
         });
         self.tasks.push(task);

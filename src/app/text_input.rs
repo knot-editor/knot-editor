@@ -540,7 +540,16 @@ impl Render for TextInput {
                                 selection_color,
                             ));
                         }
-                        shaped.paint(bounds.origin, line_height, window, cx).ok();
+                        shaped
+                            .paint(
+                                bounds.origin,
+                                line_height,
+                                TextAlign::Left,
+                                None,
+                                window,
+                                cx,
+                            )
+                            .ok();
                         if let Some(marked) = marked {
                             let start = TextInput::byte_for_utf16(&text, marked.start);
                             let end = TextInput::byte_for_utf16(&text, marked.end);

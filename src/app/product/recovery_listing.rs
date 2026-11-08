@@ -90,22 +90,16 @@ impl ProductShell {
             let (kind, key) = (snapshot.kind, snapshot.capture_key.clone());
             match answer.await.unwrap_or(2) {
                 0 => {
-                    let Ok(restore) = cx.update(|cx| {
-                        crate::app::recovery::restore(kind, key, providers, cx)
-                    }) else {
-                        return;
-                    };
+                    let restore =
+                        cx.update(|cx| crate::app::recovery::restore(kind, key, providers, cx));
                     let outcome = restore.await;
                     let _ = this.update(cx, |shell, cx| {
                         shell.present_recovered(outcome, &title, cx)
                     });
                 }
                 1 => {
-                    let Ok(discard) =
-                        cx.update(|cx| crate::app::recovery::discard_snapshot(kind, key, cx))
-                    else {
-                        return;
-                    };
+                    let discard =
+                        cx.update(|cx| crate::app::recovery::discard_snapshot(kind, key, cx));
                     if let Err(error) = discard.await {
                         Self::notice(
                             &this,

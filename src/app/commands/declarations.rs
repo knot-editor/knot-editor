@@ -284,10 +284,9 @@ impl CommandDescriptor {
             cx.spawn(async move |cx| {
                 let outcome = std::future::poll_fn(|task| {
                     cx.update(|cx| poll_command(future.as_mut(), &foreground, task, cx))
-                        .unwrap_or(Poll::Ready(CommandOutcome::Cancelled))
                 })
                 .await;
-                let _ = cx.update(|cx| complete(&completion, outcome, cx));
+                cx.update(|cx| complete(&completion, outcome, cx));
             })
             .detach();
             Ok(())

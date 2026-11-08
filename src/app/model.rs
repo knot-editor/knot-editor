@@ -1422,7 +1422,7 @@ impl BufferRegistry {
             .get(&handle)
             .and_then(WeakEntity::upgrade)
             .ok_or(BufferClosed)?;
-        let _ = model.update(cx, |model, cx| {
+        model.update(cx, |model, cx| {
             if model.is_open() {
                 model.close();
                 cx.notify();
@@ -1439,7 +1439,7 @@ impl BufferRegistry {
         cx: &mut C,
     ) {
         for model in self.buffers.values().filter_map(WeakEntity::upgrade) {
-            let _ = model.update(cx, |model, cx| {
+            model.update(cx, |model, cx| {
                 if model.remove_lifecycle_state(extension, lifecycle) {
                     cx.notify();
                 }

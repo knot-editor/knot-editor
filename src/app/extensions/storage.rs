@@ -366,7 +366,11 @@ impl Database {
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) fn test_executor() -> BackgroundExecutor {
     static EXECUTOR: std::sync::OnceLock<BackgroundExecutor> = std::sync::OnceLock::new();
-    EXECUTOR.get_or_init(gpui::background_executor).clone()
+    EXECUTOR
+        .get_or_init(|| {
+            BackgroundExecutor::new(std::sync::Arc::new(gpui::ThreadedDispatcher::new()))
+        })
+        .clone()
 }
 
 #[cfg(test)]

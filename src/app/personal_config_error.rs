@@ -132,7 +132,8 @@ pub(crate) fn open(diagnostic: ConfigDiagnostic, cx: &mut App) {
         |window, cx| {
             window.on_window_should_close(cx, |_, _| false);
             let view = cx.new(|cx| PersonalConfigErrorView::new(diagnostic, cx));
-            view.read(cx).focus.focus(window);
+            let focus = view.read(cx).focus.clone();
+            focus.focus(window, cx);
             view
         },
     )

@@ -38,7 +38,7 @@ fn bounds(
     cx: &mut TestAppContext,
 ) -> Option<gpui::Bounds<gpui::Pixels>> {
     cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| window.draw(cx).clear())
+    cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
         .unwrap();
     VisualTestContext::from_window(window, cx).debug_bounds(selector)
 }

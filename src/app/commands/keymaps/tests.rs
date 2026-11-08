@@ -364,7 +364,7 @@ fn rebuilt_map_retains_fixed_config_error_binding(cx: &mut TestAppContext) {
     cx.read(|cx| {
         let keymap = cx.key_bindings();
         let keymap = keymap.borrow();
-        let input = [gpui::Keystroke::parse(quit_key).unwrap()];
+        let input = [gpui::Keystroke::parse_with_os(quit_key, cx.platform_info().os).unwrap()];
         let contexts = [KeyContext::parse("config-error").unwrap()];
         let (bindings, _) = keymap.bindings_for_input(&input, &contexts);
         assert_eq!(bindings.len(), 1);
@@ -396,7 +396,7 @@ fn menu_shortcuts_follow_the_effective_global_keymap(cx: &mut TestAppContext) {
                 binding
                     .keystrokes()
                     .iter()
-                    .map(|stroke| stroke.unparse())
+                    .map(|stroke| stroke.unparse(cx.platform_info().os))
                     .collect::<Vec<_>>()
                     .join(" ")
             })

@@ -45,9 +45,9 @@ impl Render for EditorView {
             // viewport height (written each paint by the element). macOS
             // "natural" scroll: trackpad two-finger gesture down moves the
             // content up, i.e. the viewport descends — scroll increases.
-            // ScrollWheelEvent delta is positive for swipes upward (toward
+            // ScrollEvent delta is positive for swipes upward (toward
             // content top), so we invert it here.
-            .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|this, ev: &ScrollEvent, _, cx| {
                 let (dx, dy) = match ev.delta {
                     ScrollDelta::Pixels(p) => (f32::from(p.x), f32::from(p.y)),
                     ScrollDelta::Lines(p) => (
@@ -512,7 +512,7 @@ impl Element for EditorElement {
             for (row, s, x_off) in &shaped {
                 if let Some(s) = s {
                     let origin = point(bounds.origin.x + *x_off, top(row.row.index));
-                    let _ = s.paint(origin, line_height, window, cx);
+                    let _ = s.paint(origin, line_height, TextAlign::Left, None, window, cx);
                 }
             }
 
@@ -545,6 +545,8 @@ impl Element for EditorElement {
                 let _ = glyph.paint(
                     point(left + pad, top(row.row.index)),
                     line_height,
+                    TextAlign::Left,
+                    None,
                     window,
                     cx,
                 );
@@ -697,7 +699,8 @@ impl Element for EditorElement {
                             gutter_bounds.origin.x + px(gutter.layout.numbers_end) - shaped.width,
                             top(*row),
                         );
-                        let _ = shaped.paint(origin, line_height, window, cx);
+                        let _ =
+                            shaped.paint(origin, line_height, TextAlign::Left, None, window, cx);
                     }
                 },
             );

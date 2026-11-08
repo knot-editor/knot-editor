@@ -226,7 +226,7 @@ impl ProductShell {
         } else {
             #[cfg(target_os = "macos")]
             let _ = cx.update_window(destination_window, |_, window, cx| {
-                window.draw(cx).clear();
+                window.draw(cx).clear(cx);
                 window.activate_window();
             });
         }

@@ -29,6 +29,7 @@ pub(crate) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollect
     cx.set_global(ApplicationTerminalSessions(RefCell::new(
         TerminalSessions::default(),
     )));
+    cx.update(|cx| crate::app::allow_thread_wakeups(cx));
     cx.set_global(ApplicationFileSystems(product_filesystems()));
     let commands = cx.new(ProductCommandDispatcher::new);
     cx.set_global(ApplicationProductCommands(commands));

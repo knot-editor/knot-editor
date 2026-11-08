@@ -740,7 +740,7 @@ fn deactivation_publishes_null_targets_without_repaint_events(cx: &mut TestAppCo
     visual.refresh().unwrap();
     assert!(take_events(&host, visual).is_empty());
     // Focus is the session's, so the window losing native focus leaves it.
-    visual.update(|window, _| window.blur());
+    visual.update(|window, cx| window.blur(cx));
     assert!(take_events(&host, visual).is_empty());
     visual.deactivate_window();
     let deactivated = take_events(&host, visual);

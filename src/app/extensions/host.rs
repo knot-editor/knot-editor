@@ -272,8 +272,8 @@ pub(crate) fn quit_after_storage(cx: &mut App) {
         // Windows are recorded once the shell that started quit is released,
         // and before quitting closes them.
         match cx.update(crate::app::window_sessions::record_for_quit) {
-            Ok(Some(flush)) => flush.await.is_ok(),
-            _ => true,
+            Some(flush) => flush.await.is_ok(),
+            None => true,
         }
     });
     // Debounced application-state writes may still be pending; force them
@@ -295,7 +295,7 @@ pub(crate) fn quit_after_storage(cx: &mut App) {
         if let Some(flush) = state_flush {
             let _ = flush.await;
         }
-        let _ = cx.update(|cx| cx.quit());
+        cx.update(|cx| cx.quit());
     })
     .detach();
 }
@@ -304,6 +304,7 @@ pub(crate) fn install(cx: &mut App) -> Entity<ProductExtensionHost> {
     knot_protocol::declarations::registry()
         .validate_context::<handlers::HostContext>()
         .expect("valid application handler contexts");
+    crate::app::allow_thread_wakeups(cx);
     let (pool, inbox) = ExtensionPool::new(PoolConfig::default());
     let host = cx.new(|cx| ProductExtensionHost::new(pool, inbox, cx));
     cx.set_global(ApplicationExtensionHost {
@@ -496,7 +497,7 @@ fn route_nested_command(
             Ok(()) => {
                 cx.spawn(async move |cx| {
                     let outcome = receiver.await.unwrap_or(CommandOutcome::Cancelled);
-                    let _ = host.update(cx, |host, cx| {
+                    host.update(cx, |host, cx| {
                         host.commands.complete(child, outcome);
                         host.drain_command_events(cx);
                     });
@@ -671,7 +672,7 @@ impl ProductExtensionHost {
             setting_warnings: Vec::new(),
             #[cfg(any(test, feature = "test-support"))]
             application_events: Vec::new(),
-            _application_window_closed: cx.on_window_closed(application_changed),
+            _application_window_closed: cx.on_window_closed(|cx, _| application_changed(cx)),
             _application_signal: cx.observe(&application_signal, |host, _, cx| {
                 host.refresh_application_observation(cx)
             }),
@@ -1143,7 +1144,7 @@ impl ProductExtensionHost {
             if result.is_err() {
                 let _ = this.update(cx, |host, cx| host.abort_product_startup(cx));
             }
-            let _ = cx.update(|cx| product::finish_product_startup(result, cx));
+            cx.update(|cx| product::finish_product_startup(result, cx));
         }));
     }
 
@@ -1914,33 +1915,31 @@ impl ProductExtensionHost {
                 .completion
                 .await
                 .unwrap_or(CommandOutcome::Cancelled);
-            let outcome = cx
-                .update(|cx| {
-                    if target.session(cx).is_none() {
-                        return CommandOutcome::InvalidTarget;
-                    }
-                    if let Err(invalid) = target
-                        .validate_tab(cx)
-                        .and_then(|()| target.validate_view(cx))
-                    {
-                        return invalid;
-                    }
-                    let Some(host) = this.upgrade() else {
-                        return CommandOutcome::Cancelled;
-                    };
-                    let host = host.read(cx);
-                    if !host
-                        .lifecycles
-                        .contains(&ExtensionKey::new(handler.extension, handler.lifecycle))
-                        || host.commands.catalog().borrow().resolve(name.as_ref())
-                            != Ok(CommandTargetKind::Extension(handler))
-                    {
-                        CommandOutcome::Cancelled
-                    } else {
-                        outcome
-                    }
-                })
-                .unwrap_or(CommandOutcome::InvalidTarget);
+            let outcome = cx.update(|cx| {
+                if target.session(cx).is_none() {
+                    return CommandOutcome::InvalidTarget;
+                }
+                if let Err(invalid) = target
+                    .validate_tab(cx)
+                    .and_then(|()| target.validate_view(cx))
+                {
+                    return invalid;
+                }
+                let Some(host) = this.upgrade() else {
+                    return CommandOutcome::Cancelled;
+                };
+                let host = host.read(cx);
+                if !host
+                    .lifecycles
+                    .contains(&ExtensionKey::new(handler.extension, handler.lifecycle))
+                    || host.commands.catalog().borrow().resolve(name.as_ref())
+                        != Ok(CommandTargetKind::Extension(handler))
+                {
+                    CommandOutcome::Cancelled
+                } else {
+                    outcome
+                }
+            });
             completion.complete(outcome);
         })
         .detach();
@@ -1984,36 +1983,34 @@ impl ProductExtensionHost {
                 .completion
                 .await
                 .unwrap_or(knot_protocol::CommandOutcome::Cancelled);
-            let outcome = cx
-                .update(|cx| {
-                    let Some(host) = this.upgrade() else {
-                        return knot_protocol::CommandOutcome::Cancelled;
-                    };
-                    // A dead lifecycle cancels the command even when its frame
-                    // was detached first; a live lifecycle with an invalid
-                    // target is a distinct InvalidTarget result.
-                    let host = host.read(cx);
-                    if !host
-                        .lifecycles
-                        .contains(&ExtensionKey::new(handler.extension, handler.lifecycle))
-                    {
-                        return knot_protocol::CommandOutcome::Cancelled;
-                    }
-                    if let Err(invalid) = target.validate_view(cx) {
-                        return invalid;
-                    }
-                    if target.view.is_none_or(|view| {
-                        host.commands
-                            .catalog()
-                            .borrow()
-                            .resolve_view(view, name.as_ref())
-                            != Some(handler)
-                    }) {
-                        return knot_protocol::CommandOutcome::Cancelled;
-                    }
-                    outcome
-                })
-                .unwrap_or(knot_protocol::CommandOutcome::InvalidTarget);
+            let outcome = cx.update(|cx| {
+                let Some(host) = this.upgrade() else {
+                    return knot_protocol::CommandOutcome::Cancelled;
+                };
+                // A dead lifecycle cancels the command even when its frame
+                // was detached first; a live lifecycle with an invalid
+                // target is a distinct InvalidTarget result.
+                let host = host.read(cx);
+                if !host
+                    .lifecycles
+                    .contains(&ExtensionKey::new(handler.extension, handler.lifecycle))
+                {
+                    return knot_protocol::CommandOutcome::Cancelled;
+                }
+                if let Err(invalid) = target.validate_view(cx) {
+                    return invalid;
+                }
+                if target.view.is_none_or(|view| {
+                    host.commands
+                        .catalog()
+                        .borrow()
+                        .resolve_view(view, name.as_ref())
+                        != Some(handler)
+                }) {
+                    return knot_protocol::CommandOutcome::Cancelled;
+                }
+                outcome
+            });
             completion.complete(outcome);
         })
         .detach();
@@ -2086,7 +2083,7 @@ impl ProductExtensionHost {
                             }),
                         },
                     };
-                let _ = editor_for_task.update(cx, |editor, cx| {
+                editor_for_task.update(cx, |editor, cx| {
                     editor.apply_completion_response(buffer, response, cx);
                 });
             });

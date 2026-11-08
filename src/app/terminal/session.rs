@@ -254,6 +254,7 @@ impl TerminalSession {
     }
 
     fn start(&mut self, cx: &mut Context<Self>) {
+        crate::app::allow_thread_wakeups(cx);
         self.generation += 1;
         let generation = self.generation;
         let (wakeup_tx, mut wakeup_rx) = tokio::sync::mpsc::channel(1);

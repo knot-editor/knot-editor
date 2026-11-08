@@ -52,6 +52,18 @@ mod zoom;
 
 use command_palette::CommandPalette;
 
+/// Lets real threads wake foreground tasks under gpui's deterministic test
+/// scheduler, which otherwise fails the test. Extension workers, PTY readers,
+/// and storage threads finish work that foreground tasks await.
+fn allow_thread_wakeups(cx: &App) {
+    #[cfg(any(test, feature = "test-support"))]
+    if cx.background_executor().is_test() {
+        cx.background_executor().allow_parking();
+    }
+    #[cfg(not(any(test, feature = "test-support")))]
+    let _ = cx;
+}
+
 actions!(
     knot,
     [

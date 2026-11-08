@@ -94,7 +94,7 @@ impl ProductShell {
             }) else {
                 return;
             };
-            let _ = cx.update(|cx| match settled {
+            cx.update(|cx| match settled {
                 Settled::Unchanged => {}
                 Settled::Roots => crate::app::window_sessions::record(cx),
                 Settled::Layout(target) => {

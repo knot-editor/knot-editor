@@ -292,7 +292,7 @@ impl ProductShell {
                 plan.prompts.clear();
                 plan.hot_exit = true;
             }
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 shell.update(cx, |shell, cx| {
                     shell.start_protected_close_plan(plan, completion, cx)
                 })
@@ -349,14 +349,10 @@ impl ProductShell {
                     Ok(Some((prompt, prompted_revision)))
                 });
                 let (prompt, prompted_revision) = match prompt {
-                    Ok(Ok(Some(prompt))) => prompt,
-                    Ok(Ok(None)) => continue,
-                    Ok(Err(error)) => {
+                    Ok(Some(prompt)) => prompt,
+                    Ok(None) => continue,
+                    Err(error) => {
                         outcome = Err(error);
-                        break;
-                    }
-                    Err(_) => {
-                        outcome = Err(ProtectedCloseFailure::InvalidTarget);
                         break;
                     }
                 };
@@ -386,13 +382,9 @@ impl ProductShell {
                             Ok(receiver)
                         });
                         let save_outcome = match save {
-                            Ok(Ok(receiver)) => receiver.await.unwrap_or(CommandOutcome::Cancelled),
-                            Ok(Err(error)) => {
+                            Ok(receiver) => receiver.await.unwrap_or(CommandOutcome::Cancelled),
+                            Err(error) => {
                                 outcome = Err(error);
-                                break;
-                            }
-                            Err(_) => {
-                                outcome = Err(ProtectedCloseFailure::InvalidTarget);
                                 break;
                             }
                         };
@@ -430,13 +422,9 @@ impl ProductShell {
                             })
                         });
                         match approval {
-                            Ok(Ok(approval)) => approvals.push(approval),
-                            Ok(Err(error)) => {
+                            Ok(approval) => approvals.push(approval),
+                            Err(error) => {
                                 outcome = Err(error);
-                                break;
-                            }
-                            Err(_) => {
-                                outcome = Err(ProtectedCloseFailure::InvalidTarget);
                                 break;
                             }
                         }
@@ -457,13 +445,9 @@ impl ProductShell {
                             })
                         });
                         match approval {
-                            Ok(Ok(approval)) => approvals.push(approval),
-                            Ok(Err(error)) => {
+                            Ok(approval) => approvals.push(approval),
+                            Err(error) => {
                                 outcome = Err(error);
-                                break;
-                            }
-                            Err(_) => {
-                                outcome = Err(ProtectedCloseFailure::InvalidTarget);
                                 break;
                             }
                         }
@@ -475,7 +459,7 @@ impl ProductShell {
                 }
             }
             let current_views = if matches!(outcome, Ok(PresentationCloseOutcome::Closed)) {
-                cx.update(Self::collect_product_views).ok()
+                Some(cx.update(Self::collect_product_views))
             } else {
                 None
             };
@@ -502,7 +486,7 @@ impl ProductShell {
                 })
                 .is_err()
             {
-                let _ = cx.update(|cx| {
+                cx.update(|cx| {
                     Self::set_protected_closure_active(false, cx);
                     completion.take().unwrap()(Err(ProtectedCloseFailure::InvalidTarget), cx);
                 });

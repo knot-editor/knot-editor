@@ -326,7 +326,7 @@ impl ProductShell {
         let generation = self.keys.generation;
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(SEQUENCE_TIMEOUT).await;
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 let Some(this) = this.upgrade() else {
                     return;
                 };

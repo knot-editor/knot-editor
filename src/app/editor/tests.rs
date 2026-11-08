@@ -1,6 +1,6 @@
 use gpui::{
     AppContext, ClipboardItem, EntityInputHandler, Modifiers, MouseButton, MouseDownEvent,
-    MouseMoveEvent, ScrollDelta, ScrollWheelEvent, TestAppContext, point, px,
+    MouseMoveEvent, ScrollDelta, ScrollEvent, TestAppContext, point, px,
 };
 
 use super::{
@@ -673,7 +673,7 @@ fn editing_a_large_buffer_never_reads_the_whole_text(cx: &mut TestAppContext) {
     cx.refresh().unwrap();
     cx.update(|window, cx| {
         editor.update(cx, |view, cx| {
-            view.focus.focus(window);
+            view.focus.focus(window, cx);
             let state = view.editor.clone();
             state.update(cx, |state, cx| {
                 state.restore_view_state(
@@ -713,7 +713,7 @@ fn editing_a_large_buffer_never_reads_the_whole_text(cx: &mut TestAppContext) {
             view.replace_text_in_range(None, "日", window, cx);
         })
     });
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: cx.read(|cx| editor.read(cx).interaction_bounds().center()),
         delta: ScrollDelta::Pixels(point(px(-30.), px(-200.))),
         ..Default::default()
@@ -733,7 +733,7 @@ fn horizontal_scroll_is_bounded_by_the_widest_shaped_line(cx: &mut TestAppContex
     let model = cx.new(|_| BufferModel::from_text(text));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model.clone(), cx));
     cx.refresh().unwrap();
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: cx.read(|cx| editor.read(cx).interaction_bounds().center()),
         delta: ScrollDelta::Pixels(point(px(-100_000.), px(0.))),
         ..Default::default()
@@ -921,7 +921,7 @@ fn read_only_text_keeps_normal_selection_copy_and_scroll_behavior(cx: &mut TestA
             editor.replace_text_in_range(None, "changed", window, cx);
         });
     });
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: cx.read(|cx| editor.read(cx).interaction_bounds().center()),
         delta: ScrollDelta::Lines(point(0., -5.)),
         ..Default::default()
@@ -1703,7 +1703,10 @@ fn the_caret_blinks_while_focused_and_shows_again_after_typing(cx: &mut TestAppC
         |cx: &mut gpui::VisualTestContext| cx.read(|cx| editor.read(cx).caret_blink.visible);
     let blinking =
         |cx: &mut gpui::VisualTestContext| cx.read(|cx| editor.read(cx).caret_blink.key.is_some());
-    cx.update(|window, cx| editor.read(cx).focus.focus(window));
+    cx.update(|window, cx| {
+        let focus = editor.read(cx).focus.clone();
+        focus.focus(window, cx);
+    });
     cx.run_until_parked();
     assert!(visible(cx));
     cx.executor().advance_clock(super::CARET_BLINK_INTERVAL);
@@ -1724,7 +1727,7 @@ fn the_caret_blinks_while_focused_and_shows_again_after_typing(cx: &mut TestAppC
     cx.run_until_parked();
     assert!(visible(cx));
 
-    cx.update(|window, _| window.blur());
+    cx.update(|window, cx| window.blur(cx));
     cx.run_until_parked();
     assert!(!blinking(cx));
 }

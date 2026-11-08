@@ -364,7 +364,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     };
     let settle = |cx: &mut TestAppContext| {
         cx.update_window(window, |_, window, cx| {
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         })
         .unwrap();
         cx.run_until_parked();
@@ -376,7 +376,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
         })
         .unwrap();
         cx.update_window(window, |_, window, cx| {
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         })
         .unwrap();
         cx.run_until_parked();

@@ -107,6 +107,14 @@ impl ThemePaint for Theme {
 mod tests {
     use super::*;
 
+    const HOST_OS: gpui::OperatingSystem = if cfg!(target_os = "macos") {
+        gpui::OperatingSystem::Mac
+    } else if cfg!(windows) {
+        gpui::OperatingSystem::Windows
+    } else {
+        gpui::OperatingSystem::Linux
+    };
+
     #[test]
     fn keystrokes_round_trip_through_gpui() {
         for source in ["ctrl-shift-a", "alt-s->ß", "cmd-,", "f5", "ctrl--"] {
@@ -184,12 +192,12 @@ mod tests {
             "super-x",
         ] {
             let knot = keys::Keystroke::parse(source).unwrap();
-            let gpui = gpui::Keystroke::parse(source).unwrap();
+            let gpui = gpui::Keystroke::parse_with_os(source, HOST_OS).unwrap();
             assert_eq!(keystroke_to_gpui(&knot), gpui, "{source}");
-            assert_eq!(knot.unparse(), gpui.unparse(), "{source}");
+            assert_eq!(knot.unparse(), gpui.unparse(HOST_OS), "{source}");
         }
         for source in ["ctrl-ab-c", "a-b"] {
-            assert!(gpui::Keystroke::parse(source).is_err());
+            assert!(gpui::Keystroke::parse_with_os(source, HOST_OS).is_err());
             assert!(keys::Keystroke::parse(source).is_err());
         }
     }

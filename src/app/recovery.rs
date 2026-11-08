@@ -945,7 +945,7 @@ pub(crate) fn recoverable(cx: &mut App) -> Task<Result<Vec<StoredSnapshot>, Stri
     let listing = service.store.snapshots();
     cx.spawn(async move |cx| {
         let snapshots = listing.await?;
-        cx.update(|cx| {
+        Ok(cx.update(|cx| {
             let documents = cx.global::<ApplicationDocuments>().0.read(cx);
             snapshots
                 .into_iter()
@@ -956,8 +956,7 @@ pub(crate) fn recoverable(cx: &mut App) -> Task<Result<Vec<StoredSnapshot>, Stri
                             .is_none()
                 })
                 .collect()
-        })
-        .map_err(display_error)
+        }))
     })
 }
 
@@ -1278,7 +1277,6 @@ async fn restore_snapshot(
     let StagedRestore { snapshot, loaded } = stage_snapshot(snapshot, providers).await?;
     let service = service.clone();
     cx.update(|cx| commit_restore(&service, snapshot, loaded, cx))
-        .map_err(|error| RestoreError::Store(display_error(error)))?
 }
 
 fn commit_restore(

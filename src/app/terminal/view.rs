@@ -423,7 +423,7 @@ impl TerminalView {
         };
         self.pointer_position = Some(event.position);
         self.pointer_modifiers = event.modifiers;
-        self.focus.focus(window);
+        self.focus.focus(window, cx);
         if event.button == MouseButton::Left
             && link_modifier(event.modifiers)
             && let Some(grid) = self.link_grid(cx)
@@ -582,7 +582,7 @@ impl TerminalView {
         }
     }
 
-    fn scroll(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) -> bool {
+    fn scroll(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) -> bool {
         self.clear_links();
         let Some(mode) = self.sync_pointer(cx) else {
             return false;
@@ -912,7 +912,7 @@ impl Element for TerminalElement {
     ) {
         let scroll_hitbox = hitbox.clone();
         let entity = self.entity.clone();
-        window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+        window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble
                 && scroll_hitbox.should_handle_scroll(window)
                 && entity.update(cx, |terminal, cx| terminal.scroll(event, cx))
@@ -1095,7 +1095,8 @@ impl Element for TerminalElement {
                     }),
                     |window| {
                         let origin = layout.text_origin(origin, shaped.ascent, shaped.descent);
-                        let _ = shaped.paint(origin, cell_height, window, cx);
+                        let _ =
+                            shaped.paint(origin, cell_height, TextAlign::Left, None, window, cx);
                     },
                 );
             }

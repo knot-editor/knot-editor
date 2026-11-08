@@ -1,7 +1,7 @@
 use super::{Scroll, TerminalSession, TerminalStatus, TerminalView};
 use alacritty_terminal::{tty, vte::ansi::Processor};
 use gpui::{
-    App, AppContext, Entity, Modifiers, MouseButton, Pixels, Point, ScrollDelta, ScrollWheelEvent,
+    App, AppContext, Entity, Modifiers, MouseButton, Pixels, Point, ScrollDelta, ScrollEvent,
     TestAppContext, point, px,
 };
 use std::{
@@ -122,7 +122,7 @@ fn click_tracking_reports_buttons_and_wheels_without_selection_or_motion(cx: &mu
         cx.simulate_mouse_up(start, button, modifiers);
     }
     for delta in [point(0., 1.), point(0., -1.), point(1., 0.), point(-1., 0.)] {
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: start,
             delta: ScrollDelta::Lines(delta),
             ..Default::default()
@@ -280,7 +280,7 @@ fn shift_selection_and_scrolling_stay_local_in_tracking_scrollback(cx: &mut Test
             .grid()
             .display_offset()
     });
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: start,
         delta: ScrollDelta::Lines(point(0., -1.)),
         modifiers: shift,
@@ -301,7 +301,7 @@ fn shift_selection_and_scrolling_stay_local_in_tracking_scrollback(cx: &mut Test
     });
     cx.simulate_mouse_down(reported, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_up(reported, MouseButton::Left, Modifiers::default());
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: reported,
         delta: ScrollDelta::Lines(point(0., -1.)),
         ..Default::default()
@@ -331,7 +331,7 @@ fn wheel_accumulation_and_alternate_scroll_use_one_current_route(cx: &mut TestAp
     let position = cx.read(|cx| cell(&view, cx, 1, 0));
     let height = cx.read(|cx| view.read(cx).layout.unwrap().cell_height);
     for _ in 0..4 {
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position,
             delta: ScrollDelta::Pixels(point(px(0.), height / 4.)),
             ..Default::default()
@@ -339,14 +339,14 @@ fn wheel_accumulation_and_alternate_scroll_use_one_current_route(cx: &mut TestAp
     }
     cx.update(|_, cx| parse(&fixture, b"\x1b[?1000l\x1b[?1049h\x1b[?1h", cx));
     for delta in [point(0., 2.), point(1., 0.)] {
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position,
             delta: ScrollDelta::Lines(delta),
             ..Default::default()
         });
     }
     // Shift and disabling alternate scroll never emit synthetic cursor input.
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position,
         delta: ScrollDelta::Lines(point(0., 1.)),
         modifiers: Modifiers {
@@ -356,13 +356,13 @@ fn wheel_accumulation_and_alternate_scroll_use_one_current_route(cx: &mut TestAp
         ..Default::default()
     });
     cx.update(|_, cx| parse(&fixture, b"\x1b[?1007l", cx));
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position,
         delta: ScrollDelta::Lines(point(0., 1.)),
         ..Default::default()
     });
     cx.update(|_, cx| parse(&fixture, b"\x1b[?1007h\x1b[?1l", cx));
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position,
         delta: ScrollDelta::Lines(point(0., 1.)),
         ..Default::default()
@@ -629,7 +629,7 @@ fn geometry_and_focus_changes_cancel_owned_reports_and_reset_releases(cx: &mut T
     cx.simulate_mouse_up(position, MouseButton::Left, Modifiers::default());
     let position = cx.read(|cx| cell(&view, cx, 1, 0));
     cx.simulate_mouse_down(position, MouseButton::Right, Modifiers::default());
-    cx.update(|window, _| window.blur());
+    cx.update(|window, cx| window.blur(cx));
     cx.run_until_parked();
     cx.simulate_mouse_up(position, MouseButton::Right, Modifiers::default());
     finish(&fixture, expected, cx);
@@ -855,7 +855,7 @@ fn detected_link_activation_and_cancelled_lifecycle_gestures(cx: &mut TestAppCon
     assert!(opened.borrow().is_empty());
 
     cx.simulate_mouse_down(start, MouseButton::Left, link_modifiers());
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: start,
         delta: ScrollDelta::Lines(point(0., 1.)),
         ..Default::default()

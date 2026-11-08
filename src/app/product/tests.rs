@@ -189,11 +189,10 @@ struct TestRecoveryDir(tempfile::TempDir);
 impl gpui::Global for TestRecoveryDir {}
 
 fn keymap_command(cx: &gpui::App, key: &str, view: Option<&str>) -> Option<String> {
-    match cx
-        .global::<ApplicationKeymaps>()
-        .0
-        .resolve(&gpui::Keystroke::parse(key).unwrap().unparse(), view)
-    {
+    match cx.global::<ApplicationKeymaps>().0.resolve(
+        &crate::app::keys::Keystroke::parse(key).unwrap().unparse(),
+        view,
+    ) {
         Some(BindingResolution::Command(command)) => Some(command.name.to_string()),
         Some(BindingResolution::Unbound) => Some("<unbound>".into()),
         None => None,

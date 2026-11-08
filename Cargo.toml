@@ -15,6 +15,11 @@ default-members = [
 ]
 resolver = "3"
 
+# gpui-pre and its platform crate are one snapshot; upgrade them together.
+[workspace.dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.11", default-features = false, features = ["font-kit", "windows-manifest"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11", default-features = false, features = ["font-kit"] }
+
 [package]
 name = "knot"
 version = "0.1.0"
@@ -32,7 +37,8 @@ knot-protocol = { path = "crates/knot-protocol" }
 alacritty_terminal = { version = "0.26", default-features = false }
 anyhow = "1"
 directories = "6"
-gpui = { version = "0.2", default-features = false, features = ["font-kit", "windows-manifest"] }
+gpui = { workspace = true }
+gpui_platform = { workspace = true }
 libc = "0.2"
 jsonc-parser = { version = "0.34", features = ["serde", "serde_json"] }
 percent-encoding = "2"
@@ -66,10 +72,10 @@ knot-host = { path = "crates/knot-host", features = ["test-support"] }
 knot-model = { path = "crates/knot-model", features = ["test-support"] }
 knot-protocol = { path = "crates/knot-protocol", features = ["test-support"] }
 pollster = "1"
-gpui = { version = "0.2", default-features = false, features = ["font-kit", "test-support", "windows-manifest"] }
+gpui = { workspace = true, features = ["test-support"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-gpui = { version = "0.2", default-features = false, features = ["wayland"] }
+gpui_platform = { workspace = true, features = ["wayland"] }
 
 [lib]
 name = "knot"
@@ -82,7 +88,7 @@ opt-level = 3
 
 # Tests draw every dirty window after each update, and unoptimized layout and
 # painting dominate product tests and the debug app.
-[profile.dev.package.gpui]
+[profile.dev.package.gpui-pre]
 opt-level = 3
 
 [profile.dev.package.taffy]

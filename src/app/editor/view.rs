@@ -218,7 +218,7 @@ impl EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.focus.focus(window);
+        self.focus.focus(window, cx);
         self.editor.update(cx, |editor, cx| {
             editor.set_selection(
                 range.start_byte_offset,
