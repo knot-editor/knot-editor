@@ -1,7 +1,7 @@
 # D162 — Plain models and a thin gpui shell
 
 Status: 🚧 approved, not started. Roadmap item [D162](../roadmap.md).
-Order: D161 (complete; see the [crate boundaries decision](../decisions/platform.md#crate-boundaries)) → **[D160](d160-gpui-component.md) → D162.**
+Order: D161 (complete; see the [crate boundaries decision](../decisions/platform.md#crate-boundaries)) → [D160](d160-gpui-component.md) → **D162.**
 Do not start before D160 is complete: this plan shapes the shell against the
 gpui API Knot keeps. Re-read D160's port report first and revise these
 checkpoints where it shows other churn.
