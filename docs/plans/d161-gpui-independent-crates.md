@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 5 implemented, awaiting review. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 6 next. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -280,41 +280,20 @@ with checkpoint 5; conversions stay in the shell.
 
 ### 5. knot-model with the gpui-free modules
 
-🔍 Implemented; awaiting the review gate.
+✅ Complete and approved. `crates/knot-model` holds the gpui-free modules
+(`crates/knot-model/src/lib.rs` groups them), with no gpui, V8, or host in its
+dependency tree, and its tests are plain tests. Durable consequences:
 
-- ✅ `crates/knot-model` holds `keys`, `style`, `history`, `indentation`,
-  `editing` (language editing configuration), `syntax` with the grammars,
-  `theme` values, `filesystem`, `resource`, `open`, `workspace`,
-  `commands::{catalog, key_router, keymaps}`, and
-  `extensions::{package, load}`. Its manifest and dev-dependencies have no
-  gpui, V8, or host; `cargo test -p knot-model` runs 171 plain tests, and the
-  full suite still runs 1,271.
-- ✅ The application re-exports each wholly moved module at its old path
-  (`use knot_model::{resource, …}` in `src/app/mod.rs`), so callers did not
-  change. Split modules keep only their runtime part: `theme.rs` holds the
-  `ApplicationTheme` global; `commands/keymaps.rs` holds `ApplicationKeymaps`,
-  the gpui menu bindings, and `presets.rs` the Knot preset tables,
-  `ApplicationKeymapPresets`, and selection from settings.
-- Keymap decision: the binding registry, preset registry, matching, display,
-  validation, and menu-shortcut policy are model code; `PresetRegistry::new`
-  receives the native Knot preset's bindings, because those tables name
-  application commands. `select` replaces the global's direct field access.
-- `ExtensionKey` moved to `knot-protocol`: history keys entries by it, and the
-  model cannot see the host.
-- Protocol traits cannot be implemented in the application for model types
-  (orphan rule), so `defineColor` and `registerKeymapPreset` decode into local
-  newtypes (`DefinedColor`, `RegisteredPreset`).
-- `discover_all` takes the bundled discovery report; `extensions::bundled`
-  stays in the application. The load-plan rollback test that needs a real
-  pool moved to `src/app/extensions/host.rs`.
-- Model items gated `cfg(test)` that application tests use are now
-  `cfg(any(test, feature = "test-support"))`; the application enables the
-  feature as a dev-dependency and under its own `test-support`.
-- `editor/text.rs` stays with `editor/wrap.rs` until D162: its queries take
-  `BufferModel`. `entry.rs` (launch arguments) and the terminal helpers stay
-  with the shell they serve.
-- Review gate: the crate's contents and public surface read as one
-  coherent layer, not a grab bag (`crates/knot-model/src/lib.rs` groups them).
+- The application re-exports wholly moved modules at their old paths in
+  `src/app/mod.rs`; split modules keep only globals and gpui edges (`theme.rs`,
+  `commands/keymaps.rs` and its `presets.rs`).
+- `PresetRegistry::new` receives the Knot preset's bindings, because the
+  preset tables name application commands and stay in the application.
+- `ExtensionKey` lives in `knot-protocol`. Protocol traits for model types
+  need application newtypes (orphan rule), as `DefinedColor` and
+  `RegisteredPreset` show.
+- Model test helpers are gated `cfg(any(test, feature = "test-support"))`.
+- `editor/text.rs` waits for D162 with `editor/wrap.rs`; it takes `BufferModel`.
 
 ### 6. Workbench layout over identities
 
