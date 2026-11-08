@@ -27,13 +27,14 @@ compatibility concerns at any time.
 ## Repository map
 
 ```text
-src/core    UI-, platform-, and scripting-independent text and edit primitives
-src/app     gpui shell, foreground editor state, native views, resource providers,
-            commands, startup, and application persistence
-src/host    V8, bounded scheduling, module-graph validation, and typed transport
+crates/knot-core      UI-, platform-, and scripting-independent text and edit primitives
+crates/knot-protocol  Knot-owned serde transport types and operation declarations
+crates/knot-host      V8, bounded scheduling, and module-graph validation
 crates/knot-handler-macros   adapters for annotated native host handlers and commands
-extensions/@knot    bundled TypeScript extension packages, compiled by build.rs
-scripts/extensions  extension toolchain, fake knot host, and package test runner
+src/app               gpui shell, foreground editor state, native views, resource providers,
+                      commands, startup, and application persistence
+extensions/@knot      bundled TypeScript extension packages, compiled by build.rs
+scripts/extensions    extension toolchain, fake knot host, and package test runner
 ```
 
 Use the table below to route a change to its authoritative documentation and
@@ -45,7 +46,7 @@ canonical source before reading broadly.
 | Document identity, dirty state, providers, Open/Save | [documents and persistence](docs/architecture/documents-and-persistence.md) | `src/app/documents.rs`, `src/app/open.rs`, `src/app/product/{open,save}.rs`, `src/app/model.rs`, `src/app/resource.rs` |
 | Windows, panes, tabs, closure, terminal, tool layout | [workbench and lifecycle](docs/architecture/workbench-and-lifecycle.md) | `src/app/workbench/`, `src/app/product/` (`closure.rs`, `tools.rs`, `launch.rs`, `render.rs`), `src/app/terminal/` |
 | Commands, keymaps, captured targets, focus routing | [commands](docs/architecture/commands.md) | `src/app/commands/`, `src/app/product/commands.rs` |
-| Extension runtime, scheduling, lifecycle, records | [extension host](docs/architecture/extension-host.md) | `crates/knot-host/src/`, `src/app/extensions/` |
+| Extension runtime, scheduling, lifecycle, records | [extension host](docs/architecture/extension-host.md) | `crates/knot-host/src/`, `crates/knot-protocol/src/`, `src/app/extensions/` |
 | Contributed UI, trees, completion, generated text | [semantic UI](docs/architecture/semantic-ui.md) | `src/app/extensions/semantics.rs`, `src/app/tree_view.rs`, `src/app/completion.rs` |
 | Syntax highlighting, languages, theme | [semantic UI](docs/architecture/semantic-ui.md#syntax-highlighting-and-languages), [core and buffers](docs/architecture/core-and-buffers.md#syntax-state) | `src/app/syntax.rs`, `src/app/languages.rs`, `src/app/theme.rs`, `src/app/themes.rs`, `extensions/@knot/language-*/`, `extensions/@knot/themes/` |
 | Extension public contract | `crates/knot-host/src/js/knot.d.ts`, [extension guide](docs/extension-api.md) | `docs/schemas/knot.schema.json`, `scripts/extensions/examples/` |

@@ -12,8 +12,8 @@ the macOS app bundle locally.
 Rust tests run under [cargo-nextest](https://nexte.st), which runs each test
 in its own process and in parallel across test binaries: install it with
 `cargo install --locked cargo-nextest` and run `cargo nextest run
---all-targets`. Nextest does not run doc tests, so `just test` and CI also run
-`cargo test --doc`. [`.config/nextest.toml`](../.config/nextest.toml) holds the
+--workspace --all-targets`. Nextest does not run doc tests, so `just test` and CI also run
+`cargo test --workspace --doc`. [`.config/nextest.toml`](../.config/nextest.toml) holds the
 `ci` profile, which reports every failure instead of stopping at the first.
 
 The [CI workflow](../.github/workflows/ci.yml) runs on pull requests and pushes

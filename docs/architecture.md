@@ -8,7 +8,8 @@ flows; implementation details and API contracts live in code.
 
 ## System map
 
-Knot has one runtime Rust package and a compile-time handler macro crate:
+Knot is a Cargo workspace. The root `knot` package is the gpui application;
+leaf crates under `crates/` cannot see gpui:
 
 ```text
 gpui application and native views
@@ -19,13 +20,15 @@ gpui application and native views
                      extension runtimes
 ```
 
-- `core` owns UI-, platform-, and scripting-independent text and edit primitives.
-- `app` owns the gpui shell, foreground editor state, native views, resource
+- `knot-core` owns UI-, platform-, and scripting-independent text and edit primitives.
+- The root `knot` package (`src/app`) owns the gpui shell, foreground editor state, native views, resource
   providers, commands, package discovery, startup, extension storage, the
   language registry, and native syntax parsing over compiled-in grammars.
-- `host` owns V8, bounded scheduling, immutable module-graph validation, and
-  Knot-owned typed transport. Its public control surface and protocol expose no
-  V8 or gpui objects.
+- `knot-protocol` owns the Knot-owned serde transport types and the typed
+  operation declarations, and depends on neither V8 nor gpui.
+- `knot-host` owns V8, bounded scheduling, and immutable module-graph
+  validation. Its public control surface and protocol expose no V8 or gpui
+  objects.
 - `knot-handler-macros` generates adapters for annotated native host handlers
   and commands, without depending on V8, gpui, or editor models. Application
   owners expose semantic operations; declaration adapters own transport.
