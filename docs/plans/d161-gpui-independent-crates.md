@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 1 implemented, awaiting review. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -120,50 +120,24 @@ application crate, so a TypeScript edit rebuilds it until checkpoint 2.
 
 ### 1. Workspace with knot-core, knot-protocol, and knot-host
 
-✅ Implemented. Scope decisions:
+✅ Complete and approved. The crates live under `crates/`; the root package
+depends on them, and `knot-core`, `knot-protocol`, and `knot-host` have no gpui
+in their dependency trees. Durable consequences for later checkpoints:
 
-- ✅ `declarations.rs` lives in `knot-protocol`, not `knot-host`: `HostRequest`
-  embeds `DeclaredRequest`, and declarations name protocol types, so the two
-  cannot be separate crates. The handler macros emit `::knot_protocol::declarations::`.
-- ✅ The V8 engine tests (`engine_tests.rs`) and the declaration, wire-code, and
-  identity tests moved into `src/app/extensions/host/`, since they exercise the
-  application's declared handlers. Engine internals they touch are `pub`, with
-  test-only helpers behind each crate's `test-support` feature, which the
-  application enables as a dev-dependency.
-- ✅ The 33 engine tests that need no declared operation stay in
-  `knot-host` (`engine/tests.rs`), so the crate has 57 tests that build without
-  gpui. Tests that call a facade operation must live in the application, whose
-  binary links the handlers; in `knot-host` such a call is rejected as
-  unsupported and the test would wait for a request that never arrives.
-- ✅ Every blocking wait in test helpers and tests is bounded by
-  `scheduler::TEST_WAIT` (30 s) and panics on expiry, and `.config/nextest.toml`
-  terminates any test still blocked after three 60 s periods.
-- ✅ Four `HostSuccess` impls moved from the application into `knot-protocol`
-  (orphan rule).
-- Remaining: review gate.
-
-- Deliverables: the three crates under `crates/`, the application depending
-  on them, and the host's test-only edges to `app` removed. The handler
-  macros emit paths to the new crates.
-- Validation: `just test` and `just lint` across the workspace;
-  `tests/handler_linking.rs` still links every declared handler and command;
-  `cargo test -p knot-core` and `cargo test -p knot-host` build without gpui.
-- **Implementation context:** move `src/core/` to `crates/knot-core/src/`,
-  `src/host/protocol.rs` to `crates/knot-protocol/src/lib.rs`, and the rest of
-  `src/host/` (with `src/host/js/knot.d.ts`) to `crates/knot-host/`.
-  `src/lib.rs` re-exports `declarations` for the linking test; repoint it.
-  The macros in `crates/knot-handler-macros/src/` emit
-  `crate::host::declarations::` (9 sites) and
-  `crate::app::commands::declarations::` (4); host paths become
-  `::knot_host::declarations::`. Move the `app::declared_host` uses in
-  `protocol.rs` tests (around line 930) and `src/host/engine/tests.rs` into
-  application tests, or give them host-local fixtures. `build.rs`'s
-  `rerun-if-changed=src/host/js/knot.d.ts` and every doc link to `src/core`,
-  `src/host`, or `knot.d.ts` follow the move (`AGENTS.md` map and table,
-  `docs/extension-api.md`, `docs/architecture/`). `justfile` and
-  `.github/workflows/ci.yml` gain `--workspace` where missing; CI's
-  `cargo test --lib host::declarations` (line 74) becomes `-p knot-host`.
-- Review gate: the timing numbers, and the crate graph reads as designed.
+- `declarations.rs` lives in `knot-protocol`, not `knot-host`: `HostRequest`
+  embeds `DeclaredRequest`, so the two cannot be separate crates. The handler
+  macros emit `::knot_protocol::declarations::`; `HostSuccess` impls for
+  protocol types must live in `knot-protocol` (orphan rule).
+- Each crate has a `test-support` feature that exposes test-only helpers; the
+  application enables it as a dev-dependency. Tests that call a facade
+  operation live in the application (`src/app/extensions/host/engine_tests.rs`,
+  `declaration_tests.rs`), whose binary links the handlers. The 33 declaration-free
+  engine tests stay in `knot-host`, giving it 57 tests that build without gpui.
+- Every blocking wait in test helpers and tests is bounded by
+  `scheduler::TEST_WAIT` (30 s) and panics on expiry (verified for
+  `receive_request`); `.config/nextest.toml` also terminates tests blocked past
+  three 60 s periods. Plain `cargo test` has only the 30 s bounds.
+- Timings are in [Timings](#timings); a clean build could not be measured.
 
 ### 2. knot-bundled with per-package compilation
 
