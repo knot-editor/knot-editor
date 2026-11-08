@@ -51,6 +51,9 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     grammar: "html",
     fileExtensions: ["html", "htm", "xhtml"],
     queries: { highlights: html.highlights, injections: injections.html },
+    // Markdown injects HTML into its HTML blocks, so a commented Markdown
+    // line toggles with these.
+    comments: { block: ["<!--", "-->"] },
   },
   {
     id: "java",

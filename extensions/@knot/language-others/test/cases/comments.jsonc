@@ -1,0 +1,26 @@
+// Comment toggling cases, run through the editor's toggles on each listed
+// language. Each case toggles comments on every line of `before` and expects
+// `after`; each block case toggles a block comment around the selected text
+// `before` and expects `after`. HTML has only a block comment, so toggling
+// line comments wraps and unwraps each line.
+{
+  "languages": ["html"],
+  "cases": [
+    { "name": "commenting wraps a line in <!-- -->", "before": ["<p>text</p>"], "after": ["<!-- <p>text</p> -->"] },
+    { "name": "uncommenting unwraps a line", "before": ["<!-- <p>text</p> -->"], "after": ["<p>text</p>"] },
+    {
+      "name": "commenting wraps each line at the shallowest indentation",
+      "before": ["<ul>", "  <li>a</li>", "</ul>"],
+      "after": ["<!-- <ul> -->", "<!--   <li>a</li> -->", "<!-- </ul> -->"]
+    },
+    {
+      "name": "uncommenting restores each line",
+      "before": ["<!-- <ul> -->", "<!--   <li>a</li> -->", "<!-- </ul> -->"],
+      "after": ["<ul>", "  <li>a</li>", "</ul>"]
+    }
+  ],
+  "block": [
+    { "name": "wrapping adds <!-- and -->", "before": "<p>text</p>", "after": "<!-- <p>text</p> -->" },
+    { "name": "unwrapping restores the text", "before": "<!-- <p>text</p> -->", "after": "<p>text</p>" }
+  ]
+}
