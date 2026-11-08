@@ -231,6 +231,7 @@ to be rebuilt later:
     snapshot is captured.
   - Whether a formatter hook belongs here is decided in its session; language
     servers (D067) remain out of scope.
+  - 🚧 [Execution plan](d079-save-hygiene.md)
 
 - **D031 — Current-file Find** (depends on D064)
   - Bound to ⌘F. The query field takes focus. Matching is live and highlights

@@ -134,6 +134,17 @@ complete list for that item.
     detection, the conversion commands, the status bar's picker, and
     `DocumentInfo.indentation`.
 
+- **D159 — Trim trailing whitespace on modified lines only**
+  - Deferred: D079 trims every line on save. Trimming only the lines a change
+    touched keeps saves from adding noise to the diff of a file that already
+    had trailing whitespace, and needs a notion of modified lines that Knot
+    lacks.
+  - Reconsider: A VCS or diff layer exists, such as a change gutter or
+    diff view. Then make `files.trimTrailingWhitespace` accept `false`,
+    `true`, or `"modified"` and trim only the lines that differ from the
+    baseline.
+  - Order: after D079 and the diff layer.
+
 - **D149 — Line ending facts and conversion**
   - Deferred: Newlines take the buffer's first line terminator (see
     [core and buffers](architecture/core-and-buffers.md)), derived from the
@@ -143,7 +154,8 @@ complete list for that item.
     mixed endings cause trouble. Then decide whether the ending stays derived
     or becomes stored document state that can report mixed, add it to
     `DocumentInfo` as `documentChanged`, convert every terminator in one undo
-    step, and add a status bar item (click: LF or CRLF).
+    step, and add a status bar item (click: LF or CRLF). Keep it consistent
+    with D079's final-newline insertion, which uses `line_ending()`.
   - Order: after D077.
 
 - **D006 — File drag and drop**
