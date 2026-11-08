@@ -1,6 +1,6 @@
 # D160 — Current gpui and gpui-component
 
-Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Roadmap item [D160](../roadmap.md);
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 implemented, awaiting its review gate. Roadmap item [D160](../roadmap.md);
 [D055](d055-icon-packs.md) waits for it.
 Order: D161 (complete; see the [crate boundaries decision](../decisions/platform.md#crate-boundaries)) →
 **D160** → [D162](d162-thin-gpui-shell.md). The paths below follow D161's
@@ -153,26 +153,47 @@ test in `src/app/product/tests/status_bar.rs`. Findings for checkpoint 4:
 
 ### 3. Tree row context menu and the key bridge
 
-- Deliverables: right-clicking an extension tree row selects it and opens a
-  gpui-component context menu listing the row's actions, which run through
-  the existing captured-window command route. A `tree.showContextMenu`
-  command, bound to Shift+F10 in the tree key context, opens it at the
-  selected row. While the menu has focus, unclaimed keys reach it; keymap
-  bindings still win; dismissal returns focus to the tree. A row without
-  actions opens no menu. The key interceptor gains the general rule that a
-  focused gpui-component popup receives keys the keymap leaves.
-- Validation: product tests for opening by pointer and by command, running
-  an action with its arguments, Escape returning focus to the tree, a global
-  binding firing while the menu is open, and no menu for a row without
-  actions; key-routing tests for the pass-through rule; a windowless session
-  where the command does nothing.
-- **Implementation context:** row actions and their dispatch already exist in
-  `src/app/tree_view.rs` (`TreeView::render`, action focus, `TREE_KEY_CONTEXT`
-  from `src/app/mod.rs:67`). The pass-through goes in the interceptor and
-  `FocusTarget` handling of `src/app/product/key_routing.rs`. Register the
-  command and its default binding through `crates/knot-model/src/commands/catalog.rs` and
-  `src/app/commands/keymaps/presets.rs`.
-- Review gate: a personal-config `post-init.js` with a `try.*` command
+🚧 Implemented; awaiting the review gate.
+
+- Deliverables:
+  - ✅ Right-clicking an extension tree row selects it and opens a
+    gpui-component `PopupMenu` of its actions, which `TreeView` owns and
+    draws in a deferred layer. Items run through `invoke_action`, the
+    existing captured-window route. Dismissal, or the menu losing focus,
+    closes it; dismissal returns focus to the tree. A row without actions
+    opens nothing.
+  - ✅ `tree.show-context-menu` (Workbench participant, in
+    `src/app/tree_view.rs`) opens the menu below the selected row when an
+    extension tree has focus, and is otherwise `Unavailable`, including
+    without a window. The Knot preset binds it to Shift+F10 globally and
+    unbinds Shift+F10 in terminals.
+  - ✅ The key bridge: `components::track_popup` registers a popup's focus
+    handle. In `ProductShell::key_down`, a key the keymap leaves while a
+    registered popup holds focus goes on to gpui dispatch rather than the
+    Knot surface. `keymaps::rebuild` keeps the bindings gpui-component
+    installed at init, since it clears gpui's bindings; without that the
+    menu's own keys never dispatched.
+- Validation (`src/app/product/tests/tree_context_menu.rs`):
+  - ✅ Pointer: right-click opens the menu, Down Down Enter runs the second
+    action with its argument, focus returns to the tree; a row without
+    actions is selected and opens nothing, and the command reports
+    Unavailable for it.
+  - ✅ Keyboard: Shift+F10 opens the menu; a global binding (F5, bound by
+    the fixture) runs and leaves it open; Down moves the menu, not the tree;
+    Escape closes it and the tree's own keys work again; the command opens
+    it and its first action runs.
+  - ✅ A session without a window: the command is Unavailable and Shift+F10
+    opens nothing.
+  - ✅ Full suite and `clippy --workspace --all-targets -D warnings` on macOS.
+- Scope decisions:
+  - Keymap bindings are scoped by view kind, and each extension tree has its
+    own, so there is no shared tree key context to bind in. The binding is
+    global and the command declines outside a focused extension tree.
+  - The command is named `tree.show-context-menu`, following Knot's
+    kebab-case command names.
+  - The menu opens with no item selected; the first Down selects the first
+    item, as gpui-component's context menus do.
+- Review gate (pending): a personal-config `post-init.js` with a `try.*` command
   that contributes a tree whose rows have actions; the menu works by
   pointer and keyboard, and Vim mode and global bindings behave as before.
 
