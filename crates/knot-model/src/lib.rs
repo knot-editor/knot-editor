@@ -12,6 +12,7 @@
 //! - Layout: [`workbench`].
 
 pub mod buffer;
+pub mod command_history;
 pub mod commands;
 pub mod completion;
 pub mod editing;

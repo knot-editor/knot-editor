@@ -5,22 +5,17 @@
 use std::time::Duration;
 
 use gpui::Global;
-use serde::{Deserialize, Serialize};
+use knot_model::command_history::RecentCommands;
 
 use super::record_store::{RecordStore, StateDatabase};
 
 const COMMAND_HISTORY_VERSION: u32 = 1;
 const WRITE_DEBOUNCE: Duration = Duration::from_millis(300);
-pub(crate) const COMMAND_HISTORY_LIMIT: usize = 50;
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
-struct CommandHistoryRecord {
-    commands: Vec<String>,
-}
-
+/// The recent commands, persisted in the state database.
 #[derive(Clone)]
 pub(crate) struct CommandHistory {
-    record: RecordStore<CommandHistoryRecord>,
+    record: RecordStore<RecentCommands>,
 }
 
 impl CommandHistory {
@@ -32,21 +27,16 @@ impl CommandHistory {
 
     /// Command names, most recent first.
     pub(crate) fn recent(&self) -> Vec<String> {
-        self.record.current().unwrap_or_default().commands
+        self.record
+            .current()
+            .map(|history| history.recent().to_vec())
+            .unwrap_or_default()
     }
 
-    /// Move a confirmed command to the front, dropping names that are no
-    /// longer registered and keeping at most [`COMMAND_HISTORY_LIMIT`].
+    /// Move a confirmed command to the front; see [`RecentCommands::record`].
     pub(crate) fn record(&self, name: &str, registered: impl Fn(&str) -> bool) {
-        let commands = std::iter::once(name.to_owned())
-            .chain(
-                self.recent()
-                    .into_iter()
-                    .filter(|recent| recent != name && registered(recent)),
-            )
-            .take(COMMAND_HISTORY_LIMIT)
-            .collect();
-        self.record.publish(CommandHistoryRecord { commands });
+        let history = self.record.current().unwrap_or_default();
+        self.record.publish(history.record(name, registered));
     }
 }
 
@@ -79,23 +69,5 @@ mod tests {
 
         let (_, reopened) = open(&path, cx);
         assert_eq!(reopened.recent(), ["file.save", "file.open"]);
-    }
-
-    #[gpui::test]
-    fn prunes_unregistered_names_and_keeps_the_limit(cx: &mut gpui::TestAppContext) {
-        let dir = tempfile::tempdir().unwrap();
-        let (_database, history) = open(&dir.path().join("state.sqlite3"), cx);
-        for index in 0..COMMAND_HISTORY_LIMIT + 5 {
-            history.record(&format!("command.{index}"), |_| true);
-        }
-        let recent = history.recent();
-        assert_eq!(recent.len(), COMMAND_HISTORY_LIMIT);
-        assert_eq!(recent[0], format!("command.{}", COMMAND_HISTORY_LIMIT + 4));
-
-        history.record("command.new", |name| name != "command.54");
-        let recent = history.recent();
-        assert_eq!(recent[0], "command.new");
-        assert!(!recent.contains(&"command.54".to_owned()));
-        assert_eq!(recent.len(), COMMAND_HISTORY_LIMIT);
     }
 }
