@@ -225,13 +225,15 @@ to be rebuilt later:
     [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
     [decisions](../decisions/editing.md#zoom-text-size-and-soft-wrap)).
 
-- **D079 — Save hygiene** (depends on D070)
-  - Trim trailing whitespace and ensure a final newline on save, both
-    configurable. The cleanup is one undoable edit applied before the content
-    snapshot is captured.
+- ✅ **D079 — Save hygiene** (depends on D070)
+  - Save and Save As trim trailing whitespace (except on the cursor's line)
+    and ensure a final newline, per `files.trimTrailingWhitespace` and
+    `files.insertFinalNewline`. The cleanup is one undoable edit applied before
+    the content snapshot is captured; Trim Trailing Whitespace trims on demand
+    ([documents and persistence](../architecture/documents-and-persistence.md#saving),
+    [settings](../settings.md#files)).
   - Whether a formatter hook belongs here is decided in its session; language
     servers (D067) remain out of scope.
-  - 🚧 [Execution plan](d079-save-hygiene.md)
 
 - **D031 — Current-file Find** (depends on D064)
   - Bound to ⌘F. The query field takes focus. Matching is live and highlights
