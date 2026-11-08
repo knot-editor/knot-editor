@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{ToTokens, quote};
 use syn::{DeriveInput, ItemFn, LitStr, parse_macro_input};
 
 #[proc_macro_attribute]
@@ -12,7 +12,7 @@ pub fn host_operation(attribute: TokenStream, item: TokenStream) -> TokenStream 
 }
 
 fn expand_operation(name: LitStr, function: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
-    expand_handler(name, function, None)
+    expand_handler(name.to_token_stream(), function, None)
 }
 
 #[proc_macro_attribute]
@@ -34,30 +34,48 @@ pub fn command(attribute: TokenStream, item: TokenStream) -> TokenStream {
         let mut output = quote! { #function };
         for declaration in declarations {
             let options = syn::parse2::<CommandOptions>(declaration)?;
-            output.extend(expand_handler(
-                options.name.clone(),
-                function.clone(),
-                Some(options),
-            )?);
+            let name = options.name.to_token_stream();
+            output.extend(expand_handler(name, function.clone(), Some(options))?);
         }
         Ok::<_, syn::Error>(output)
     })();
     result.unwrap_or_else(syn::Error::into_compile_error).into()
 }
 
+/// A command's name: a string literal, for which `id` names the constant the
+/// declaration defines, or the path of a constant defined elsewhere.
+enum CommandName {
+    Literal(LitStr),
+    Constant(syn::Path),
+}
+
+impl quote::ToTokens for CommandName {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            Self::Literal(name) => name.to_tokens(tokens),
+            Self::Constant(path) => path.to_tokens(tokens),
+        }
+    }
+}
+
 struct CommandOptions {
-    name: LitStr,
+    name: CommandName,
     title: LitStr,
     description: Option<LitStr>,
     palette: bool,
-    id: syn::Ident,
+    /// The constant a literal name defines.
+    id: Option<syn::Ident>,
     participant: syn::Ident,
     claim: Option<syn::Path>,
 }
 
 impl syn::parse::Parse for CommandOptions {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let name = input.parse()?;
+        let name = if input.peek(LitStr) {
+            CommandName::Literal(input.parse()?)
+        } else {
+            CommandName::Constant(input.parse()?)
+        };
         let mut title = None;
         let mut description = None;
         let mut palette = true;
@@ -87,19 +105,29 @@ impl syn::parse::Parse for CommandOptions {
             }
         }
         Ok(Self {
-            name,
             title: title.ok_or_else(|| input.error("expected title"))?,
             description,
             palette,
-            id: id.ok_or_else(|| input.error("expected id"))?,
+            id: match (&name, id) {
+                (CommandName::Literal(_), Some(id)) => Some(id),
+                (CommandName::Literal(_), None) => return Err(input.error("expected id")),
+                (CommandName::Constant(path), Some(_)) => {
+                    return Err(syn::Error::new_spanned(
+                        path,
+                        "a command named by a constant takes no id",
+                    ));
+                }
+                (CommandName::Constant(_), None) => None,
+            },
             participant: participant.ok_or_else(|| input.error("expected participant"))?,
             claim,
+            name,
         })
     }
 }
 
 fn expand_handler(
-    name: LitStr,
+    name: proc_macro2::TokenStream,
     function: ItemFn,
     command: Option<CommandOptions>,
 ) -> syn::Result<proc_macro2::TokenStream> {
@@ -166,7 +194,19 @@ fn expand_handler(
         .collect::<Vec<_>>();
     let visibility = &function.vis;
     let (marker, definition, registration, handler_name) = if let Some(options) = command {
-        let id = options.id;
+        let (marker_name, definition, handler_name) = match (&options.name, &options.id) {
+            (CommandName::Literal(_), Some(id)) => (
+                id.clone(),
+                quote! { #(#conditions)* #visibility const #id: &str = #name; },
+                quote! { #id },
+            ),
+            (CommandName::Constant(path), _) => (
+                path.segments.last().unwrap().ident.clone(),
+                quote! {},
+                name.clone(),
+            ),
+            (CommandName::Literal(_), None) => unreachable!("parsing requires an id"),
+        };
         let title = options.title;
         let description = match options.description {
             Some(description) => quote! { Some(#description) },
@@ -174,7 +214,7 @@ fn expand_handler(
         };
         let palette = options.palette;
         let participant = options.participant;
-        let marker = quote::format_ident!("__command_{}", id);
+        let marker = quote::format_ident!("__command_{}", marker_name);
         let claim = if let Some(claim) = options.claim {
             quote! { #claim }
         } else {
@@ -182,7 +222,7 @@ fn expand_handler(
         };
         (
             marker.clone(),
-            quote! { #(#conditions)* #visibility const #id: &str = #name; },
+            definition,
             quote! {
                 crate::app::commands::declarations::CommandDescriptor::new::<#marker>(
                     crate::app::commands::declarations::NativeCommandMetadata {
@@ -192,7 +232,7 @@ fn expand_handler(
                     },
                     crate::app::commands::declarations::Participant::#participant, #claim)
             },
-            quote! { #id },
+            handler_name,
         )
     } else {
         (
@@ -414,7 +454,7 @@ mod tests {
         .unwrap();
         assert!(
             expand_handler(
-                options.name.clone(),
+                options.name.to_token_stream(),
                 syn::parse_quote!(
                     fn example(context: Context, args: Args) -> Result<(), Error> {}
                 ),
@@ -428,7 +468,7 @@ mod tests {
         })
         .unwrap();
         let expanded = expand_handler(
-            options.name.clone(),
+            options.name.to_token_stream(),
             syn::parse_quote!(
                 async fn example(context: Context, args: Args) -> Result<(), Error> {}
             ),
@@ -443,6 +483,32 @@ mod tests {
         assert!(expanded.contains("description : Some (\"Does the example.\")"));
         assert!(expanded.contains("palette : false"));
         assert!(expanded.contains("const EXAMPLE"));
+    }
+
+    #[test]
+    fn a_command_named_by_a_constant_takes_no_id_and_defines_no_constant() {
+        assert!(
+            syn::parse2::<CommandOptions>(quote! {
+                names::EXAMPLE, title = "Example", id = EXAMPLE, participant = Editor
+            })
+            .is_err()
+        );
+        let options = syn::parse2::<CommandOptions>(quote! {
+            names::EXAMPLE, title = "Example", participant = Editor
+        })
+        .unwrap();
+        let expanded = expand_handler(
+            options.name.to_token_stream(),
+            syn::parse_quote!(
+                async fn example(context: Context, args: Args) -> Result<(), Error> {}
+            ),
+            Some(options),
+        )
+        .unwrap()
+        .to_string();
+        assert!(expanded.contains("enum __command_EXAMPLE"));
+        assert!(expanded.contains("const NAME : & 'static str = names :: EXAMPLE"));
+        assert!(!expanded.contains("const EXAMPLE"));
     }
 
     #[test]

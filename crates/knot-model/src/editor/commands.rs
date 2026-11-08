@@ -1,0 +1,83 @@
+//! The names of the native editor commands, which the application declares
+//! and [`EditorState::execute_editing_command`](super::EditorState::execute_editing_command)
+//! runs.
+
+/// The prefix of the commands that move the caret.
+pub const EDITOR_MOVE_PREFIX: &str = "editor.move-";
+/// The prefix of the commands that extend the selection.
+pub const EDITOR_SELECT_PREFIX: &str = "editor.select-";
+
+pub const MOVE_LEFT_COMMAND: &str = "editor.move-left";
+pub const MOVE_RIGHT_COMMAND: &str = "editor.move-right";
+pub const MOVE_UP_COMMAND: &str = "editor.move-up";
+pub const MOVE_UP_LOGICAL_COMMAND: &str = "editor.move-up-logical";
+pub const MOVE_DOWN_COMMAND: &str = "editor.move-down";
+pub const MOVE_DOWN_LOGICAL_COMMAND: &str = "editor.move-down-logical";
+pub const MOVE_WORD_LEFT_COMMAND: &str = "editor.move-word-left";
+pub const MOVE_WORD_RIGHT_COMMAND: &str = "editor.move-word-right";
+pub const MOVE_LINE_START_COMMAND: &str = "editor.move-line-start";
+pub const MOVE_LINE_START_LOGICAL_COMMAND: &str = "editor.move-line-start-logical";
+pub const MOVE_SMART_HOME_COMMAND: &str = "editor.move-smart-home";
+pub const MOVE_SMART_HOME_LOGICAL_COMMAND: &str = "editor.move-smart-home-logical";
+pub const MOVE_LINE_END_COMMAND: &str = "editor.move-line-end";
+pub const MOVE_LINE_END_LOGICAL_COMMAND: &str = "editor.move-line-end-logical";
+pub const MOVE_PAGE_UP_COMMAND: &str = "editor.move-page-up";
+pub const MOVE_PAGE_UP_LOGICAL_COMMAND: &str = "editor.move-page-up-logical";
+pub const MOVE_PAGE_DOWN_COMMAND: &str = "editor.move-page-down";
+pub const MOVE_PAGE_DOWN_LOGICAL_COMMAND: &str = "editor.move-page-down-logical";
+pub const MOVE_DOCUMENT_START_COMMAND: &str = "editor.move-document-start";
+pub const MOVE_DOCUMENT_END_COMMAND: &str = "editor.move-document-end";
+pub const SELECT_LEFT_COMMAND: &str = "editor.select-left";
+pub const SELECT_RIGHT_COMMAND: &str = "editor.select-right";
+pub const SELECT_UP_COMMAND: &str = "editor.select-up";
+pub const SELECT_UP_LOGICAL_COMMAND: &str = "editor.select-up-logical";
+pub const SELECT_DOWN_COMMAND: &str = "editor.select-down";
+pub const SELECT_DOWN_LOGICAL_COMMAND: &str = "editor.select-down-logical";
+pub const SELECT_WORD_LEFT_COMMAND: &str = "editor.select-word-left";
+pub const SELECT_WORD_RIGHT_COMMAND: &str = "editor.select-word-right";
+pub const SELECT_LINE_START_COMMAND: &str = "editor.select-line-start";
+pub const SELECT_LINE_START_LOGICAL_COMMAND: &str = "editor.select-line-start-logical";
+pub const SELECT_SMART_HOME_COMMAND: &str = "editor.select-smart-home";
+pub const SELECT_SMART_HOME_LOGICAL_COMMAND: &str = "editor.select-smart-home-logical";
+pub const SELECT_LINE_END_COMMAND: &str = "editor.select-line-end";
+pub const SELECT_LINE_END_LOGICAL_COMMAND: &str = "editor.select-line-end-logical";
+pub const SELECT_PAGE_UP_COMMAND: &str = "editor.select-page-up";
+pub const SELECT_PAGE_UP_LOGICAL_COMMAND: &str = "editor.select-page-up-logical";
+pub const SELECT_PAGE_DOWN_COMMAND: &str = "editor.select-page-down";
+pub const SELECT_PAGE_DOWN_LOGICAL_COMMAND: &str = "editor.select-page-down-logical";
+pub const SELECT_DOCUMENT_START_COMMAND: &str = "editor.select-document-start";
+pub const SELECT_DOCUMENT_END_COMMAND: &str = "editor.select-document-end";
+pub const INSERT_NEWLINE_COMMAND: &str = "editor.insert-newline";
+pub const INSERT_TAB_COMMAND: &str = "editor.insert-tab";
+pub const INDENT_LINES_COMMAND: &str = "editor.indent-lines";
+pub const REINDENT_BUFFER_COMMAND: &str = "editor.reindent-buffer";
+pub const REINDENT_SELECTED_LINES_COMMAND: &str = "editor.reindent-selected-lines";
+pub const DETECT_INDENTATION_COMMAND: &str = "editor.detect-indentation";
+pub const CONVERT_INDENTATION_TO_SPACES_COMMAND: &str = "editor.convert-indentation-to-spaces";
+pub const CONVERT_INDENTATION_TO_TABS_COMMAND: &str = "editor.convert-indentation-to-tabs";
+pub const TRIM_TRAILING_WHITESPACE_COMMAND: &str = "editor.trim-trailing-whitespace";
+pub const OUTDENT_LINES_COMMAND: &str = "editor.outdent-lines";
+pub const COPY_LINES_UP_COMMAND: &str = "editor.copy-lines-up";
+pub const COPY_LINES_DOWN_COMMAND: &str = "editor.copy-lines-down";
+pub const MOVE_LINES_UP_COMMAND: &str = "editor.move-lines-up";
+pub const MOVE_LINES_DOWN_COMMAND: &str = "editor.move-lines-down";
+pub const DELETE_LINES_COMMAND: &str = "editor.delete-lines";
+pub const JOIN_LINES_COMMAND: &str = "editor.join-lines";
+pub const JUMP_TO_MATCHING_BRACKET_COMMAND: &str = "editor.jump-to-matching-bracket";
+pub const TOGGLE_LINE_COMMENT_COMMAND: &str = "editor.toggle-line-comment";
+pub const TOGGLE_BLOCK_COMMENT_COMMAND: &str = "editor.toggle-block-comment";
+pub const TOGGLE_SOFT_WRAP_COMMAND: &str = "editor.toggle-soft-wrap";
+pub const FOLD_COMMAND: &str = "editor.fold";
+pub const UNFOLD_COMMAND: &str = "editor.unfold";
+pub const TOGGLE_FOLD_COMMAND: &str = "editor.toggle-fold";
+pub const FOLD_ALL_COMMAND: &str = "editor.fold-all";
+pub const UNFOLD_ALL_COMMAND: &str = "editor.unfold-all";
+pub const DELETE_BACKWARD_COMMAND: &str = "editor.delete-backward";
+pub const DELETE_FORWARD_COMMAND: &str = "editor.delete-forward";
+pub const DELETE_TO_LINE_END_COMMAND: &str = "editor.delete-to-line-end";
+pub const SELECT_ALL_COMMAND: &str = "editor.select-all";
+pub const UNDO_COMMAND: &str = "editor.undo";
+pub const REDO_COMMAND: &str = "editor.redo";
+pub const CUT_COMMAND: &str = "editor.cut";
+pub const COPY_COMMAND: &str = "copy";
+pub const PASTE_COMMAND: &str = "editor.paste";

@@ -10,6 +10,7 @@
 //! [`EditorEffect`]s for its owner to run.
 
 mod brackets;
+pub mod commands;
 mod comments;
 mod completion;
 mod editing;
@@ -97,11 +98,6 @@ pub enum EditorEffect {
     /// its text.
     DetectIndentation { document: uuid::Uuid },
 }
-
-/// The prefix of the commands that move the caret.
-pub const EDITOR_MOVE_PREFIX: &str = "editor.move-";
-/// The prefix of the commands that extend the selection.
-pub const EDITOR_SELECT_PREFIX: &str = "editor.select-";
 
 static NEXT_HISTORY_CONTEXT: AtomicU64 = AtomicU64::new(1);
 

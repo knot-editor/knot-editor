@@ -572,8 +572,8 @@ async fn every_editor_motion_command_reaches_the_focused_view(cx: &mut TestAppCo
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
     for name in super::super::super::commands::dispatch::product_command_names().filter(|name| {
-        name.starts_with(knot_model::editor::EDITOR_MOVE_PREFIX)
-            || name.starts_with(knot_model::editor::EDITOR_SELECT_PREFIX)
+        name.starts_with(knot_model::editor::commands::EDITOR_MOVE_PREFIX)
+            || name.starts_with(knot_model::editor::commands::EDITOR_SELECT_PREFIX)
     }) {
         let execution = dispatcher.update(cx, |dispatcher, cx| {
             dispatcher.dispatch(

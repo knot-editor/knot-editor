@@ -7,11 +7,11 @@ impl EditorState {
     /// it is not one or does not apply. Paste, which needs the clipboard's
     /// text, is [`Self::paste`].
     pub fn execute_editing_command(&mut self, command: &str, buffer: &mut BufferModel) -> bool {
-        if command == "editor.undo" || command == "editor.redo" {
+        if command == commands::UNDO_COMMAND || command == commands::REDO_COMMAND {
             self.break_history_group(buffer);
             self.marked_range_utf16 = None;
             self.preferred_column = None;
-            let changed = if command == "editor.undo" {
+            let changed = if command == commands::UNDO_COMMAND {
                 buffer.undo()
             } else {
                 buffer.redo()
@@ -28,25 +28,25 @@ impl EditorState {
             }
             return true;
         }
-        if matches!(command, "copy" | "editor.cut") {
-            if command == "copy" && !self.has_selection() {
+        if matches!(command, commands::COPY_COMMAND | commands::CUT_COMMAND) {
+            if command == commands::COPY_COMMAND && !self.has_selection() {
                 return false;
             }
             self.break_history_group(buffer);
             self.marked_range_utf16 = None;
-            if command == "editor.cut" && !buffer.is_editable() {
+            if command == commands::CUT_COMMAND && !buffer.is_editable() {
                 return true;
             }
             if let Some(range) = self.selected_byte_range(buffer) {
                 let text = buffer.read(range);
                 self.effects.push(EditorEffect::WriteClipboard(text));
-                if command == "editor.cut" {
+                if command == commands::CUT_COMMAND {
                     self.replace_text_with_grouping(None, "", None, buffer);
                 }
             }
             return true;
         }
-        if command == "editor.select-all" {
+        if command == commands::SELECT_ALL_COMMAND {
             self.break_history_group(buffer);
             self.marked_range_utf16 = None;
             self.anchor_line = 0;
@@ -59,92 +59,99 @@ impl EditorState {
             return true;
         }
         match command {
-            "editor.insert-newline" => {
+            commands::INSERT_NEWLINE_COMMAND => {
                 self.insert_newline(buffer);
                 return true;
             }
-            "editor.insert-tab" => {
+            commands::INSERT_TAB_COMMAND => {
                 self.insert_tab(buffer);
                 return true;
             }
-            "editor.indent-lines" => {
+            commands::INDENT_LINES_COMMAND => {
                 self.indent_lines(buffer);
                 return true;
             }
-            "editor.outdent-lines" => {
+            commands::OUTDENT_LINES_COMMAND => {
                 self.outdent_lines(buffer);
                 return true;
             }
-            "editor.reindent-buffer" | "editor.reindent-selected-lines" => {
-                self.reindent_lines(command == "editor.reindent-selected-lines", buffer);
+            commands::REINDENT_BUFFER_COMMAND | commands::REINDENT_SELECTED_LINES_COMMAND => {
+                self.reindent_lines(command == commands::REINDENT_SELECTED_LINES_COMMAND, buffer);
                 return true;
             }
-            "editor.detect-indentation" => {
+            commands::DETECT_INDENTATION_COMMAND => {
                 self.detect_indentation(buffer);
                 return true;
             }
-            "editor.convert-indentation-to-spaces" | "editor.convert-indentation-to-tabs" => {
-                self.convert_indentation(command == "editor.convert-indentation-to-tabs", buffer);
+            commands::CONVERT_INDENTATION_TO_SPACES_COMMAND
+            | commands::CONVERT_INDENTATION_TO_TABS_COMMAND => {
+                self.convert_indentation(
+                    command == commands::CONVERT_INDENTATION_TO_TABS_COMMAND,
+                    buffer,
+                );
                 return true;
             }
-            "editor.trim-trailing-whitespace" => {
+            commands::TRIM_TRAILING_WHITESPACE_COMMAND => {
                 self.trim_trailing_whitespace(buffer);
                 return true;
             }
-            "editor.copy-lines-up" | "editor.copy-lines-down" => {
-                self.copy_lines(command == "editor.copy-lines-down", buffer);
+            commands::COPY_LINES_UP_COMMAND | commands::COPY_LINES_DOWN_COMMAND => {
+                self.copy_lines(command == commands::COPY_LINES_DOWN_COMMAND, buffer);
                 return true;
             }
-            "editor.move-lines-up" | "editor.move-lines-down" => {
-                self.move_lines(command == "editor.move-lines-down", buffer);
+            commands::MOVE_LINES_UP_COMMAND | commands::MOVE_LINES_DOWN_COMMAND => {
+                self.move_lines(command == commands::MOVE_LINES_DOWN_COMMAND, buffer);
                 return true;
             }
-            "editor.delete-lines" => {
+            commands::DELETE_LINES_COMMAND => {
                 self.delete_lines(buffer);
                 return true;
             }
-            "editor.join-lines" => {
+            commands::JOIN_LINES_COMMAND => {
                 self.join_lines(buffer);
                 return true;
             }
-            "editor.jump-to-matching-bracket" => {
+            commands::JUMP_TO_MATCHING_BRACKET_COMMAND => {
                 self.jump_to_matching_bracket(buffer);
                 return true;
             }
-            "editor.toggle-line-comment" => {
+            commands::TOGGLE_LINE_COMMENT_COMMAND => {
                 self.toggle_line_comment(buffer);
                 return true;
             }
-            "editor.toggle-block-comment" => {
+            commands::TOGGLE_BLOCK_COMMENT_COMMAND => {
                 self.toggle_block_comment(buffer);
                 return true;
             }
-            "editor.toggle-soft-wrap" => return self.toggle_soft_wrap(buffer),
-            "editor.fold" => {
+            commands::TOGGLE_SOFT_WRAP_COMMAND => return self.toggle_soft_wrap(buffer),
+            commands::FOLD_COMMAND => {
                 self.fold_at_caret(buffer);
                 return true;
             }
-            "editor.unfold" => {
+            commands::UNFOLD_COMMAND => {
                 self.unfold_at_caret(buffer);
                 return true;
             }
-            "editor.toggle-fold" => {
+            commands::TOGGLE_FOLD_COMMAND => {
                 if !self.unfold_at_caret(buffer) {
                     self.fold_at_caret(buffer);
                 }
                 return true;
             }
-            "editor.fold-all" => {
+            commands::FOLD_ALL_COMMAND => {
                 self.fold_all_regions(buffer);
                 return true;
             }
-            "editor.unfold-all" => {
+            commands::UNFOLD_ALL_COMMAND => {
                 self.unfold_all_folds(buffer);
                 return true;
             }
             _ => {}
         }
-        if matches!(command, "editor.delete-backward" | "editor.delete-forward") {
+        if matches!(
+            command,
+            commands::DELETE_BACKWARD_COMMAND | commands::DELETE_FORWARD_COMMAND
+        ) {
             if self.has_selection || self.marked_range_utf16.is_some() {
                 self.replace_text_with_grouping(None, "", None, buffer);
             } else {
@@ -172,7 +179,7 @@ impl EditorState {
             }
             return true;
         }
-        if command == "editor.delete-to-line-end" {
+        if command == commands::DELETE_TO_LINE_END_COMMAND {
             if self.has_selection || self.marked_range_utf16.is_some() {
                 self.replace_text_with_grouping(None, "", None, buffer);
                 return true;
@@ -191,13 +198,14 @@ impl EditorState {
             }
             return true;
         }
-        let (movement, extend) = if let Some(movement) = command.strip_prefix(EDITOR_MOVE_PREFIX) {
-            (movement, false)
-        } else if let Some(movement) = command.strip_prefix(EDITOR_SELECT_PREFIX) {
-            (movement, true)
-        } else {
-            return false;
-        };
+        let (movement, extend) =
+            if let Some(movement) = command.strip_prefix(commands::EDITOR_MOVE_PREFIX) {
+                (movement, false)
+            } else if let Some(movement) = command.strip_prefix(commands::EDITOR_SELECT_PREFIX) {
+                (movement, true)
+            } else {
+                return false;
+            };
         // A `-logical` twin moves by buffer lines; the plain command moves by
         // the rows wrapping shows, which are the lines while nothing wraps.
         let (movement, logical) = match movement.strip_suffix("-logical") {
