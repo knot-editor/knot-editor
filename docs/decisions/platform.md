@@ -6,22 +6,41 @@ chrome. The [decisions index](../decisions.md) lists every topic, and the
 
 ## Platform and UI
 
-Use gpui through public APIs so the editor and shell share one framework. Its
-macOS text path passed styled, culled, IME, bidirectional, CJK, emoji,
-long-line, and large-file fixtures; RTL alignment and logical-index mapping are
-Knot's. Skia had lower p50 but worse p99 in primitive benchmarks, and gpui met
-the bar, so iced and floem were not evaluated. macOS is the dogfooding
-platform; Windows 11 and Linux (Wayland) passed bounded local smoke checks.
+Use gpui through public APIs so the editor and shell share a framework rather
+than maintaining a separate renderer. Its macOS text path passed styled,
+viewport-culled text, selection, IME geometry, annotation, split-pane, Arabic,
+CJK, emoji, long-line, and large-file fixtures. Public bidirectional-text
+limitations require Knot's RTL alignment and logical-index mapping.
+
+In separate rendering-primitive benchmarks on Apple M1 Pro/macOS release builds,
+Skia had lower p50 times on every fixture but higher and less predictable p99
+spikes. Those measurements did not compare complete frameworks; gpui met the
+product bar, so iced and floem were not evaluated.
+
+macOS is the initial dogfooding platform. Windows 11 passed local startup,
+config, editing, persistence, commands, terminal, and protected-closure checks
+on one desktop session. Linux passed limited framework and native product smoke
+checks on Omarchy/Hyprland Wayland. These establish bounded local evidence, not
+broad platform certification. Local macOS packaging stays independent of signing
+and distribution credentials.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
 
 ## Views and extension UI
 
-Share text and contributions through buffer models and keep interaction per
-view. Extensions supply semantic data, never rendering callbacks; a widget tree
-or WebView waits for an unmet use case. Vertical movement measures display
-cells rather than shaped x, so editor state runs headless and tests check real
-behavior, at the cost of slight drift beside proportional fallback glyphs.
+Share text and contributions through buffer models; keep interaction per view.
+Surface-specific semantic data lets extensions customize behavior without
+blocking native painting. A general widget tree or WebView needs a concrete
+unmet use case first.
+
+Horizontal movement steps by graphemes, so combining text, CJK, and emoji
+move as one character. Vertical movement keeps a display column measured in
+`unicode-width` cells with tabs expanded, as soft wrap measures rows, rather
+than a shaped x: movement then needs no window, so editor state and its
+commands run headless, and tests check what users get, since the gpui test
+platform never shapes real text. The cost is a cell's drift beside
+proportional fallback glyphs and on right-to-left lines, which Knot's
+monospace text rarely shows.
 
 References: [semantic UI](../architecture/semantic-ui.md) and
 [editor views](../architecture/workbench-and-lifecycle.md#editor-views).
@@ -29,9 +48,13 @@ References: [semantic UI](../architecture/semantic-ui.md) and
 ## Product window chrome and failure notices
 
 A product window shows only product surfaces. The prototype toolbar duplicated
-commands, and its status string was the only place some failures appeared.
-Native failures with no visible effect now use the native warning prompt;
-extensions receive failures as results and decide what to show. A failed
-package startup opens the startup report.
+commands, menus, and keys, and its free-form status string was the only place
+some failures appeared. Native failures with no other visible effect use the
+native message prompt, at warning level, that extension messages already use.
+Success and progress notices were dropped because their effect is visible.
+Extension calls get the failure as their result, so a package decides whether
+to tell the user. A failed package startup opens the startup report in each
+launch window, because nothing else passively shows that a package failed.
+Developer tooling shares a `Developer:` title prefix and stays out of the menus.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#product-application-launch).
