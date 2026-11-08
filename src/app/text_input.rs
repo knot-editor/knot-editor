@@ -7,6 +7,7 @@
 //! movement and shift selection in `key_down`, which its session calls
 //! without a window, and pointer click/drag selection.
 
+use crate::app::convert::ThemePaint as _;
 use gpui::{prelude::*, *};
 
 use super::keys::Keystroke;
@@ -488,10 +489,10 @@ impl Render for TextInput {
         let caret = self.caret;
         let marked = self.marked.clone();
         let font = text_font(false, false);
-        let foreground = theme(cx).color(color::TEXT);
-        let selection_color = theme(cx).color(color::EDITOR_SELECTION);
-        let marked_color = theme(cx).color(color::EDITOR_MARKED_TEXT);
-        let caret_color = theme(cx).color(color::EDITOR_CURSOR);
+        let foreground = theme(cx).paint_color(color::TEXT);
+        let selection_color = theme(cx).paint_color(color::EDITOR_SELECTION);
+        let marked_color = theme(cx).paint_color(color::EDITOR_MARKED_TEXT);
+        let caret_color = theme(cx).paint_color(color::EDITOR_CURSOR);
         let line_height = zoom::scaled(INPUT_LINE_HEIGHT, cx);
         let font_size = zoom::scaled(FONT_SIZE, cx);
         div()

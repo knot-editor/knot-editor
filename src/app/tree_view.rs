@@ -1,5 +1,6 @@
 //! Native presentation and interaction state for a semantic extension tree.
 
+use crate::app::convert::ThemePaint as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -704,11 +705,11 @@ impl Render for TreeView {
         let action_focus = self.action_focus.clone();
         let frame_actions = self.frame_actions.clone();
         let entity = cx.entity();
-        let border = theme(cx).color(color::BORDER);
-        let button_text = theme(cx).color(color::TEXT);
-        let button_focused = theme(cx).color(color::LIST_SELECTED_BACKGROUND);
-        let button = theme(cx).color(color::BUTTON_BACKGROUND);
-        let button_hover = theme(cx).color(color::BUTTON_HOVER_BACKGROUND);
+        let border = theme(cx).paint_color(color::BORDER);
+        let button_text = theme(cx).paint_color(color::TEXT);
+        let button_focused = theme(cx).paint_color(color::LIST_SELECTED_BACKGROUND);
+        let button = theme(cx).paint_color(color::BUTTON_BACKGROUND);
+        let button_hover = theme(cx).paint_color(color::BUTTON_HOVER_BACKGROUND);
         let mut key_context = KeyContext::default();
         key_context.add(TREE_KEY_CONTEXT);
         key_context.add(super::commands::keymaps::view_context(&self.view_id));
@@ -784,17 +785,17 @@ impl Render for TreeView {
                             .gap_1()
                             .text_sm()
                             .when(is_group, |row| {
-                                row.bg(theme.color(color::LIST_GROUP_BACKGROUND))
-                                    .text_color(theme.color(color::TEXT_MUTED))
+                                row.bg(theme.paint_color(color::LIST_GROUP_BACKGROUND))
+                                    .text_color(theme.paint_color(color::TEXT_MUTED))
                             })
                             .when(is_selected, |row| {
-                                row.bg(theme.color(color::LIST_SELECTED_BACKGROUND))
-                                    .text_color(theme.color(color::LIST_SELECTED_FOREGROUND))
+                                row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                                    .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
                             })
                             // A selected row keeps its highlight while hovered.
                             .when(!is_selected, |row| {
                                 row.hover(|style| {
-                                    style.bg(theme.color(color::LIST_HOVER_BACKGROUND))
+                                    style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
                                 })
                             })
                             .child(Self::disclosure(item, expanded.contains(&item.id)))
@@ -803,14 +804,14 @@ impl Render for TreeView {
                             .when_some(item.description.clone(), |row, description| {
                                 row.child(
                                     div()
-                                        .text_color(theme.color(color::TEXT_MUTED))
+                                        .text_color(theme.paint_color(color::TEXT_MUTED))
                                         .child(description),
                                 )
                             });
                         if let Some(status) = item.status_text.clone() {
                             row = row.child(
                                 div()
-                                    .text_color(theme.color(color::TEXT_MUTED))
+                                    .text_color(theme.paint_color(color::TEXT_MUTED))
                                     .child(status),
                             );
                         }
@@ -820,7 +821,7 @@ impl Render for TreeView {
                                     .size(crate::app::zoom::rems(6.0))
                                     .flex_shrink_0()
                                     .rounded_full()
-                                    .bg(theme.color(badge)),
+                                    .bg(theme.paint_color(badge)),
                             );
                         }
                         for (action_index, action) in item.actions.iter().enumerate() {
@@ -833,14 +834,14 @@ impl Render for TreeView {
                                     .px_1()
                                     .rounded_sm()
                                     .text_xs()
-                                    .text_color(theme.color(color::TEXT_ACCENT))
-                                    .bg(theme.color(if focused {
+                                    .text_color(theme.paint_color(color::TEXT_ACCENT))
+                                    .bg(theme.paint_color(if focused {
                                         color::LIST_SELECTED_BACKGROUND
                                     } else {
                                         color::BUTTON_BACKGROUND
                                     }))
                                     .hover(|style| {
-                                        style.bg(theme.color(color::BUTTON_HOVER_BACKGROUND))
+                                        style.bg(theme.paint_color(color::BUTTON_HOVER_BACKGROUND))
                                     })
                                     .child(action.label.clone())
                                     .on_click(move |_, window, cx| {
@@ -873,7 +874,7 @@ impl Render for TreeView {
                         .pl(crate::app::zoom::rems(22. + *depth as f32 * 14.))
                         .py_1()
                         .text_sm()
-                        .text_color(theme.color(if *error {
+                        .text_color(theme.paint_color(if *error {
                             color::ERROR
                         } else {
                             color::TEXT_MUTED

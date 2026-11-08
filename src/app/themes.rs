@@ -13,16 +13,17 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use gpui::{App, Global, HighlightStyle, UnderlineStyle, WindowAppearance, px};
+use gpui::{App, Global, WindowAppearance};
 use serde::{Deserialize, Serialize};
 
 use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 use super::{
     settings::{self, ApplicationSettings, THEME_DARK, THEME_LIGHT, THEME_MODE},
+    style::{Color, FontStyle, HighlightStyle, Underline},
     theme::{
         Appearance, ColorDefault, ColorDefinition, Highlight, Theme, markup_styles,
-        native_color_definitions, parse_color, set_theme,
+        native_color_definitions, set_theme,
     },
 };
 
@@ -49,40 +50,21 @@ pub(crate) struct SyntaxStyle {
     pub(crate) strikethrough: Option<bool>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum FontStyle {
-    Normal,
-    Italic,
-}
-
 impl SyntaxStyle {
     fn highlight(&self) -> HighlightStyle {
         HighlightStyle {
-            color: self.color.as_deref().and_then(parse_color),
-            font_style: self.font_style.map(|style| match style {
-                FontStyle::Normal => gpui::FontStyle::Normal,
-                FontStyle::Italic => gpui::FontStyle::Italic,
-            }),
-            font_weight: self
-                .font_weight
-                .map(|weight| gpui::FontWeight(f32::from(weight))),
+            color: self.color.as_deref().and_then(Color::parse),
+            font_style: self.font_style,
+            font_weight: self.font_weight,
             underline: self
                 .underline
                 .filter(|underline| *underline)
-                .map(|_| UnderlineStyle {
-                    thickness: px(1.),
+                .map(|_| Underline {
+                    thickness: 1.,
                     color: None,
                     wavy: false,
                 }),
-            strikethrough: self
-                .strikethrough
-                .filter(|strikethrough| *strikethrough)
-                .map(|_| gpui::StrikethroughStyle {
-                    thickness: px(1.),
-                    color: None,
-                }),
-            ..Default::default()
+            strikethrough: self.strikethrough.unwrap_or(false),
         }
     }
 }
@@ -108,7 +90,7 @@ impl ThemeDefinition {
                 .filter_map(|style| style.color.as_deref()),
         );
         for color in colors {
-            if parse_color(color).is_none() {
+            if Color::parse(color).is_none() {
                 return Some("theme colors must be #rrggbb or #rrggbbaa");
             }
         }
@@ -132,7 +114,7 @@ impl ThemeDefinition {
         let values = self
             .colors
             .iter()
-            .filter_map(|(key, value)| Some((key.clone(), parse_color(value)?)))
+            .filter_map(|(key, value)| Some((key.clone(), Color::parse(value)?)))
             .collect::<HashMap<_, _>>();
         let syntax = self
             .syntax
@@ -147,7 +129,7 @@ impl ThemeDefinition {
 /// A color default as written: `#rrggbb`, `#rrggbbaa`, or another key.
 pub(crate) fn color_default(text: &str) -> Option<ColorDefault> {
     if text.starts_with('#') {
-        parse_color(text).map(ColorDefault::Color)
+        Color::parse(text).map(ColorDefault::Color)
     } else if text.is_empty() {
         None
     } else {

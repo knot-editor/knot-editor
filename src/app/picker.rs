@@ -9,6 +9,7 @@
 //! the list the picker was created with. The picker reports the highlighted
 //! item whenever it changes, so a consumer can preview it.
 
+use crate::app::convert::ThemePaint as _;
 use std::ops::Range;
 
 use gpui::{prelude::*, *};
@@ -312,8 +313,8 @@ impl Render for Picker {
         let list = uniform_list("picker-rows", rows, move |range, _, cx| {
             let picker = entity.read(cx);
             let theme = theme(cx);
-            let muted = theme.color(color::TEXT_MUTED);
-            let matched = theme.color(color::LIST_MATCH_FOREGROUND);
+            let muted = theme.paint_color(color::TEXT_MUTED);
+            let matched = theme.paint_color(color::LIST_MATCH_FOREGROUND);
             range
                 .map(|index| {
                     let found = &picker.matches[index];
@@ -360,11 +361,13 @@ impl Render for Picker {
                         .justify_center()
                         .overflow_hidden()
                         .when(is_selected, |row| {
-                            row.bg(theme.color(color::LIST_SELECTED_BACKGROUND))
-                                .text_color(theme.color(color::LIST_SELECTED_FOREGROUND))
+                            row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                                .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
                         })
                         .when(!is_selected, |row| {
-                            row.hover(|style| style.bg(theme.color(color::LIST_HOVER_BACKGROUND)))
+                            row.hover(|style| {
+                                style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
+                            })
                         })
                         .child(line)
                         .when_some(entry.detail.clone(), |row, detail| {
@@ -386,9 +389,9 @@ impl Render for Picker {
             .flex_col()
             .rounded_md()
             .border_1()
-            .border_color(theme(cx).color(color::POPOVER_BORDER))
-            .bg(theme(cx).color(color::POPOVER_BACKGROUND))
-            .text_color(theme(cx).color(color::TEXT))
+            .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
+            .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))
+            .text_color(theme(cx).paint_color(color::TEXT))
             .shadow_lg()
             .key_context(self.key_context)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -400,7 +403,7 @@ impl Render for Picker {
                     .px_3()
                     .py_2()
                     .border_b_1()
-                    .border_color(theme(cx).color(color::BORDER))
+                    .border_color(theme(cx).paint_color(color::BORDER))
                     .child(self.input.clone()),
             )
             .when(rows == 0, |panel| {
@@ -408,7 +411,7 @@ impl Render for Picker {
                     div()
                         .px_3()
                         .py_2()
-                        .text_color(theme(cx).color(color::TEXT_MUTED))
+                        .text_color(theme(cx).paint_color(color::TEXT_MUTED))
                         .child("No matching items"),
                 )
             })

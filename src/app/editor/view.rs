@@ -201,11 +201,12 @@ impl EditorView {
     /// Each gutter marker's line and color, as the view paints them.
     #[cfg(test)]
     pub(crate) fn gutter_colors_for_test(&self, cx: &App) -> Vec<(usize, Hsla)> {
+        use crate::app::convert::ThemePaint as _;
         self.editor
             .read(cx)
             .gutter_markers
             .iter()
-            .map(|marker| (marker.line, theme(cx).color(&marker.key)))
+            .map(|marker| (marker.line, theme(cx).paint_color(&marker.key)))
             .collect()
     }
 

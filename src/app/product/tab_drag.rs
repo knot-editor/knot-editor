@@ -2,6 +2,7 @@
 
 use super::relocate::{TabRelocationDestination, TabRelocationSource};
 use super::*;
+use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{color, theme};
 use crate::app::workbench::{
     DockLocation, SplitEdge, TabMoveCapture, TabMoveDestination, TabMovePlacement,
@@ -461,8 +462,8 @@ impl Render for TabDragLabel {
                     .px_3()
                     .py_1()
                     .text_sm()
-                    .bg(theme(cx).color(color::LIST_SELECTED_BACKGROUND))
-                    .text_color(theme(cx).color(color::LIST_SELECTED_FOREGROUND))
+                    .bg(theme(cx).paint_color(color::LIST_SELECTED_BACKGROUND))
+                    .text_color(theme(cx).paint_color(color::LIST_SELECTED_FOREGROUND))
                     .child(self.title.clone()),
             )
         })
@@ -634,7 +635,7 @@ impl ProductShell {
         let shell = cx.entity().downgrade();
         let workbench = self.workbench.downgrade();
         let accepts_drop = self.command_palette.is_none() && !self.extension_report_open;
-        let drop_target = theme(cx).color(color::DROP_TARGET_BACKGROUND);
+        let drop_target = theme(cx).paint_color(color::DROP_TARGET_BACKGROUND);
         canvas(
             |_, _, _| (),
             move |_, _, window, _| {

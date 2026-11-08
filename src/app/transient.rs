@@ -6,6 +6,7 @@
 //! one live extension interaction per window; confirmations and messages use
 //! the native platform prompt instead of an overlay.
 
+use crate::app::convert::ThemePaint as _;
 use std::path::PathBuf;
 
 use gpui::{prelude::*, *};
@@ -169,8 +170,8 @@ impl Render for InputView {
             .flex_col()
             .rounded_md()
             .border_1()
-            .border_color(theme(cx).color(color::POPOVER_BORDER))
-            .bg(theme(cx).color(color::POPOVER_BACKGROUND))
+            .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
+            .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))
             .shadow_lg()
             .key_context(super::TRANSIENT_KEY_CONTEXT)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -179,7 +180,7 @@ impl Render for InputView {
                     .px_3()
                     .py_2()
                     .text_sm()
-                    .text_color(theme(cx).color(color::TEXT))
+                    .text_color(theme(cx).paint_color(color::TEXT))
                     .child(self.title.clone()),
             )
             .child(
@@ -193,7 +194,7 @@ impl Render for InputView {
                         div()
                             .flex_none()
                             .pr_1()
-                            .text_color(theme(cx).color(color::TEXT_MUTED))
+                            .text_color(theme(cx).paint_color(color::TEXT_MUTED))
                             .child(prompt)
                     }))
                     .child(div().flex_1().child(self.input.clone())),
@@ -203,7 +204,7 @@ impl Render for InputView {
                     .px_3()
                     .pb_2()
                     .text_sm()
-                    .text_color(theme(cx).color(color::TEXT_MUTED))
+                    .text_color(theme(cx).paint_color(color::TEXT_MUTED))
                     .child(message)
             }))
     }

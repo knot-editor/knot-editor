@@ -1,3 +1,4 @@
+use crate::app::convert::ThemePaint as _;
 use alacritty_terminal::{
     grid::{Dimensions, Scroll},
     index::{Column, Line, Point as TermPoint, Side},
@@ -699,7 +700,7 @@ impl Render for TerminalView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(theme(cx).color(color::TERMINAL_BACKGROUND))
+            .bg(theme(cx).paint_color(color::TERMINAL_BACKGROUND))
             .occlude()
             .child(
                 div()
@@ -710,8 +711,8 @@ impl Render for TerminalView {
                     .justify_between()
                     .px_2()
                     .text_xs()
-                    .text_color(theme(cx).color(color::TEXT_MUTED))
-                    .bg(theme(cx).color(color::TAB_BAR_BACKGROUND))
+                    .text_color(theme(cx).paint_color(color::TEXT_MUTED))
+                    .bg(theme(cx).paint_color(color::TAB_BAR_BACKGROUND))
                     .child(format!(
                         "TERMINAL · {} · mouse: {}",
                         match self.session.read(cx).status() {
@@ -734,7 +735,7 @@ impl Render for TerminalView {
                                 div()
                                     .id("close-terminal")
                                     .cursor_pointer()
-                                    .text_color(theme(cx).color(color::TEXT_ACCENT))
+                                    .text_color(theme(cx).paint_color(color::TEXT_ACCENT))
                                     .child("close")
                                     .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                             )
@@ -742,7 +743,7 @@ impl Render for TerminalView {
                                 div()
                                     .id("restart-terminal")
                                     .cursor_pointer()
-                                    .text_color(theme(cx).color(color::TEXT_ACCENT))
+                                    .text_color(theme(cx).paint_color(color::TEXT_ACCENT))
                                     .child("restart")
                                     .on_click(cx.listener(|this, _, _, cx| this.restart(cx))),
                             ),
@@ -981,8 +982,8 @@ impl Element for TerminalElement {
         let cell_height = layout.cell_height;
         let mask = Some(ContentMask { bounds });
         let terminal_background = TerminalPalette::new(theme(cx)).background;
-        let selection = theme(cx).color(color::TERMINAL_SELECTION);
-        let cursor_color = theme(cx).color(color::TERMINAL_CURSOR);
+        let selection = theme(cx).paint_color(color::TERMINAL_SELECTION);
+        let cursor_color = theme(cx).paint_color(color::TERMINAL_CURSOR);
         window.with_content_mask(mask, |window| {
             for cell in &snapshot.cells {
                 let origin = layout.origin(bounds, cell.column, cell.line);

@@ -1,3 +1,4 @@
+use crate::app::convert::ThemePaint as _;
 use std::collections::{HashMap, HashSet};
 
 use gpui::{prelude::FluentBuilder, *};
@@ -543,7 +544,7 @@ impl Render for WorkspaceTree {
                                 .pl(crate::app::zoom::rems(22. + *depth as f32 * 14.))
                                 .py_1()
                                 .text_sm()
-                                .text_color(theme.color(if *error {
+                                .text_color(theme.paint_color(if *error {
                                     color::ERROR
                                 } else {
                                     color::TEXT_MUTED
@@ -568,10 +569,10 @@ impl Render for WorkspaceTree {
                         .text_sm()
                         .when(is_root, |row| row.font_weight(FontWeight::SEMIBOLD))
                         .when(is_selected, |row| {
-                            row.bg(theme.color(color::LIST_SELECTED_BACKGROUND))
-                                .text_color(theme.color(color::LIST_SELECTED_FOREGROUND))
+                            row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                                .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
                         })
-                        .hover(|style| style.bg(theme.color(color::LIST_HOVER_BACKGROUND)))
+                        .hover(|style| style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND)))
                         .child(Self::disclosure(&kind, is_expanded))
                         .when(!is_root, |row| row.child(Self::icon(&kind)))
                         .child(label)

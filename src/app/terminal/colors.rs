@@ -1,3 +1,4 @@
+use crate::app::convert::ThemePaint as _;
 use alacritty_terminal::{
     term::color::Colors,
     vte::ansi::{Color, NamedColor, Rgb},
@@ -16,7 +17,7 @@ pub(crate) struct TerminalPalette {
 
 impl TerminalPalette {
     pub(crate) fn new(theme: &Theme) -> Self {
-        let packed = |key| pack(theme.color(key));
+        let packed = |key| pack(theme.paint_color(key));
         Self {
             ansi: [
                 color::TERMINAL_ANSI_BLACK,

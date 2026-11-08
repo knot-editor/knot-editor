@@ -3,6 +3,7 @@
 
 use super::wrap::WrapWidth;
 use super::*;
+use crate::app::convert::ThemePaint as _;
 
 /// Pixels a wrapped row leaves free at the right edge, for the caret and the
 /// scrollbar.
@@ -476,7 +477,7 @@ impl EditorView {
             .take_while(|(span, _)| span.start < range.end)
             .map(|(span, highlight)| HighlightSpan {
                 range: span.start.saturating_sub(range.start)..span.end - range.start,
-                style: theme.style(*highlight),
+                style: theme.highlight_style(*highlight),
             })
             .collect()
     }
@@ -579,7 +580,7 @@ fn decoration_layers(editor: &Editor, line: usize, theme: &Theme) -> Vec<Vec<Hig
                     _ => merged.push(range),
                 }
             }
-            let style = theme.decoration(key, style);
+            let style = theme.decoration_style(key, style);
             merged
                 .into_iter()
                 .map(|range| HighlightSpan { range, style })
@@ -709,7 +710,9 @@ pub(super) fn runs_for(line: &str, layers: &[&[HighlightSpan]], theme: &Theme) -
             TextRun {
                 len,
                 font,
-                color: style.color.unwrap_or(theme.color(color::EDITOR_FOREGROUND)),
+                color: style
+                    .color
+                    .unwrap_or(theme.paint_color(color::EDITOR_FOREGROUND)),
                 background_color: None,
                 underline: style.underline,
                 strikethrough: style.strikethrough,

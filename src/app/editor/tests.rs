@@ -9,6 +9,8 @@ use super::{
     layout::{HighlightSpan, runs_for, shape_editor_line, x_for_index_dir},
     project_contributions, to_flat_utf16,
 };
+use crate::app::convert::ThemePaint as _;
+use crate::app::style::{Color, FontStyle, HighlightStyle};
 use std::sync::Arc;
 
 use crate::app::{
@@ -1305,7 +1307,7 @@ fn line_runs(
 fn span(range: std::ops::Range<usize>, name: &str) -> HighlightSpan {
     HighlightSpan {
         range,
-        style: test_theme().style(Highlight::named(name)),
+        style: test_theme().highlight_style(Highlight::named(name)),
     }
 }
 
@@ -1321,7 +1323,7 @@ fn run_styles(runs: &[gpui::TextRun]) -> Vec<(usize, gpui::Hsla, Option<gpui::Hs
 
 /// A theme styling the captures these tests paint.
 fn test_theme() -> Theme {
-    let style = |hex: u32| gpui::HighlightStyle::color(gpui::rgb(hex).into());
+    let style = |hex: u32| HighlightStyle::color(Color::rgb(hex));
     Theme::new(
         Appearance::Dark,
         &std::collections::HashMap::new(),
@@ -1329,8 +1331,8 @@ fn test_theme() -> Theme {
         &[
             (
                 "comment",
-                gpui::HighlightStyle {
-                    font_style: Some(gpui::FontStyle::Italic),
+                HighlightStyle {
+                    font_style: Some(FontStyle::Italic),
                     ..style(0x111111)
                 },
             ),
@@ -1345,9 +1347,9 @@ fn test_theme() -> Theme {
 #[test]
 fn layered_runs_apply_layers_in_order_and_fill_gaps() {
     let theme = test_theme();
-    let color = |name| theme.style(Highlight::named(name)).color.unwrap();
-    let error = Some(theme.color(color::ERROR));
-    let fg = theme.color(color::EDITOR_FOREGROUND);
+    let color = |name| theme.highlight_style(Highlight::named(name)).color.unwrap();
+    let error = Some(theme.paint_color(color::ERROR));
+    let fg = theme.paint_color(color::EDITOR_FOREGROUND);
     let text = "let x = \"é\";";
     let syntax = [
         span(0..3, "keyword"),
@@ -1357,7 +1359,7 @@ fn layered_runs_apply_layers_in_order_and_fill_gaps() {
     let semantic = [span(0..3, "type")];
     let decorations = [HighlightSpan {
         range: 6..11,
-        style: theme.decoration(color::ERROR, DecorationStyle::Wavy),
+        style: theme.decoration_style(color::ERROR, DecorationStyle::Wavy),
     }];
 
     let runs = runs_for(text, &[&syntax, &semantic, &decorations], &theme);
@@ -1380,7 +1382,10 @@ fn layered_runs_apply_layers_in_order_and_fill_gaps() {
 #[test]
 fn layered_runs_merge_equal_styles_and_clip_to_the_line() {
     let theme = test_theme();
-    let keyword = theme.style(Highlight::named("keyword")).color.unwrap();
+    let keyword = theme
+        .highlight_style(Highlight::named("keyword"))
+        .color
+        .unwrap();
     let layer = [
         span(0..2, "keyword"),
         span(2..4, "keyword"),
@@ -1390,14 +1395,14 @@ fn layered_runs_merge_equal_styles_and_clip_to_the_line() {
         run_styles(&runs_for("abcd e", &[&layer], &theme)),
         [
             (4, keyword, None),
-            (1, theme.color(color::EDITOR_FOREGROUND), None),
+            (1, theme.paint_color(color::EDITOR_FOREGROUND), None),
             (1, keyword, None)
         ]
     );
     assert!(runs_for("", &[&layer], &theme).is_empty());
     assert_eq!(
         run_styles(&runs_for("plain", &[], &theme)),
-        [(5, theme.color(color::EDITOR_FOREGROUND), None)]
+        [(5, theme.paint_color(color::EDITOR_FOREGROUND), None)]
     );
 
     let comment = [span(0..5, "comment")];
@@ -1473,8 +1478,8 @@ fn overlapping_decorations_underline_with_the_most_severe(cx: &mut TestAppContex
 
     cx.read(|cx| {
         let theme = theme(cx);
-        let underline = |key| Some(theme.color(key));
-        let fg = theme.color(color::EDITOR_FOREGROUND);
+        let underline = |key| Some(theme.paint_color(key));
+        let fg = theme.paint_color(color::EDITOR_FOREGROUND);
         assert_eq!(
             run_styles(&line_runs(&editor, 0, "abcdefgh", cx)),
             [
@@ -1517,7 +1522,7 @@ fn underline_styles_paint_as_separate_layers(cx: &mut TestAppContext) {
     cx.run_until_parked();
 
     cx.read(|cx| {
-        let color = Some(theme(cx).color("diff.add"));
+        let color = Some(theme(cx).paint_color("diff.add"));
         let runs = line_runs(&editor, 0, "abcdefgh", cx);
         let underlines = runs
             .iter()
@@ -1612,12 +1617,12 @@ fn syntax_highlights_paint_beneath_decorations(cx: &mut TestAppContext) {
     };
     let (keyword, function, warning, fg) = cx.read(|cx| {
         let theme = theme(cx);
-        let color = |name| theme.style(Highlight::named(name)).color.unwrap();
+        let color = |name| theme.highlight_style(Highlight::named(name)).color.unwrap();
         (
             color("keyword"),
             color("function"),
-            Some(theme.color(color::WARNING)),
-            theme.color(color::EDITOR_FOREGROUND),
+            Some(theme.paint_color(color::WARNING)),
+            theme.paint_color(color::EDITOR_FOREGROUND),
         )
     });
     assert_eq!(

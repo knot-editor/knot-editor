@@ -1,6 +1,7 @@
 //! The editor element: layout, viewport-culled painting, and IME registration.
 
 use super::*;
+use crate::app::convert::ThemePaint as _;
 
 impl Render for EditorView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -25,7 +26,7 @@ impl Render for EditorView {
         div()
             .id(("editor", self.element_id))
             .size_full()
-            .bg(theme(cx).color(color::EDITOR_BACKGROUND))
+            .bg(theme(cx).paint_color(color::EDITOR_BACKGROUND))
             // Track focus so clicking the pane focuses this view (gpui
             // auto-focuses a tracked element on mouse-down) and so on_key_down
             // listeners below actually receive keystrokes.
@@ -280,7 +281,7 @@ impl Element for EditorElement {
                 .collect();
             let fills = decoration_fills(&editor.decorations, vis.iter().map(|row| &row.row))
                 .into_iter()
-                .map(|fill| (fill.row, fill.columns, theme.color(fill.key)))
+                .map(|fill| (fill.row, fill.columns, theme.paint_color(fill.key)))
                 .collect();
             // Numbers and markers show on each line's first row.
             let first_row = |line: usize| {
@@ -313,15 +314,15 @@ impl Element for EditorElement {
                         .gutter_markers
                         .iter()
                         .filter_map(|marker| {
-                            Some((first_row(marker.line)?, theme.color(&marker.key)))
+                            Some((first_row(marker.line)?, theme.paint_color(&marker.key)))
                         })
                         .collect()
                 } else {
                     Vec::new()
                 },
-                background: theme.color(color::EDITOR_GUTTER_BACKGROUND),
-                number: theme.color(color::EDITOR_LINE_NUMBER),
-                active_number: theme.color(color::EDITOR_LINE_NUMBER_ACTIVE),
+                background: theme.paint_color(color::EDITOR_GUTTER_BACKGROUND),
+                number: theme.paint_color(color::EDITOR_LINE_NUMBER),
+                active_number: theme.paint_color(color::EDITOR_LINE_NUMBER_ACTIVE),
             };
             let line_highlight = editor
                 .highlighted_line()
@@ -341,13 +342,13 @@ impl Element for EditorElement {
                 gutter,
                 line_highlight,
                 PaintColors {
-                    selection: theme.color(color::EDITOR_SELECTION),
-                    caret: theme.color(color::EDITOR_CURSOR),
-                    marked_text: theme.color(color::EDITOR_MARKED_TEXT),
-                    bracket_match: theme.color(color::EDITOR_BRACKET_MATCH),
-                    line_highlight: theme.color(color::EDITOR_LINE_HIGHLIGHT),
-                    fold_placeholder: theme.color(color::EDITOR_FOLD_PLACEHOLDER),
-                    scrollbar: theme.color(color::SCROLLBAR_THUMB),
+                    selection: theme.paint_color(color::EDITOR_SELECTION),
+                    caret: theme.paint_color(color::EDITOR_CURSOR),
+                    marked_text: theme.paint_color(color::EDITOR_MARKED_TEXT),
+                    bracket_match: theme.paint_color(color::EDITOR_BRACKET_MATCH),
+                    line_highlight: theme.paint_color(color::EDITOR_LINE_HIGHLIGHT),
+                    fold_placeholder: theme.paint_color(color::EDITOR_FOLD_PLACEHOLDER),
+                    scrollbar: theme.paint_color(color::SCROLLBAR_THUMB),
                 },
                 view.focus.clone(),
                 self.entity.clone(),

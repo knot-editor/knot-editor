@@ -4,6 +4,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::app::convert::ThemePaint as _;
 use gpui::{prelude::*, *};
 
 use super::theme::{Theme, color};
@@ -105,8 +106,8 @@ impl CompletionSurface {
             .overflow_hidden()
             .rounded_md()
             .border_1()
-            .border_color(theme.color(color::POPOVER_BORDER))
-            .bg(theme.color(color::POPOVER_BACKGROUND))
+            .border_color(theme.paint_color(color::POPOVER_BORDER))
+            .bg(theme.paint_color(color::POPOVER_BACKGROUND))
             .text_sm()
             .children(self.snapshot.items.iter().take(8).map(|item| {
                 div()
@@ -115,12 +116,12 @@ impl CompletionSurface {
                     .px_2()
                     .py_1()
                     .when(Some(item.id) == selected, |row| {
-                        row.bg(theme.color(color::LIST_SELECTED_BACKGROUND))
+                        row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
                     })
                     .child(item.label.clone())
                     .child(
                         div()
-                            .text_color(theme.color(color::TEXT_ACCENT))
+                            .text_color(theme.paint_color(color::TEXT_ACCENT))
                             .child(item.provider_label.clone()),
                     )
             }))
@@ -128,16 +129,16 @@ impl CompletionSurface {
                 div()
                     .px_2()
                     .py_1()
-                    .text_color(theme.color(color::ERROR))
+                    .text_color(theme.paint_color(color::ERROR))
                     .child(format!("{}: {}", failure.provider_label, failure.message))
             }))
             .child(
                 div()
                     .border_t_1()
-                    .border_color(theme.color(color::POPOVER_BORDER))
+                    .border_color(theme.paint_color(color::POPOVER_BORDER))
                     .px_2()
                     .py_1()
-                    .text_color(theme.color(color::TEXT_MUTED))
+                    .text_color(theme.paint_color(color::TEXT_MUTED))
                     .child(status),
             )
             .into_any_element()

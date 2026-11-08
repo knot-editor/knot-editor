@@ -1,6 +1,7 @@
 //! Rendering of the product shell's panes, split layout, dividers, and extension report.
 
 use super::*;
+use crate::app::convert::ThemePaint as _;
 use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Theme, color, theme};
 use crate::app::zoom;
@@ -116,9 +117,9 @@ impl ProductShell {
                 div()
                     .when(horizontal, |element| element.w(px(1.)).h_full())
                     .when(!horizontal, |element| element.h(px(1.)).w_full())
-                    .bg(theme(cx).color(color::BORDER))
+                    .bg(theme(cx).paint_color(color::BORDER))
                     .hover({
-                        let hover = theme(cx).color(color::BORDER_HOVER);
+                        let hover = theme(cx).paint_color(color::BORDER_HOVER);
                         move |style| style.bg(hover)
                     }),
             )
@@ -219,12 +220,12 @@ impl ProductShell {
                     .py_1()
                     .cursor_pointer()
                     .text_sm()
-                    .text_color(theme(cx).color(if tab_id == active_tab {
+                    .text_color(theme(cx).paint_color(if tab_id == active_tab {
                         color::TAB_ACTIVE_FOREGROUND
                     } else {
                         color::TAB_INACTIVE_FOREGROUND
                     }))
-                    .bg(theme(cx).color(if tab_id == active_tab {
+                    .bg(theme(cx).paint_color(if tab_id == active_tab {
                         color::TAB_ACTIVE_BACKGROUND
                     } else {
                         color::TAB_INACTIVE_BACKGROUND
@@ -250,7 +251,7 @@ impl ProductShell {
                             .px_1()
                             .rounded_sm()
                             .hover(|style| {
-                                style.bg(theme(cx).color(color::BUTTON_HOVER_BACKGROUND))
+                                style.bg(theme(cx).paint_color(color::BUTTON_HOVER_BACKGROUND))
                             })
                             .child("×")
                             // Keep the press from starting a tab drag or
@@ -288,7 +289,7 @@ impl ProductShell {
             .size_full()
             .min_w_0()
             .min_h_0()
-            .bg(theme(cx).color(color::BACKGROUND))
+            .bg(theme(cx).paint_color(color::BACKGROUND))
             .child(
                 div()
                     .flex()
@@ -299,7 +300,7 @@ impl ProductShell {
                     .debug_selector(move || format!("tab-bar-{}", pane_id.value()))
                     .child(self.tab_bar_drag_geometry(pane_id))
                     .overflow_hidden()
-                    .bg(theme(cx).color(color::TAB_BAR_BACKGROUND))
+                    .bg(theme(cx).paint_color(color::TAB_BAR_BACKGROUND))
                     .children(tabs),
             )
             .child(
@@ -349,9 +350,9 @@ impl ProductShell {
                 .px_1()
                 .text_xs()
                 .border_t_1()
-                .border_color(theme(cx).color(color::STATUS_BAR_BORDER))
-                .bg(theme(cx).color(color::STATUS_BAR_BACKGROUND))
-                .text_color(theme(cx).color(color::STATUS_BAR_FOREGROUND))
+                .border_color(theme(cx).paint_color(color::STATUS_BAR_BORDER))
+                .bg(theme(cx).paint_color(color::STATUS_BAR_BACKGROUND))
+                .text_color(theme(cx).paint_color(color::STATUS_BAR_FOREGROUND))
                 .child(group().children(left))
                 .child(div().flex_1())
                 .child(group().children(right))
@@ -368,7 +369,7 @@ impl ProductShell {
             color: color_key,
             ..
         } = item;
-        let hover = theme(cx).color(color::STATUS_BAR_ITEM_HOVER_BACKGROUND);
+        let hover = theme(cx).paint_color(color::STATUS_BAR_ITEM_HOVER_BACKGROUND);
         div()
             .id(SharedString::from(format!("status-item-{id}")))
             .debug_selector(move || format!("status-item-{id}"))
@@ -377,7 +378,7 @@ impl ProductShell {
             .h_full()
             .px_2()
             .when_some(color_key, |element, key| {
-                element.text_color(theme(cx).color(&key))
+                element.text_color(theme(cx).paint_color(&key))
             })
             .when_some(command, |element, command| {
                 element
@@ -418,9 +419,9 @@ impl Render for StatusTooltip {
             .py_1()
             .text_xs()
             .border_1()
-            .border_color(theme(cx).color(color::POPOVER_BORDER))
-            .bg(theme(cx).color(color::POPOVER_BACKGROUND))
-            .text_color(theme(cx).color(color::TEXT))
+            .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
+            .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))
+            .text_color(theme(cx).paint_color(color::TEXT))
             .child(self.0.clone())
     }
 }
@@ -449,7 +450,7 @@ impl Render for ProductShell {
             cx.listener(|this: &mut Self, _: &MouseDownEvent, _: &mut Window, cx| {
                 this.finish_transient(TransientOutcome::Dismissed, cx);
             });
-        let scrim = theme(cx).color(color::SCRIM);
+        let scrim = theme(cx).paint_color(color::SCRIM);
         let startup_report = crate::app::extensions::host::startup_report(cx);
         let extension_report = self.extension_report_open.then(|| {
             (
@@ -468,8 +469,8 @@ impl Render for ProductShell {
             .flex()
             .flex_col()
             .size_full()
-            .bg(theme(cx).color(color::BACKGROUND))
-            .text_color(theme(cx).color(color::TEXT))
+            .bg(theme(cx).paint_color(color::BACKGROUND))
+            .text_color(theme(cx).paint_color(color::TEXT))
             .child(
                 div()
                     .flex_1()
@@ -570,28 +571,32 @@ pub(super) fn render_extension_report(
                 .gap_1()
                 .py_2()
                 .border_b_1()
-                .border_color(theme.color(color::BORDER))
+                .border_color(theme.paint_color(color::BORDER))
                 .child(
                     div()
-                        .text_color(theme.color(status_color))
+                        .text_color(theme.paint_color(status_color))
                         .child(format!("{label}: {name}")),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(theme.color(color::TEXT_MUTED))
+                        .text_color(theme.paint_color(color::TEXT_MUTED))
                         .child(entry.directory.display().to_string()),
                 )
                 .when_some(cause, |row, cause| {
-                    row.child(div().text_color(theme.color(color::ERROR)).child(cause))
+                    row.child(
+                        div()
+                            .text_color(theme.paint_color(color::ERROR))
+                            .child(cause),
+                    )
                 })
         })
         .chain(setting_warnings.into_iter().map(|warning| {
             div()
                 .py_2()
                 .border_b_1()
-                .border_color(theme.color(color::BORDER))
-                .text_color(theme.color(color::WARNING))
+                .border_color(theme.paint_color(color::BORDER))
+                .text_color(theme.paint_color(color::WARNING))
                 .child(warning)
         }))
         .collect::<Vec<_>>();
@@ -602,16 +607,16 @@ pub(super) fn render_extension_report(
         .items_start()
         .justify_center()
         .pt(px(60.))
-        .bg(theme.color(color::SCRIM))
+        .bg(theme.paint_color(color::SCRIM))
         .child(
             div()
                 .w(px(760.))
                 .h(px(520.))
                 .flex()
                 .flex_col()
-                .bg(theme.color(color::POPOVER_BACKGROUND))
+                .bg(theme.paint_color(color::POPOVER_BACKGROUND))
                 .border_1()
-                .border_color(theme.color(color::POPOVER_BORDER))
+                .border_color(theme.paint_color(color::POPOVER_BORDER))
                 .p_4()
                 .gap_3()
                 .child(
@@ -624,13 +629,13 @@ pub(super) fn render_extension_report(
                             "close-extension-report",
                             shell,
                             SHOW_EXTENSION_REPORT_COMMAND,
-                            theme.color(color::TEXT_ACCENT),
+                            theme.paint_color(color::TEXT_ACCENT),
                         )),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(theme.color(color::TEXT_MUTED))
+                        .text_color(theme.paint_color(color::TEXT_MUTED))
                         .child(root),
                 )
                 .child(

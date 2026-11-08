@@ -15,10 +15,9 @@
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use gpui::{
-    App, FontStyle, FontWeight, Global, HighlightStyle, Hsla, StrikethroughStyle, UnderlineStyle,
-    px, rgb, rgba,
-};
+use gpui::{App, Global};
+
+use super::style::{Color, FontStyle, HighlightStyle, Underline};
 
 use knot_protocol::DecorationStyle;
 
@@ -167,7 +166,7 @@ fn dotted_prefixes(name: &str) -> impl Iterator<Item = &str> {
 /// A color definition's default for one appearance.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ColorDefault {
-    Color(Hsla),
+    Color(Color),
     /// The resolved color of another key.
     Key(String),
 }
@@ -199,8 +198,8 @@ enum NativeDefault {
 impl NativeDefault {
     fn definition(&self) -> ColorDefault {
         match self {
-            Self::Rgb(color) => ColorDefault::Color(rgb(*color).into()),
-            Self::Rgba(color) => ColorDefault::Color(rgba(*color).into()),
+            Self::Rgb(color) => ColorDefault::Color(Color::rgb(*color)),
+            Self::Rgba(color) => ColorDefault::Color(Color::rgba(*color)),
             Self::Key(key) => ColorDefault::Key((*key).to_owned()),
         }
     }
@@ -306,25 +305,11 @@ pub(crate) enum Appearance {
     Light,
 }
 
-/// A `#rrggbb` or `#rrggbbaa` color.
-pub(crate) fn parse_color(text: &str) -> Option<Hsla> {
-    let digits = text.strip_prefix('#')?;
-    if !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return None;
-    }
-    let value = u32::from_str_radix(digits, 16).ok()?;
-    match digits.len() {
-        6 => Some(rgb(value).into()),
-        8 => Some(rgba(value).into()),
-        _ => None,
-    }
-}
-
 /// Resolved colors by key and a resolved style for every capture name.
 pub(crate) struct Theme {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) appearance: Appearance,
-    colors: HashMap<String, Hsla>,
+    colors: HashMap<String, Color>,
     /// Indexed by `Highlight`.
     highlights: Vec<HighlightStyle>,
 }
@@ -351,25 +336,22 @@ pub(crate) fn markup_styles() -> [(&'static str, HighlightStyle); 4] {
         (
             "markup.strikethrough",
             HighlightStyle {
-                strikethrough: Some(StrikethroughStyle {
-                    thickness: px(1.),
-                    color: None,
-                }),
+                strikethrough: true,
                 ..Default::default()
             },
         ),
         (
             "markup.strong",
             HighlightStyle {
-                font_weight: Some(FontWeight::BOLD),
+                font_weight: Some(700),
                 ..Default::default()
             },
         ),
         (
             "markup.underline",
             HighlightStyle {
-                underline: Some(UnderlineStyle {
-                    thickness: px(1.),
+                underline: Some(Underline {
+                    thickness: 1.,
                     color: None,
                     wavy: false,
                 }),
@@ -407,7 +389,7 @@ impl Theme {
         };
         let syntax = syntax
             .into_iter()
-            .map(|(name, color)| (name, HighlightStyle::color(rgb(color).into())))
+            .map(|(name, color)| (name, HighlightStyle::color(Color::rgb(color))))
             .chain(markup_styles())
             .collect::<Vec<_>>();
         Self::new(appearance, &HashMap::new(), definitions, &syntax)
@@ -418,7 +400,7 @@ impl Theme {
     /// longest dotted prefix.
     pub(crate) fn new(
         appearance: Appearance,
-        values: &HashMap<String, Hsla>,
+        values: &HashMap<String, Color>,
         definitions: &[ColorDefinition],
         syntax: &[(&str, HighlightStyle)],
     ) -> Self {
@@ -445,7 +427,7 @@ impl Theme {
 
     /// The resolved color of `key`; an undefined key paints as interface
     /// text, since its definition may arrive later.
-    pub(crate) fn color(&self, key: &str) -> Hsla {
+    pub(crate) fn color(&self, key: &str) -> Color {
         self.colors
             .get(key)
             .or_else(|| self.colors.get(color::TEXT))
@@ -462,14 +444,14 @@ impl Theme {
     /// behind the text instead and add nothing here.
     pub(crate) fn decoration(&self, key: &str, style: DecorationStyle) -> HighlightStyle {
         let (thickness, wavy) = match style {
-            DecorationStyle::Underline => (px(1.), false),
-            DecorationStyle::Wavy => (px(1.5), true),
+            DecorationStyle::Underline => (1., false),
+            DecorationStyle::Wavy => (1.5, true),
             DecorationStyle::Background | DecorationStyle::Line => {
                 return HighlightStyle::default();
             }
         };
         HighlightStyle {
-            underline: Some(UnderlineStyle {
+            underline: Some(Underline {
                 thickness,
                 color: Some(self.color(key)),
                 wavy,
@@ -484,9 +466,9 @@ impl Theme {
 /// leaves the key unresolved.
 fn resolve_colors(
     appearance: Appearance,
-    values: &HashMap<String, Hsla>,
+    values: &HashMap<String, Color>,
     definitions: &[ColorDefinition],
-) -> HashMap<String, Hsla> {
+) -> HashMap<String, Color> {
     let definitions = definitions
         .iter()
         .map(|definition| (definition.key.as_str(), definition))
@@ -616,16 +598,16 @@ mod tests {
             &HashMap::new(),
             &native_color_definitions(),
             &[
-                ("function", HighlightStyle::color(rgb(0x111111).into())),
+                ("function", HighlightStyle::color(Color::rgb(0x111111))),
                 (
                     "function.macro",
-                    HighlightStyle::color(rgb(0x222222).into()),
+                    HighlightStyle::color(Color::rgb(0x222222)),
                 ),
             ],
         );
         let color = |name| theme.style(Highlight::named(name)).color;
-        assert_eq!(color("function.method"), Some(rgb(0x111111).into()));
-        assert_eq!(color("function.macro"), Some(rgb(0x222222).into()));
+        assert_eq!(color("function.method"), Some(Color::rgb(0x111111)));
+        assert_eq!(color("function.macro"), Some(Color::rgb(0x222222)));
         assert_eq!(color("keyword"), None);
     }
 
@@ -652,21 +634,12 @@ mod tests {
 
     #[test]
     fn theme_values_win_over_defaults_and_references_follow_them() {
-        let values = HashMap::from([(color::BACKGROUND.to_owned(), rgb(0x123456).into())]);
+        let values = HashMap::from([(color::BACKGROUND.to_owned(), Color::rgb(0x123456))]);
         let theme = Theme::new(Appearance::Dark, &values, &native_color_definitions(), &[]);
-        assert_eq!(theme.color(color::BACKGROUND), rgb(0x123456).into());
+        assert_eq!(theme.color(color::BACKGROUND), Color::rgb(0x123456));
         // editor.background defaults to background.
-        assert_eq!(theme.color(color::EDITOR_BACKGROUND), rgb(0x123456).into());
+        assert_eq!(theme.color(color::EDITOR_BACKGROUND), Color::rgb(0x123456));
         assert_eq!(theme.color("undefined.key"), theme.color(color::TEXT));
-    }
-
-    #[test]
-    fn colors_parse_from_six_or_eight_hex_digits() {
-        assert_eq!(parse_color("#1e1e1e"), Some(rgb(0x1e1e1e).into()));
-        assert_eq!(parse_color("#1E1E1E80"), Some(rgba(0x1e1e1e80).into()));
-        for invalid in ["1e1e1e", "#1e1e1", "#1e1e1e8", "#+1e1e1e", "#gggggg", ""] {
-            assert_eq!(parse_color(invalid), None, "{invalid}");
-        }
     }
 
     #[test]
@@ -695,7 +668,7 @@ mod tests {
         definitions.push(ColorDefinition {
             key: "diff.add".into(),
             description: String::new(),
-            dark: ColorDefault::Color(rgb(0x00ff00).into()),
+            dark: ColorDefault::Color(Color::rgb(0x00ff00)),
             light: ColorDefault::Key(color::SUCCESS.into()),
         });
         for appearance in [Appearance::Dark, Appearance::Light] {
@@ -716,7 +689,8 @@ mod tests {
         }
     }
 
-    /// Every surface takes its colors from the theme; tests may build colors.
+    /// Every surface takes its colors from the theme; tests, the color type, and
+    /// its conversions may build colors.
     #[test]
     fn no_color_literals_outside_the_theme() {
         let mut offenders = Vec::new();
@@ -733,6 +707,8 @@ mod tests {
                 );
             } else if path.extension().is_some_and(|extension| extension == "rs")
                 && !path.ends_with("theme.rs")
+                && !path.ends_with("style.rs")
+                && !path.ends_with("convert.rs")
                 && !path.ends_with("tests.rs")
                 && !path
                     .components()

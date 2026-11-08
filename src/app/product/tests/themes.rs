@@ -1,6 +1,7 @@
 //! Theme registration, color definitions, and selection through the public
 //! extension API.
 use super::*;
+use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{Appearance, color, theme};
 use knot_host::lifecycle::ExtensionKey;
 
@@ -57,7 +58,7 @@ await commands.register("theme.dropDerived", async () => {
 "##;
 
 fn background(cx: &TestAppContext) -> gpui::Hsla {
-    cx.read(|cx| theme(cx).color(color::BACKGROUND))
+    cx.read(|cx| theme(cx).paint_color(color::BACKGROUND))
 }
 
 #[gpui::test]
@@ -87,11 +88,14 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     assert_eq!(background(cx), gpui::rgb(0x101010).into());
     cx.read(|cx| {
         // An extension key defaults to a native key the theme sets.
-        assert_eq!(theme(cx).color("diff.add"), gpui::rgb(0x20a020).into());
+        assert_eq!(
+            theme(cx).paint_color("diff.add"),
+            gpui::rgb(0x20a020).into()
+        );
         // A key nobody defined stays inert.
         assert_eq!(
-            theme(cx).color("other.package.key"),
-            theme(cx).color(color::TEXT)
+            theme(cx).paint_color("other.package.key"),
+            theme(cx).paint_color(color::TEXT)
         );
     });
 
@@ -118,7 +122,10 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     cx.read(|cx| {
         assert_eq!(theme(cx).appearance, Appearance::Light);
         // diff.add takes its own light default.
-        assert_eq!(theme(cx).color("diff.add"), gpui::rgb(0x00ff00).into());
+        assert_eq!(
+            theme(cx).paint_color("diff.add"),
+            gpui::rgb(0x00ff00).into()
+        );
     });
 
     // Disposing the active theme keeps its colors until the selection
@@ -141,10 +148,13 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     cx.update(crate::app::themes::apply_at_startup);
     cx.read(|cx| {
         assert_eq!(
-            theme(cx).color(color::BACKGROUND),
+            theme(cx).paint_color(color::BACKGROUND),
             gpui::rgb(0x1e1e1e).into()
         );
-        assert_eq!(theme(cx).color("diff.add"), theme(cx).color(color::TEXT));
+        assert_eq!(
+            theme(cx).paint_color("diff.add"),
+            theme(cx).paint_color(color::TEXT)
+        );
     });
 }
 
@@ -200,7 +210,7 @@ await commands.register("green", async () => { await settings.set("theme.dark", 
     };
     // The extension's key takes its default; an undefined key paints as
     // interface text.
-    let text = cx.read(|cx| theme(cx).color(color::TEXT));
+    let text = cx.read(|cx| theme(cx).paint_color(color::TEXT));
     let green = gpui::rgb(0x00aa00).into();
     assert_eq!(
         painted(cx),

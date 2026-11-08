@@ -1,4 +1,5 @@
-use gpui::{TestAppContext, rgb};
+use crate::app::style::Color;
+use gpui::TestAppContext;
 
 use super::*;
 use crate::app::theme::{color, theme};
@@ -75,13 +76,13 @@ fn a_registered_theme_fills_missing_keys_from_defaults_of_its_appearance() {
     let theme = registry.theme(&dark("Day"));
     let defaults = Theme::defaults(Appearance::Light, &native_color_definitions());
     assert_eq!(theme.appearance, Appearance::Light);
-    assert_eq!(theme.color(color::BACKGROUND), rgb(0xfafafa).into());
+    assert_eq!(theme.color(color::BACKGROUND), Color::rgb(0xfafafa));
     // editor.background defaults to background, so it follows the theme.
-    assert_eq!(theme.color(color::EDITOR_BACKGROUND), rgb(0xfafafa).into());
+    assert_eq!(theme.color(color::EDITOR_BACKGROUND), Color::rgb(0xfafafa));
     assert_eq!(theme.color(color::TEXT), defaults.color(color::TEXT));
     let keyword = theme.style(Highlight::named("keyword.return"));
-    assert_eq!(keyword.color, Some(rgb(0xff0000).into()));
-    assert_eq!(keyword.font_weight, Some(gpui::FontWeight::BOLD));
+    assert_eq!(keyword.color, Some(Color::rgb(0xff0000)));
+    assert_eq!(keyword.font_weight, Some(700));
     assert!(
         theme
             .style(Highlight::named("markup.strong"))
@@ -127,7 +128,7 @@ fn extension_color_definitions_resolve_and_leave_with_their_lifecycle() {
     registry.register(owner(2), themed);
     assert_eq!(
         registry.theme(&dark("Night")).color("diff.add"),
-        rgb(0x123456).into()
+        Color::rgb(0x123456)
     );
 
     registry.remove_lifecycle(ExtensionId::new(1), ExtensionLifecycleId::new(1));
@@ -178,7 +179,7 @@ fn startup_applies_the_selection_and_settings_writes_switch_it(cx: &mut TestAppC
         );
         registry.register(owner(1), definition("Paper", Appearance::Light, "#fefefe"));
         apply_at_startup(cx);
-        assert_eq!(theme(cx).color(color::BACKGROUND), rgb(0x101010).into());
+        assert_eq!(theme(cx).color(color::BACKGROUND), Color::rgb(0x101010));
     });
     cx.update(|cx| {
         let scope = settings::SettingsScope::default();
@@ -191,13 +192,13 @@ fn startup_applies_the_selection_and_settings_writes_switch_it(cx: &mut TestAppC
     cx.run_until_parked();
     cx.update(|cx| {
         assert_eq!(theme(cx).appearance, Appearance::Light);
-        assert_eq!(theme(cx).color(color::BACKGROUND), rgb(0xfefefe).into());
+        assert_eq!(theme(cx).color(color::BACKGROUND), Color::rgb(0xfefefe));
         // A registration after startup changes nothing until the selection does.
         cx.global_mut::<ApplicationThemes>()
             .0
             .register(owner(1), definition("Paper", Appearance::Light, "#eeeeee"));
         selection_changed(cx);
-        assert_eq!(theme(cx).color(color::BACKGROUND), rgb(0xfefefe).into());
+        assert_eq!(theme(cx).color(color::BACKGROUND), Color::rgb(0xfefefe));
     });
 }
 

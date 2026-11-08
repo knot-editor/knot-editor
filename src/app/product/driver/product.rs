@@ -1,5 +1,6 @@
 //! The application started headless with chosen packages.
 
+use crate::app::convert::ThemePaint as _;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -191,12 +192,12 @@ impl TestProduct {
 
     /// The current theme's value for the color key `key`.
     pub fn theme_color(&self, key: &str, cx: &mut TestAppContext) -> Hsla {
-        cx.read(|cx| crate::app::theme::theme(cx).color(key))
+        cx.read(|cx| crate::app::theme::theme(cx).paint_color(key))
     }
 
     /// A color in theme notation, such as `#282c34`.
     pub fn parse_color(text: &str) -> Option<Hsla> {
-        crate::app::theme::parse_color(text)
+        crate::app::style::Color::parse(text).map(crate::app::convert::color_to_gpui)
     }
 
     /// The highlights of `text` in the language detected for a file named

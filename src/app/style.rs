@@ -1,0 +1,113 @@
+//! Color and text-style values the theme resolves. Views convert them to the
+//! toolkit's types in [`super::convert`].
+
+use serde::{Deserialize, Serialize};
+
+/// An sRGB color with alpha. The default is transparent black.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) struct Color {
+    pub(crate) red: u8,
+    pub(crate) green: u8,
+    pub(crate) blue: u8,
+    pub(crate) alpha: u8,
+}
+
+impl Color {
+    /// An opaque color from `0xrrggbb`.
+    pub(crate) const fn rgb(value: u32) -> Self {
+        Self::rgba((value << 8) | 0xff)
+    }
+
+    /// A color from `0xrrggbbaa`.
+    pub(crate) const fn rgba(value: u32) -> Self {
+        Self {
+            red: (value >> 24) as u8,
+            green: (value >> 16) as u8,
+            blue: (value >> 8) as u8,
+            alpha: value as u8,
+        }
+    }
+
+    /// Parses `#rrggbb` or `#rrggbbaa`.
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        let digits = text.strip_prefix('#')?;
+        if !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return None;
+        }
+        let value = u32::from_str_radix(digits, 16).ok()?;
+        match digits.len() {
+            6 => Some(Self::rgb(value)),
+            8 => Some(Self::rgba(value)),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum FontStyle {
+    #[default]
+    Normal,
+    Italic,
+}
+
+/// A line under text, in logical pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Underline {
+    pub(crate) thickness: f32,
+    /// The line's color; the text color when unset.
+    pub(crate) color: Option<Color>,
+    pub(crate) wavy: bool,
+}
+
+/// How a span of text is styled; an unset field leaves the text as it is.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct HighlightStyle {
+    pub(crate) color: Option<Color>,
+    /// A weight from 100 to 900.
+    pub(crate) font_weight: Option<u16>,
+    pub(crate) font_style: Option<FontStyle>,
+    pub(crate) underline: Option<Underline>,
+    /// A one-pixel line through the text.
+    pub(crate) strikethrough: bool,
+}
+
+impl HighlightStyle {
+    pub(crate) fn color(color: Color) -> Self {
+        Self {
+            color: Some(color),
+            ..Self::default()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn colors_parse_six_or_eight_hex_digits() {
+        assert_eq!(Color::parse("#1e2f3a"), Some(Color::rgb(0x1e2f3a)));
+        assert_eq!(Color::parse("#1E2F3A"), Some(Color::rgb(0x1e2f3a)));
+        assert_eq!(
+            Color::parse("#1e2f3a80"),
+            Some(Color {
+                red: 0x1e,
+                green: 0x2f,
+                blue: 0x3a,
+                alpha: 0x80
+            })
+        );
+        for text in [
+            "1e2f3a", "#fff", "#1e2f3", "#1e2f3a8", "#gggggg", "#+12345", "",
+        ] {
+            assert_eq!(Color::parse(text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn rgb_is_opaque() {
+        assert_eq!(Color::rgb(0x112233), Color::rgba(0x112233ff));
+        assert_eq!(Color::default().alpha, 0);
+    }
+}
