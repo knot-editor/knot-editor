@@ -11,6 +11,7 @@ use crate::app::keys::{Keystroke, Modifiers};
 use super::{ApplicationKeymaps, Platform, PresetBinding, PresetOwner, PresetRegistry, rebuild};
 use crate::app::commands::dispatch::*;
 use crate::app::settings::{self, ApplicationSettings, KEYMAP_PRESET};
+use crate::app::tree_view::SHOW_TREE_CONTEXT_MENU_COMMAND;
 use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Commands of bundled packages that the Knot preset binds. A key bound to one
@@ -95,6 +96,12 @@ pub(crate) fn knot_preset(platform: Platform) -> Vec<PresetBinding> {
             PresetBinding::new(key.replace("secondary-", secondary), Some(command), view)
         })
         .collect::<Vec<_>>();
+    // Terminal programs read function keys.
+    preset.push(PresetBinding::new(
+        "shift-f10".into(),
+        None,
+        Some("terminal"),
+    ));
     if platform != Platform::MacOs {
         let mut pass_through = preset
             .iter()
@@ -167,6 +174,7 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("delete", DELETE_FORWARD_COMMAND, Some("editor")),
     ("ctrl-space", SHOW_COMPLETIONS_COMMAND, Some("editor")),
     ("ctrl-g", GO_TO_LINE_COMMAND, Some("editor")),
+    ("shift-f10", SHOW_TREE_CONTEXT_MENU_COMMAND, None),
     ("secondary-n", NEW_COMMAND, None),
     ("ctrl-`", NEW_TERMINAL_COMMAND, None),
     ("ctrl-tab", NEXT_RECENT_TAB_COMMAND, None),

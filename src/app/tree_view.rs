@@ -1,10 +1,16 @@
 //! Native presentation and interaction state for a semantic extension tree.
 
 use crate::app::convert::ThemePaint as _;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpui::{prelude::FluentBuilder, *};
+use gpui_component::{
+    ElementExt as _,
+    menu::{PopupMenu, PopupMenuItem},
+};
 
 use super::keys::Keystroke;
 
@@ -81,6 +87,16 @@ struct ActionFocus {
     index: usize,
 }
 
+/// A row's ID and its bounds when last painted.
+type RowBounds = Option<(String, Bounds<Pixels>)>;
+
+/// The open context menu of a row's actions.
+struct ContextMenu {
+    menu: Entity<PopupMenu>,
+    position: Point<Pixels>,
+    _subscriptions: [Subscription; 2],
+}
+
 /// Foreground-owned cache and presentation state for one native tree surface.
 pub(crate) struct TreeView {
     view_id: String,
@@ -92,6 +108,9 @@ pub(crate) struct TreeView {
     expanded: HashSet<String>,
     selected: Option<String>,
     action_focus: Option<ActionFocus>,
+    context_menu: Option<ContextMenu>,
+    /// The selected row and its bounds when last painted.
+    selected_bounds: Rc<RefCell<RowBounds>>,
     focus: FocusHandle,
     scroll: UniformListScrollHandle,
 }
@@ -116,6 +135,8 @@ impl TreeView {
             expanded: HashSet::new(),
             selected: None,
             action_focus: None,
+            context_menu: None,
+            selected_bounds: Rc::default(),
             focus: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
         }
@@ -561,6 +582,87 @@ impl TreeView {
         });
     }
 
+    /// Select row `id` and open a menu of its actions at `position`, which
+    /// takes focus and returns it to the tree when dismissed. False when the
+    /// row has no actions.
+    pub(crate) fn open_context_menu(
+        &mut self,
+        id: &str,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let actions = self.actions_for_row(id);
+        if actions.is_empty() {
+            return false;
+        }
+        self.selected = Some(id.to_owned());
+        self.action_focus = None;
+        let tree = cx.entity().downgrade();
+        let focus = self.focus.clone();
+        let menu = PopupMenu::build(window, cx, move |menu, _, _| {
+            actions
+                .into_iter()
+                .fold(menu.action_context(focus), |menu, action| {
+                    let tree = tree.clone();
+                    menu.item(
+                        PopupMenuItem::new(action.label.clone()).on_click(move |_, _, cx| {
+                            let _ =
+                                tree.update(cx, |tree, cx| tree.invoke_action(action.clone(), cx));
+                        }),
+                    )
+                })
+        });
+        let menu_focus = menu.focus_handle(cx);
+        let subscriptions = [
+            cx.subscribe_in(&menu, window, |tree, _, _: &DismissEvent, _, cx| {
+                tree.close_context_menu(cx)
+            }),
+            cx.on_blur(&menu_focus, window, |tree, _, cx| {
+                tree.close_context_menu(cx)
+            }),
+        ];
+        menu_focus.focus(window, cx);
+        crate::app::components::track_popup(&menu_focus, cx);
+        self.context_menu = Some(ContextMenu {
+            menu,
+            position,
+            _subscriptions: subscriptions,
+        });
+        cx.notify();
+        true
+    }
+
+    /// Open the selected row's context menu below it; false when no row is
+    /// selected or it has no actions.
+    pub(crate) fn open_selected_context_menu(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(selected) = self.selected.clone() else {
+            return false;
+        };
+        let position = self
+            .selected_bounds
+            .borrow()
+            .as_ref()
+            .filter(|(row, _)| *row == selected)
+            .map_or_else(Point::default, |(_, bounds)| bounds.bottom_left());
+        self.open_context_menu(&selected, position, window, cx)
+    }
+
+    fn close_context_menu(&mut self, cx: &mut Context<Self>) {
+        if self.context_menu.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn context_menu_open(&self) -> bool {
+        self.context_menu.is_some()
+    }
+
     /// Handle a key the keymap left unclaimed; false when the tree ignores
     /// it.
     pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
@@ -704,6 +806,11 @@ impl Render for TreeView {
         let expanded = self.expanded.clone();
         let action_focus = self.action_focus.clone();
         let frame_actions = self.frame_actions.clone();
+        let selected_bounds = self.selected_bounds.clone();
+        let context_menu = self
+            .context_menu
+            .as_ref()
+            .map(|open| (open.menu.clone(), open.position));
         let entity = cx.entity();
         let border = theme(cx).paint_color(color::BORDER);
         let button_text = theme(cx).paint_color(color::TEXT);
@@ -808,6 +915,13 @@ impl Render for TreeView {
                                         .child(description),
                                 )
                             });
+                        if is_selected {
+                            let selected_bounds = selected_bounds.clone();
+                            let id = item.id.clone();
+                            row = row.on_prepaint(move |bounds, _, _| {
+                                *selected_bounds.borrow_mut() = Some((id, bounds));
+                            });
+                        }
                         if let Some(status) = item.status_text.clone() {
                             row = row.child(
                                 div()
@@ -855,11 +969,24 @@ impl Render for TreeView {
                         }
                         row.on_click({
                             let entity = entity.clone();
+                            let id = id.clone();
                             move |_, window, cx| {
                                 entity.update(cx, |tree, cx| {
                                     tree.focus_handle(cx).focus(window, cx);
                                     tree.activate(&id, cx);
                                 });
+                            }
+                        })
+                        .on_mouse_down(MouseButton::Right, {
+                            let entity = entity.clone();
+                            move |event, window, cx| {
+                                entity.update(cx, |tree, cx| {
+                                    tree.focus_handle(cx).focus(window, cx);
+                                    tree.selected = Some(id.clone());
+                                    tree.open_context_menu(&id, event.position, window, cx);
+                                    cx.notify();
+                                });
+                                cx.stop_propagation();
                             }
                         })
                         .into_any_element()
@@ -895,7 +1022,43 @@ impl Render for TreeView {
             .flex_col()
             .when_some(toolbar, |container, toolbar| container.child(toolbar))
             .child(list)
+            .when_some(context_menu, |container, (menu, position)| {
+                container.child(
+                    deferred(
+                        anchored()
+                            .position(position)
+                            .snap_to_window_with_margin(px(8.))
+                            .child(menu),
+                    )
+                    .with_priority(1),
+                )
+            })
     }
+}
+
+#[crate::app::commands::declarations::command("tree.show-context-menu", title = "Show Context Menu", description = "Show the actions of the selected tree row.", id = SHOW_TREE_CONTEXT_MENU_COMMAND, participant = Workbench)]
+pub(crate) async fn show_context_menu(
+    context: crate::app::commands::declarations::CommandContext,
+    (): (),
+) -> Result<(), knot_protocol::CommandOutcome> {
+    use crate::app::workbench::{CommandView, ExtensionView};
+    use knot_protocol::CommandOutcome;
+    context
+        .foreground(|target, cx| {
+            let Some(CommandView::Extension(ExtensionView::Tree(tree))) =
+                target.command_view(cx).filter(|_| target.focused)
+            else {
+                return Err(CommandOutcome::Unavailable);
+            };
+            let window = target.window(cx).ok_or(CommandOutcome::Unavailable)?;
+            let opened = window
+                .update(cx, |_, window, cx| {
+                    tree.update(cx, |tree, cx| tree.open_selected_context_menu(window, cx))
+                })
+                .map_err(|_| CommandOutcome::InvalidTarget)?;
+            opened.then_some(()).ok_or(CommandOutcome::Unavailable)
+        })
+        .await
 }
 
 #[cfg(test)]

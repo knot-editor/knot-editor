@@ -28,6 +28,7 @@ mod themes;
 mod tool_layout;
 mod tools;
 mod transient;
+mod tree_context_menu;
 mod window_restore;
 mod workbench;
 mod workspaces;
