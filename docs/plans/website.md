@@ -38,8 +38,8 @@ guide, and a feature tour.
 - The recorded demo (a `pre-init.js` keybinding that toggles a maximized
   lazygit terminal). The idea is kept here as a candidate
   user guide example, and a video is a later decision.
-- Versioned docs, search beyond what the generator provides, a package
-  directory, analytics, and a blog.
+- A blog and a newsletter ([D167](../roadmap.md)), versioned docs, search
+  beyond what the generator provides, a package directory, and analytics.
 - Publishing architecture or decision documents.
 
 ## Deferred decisions
