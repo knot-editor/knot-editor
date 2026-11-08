@@ -38,7 +38,10 @@ fn transitions_through_root_and_host_continuation() {
     scheduler
         .finish_turn(key, turn.id, TurnOutcome::Completed)
         .unwrap();
-    assert_eq!(completion.recv().unwrap(), CompletionOutcome::Completed);
+    assert_eq!(
+        completion.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Completed
+    );
     assert_eq!(scheduler.state(key), Ok(&ExtensionState::Idle));
 }
 
@@ -122,10 +125,13 @@ fn terminal_paths_settle_every_completion_once() {
         .finish_turn(key, turn.id, TurnOutcome::Fatal(failure.clone()))
         .unwrap();
     assert_eq!(
-        active.recv().unwrap(),
+        active.recv_timeout(TEST_WAIT).unwrap(),
         CompletionOutcome::Failed(failure.clone())
     );
-    assert_eq!(queued.recv().unwrap(), CompletionOutcome::Failed(failure));
+    assert_eq!(
+        queued.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Failed(failure)
+    );
     assert!(active.try_recv().is_err());
     assert!(queued.try_recv().is_err());
 }
@@ -141,15 +147,24 @@ fn stop_and_shutdown_cancel_all_work() {
     let (_, other) = scheduler.enqueue_root(second, "other").unwrap();
     let turn = scheduler.next_turn().unwrap();
     scheduler.stop(first).unwrap();
-    assert_eq!(queued.recv().unwrap(), CompletionOutcome::Cancelled);
+    assert_eq!(
+        queued.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Cancelled
+    );
     assert!(running.try_recv().is_err());
     scheduler
         .finish_turn(first, turn.id, TurnOutcome::Completed)
         .unwrap();
-    assert_eq!(running.recv().unwrap(), CompletionOutcome::Cancelled);
+    assert_eq!(
+        running.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Cancelled
+    );
 
     scheduler.shutdown();
-    assert_eq!(other.recv().unwrap(), CompletionOutcome::Cancelled);
+    assert_eq!(
+        other.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Cancelled
+    );
     assert!(matches!(
         scheduler.enqueue_root(second, "late"),
         Err(SchedulerError::ShuttingDown)
@@ -165,7 +180,7 @@ fn load_failure_settles_work_queued_during_loading() {
     let failure = Failure::new("load failed");
     scheduler.finish_loading(key, Err(failure.clone())).unwrap();
     assert_eq!(
-        completion.recv().unwrap(),
+        completion.recv_timeout(TEST_WAIT).unwrap(),
         CompletionOutcome::Failed(failure.clone())
     );
     assert_eq!(scheduler.state(key), Ok(&ExtensionState::Failed(failure)));
@@ -248,7 +263,10 @@ fn stopped_running_lifecycle_can_be_replaced_after_its_turn_returns() {
     scheduler
         .finish_turn(old, turn.id, TurnOutcome::Completed)
         .unwrap();
-    assert_eq!(completion.recv().unwrap(), CompletionOutcome::Cancelled);
+    assert_eq!(
+        completion.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Cancelled
+    );
 
     let replacement = key(1, 2);
     scheduler.admit(replacement).unwrap();
@@ -340,7 +358,7 @@ fn blocking_work(
 
 fn blocking_executor(work: Turn<BlockingWork>) -> TurnOutcome {
     work.work.started.send(work.work.label).unwrap();
-    work.work.release.recv().unwrap();
+    work.work.release.recv_timeout(TEST_WAIT).unwrap();
     TurnOutcome::Completed
 }
 
@@ -372,8 +390,14 @@ fn one_worker_serializes_independent_extensions() {
         "second"
     );
     release_second.send(()).unwrap();
-    assert_eq!(first_done.recv().unwrap(), CompletionOutcome::Completed);
-    assert_eq!(second_done.recv().unwrap(), CompletionOutcome::Completed);
+    assert_eq!(
+        first_done.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Completed
+    );
+    assert_eq!(
+        second_done.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Completed
+    );
     pool.shutdown();
 }
 
@@ -403,8 +427,14 @@ fn two_workers_run_independent_extensions_concurrently() {
     assert_eq!(labels, ["first", "second"]);
     release_first.send(()).unwrap();
     release_second.send(()).unwrap();
-    assert_eq!(first_done.recv().unwrap(), CompletionOutcome::Completed);
-    assert_eq!(second_done.recv().unwrap(), CompletionOutcome::Completed);
+    assert_eq!(
+        first_done.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Completed
+    );
+    assert_eq!(
+        second_done.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Completed
+    );
     pool.shutdown();
 }
 
@@ -419,7 +449,7 @@ fn two_workers_never_run_one_extension_concurrently() {
                 TurnOutcome::Completed
             };
             turn.work.started.send(turn.work.label).unwrap();
-            turn.work.release.recv().unwrap();
+            turn.work.release.recv_timeout(TEST_WAIT).unwrap();
             outcome
         },
     );
@@ -443,7 +473,10 @@ fn two_workers_never_run_one_extension_concurrently() {
         "continuation"
     );
     release_continuation.send(()).unwrap();
-    assert_eq!(completed.recv().unwrap(), CompletionOutcome::Completed);
+    assert_eq!(
+        completed.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Completed
+    );
     pool.shutdown();
 }
 
@@ -527,8 +560,14 @@ fn many_lifecycles_preserve_queued_roots_and_delayed_continuations() {
             .into_iter()
             .map(|(_, first, second)| (first, second))
         {
-            assert_eq!(first.recv().unwrap(), CompletionOutcome::Completed);
-            assert_eq!(second.recv().unwrap(), CompletionOutcome::Completed);
+            assert_eq!(
+                first.recv_timeout(TEST_WAIT).unwrap(),
+                CompletionOutcome::Completed
+            );
+            assert_eq!(
+                second.recv_timeout(TEST_WAIT).unwrap(),
+                CompletionOutcome::Completed
+            );
         }
         assert_eq!(scheduler.diagnostics(2).queue_depth, 0);
         for key in keys {
@@ -553,7 +592,7 @@ fn yielding_turn_frees_a_worker_for_queued_extensions() {
         PoolConfig::new(NonZeroUsize::new(2).unwrap()),
         |turn: Turn<GatedWork>| {
             turn.work.started.send(turn.work.key).unwrap();
-            turn.work.release.recv().unwrap();
+            turn.work.release.recv_timeout(TEST_WAIT).unwrap();
             turn.work.outcome
         },
     );
@@ -608,7 +647,10 @@ fn yielding_turn_frees_a_worker_for_queued_extensions() {
     releases[2].send(()).unwrap();
     releases[3].send(()).unwrap();
     for (_, completed) in completions.iter_mut().skip(1) {
-        assert_eq!(completed.recv().unwrap(), CompletionOutcome::Completed);
+        assert_eq!(
+            completed.recv_timeout(TEST_WAIT).unwrap(),
+            CompletionOutcome::Completed
+        );
     }
 
     let (release_reply, released_reply) = mpsc::channel();
@@ -630,7 +672,7 @@ fn yielding_turn_frees_a_worker_for_queued_extensions() {
     );
     release_reply.send(()).unwrap();
     assert_eq!(
-        completions[0].1.recv().unwrap(),
+        completions[0].1.recv_timeout(TEST_WAIT).unwrap(),
         CompletionOutcome::Completed
     );
     assert_eq!(pool.diagnostics().turn_count, 5);
@@ -654,11 +696,14 @@ fn executor_panic_fails_only_its_extension() {
     let (_, completed) = handle.enqueue_root(neighbor, "complete").unwrap();
 
     assert!(matches!(
-        failed.recv().unwrap(),
+        failed.recv_timeout(TEST_WAIT).unwrap(),
         CompletionOutcome::Failed(failure)
             if failure.message() == "turn executor panicked"
     ));
-    assert_eq!(completed.recv().unwrap(), CompletionOutcome::Completed);
+    assert_eq!(
+        completed.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Completed
+    );
     let diagnostics = pool.diagnostics();
     assert_eq!(diagnostics.worker_count, 1);
     assert_eq!(diagnostics.turn_count, 2);

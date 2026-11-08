@@ -2,6 +2,8 @@
 //! calls, cancellation, and termination.
 
 use super::*;
+#[cfg(any(test, feature = "test-support"))]
+use crate::scheduler::TEST_WAIT;
 
 /// Thread-safe, V8-free control surface for forced termination.
 pub struct TerminationHandle {
@@ -121,13 +123,13 @@ pub struct RuntimeExecution {
 
 impl RuntimeExecution {
     #[cfg(any(test, feature = "test-support"))]
-    pub fn wait(self) -> Result<ExecutionReport, RuntimeError> {
-        match self.result.blocking_recv() {
+    pub fn wait(mut self) -> Result<ExecutionReport, RuntimeError> {
+        match recv_bounded(&mut self.result) {
             Ok(result) => {
-                let _ = self.completion.recv();
+                let _ = self.completion.recv_timeout(TEST_WAIT);
                 result
             }
-            Err(_) => match self.completion.recv() {
+            Err(_) => match self.completion.recv_timeout(TEST_WAIT) {
                 Ok(CompletionOutcome::Cancelled) => Err(RuntimeError::fatal(
                     RuntimeErrorKind::Cancelled,
                     "extension JavaScript execution was cancelled",
@@ -183,13 +185,13 @@ pub struct RuntimeCommandExecution {
 
 impl RuntimeCommandExecution {
     #[cfg(any(test, feature = "test-support"))]
-    pub fn wait(self) -> Result<CommandOutcome, RuntimeError> {
-        match self.result.blocking_recv() {
+    pub fn wait(mut self) -> Result<CommandOutcome, RuntimeError> {
+        match recv_bounded(&mut self.result) {
             Ok(result) => {
-                let _ = self.completion.recv();
+                let _ = self.completion.recv_timeout(TEST_WAIT);
                 result
             }
-            Err(_) => match self.completion.recv() {
+            Err(_) => match self.completion.recv_timeout(TEST_WAIT) {
                 Ok(CompletionOutcome::Cancelled) => Ok(CommandOutcome::Cancelled),
                 Ok(CompletionOutcome::Failed(failure)) => Err(RuntimeError::fatal(
                     RuntimeErrorKind::LifecycleFailed,
@@ -256,14 +258,14 @@ impl<T> RuntimeProviderExecution<T> {
         let result = match self
             .result
             .take()
+            .map(|mut result| recv_bounded(&mut result))
             .expect("provider execution owns its result")
-            .blocking_recv()
         {
             Ok(result) => {
-                let _ = self.completion.recv();
+                let _ = self.completion.recv_timeout(TEST_WAIT);
                 result
             }
-            Err(_) => match self.completion.recv() {
+            Err(_) => match self.completion.recv_timeout(TEST_WAIT) {
                 Ok(CompletionOutcome::Cancelled) => Err(RuntimeError::fatal(
                     RuntimeErrorKind::Cancelled,
                     "semantic provider request was cancelled",
@@ -361,5 +363,22 @@ impl<T> Drop for RuntimeProviderExecution<T> {
                 work: EngineWork::CancelProvider,
             },
         );
+    }
+}
+
+/// Receives a oneshot result, failing the test instead of blocking forever.
+#[cfg(any(test, feature = "test-support"))]
+fn recv_bounded<T>(receiver: &mut tokio::sync::oneshot::Receiver<T>) -> Result<T, ()> {
+    use tokio::sync::oneshot::error::TryRecvError;
+    let deadline = std::time::Instant::now() + TEST_WAIT;
+    loop {
+        match receiver.try_recv() {
+            Ok(value) => return Ok(value),
+            Err(TryRecvError::Closed) => return Err(()),
+            Err(TryRecvError::Empty) if std::time::Instant::now() >= deadline => {
+                panic!("timed out waiting for an execution result")
+            }
+            Err(TryRecvError::Empty) => std::thread::sleep(std::time::Duration::from_millis(1)),
+        }
     }
 }

@@ -651,3 +651,6 @@ pub use marshal::{
 pub use modules::validate_module_graph_entry;
 use modules::*;
 pub use pool::*;
+
+#[cfg(test)]
+mod tests;

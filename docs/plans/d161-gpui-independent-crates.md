@@ -130,6 +130,14 @@ application crate, so a TypeScript edit rebuilds it until checkpoint 2.
   application's declared handlers. Engine internals they touch are `pub`, with
   test-only helpers behind each crate's `test-support` feature, which the
   application enables as a dev-dependency.
+- ✅ The 33 engine tests that need no declared operation stay in
+  `knot-host` (`engine/tests.rs`), so the crate has 57 tests that build without
+  gpui. Tests that call a facade operation must live in the application, whose
+  binary links the handlers; in `knot-host` such a call is rejected as
+  unsupported and the test would wait for a request that never arrives.
+- ✅ Every blocking wait in test helpers and tests is bounded by
+  `scheduler::TEST_WAIT` (30 s) and panics on expiry, and `.config/nextest.toml`
+  terminates any test still blocked after three 60 s periods.
 - ✅ Four `HostSuccess` impls moved from the application into `knot-protocol`
   (orphan rule).
 - Remaining: review gate.

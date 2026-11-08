@@ -165,6 +165,11 @@ struct CompletionSlot {
 }
 
 /// Awaitable view of one root's terminal disposition. Tests may also block on it.
+/// Upper bound for every blocking wait in tests, so a lost message fails the
+/// test instead of hanging it.
+#[cfg(any(test, feature = "test-support"))]
+pub const TEST_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub struct CompletionReceiver {
     #[cfg(any(test, feature = "test-support"))]
     blocking: mpsc::Receiver<CompletionOutcome>,
@@ -173,8 +178,11 @@ pub struct CompletionReceiver {
 
 impl CompletionReceiver {
     #[cfg(any(test, feature = "test-support"))]
-    pub fn recv(&self) -> Result<CompletionOutcome, mpsc::RecvError> {
-        self.blocking.recv()
+    pub fn recv_timeout(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<CompletionOutcome, mpsc::RecvTimeoutError> {
+        self.blocking.recv_timeout(timeout)
     }
 
     #[cfg(test)]

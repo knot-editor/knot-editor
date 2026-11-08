@@ -489,14 +489,9 @@ impl RuntimePool {
 
     #[cfg(any(test, feature = "test-support"))]
     pub fn receive_request(&self) -> Option<HostRequest> {
-        loop {
-            let event = self.events.lock().unwrap().as_mut()?.blocking_recv()?;
-            match event {
-                EngineEvent::Request(request) => return Some(request),
-                EngineEvent::LifecycleEnded { reason, .. } => {
-                    Self::lifecycle_failure_while_waiting(&reason)
-                }
-            }
+        match self.receive_request_timeout(crate::scheduler::TEST_WAIT) {
+            Some(request) => Some(request),
+            None => panic!("no host request arrived (timed out or the event channel closed)"),
         }
     }
 
