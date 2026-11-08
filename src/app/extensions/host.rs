@@ -6,6 +6,7 @@ mod declaration_tests;
 mod engine_tests;
 pub(crate) mod handlers;
 
+use crate::app::documents::DocumentDirty;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,

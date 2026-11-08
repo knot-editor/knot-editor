@@ -1,138 +1,54 @@
-use std::collections::HashMap;
+//! The application's documents: the global wrapping the plain
+//! [`knot_model::documents::DocumentCollection`] over buffer entities, and the
+//! effects document changes have on the rest of the application.
 
 use std::sync::Arc;
 
 use gpui::{App, Entity, Global};
 
-use super::filesystem::ResourceVersion;
 use super::model::Buffer;
 use super::resource::ResourceUri;
 
+pub(crate) use knot_model::documents::{DocumentState, PersistenceCapture};
 pub(crate) use knot_model::workbench::DocumentId;
 
-/// A document's persistence relationship.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum DocumentState {
-    /// A user document with no destination yet.
-    ///
-    /// It is clean at creation and dirty whenever its current content state no
-    /// longer matches the state recorded at `clean_revision`.
-    Untitled { clean_revision: u64 },
-    /// A user document associated with a destination that does not exist yet.
-    ///
-    /// It remains dirty until the first successful persistence transitions it
-    /// to [`DocumentState::Persisted`].
-    Destination { uri: ResourceUri },
-    /// A user document whose contents have been persisted to a resource.
-    ///
-    /// Edits are dirty while the model's current content state differs from the
-    /// state recorded at `persisted_revision`.
-    Persisted {
-        uri: ResourceUri,
-        persisted_revision: u64,
-        version: ResourceVersion,
-    },
+use super::filesystem::ResourceVersion;
+
+pub(crate) type Document = knot_model::documents::Document<Entity<Buffer>>;
+
+/// Dirty state, which reads the buffer entity.
+pub(crate) trait DocumentDirty {
+    fn is_dirty(&self, cx: &App) -> bool;
 }
 
-impl DocumentState {
-    pub(crate) fn resource_uri(&self) -> Option<&ResourceUri> {
-        match self {
-            Self::Destination { uri } | Self::Persisted { uri, .. } => Some(uri),
-            Self::Untitled { .. } => None,
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn persisted_revision(&self) -> Option<u64> {
-        match self {
-            Self::Persisted {
-                persisted_revision, ..
-            } => Some(*persisted_revision),
-            _ => None,
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn persisted_version(&self) -> Option<&ResourceVersion> {
-        match self {
-            Self::Persisted { version, .. } => Some(version),
-            _ => None,
-        }
+impl DocumentDirty for Document {
+    fn is_dirty(&self, cx: &App) -> bool {
+        self.is_dirty_with(|model, revision| model.read(cx).content_matches_revision(revision))
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PersistenceCapture {
-    identity: uuid::Uuid,
-    generation: u64,
-    state: DocumentState,
-}
+/// The application-owned lifetime and persistence registry for documents. The
+/// plain collection decides; this wrapper stamps the model, detects its
+/// language and indentation, and tells recovery and observation.
+pub(crate) struct DocumentCollection(knot_model::documents::DocumentCollection<Entity<Buffer>>);
 
-pub(crate) struct Document {
-    id: DocumentId,
-    identity: uuid::Uuid,
-    title: Arc<str>,
-    model: Entity<Buffer>,
-    state: DocumentState,
-    persistence_generation: u64,
-}
+impl std::ops::Deref for DocumentCollection {
+    type Target = knot_model::documents::DocumentCollection<Entity<Buffer>>;
 
-impl Document {
-    pub(crate) fn id(&self) -> DocumentId {
-        self.id
-    }
-
-    /// Opaque identity retained across persistence and presentation changes.
-    pub(crate) fn identity(&self) -> uuid::Uuid {
-        self.identity
-    }
-
-    pub(crate) fn title(&self) -> &str {
-        &self.title
-    }
-
-    pub(crate) fn model(&self) -> &Entity<Buffer> {
-        &self.model
-    }
-
-    pub(crate) fn state(&self) -> &DocumentState {
-        &self.state
-    }
-
-    pub(crate) fn resource_uri(&self) -> Option<&ResourceUri> {
-        self.state.resource_uri()
-    }
-
-    pub(crate) fn is_dirty(&self, cx: &App) -> bool {
-        match self.state {
-            DocumentState::Untitled { clean_revision } => {
-                !self.model.read(cx).content_matches_revision(clean_revision)
-            }
-            DocumentState::Destination { .. } => true,
-            DocumentState::Persisted {
-                persisted_revision, ..
-            } => !self
-                .model
-                .read(cx)
-                .content_matches_revision(persisted_revision),
-        }
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-/// The application-owned lifetime and persistence registry for documents.
-pub(crate) struct DocumentCollection {
-    next_id: u64,
-    documents: Vec<Document>,
-    resources: HashMap<ResourceUri, DocumentId>,
+impl std::ops::DerefMut for DocumentCollection {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 impl DocumentCollection {
     pub(crate) fn new() -> Self {
-        Self {
-            next_id: 1,
-            documents: Vec::new(),
-            resources: HashMap::new(),
-        }
+        Self(knot_model::documents::DocumentCollection::new())
     }
 
     pub(crate) fn create_untitled(
@@ -142,7 +58,9 @@ impl DocumentCollection {
         cx: &mut App,
     ) -> DocumentId {
         let clean_revision = model.read(cx).revision();
-        self.insert(title, model, DocumentState::Untitled { clean_revision }, cx)
+        let id = self.0.insert_untitled(title, model.clone(), clean_revision);
+        self.attach(id, &model, cx);
+        id
     }
 
     pub(crate) fn create_destination(
@@ -152,7 +70,8 @@ impl DocumentCollection {
         uri: ResourceUri,
         cx: &mut App,
     ) -> DocumentId {
-        self.insert_resource(title, model, DocumentState::Destination { uri }, cx)
+        let inserted = self.0.insert_destination(title, model.clone(), uri);
+        self.attach_new(inserted, &model, cx)
     }
 
     pub(crate) fn create_persisted(
@@ -164,16 +83,10 @@ impl DocumentCollection {
         version: ResourceVersion,
         cx: &mut App,
     ) -> DocumentId {
-        self.insert_resource(
-            title,
-            model,
-            DocumentState::Persisted {
-                uri,
-                persisted_revision,
-                version,
-            },
-            cx,
-        )
+        let inserted =
+            self.0
+                .insert_persisted(title, model.clone(), uri, persisted_revision, version);
+        self.attach_new(inserted, &model, cx)
     }
 
     /// Insert a recovered user document, keeping its recorded identity when one
@@ -187,90 +100,29 @@ impl DocumentCollection {
         identity: Option<uuid::Uuid>,
         cx: &mut App,
     ) -> Option<DocumentId> {
-        if identity.is_some_and(|identity| self.document_by_identity(identity).is_some())
-            || state
-                .resource_uri()
-                .is_some_and(|uri| self.resources.contains_key(uri))
-        {
-            return None;
-        }
-        let uri = state.resource_uri().cloned();
-        let id = self.insert_with_identity(
-            title,
-            model,
-            state,
-            identity.unwrap_or_else(uuid::Uuid::new_v4),
-            cx,
-        );
-        if let Some(uri) = uri {
-            self.resources.insert(uri, id);
-        }
+        let id = self
+            .0
+            .insert_recovered(title, model.clone(), state, identity)?;
+        self.attach(id, &model, cx);
         Some(id)
     }
 
-    pub(crate) fn documents(&self) -> impl Iterator<Item = &Document> {
-        self.documents.iter()
-    }
-
-    pub(crate) fn get(&self, id: DocumentId) -> Option<&Document> {
-        self.documents.iter().find(|document| document.id == id)
-    }
-
-    pub(crate) fn document_by_identity(&self, identity: uuid::Uuid) -> Option<&Document> {
-        self.documents
-            .iter()
-            .find(|document| document.identity == identity)
-    }
-
-    pub(crate) fn document_for_resource(&self, uri: &ResourceUri) -> Option<DocumentId> {
-        self.resources.get(uri).copied()
-    }
-
     pub(crate) fn remove(&mut self, id: DocumentId, cx: &mut App) -> bool {
-        let Some(index) = self.documents.iter().position(|document| document.id == id) else {
+        let Some(document) = self.0.take(id) else {
             return false;
         };
-        let document = self.documents.remove(index);
-        document.model.update(cx, |model, cx| {
+        document.model().update(cx, |model, cx| {
             model.close();
             cx.notify();
         });
-        if let Some(uri) = document.resource_uri() {
-            self.resources.remove(uri);
-        }
-        super::settings::release_document(document.identity, cx);
-        super::recovery::forget_document(document.identity, cx);
+        super::settings::release_document(document.identity(), cx);
+        super::recovery::forget_document(document.identity(), cx);
         super::application_observation::changed(cx);
         true
     }
 
-    pub(crate) fn begin_persistence(
-        &mut self,
-        id: DocumentId,
-        model: &Entity<Buffer>,
-    ) -> Option<PersistenceCapture> {
-        let document = self
-            .documents
-            .iter_mut()
-            .find(|document| document.id == id)?;
-        if &document.model != model {
-            return None;
-        }
-        document.persistence_generation = document
-            .persistence_generation
-            .checked_add(1)
-            .expect("document persistence generation overflowed");
-        Some(PersistenceCapture {
-            identity: document.identity(),
-            generation: document.persistence_generation,
-            state: document.state.clone(),
-        })
-    }
-
-    /// Commit exactly the bytes and revision captured before asynchronous I/O.
-    ///
-    /// The document may have acquired newer edits, which remain dirty. Identity
-    /// changes and later persistence attempts invalidate this completion.
+    /// Commit exactly the bytes and revision captured before asynchronous I/O;
+    /// see [`knot_model::documents::DocumentCollection::complete_persistence`].
     pub(crate) fn finish_persistence(
         &mut self,
         id: DocumentId,
@@ -280,41 +132,16 @@ impl DocumentCollection {
         persisted_state: (ResourceVersion, u64),
         cx: &mut App,
     ) -> bool {
-        let (title, uri) = resource;
-        let (version, revision) = persisted_state;
-        if self
-            .resources
-            .get(&uri)
-            .is_some_and(|existing| *existing != id)
-        {
-            return false;
-        }
-        let Some(document) = self.documents.iter_mut().find(|document| document.id == id) else {
+        let Some(moved) =
+            self.0
+                .complete_persistence(id, model, capture, resource, persisted_state)
+        else {
             return false;
         };
-        if document.identity() != capture.identity
-            || &document.model != model
-            || document.persistence_generation != capture.generation
-            || document.state != capture.state
-        {
-            return false;
-        }
-        // Only Save As, or a first save, moves the document to a new resource;
-        // a plain Save keeps its language even after its shebang changed.
-        let moved = document.resource_uri() != Some(&uri);
-        if let Some(old_uri) = document.resource_uri() {
-            self.resources.remove(old_uri);
-        }
-        document.title = title.into();
-        document.state = DocumentState::Persisted {
-            uri: uri.clone(),
-            persisted_revision: revision,
-            version,
-        };
+        let document = self.0.get(id).expect("a completed document is live");
         if moved {
-            super::languages::detect_document(&document.model, document.resource_uri(), cx);
+            super::languages::detect_document(document.model(), document.resource_uri(), cx);
         }
-        self.resources.insert(uri, id);
         // A successful persistence changes the saved baseline while edits racing
         // the I/O remain dirty; re-publish so the automatic record matches the
         // committed state or is retired once the document is clean.
@@ -323,65 +150,30 @@ impl DocumentCollection {
         true
     }
 
-    fn insert_resource(
+    fn attach_new(
         &mut self,
-        title: impl Into<Arc<str>>,
-        model: Entity<Buffer>,
-        state: DocumentState,
+        inserted: knot_model::documents::Inserted,
+        model: &Entity<Buffer>,
         cx: &mut App,
     ) -> DocumentId {
-        let uri = state
-            .resource_uri()
-            .expect("resource document state has a URI")
-            .clone();
-        if let Some(existing) = self.document_for_resource(&uri) {
-            return existing;
+        if let knot_model::documents::Inserted::New(id) = inserted {
+            self.attach(id, model, cx);
         }
-        let id = self.insert(title, model, state, cx);
-        self.resources.insert(uri, id);
-        id
+        inserted.id()
     }
 
-    fn insert(
-        &mut self,
-        title: impl Into<Arc<str>>,
-        model: Entity<Buffer>,
-        state: DocumentState,
-        cx: &mut App,
-    ) -> DocumentId {
-        self.insert_with_identity(title, model, state, uuid::Uuid::new_v4(), cx)
-    }
-
-    fn insert_with_identity(
-        &mut self,
-        title: impl Into<Arc<str>>,
-        model: Entity<Buffer>,
-        state: DocumentState,
-        identity: uuid::Uuid,
-        cx: &mut App,
-    ) -> DocumentId {
-        let id = DocumentId::new(self.next_id);
-        self.next_id = self
-            .next_id
-            .checked_add(1)
-            .expect("document identity space exhausted");
-        super::languages::detect_document(&model, state.resource_uri(), cx);
+    /// Stamp a new document's model with its identity and tell the rest of the
+    /// application about it.
+    fn attach(&self, id: DocumentId, model: &Entity<Buffer>, cx: &mut App) {
+        let document = self.0.get(id).expect("an inserted document is live");
+        let identity = document.identity();
+        super::languages::detect_document(model, document.resource_uri(), cx);
         model.update(cx, |model, _| model.set_document(identity));
-        if state.resource_uri().is_some() {
-            detect_indentation(&model, cx);
+        if document.resource_uri().is_some() {
+            detect_indentation(model, cx);
         }
-        let observed_model = model.clone();
-        self.documents.push(Document {
-            id,
-            identity,
-            title: title.into(),
-            model,
-            state,
-            persistence_generation: 0,
-        });
-        super::recovery::observe_document(&observed_model, identity, cx);
+        super::recovery::observe_document(model, identity, cx);
         super::application_observation::changed(cx);
-        id
     }
 }
 
@@ -583,110 +375,6 @@ mod tests {
         });
         assert_ne!(reopened, first);
         assert_ne!(documents.get(reopened).unwrap().identity(), first_identity);
-    }
-
-    #[gpui::test]
-    fn recovered_documents_keep_identity_and_never_displace_live_ones(cx: &mut TestAppContext) {
-        let uri = ResourceUri::parse("mem://workspace/notes.txt").unwrap();
-        let identity = uuid::Uuid::new_v4();
-        let mut documents = DocumentCollection::new();
-        let recovered =
-            cx.new(|_| Buffer::new(BufferModel::from_recovered_text("disk", "recovered")));
-        let id = cx
-            .update(|cx| {
-                documents.create_recovered(
-                    "notes.txt",
-                    recovered,
-                    DocumentState::Persisted {
-                        uri: uri.clone(),
-                        persisted_revision: 0,
-                        version: version(1),
-                    },
-                    Some(identity),
-                    cx,
-                )
-            })
-            .unwrap();
-        let document = documents.get(id).unwrap();
-        assert_eq!(document.identity(), identity);
-        assert!(cx.read(|cx| document.is_dirty(cx)));
-        assert_eq!(documents.document_for_resource(&uri), Some(id));
-
-        for (state, identity) in [
-            (
-                DocumentState::Untitled { clean_revision: 0 },
-                Some(identity),
-            ),
-            (DocumentState::Destination { uri: uri.clone() }, None),
-        ] {
-            let model = cx.new(|_| Buffer::new(BufferModel::from_text("other")));
-            assert!(
-                cx.update(|cx| documents.create_recovered("other", model, state, identity, cx))
-                    .is_none()
-            );
-        }
-        assert_eq!(documents.documents().count(), 1);
-    }
-
-    #[gpui::test]
-    fn stale_persistence_completion_cannot_change_document_state(cx: &mut TestAppContext) {
-        let uri = ResourceUri::parse("mem://workspace/notes.txt").unwrap();
-        let model = cx.new(|_| Buffer::new(BufferModel::from_text("notes")));
-        let other_model = cx.new(|_| Buffer::new(BufferModel::from_text("other")));
-        let mut documents = DocumentCollection::new();
-        let id = cx.update(|cx| {
-            documents.create_persisted("notes.txt", model.clone(), uri.clone(), 0, version(1), cx)
-        });
-
-        assert!(documents.begin_persistence(id, &other_model).is_none());
-        let stale = documents.begin_persistence(id, &model).unwrap();
-        let current = documents.begin_persistence(id, &model).unwrap();
-        assert!(!cx.update(|cx| documents.finish_persistence(
-            id,
-            &model,
-            &stale,
-            ("notes.txt", uri.clone()),
-            (version(2), 1),
-            cx
-        )));
-        assert!(!cx.update(|cx| documents.finish_persistence(
-            DocumentId::new(u64::MAX),
-            &model,
-            &current,
-            ("notes.txt", uri.clone()),
-            (version(2), 1),
-            cx
-        )));
-        assert_eq!(
-            documents.get(id).unwrap().state().persisted_revision(),
-            Some(0)
-        );
-    }
-
-    #[gpui::test]
-    fn save_as_retargets_resource_identity_only_on_a_current_completion(cx: &mut TestAppContext) {
-        let old_uri = ResourceUri::parse("mem://workspace/old.txt").unwrap();
-        let new_uri = ResourceUri::parse("mem://workspace/new.txt").unwrap();
-        let model = cx.new(|_| Buffer::new(BufferModel::from_text("notes")));
-        let mut documents = DocumentCollection::new();
-        let id = cx.update(|cx| {
-            documents.create_persisted("old.txt", model.clone(), old_uri.clone(), 0, version(1), cx)
-        });
-        let identity = documents.get(id).unwrap().identity();
-        let capture = documents.begin_persistence(id, &model).unwrap();
-
-        assert!(cx.update(|cx| documents.finish_persistence(
-            id,
-            &model,
-            &capture,
-            ("new.txt", new_uri.clone()),
-            (version(2), 0),
-            cx
-        )));
-        assert_eq!(documents.document_for_resource(&old_uri), None);
-        assert_eq!(documents.document_for_resource(&new_uri), Some(id));
-        assert_eq!(documents.get(id).unwrap().title(), "new.txt");
-        assert_eq!(documents.get(id).unwrap().identity(), identity);
     }
 
     #[gpui::test]

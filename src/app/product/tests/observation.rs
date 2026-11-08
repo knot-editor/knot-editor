@@ -1,6 +1,7 @@
 //! Product commit-boundary regressions for application metadata observation.
 
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::{
     entry::parse_launch_arguments,
     extensions::{self, host::ProductExtensionHost},

@@ -1,5 +1,6 @@
 //! Native window hot exit: recording, startup restoration, and precedence.
 
+use crate::app::documents::DocumentDirty;
 use std::rc::Rc;
 
 use super::*;

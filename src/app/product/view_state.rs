@@ -6,6 +6,7 @@
 //! published, reports `viewStateChanged` to extension observers. A changed
 //! layout or root set also re-records the native window session.
 
+use crate::app::documents::DocumentDirty;
 use std::time::Duration;
 
 use super::*;

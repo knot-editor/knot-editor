@@ -2,6 +2,7 @@
 
 use super::operations::empty_product_window;
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::extensions::load::LoadResult;
 
 const LOOP_V1: &str = r#"

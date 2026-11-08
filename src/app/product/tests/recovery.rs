@@ -1,5 +1,6 @@
 //! Durable unsaved-document recovery through the product document lifecycle.
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::recovery::{
     ApplicationRecovery, RecoveryService, RecoveryStore, RestoreError, RestoreOutcome,
     RestoredResource, SnapshotDraft, SnapshotKind, SnapshotState, StartupRecovery,

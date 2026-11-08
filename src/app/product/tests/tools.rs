@@ -1,6 +1,7 @@
 //! Native tools participate in the same presentation and closure boundaries as tabs.
 use super::operations::empty_product_window;
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::workbench::{DockLocation, ToolPlacement};
 
 #[gpui::test]

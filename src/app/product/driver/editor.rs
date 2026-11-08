@@ -5,6 +5,7 @@
 //! input settles once the session holds no keys and the extension pool has
 //! gone quiet. Keys use the [case](crate::test_support::cases) notation.
 
+use crate::app::documents::DocumentDirty;
 use gpui::{
     AppContext, Bounds, Entity, Modifiers, MouseButton, Pixels, Point, TestAppContext,
     VisualTestContext,

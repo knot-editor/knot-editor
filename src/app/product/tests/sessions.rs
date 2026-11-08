@@ -1,5 +1,6 @@
 //! Native session replacement: staging, revalidation, and the single commit.
 
+use crate::app::documents::DocumentDirty;
 use std::rc::Rc;
 
 use super::*;

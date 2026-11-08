@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::app::convert::ThemePaint as _;
+use crate::app::documents::DocumentDirty;
 use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Theme, color, theme};
 use crate::app::zoom;

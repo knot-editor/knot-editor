@@ -15,6 +15,7 @@ pub mod buffer;
 pub mod command_history;
 pub mod commands;
 pub mod completion;
+pub mod documents;
 pub mod editing;
 pub mod editor;
 pub mod extensions;

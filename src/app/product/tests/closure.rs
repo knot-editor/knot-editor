@@ -2,6 +2,7 @@
 
 use super::operations::{empty_product_window, install_operation_fixture};
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::extensions;
 use crate::app::product::{ProtectedCloseFailure, ProtectedCloseKind, ProtectedCloseRequest};
 

@@ -4,6 +4,7 @@ use super::super::{
 };
 use super::tests::start_drag;
 use super::{ApplicationTabDrag, DropAction, WindowGeometry, commit_drop_with, content_bounds};
+use crate::app::documents::DocumentDirty;
 use crate::app::{
     product::tests::install_globals,
     workbench::{SplitEdge, TabMoveDestination, TabMovePlacement, TabSurfaceId, Workbench},

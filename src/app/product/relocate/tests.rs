@@ -3,6 +3,7 @@ use super::super::{
     create_untitled_document, open_tab_transfer_window,
 };
 use super::{TabRelocationDestination, TabRelocationSource};
+use crate::app::documents::DocumentDirty;
 use crate::app::{
     product::tests::{install_globals, product_window},
     workbench::{SplitEdge, TabMoveDestination, TabMovePlacement, TabSurfaceId},

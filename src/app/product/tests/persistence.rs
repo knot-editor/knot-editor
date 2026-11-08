@@ -1,5 +1,6 @@
 //! Open, Save, Save As, and external conflicts through product commands.
 use super::*;
+use crate::app::documents::DocumentDirty;
 
 #[gpui::test]
 async fn cancelling_the_native_open_selection_settles_the_command(cx: &mut TestAppContext) {

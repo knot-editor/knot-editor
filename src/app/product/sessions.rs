@@ -13,6 +13,7 @@
 
 use super::super::extensions::host::handlers::{AccessError, OpenError, ReplaceError};
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::recovery::{RestoreOutcome, RestoredResource, StagedRestore};
 use crate::app::window_layout::{PlannedTab, WindowLayout};
 use crate::app::workbench::ArrangedTab;

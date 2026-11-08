@@ -1,5 +1,6 @@
 //! Save cleanup: trailing whitespace and the final newline.
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::settings::{
     ApplicationSettings, FILES_INSERT_FINAL_NEWLINE, FILES_TRIM_TRAILING_WHITESPACE, SettingsScope,
 };

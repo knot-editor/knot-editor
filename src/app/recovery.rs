@@ -27,6 +27,7 @@
 //! A missing, corrupt, or incompatible database is preserved and reported; it
 //! never blocks editing and is never replaced.
 
+use crate::app::documents::DocumentDirty;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},

@@ -2,6 +2,7 @@
 
 use super::super::{OpenCommit, OpenFailure};
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::open::OpenResourceError;
 
 fn begin_open(

@@ -2,6 +2,7 @@
 //! windows, and quit.
 
 use super::*;
+use crate::app::documents::DocumentDirty;
 
 impl ProductShell {
     pub(super) fn protected_closure_is_active(cx: &App) -> bool {

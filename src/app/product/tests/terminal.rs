@@ -1,5 +1,6 @@
 //! Terminal tabs, sessions, closure, and cross-window transfer.
 use super::*;
+use crate::app::documents::DocumentDirty;
 use crate::app::product::relocate::TabRelocationSource;
 
 fn capture_active_tab(shell: &Entity<ProductShell>, cx: &TestAppContext) -> TabRelocationSource {
