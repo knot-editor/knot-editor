@@ -23,6 +23,7 @@ pub mod indentation;
 pub mod keys;
 pub mod open;
 pub mod resource;
+pub mod settings;
 pub mod style;
 pub mod syntax;
 pub mod theme;

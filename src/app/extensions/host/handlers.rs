@@ -3411,9 +3411,12 @@ fn settings_scope(
     })
 }
 
-impl HostArguments for SettingDefinition {
+#[derive(Clone, Debug, PartialEq)]
+struct SettingDefinitionArguments(SettingDefinition);
+
+impl HostArguments for SettingDefinitionArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
+        Ok(Self(SettingDefinition {
             key: reader.text(2, "setting key must be text")?,
             value_type: SettingType::parse(&reader.text(3, "setting type must be text")?).ok_or(
                 DecodeError::Type(
@@ -3422,15 +3425,16 @@ impl HostArguments for SettingDefinition {
             )?,
             default: setting_value(reader.command_arguments(4)?),
             description: reader.text(5, "setting description must be text")?,
-        })
+        }))
     }
 }
 
 #[host_operation("defineSetting")]
 async fn define_setting(
     context: HostContext,
-    arguments: SettingDefinition,
+    arguments: SettingDefinitionArguments,
 ) -> Result<(), SettingError> {
+    let arguments = arguments.0;
     let request = context.request;
     context.foreground(|host, cx| {
         let key = arguments.key.clone();
