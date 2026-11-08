@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -98,42 +98,13 @@ behavior change.
 
 ## Checkpoints
 
-### 1. Plain buffer model — ✅ implemented, review pending
+### 1. Plain buffer model — ✅ complete
 
-- ✅ `BufferModel` and its folds live in `crates/knot-model/src/buffer.rs`
-  with no gpui. `set_syntax` parses within the budget;
-  `start_syntax_parse` hands out a `BackgroundParse` job when the tree lags,
-  and `finish_syntax_parse` accepts, rebases, or rejects its result.
-- ✅ `Buffer` (`src/app/model.rs`) is the entity: it derefs to the model, owns
-  the observe-self syntax driver that runs jobs on the background executor,
-  and notifies on accepted results. `BufferRegistry` holds
-  `WeakEntity<Buffer>`; callers hold `Entity<Buffer>` and build it with
-  `Buffer::new(BufferModel::…)`.
-- ✅ The model tests are plain tests in `knot-model`, including parse jobs
-  rebased over later commits and stale results rejected after replacing or
-  closing the syntax; the registry tests and one driver test stay in the
-  shell. The full workspace suite passes unchanged.
-- Test-only model counters (`whole_text_reads`, `syntax_queries`,
-  `set_syntax_budget`) are behind `knot-model`'s `test-support` feature.
-
-
-- Deliverables: `BufferModel` and its folds in `knot-model` with no gpui; the
-  syntax driver as a parse job the shell runs off the foreground; a shell
-  entity wrapper that notifies observers after commits and parse results;
-  `BufferRegistry` keyed to the wrapper.
-- Validation: `src/app/model/tests.rs` as plain tests; syntax tests that run
-  a parse job, rebase, and reject a stale result without an executor; the
-  documents, recovery, observation, and editing product tests unchanged.
-- **Implementation context:** split `src/app/model.rs` at the
-  `cx`-taking methods (lines 753-786) and the `BufferRegistry` (1368-1450).
-  The background parse mirrors today's `cx.background_spawn(parse.run())`
-  and the revalidation in `finish_syntax_parse`. Callers holding
-  `Entity<BufferModel>` (`documents.rs`, `languages.rs`,
-  `extensions/buffers.rs`, `editor.rs`, `workbench`) keep an entity of the
-  wrapper. The architecture invariant "syntax trees follow every commit
-  synchronously" must hold.
-- Review gate: the wrapper is small, and the model API reads naturally from
-  plain tests.
+`BufferModel` is plain `knot-model` code (`crates/knot-model/src/buffer.rs`)
+whose syntax parse continues as a job it hands out and takes back; the
+`Buffer` entity (`src/app/model.rs`) derefs to it, runs the jobs, and
+notifies. See [core and buffers](../architecture/core-and-buffers.md#application-buffer-ownership).
+Test-only model counters sit behind `knot-model`'s `test-support` feature.
 
 ### 2. Plain editor state
 
