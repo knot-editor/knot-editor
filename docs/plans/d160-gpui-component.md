@@ -79,8 +79,9 @@ docks, editor, terminal, single-line text input, and key routing.
 ✅ Complete and approved after the macOS smoke pass. Knot runs on
 `gpui-pre` and `gpui-pre-platform` 0.3.11, declared once under
 `[workspace.dependencies]` as `gpui` and `gpui_platform`; `knot-app` creates
-the application ([architecture](../architecture.md#system-map)). Limitation:
-the Linux and Windows CI jobs had not run at approval.
+the application ([architecture](../architecture.md#system-map)). CI passes
+on Linux (full suite) and builds the product and runs the handler checks on
+macOS and Windows; the full suite and a manual pass ran only on macOS.
 
 - **Port report.**
   - Build errors, 59 in the library and 23 more in tests, by category:
