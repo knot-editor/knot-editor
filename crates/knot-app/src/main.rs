@@ -1,5 +1,5 @@
 //! Knot editor.
 
 fn main() {
-    knot::run(knot_app::packages());
+    knot::run(gpui_platform::application(), knot_app::packages());
 }

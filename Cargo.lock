@@ -3111,7 +3111,6 @@ dependencies = [
  "anyhow",
  "directories",
  "gpui-pre",
- "gpui-pre-platform",
  "inventory",
  "jsonc-parser",
  "knot-bundled",
@@ -3141,6 +3140,7 @@ name = "knot-app"
 version = "0.1.0"
 dependencies = [
  "gpui-pre",
+ "gpui-pre-platform",
  "knot",
  "knot-bundled",
  "knot-ext-languages",

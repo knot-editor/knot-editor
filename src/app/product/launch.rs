@@ -389,10 +389,10 @@ fn open_report_after_failed_startup(cx: &mut App) {
 }
 
 pub(crate) fn run(
+    application: Application,
     initial_request: Option<OpenRequest>,
     packages: &'static [knot_bundled::BundledSource],
 ) {
-    let application = gpui_platform::application();
     let (open_requests, mut incoming_requests) = tokio::sync::mpsc::unbounded_channel();
     application.on_open_urls(move |urls| {
         for url in urls {

@@ -34,7 +34,8 @@ crates/knot-model     gpui-free editor state and policy: syntax, history, keys, 
                       theme values, resources, package discovery, and workbench layout
 crates/knot-bundled   BundledSource and the build helper that compiles bundled packages
 crates/knot-ext-*     compiled bundled packages by domain, with their integration tests
-crates/knot-app       the knot binary: joins the packages and calls knot::run
+crates/knot-app       the knot binary: joins the packages, creates the platform
+                      application, and calls knot::run
 crates/knot-handler-macros   adapters for annotated native host handlers and commands
 src/app               gpui shell, foreground editor state, native views, resource providers,
                       commands, startup, and application persistence

@@ -134,8 +134,9 @@ struct CommandExecution {
     completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
 }
 
-/// Runs the product with the compiled-in `packages` beside installed ones.
-pub fn run(packages: &'static [knot_bundled::BundledSource]) {
+/// Runs the product on `application`, created by the binary for its platform,
+/// with the compiled-in `packages` beside installed ones.
+pub fn run(application: Application, packages: &'static [knot_bundled::BundledSource]) {
     let request = entry::parse_launch_arguments(
         std::env::args(),
         &std::env::current_dir().expect("Knot requires a current working directory"),
@@ -144,5 +145,5 @@ pub fn run(packages: &'static [knot_bundled::BundledSource]) {
         eprintln!("[knot] {error}");
         std::process::exit(2);
     });
-    product::run(request, packages);
+    product::run(application, request, packages);
 }

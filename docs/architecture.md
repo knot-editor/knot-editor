@@ -44,8 +44,10 @@ gpui application and native views
   and commands, without depending on V8, gpui, or editor models. Application
   owners expose semantic operations; declaration adapters own transport.
 
-The `knot` binary lives in `knot-app`, which joins the group crates' packages
-and enters the product through `knot::run`.
+The `knot` binary lives in `knot-app`, which joins the group crates' packages,
+creates the platform application, and enters the product through `knot::run`.
+Only the binary links gpui's platform crates, so test binaries never load a
+native platform.
 
 ## Ownership
 
