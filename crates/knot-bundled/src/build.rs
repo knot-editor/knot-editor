@@ -13,10 +13,13 @@ use std::process::Command;
 /// `bundled_packages.rs` to `OUT_DIR`. Call it from a build script in a crate
 /// two levels below the workspace root.
 pub fn compile_packages(packages: &[&str]) {
+    // Not canonicalized: on Windows that yields a verbatim `\\?\` path, which
+    // tsc cannot open.
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .join("../..")
-        .canonicalize()
-        .unwrap();
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .to_owned();
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let tools = root.join("scripts/extensions");
     let bundled = root.join("extensions/@knot");
