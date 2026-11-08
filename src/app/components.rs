@@ -5,8 +5,13 @@
 //! appearance, which loads that appearance's built-in colors, then sets
 //! every field of [`COLORS`] from its native key. Fields without a fitting
 //! key keep the built-in colors.
+//!
+//! A gpui-component popup that takes focus registers its focus handle. While
+//! one holds focus, the keymap still matches keys first, and a key it leaves
+//! goes to gpui's dispatch, where the popup's own actions run, rather than to
+//! the surface with Knot-side focus.
 
-use gpui::{App, Hsla};
+use gpui::{App, FocusHandle, Global, Hsla, KeyBinding, WeakFocusHandle, Window};
 use gpui_component::{Theme as ComponentTheme, ThemeColor, ThemeMode};
 
 use super::{
@@ -56,10 +61,58 @@ component_colors! {
     warning = color::WARNING;
 }
 
+/// The focus handles of popups that may hold focus; dropped popups leave.
+#[derive(Default)]
+struct Popups(Vec<WeakFocusHandle>);
+
+impl Global for Popups {}
+
+/// Register the focus handle of a popup that takes focus.
+pub(crate) fn track_popup(focus: &FocusHandle, cx: &mut App) {
+    let popups = &mut cx.default_global::<Popups>().0;
+    popups.retain(|popup| popup.upgrade().is_some());
+    popups.push(focus.downgrade());
+}
+
+/// Whether a registered popup, or an element inside it, holds focus.
+pub(crate) fn popup_focused(window: &Window, cx: &App) -> bool {
+    cx.try_global::<Popups>().is_some_and(|popups| {
+        popups
+            .0
+            .iter()
+            .filter_map(WeakFocusHandle::upgrade)
+            .any(|popup| popup.is_focused(window) || popup.contains_focused(window, cx))
+    })
+}
+
+/// The key bindings gpui-component installs, which the keymap restores
+/// whenever it rebuilds gpui's bindings.
+#[derive(Default)]
+struct Bindings(Vec<KeyBinding>);
+
+impl Global for Bindings {}
+
 /// Initialize gpui-component and paint it with the current theme.
 pub(crate) fn init(cx: &mut App) {
+    let before = cx.key_bindings().borrow().bindings().len();
     gpui_component::init(cx);
+    let bindings = cx
+        .key_bindings()
+        .borrow()
+        .bindings()
+        .skip(before)
+        .cloned()
+        .collect();
+    cx.set_global(Bindings(bindings));
     apply_theme(cx);
+}
+
+/// The key bindings of gpui-component's own actions, such as a popup
+/// menu's arrows, Enter, and Escape in its key context.
+pub(crate) fn key_bindings(cx: &App) -> Vec<KeyBinding> {
+    cx.try_global::<Bindings>()
+        .map(|bindings| bindings.0.clone())
+        .unwrap_or_default()
 }
 
 /// Paint gpui-component with the current application theme; nothing before

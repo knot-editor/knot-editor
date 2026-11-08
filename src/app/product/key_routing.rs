@@ -4,8 +4,9 @@
 //! unfinished key-invoked extension command, and otherwise routes it
 //! through its `KeyRouter` against the focused view's kind and live key
 //! contexts while the workbench has focus. A key the keymap does not claim
-//! goes to the surface with Knot-side focus, and one that surface ignores
-//! becomes typed text, as if no binding existed; the keys of a sequence that
+//! goes to the surface with Knot-side focus, unless a gpui-component popup
+//! holds focus and takes it through gpui's dispatch; a key the surface
+//! ignores becomes typed text, as if no binding existed; the keys of a sequence that
 //! stops matching are delivered that way after the fact.
 
 use std::collections::VecDeque;
@@ -68,14 +69,23 @@ impl ProductShell {
     fn key_down(
         &mut self,
         keystroke: Keystroke,
-        window: Option<&mut Window>,
+        mut window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) -> bool {
         if self.hold_key(&keystroke, cx) {
             return true;
         }
-        if !std::mem::take(&mut self.keys.native) && self.route_key(keystroke.clone(), window, cx) {
+        if !std::mem::take(&mut self.keys.native)
+            && self.route_key(keystroke.clone(), window.as_deref_mut(), cx)
+        {
             return true;
+        }
+        // A focused gpui-component popup takes the key through gpui's dispatch.
+        if window
+            .as_deref()
+            .is_some_and(|window| crate::app::components::popup_focused(window, cx))
+        {
+            return false;
         }
         self.deliver_key(&keystroke, cx)
     }
