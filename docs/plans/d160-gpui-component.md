@@ -1,6 +1,6 @@
 # D160 — Current gpui and gpui-component
 
-Status: 🚧 checkpoint 1 at its review gate. Roadmap item [D160](../roadmap.md);
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Roadmap item [D160](../roadmap.md);
 [D055](d055-icon-packs.md) waits for it.
 Order: D161 (complete; see the [crate boundaries decision](../decisions/platform.md#crate-boundaries)) →
 **D160** → [D162](d162-thin-gpui-shell.md). The paths below follow D161's
@@ -76,12 +76,12 @@ docks, editor, terminal, single-line text input, and key routing.
 
 ### 1. Port to gpui-pre
 
-🚧 Implemented; the CI jobs and the manual smoke pass remain.
+✅ Complete and approved after the macOS smoke pass. Knot runs on
+`gpui-pre` and `gpui-pre-platform` 0.3.11, declared once under
+`[workspace.dependencies]` as `gpui` and `gpui_platform`; `knot-app` creates
+the application ([architecture](../architecture.md#system-map)). Limitation:
+the Linux and Windows CI jobs had not run at approval.
 
-- ✅ Knot builds on `gpui-pre` and `gpui-pre-platform` 0.3.11, declared once
-  under `[workspace.dependencies]` as `gpui` and `gpui_platform`. On macOS
-  `just test` passes 1274 tests, clippy is clean, and the extension checks
-  pass. The Linux and Windows builds are unchecked until CI runs.
 - **Port report.**
   - Build errors, 59 in the library and 23 more in tests, by category:
     - Async contexts are infallible. `AsyncApp::update` and entity access
@@ -131,27 +131,6 @@ docks, editor, terminal, single-line text input, and key routing.
   - Cost, measured on Apple M1 Pro macOS against the pre-port tree with a
     fresh `target`: the full suite takes 10.0 s against 10.8 s, and the
     release binary is 93.3 MB against 91.7 MB (+1.7%).
-- Deliverables: Knot builds and runs on `gpui-pre` 0.3.11 with the same
-  behavior on macOS, Windows, and Linux. This plan records a short port
-  report under this checkpoint: build errors by category, the API changes
-  that mattered, and anything gpui now does that Knot had worked around.
-- Validation: the full suite under `just test` and the extension checks;
-  CI's Linux, macOS, and Windows jobs; a manual macOS smoke pass over editing,
-  IME, splits, tab drag, terminal, zoom, and window restoration.
-- **Implementation context:** `Cargo.toml` swaps the three `gpui` entries
-  (normal, dev with `test-support`, Linux with `wayland`) for `gpui-pre` and
-  `gpui-pre-platform`, renamed to `gpui` with `package =` so `use gpui::`
-  stays unchanged. Application creation moves from `Application::new()` in
-  `src/app/product/launch.rs:393` to `gpui_platform::application()`, and test
-  setup to its headless counterpart. The work most likely to break is
-  text-system and painting code (`src/app/editor/paint.rs`,
-  `src/app/editor/layout.rs`, `src/app/terminal/`), the key interceptor in
-  `src/app/product/key_routing.rs`, and tab drag in
-  `src/app/product/tab_drag.rs`. Re-check the gpui 0.2.2 workarounds noted
-  in `docs/architecture/` and the D062 and D030 roadmap entries.
-- Review gate: the port report and the smoke pass. Nothing feels
-  different, and the measured cost does not change the decision.
-
 ### 2. gpui-component, the theme bridge, and tooltips
 
 - Deliverables: gpui-component initialized at startup and in test
