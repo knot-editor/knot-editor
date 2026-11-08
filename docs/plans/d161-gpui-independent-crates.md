@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 approved, not started. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 1 implemented, awaiting review. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -103,7 +103,36 @@ for a clean debug build, the incremental rebuild after touching one file in
 `src/app/editor/` and one under `extensions/@knot/vim/src`, and the
 `just test` wall time. Each checkpoint records the same numbers.
 
+## Timings
+
+Warm incremental builds (`cargo build`, debug, Apple silicon) after touching one
+file, and `nextest` wall time with warm test binaries. A clean build could not
+be measured: the sandbox cannot download the V8 prebuilt, so only numbers
+against the existing target directory exist, and they are noisy.
+
+| | `src/app/editor.rs` | vim `main.ts` | core `lib.rs` | tests |
+| --- | --- | --- | --- | --- |
+| Baseline (`e158c9e`) | 3.3 s | 4.0 s | 3.5 s | 23 s |
+| 1. Workspace crates | 3.1 s | 3.8 s | 3.2 s | 34 s (includes test relinking) |
+
+Checkpoint 1 changes nothing here as expected: `build.rs` still sits on the
+application crate, so a TypeScript edit rebuilds it until checkpoint 2.
+
 ### 1. Workspace with knot-core, knot-protocol, and knot-host
+
+✅ Implemented. Scope decisions:
+
+- ✅ `declarations.rs` lives in `knot-protocol`, not `knot-host`: `HostRequest`
+  embeds `DeclaredRequest`, and declarations name protocol types, so the two
+  cannot be separate crates. The handler macros emit `::knot_protocol::declarations::`.
+- ✅ The V8 engine tests (`engine_tests.rs`) and the declaration, wire-code, and
+  identity tests moved into `src/app/extensions/host/`, since they exercise the
+  application's declared handlers. Engine internals they touch are `pub`, with
+  test-only helpers behind each crate's `test-support` feature, which the
+  application enables as a dev-dependency.
+- ✅ Four `HostSuccess` impls moved from the application into `knot-protocol`
+  (orphan rule).
+- Remaining: review gate.
 
 - Deliverables: the three crates under `crates/`, the application depending
   on them, and the host's test-only edges to `app` removed. The handler
