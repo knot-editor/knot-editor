@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 2c in review. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 3 next. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -243,18 +243,6 @@ same files. `projects.rs` and `project_sessions.rs` import only
   A root change made "while the package is not running" is now
   `stop_package`, the change, then `reload_packages`, instead of one update
   that relied on the ordering of events.
-
-- Deliverables: `projects.rs` and `project_sessions.rs` use only
-  `crate::test_support`; `TestProduct` gains what they need.
-- Validation: `just test` passes with the same test count, or with any
-  merged or dropped test justified in the commit.
-- **Implementation context:** these tests reach `ProductShell` workbench
-  and focus, `window_sessions`, `record_store`, extension storage
-  (`StorageOwner`), `recovery::StoredSnapshot`, workbench splits and docks,
-  `TreeView`, and `TransientSurface`. Observations become `snapshot()` fields,
-  tree rows, stored records, and recovery snapshots; setup becomes driver
-  calls.
-- Review gate: as 2b, over the whole driver.
 
 ### 3. Extension group crates and the knot-app binary
 
