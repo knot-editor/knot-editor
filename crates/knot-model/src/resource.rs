@@ -1,3 +1,5 @@
+//! Normalized resource URIs, the identity generic resource state uses.
+
 use std::{fmt, str::FromStr};
 
 use url::Url;

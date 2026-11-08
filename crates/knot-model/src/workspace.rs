@@ -1,3 +1,5 @@
+//! A window's ordered set of workspace roots.
+
 use crate::resource::ResourceUri;
 
 /// One normalized root in a window's ordered root set.

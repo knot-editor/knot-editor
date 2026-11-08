@@ -1,3 +1,6 @@
+//! Resource providers by URI scheme: the local filesystem and, for tests, an
+//! in-memory tree.
+
 use std::{collections::HashMap, fmt, future::Future, pin::Pin, sync::Arc};
 
 use crate::resource::ResourceUri;
