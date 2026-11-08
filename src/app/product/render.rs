@@ -401,28 +401,15 @@ impl ProductShell {
                     }))
             })
             .when_some(tooltip, |element, tooltip| {
-                element
-                    .tooltip(move |_, cx| cx.new(|_| StatusTooltip(tooltip.clone().into())).into())
+                let tooltip = SharedString::from(tooltip);
+                element.tooltip(move |window, cx| {
+                    gpui_component::tooltip::Tooltip::new(tooltip.clone())
+                        .text_xs()
+                        .build(window, cx)
+                })
             })
             .child(text)
             .into_any_element()
-    }
-}
-
-/// The text shown while the pointer rests on a status item.
-struct StatusTooltip(SharedString);
-
-impl Render for StatusTooltip {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .px_2()
-            .py_1()
-            .text_xs()
-            .border_1()
-            .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
-            .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))
-            .text_color(theme(cx).paint_color(color::TEXT))
-            .child(self.0.clone())
     }
 }
 

@@ -2,8 +2,10 @@
 //! shows them, and the settings and command that control it.
 use super::*;
 use crate::app::{
+    convert::ThemePaint as _,
     settings::{ApplicationSettings, STATUS_BAR_HIDDEN_ITEMS, SettingsScope},
     status_bar::ApplicationStatusBar,
+    theme::{color, theme},
 };
 use knot_protocol::ExtensionKey;
 
@@ -166,6 +168,60 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
     host.update(cx, |host, cx| host.unload(key, cx)).unwrap();
     cx.run_until_parked();
     assert_eq!(texts(window, cx), (vec![], vec![]));
+}
+
+#[gpui::test]
+fn hovering_an_item_with_a_tooltip_shows_it_on_a_popover(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (_, window) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(972), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(None));
+    let result = loaded.clone();
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            *result.lock().unwrap() = Some(execution.await.map(|_| ()));
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
+    loaded.lock().unwrap().take().unwrap().unwrap();
+
+    // The tooltip is the only surface on the theme's popover background.
+    let popover: gpui::Background = cx
+        .read(|cx| theme(cx).paint_color(color::POPOVER_BACKGROUND))
+        .into();
+    let popovers = |cx: &mut TestAppContext| {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            window.draw(cx).clear(cx);
+            window
+                .painted_quads()
+                .iter()
+                .filter(|quad| quad.background == popover)
+                .count()
+        })
+        .unwrap()
+    };
+    let hover = |selector: &'static str, cx: &mut TestAppContext| {
+        let item = bounds(window, selector, cx).unwrap();
+        VisualTestContext::from_window(window, cx).simulate_mouse_move(
+            item.center(),
+            None,
+            Modifiers::default(),
+        );
+        cx.executor()
+            .advance_clock(std::time::Duration::from_secs(1));
+    };
+    assert_eq!(popovers(cx), 0);
+    hover("status-item-position", cx);
+    assert_eq!(popovers(cx), 1);
+    // An item without a tooltip shows none.
+    hover("status-item-language", cx);
+    assert_eq!(popovers(cx), 0);
 }
 
 #[gpui::test]
