@@ -127,12 +127,12 @@ setting, or replace a single icon.
 - **Implementation context:** add `src/app/icons.rs`, declared in
   `src/app/mod.rs` and exposed as an `ApplicationIcons` global. Mirror the
   registration, owner, and lifecycle structure of `ThemeRegistry` in
-  `src/app/themes.rs`, and the native defaults table of
+  `crates/knot-model/src/themes.rs`, and the native defaults table of
   `native_color_definitions` in `crates/knot-model/src/theme.rs`. Register the asset source
   with `Application::new().with_assets(..)` in `src/app/product/launch.rs`
   (around line 393), and in the test application setup. Detection uses
-  `LanguageRegistry::detect(file_name, "")` in `src/app/languages.rs:295`.
-  Add the setting beside `THEME_*` in `src/app/settings.rs` and observe it
+  `LanguageRegistry::detect(file_name, "")` in `crates/knot-model/src/languages.rs`.
+  Add the setting beside `THEME_*` in `crates/knot-model/src/settings.rs` and observe it
   like `themes::apply`. Add an `icon` color key, the default icon tint, to the
   native color table.
 - Review gate: the registry shape and the element's sizing API, before
@@ -194,7 +194,7 @@ setting, or replace a single icon.
   name; a product test in which a tab's icon follows a language change; a
   `node:test` case per language package that its icon resolves.
 - **Implementation context:** the association store mirrors pattern claims
-  in `languages.associate` (`src/app/languages.rs`). Tab titles are built in
+  in `LanguageRegistry::associate` (`crates/knot-model/src/languages.rs`). Tab titles are built in
   `src/app/product/render.rs` (around line 197); also paint the icon in the
   drag label from `tab_drag_label` in `src/app/product/tab_drag.rs`. Language
   packages register in `extensions/@knot/language-*/src/extension.ts`, and

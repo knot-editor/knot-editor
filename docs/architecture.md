@@ -32,7 +32,8 @@ gpui application and native views
   operation declarations, and depends on neither V8 nor gpui.
 - `knot-model` owns editor state and policy that need no gpui, V8, or host:
   the buffer model, editor state and the native editing commands, completion
-  sessions, syntax and the compiled-in grammars, edit history, indentation and language
+  sessions, the document collection, the settings store, the language and
+  theme registries, syntax and the compiled-in grammars, edit history, indentation and language
   editing configuration, key notation, the command catalog, keymap registries
   and matching, theme values, resource URIs and providers, package
   discovery, and the workbench layout over tab identities. Its functions take

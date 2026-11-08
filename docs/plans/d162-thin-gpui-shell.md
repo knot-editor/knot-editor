@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 checkpoints 1–2 complete; checkpoint 3 next. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 ready for review. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -120,18 +120,36 @@ Single-editor command tests are plain; the shell keeps the painting,
 hit-testing, layout, settings-integration, and background-parse cases, which
 reach state through `test-support` helpers.
 
-### 3. Application stores
+### 3. Application stores — 🔎 ready for review
 
-- Deliverables: the document collection, settings store, language
-  registry, theme registry, and command history as plain stores in
-  `knot-model`, each wrapped by its existing global.
-- Validation: their unit tests as plain tests; persistence, settings,
-  languages, themes, and startup product tests unchanged.
-- **Implementation context:** `src/app/documents.rs`, `settings.rs`,
-  `languages.rs`, `themes.rs`, `command_history.rs`, and the globals they
-  register; `record_store.rs` and `tool_layout.rs` keep SQLite I/O in the
-  shell or move with a plain interface, whichever is smaller.
-- Review gate: each global is a thin wrapper over its store.
+The document collection, settings store, language registry, theme registry,
+and command-history ranking are plain `knot-model` code
+(`documents.rs`, `settings.rs`, `languages.rs`, `themes.rs`,
+`command_history.rs`) with plain tests. Their globals stay in `src/app`:
+
+- `DocumentCollection` there derefs to the plain collection over buffer
+  entities and runs the effects of changes (language and indentation
+  detection, model stamping, recovery, observation); `DocumentDirty` reads
+  dirty state through the entity.
+- The settings, language, and theme globals wrap their registries. The theme
+  registry's `select` returns the theme to install; the shell reads the
+  settings and system appearance.
+- The state database (`record_store.rs`) and tool-layout store keep their
+  SQLite I/O in the shell, since both run on gpui's executors; command
+  history persists its plain `RecentCommands` through a record store.
+- Extension handlers wrap moved types that need `HostArguments`
+  (`SettingDefinitionArguments`, `ThemeDefinitionArguments`,
+  `LanguageArguments`, `LanguageAssociationArguments`), as the orphan rule
+  requires.
+- Language reattachment (`attach`, `refresh`) and the entity-keyed model
+  table stay in the shell. They are entity work, and checkpoint 4 or 5 can
+  revisit them if a model function needs them.
+
+Validation limitation: the full suite fails intermittently (different
+product tests, about one run in three) on the checkpoint 2 commit as well as
+after this work; they pass alone.
+
+Review gate: each global is a thin wrapper over its store.
 
 ### 4. Extension-API semantics
 

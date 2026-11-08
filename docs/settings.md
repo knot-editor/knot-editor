@@ -2,7 +2,7 @@
 
 Every setting Knot ships: native keys defined when the store is created, and
 keys defined by bundled packages under `extensions/@knot/`. Native definitions
-live in `src/app/settings.rs`, typed declarations in `crates/knot-host/src/js/knot.d.ts`,
+live in `crates/knot-model/src/settings.rs`, typed declarations in `crates/knot-host/src/js/knot.d.ts`,
 and package definitions in the owning package's `src/extension.ts`. This page
 lists keys, types, and defaults; it does not repeat how settings work. See
 [read and write settings](extension-api.md#read-and-write-settings) for the
