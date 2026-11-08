@@ -3777,28 +3777,27 @@ fn theme_owner(context: &HostContext) -> ThemeOwner {
     }
 }
 
-impl HostArguments for ThemeDefinition {
+#[derive(Clone, Debug, PartialEq)]
+struct ThemeDefinitionArguments(ThemeDefinition);
+
+impl HostArguments for ThemeDefinitionArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        let definition: Self = serde_json::from_value(setting_value(reader.command_arguments(2)?))
-            .map_err(|_| DecodeError::Type("invalid theme definition"))?;
+        let definition: ThemeDefinition =
+            serde_json::from_value(setting_value(reader.command_arguments(2)?))
+                .map_err(|_| DecodeError::Type("invalid theme definition"))?;
         match definition.invalid_value() {
             Some(message) => Err(DecodeError::Type(message)),
-            None => Ok(definition),
+            None => Ok(Self(definition)),
         }
-    }
-}
-
-impl HostSuccess for ThemeInfo {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
     }
 }
 
 #[host_operation("registerTheme")]
 async fn register_theme(
     context: HostContext,
-    arguments: ThemeDefinition,
+    arguments: ThemeDefinitionArguments,
 ) -> Result<u64, ThemeError> {
+    let arguments = arguments.0;
     if let Some(capture) = arguments.unknown_capture() {
         return Err(ThemeError::UnknownCapture {
             capture: capture.into(),
