@@ -20,9 +20,8 @@ documents and terminals, and one `CommandView` path resolves focus and targets
 for every surface. The workbench keeps hidden tool definitions so native state
 survives hiding without retaining closed documents.
 
-Tool-layout memory stores only tools: reproducing document splits or terminal
-contents in a fresh window would resurrect a stale arrangement rather than
-offer a starting point. Only explicit user arrangements publish the default,
+Tool-layout memory stores only tools; document structure is never reproduced
+in a fresh window. Only explicit user arrangements publish the default,
 so nothing the user did not arrange, such as a restore or an extension's
 automatic presentation, becomes what new windows inherit. Profiles and layered
 preferences were left out; Reset Layout is the single escape.
@@ -43,14 +42,14 @@ while docks keep absolute sizes because a sidebar should not grow with the
 window. Addressing a split by its boundary pane, which is unique, avoids a
 separate split identity in dividers and the layout.
 
-Recent-tab switching has no overlay, unlike VS Code's and Zed's switchers:
-activating each tab as ctrl-tab is pressed shows the real tab rather than a
-list, and committing on release keeps a walk to one activation. Directional
+Recent-tab switching has no overlay, unlike VS Code's and Zed's switchers;
+each press activates the next tab, and committing on release keeps a walk to
+one activation. Directional
 commands use laid-out pane rectangles rather than painted bounds, because a
 maximized window paints only one pane; tying maximize to focus ends it on every
 focus change without separate hooks.
 
-Preview tabs follow VS Code, the behavior users most expect. Previews, the
+Preview tabs follow VS Code. Previews, the
 reopen stack, recent order, and maximize describe a moment of browsing rather
 than an arrangement worth restoring, so none is recorded. Reopen Closed Tab
 recreates tabs through the layout's per-kind step rather than its own, so a

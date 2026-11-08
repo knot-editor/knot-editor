@@ -37,8 +37,7 @@ registrations with no `extends`. The selection resolves at startup completion
 and on change rather than on registration, which keeps package load order out of
 the first keystroke. Extensions branch on the platform in code rather than
 registrations carrying per-platform fields. On Windows and Linux terminals
-follow VS Code and Zed in leaving plain ctrl chords to the shell, derived from
-the table rather than listed so new bindings cannot forget it; on macOS editors
+follow VS Code and Zed in leaving plain ctrl chords to the shell; on macOS editors
 take the Cocoa Emacs keys every native text field accepts.
 
 Modal editing keeps its grammar in JavaScript over three generic primitives: key
