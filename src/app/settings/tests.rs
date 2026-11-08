@@ -343,3 +343,35 @@ fn terminals_resolve_their_own_font_size() {
         })
     );
 }
+
+#[test]
+fn file_cleanup_settings_default_on_and_read_any_other_text_as_all() {
+    let mut store = SettingsStore::default();
+    let context = rust_editor();
+    assert_eq!(
+        store.get(FILES_TRIM_TRAILING_WHITESPACE, &context),
+        Some(&json!("all"))
+    );
+    assert_eq!(
+        store.get(FILES_INSERT_FINAL_NEWLINE, &context),
+        Some(&json!(true))
+    );
+    store
+        .set(
+            FILES_TRIM_TRAILING_WHITESPACE,
+            json!("off"),
+            scope(Some("markdown"), None),
+        )
+        .unwrap();
+    assert_eq!(
+        store.get(
+            FILES_TRIM_TRAILING_WHITESPACE,
+            &scope(Some("markdown"), Some("editor"))
+        ),
+        Some(&json!("off"))
+    );
+    assert_eq!(
+        store.get(FILES_TRIM_TRAILING_WHITESPACE, &context),
+        Some(&json!("all"))
+    );
+}

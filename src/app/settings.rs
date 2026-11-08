@@ -41,6 +41,10 @@ pub(crate) const EDITOR_LINE_NUMBERS: &str = "editor.lineNumbers";
 pub(crate) const EDITOR_FOLDING: &str = "editor.folding";
 /// When the fold lane shows chevrons on foldable lines: `mouseover` or `always`.
 pub(crate) const EDITOR_SHOW_FOLDING_CONTROLS: &str = "editor.showFoldingControls";
+/// Whether saving trims trailing whitespace: `off` or `all`.
+pub(crate) const FILES_TRIM_TRAILING_WHITESPACE: &str = "files.trimTrailingWhitespace";
+/// Whether saving ends a non-empty file with a line terminator.
+pub(crate) const FILES_INSERT_FINAL_NEWLINE: &str = "files.insertFinalNewline";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
 pub(crate) const THEME_MODE: &str = "theme.mode";
 /// The theme name used in dark mode.
@@ -251,6 +255,17 @@ fn native_definitions() -> Vec<SettingDefinition> {
             "mouseover",
             "When the fold lane shows chevrons on foldable lines: \"mouseover\" while the pointer is over the gutter, or \"always\"; collapsed folds always show one",
         ),
+        text(
+            FILES_TRIM_TRAILING_WHITESPACE,
+            "all",
+            "Trim trailing spaces and tabs from every line except the cursor's when saving: \"all\" or \"off\"",
+        ),
+        SettingDefinition {
+            key: FILES_INSERT_FINAL_NEWLINE.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "End a non-empty file with a line terminator when saving".into(),
+        },
         text(
             THEME_MODE,
             "dark",
@@ -536,6 +551,21 @@ pub(crate) fn editor_line_numbers(context: &SettingsScope, cx: &App) -> LineNumb
         Some("relative") => LineNumbers::Relative,
         _ => LineNumbers::On,
     }
+}
+
+/// Whether saving a document in `context` trims trailing whitespace.
+pub(crate) fn files_trim_trailing_whitespace(context: &SettingsScope, cx: &App) -> bool {
+    resolve(FILES_TRIM_TRAILING_WHITESPACE, context, cx, |value| {
+        value.as_str().map(str::to_owned)
+    })
+    .as_deref()
+        != Some("off")
+}
+
+/// Whether saving a document in `context` ends it with a line terminator.
+pub(crate) fn files_insert_final_newline(context: &SettingsScope, cx: &App) -> bool {
+    resolve(FILES_INSERT_FINAL_NEWLINE, context, cx, Value::as_bool)
+        .expect("files.insertFinalNewline is a native boolean setting")
 }
 
 /// The fold lane of an editor in `context`.

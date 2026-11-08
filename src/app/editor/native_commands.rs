@@ -59,6 +59,7 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 #[command("editor.detect-indentation", title = "Detect Indentation from Content", description = "Indent with the style the document's text uses, or the default when it shows none.", id = DETECT_INDENTATION_COMMAND, participant = Editor)]
 #[command("editor.convert-indentation-to-spaces", title = "Convert Indentation to Spaces", description = "Rewrite the indentation of every line with spaces, and indent with spaces from now on.", id = CONVERT_INDENTATION_TO_SPACES_COMMAND, participant = Editor)]
 #[command("editor.convert-indentation-to-tabs", title = "Convert Indentation to Tabs", description = "Rewrite the indentation of every line with tabs, and indent with tabs from now on.", id = CONVERT_INDENTATION_TO_TABS_COMMAND, participant = Editor)]
+#[command("editor.trim-trailing-whitespace", title = "Trim Trailing Whitespace", description = "Remove the spaces and tabs that end each line.", id = TRIM_TRAILING_WHITESPACE_COMMAND, participant = Editor)]
 #[command("editor.outdent-lines", title = "Outdent Lines", description = "Outdent the selected lines by one level.", id = OUTDENT_LINES_COMMAND, participant = Editor)]
 #[command("editor.copy-lines-up", title = "Copy Lines Up", description = "Duplicate the selected lines above them.", id = COPY_LINES_UP_COMMAND, participant = Editor)]
 #[command("editor.copy-lines-down", title = "Copy Lines Down", description = "Duplicate the selected lines below them.", id = COPY_LINES_DOWN_COMMAND, participant = Editor)]

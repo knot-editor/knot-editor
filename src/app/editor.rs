@@ -22,6 +22,7 @@ mod layout;
 mod lines;
 pub(super) mod native_commands;
 mod paint;
+mod save_hygiene;
 mod text;
 mod view;
 mod wrap;

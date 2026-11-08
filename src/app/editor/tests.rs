@@ -1800,6 +1800,7 @@ mod folding;
 mod gutter;
 mod indentation;
 mod lines;
+mod save_hygiene;
 mod wrap;
 
 fn press(

@@ -36,6 +36,13 @@ values take effect.
 | `editor.folding` | boolean | `true` | Any | native | Show the fold lane in the editor gutter. |
 | `editor.showFoldingControls` | string: `mouseover`, `always` | `"mouseover"` | Any; other text means `mouseover` | native | When the fold lane shows chevrons on foldable lines; collapsed folds always show one. |
 
+## Files
+
+| Key | Type | Default | Scope | Owner | Description |
+| --- | --- | --- | --- | --- | --- |
+| `files.trimTrailingWhitespace` | string: `off`, `all` | `"all"` | Any; other text means `all` | native | Trim trailing spaces and tabs from every line except the cursor's when saving. |
+| `files.insertFinalNewline` | boolean | `true` | Any | native | End a non-empty file with a line terminator when saving. |
+
 ## Appearance
 
 | Key | Type | Default | Scope | Owner | Description |
