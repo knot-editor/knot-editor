@@ -1,6 +1,6 @@
 # D160 — Current gpui and gpui-component
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 implemented, awaiting its review gate. Roadmap item [D160](../roadmap.md);
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Roadmap item [D160](../roadmap.md);
 [D055](d055-icon-packs.md) waits for it.
 Order: D161 (complete; see the [crate boundaries decision](../decisions/platform.md#crate-boundaries)) →
 **D160** → [D162](d162-thin-gpui-shell.md). The paths below follow D161's
@@ -134,43 +134,22 @@ macOS and Windows; the full suite and a manual pass ran only on macOS.
     release binary is 93.3 MB against 91.7 MB (+1.7%).
 ### 2. gpui-component, the theme bridge, and tooltips
 
-🚧 Implemented; awaiting the review gate.
+✅ Complete and approved after the macOS review. gpui-component 0.9.0 is
+pinned beside gpui-pre; `src/app/components.rs` initializes it and holds the
+`COLORS` table that `set_theme` applies on every theme application. Status
+bar tooltips render its `Tooltip` view through gpui's `.tooltip()`.
+Validated on macOS by the bundled-theme bridge test in
+`crates/knot-ext-workbench/tests/workbench/themes.rs` and the tooltip hover
+test in `src/app/product/tests/status_bar.rs`. Findings for checkpoint 4:
 
-- Deliverables:
-  - ✅ gpui-component 0.9.0 (`default-features = false`) is a workspace
-    dependency pinned beside gpui-pre. `components::init` in
-    `src/app/components.rs` initializes it at the start of `application.run`
-    in `src/app/product/launch.rs` and in the test globals.
-  - ✅ The theme bridge: `set_theme` in `src/app/theme.rs`, which every theme
-    application goes through, calls `components::apply_theme`. It switches
-    gpui-component to the theme's appearance, which loads its built-in
-    colors for that appearance, then sets each field of the `COLORS` table
-    from its native key. Fields with no fitting key (charts, button
-    variants, sidebar, tables) keep the built-in colors.
-  - ✅ Status bar item tooltips render gpui-component's `Tooltip` view
-    through gpui's own `.tooltip()`, at `text_xs`; the `StatusTooltip` view is
-    gone. gpui-component's managed tooltips need its `Root`, which Knot does
-    not use.
-- Validation:
-  - ✅ `components_take_the_bundled_theme_colors_and_follow_a_switch`
-    (`crates/knot-ext-workbench/tests/workbench/themes.rs`): with the bundled
-    themes, every mapped field, the popover token, and the mode match One
-    Dark, then One Light after `theme.mode` switches.
-  - ✅ `hovering_an_item_with_a_tooltip_shows_it_on_a_popover`
-    (`src/app/product/tests/status_bar.rs`): hovering an item with a tooltip
-    paints one quad on the theme's popover background; an item without one
-    paints none. The existing status bar tests pass unchanged.
-  - ✅ Full suite and `clippy --all-targets -D warnings` on macOS.
-- Scope decisions:
-  - The mapping table lives in `src/app/components.rs`, not `knot-model`:
-    it names gpui-component's fields, and `knot-model` cannot see gpui.
-  - gpui-component's `border` takes the general `border` key rather than
-    `popover.border`, so later tables and lists get dividers; tooltips and
-    menus therefore border with `border`. No native key was added.
-  - In debug builds gpui-component's inspector binds Cmd-Alt-I
-    (Ctrl-Shift-I elsewhere) globally; Knot's keymap still matches first.
-- Review gate (pending): tooltips look native in both appearances, and the
-  theme bridge has no field that would need a hand-picked color.
+- The table lives in the app, not `knot-model`, because it names
+  gpui-component fields. Unmapped fields keep gpui-component's built-in
+  colors for the theme's appearance; no native key was added.
+- gpui-component's `border` takes the general `border` key, so its popups
+  border with it rather than `popover.border`.
+- gpui-component's managed tooltips need its `Root`, which Knot does not use.
+- In debug builds its inspector binds Cmd-Alt-I (Ctrl-Shift-I elsewhere)
+  globally; Knot's keymap still matches first.
 
 ### 3. Tree row context menu and the key bridge
 
