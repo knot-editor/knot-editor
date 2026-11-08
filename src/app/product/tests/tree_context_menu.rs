@@ -103,7 +103,9 @@ impl Fixture {
     fn press(&self, keys: &str, cx: &mut TestAppContext) {
         cx.refresh().unwrap();
         cx.simulate_keystrokes(self.window, keys);
-        cx.run_until_parked();
+        // A key can run a command on the package's worker thread, whose
+        // completion settles focus and the menu.
+        crate::app::product::driver::settle(&self.shell, cx);
     }
 
     fn menu_open(&self, cx: &TestAppContext) -> bool {
