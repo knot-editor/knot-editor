@@ -26,6 +26,42 @@ and distribution credentials.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
 
+## Crate boundaries
+
+The gpui boundary is enforced by the compiler: a workspace whose text,
+transport, extension-runtime, and model crates cannot see gpui, rather than a
+convention inside one crate. `knot-protocol` sits below both `knot-model` and
+`knot-host` so the model can use transport types without depending on V8.
+`knot-model` holds code that takes plain data and returns results as data, so
+its tests are plain `#[test]`s and double as the second consumer of every API;
+an API that a plain test cannot call without imitating gpui is redesigned. Knot
+owns key, color, and string vocabulary and converts at the view edge only, and
+workbench tabs hold identities with the product session owning the views. No
+Knot runtime abstraction over spawn, notify, observe, or globals was added:
+nothing measured needed one, and it would duplicate gpui's own.
+
+Bundled packages are compiled in domain group crates and injected into a
+library-only `knot` as `&'static [BundledSource]` by the `knot-app` binary. Cargo
+recompiles every dependent of a changed crate, so any edge from the library
+(even a dev-dependency) to compiled extension output would rebuild the library
+and its test binary on a TypeScript edit. One crate per package is too fine and
+one crate for all too coarse; per-package fingerprints in `OUT_DIR` rerun `tsc`
+only for changed packages. Extension tests are integration tests against the
+real editor and packages, never stubs.
+
+Warm debug rebuilds after touching one file, before and after the split:
+
+| | editor file | vim `main.ts` | core `lib.rs` | tests |
+| --- | --- | --- | --- | --- |
+| Before | 3.3 s | 4.0 s | 3.5 s | 23 s |
+| After | 2.8 s | 1.4 s | 3.4 s | 12.5 s |
+
+A clean build could not be measured. The gain is the Vim edit and the test
+loop; an editor-file rebuild is dominated by the gpui shell and barely moved.
+
+References: [architecture](../architecture.md#system-map) and
+[development](../development.md).
+
 ## Views and extension UI
 
 Share text and contributions through buffer models; keep interaction per view.

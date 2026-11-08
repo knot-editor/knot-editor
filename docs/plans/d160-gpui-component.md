@@ -2,9 +2,9 @@
 
 Status: 🚧 approved, not started. Roadmap item [D160](../roadmap.md);
 [D055](d055-icon-packs.md) waits for it.
-Order: **[D161](d161-gpui-independent-crates.md) → D160 →
-[D162](d162-thin-gpui-shell.md).** Do not start before D161 is complete; its
-crate moves change the paths below. The port report from checkpoint 1 feeds
+Order: D161 (complete; see the [crate boundaries decision](../decisions/platform.md#crate-boundaries)) →
+**D160** → [D162](d162-thin-gpui-shell.md). The paths below follow D161's
+crate moves. The port report from checkpoint 1 feeds
 D162.
 
 ## Goal

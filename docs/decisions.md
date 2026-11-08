@@ -13,6 +13,8 @@ touches.
 
 - [Platform and UI](decisions/platform.md#platform-and-ui): gpui through public
   APIs; macOS first, with Windows and Linux smoke-checked.
+- [Crate boundaries](decisions/platform.md#crate-boundaries): a compiler-enforced
+  gpui-free model, bundled packages in group crates injected into the library.
 - [Views and extension UI](decisions/platform.md#views-and-extension-ui):
   extensions supply semantic data, never rendering callbacks; movement uses
   display cells, so views run headless.

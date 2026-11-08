@@ -92,7 +92,7 @@ complete list for that item.
 - **Extension presentation and language tooling:**
   - D114 → D145 → D067 → D022
   - D064, D160 → D055
-  - D161 → D160 → D162
+  - D160 → D162
   - D087 → D067, D023
   - D079 → D115 → format on save with D067
   - D145 before D021, which is reconsidered only if D145 falls short.
@@ -845,17 +845,7 @@ Kakoune mode could use it too. The
     hand-builds every widget.
   - 🚧 Planned: [D160 plan](plans/d160-gpui-component.md): port to the
     `gpui-pre` snapshots, then adopt gpui-component for leaf widgets.
-  - Order: after D161; before D162, D055, and D030.
-
-- **D161 — gpui-independent crates and vocabulary**
-  - Deferred: Knot is one crate, so nothing enforces which code may use
-    gpui; non-UI code uses gpui key, color, and string types, the workbench
-    layout holds view entities, and a TypeScript edit rebuilds the whole
-    application.
-  - 🚧 Planned: [D161 plan](plans/d161-gpui-independent-crates.md): a
-    workspace with gpui-free core, protocol, host, model, and bundled-package
-    crates, Knot-owned vocabulary, and a workbench over identities.
-  - Order: before D160.
+  - Order: before D162, D055, and D030.
 
 - **D162 — Plain models and a thin gpui shell**
   - Deferred: the buffer model, editor state, application stores, extension
@@ -865,16 +855,15 @@ Kakoune mode could use it too. The
   - 🚧 Planned: [D162 plan](plans/d162-thin-gpui-shell.md): move that
     behavior into the model crate and keep a shell that resolves entities,
     calls the model, runs effects, and notifies.
-  - Order: after D161 and D160.
+  - Order: after D160.
 
 - **D163 — Vim tests on a minimal language fixture**
   - Deferred: `knot-ext-vim`'s tests load the real language packages,
     because Vim's indentation, key-context, and `o`/`O` cases need language
     configuration, so an edit to a language package reruns the Vim tests.
-  - Reconsider: after D161. Give the Vim tests an inline fixture language
+  - Reconsider: now. Give the Vim tests an inline fixture language
     (the simplest that supplies the configuration they use) instead of
     `knot-ext-languages`, and drop that dev-dependency.
-  - Order: after D161.
 
 - **D062 — Positioning existing windows**
   - Deferred: gpui 0.2.2 sets a window's bounds only at creation and can
