@@ -297,7 +297,7 @@ enum SaveDialogOutcome {
 type SaveDialogFuture = Pin<Box<dyn Future<Output = SaveDialogOutcome> + Send + 'static>>;
 
 trait ProductSaveDialog: Send + Sync {
-    fn select(&self, suggested_name: SharedString) -> SaveDialogFuture;
+    fn select(&self, suggested_name: String) -> SaveDialogFuture;
 }
 
 struct ApplicationSaveDialog(Arc<dyn ProductSaveDialog>);

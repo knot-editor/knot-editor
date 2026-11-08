@@ -29,6 +29,8 @@ mod wrap;
 
 pub use view::EditorView;
 
+use std::sync::Arc;
+
 use gutter::GutterLayout;
 use layout::*;
 use text::*;
@@ -217,7 +219,7 @@ pub(crate) enum CaretShape {
 pub struct Editor {
     /// The `view` fact settings resolve for: `editor` for documents, or the
     /// contributed view ID of the frame that embeds this editor.
-    view_kind: SharedString,
+    view_kind: Arc<str>,
     /// Authoritative document state. Everything below is editor state or
     /// derived from the model's current revision.
     model: Entity<BufferModel>,
@@ -280,7 +282,7 @@ pub struct Editor {
     auto_closed: Vec<brackets::AutoClosed>,
     /// Named key contexts keybindings can require, each owned by the
     /// extension lifecycle that set it. Presentation state, never recorded.
-    key_contexts: Vec<(knot_host::lifecycle::ExtensionKey, SharedString)>,
+    key_contexts: Vec<(knot_host::lifecycle::ExtensionKey, Arc<str>)>,
     /// Caret shapes lifecycles have set; the latest one wins and each belongs
     /// to its lifecycle. Presentation state, never recorded.
     caret_shapes: Vec<(knot_host::lifecycle::ExtensionKey, CaretShape)>,
@@ -292,7 +294,7 @@ impl Editor {
     /// Build an editor over `model` whose settings resolve for view `kind`.
     pub(crate) fn new(
         model: Entity<BufferModel>,
-        kind: impl Into<SharedString>,
+        kind: impl Into<Arc<str>>,
         cx: &mut Context<Self>,
     ) -> Self {
         let (line_count, seen_revision, (decorations, gutter_markers, contribution_actions)) = {
@@ -485,8 +487,7 @@ impl Editor {
         self.key_contexts
             .retain(|(key, context)| *key != owner || context.as_ref() != name);
         if active {
-            self.key_contexts
-                .push((owner, SharedString::from(name.to_owned())));
+            self.key_contexts.push((owner, Arc::<str>::from(name)));
         }
     }
 

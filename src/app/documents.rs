@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use gpui::{App, Entity, Global, SharedString};
+use std::sync::Arc;
+
+use gpui::{App, Entity, Global};
 
 use super::filesystem::ResourceVersion;
 use super::model::BufferModel;
@@ -70,7 +72,7 @@ pub(crate) struct PersistenceCapture {
 pub(crate) struct Document {
     id: DocumentId,
     identity: uuid::Uuid,
-    title: SharedString,
+    title: Arc<str>,
     model: Entity<BufferModel>,
     state: DocumentState,
     persistence_generation: u64,
@@ -86,7 +88,7 @@ impl Document {
         self.identity
     }
 
-    pub(crate) fn title(&self) -> &SharedString {
+    pub(crate) fn title(&self) -> &str {
         &self.title
     }
 
@@ -136,7 +138,7 @@ impl DocumentCollection {
 
     pub(crate) fn create_untitled(
         &mut self,
-        title: impl Into<SharedString>,
+        title: impl Into<Arc<str>>,
         model: Entity<BufferModel>,
         cx: &mut App,
     ) -> DocumentId {
@@ -146,7 +148,7 @@ impl DocumentCollection {
 
     pub(crate) fn create_destination(
         &mut self,
-        title: impl Into<SharedString>,
+        title: impl Into<Arc<str>>,
         model: Entity<BufferModel>,
         uri: ResourceUri,
         cx: &mut App,
@@ -156,7 +158,7 @@ impl DocumentCollection {
 
     pub(crate) fn create_persisted(
         &mut self,
-        title: impl Into<SharedString>,
+        title: impl Into<Arc<str>>,
         model: Entity<BufferModel>,
         uri: ResourceUri,
         persisted_revision: u64,
@@ -180,7 +182,7 @@ impl DocumentCollection {
     /// so recovered content never replaces an open document.
     pub(crate) fn create_recovered(
         &mut self,
-        title: impl Into<SharedString>,
+        title: impl Into<Arc<str>>,
         model: Entity<BufferModel>,
         state: DocumentState,
         identity: Option<uuid::Uuid>,
@@ -275,7 +277,7 @@ impl DocumentCollection {
         id: DocumentId,
         model: &Entity<BufferModel>,
         capture: &PersistenceCapture,
-        resource: (impl Into<SharedString>, ResourceUri),
+        resource: (impl Into<Arc<str>>, ResourceUri),
         persisted_state: (ResourceVersion, u64),
         cx: &mut App,
     ) -> bool {
@@ -324,7 +326,7 @@ impl DocumentCollection {
 
     fn insert_resource(
         &mut self,
-        title: impl Into<SharedString>,
+        title: impl Into<Arc<str>>,
         model: Entity<BufferModel>,
         state: DocumentState,
         cx: &mut App,
@@ -343,7 +345,7 @@ impl DocumentCollection {
 
     fn insert(
         &mut self,
-        title: impl Into<SharedString>,
+        title: impl Into<Arc<str>>,
         model: Entity<BufferModel>,
         state: DocumentState,
         cx: &mut App,
@@ -353,7 +355,7 @@ impl DocumentCollection {
 
     fn insert_with_identity(
         &mut self,
-        title: impl Into<SharedString>,
+        title: impl Into<Arc<str>>,
         model: Entity<BufferModel>,
         state: DocumentState,
         identity: uuid::Uuid,

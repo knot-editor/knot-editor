@@ -62,7 +62,7 @@ impl EditorView {
     /// `kind`, without a gutter until the view asks for one.
     pub(crate) fn for_contributed_view(
         model: Entity<BufferModel>,
-        kind: impl Into<SharedString>,
+        kind: impl Into<Arc<str>>,
         cx: &mut Context<Self>,
     ) -> Self {
         Self::with_rendering(
@@ -88,7 +88,7 @@ impl EditorView {
         model: Entity<BufferModel>,
         element_id: usize,
         rendering: EditorRenderingOptions,
-        kind: impl Into<SharedString>,
+        kind: impl Into<Arc<str>>,
         cx: &mut Context<Self>,
     ) -> Self {
         let editor = cx.new(|cx| Editor::new(model.clone(), kind, cx));

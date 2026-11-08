@@ -382,7 +382,7 @@ impl ProductOpenDialog for FixedOpenDialog {
 struct FixedSaveDialog(SaveDialogOutcome);
 
 impl ProductSaveDialog for FixedSaveDialog {
-    fn select(&self, _: gpui::SharedString) -> SaveDialogFuture {
+    fn select(&self, _: String) -> SaveDialogFuture {
         let outcome = self.0.clone();
         Box::pin(async move { outcome })
     }

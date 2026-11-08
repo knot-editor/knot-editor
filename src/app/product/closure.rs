@@ -332,7 +332,7 @@ impl ProductShell {
                     if !document_state.is_dirty(cx) {
                         return Ok(None);
                     }
-                    let title = document_state.title().clone();
+                    let title = document_state.title().to_owned();
                     let prompted_revision = document_state.model().read(cx).revision();
                     target
                         .session(cx)

@@ -59,7 +59,7 @@ impl ProductShell {
         let suggested_name = Self::documents(cx)
             .read(cx)
             .get(target_document(&target).expect("save target is a document"))
-            .map(|document| document.title().clone())
+            .map(|document| document.title().to_owned())
             .unwrap_or_else(|| "Untitled".into());
         let selection = if let Some(dialog) = cx.try_global::<ApplicationSaveDialog>() {
             dialog.0.select(suggested_name)
@@ -361,7 +361,7 @@ impl ProductShell {
         let Some((model, title)) = documents
             .read(cx)
             .get(target_document(&target).expect("save target is a document"))
-            .map(|document| (document.model().clone(), document.title().clone()))
+            .map(|document| (document.model().clone(), document.title().to_owned()))
         else {
             self.finish_save_command(completion, knot_protocol::CommandOutcome::InvalidTarget, cx);
             return;

@@ -309,7 +309,7 @@ impl TestProduct {
         let model = cx.new(|_| BufferModel::from_text(String::from_utf8(opened.bytes).unwrap()));
         let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
         let document = documents.update(cx, |documents, cx| {
-            documents.create_persisted(&name, model.clone(), uri, 0, opened.version, cx)
+            documents.create_persisted(name.as_str(), model.clone(), uri, 0, opened.version, cx)
         });
         TestEditor::over(document, model, (0, 0), cx)
     }
