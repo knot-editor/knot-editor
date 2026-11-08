@@ -35,21 +35,23 @@ review gates; reduce completed checkpoints to completion notes and current links
 
 ## Decisions
 
-`decisions.md` is read when a task revisits a choice, not in every session, so
-it must stay short enough to read whole.
+[decisions.md](decisions.md) is an index with one line per decision, grouped by
+topic; the entries live in topic files under [decisions/](decisions/). A task
+that revisits a choice reads the index, then only the topic files it touches.
 
 - Record a choice only when a reasonable alternative was rejected and a future
   change might revisit it. Small or obvious choices stay in plans and commit
   messages.
 - An entry states the choice, why it was made, the rejected alternatives that
-  matter, and at most one or two measurements that decided it. Keep it to one
-  or two short paragraphs, roughly 150 words.
+  matter, and the measurements that decided it. Keep it as short as the
+  reasoning allows.
 - Leave behavior out: keys, wording, defaults, edge-case rules, and how a
   feature works belong in architecture references or code. Link them instead.
 - Revise the existing section when a choice extends or changes a topic, and
   replace a superseded choice rather than appending to it. Never record
   history; Git keeps it.
-- Keep the whole file under 5,000 words (`wc -w docs/decisions.md`). If an
-  addition would exceed it, condense or merge existing entries in the same
-  change.
-- Keep section headings stable, since other documents link to them.
+- Add or update the entry's index line in the same change. Put a new entry in
+  the topic file that owns its subject, and start a new topic file only when
+  none fits.
+- Keep section headings and file names stable, since other documents link to
+  them.

@@ -4,7 +4,7 @@ The selected work below has an explicit implementation order. The deferred
 register that follows is grouped by area, not by priority, but its items are
 not independent: [dependency order](#dependency-order) lists the chains, and
 each item's **Order** line names what must come before and after it.
-Completed decisions remain in `decisions.md`; proposed architecture and
+Completed decisions remain in [decisions](decisions.md); proposed architecture and
 checkpoint details live in active plans.
 
 Each item has a stable `D###` identifier, a reason for deferral, a concrete

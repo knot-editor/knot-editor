@@ -9,7 +9,7 @@ cost shows in daily use; the target is 40 or more packages. Tracked in the
 Lower the fixed memory each extension package costs while idle, so that 40 or
 more small single-feature packages stay cheap. D137 measured that cost and
 removed the garbage a package leaves behind after bursts of work, but did not
-lower the fixed cost; see [extension runtime](../decisions.md#extension-runtime).
+lower the fixed cost; see [extension runtime](../decisions/extension-host.md#extension-runtime).
 
 ## What D137 found
 

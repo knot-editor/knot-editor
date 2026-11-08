@@ -5,7 +5,7 @@ other editors and recommends a replacement representation, tracked as D092 in
 the [roadmap](../roadmap.md). Current behavior is owned by
 [core and buffers](../architecture/core-and-buffers.md) and
 `src/core/buffer.rs`; the rationale for the original choice is in
-[decisions](../decisions.md#text-buffer-and-stable-positions).
+[decisions](../decisions/core-and-buffers.md#text-buffer-and-stable-positions).
 
 ## Summary
 
@@ -79,8 +79,8 @@ of adding one.
 
 ### Measured evidence
 
-From [decisions](../decisions.md#text-buffer-and-stable-positions) and
-[syntax highlighting](../decisions.md#syntax-highlighting), Apple M1 Pro
+From [decisions](../decisions/core-and-buffers.md#text-buffer-and-stable-positions) and
+[syntax highlighting](../decisions/semantic-ui.md#syntax-highlighting), Apple M1 Pro
 release builds:
 
 - 1M-line, 29 MiB file: edit p50 678 µs, of which about 88% is the line-index

@@ -79,14 +79,14 @@ to be rebuilt later:
     `languages.associate` claims file patterns for a language, so detection
     overrides compose instead of living in one map setting
     ([extension host](../architecture/extension-host.md#settings),
-    [decisions](../decisions.md#application-settings)).
+    [decisions](../decisions/commands-and-settings.md#application-settings)).
 
 - ✅ **D121 — Terminals start in the workspace root**
   - A new terminal starts in the root of the window's most recently focused
     document, else the first root, else home. Restored terminals fall back to
     the same rule (D127), and `terminals.open` takes an explicit directory
     ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views),
-    [decisions](../decisions.md#terminal)).
+    [decisions](../decisions/workbench-and-lifecycle.md#terminal)).
 
 - ✅ **D127 — Restored terminals keep their working directory**
   - A terminal restored in place starts in the directory its shell was last
@@ -95,7 +95,7 @@ to be rebuilt later:
     focused terminal start in its directory. D128 moves the query to
     libghostty
     ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views),
-    [decisions](../decisions.md#terminal)).
+    [decisions](../decisions/workbench-and-lifecycle.md#terminal)).
 
 - ✅ **D064 — Theming system**
   - Themes are extension contributions registered like languages, and every
@@ -106,7 +106,7 @@ to be rebuilt later:
     One Light, Catppuccin, Tokyo Night, and Solarized with a remembered Select
     Theme command
     ([semantic UI](../architecture/semantic-ui.md#themes-and-color-keys),
-    [decisions](../decisions.md#themes)).
+    [decisions](../decisions/semantic-ui.md#themes)).
 
 - ✅ **D071 — Command palette and shared picker**
   - One native fuzzy-matching picker (`nucleo-matcher`) serves the palette,
@@ -117,7 +117,7 @@ to be rebuilt later:
     the application state database
     ([semantic UI](../architecture/semantic-ui.md#extension-transient-interactions),
     [commands](../architecture/commands.md#dispatch),
-    [decisions](../decisions.md#extension-transient-interactions)).
+    [decisions](../decisions/semantic-ui.md#extension-transient-interactions)).
 
 - ✅ **D086 — Keymap presets** (promotes D060)
   - Default bindings are a preset in one slot beneath every extension and
@@ -126,7 +126,7 @@ to be rebuilt later:
     one. Extensions read `knot.platform`. Show Keybindings lists every binding
     with its owner and overrides, and menus show the effective keys
     ([commands](../architecture/commands.md#keymaps),
-    [decisions](../decisions.md#commands-and-keymaps),
+    [decisions](../decisions/commands-and-settings.md#commands-and-keymaps),
     [extension guide](../extension-api.md#register-a-keymap-preset)).
 
 - ✅ **D072 — Workbench navigation and layout commands**
@@ -138,7 +138,7 @@ to be rebuilt later:
     and Move Tool to Dock… complete the set; New Terminal moved to ctrl-`
     ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure),
     [commands](../architecture/commands.md#keymaps),
-    [decisions](../decisions.md#workbench-navigation)).
+    [decisions](../decisions/workbench-and-lifecycle.md#workbench-navigation)).
 
 ## Phase 3 — Editing
 
@@ -151,7 +151,7 @@ to be rebuilt later:
     cases. Indentation is left to D134's `indents` queries. D074 and D075
     consume it
     ([semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
-    [decisions](../decisions.md#language-editing-configuration),
+    [decisions](../decisions/editing.md#language-editing-configuration),
     [extension guide](../extension-api.md#register-a-language)).
 
 - ✅ **D074 — Editing commands**
@@ -164,7 +164,7 @@ to be rebuilt later:
     command is one undo step that restores its selection
     ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
     [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
-    [decisions](../decisions.md#editing-commands)).
+    [decisions](../decisions/editing.md#editing-commands)).
 
 - ✅ **D134 — Tree-sitter indentation**
   - Language registrations take an optional `indents` query with
@@ -177,7 +177,7 @@ to be rebuilt later:
     `test/cases/indents.jsonc` cases
     ([semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
     [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [decisions](../decisions.md#indentation),
+    [decisions](../decisions/editing.md#indentation),
     [extension guide](../extension-api.md#register-a-language)).
 
 - ✅ **D075 — Bracket matching and auto-closing**
@@ -190,7 +190,7 @@ to be rebuilt later:
     them off, and packages keep `test/cases/brackets.jsonc` cases
     ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
     [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
-    [decisions](../decisions.md#brackets)).
+    [decisions](../decisions/editing.md#brackets)).
 
 - ✅ **D068 — Editor gutter and line numbers**
   - The gutter is a marker lane, always reserved, then line numbers sized to
@@ -200,7 +200,7 @@ to be rebuilt later:
     its most severe marker, whose command a click runs. Text frames opt in
     with `gutter: true`
     ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [decisions](../decisions.md#editor-gutter),
+    [decisions](../decisions/editing.md#editor-gutter),
     [extension guide](../extension-api.md#read-only-text-frames)).
 
 - ✅ **D076 — Go to Line** (depends on D071)
@@ -223,7 +223,7 @@ to be rebuilt later:
     viewport width, and movement goes by wrapped row with `-logical` twins
     ([zoom](../architecture/workbench-and-lifecycle.md#zoom),
     [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [decisions](../decisions.md#zoom-text-size-and-soft-wrap)).
+    [decisions](../decisions/editing.md#zoom-text-size-and-soft-wrap)).
 
 - **D079 — Save hygiene** (depends on D070)
   - Trim trailing whitespace and ensure a final newline on save, both
