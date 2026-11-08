@@ -144,7 +144,7 @@ pub(crate) fn record(cx: &mut App) {
         });
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl ApplicationWindowSessions {
     pub(crate) fn publish_for_test(&self, record: WindowSession) {
         self.store.publish(record);
@@ -152,20 +152,20 @@ impl ApplicationWindowSessions {
 }
 
 /// Stop recording as a crash would, without capturing the windows.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn stop_for_test(cx: &App) {
     if let Some(sessions) = cx.try_global::<ApplicationWindowSessions>() {
         sessions.recording.set(Recording::Stopped);
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn current(cx: &App) -> Option<WindowSession> {
     cx.try_global::<ApplicationWindowSessions>()
         .and_then(|sessions| sessions.store.current())
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn flush(cx: &App) -> Task<Result<(), String>> {
     cx.global::<ApplicationWindowSessions>().store.flush()
 }

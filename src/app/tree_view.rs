@@ -173,7 +173,7 @@ impl TreeView {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn activate_row_for_test(&mut self, id: &str, cx: &mut Context<Self>) {
         self.activate(id, cx);
     }
@@ -468,7 +468,7 @@ impl TreeView {
         cx.notify();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn visible_labels(&self) -> Vec<String> {
         self.visible_rows()
             .iter()
@@ -479,23 +479,23 @@ impl TreeView {
             .collect()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn actions_for_row_for_test(&self, id: &str) -> Vec<TreeAction> {
         self.actions_for_row(id)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn frame_actions_for_test(&self) -> Vec<TreeAction> {
         self.frame_actions.clone()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn status_for_test(&self, id: &str) -> Option<(Option<String>, Option<String>)> {
         self.item(id)
             .map(|item| (item.status_text.clone(), item.badge.clone()))
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn description_for_test(&self, id: &str) -> Option<String> {
         self.item(id).and_then(|item| item.description.clone())
     }

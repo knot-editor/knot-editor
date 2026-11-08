@@ -18,11 +18,13 @@ use crate::app::product::{ApplicationDocuments, ApplicationFileSystems};
 use crate::app::resource::ResourceUri;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
 
-/// The product, started without a window under a personal config with no
-/// installed packages. It keeps the directories startup read from.
+/// The product under a personal config with no installed packages, either
+/// started without a window or [launched](TestProduct::launch). It keeps
+/// the directories startup read from and its durable state.
 pub struct TestProduct {
-    _config: tempfile::TempDir,
-    _extensions: tempfile::TempDir,
+    pub(super) config: tempfile::TempDir,
+    pub(super) extensions: tempfile::TempDir,
+    pub(super) state: tempfile::TempDir,
 }
 
 /// One package's outcome in the startup report.
@@ -79,11 +81,10 @@ impl TestProduct {
         post_init: Option<&str>,
         cx: &mut TestAppContext,
     ) -> Self {
-        let config = tempfile::tempdir().unwrap();
+        let product = Self::new_directories();
         if let Some(source) = post_init {
-            std::fs::write(config.path().join("post-init.js"), source).unwrap();
+            std::fs::write(product.config.path().join("post-init.js"), source).unwrap();
         }
-        let extensions = tempfile::tempdir().unwrap();
         install_globals(cx);
         // Product startup binds keys before packages start, so they can bind theirs.
         cx.update(super::super::launch::bind_product_keys);
@@ -92,16 +93,12 @@ impl TestProduct {
         host.update(cx, |host, cx| {
             host.set_bundled_packages(packages);
             host.start_product_startup(
-                Ok(config.path().to_path_buf()),
-                Ok(extensions.path().to_path_buf()),
+                Ok(product.config.path().to_path_buf()),
+                Ok(product.extensions.path().to_path_buf()),
                 cx,
             )
         });
         assert!(wait_for_product_startup(cx));
-        let product = Self {
-            _config: config,
-            _extensions: extensions,
-        };
         let failures: Vec<_> = product
             .load_report(cx)
             .into_iter()
@@ -116,6 +113,14 @@ impl TestProduct {
         }
         cx.run_until_parked();
         product
+    }
+
+    pub(super) fn new_directories() -> Self {
+        Self {
+            config: tempfile::tempdir().unwrap(),
+            extensions: tempfile::tempdir().unwrap(),
+            state: tempfile::tempdir().unwrap(),
+        }
     }
 
     /// Each package startup discovered, with its outcome.

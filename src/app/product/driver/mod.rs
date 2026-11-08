@@ -1,10 +1,12 @@
 //! The product test driver behind [`crate::test_support`]: the real
 //! application started headless, driven and observed through plain values.
 
+pub(crate) mod application;
 pub(crate) mod editing;
 pub(crate) mod editor;
 pub(crate) mod product;
 pub(in crate::app::product) mod setup;
+pub(crate) mod window;
 
 use std::time::{Duration, Instant};
 

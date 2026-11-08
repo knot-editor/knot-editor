@@ -99,7 +99,7 @@ pub(crate) struct ExtensionStorage {
 
 impl ExtensionStorage {
     #[cfg_attr(
-        test,
+        any(test, feature = "test-support"),
         allow(dead_code, reason = "test hosts use isolated storage roots")
     )]
     pub(crate) fn user_root() -> Result<PathBuf, String> {
@@ -114,7 +114,7 @@ impl ExtensionStorage {
 
     /// Storage whose databases live only as long as it does, for tests that
     /// need no files.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn in_memory(executor: BackgroundExecutor) -> Self {
         Self::with_root(None, executor)
     }
@@ -363,7 +363,7 @@ impl Database {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn test_executor() -> BackgroundExecutor {
     static EXECUTOR: std::sync::OnceLock<BackgroundExecutor> = std::sync::OnceLock::new();
     EXECUTOR.get_or_init(gpui::background_executor).clone()

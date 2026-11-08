@@ -655,7 +655,7 @@ impl ContributedView {
         self.content.instance_id(cx)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     fn tree(&self) -> &Entity<super::tree_view::TreeView> {
         match &self.content {
             super::workbench::ExtensionView::Tree(view) => view,

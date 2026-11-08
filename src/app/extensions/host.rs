@@ -169,7 +169,7 @@ pub(crate) fn launched(cx: &mut App) {
     application_changed(cx);
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn reset_launched_for_test(cx: &mut App) {
     if cx.has_global::<ApplicationLaunched>() {
         cx.remove_global::<ApplicationLaunched>();
@@ -511,7 +511,7 @@ fn route_nested_command(
 /// Test hosts keep extension storage in memory, so bundled packages never
 /// read the developer's real records and every test starts empty.
 /// Production uses the platform application-data root.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn test_storage(
     cx: &mut Context<ProductExtensionHost>,
 ) -> Result<crate::app::extensions::storage::ExtensionStorage, String> {
@@ -522,7 +522,7 @@ fn test_storage(
     )
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 fn test_storage(
     cx: &mut Context<ProductExtensionHost>,
 ) -> Result<crate::app::extensions::storage::ExtensionStorage, String> {
@@ -592,7 +592,7 @@ pub(crate) struct ProductExtensionHost {
     /// Open undo groups, ended by disposal, teardown, or their handle's tab.
     undo_groups: HashMap<u64, UndoGroup>,
     next_undo_group: u64,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     application_events: Vec<knot_protocol::ApplicationEvent>,
     _application_window_closed: Subscription,
     _application_signal: Subscription,
@@ -669,7 +669,7 @@ impl ProductExtensionHost {
             transient_sessions: HashMap::new(),
             next_transient_session: 0,
             setting_warnings: Vec::new(),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             application_events: Vec::new(),
             _application_window_closed: cx.on_window_closed(application_changed),
             _application_signal: cx.observe(&application_signal, |host, _, cx| {
@@ -732,7 +732,7 @@ impl ProductExtensionHost {
             .collect();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn set_test_storage_root(&mut self, root: PathBuf, cx: &Context<Self>) {
         self.storage = Ok(crate::app::extensions::storage::ExtensionStorage::new(
             root,
@@ -747,7 +747,7 @@ impl ProductExtensionHost {
         self.bundled = packages;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn start_installed_extensions(&mut self, root: PathBuf, cx: &mut Context<Self>) {
         let _ = self.start_installed_extensions_with_completion(root, cx);
     }
@@ -863,7 +863,7 @@ impl ProductExtensionHost {
     }
 
     /// Stop one package with a terminating unload, as quitting would.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn unload_package_for_test(&mut self, name: &str, cx: &mut Context<Self>) {
         if let Some(key) = self.package_keys.get(name).copied() {
             let _ = self.pool.unload(key);
@@ -1222,7 +1222,7 @@ impl ProductExtensionHost {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn take_test_application_events(&mut self) -> Vec<knot_protocol::ApplicationEvent> {
         std::mem::take(&mut self.application_events)
     }
@@ -2222,7 +2222,7 @@ impl ProductExtensionHost {
         self.release_stale_editor_handles(cx);
         let snapshot = self.application_snapshot(cx);
         let events = self.application_observation.commit(snapshot);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         self.application_events.extend(events.iter().cloned());
         for event in events {
             for (subscription, key) in self.application_observation.subscriptions() {
@@ -2240,7 +2240,7 @@ impl ProductExtensionHost {
     ) {
         self.refresh_application_observation(cx);
         let event = self.application_observation.push(change);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         self.application_events.push(event.clone());
         for (subscription, key) in self.application_observation.subscriptions() {
             let _ = self

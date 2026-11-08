@@ -82,7 +82,11 @@ line of the case. `TestProduct` starts the packages without a window, and a
 `TestEditor` session shows each case in a fresh workbench and types its keys
 through the session's router; a run settles once the session holds no keys
 and the extension pool is quiet, so keys that leave a command waiting on a
-picker or prompt go in unsettled. Each
+picker or prompt go in unsettled. `TestProduct::launch` starts the whole
+application instead, with its launch window, which `TestWindow` drives
+through native keys and commands, and with package storage, recovery, and
+the window record in files of its own, so a relaunch in the same process
+restores what the previous run recorded. Each
 Vim case starts from an empty clipboard and the package's hidden
 `vim.reset`, which clears registers, their record, marks, and the last find,
 so case order does not matter. A case may collapse `folds` before its keys

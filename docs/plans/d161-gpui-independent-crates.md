@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 2c next. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 2c in review. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -224,7 +224,25 @@ gates (`cargo clippy -p knot --lib --features test-support` is clean).
   on a picker or prompt keeps its package busy, so Go to Line and Vim's `:q`
   send those keys with `press_unsettled` and wait for what they show.
 
-#### 2c. TestProduct for the projects tests
+#### 2c. TestProduct for the projects tests ✅
+
+`TestProduct::launch` starts the whole application, keeps its launch window,
+and keeps package storage, recovery, and the window record in files under
+its own directory. `TestWindow` drives a window through native keys,
+commands, roots, opened files, and splits, and reports its documents,
+editors, and layout. `TestTree` reads and acts on a contributed tree.
+`relaunch_restoring` quits and launches again in the same process over the
+same files. `projects.rs` and `project_sessions.rs` import only
+`crate::test_support`, and the test count is unchanged.
+
+- The driver always sets the storage root it launches with, and the host's
+  in-memory test storage is also used under `test-support`. Without that,
+  extension tests built outside `cfg(test)` would read the developer's real
+  package records.
+- Packages stop before a relaunch closes the windows, as quit stops them.
+  A root change made "while the package is not running" is now
+  `stop_package`, the change, then `reload_packages`, instead of one update
+  that relied on the ordering of events.
 
 - Deliverables: `projects.rs` and `project_sessions.rs` use only
   `crate::test_support`; `TestProduct` gains what they need.
