@@ -867,6 +867,15 @@ Kakoune mode could use it too. The
     calls the model, runs effects, and notifies.
   - Order: after D161 and D160.
 
+- **D163 — Vim tests on a minimal language fixture**
+  - Deferred: `knot-ext-vim`'s tests load the real language packages,
+    because Vim's indentation, key-context, and `o`/`O` cases need language
+    configuration, so an edit to a language package reruns the Vim tests.
+  - Reconsider: after D161. Give the Vim tests an inline fixture language
+    (the simplest that supplies the configuration they use) instead of
+    `knot-ext-languages`, and drop that dev-dependency.
+  - Order: after D161.
+
 - **D062 — Positioning existing windows**
   - Deferred: gpui 0.2.2 sets a window's bounds only at creation and can
     afterwards only resize it. Session restoration and project switching always
