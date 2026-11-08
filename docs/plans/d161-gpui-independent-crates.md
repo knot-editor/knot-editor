@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 2 next. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 2b in progress. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -165,50 +165,75 @@ in their dependency trees. Durable consequences for later checkpoints:
   three 60 s periods. Plain `cargo test` has only the 30 s bounds.
 - Timings are in [Timings](#timings); a clean build could not be measured.
 
-### 2. Core tests without the bundled packages
+### 2. Core tests without the bundled packages, and a product test driver
 
-Starts from `knot-bundled` as committed: it owns `build.rs` with per-package
-`tsc` fingerprints (`scripts/check-bundled-incremental.sh` verifies them),
-`BundledSource`, and `PACKAGES`, and the library imports `PACKAGES`.
+The extension tests must run outside the library, but they reach deep
+internals today (`ProductShell` fields, workbench panes, editor viewport,
+window sessions, extension storage, recovery). Exporting those would keep the
+coupling this plan removes, so the tests are ported to a narrow driver that
+exposes only plain data.
 
-- Deliverables: no library test needs a real bundled package except the
-  extension tests that checkpoint 3 moves; the library receives its bundled
-  packages as data; the harness and its helpers are a `test-support` API that
-  takes the packages to start explicitly.
-- Validation: `just test` passes with unchanged behavior and test count; the
-  tests below start fixtures or no packages.
-- **Implementation context:**
-  - Switch to inline fixtures or no packages (they start the bundled set only
-    incidentally): `src/app/product/tests/startup.rs` (6 tests),
-    `keybindings.rs` (7), `window_restore.rs` (3), `recovery.rs` (1), and the
-    two `discover_all` tests in `src/app/extensions/package/tests.rs`, which
-    inject a fixture bundled package. Callers of `start_product_extensions`
-    and `start_product_startup` locate them.
-  - `settings.rs::config_and_packages_share_settings_across_phases_and_restart`
-    asserts one setting observer, not two (Vim's `vim.enabled` observer goes);
-    `settings.rs::personal_config_associates_an_extension_and_open_documents_redetect`
-    registers its `rust` and `python` languages inline, as
-    `window_restore.rs` already does.
-  - Discovery takes the bundled packages as data: `discover_all`
-    (`src/app/extensions/package.rs`) and `bundled::report` receive the
-    `&'static [BundledSource]` the extension host holds, instead of importing
-    `knot_bundled::PACKAGES`. `knot::run(packages)` supplies them, and
-    `src/main.rs` passes `knot_bundled::PACKAGES` until checkpoint 3.
-  - Export under a `test-support` feature of `knot`, taking packages
-    explicitly: `src/app/product/tests/harness.rs`
-    (`start_bundled_packages*`), `cases.rs` (`topic_files`, `package_files`;
-    the package directories become a parameter instead of
-    `CARGO_MANIFEST_DIR`), the helpers they use from
-    `src/app/product/tests.rs` (`product_window`, `dispatch_product_command`,
-    `wait_for_command`) and `operations.rs` (`empty_product_window`),
-    `host.rs`'s test `start_bundled_packages`, and the
-    roughly 20 `crate::app` items they reach (`extensions::host::{install,
-    pool, startup_report}`, `work_counts`, `languages::set_language`,
-    `editor::EditorView`, `status_bar`, `EDITOR_KEY_CONTEXT`, …). Mirror the
-    `test-support` features of `knot-core`, `knot-host`, and `knot-protocol`,
-    and expose only what the moved tests call.
-- Review gate: the exported `test-support` surface is small and reads as a
-  test API, not a dump of internals.
+**Design.** `knot::test_support` (feature `test-support`, also compiled
+under `cfg(test)`) holds:
+
+- `TestProduct`: starts the real product (globals, recovery, state database,
+  launch gate) with the given packages, an optional `post-init`, and
+  installed packages. It drives through keys, text, commands, Open, roots,
+  windows, prompts, package restart, quit, and relaunch over the same state;
+  it observes through `snapshot()`, a serde description of windows, panes,
+  tabs, documents (URI, dirty, text), and roots, plus contributed tree rows,
+  status-bar items, a package's stored records, and recovery snapshots.
+- `TestEditor`: the case harness's editor session (marked text, keys,
+  caret, caret shape, key contexts, viewport rows, folds, scoped settings).
+
+Only these types and their data structs are public; the library's own items
+stay `pub(crate)`. Ported tests import only `crate::test_support`, and a
+`pub use` of a crate-private type fails to compile, so the boundary holds
+before checkpoint 3 moves them.
+
+#### 2a. Inject the packages and switch incidental tests ✅
+
+`knot::run(packages)` hands the compiled-in packages to the extension host,
+which passes them to `discover_all`; nothing in the library imports
+`knot_bundled::PACKAGES`, and `src/main.rs` passes it until checkpoint 3.
+Tests start the bundled set only by passing it. The startup, keybinding,
+window-restore, recovery, and settings tests that started it incidentally
+now run on inline fixtures or none, and the `discover_all` tests inject a
+fixture bundled package.
+
+#### 2b. TestEditor, a minimal TestProduct, and the editor-level extension tests
+
+- Deliverables: `src/test_support/` with `TestEditor` and the parts of
+  `TestProduct` these tests need; `vim.rs`, `language_{editing,indents,brackets,folds}.rs`,
+  `go_to_line.rs`, `status_bar_package.rs`, the case readers (`cases.rs`),
+  `highlight_tests.rs::bundled_languages_highlight_their_fixtures`, and
+  `host.rs`'s `bundled_packages_load_with_product_discovery` and
+  `measure_bundled_package_memory` use only `crate::test_support`.
+- Validation: `just test` passes with the same test count; `rg
+  'crate::app|super::' ` over the ported files finds nothing.
+- **Implementation context:** grow the driver from
+  `src/app/product/tests/harness.rs` (`Session`, `Windowed`, `run`,
+  `work_per_key`) and `cases.rs`; package case directories become a
+  parameter instead of `CARGO_MANIFEST_DIR`. Vim reaches `Editor::viewport`,
+  `row_start`, folds, `caret_shape`, workbench panes, `settings::*` setters,
+  `languages::set_language`, mouse drags, and a memory filesystem; each
+  becomes a driver method returning plain values.
+- Review gate: the driver's public surface reads as a test API, and the
+  ported tests read as behavior, not internals.
+
+#### 2c. TestProduct for the projects tests
+
+- Deliverables: `projects.rs` and `project_sessions.rs` use only
+  `crate::test_support`; `TestProduct` gains what they need.
+- Validation: `just test` passes with the same test count, or with any
+  merged or dropped test justified in the commit.
+- **Implementation context:** these tests reach `ProductShell` workbench
+  and focus, `window_sessions`, `record_store`, extension storage
+  (`StorageOwner`), `recovery::StoredSnapshot`, workbench splits and docks,
+  `TreeView`, and `TransientSurface`. Observations become `snapshot()` fields,
+  tree rows, stored records, and recovery snapshots; setup becomes driver
+  calls.
+- Review gate: as 2b, over the whole driver.
 
 ### 3. Extension group crates and the knot-app binary
 
