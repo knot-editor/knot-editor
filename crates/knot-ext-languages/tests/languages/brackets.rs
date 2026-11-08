@@ -1,6 +1,6 @@
 //! Runs the bracket cases each bundled language package keeps in
 //! `test/cases/brackets.jsonc` through an editor on the registered language, in
-//! the [case](crate::test_support::cases) format.
+//! the [case](knot::test_support::cases) format.
 //!
 //! Groups list their `languages` as the indentation cases do. A `type` case types `text` one character at a time, `⌫`
 //! pressing Backspace, and expects `after` with its caret or selection. A
@@ -9,11 +9,11 @@
 //! the view highlights at the caret, or without markers when none match.
 
 use super::bundled::{PACKAGES, language_packages};
-use super::language_indents::{IndentCase, TypeCase};
-use crate::test_support::TestProduct;
-use crate::test_support::cases::{Failures, read_groups, topic_files, unmark};
-use crate::test_support::editing::{Action, run};
+use super::indents::{IndentCase, TypeCase};
 use gpui::TestAppContext;
+use knot::test_support::TestProduct;
+use knot::test_support::cases::{Failures, read_groups, topic_files, unmark};
+use knot::test_support::editing::{Action, run};
 
 /// `text` with `«` and `»` around each of `brackets`.
 fn mark_brackets(text: &str, brackets: Option<[std::ops::Range<usize>; 2]>) -> String {

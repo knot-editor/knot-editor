@@ -30,11 +30,13 @@ compatibility concerns at any time.
 crates/knot-core      UI-, platform-, and scripting-independent text and edit primitives
 crates/knot-protocol  Knot-owned serde transport types and operation declarations
 crates/knot-host      V8, bounded scheduling, and module-graph validation
-crates/knot-bundled   build.rs and the compiled bundled-package table
+crates/knot-bundled   BundledSource and the build helper that compiles bundled packages
+crates/knot-ext-*     compiled bundled packages by domain, with their integration tests
+crates/knot-app       the knot binary: joins the packages and calls knot::run
 crates/knot-handler-macros   adapters for annotated native host handlers and commands
 src/app               gpui shell, foreground editor state, native views, resource providers,
                       commands, startup, and application persistence
-extensions/@knot      bundled TypeScript extension packages, compiled by knot-bundled
+extensions/@knot      bundled TypeScript extension packages, compiled by the knot-ext-* crates
 scripts/extensions    extension toolchain, fake knot host, and package test runner
 ```
 
@@ -51,7 +53,7 @@ canonical source before reading broadly.
 | Contributed UI, trees, completion, generated text | [semantic UI](docs/architecture/semantic-ui.md) | `src/app/extensions/semantics.rs`, `src/app/tree_view.rs`, `src/app/completion.rs` |
 | Syntax highlighting, languages, theme | [semantic UI](docs/architecture/semantic-ui.md#syntax-highlighting-and-languages), [core and buffers](docs/architecture/core-and-buffers.md#syntax-state) | `src/app/syntax.rs`, `src/app/languages.rs`, `src/app/theme.rs`, `src/app/themes.rs`, `extensions/@knot/language-*/`, `extensions/@knot/themes/` |
 | Extension public contract | `crates/knot-host/src/js/knot.d.ts`, [extension guide](docs/extension-api.md) | `docs/schemas/knot.schema.json`, `scripts/extensions/examples/` |
-| Bundled extensions, authoring toolchain, extension tests | [extension guide](docs/extension-api.md#write-and-test-in-typescript), [development](docs/development.md) | `extensions/@knot/`, `scripts/extensions/`, `crates/knot-bundled/build.rs` |
+| Bundled extensions, authoring toolchain, extension tests | [extension guide](docs/extension-api.md#write-and-test-in-typescript), [development](docs/development.md) | `extensions/@knot/`, `scripts/extensions/`, `crates/knot-bundled/src/build.rs`, `crates/knot-ext-*/` |
 | Application-owned SQLite stores | [automatic tool-layout memory](docs/architecture/workbench-and-lifecycle.md#automatic-tool-layout-memory) | `src/app/tool_layout.rs` |
 
 ### Registering an application subsystem

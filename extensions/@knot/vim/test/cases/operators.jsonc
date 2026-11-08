@@ -1,5 +1,5 @@
 // Vim behavior cases in the format described in
-// src/app/product/tests/vim.rs: a Rust product test types `keys` through the
+// crates/knot-ext-vim/tests/vim.rs: a Rust product test types `keys` through the
 // real editor with this package enabled. Topic: operators.
 {
   "cases": [

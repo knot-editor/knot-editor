@@ -6,7 +6,7 @@ use gpui::TestAppContext;
 use serde_json::Value;
 
 use super::bundled::PACKAGES;
-use crate::test_support::{CommandOutcome, TestProduct, TestWindow, wait_until};
+use knot::test_support::{CommandOutcome, TestProduct, TestWindow, wait_until};
 
 pub(super) const TREE: &str = "builtin.projects";
 

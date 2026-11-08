@@ -6,7 +6,7 @@ use serde_json::Value;
 use super::projects::{
     Projects, TREE, create_project, file_uri, list_projects, project_id, wait_for_prompt,
 };
-use crate::test_support::{CommandOutcome, wait_until};
+use knot::test_support::{CommandOutcome, wait_until};
 
 const OWNER: &str = "@knot/projects";
 

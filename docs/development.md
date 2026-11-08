@@ -43,14 +43,18 @@ The workflow has read-only repository permissions and pins external actions to
 commits. [Dependabot](../.github/dependabot.yml) checks for action updates
 weekly.
 
-Building Knot requires Node.js and npm. The `knot-bundled` crate's `build.rs` installs the lockfile-pinned
-TypeScript compiler in `scripts/extensions` when it is missing or older than the
-lockfile, compiles each bundled package under `extensions/@knot` into Cargo's
-output directory, and embeds the emitted modules. It reruns `tsc` only for
-packages whose sources or `tsconfig.json` changed, or for all of them when the
-lockfile, `tsconfig.base.json`, or `knot.d.ts` changed; a TypeScript edit
-therefore rebuilds `knot-bundled` and relinks, not the Rust application crate.
-`scripts/check-bundled-incremental.sh` verifies this. CI installs a pinned Node in
+Building Knot requires Node.js and npm. Bundled packages are compiled by the
+domain group crates `knot-ext-languages`, `knot-ext-vim`, and
+`knot-ext-workbench`, whose `build.rs` files call the `knot-bundled` helper. It
+installs the lockfile-pinned TypeScript compiler in `scripts/extensions` when it
+is missing or older than the lockfile, compiles each of the crate's packages
+under `extensions/@knot` into Cargo's output directory, and embeds the emitted
+modules. It reruns `tsc` only for packages whose sources or `tsconfig.json`
+changed, or for all of them when the lockfile, `tsconfig.base.json`, or
+`knot.d.ts` changed. The `knot` library never depends on compiled packages
+(`knot-app` hands them to `knot::run`), so a TypeScript edit rebuilds and retests
+only its group crate. `scripts/check-bundled-incremental.sh` verifies this. A new
+package joins the group of its domain, or starts a group crate. CI installs a pinned Node in
 every job that builds Rust. On macOS, release builds also need the Metal
 Toolchain, because gpui precompiles its shaders outside debug builds:
 `xcodebuild -downloadComponent MetalToolchain`.
@@ -62,15 +66,15 @@ with an in-memory host (see the [extension guide](extension-api.md#write-and-tes
 It does not use a global `tsc`. Runtime contracts still require Rust/V8 tests.
 Files under a package's `test/fixtures` are test inputs and are not compiled;
 The bundled language packages keep highlight fixtures there, checked by a Rust test that
-highlights them with the bundled queries (see `src/app/product/tests/language_highlights.rs`).
+highlights them with the bundled queries (see `crates/knot-ext-languages/tests/languages/highlights.rs`).
 Packages keep behavior cases as JSONC topic files in `test/cases/`. A language
 package's `comments.jsonc` lists comment toggling cases, which
-`src/app/product/tests/language_editing.rs` runs through the editor's toggle
+`crates/knot-ext-languages/tests/languages/editing.rs` runs through the editor's toggle
 commands; `indents.jsonc`, `brackets.jsonc`, and `folds.jsonc` list
-indentation, bracket, and fold cases, which `language_indents.rs`,
-`language_brackets.rs`, and `language_folds.rs` beside it run through an
+indentation, bracket, and fold cases, which `indents.rs`,
+`brackets.rs`, and `folds.rs` beside it run through an
 editor without a window. `@knot/vim` keeps one file per topic, each its own
-parallel test in `vim.rs`.
+parallel test in `crates/knot-ext-vim/tests/vim.rs`, which loads the language packages too.
 
 Tests of bundled packages use only `knot::test_support` (feature
 `test-support`), a driver that starts the real product with chosen packages

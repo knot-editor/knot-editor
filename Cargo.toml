@@ -1,5 +1,17 @@
 [workspace]
 members = ["crates/*"]
+default-members = [
+    ".",
+    "crates/knot-app",
+    "crates/knot-bundled",
+    "crates/knot-core",
+    "crates/knot-ext-languages",
+    "crates/knot-ext-vim",
+    "crates/knot-ext-workbench",
+    "crates/knot-handler-macros",
+    "crates/knot-host",
+    "crates/knot-protocol",
+]
 resolver = "3"
 
 [package]
@@ -76,10 +88,6 @@ gpui = { version = "0.2", default-features = false, features = ["wayland"] }
 [lib]
 name = "knot"
 path = "src/lib.rs"
-
-[[bin]]
-name = "knot"
-path = "src/main.rs"
 
 # Startup compiles every bundled highlight query; unoptimized, the query
 # compiler takes seconds, so debug builds and tests optimize the runtime.

@@ -1,0 +1,19 @@
+[package]
+name = "knot-ext-workbench"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+knot-bundled = { path = "../knot-bundled" }
+
+[build-dependencies]
+knot-bundled = { path = "../knot-bundled" }
+
+[dev-dependencies]
+knot = { path = "../..", features = ["test-support"] }
+gpui = { version = "0.2", default-features = false, features = ["font-kit", "test-support", "windows-manifest"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+url = "2"

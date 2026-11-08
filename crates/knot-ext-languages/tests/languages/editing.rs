@@ -1,13 +1,13 @@
 //! Runs the comment toggling cases each bundled language package keeps in
 //! `test/cases/comments.jsonc` through the editor's line and block toggles on
-//! the registered language, in the [case](crate::test_support::cases) format.
+//! the registered language, in the [case](knot::test_support::cases) format.
 use serde::Deserialize;
 
 use super::bundled::{PACKAGES, language_packages};
-use crate::test_support::TestProduct;
-use crate::test_support::cases::{Failures, read_groups, topic_files};
-use crate::test_support::editing::{Action, run};
 use gpui::TestAppContext;
+use knot::test_support::TestProduct;
+use knot::test_support::cases::{Failures, read_groups, topic_files};
+use knot::test_support::editing::{Action, run};
 
 /// Toggling line comments on every line of `before` gives `after`.
 #[derive(Deserialize)]

@@ -2,7 +2,7 @@
 use gpui::TestAppContext;
 
 use super::bundled::PACKAGES;
-use crate::test_support::{TestProduct, wait_until};
+use knot::test_support::{TestProduct, wait_until};
 
 #[gpui::test]
 fn ctrl_g_previews_and_keeps_a_typed_line_in_the_editor(cx: &mut TestAppContext) {

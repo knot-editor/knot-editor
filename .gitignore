@@ -5,3 +5,4 @@
 /scripts/extensions/.test-build
 /.cloudflare
 /.claude/worktrees
+/scripts/extensions/.npm-ci.lock

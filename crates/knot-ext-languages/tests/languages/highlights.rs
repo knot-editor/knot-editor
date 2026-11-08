@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use gpui::TestAppContext;
 
 use super::bundled::{PACKAGES, language_packages};
-use crate::test_support::TestProduct;
+use knot::test_support::TestProduct;
 
 const COMMENTS: &[&str] = &["//", "#", "--", "<!--"];
 

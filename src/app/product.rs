@@ -780,7 +780,7 @@ impl ProductShell {
         self.window = Some(handle);
         cx.global::<ApplicationSessions>()
             .attach(cx.entity_id(), handle);
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         TEST_SESSION_IDS.with_borrow_mut(|ids| {
             ids.insert(handle.window_id().as_u64(), session_id(cx.entity_id()))
         });

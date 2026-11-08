@@ -77,4 +77,4 @@ jobs:
           cargo test --locked --test handler_linking
           cargo test --locked --workspace --doc
       - name: Build product
-        run: cargo build --locked --bin knot
+        run: cargo build --locked -p knot-app

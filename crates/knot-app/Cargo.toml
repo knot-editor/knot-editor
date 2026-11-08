@@ -1,0 +1,24 @@
+[package]
+name = "knot-app"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[lib]
+name = "knot_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "knot"
+path = "src/main.rs"
+
+[dependencies]
+knot = { path = "../.." }
+knot-bundled = { path = "../knot-bundled" }
+knot-ext-languages = { path = "../knot-ext-languages" }
+knot-ext-vim = { path = "../knot-ext-vim" }
+knot-ext-workbench = { path = "../knot-ext-workbench" }
+
+[dev-dependencies]
+knot = { path = "../..", features = ["test-support"] }
+gpui = { version = "0.2", default-features = false, features = ["font-kit", "test-support", "windows-manifest"] }

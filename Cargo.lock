@@ -3175,12 +3175,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "knot-app"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "knot",
+ "knot-bundled",
+ "knot-ext-languages",
+ "knot-ext-vim",
+ "knot-ext-workbench",
+]
+
+[[package]]
 name = "knot-bundled"
 version = "0.1.0"
 
 [[package]]
 name = "knot-core"
 version = "0.1.0"
+
+[[package]]
+name = "knot-ext-languages"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "knot",
+ "knot-bundled",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "knot-ext-vim"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "knot",
+ "knot-bundled",
+ "knot-ext-languages",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "knot-ext-workbench"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "knot",
+ "knot-bundled",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "url",
+]
 
 [[package]]
 name = "knot-handler-macros"

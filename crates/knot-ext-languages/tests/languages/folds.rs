@@ -1,17 +1,17 @@
 //! Runs the fold cases each bundled language package keeps in
 //! `test/cases/folds.jsonc` through an editor on the registered language, in
-//! the [case](crate::test_support::cases) format.
+//! the [case](knot::test_support::cases) format.
 //!
 //! A group lists the `languages` its cases run on. A `regions` case expects
 //! `after` to list the fold regions of `before`, one `first-last` pair of
 //! 0-based lines, both included, per entry, ordered by first line and then
 //! outermost first.
 use super::bundled::{PACKAGES, language_packages};
-use super::language_indents::IndentCase;
-use crate::test_support::TestProduct;
-use crate::test_support::cases::{Failures, read_groups, topic_files, unmark};
-use crate::test_support::editing::{Action, run};
+use super::indents::IndentCase;
 use gpui::TestAppContext;
+use knot::test_support::TestProduct;
+use knot::test_support::cases::{Failures, read_groups, topic_files, unmark};
+use knot::test_support::editing::{Action, run};
 
 #[gpui::test]
 fn bundled_fold_cases_find_regions_on_their_registered_languages(cx: &mut TestAppContext) {

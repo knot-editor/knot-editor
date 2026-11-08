@@ -2,7 +2,7 @@
 use gpui::TestAppContext;
 
 use super::bundled::PACKAGES;
-use crate::test_support::{TestProduct, wait_until};
+use knot::test_support::{TestProduct, wait_until};
 
 #[gpui::test]
 fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut TestAppContext) {

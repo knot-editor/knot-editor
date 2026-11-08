@@ -15,7 +15,7 @@ test:
 
 # Run Knot
 run:
-    cargo run --bin knot
+    cargo run -p knot-app
 
 # Build a local macOS app bundle
 app:

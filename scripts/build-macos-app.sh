@@ -26,9 +26,9 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 if [[ "$profile" == release ]]; then
-    cargo build --release --bin knot
+    cargo build --release -p knot-app
 else
-    cargo build --bin knot
+    cargo build -p knot-app
 fi
 
 target_dir="${CARGO_TARGET_DIR:-$repo_root/target}"

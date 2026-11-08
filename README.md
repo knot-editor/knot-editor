@@ -62,7 +62,7 @@ You need:
 just run
 ```
 
-That is the same as `cargo run --bin knot`. Other useful recipes:
+That is the same as `cargo run -p knot-app`. Other useful recipes:
 
 | Command | What it does |
 | --- | --- |

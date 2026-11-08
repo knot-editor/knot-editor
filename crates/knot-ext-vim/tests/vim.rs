@@ -2,7 +2,7 @@
 //! session.
 //!
 //! The behavior cases live beside the package in `test/cases/<topic>.jsonc`,
-//! in the [case](crate::test_support::cases) format, and each topic runs as its own test
+//! in the [case](knot::test_support::cases) format, and each topic runs as its own test
 //! through a windowless session's key router, native commands, and ordered
 //! key delivery. A case starts from `before`, types `keys` in the key
 //! notation, and expects `after`: the text with the caret or the selection at
@@ -16,13 +16,14 @@
 //! over a fresh document, after Vim starts over with an empty clipboard and
 //! no registers, marks, or last find. Pointer input and the work a key costs a window run
 //! in a product window.
+use std::path::{Path, PathBuf};
+
 use gpui::{TestAppContext, point, px};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::bundled::{PACKAGES, package};
-use crate::test_support::cases::{Failures, Text, package_files, read_groups, topics, unmark};
-use crate::test_support::{TestEditor, TestProduct, wait_until};
+use knot::test_support::cases::{Failures, Text, package_files, read_groups, topics, unmark};
+use knot::test_support::{TestEditor, TestProduct, wait_until};
 
 const ENABLE: &str = r#"import { settings } from "knot";
 await settings.set("vim.enabled", true);
@@ -143,7 +144,7 @@ fn shows_right(session: &TestEditor, text: &str, cx: &mut TestAppContext) -> boo
 
 /// Start the bundled packages with Vim enabled.
 fn start(cx: &mut TestAppContext) -> TestProduct {
-    TestProduct::start_with_post_init(PACKAGES, Some(ENABLE), cx)
+    TestProduct::start_with_post_init(packages(), Some(ENABLE), cx)
 }
 
 /// Open `text` with the caret at `caret` in a session Vim follows.
@@ -392,7 +393,7 @@ fn scrolls_move_through_the_rows_of_one_wrapped_line(cx: &mut TestAppContext) {
 #[gpui::test]
 fn vim_follows_the_setting_and_a_language_scoped_value(cx: &mut TestAppContext) {
     let product = TestProduct::start_with_post_init(
-        PACKAGES,
+        packages(),
         Some(
             r#"import { settings } from "knot";
 await settings.set("vim.enabled", true);
@@ -563,7 +564,7 @@ fn a_case_starts_without_what_an_earlier_one_left(cx: &mut TestAppContext) {
 
 /// Serve `a.txt` holding "one" and `b.txt` holding "two" from
 /// `mem://product/dir/`.
-fn serve_files(product: &TestProduct, cx: &mut TestAppContext) -> crate::test_support::ServedFiles {
+fn serve_files(product: &TestProduct, cx: &mut TestAppContext) -> knot::test_support::ServedFiles {
     product.serve_files(
         "mem://product/dir",
         &[("a.txt", "one"), ("b.txt", "two")],
@@ -750,4 +751,18 @@ fn ctrl_w_counts_repeat_resizing(cx: &mut TestAppContext) {
     session.press("<c-w>1", cx);
     assert!(shows_right(&session, "^W1", cx));
     session.press("<esc>", cx);
+}
+
+/// Vim and the language packages its cases edit in.
+fn packages() -> &'static [knot_bundled::BundledSource] {
+    static PACKAGES: std::sync::OnceLock<Vec<knot_bundled::BundledSource>> =
+        std::sync::OnceLock::new();
+    PACKAGES.get_or_init(|| [knot_ext_vim::PACKAGES, knot_ext_languages::PACKAGES].concat())
+}
+
+/// The directory of the bundled package `@knot/<name>`.
+fn package(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../extensions/@knot")
+        .join(name)
 }

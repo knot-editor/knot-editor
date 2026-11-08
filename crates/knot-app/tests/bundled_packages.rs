@@ -1,12 +1,12 @@
 //! Every bundled package together under product startup.
 use gpui::TestAppContext;
 
-use super::bundled::PACKAGES;
-use crate::test_support::TestProduct;
+use knot::test_support::TestProduct;
+use knot_app::packages;
 
 #[gpui::test]
 fn bundled_packages_load_with_product_discovery(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(packages(), cx);
     let report = product.load_report(cx);
     for name in [
         "@knot/projects",
@@ -59,6 +59,6 @@ fn bundled_packages_load_with_product_discovery(cx: &mut TestAppContext) {
 #[gpui::test]
 #[ignore = "measurement: run in release with --ignored --nocapture"]
 fn measure_bundled_package_memory(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(packages(), cx);
     println!("{}", product.memory_report(cx));
 }

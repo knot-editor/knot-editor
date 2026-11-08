@@ -1,14 +1,18 @@
-//! Compiles the TypeScript extension packages with the lockfile-pinned compiler
-//! in `scripts/extensions`. Bundled packages under `extensions/@knot` are
-//! embedded through a generated table that `src/lib.rs` includes. Each package
-//! is recompiled only when its own inputs or a shared input changed.
+//! The build-script helper that compiles bundled TypeScript packages. A group
+//! crate's `build.rs` names its packages; each is recompiled with the
+//! lockfile-pinned compiler in `scripts/extensions` only when its own inputs or a
+//! shared input changed, and the compiled sources are emitted as a generated
+//! `PACKAGES` table for the crate to include.
 
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn main() {
+/// Compiles the packages `@knot/<name>` for each name in `packages` and writes
+/// `bundled_packages.rs` to `OUT_DIR`. Call it from a build script in a crate
+/// two levels below the workspace root.
+pub fn compile_packages(packages: &[&str]) {
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
         .join("../..")
         .canonicalize()
@@ -22,7 +26,6 @@ fn main() {
         tools.join("tsconfig.base.json"),
         root.join("crates/knot-host/src/js/knot.d.ts"),
     ];
-    println!("cargo::rerun-if-changed={}", bundled.display());
     for input in &shared {
         println!("cargo::rerun-if-changed={}", input.display());
     }
@@ -34,12 +37,10 @@ fn main() {
         fingerprint(input, &mut shared_fingerprint);
     }
 
-    let mut table = String::from("pub const PACKAGES: &[BundledSource] = &[\n");
-    for package in sorted_entries(&bundled)
-        .into_iter()
-        .filter(|path| path.is_dir())
-    {
-        let name = package.file_name().unwrap().to_str().unwrap();
+    let mut table = String::from("pub const PACKAGES: &[knot_bundled::BundledSource] = &[\n");
+    for name in packages {
+        let package = bundled.join(name);
+        println!("cargo::rerun-if-changed={}", package.display());
         let dist = out.join("extensions").join(name).join("dist");
         let stamp = out.join("extensions").join(format!("{name}.fingerprint"));
         let mut current = shared_fingerprint.clone();
@@ -56,7 +57,7 @@ fn main() {
         collect_modules(&dist, &dist, &mut modules);
         writeln!(
             table,
-            "    BundledSource {{\n        manifest: include_str!({:?}),\n        sources: &[",
+            "    knot_bundled::BundledSource {{\n        manifest: include_str!({:?}),\n        sources: &[",
             package.join("knot.jsonc").to_str().unwrap()
         )
         .unwrap();
@@ -76,6 +77,8 @@ fn main() {
 }
 
 /// Installs the pinned toolchain when it is missing or older than the lockfile.
+/// Group crates build in parallel, so installing holds a file lock and checks
+/// again once it has it.
 fn install_tools(tools: &Path) {
     let lockfile = tools.join("package-lock.json");
     let installed = tools.join("node_modules/.package-lock.json");
@@ -84,7 +87,13 @@ fn install_tools(tools: &Path) {
             .and_then(|metadata| metadata.modified())
             .ok()
     };
-    if modified(&installed).is_some_and(|time| Some(time) >= modified(&lockfile)) {
+    let current = || modified(&installed).is_some_and(|time| Some(time) >= modified(&lockfile));
+    if current() {
+        return;
+    }
+    let guard = fs::File::create(tools.join(".npm-ci.lock")).unwrap();
+    guard.lock().unwrap();
+    if current() {
         return;
     }
     let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };

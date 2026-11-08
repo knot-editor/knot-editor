@@ -1,6 +1,6 @@
 //! Runs the indentation cases each bundled language package keeps in
 //! `test/cases/indents.jsonc` through an editor on the registered language,
-//! in the [case](crate::test_support::cases) format.
+//! in the [case](knot::test_support::cases) format.
 //!
 //! A group lists the `languages` its cases run on. A `reindent` case
 //! reindents the marked lines, or every line without a marker, and expects
@@ -11,10 +11,10 @@
 use serde::Deserialize;
 
 use super::bundled::{PACKAGES, language_packages};
-use crate::test_support::TestProduct;
-use crate::test_support::cases::{Failures, read_groups, topic_files, unmark};
-use crate::test_support::editing::{Action, run};
 use gpui::TestAppContext;
+use knot::test_support::TestProduct;
+use knot::test_support::cases::{Failures, read_groups, topic_files, unmark};
+use knot::test_support::editing::{Action, run};
 
 /// A case that expects `after` from `before`.
 #[derive(Deserialize)]

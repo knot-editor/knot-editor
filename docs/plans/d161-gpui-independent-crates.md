@@ -1,6 +1,6 @@
 # D161 — gpui-independent crates and vocabulary
 
-Status: 🚧 checkpoint 3 next. Roadmap item [D161](../roadmap.md).
+Status: 🚧 checkpoint 3 awaiting review. Roadmap item [D161](../roadmap.md).
 Order: **D161 → [D160](d160-gpui-component.md) → [D162](d162-thin-gpui-shell.md).**
 This plan runs before the gpui port; D162 continues it after the port.
 
@@ -139,10 +139,13 @@ against the existing target directory exist, and they are noisy.
 | --- | --- | --- | --- | --- |
 | Baseline (`e158c9e`) | 3.3 s | 4.0 s | 3.5 s | 23 s |
 | 1. Workspace crates | 3.1 s | 3.8 s | 3.2 s | 34 s (includes test relinking) |
+| 3. Group crates | 3 s | 3 s (`cargo test --no-run`); 2 s (`nextest run -p knot-ext-vim --no-run`) | 3 s | 10 s |
 
 Checkpoint 1 changes nothing here as expected. Moving `build.rs` into
 `knot-bundled` alone made a Vim edit 5.4–5.7 s, because the library still
-depends on it; checkpoint 3 removes that edge.
+depends on it; checkpoint 3 removed that edge. After it, a Vim edit rebuilds
+`knot-ext-vim` and `knot-app` only; `scripts/check-bundled-incremental.sh`
+asserts that the library stays fresh.
 
 ### 1. Workspace with knot-core, knot-protocol, and knot-host
 
@@ -245,6 +248,19 @@ same files. `projects.rs` and `project_sessions.rs` import only
   that relied on the ordering of events.
 
 ### 3. Extension group crates and the knot-app binary
+
+✅ Implemented; awaiting review. Notes for later checkpoints:
+
+- `BundledSource` is `Copy`; `knot-app` exposes `packages()`, the three
+  groups joined, for `main` and its test.
+- `knot-ext-vim`'s tests also load `knot-ext-languages`: Vim's indentation,
+  contexts, and `o`/`O` cases depend on language configuration.
+- The group crates' `build.rs` files run in parallel, so the helper's
+  `npm ci` holds a file lock (`scripts/extensions/.npm-ci.lock`).
+- The root package lists every workspace crate in `default-members`, so a plain
+  `cargo test` still covers all of them and `cargo run -p knot-app` runs the app.
+- Moving the tests outside the library exposed a `cfg(test)` gate on the
+  session-ID registry that now follows `test-support`.
 
 - Deliverables: `knot-ext-{languages,vim,workbench}` with their packages and
   tests; `crates/knot-app` owning `main.rs` and the `knot` binary; the root
