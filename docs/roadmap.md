@@ -514,6 +514,7 @@ complete list for that item.
     setting as `theme.*` selects themes, with a deterministic native
     fallback, and migrate the fixed `TreeIcon` set and label-only actions
     onto it.
+  - 🚧 Planned: [D055 plan](plans/d055-icon-packs.md).
 
 - **D022 — Rich completion policy and presentation**
   - Deferred: The prototype validated provider aggregation and replaceable
