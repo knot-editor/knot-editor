@@ -35,6 +35,27 @@ behavior change.
   mixing protocol conversion, validation, and target revalidation with
   entity access).
 
+- The port to `gpui-pre` 0.3.11 (see the
+  [decision](../decisions/platform.md#gpui-snapshots-and-gpui-component))
+  showed where gpui churn lands, which this plan should keep inside the
+  shell:
+  - Async contexts became infallible: `AsyncApp::update` and entity access
+    return values, while `WeakEntity` and window updates still return
+    `Result`. About 40 sites changed.
+  - Focus takes the app: `FocusHandle::focus(window, cx)`,
+    `Window::focus(handle, cx)`, `Window::blur(cx)`.
+  - Keystroke notation became OS-aware (`Keystroke::parse` rejects
+    `secondary` without an OS; `KeyBinding::load` takes the host OS).
+  - `ShapedLine::paint` gained alignment arguments, and scroll-wheel events
+    became `ScrollEvent`.
+  - gpui's test scheduler fails a test when another thread wakes a
+    foreground task unless that is allowed (`allow_thread_wakeups` in
+    `src/app/mod.rs`); 225 tests failed this way. Storage tests run on
+    gpui's `ThreadedDispatcher`, since a Mac platform exists only on the
+    main thread.
+  - Untouched: editor layout, the text system, the key interceptor, and
+    tab drag beyond the window-closed callback.
+
 ## Design
 
 - **The shell keeps the runtime.** No Knot abstraction over spawn, notify,

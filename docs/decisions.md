@@ -15,6 +15,9 @@ touches.
   APIs; macOS first, with Windows and Linux smoke-checked.
 - [Crate boundaries](decisions/platform.md#crate-boundaries): a compiler-enforced
   gpui-free model, bundled packages in group crates injected into the library.
+- [gpui snapshots and gpui-component](decisions/platform.md#gpui-snapshots-and-gpui-component):
+  pinned `gpui-pre` snapshots with gpui-component for presentational leaf
+  widgets only; the keymap matches first and the Knot theme paints them.
 - [Views and extension UI](decisions/platform.md#views-and-extension-ui):
   extensions supply semantic data, never rendering callbacks; movement uses
   display cells, so views run headless.

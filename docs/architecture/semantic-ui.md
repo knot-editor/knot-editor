@@ -76,6 +76,12 @@ startup completes and again when the selection settings or, in `system` mode,
 the system appearance change; registering or removing a theme later takes
 effect at the next selection change rather than repainting mid-session.
 
+gpui-component's widgets take their colors from the same resolution: each
+theme application switches gpui-component to the theme's appearance, which
+loads its built-in colors, then sets each field of the `COLORS` table in
+`src/app/components.rs` from its native key. Fields without a fitting key
+keep the built-in colors.
+
 The bundled `@knot/themes` package registers the themes the native selection
 defaults name and owns Select Theme. It keeps the settings it wrote in its own
 storage and writes them again at start, as any settings UI does, so personal
@@ -281,6 +287,15 @@ rendered rows directly so scrolling stays aligned when a transient loading or
 error row is present. A root invalidation keeps stale rows visible while the
 refetch is pending and reloads group children when the refreshed result arrives,
 so selection and navigation stay usable during a refresh.
+
+A row's actions also form its context menu, a gpui-component popup menu that
+the tree owns. Right-clicking a row selects it and opens the menu there;
+`tree.show-context-menu` (Shift+F10) opens it below the selected row, needs a
+window, and is unavailable outside a focused extension tree or for a row
+without actions. Items emit the same captured-window command event as the
+row's controls. The menu takes focus, receives the keys the keymap leaves
+([keymaps](commands.md#keymaps)), closes when dismissed or when it loses
+focus, and returns focus to the tree on dismissal.
 
 Contributed text frames are a separate content kind. Each instance owns a
 private read-only `BufferModel` rendered by the ordinary `EditorView`; it is not

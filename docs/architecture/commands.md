@@ -67,7 +67,9 @@ printable character other than backtick is unbound in terminals, so the shell
 receives readline and job-control keys, and terminals copy and paste with
 ctrl-shift-c and ctrl-shift-v. Named keys such as tab and pageup, and ctrl-`,
 stay global because shells do not read them, so tab navigation and New
-Terminal work from a terminal.
+Terminal work from a terminal. On every platform Shift+F10, which shows a
+tree's context menu, is unbound in terminals, whose programs read function
+keys.
 Extensions register further presets by name, lifecycle-owned like themes. The
 `keymap.preset` setting selects one when startup completes and whenever the
 setting changes; an unregistered name selects Knot, and installing a preset
@@ -84,12 +86,16 @@ there waits for the rest of its sequence; a completed binding enters command
 dispatch. Any other key goes to the surface with Knot-side focus, whose state
 handles its own keys, such as a tree's arrows, the palette's Enter, or a
 terminal's bytes, and a key that surface ignores becomes typed text, as if
-unbound. A sequence that stops matching runs its longest bound prefix, or
+unbound. While a gpui-component popup that registered its focus handle
+holds focus, such as a tree's context menu, a key the keymap leaves goes on
+to gpui's dispatch instead, where the popup's own bindings run, so global and
+extension bindings still win over it. A sequence that stops matching runs its longest bound prefix, or
 delivers its first key natively, and routes the rest again, and a pending
 sequence flushes the same way after one second or ends when focus moves. Keys
 typed in the palette or a transient interaction skip the router and go to
 them. Menus and palette commands bypass keymaps. gpui holds bindings only for
-menu key equivalents and the config-error window's Quit.
+menu key equivalents, the config-error window's Quit, and the bindings
+gpui-component installs at startup, which every keymap rebuild restores.
 
 ### Key contexts
 

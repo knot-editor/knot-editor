@@ -1,6 +1,6 @@
 # D160 — Current gpui and gpui-component
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 next. Roadmap item [D160](../roadmap.md);
+Status: ✅ complete; this plan is removed in the next commit. Roadmap item [D160](../roadmap.md);
 [D055](d055-icon-packs.md) waits for it.
 Order: D161 (complete; see the [crate boundaries decision](../decisions/platform.md#crate-boundaries)) →
 **D160** → [D162](d162-thin-gpui-shell.md). The paths below follow D161's
@@ -170,6 +170,10 @@ is `components::track_popup` and the popup check in
   names. The menu opens with no item selected.
 
 ### 4. Documentation
+
+✅ Complete: the [decision](../decisions/platform.md#gpui-snapshots-and-gpui-component),
+the architecture, commands, and semantic UI references, the D030, D040, and
+D062 roadmap entries, and the D055 and D162 plans. No toolchain change.
 
 - Deliverables: a decision in `docs/decisions/platform.md` with its index
   line (the gpui-pre route and its risk, selective adoption, native text

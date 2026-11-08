@@ -57,9 +57,9 @@ setting, or replace a single icon.
   tracking upstream releases; `Icon::all()`, `name()`, `svg_bytes()`). If it
   stops tracking upstream, vendor `lucide-static` through the existing npm
   toolchain in `build.rs` instead. `lucide-gpui` is rejected: it depends on
-  `gpui-kit`, Longbridge's component bundle, which builds on a separate
-  `gpui-pre` fork rather than Knot's `gpui`, and its own value is only an
-  asset source over the same SVGs.
+  `gpui-kit`, Longbridge's umbrella bundle, which Knot does not use (it
+  depends on gpui-component alone), and its own value is only an asset
+  source over the same SVGs.
 - **File icons** are resolved apart from the icons themselves. For a file,
   the resolver tries, in order, the names that a registered association gives
   for the exact file name and for the extension, then `file.<languageId>`
@@ -104,6 +104,9 @@ setting, or replace a single icon.
   Grow it as packages ask, rather than reproducing every Lucide name.
 - Whether folder name associations should also match path suffixes such as
   `.github/workflows`. Plain names until a pack needs more.
+- Whether icons paint through gpui-component's `Icon` element or Knot's own
+  `svg()` element. Decide in checkpoint 1, after re-reading the painting and
+  asset APIs of the current gpui.
 
 ## Checkpoints
 

@@ -760,7 +760,7 @@ Kakoune mode could use it too. The
 ## Terminals and generated surfaces
 
 - **D040 — Physical application-keypad input**
-  - Deferred: gpui 0.2.2 merges numeric-keypad keys with ordinary key identities.
+  - Deferred: gpui merges numeric-keypad keys with ordinary key identities.
     D026 retains numeric input but cannot emit distinct application-keypad
     sequences. The user chose deferral over vendoring gpui for a platform patch.
   - Reconsider: gpui exposes keypad identity, or a concrete TUI workflow requires
@@ -909,8 +909,8 @@ Kakoune mode could use it too. The
     keeps subscriber data out of the repository.
 
 - **D062 — Positioning existing windows**
-  - Deferred: gpui 0.2.2 sets a window's bounds only at creation and can
-    afterwards only resize it. Session restoration and project switching always
+  - Deferred: gpui sets a window's bounds only at creation and can
+    afterwards only resize it, including on its separate platform crates. Session restoration and project switching always
     create their windows, so they apply saved geometry at creation and no
     product path needs to move an existing window.
   - Reconsider: A workflow needs to move or re-frame an open window, such as
@@ -928,9 +928,10 @@ Kakoune mode could use it too. The
     notarization, and an install/update path.
 
 - **D030 — Accessibility bridge**
-  - Deferred: gpui lacks the public platform bridge required by the semantic
-    state already retained.
-  - Note: the gpui snapshots D160 moves to include AccessKit; re-assess when
-    it lands.
-  - Reconsider: The framework exposes a viable bridge or Knot selects an
-    implementation strategy.
+  - Deferred: gpui has a public AccessKit bridge (`Element::a11y_role`,
+    `write_a11y_info`), and gpui-component's widgets publish roles through
+    it, but the editor, trees, terminal, palette, and pickers publish
+    nothing, though their semantic state is already retained.
+  - Reconsider: Accessibility becomes a product priority, or a user needs a
+    screen reader; then give each native surface its roles and the editor
+    its text and caret, starting from the semantic tree state.

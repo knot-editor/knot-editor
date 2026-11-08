@@ -62,6 +62,46 @@ loop; an editor-file rebuild is dominated by the gpui shell and barely moved.
 References: [architecture](../architecture.md#system-map) and
 [development](../development.md).
 
+## gpui snapshots and gpui-component
+
+Knot depends on `gpui-pre` and `gpui-pre-platform`, weekly crates.io
+snapshots of Zed's gpui, together with gpui-component, all at exact versions
+and upgraded together when gpui-component releases. Zed's last crates.io
+release, 0.2.2, was a year behind its repository, and gpui-component pins an
+exact `gpui-pre`, so adopting it required the port. The snapshots have one
+publisher; if they stop, pinning a Zed git commit carries the same code, but
+gpui-component would then need a fork. On Apple M1 Pro the port took the
+full suite from 10.8 s to 10.0 s and the release binary from 91.7 MB to
+93.3 MB (+1.7%). Only the `knot-app` binary links the platform crate: gpui's
+macOS constructor scans the executable's directory for a bundle, and with
+`target/debug/deps` full of stale files every linked test binary paid for it
+at load, taking the suite to 105 s.
+
+Knot adopts gpui-component only for leaf widgets whose state is purely
+presentational, such as tooltips and popup menus, each when a feature needs
+it. Its dock, code editor, `Input`, and theme registry are rejected: Knot's
+workbench, editor, terminal, pickers, and key routing are product state that
+runs without a window, and its single-line `TextInput` stays native because
+windowless sessions and package tests drive it, which `Input` cannot provide.
+A component that takes focus is adopted only for a surface with no windowless
+path.
+
+Knot's keymap still matches every key first; a focused component popup gets
+only the keys the keymap leaves. Letting gpui dispatch first would let a
+component's bindings shadow global and extension bindings, and the keymap is
+the one place users and extensions change keys.
+
+gpui-component is painted from the Knot theme through one table from its
+color fields to native color keys, applied with every theme application.
+Extensions see no new API and themes set no component colors; fields without
+a fitting key keep gpui-component's built-in colors for the appearance, since
+adding a native key per field would grow the native table with keys no Knot
+surface paints with.
+
+References: [architecture](../architecture.md#system-map),
+[commands](../architecture/commands.md#keymaps), and
+[semantic UI](../architecture/semantic-ui.md#themes-and-color-keys).
+
 ## Views and extension UI
 
 Share text and contributions through buffer models; keep interaction per view.
