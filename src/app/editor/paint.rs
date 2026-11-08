@@ -21,7 +21,7 @@ impl Render for EditorView {
         }
         let completion = editor.completion_surface.as_ref().map(|surface| {
             let anchor = self.completion_anchor(editor, window, cx);
-            surface.render(anchor, theme(cx))
+            crate::app::completion::render_completion(surface, anchor, theme(cx))
         });
         div()
             .id(("editor", self.element_id))

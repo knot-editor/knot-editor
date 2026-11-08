@@ -6,13 +6,14 @@
 //! - Text: [`buffer`], [`history`], [`indentation`], [`editing`], and
 //!   [`syntax`].
 //! - Resources: [`resource`], [`filesystem`], [`open`], and [`workspace`].
-//! - Input: [`keys`] and [`commands`].
+//! - Input: [`keys`], [`commands`], and [`completion`].
 //! - Presentation values: [`style`] and [`theme`].
 //! - Packages: [`extensions`].
 //! - Layout: [`workbench`].
 
 pub mod buffer;
 pub mod commands;
+pub mod completion;
 pub mod editing;
 pub mod extensions;
 pub mod filesystem;
