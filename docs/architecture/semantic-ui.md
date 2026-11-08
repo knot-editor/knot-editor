@@ -291,8 +291,9 @@ A frame's editor has no gutter unless its registration asks for one.
 Wrapping the editor surface is provisional; the [roadmap](../roadmap.md) tracks a
 dedicated read-only presentation (D054).
 
-Semantic tree state retains accessibility information, but gpui 0.2.2 lacks
-the required public platform bridge.
+Semantic tree state retains accessibility information. gpui exposes an
+AccessKit bridge, but Knot's surfaces do not publish to it yet (D030 in the
+[roadmap](../roadmap.md)).
 
 Provider disposal follows the shared
 [host lifecycle](extension-host.md#disposal-cancellation-and-teardown). Native

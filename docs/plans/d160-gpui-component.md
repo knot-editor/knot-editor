@@ -1,6 +1,6 @@
 # D160 — Current gpui and gpui-component
 
-Status: 🚧 approved, not started. Roadmap item [D160](../roadmap.md);
+Status: 🚧 checkpoint 1 at its review gate. Roadmap item [D160](../roadmap.md);
 [D055](d055-icon-packs.md) waits for it.
 Order: D161 (complete; see the [crate boundaries decision](../decisions/platform.md#crate-boundaries)) →
 **D160** → [D162](d162-thin-gpui-shell.md). The paths below follow D161's
@@ -76,6 +76,61 @@ docks, editor, terminal, single-line text input, and key routing.
 
 ### 1. Port to gpui-pre
 
+🚧 Implemented; the CI jobs and the manual smoke pass remain.
+
+- ✅ Knot builds on `gpui-pre` and `gpui-pre-platform` 0.3.11, declared once
+  under `[workspace.dependencies]` as `gpui` and `gpui_platform`. On macOS
+  `just test` passes 1274 tests, clippy is clean, and the extension checks
+  pass. The Linux and Windows builds are unchecked until CI runs.
+- **Port report.**
+  - Build errors, 59 in the library and 23 more in tests, by category:
+    - Async contexts are infallible. `AsyncApp::update` and entity access
+      return the value, not a `Result`; about 25 sites dropped dead `Err`
+      branches and 15 a `let _ =`. `WeakEntity` and window updates still
+      return `Result`.
+    - Focus and blur take the app: `FocusHandle::focus(window, cx)`,
+      `Window::focus(handle, cx)`, `Window::blur(cx)`.
+    - Keystroke notation is OS-aware. `Keystroke::parse` rejects `secondary`
+      without an OS, `unparse` takes one, and `KeyBinding::new` takes a
+      `&'static str` and panics on `secondary`, so menu shortcuts and the
+      config-error Quit bind through `KeyBinding::load` with the host OS.
+    - `ShapedLine::paint` takes an alignment and an alignment width (5 call
+      sites); `ScrollWheelEvent` and `on_scroll_wheel` became `ScrollEvent`
+      and `on_scroll`.
+    - Small ones: `on_window_closed` passes the window id, `Menu` has
+      `disabled`, `flex_shrink` takes a value, `ArenaClearNeeded::clear`
+      takes the app, and `track_scroll` borrows its handle.
+    - The application comes from `gpui_platform::application()`, which
+      `knot-app` calls and passes to `knot::run`. Linking the platform crate
+      into the library made every test process pay ~100 ms or more at load.
+      gpui's macOS constructor initializes `NSView`, and that scans the
+      executable's directory, `target/debug/deps`, for a bundle. With 69k
+      stale files the suite took 105 s; with only the binary linking the
+      platform, test binaries never load it.
+  - The change that mattered: gpui's new test scheduler fails a test when
+    another thread wakes a foreground task, unless parking is allowed. 225
+    tests failed this way, because extension workers, PTY readers, the local
+    filesystem thread, and storage threads all wake foreground tasks.
+    `allow_thread_wakeups` in `src/app/mod.rs` allows it where the extension
+    pool, terminal sessions, and the product globals start. Storage tests
+    now run on gpui's `ThreadedDispatcher`, because a Mac platform can only
+    be created on the main thread. Tests use gpui's own test platform and
+    need no headless application from `gpui_platform`.
+  - Untouched: editor layout, painting other than `paint`'s new arguments,
+    the text system, the key interceptor, and tab drag beyond the
+    window-closed callback.
+  - Workarounds rechecked:
+    - D030: gpui now has a public AccessKit bridge (`Element::a11y_role`,
+      `write_a11y_info`), so the deferral's reason no longer holds.
+      [Semantic UI](../architecture/semantic-ui.md) now says so; the roadmap
+      entry is revised in checkpoint 4.
+    - D062: unchanged. gpui still only resizes an existing window.
+    - Physical keypad keys: still no key identity for them.
+    - The macOS draw before activation in tab relocation stays until the
+      smoke pass shows it is unnecessary.
+  - Cost, measured on Apple M1 Pro macOS against the pre-port tree with a
+    fresh `target`: the full suite takes 10.0 s against 10.8 s, and the
+    release binary is 93.3 MB against 91.7 MB (+1.7%).
 - Deliverables: Knot builds and runs on `gpui-pre` 0.3.11 with the same
   behavior on macOS, Windows, and Linux. This plan records a short port
   report under this checkpoint: build errors by category, the API changes
