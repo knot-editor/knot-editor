@@ -10,6 +10,7 @@ default-members = [
     "crates/knot-ext-workbench",
     "crates/knot-handler-macros",
     "crates/knot-host",
+    "crates/knot-model",
     "crates/knot-protocol",
 ]
 resolver = "3"
@@ -26,6 +27,7 @@ knot-bundled = { path = "crates/knot-bundled" }
 knot-core = { path = "crates/knot-core" }
 knot-handler-macros = { path = "crates/knot-handler-macros" }
 knot-host = { path = "crates/knot-host" }
+knot-model = { path = "crates/knot-model" }
 knot-protocol = { path = "crates/knot-protocol" }
 alacritty_terminal = { version = "0.26", default-features = false }
 anyhow = "1"
@@ -45,23 +47,6 @@ url = "2"
 uuid = { version = "1", features = ["v4"] }
 v8 = "152.2"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
-tree-sitter = "0.27"
-tree-sitter-html = "0.23.2"
-tree-sitter-css = "0.25.0"
-tree-sitter-javascript = "0.25.0"
-tree-sitter-typescript = "0.23.2"
-tree-sitter-rust = "0.24.2"
-tree-sitter-c = "0.24.2"
-tree-sitter-cpp = "0.23.4"
-tree-sitter-go = "0.25.0"
-tree-sitter-java = "0.23.5"
-tree-sitter-python = "0.25.0"
-tree-sitter-bash = "0.25.1"
-tree-sitter-json = "0.24.8"
-tree-sitter-toml-ng = "0.7.0"
-tree-sitter-yaml = "0.7.2"
-tree-sitter-md = "0.5.4"
-tree-sitter-tsquery = "0.8.0"
 nucleo-matcher = "0.3.1"
 pollster = { version = "1", optional = true }
 
@@ -72,12 +57,14 @@ test-support = [
     "gpui/test-support",
     "knot-core/test-support",
     "knot-host/test-support",
+    "knot-model/test-support",
     "knot-protocol/test-support",
 ]
 
 [dev-dependencies]
 knot-core = { path = "crates/knot-core", features = ["test-support"] }
 knot-host = { path = "crates/knot-host", features = ["test-support"] }
+knot-model = { path = "crates/knot-model", features = ["test-support"] }
 knot-protocol = { path = "crates/knot-protocol", features = ["test-support"] }
 pollster = "1"
 gpui = { version = "0.2", default-features = false, features = ["font-kit", "test-support", "windows-manifest"] }

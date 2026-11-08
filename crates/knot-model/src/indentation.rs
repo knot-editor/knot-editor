@@ -6,20 +6,20 @@ use std::ops::Range;
 
 /// How a document's text indents its lines.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum IndentStyle {
+pub enum IndentStyle {
     Tabs,
     Spaces,
 }
 
 /// How many lines from the start of a document detection reads.
-pub(crate) const DETECTION_LINES: usize = 10_000;
+pub const DETECTION_LINES: usize = 10_000;
 
 /// The style that indents at least twice as many of `lines` as the other.
 ///
 /// A line counts when its leading whitespace starts with a tab, or with two
 /// or more spaces; one space is alignment rather than indentation. Blank lines
 /// and block-comment continuations such as ` * text` do not count.
-pub(crate) fn detect<'a>(lines: impl IntoIterator<Item = &'a str>) -> Option<IndentStyle> {
+pub fn detect<'a>(lines: impl IntoIterator<Item = &'a str>) -> Option<IndentStyle> {
     let (mut tabs, mut spaces) = (0usize, 0usize);
     for line in lines {
         let content = line.trim_start_matches([' ', '\t']);
@@ -42,22 +42,22 @@ pub(crate) fn detect<'a>(lines: impl IntoIterator<Item = &'a str>) -> Option<Ind
 }
 
 /// The leading spaces and tabs of `line`.
-pub(crate) fn leading_whitespace(line: &str) -> &str {
+pub fn leading_whitespace(line: &str) -> &str {
     &line[..line.len() - line.trim_start_matches([' ', '\t']).len()]
 }
 
 /// One level of indentation: a tab, or `size` columns of spaces.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct IndentUnit {
-    pub(crate) tabs: bool,
+pub struct IndentUnit {
+    pub tabs: bool,
     /// Columns per tab stop.
-    pub(crate) size: usize,
+    pub size: usize,
 }
 
 impl IndentUnit {
     /// The columns `text` occupies from the start of a line, with tabs
     /// advancing to the next tab stop.
-    pub(crate) fn width(&self, text: &str) -> usize {
+    pub fn width(&self, text: &str) -> usize {
         text.chars().fold(0, |width, character| {
             if character == '\t' {
                 width + self.size - width % self.size
@@ -69,7 +69,7 @@ impl IndentUnit {
 
     /// What Tab inserts after `before`, the line's text before the caret: a
     /// tab, or spaces to the next tab stop.
-    pub(crate) fn insertion(&self, before: &str) -> String {
+    pub fn insertion(&self, before: &str) -> String {
         if self.tabs {
             "\t".into()
         } else {
@@ -79,7 +79,7 @@ impl IndentUnit {
 
     /// Leading whitespace spanning `columns`: as many tabs as fit and then
     /// spaces, or only spaces.
-    pub(crate) fn whitespace(&self, columns: usize) -> String {
+    pub fn whitespace(&self, columns: usize) -> String {
         if self.tabs {
             "\t".repeat(columns / self.size) + &" ".repeat(columns % self.size)
         } else {
@@ -89,7 +89,7 @@ impl IndentUnit {
 
     /// The column and text that indent `line` by one level. Spaces go after
     /// the existing indentation and round it up to the next tab stop.
-    pub(crate) fn indent(&self, line: &str) -> (usize, String) {
+    pub fn indent(&self, line: &str) -> (usize, String) {
         if self.tabs {
             return (0, "\t".into());
         }
@@ -100,7 +100,7 @@ impl IndentUnit {
     /// The range that outdents `line` by one level: a leading tab, or leading
     /// spaces back to the previous tab stop. Empty when `line` is not
     /// indented. Either character outdents in either style.
-    pub(crate) fn outdent(&self, line: &str) -> Range<usize> {
+    pub fn outdent(&self, line: &str) -> Range<usize> {
         if line.starts_with('\t') {
             return 0..1;
         }
@@ -109,7 +109,7 @@ impl IndentUnit {
 
     /// How many bytes Backspace deletes after `before`, the line's text before
     /// the caret, when that text is only spaces: back to the previous tab stop.
-    pub(crate) fn backspace(&self, before: &str) -> Option<usize> {
+    pub fn backspace(&self, before: &str) -> Option<usize> {
         (!before.is_empty() && before.bytes().all(|byte| byte == b' '))
             .then(|| self.spaces_to_previous_stop(before.len()))
     }

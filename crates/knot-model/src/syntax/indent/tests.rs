@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::*;
-use crate::app::languages::editing::{BracketPair, EditingDefinition};
-use crate::app::syntax::{LanguageResolver, SyntaxLanguage, SyntaxState};
+use crate::editing::{BracketPair, EditingDefinition};
+use crate::syntax::{LanguageResolver, SyntaxLanguage, SyntaxState};
 use knot_core::buffer::TextBuffer;
 
 const BLOCKS: &str = r#"

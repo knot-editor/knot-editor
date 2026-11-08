@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::*;
-use crate::app::languages::editing::{BracketPair as RegisteredPair, EditingDefinition};
-use crate::app::syntax::{LanguageResolver, SyntaxLanguage};
+use crate::editing::{BracketPair as RegisteredPair, EditingDefinition};
+use crate::syntax::{LanguageResolver, SyntaxLanguage};
 use knot_core::buffer::TextBuffer;
 
 const MARKDOWN_INJECTIONS: &str = r#"

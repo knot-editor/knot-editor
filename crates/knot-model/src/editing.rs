@@ -12,52 +12,52 @@ use serde::{Deserialize, Serialize};
 /// unchanged.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct EditingDefinition {
+pub struct EditingDefinition {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) comments: Option<CommentTokens>,
+    pub comments: Option<CommentTokens>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) brackets: Option<Vec<BracketPair>>,
+    pub brackets: Option<Vec<BracketPair>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) auto_close_before: Option<String>,
+    pub auto_close_before: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CommentTokens {
+pub struct CommentTokens {
     /// Every line comment token; the first is the one commenting inserts.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(crate) line: Vec<String>,
+    pub line: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) block: Option<(String, String)>,
+    pub block: Option<(String, String)>,
 }
 
 /// A bracket pair as registered; compiling resolves its defaults.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct BracketPair {
-    pub(crate) open: String,
-    pub(crate) close: String,
+pub struct BracketPair {
+    pub open: String,
+    pub close: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) auto_close: Option<bool>,
+    pub auto_close: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) newline: Option<bool>,
+    pub newline: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) not_in: Option<Vec<SyntaxFamily>>,
+    pub not_in: Option<Vec<SyntaxFamily>>,
 }
 
 /// A bracket pair with its defaults resolved. A pair whose open equals its
 /// close, such as quotes, never takes part in matching.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Bracket {
-    pub(crate) open: String,
-    pub(crate) close: String,
+pub struct Bracket {
+    pub open: String,
+    pub close: String,
     /// Whether typing open inserts close; true unless registered otherwise.
-    pub(crate) auto_close: bool,
+    pub auto_close: bool,
     /// Whether Enter between the pair opens an indented middle line; by
     /// default, unless open equals close.
-    pub(crate) newline: bool,
+    pub newline: bool,
     /// Syntax at the cursor where auto-closing is suppressed.
-    pub(crate) not_in: Vec<SyntaxFamily>,
+    pub not_in: Vec<SyntaxFamily>,
 }
 
 impl BracketPair {
@@ -74,24 +74,23 @@ impl BracketPair {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum SyntaxFamily {
+pub enum SyntaxFamily {
     String,
     Comment,
 }
 
 /// A language's editing data with its defaults resolved, as native editing
 /// code reads it.
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, Default)]
-pub(crate) struct EditingConfiguration {
-    pub(crate) line_comments: Vec<String>,
-    pub(crate) block_comment: Option<(String, String)>,
-    pub(crate) brackets: Vec<Bracket>,
-    pub(crate) auto_close_before: String,
+pub struct EditingConfiguration {
+    pub line_comments: Vec<String>,
+    pub block_comment: Option<(String, String)>,
+    pub brackets: Vec<Bracket>,
+    pub auto_close_before: String,
 }
 
 impl EditingDefinition {
-    pub(crate) fn resolve(&self) -> EditingConfiguration {
+    pub fn resolve(&self) -> EditingConfiguration {
         let comments = self.comments.clone().unwrap_or_default();
         EditingConfiguration {
             line_comments: comments.line,
@@ -110,10 +109,10 @@ impl EditingDefinition {
 /// Replace the byte `range` of line `line` with `text`. A line's edits are
 /// ordered and never overlap.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct CommentEdit {
-    pub(crate) line: usize,
-    pub(crate) range: Range<usize>,
-    pub(crate) text: String,
+pub struct CommentEdit {
+    pub line: usize,
+    pub range: Range<usize>,
+    pub text: String,
 }
 
 impl EditingConfiguration {
@@ -126,7 +125,7 @@ impl EditingConfiguration {
     /// every non-blank line gets the first token and a space at the smallest
     /// indentation among them. A language with only a block comment wraps
     /// each line instead, and unwraps when every line is wrapped.
-    pub(crate) fn toggle_comments(&self, lines: &[&str]) -> Vec<CommentEdit> {
+    pub fn toggle_comments(&self, lines: &[&str]) -> Vec<CommentEdit> {
         let filled: Vec<(usize, &str)> = lines
             .iter()
             .enumerate()
@@ -217,7 +216,7 @@ impl EditingConfiguration {
     /// the delimiters, else wrap it. Whitespace alone becomes an empty
     /// comment with two spaces inside. None when the language has no block
     /// comment.
-    pub(crate) fn toggle_block_comment(&self, text: &str) -> Vec<(Range<usize>, String)> {
+    pub fn toggle_block_comment(&self, text: &str) -> Vec<(Range<usize>, String)> {
         let Some((open, close)) = &self.block_comment else {
             return Vec::new();
         };
@@ -244,7 +243,7 @@ impl EditingConfiguration {
     /// is whitespace, the end of the line, or in `autoCloseBefore`, `family`
     /// is not in its `notIn`, and, for a pair whose opener is its closer,
     /// no word character precedes the opener. The longest opener wins.
-    pub(crate) fn auto_close(
+    pub fn auto_close(
         &self,
         before: &str,
         typed: &str,
@@ -278,7 +277,7 @@ impl EditingConfiguration {
 
     /// The pair whose opener is `typed`, which wraps a selection when typed
     /// over it, whether or not the pair auto-closes.
-    pub(crate) fn surround(&self, typed: &str) -> Option<&Bracket> {
+    pub fn surround(&self, typed: &str) -> Option<&Bracket> {
         self.brackets.iter().find(|bracket| bracket.open == typed)
     }
 }

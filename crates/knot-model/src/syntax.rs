@@ -28,10 +28,10 @@
 //! before or after every pattern of another priority. An injected layer
 //! paints over the layer that hosts it.
 
-pub(crate) mod brackets;
-pub(crate) mod fold;
-pub(crate) mod grammars;
-pub(crate) mod indent;
+pub mod brackets;
+pub mod fold;
+pub mod grammars;
+pub mod indent;
 
 use std::{
     ops::{ControlFlow, Range},
@@ -49,12 +49,12 @@ use tree_sitter::{
 
 use knot_core::buffer::{BufferEdit, TextPoint, TextSnapshot};
 
-use super::languages::editing::{EditingConfiguration, SyntaxFamily};
-use super::theme::Highlight;
+use crate::editing::{EditingConfiguration, SyntaxFamily};
+use crate::theme::Highlight;
 
 /// How long a commit may spend reparsing on the foreground before the parse
 /// continues in the background.
-pub(crate) const FOREGROUND_BUDGET: Duration = Duration::from_millis(1);
+pub const FOREGROUND_BUDGET: Duration = Duration::from_millis(1);
 
 /// Priority of a pattern without a `priority` property, as in Neovim.
 const DEFAULT_PRIORITY: u32 = 100;
@@ -75,10 +75,10 @@ fn next_generation() -> u64 {
 
 /// Resolves a language name as an injection query gives it. Returning the
 /// same `Arc` for a name lets an injection found again reuse its tree.
-pub(crate) type LanguageResolver = Arc<dyn Fn(&str) -> Option<Arc<SyntaxLanguage>> + Send + Sync>;
+pub type LanguageResolver = Arc<dyn Fn(&str) -> Option<Arc<SyntaxLanguage>> + Send + Sync>;
 
 /// A grammar and the queries that highlight and indent it.
-pub(crate) struct SyntaxLanguage {
+pub struct SyntaxLanguage {
     grammar: Language,
     highlights: Query,
     /// The highlight each capture resolves to, indexed by capture index.
@@ -112,7 +112,7 @@ struct InjectionPattern {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SyntaxQuery {
+pub enum SyntaxQuery {
     Highlights,
     Injections,
     Indents,
@@ -120,7 +120,7 @@ pub(crate) enum SyntaxQuery {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum SyntaxLanguageError {
+pub enum SyntaxLanguageError {
     UnknownGrammar,
     /// `query` failed to compile at 0-indexed `row` and `column`.
     InvalidQuery {
@@ -134,7 +134,7 @@ pub(crate) enum SyntaxLanguageError {
 impl SyntaxLanguage {
     /// Compile `highlights` and `injections` against the grammar named
     /// `grammar`.
-    pub(crate) fn new(
+    pub fn new(
         grammar: &str,
         highlights: &str,
         injections: &str,
@@ -207,7 +207,7 @@ impl SyntaxLanguage {
 
     /// This language with an indent query, compiled from `source`; an empty
     /// query leaves it without one.
-    pub(crate) fn with_indents(self, source: &str) -> Result<Self, SyntaxLanguageError> {
+    pub fn with_indents(self, source: &str) -> Result<Self, SyntaxLanguageError> {
         Ok(Self {
             indents: indent::IndentQuery::new(&self.grammar, source)?,
             ..self
@@ -216,7 +216,7 @@ impl SyntaxLanguage {
 
     /// This language with a folds query, compiled from `source`; an empty
     /// query leaves it without one.
-    pub(crate) fn with_folds(self, source: &str) -> Result<Self, SyntaxLanguageError> {
+    pub fn with_folds(self, source: &str) -> Result<Self, SyntaxLanguageError> {
         Ok(Self {
             folds: fold::FoldQuery::new(&self.grammar, source)?,
             ..self
@@ -224,26 +224,26 @@ impl SyntaxLanguage {
     }
 
     /// This language with a registration's editing data.
-    pub(crate) fn with_editing(self, editing: EditingConfiguration) -> Self {
+    pub fn with_editing(self, editing: EditingConfiguration) -> Self {
         Self {
             editing: Arc::new(editing),
             ..self
         }
     }
 
-    pub(crate) fn editing(&self) -> &Arc<EditingConfiguration> {
+    pub fn editing(&self) -> &Arc<EditingConfiguration> {
         &self.editing
     }
 
     /// Whether the injection query can hand regions to other languages, so
     /// its highlights depend on which languages are registered.
-    pub(crate) fn can_inject(&self) -> bool {
+    pub fn can_inject(&self) -> bool {
         self.injections.pattern_count() > 0
     }
 }
 
 /// One buffer's parse layers and the parse that keeps them current.
-pub(crate) struct SyntaxState {
+pub struct SyntaxState {
     /// The buffer's own language, edited forward to the current text.
     root: Layer,
     resolver: LanguageResolver,
@@ -313,7 +313,7 @@ struct RunningParse {
 
 /// A parse to run off the foreground. `Send`, and independent of the state
 /// that started it except for cancellation when that state is dropped.
-pub(crate) struct BackgroundParse {
+pub struct BackgroundParse {
     id: u64,
     root: Layer,
     edited: Vec<Range<usize>>,
@@ -323,7 +323,7 @@ pub(crate) struct BackgroundParse {
 }
 
 /// The result of a `BackgroundParse`.
-pub(crate) struct ParsedTree {
+pub struct ParsedTree {
     id: u64,
     root: Layer,
 }
@@ -331,7 +331,7 @@ pub(crate) struct ParsedTree {
 impl SyntaxState {
     /// A state with no tree yet; the first parse builds one. Injections name
     /// their languages through `resolver`.
-    pub(crate) fn new(language: Arc<SyntaxLanguage>, resolver: LanguageResolver) -> Self {
+    pub fn new(language: Arc<SyntaxLanguage>, resolver: LanguageResolver) -> Self {
         Self {
             root: Layer::new(language, 0..usize::MAX),
             resolver,
@@ -343,18 +343,18 @@ impl SyntaxState {
         }
     }
 
-    pub(crate) fn generation(&self) -> u64 {
+    pub fn generation(&self) -> u64 {
         self.generation
     }
 
     /// The buffer's own language.
-    pub(crate) fn language(&self) -> &Arc<SyntaxLanguage> {
+    pub fn language(&self) -> &Arc<SyntaxLanguage> {
         &self.root.language
     }
 
     /// The language of the deepest layer that parses the text at `offset`,
     /// such as a code fence's language inside Markdown.
-    pub(crate) fn language_at(&self, offset: usize) -> &Arc<SyntaxLanguage> {
+    pub fn language_at(&self, offset: usize) -> &Arc<SyntaxLanguage> {
         &self.layer_at(offset).language
     }
 
@@ -374,7 +374,7 @@ impl SyntaxState {
     /// How `row` of `text` indents, from the indent query of the deepest
     /// layer at its first non-blank byte, with `size` columns per level and
     /// per tab stop. `None` when that layer's language has no indent query.
-    pub(crate) fn line_indent(
+    pub fn line_indent(
         &self,
         text: &TextSnapshot,
         lines: &dyn indent::LineSource,
@@ -387,7 +387,7 @@ impl SyntaxState {
     /// Whether typing up to byte `caret` of `row` completed a closing or
     /// branching node at the start of the row's content, by the indent query
     /// of the deepest layer there.
-    pub(crate) fn closes_line(
+    pub fn closes_line(
         &self,
         text: &TextSnapshot,
         lines: &dyn indent::LineSource,
@@ -408,7 +408,7 @@ impl SyntaxState {
     /// though the rows before it already were; a row whose layer has no
     /// indent query, or that holds only whitespace among several rows, is
     /// left as it is.
-    pub(crate) fn reindent(
+    pub fn reindent(
         &self,
         text: &TextSnapshot,
         lines: &dyn indent::LineSource,
@@ -444,7 +444,7 @@ impl SyntaxState {
     /// only offsets strictly inside it; a comment also contains its end,
     /// unless it ends with the language's block comment closer, so a caret at
     /// the end of a line comment is inside it.
-    pub(crate) fn family_at(&self, text: &TextSnapshot, offset: usize) -> Option<SyntaxFamily> {
+    pub fn family_at(&self, text: &TextSnapshot, offset: usize) -> Option<SyntaxFamily> {
         if offset == 0 || offset > text.len() {
             return None;
         }
@@ -489,19 +489,19 @@ impl SyntaxState {
 
     /// Whether the tree is a parse of the current text rather than an edited
     /// parse of older text.
-    pub(crate) fn is_current(&self) -> bool {
+    pub fn is_current(&self) -> bool {
         self.current
     }
 
     /// Whether the tree lags the text and no background parse is running,
     /// so a parse would make progress.
-    pub(crate) fn needs_parse(&self) -> bool {
+    pub fn needs_parse(&self) -> bool {
         !self.current && self.background.is_none()
     }
 
     /// Apply committed primitive edits, in log order, to the layers and to
     /// the running background parse's pending edits.
-    pub(crate) fn edit(&mut self, edits: &[BufferEdit]) {
+    pub fn edit(&mut self, edits: &[BufferEdit]) {
         for edit in edits {
             let edit = input_edit(edit);
             self.root.edit(&edit);
@@ -519,7 +519,7 @@ impl SyntaxState {
     /// Reparse `text`, the current text, within `budget`. Returns whether the
     /// layers are now current; a running background parse defers reparsing
     /// to its rebase.
-    pub(crate) fn parse_in_foreground(&mut self, text: &TextSnapshot, budget: Duration) -> bool {
+    pub fn parse_in_foreground(&mut self, text: &TextSnapshot, budget: Duration) -> bool {
         if self.current {
             return true;
         }
@@ -544,7 +544,7 @@ impl SyntaxState {
     }
 
     /// Start parsing `text`, the current text, off the foreground.
-    pub(crate) fn start_background_parse(&mut self, text: TextSnapshot) -> BackgroundParse {
+    pub fn start_background_parse(&mut self, text: TextSnapshot) -> BackgroundParse {
         debug_assert!(self.background.is_none(), "one background parse at a time");
         let id = NEXT_PARSE.fetch_add(1, Ordering::Relaxed);
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -568,7 +568,7 @@ impl SyntaxState {
     /// Accept a background result, rebased over the edits committed since its
     /// snapshot. Returns false, changing nothing, for a result this state did
     /// not start.
-    pub(crate) fn finish_background_parse(&mut self, parsed: ParsedTree) -> bool {
+    pub fn finish_background_parse(&mut self, parsed: ParsedTree) -> bool {
         let Some(running) = self.background.take_if(|running| running.id == parsed.id) else {
             return false;
         };
@@ -588,7 +588,7 @@ impl SyntaxState {
 
     /// Sorted, non-overlapping highlights of `text`, the current text, within
     /// `range`.
-    pub(crate) fn highlights(
+    pub fn highlights(
         &self,
         text: &TextSnapshot,
         range: Range<usize>,
@@ -611,7 +611,7 @@ impl Drop for SyntaxState {
 impl BackgroundParse {
     /// Parse to completion, or `None` once the state that started this parse
     /// has been dropped.
-    pub(crate) fn run(self) -> Option<ParsedTree> {
+    pub fn run(self) -> Option<ParsedTree> {
         let Self {
             id,
             mut root,

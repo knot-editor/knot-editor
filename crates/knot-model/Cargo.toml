@@ -1,0 +1,36 @@
+[package]
+name = "knot-model"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# Editor state and policy that need no UI toolkit, scripting runtime, or host.
+[dependencies]
+knot-core = { path = "../knot-core" }
+knot-protocol = { path = "../knot-protocol" }
+serde = { version = "1", features = ["derive"] }
+tree-sitter = "0.27"
+tree-sitter-html = "0.23.2"
+tree-sitter-css = "0.25.0"
+tree-sitter-javascript = "0.25.0"
+tree-sitter-typescript = "0.23.2"
+tree-sitter-rust = "0.24.2"
+tree-sitter-c = "0.24.2"
+tree-sitter-cpp = "0.23.4"
+tree-sitter-go = "0.25.0"
+tree-sitter-java = "0.23.5"
+tree-sitter-python = "0.25.0"
+tree-sitter-bash = "0.25.1"
+tree-sitter-json = "0.24.8"
+tree-sitter-toml-ng = "0.7.0"
+tree-sitter-yaml = "0.7.2"
+tree-sitter-md = "0.5.4"
+tree-sitter-tsquery = "0.8.0"
+
+[dev-dependencies]
+knot-core = { path = "../knot-core", features = ["test-support"] }
+
+[features]
+# Test-only helpers for the application's tests.
+test-support = ["knot-core/test-support"]

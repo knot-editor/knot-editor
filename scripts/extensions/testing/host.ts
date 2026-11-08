@@ -1021,7 +1021,7 @@ const GRAMMARS = [
   "markdown_inline", "python", "query", "rust", "toml", "tsx", "typescript", "yaml",
 ];
 
-/** The names a highlight capture resolves to, as `src/app/theme.rs` lists
+/** The names a highlight capture resolves to, as `crates/knot-model/src/theme.rs` lists
  * them; queries should use these exactly so no capture is silently ignored. */
 export const CAPTURE_NAMES: readonly string[] = [
   "attribute", "attribute.builtin", "boolean", "character", "character.special", "comment",

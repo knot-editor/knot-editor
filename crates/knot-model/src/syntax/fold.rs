@@ -16,7 +16,7 @@ use super::{Layer, StreamingIterator, SyntaxLanguageError, SyntaxQuery, SyntaxSt
 use knot_core::buffer::TextSnapshot;
 
 /// A compiled `folds` query.
-pub(crate) struct FoldQuery {
+pub struct FoldQuery {
     query: Query,
     capture: u32,
 }
@@ -43,13 +43,13 @@ impl FoldQuery {
 
 impl SyntaxState {
     /// Whether the buffer's own language has a `folds` query.
-    pub(crate) fn has_fold_query(&self) -> bool {
+    pub fn has_fold_query(&self) -> bool {
         self.root.language.folds.is_some()
     }
 
     /// The multi-line regions the `folds` queries of every layer capture, as
     /// line ranges from the first line to one past the last.
-    pub(crate) fn fold_regions(&self, text: &TextSnapshot) -> Vec<Range<usize>> {
+    pub fn fold_regions(&self, text: &TextSnapshot) -> Vec<Range<usize>> {
         let mut regions = Vec::new();
         collect(&self.root, text, &mut regions);
         regions

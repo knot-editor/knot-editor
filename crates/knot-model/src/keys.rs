@@ -1,35 +1,35 @@
 //! Key notation: the keystrokes and modifiers Knot parses, matches, and shows.
 //! The notation is `[ctrl-][alt-][shift-][cmd-][fn-]key[->key_char]`, with
-//! `secondary` meaning `cmd` on macOS and `ctrl` elsewhere. Views convert to
-//! and from the toolkit's types in [`super::convert`].
+//! `secondary` meaning `cmd` on macOS and `ctrl` elsewhere. The application
+//! shell converts them to and from the toolkit's types at the view edge.
 
 use std::fmt;
 
 /// The modifier keys held at some point in time.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub(crate) struct Modifiers {
-    pub(crate) control: bool,
-    pub(crate) alt: bool,
-    pub(crate) shift: bool,
+pub struct Modifiers {
+    pub control: bool,
+    pub alt: bool,
+    pub shift: bool,
     /// The command key on macOS, the windows key on Windows, super on Linux.
-    pub(crate) platform: bool,
-    pub(crate) function: bool,
+    pub platform: bool,
+    pub function: bool,
 }
 
 impl Modifiers {
-    pub(crate) fn none() -> Self {
+    pub fn none() -> Self {
         Self::default()
     }
 
-    #[cfg(test)]
-    pub(crate) fn shift() -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn shift() -> Self {
         Self {
             shift: true,
             ..Self::default()
         }
     }
 
-    pub(crate) fn control() -> Self {
+    pub fn control() -> Self {
         Self {
             control: true,
             ..Self::default()
@@ -37,26 +37,26 @@ impl Modifiers {
     }
 
     /// Whether any modifier is held.
-    pub(crate) fn modified(&self) -> bool {
+    pub fn modified(&self) -> bool {
         self.control || self.alt || self.shift || self.platform || self.function
     }
 }
 
 /// A key press: the key, the modifiers held, and the character it typed.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub(crate) struct Keystroke {
-    pub(crate) modifiers: Modifiers,
+pub struct Keystroke {
+    pub modifiers: Modifiers,
     /// The printed key, such as `s` for option-s. Named keys are lowercase,
     /// like `tab` and `enter`.
-    pub(crate) key: String,
+    pub key: String,
     /// The character the press typed, such as `ß` for option-s; `None` for
     /// cmd-s.
-    pub(crate) key_char: Option<String>,
+    pub key_char: Option<String>,
 }
 
 /// The source of a keystroke that does not parse.
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) struct InvalidKeystroke(pub(crate) String);
+pub struct InvalidKeystroke(pub String);
 
 impl fmt::Display for InvalidKeystroke {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -70,7 +70,7 @@ impl Keystroke {
     /// Parses `ctrl-shift-a`, `cmd-,`, `secondary-q`, or `a->å` (a key with
     /// the character it typed). A lone uppercase letter means shift plus the
     /// lowercase letter, and a modifier alone names that modifier's key.
-    pub(crate) fn parse(source: &str) -> Result<Self, InvalidKeystroke> {
+    pub fn parse(source: &str) -> Result<Self, InvalidKeystroke> {
         let invalid = || InvalidKeystroke(source.to_owned());
         let mut modifiers = Modifiers::none();
         let mut key = None;
@@ -153,7 +153,7 @@ impl Keystroke {
 
     /// The notation [`Keystroke::parse`] reads back, in the canonical modifier
     /// order and spelling of this platform.
-    pub(crate) fn unparse(&self) -> String {
+    pub fn unparse(&self) -> String {
         let mut result = String::new();
         let modifiers = &self.modifiers;
         if modifiers.function {
@@ -183,7 +183,7 @@ impl Keystroke {
 
     /// Fills `key_char` the way a keyboard would when only shift modifies
     /// the key, so a keystroke written in notation types its character.
-    pub(crate) fn with_simulated_text(mut self) -> Self {
+    pub fn with_simulated_text(mut self) -> Self {
         let modifiers = &self.modifiers;
         if self.key_char.is_none()
             && !modifiers.platform
@@ -206,7 +206,7 @@ impl Keystroke {
     /// Whether this typed keystroke triggers a binding written as `bound`:
     /// directly, or through the character it typed, which already reflects
     /// its other modifiers.
-    pub(crate) fn triggers(&self, bound: &Keystroke) -> bool {
+    pub fn triggers(&self, bound: &Keystroke) -> bool {
         if let Some(key_char) = self
             .key_char
             .as_ref()

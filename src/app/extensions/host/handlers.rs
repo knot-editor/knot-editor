@@ -4023,7 +4023,11 @@ async fn get_theme(
     })
 }
 
-impl HostArguments for ColorDefinition {
+/// The color a package defines.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DefinedColor(ColorDefinition);
+
+impl HostArguments for DefinedColor {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         let key = reader.text(2, "color key must be text")?;
         let description = reader.text(3, "color description must be text")?;
@@ -4041,23 +4045,23 @@ impl HostArguments for ColorDefinition {
         if key.is_empty() {
             return Err(DecodeError::Type("color key must be nonempty text"));
         }
-        Ok(Self {
+        Ok(Self(ColorDefinition {
             key,
             description,
             dark,
             light,
-        })
+        }))
     }
 }
 
 #[host_operation("defineColor")]
-async fn define_color(context: HostContext, arguments: ColorDefinition) -> Result<(), ThemeError> {
+async fn define_color(context: HostContext, arguments: DefinedColor) -> Result<(), ThemeError> {
     let owner = theme_owner(&context);
     context.foreground(|_, cx| {
-        let key = arguments.key.clone();
+        let key = arguments.0.key.clone();
         cx.default_global::<ApplicationThemes>()
             .0
-            .define_color(owner, arguments)
+            .define_color(owner, arguments.0)
             .map_err(|_| ThemeError::DuplicateColor { key })
     })?
 }

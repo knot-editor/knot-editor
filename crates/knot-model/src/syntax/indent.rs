@@ -29,7 +29,7 @@ use std::ops::Range;
 use tree_sitter::{Language, Node, Point, Query, QueryCursor, QueryMatch, QueryPredicateArg, Tree};
 
 use super::{StreamingIterator, SyntaxLanguageError, SyntaxQuery, clamp};
-use crate::app::languages::editing::Bracket;
+use crate::editing::Bracket;
 use knot_core::buffer::TextSnapshot;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,7 +113,7 @@ impl NodePredicate {
 }
 
 /// A compiled `indents` query.
-pub(crate) struct IndentQuery {
+pub struct IndentQuery {
     query: Query,
     /// Indexed by capture index; `None` for names that are not indent
     /// captures, such as `_`-prefixed helpers.
@@ -251,7 +251,7 @@ fn unsupported(
 
 /// How a line indents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LineIndent {
+pub enum LineIndent {
     /// Indent to this many columns.
     Columns(usize),
     /// Leave the indentation as it is, because it is content, as inside a
@@ -263,7 +263,7 @@ pub(crate) enum LineIndent {
 }
 
 /// The lines of the text a tree parsed.
-pub(crate) trait LineSource {
+pub trait LineSource {
     /// `row`'s text, without its line terminator.
     fn line(&self, row: usize) -> String;
     /// The byte offset where `row` starts.

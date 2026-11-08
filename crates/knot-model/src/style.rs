@@ -1,25 +1,25 @@
-//! Color and text-style values the theme resolves. Views convert them to the
-//! toolkit's types in [`super::convert`].
+//! Color and text-style values the theme resolves. The application shell
+//! converts them to the toolkit's types at the view edge.
 
 use serde::{Deserialize, Serialize};
 
 /// An sRGB color with alpha. The default is transparent black.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub(crate) struct Color {
-    pub(crate) red: u8,
-    pub(crate) green: u8,
-    pub(crate) blue: u8,
-    pub(crate) alpha: u8,
+pub struct Color {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub alpha: u8,
 }
 
 impl Color {
     /// An opaque color from `0xrrggbb`.
-    pub(crate) const fn rgb(value: u32) -> Self {
+    pub const fn rgb(value: u32) -> Self {
         Self::rgba((value << 8) | 0xff)
     }
 
     /// A color from `0xrrggbbaa`.
-    pub(crate) const fn rgba(value: u32) -> Self {
+    pub const fn rgba(value: u32) -> Self {
         Self {
             red: (value >> 24) as u8,
             green: (value >> 16) as u8,
@@ -29,7 +29,7 @@ impl Color {
     }
 
     /// Parses `#rrggbb` or `#rrggbbaa`.
-    pub(crate) fn parse(text: &str) -> Option<Self> {
+    pub fn parse(text: &str) -> Option<Self> {
         let digits = text.strip_prefix('#')?;
         if !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return None;
@@ -45,7 +45,7 @@ impl Color {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum FontStyle {
+pub enum FontStyle {
     #[default]
     Normal,
     Italic,
@@ -53,27 +53,27 @@ pub(crate) enum FontStyle {
 
 /// A line under text, in logical pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Underline {
-    pub(crate) thickness: f32,
+pub struct Underline {
+    pub thickness: f32,
     /// The line's color; the text color when unset.
-    pub(crate) color: Option<Color>,
-    pub(crate) wavy: bool,
+    pub color: Option<Color>,
+    pub wavy: bool,
 }
 
 /// How a span of text is styled; an unset field leaves the text as it is.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(crate) struct HighlightStyle {
-    pub(crate) color: Option<Color>,
+pub struct HighlightStyle {
+    pub color: Option<Color>,
     /// A weight from 100 to 900.
-    pub(crate) font_weight: Option<u16>,
-    pub(crate) font_style: Option<FontStyle>,
-    pub(crate) underline: Option<Underline>,
+    pub font_weight: Option<u16>,
+    pub font_style: Option<FontStyle>,
+    pub underline: Option<Underline>,
     /// A one-pixel line through the text.
-    pub(crate) strikethrough: bool,
+    pub strikethrough: bool,
 }
 
 impl HighlightStyle {
-    pub(crate) fn color(color: Color) -> Self {
+    pub fn color(color: Color) -> Self {
         Self {
             color: Some(color),
             ..Self::default()

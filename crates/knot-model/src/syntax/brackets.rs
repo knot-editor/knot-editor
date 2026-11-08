@@ -12,7 +12,7 @@ use std::ops::Range;
 use tree_sitter::Node;
 
 use super::{Layer, SyntaxState};
-use crate::app::languages::editing::Bracket;
+use crate::editing::Bracket;
 use knot_core::buffer::TextSnapshot;
 
 /// The longest bracket token read; longer leaves are never brackets.
@@ -20,16 +20,16 @@ const MAX_BRACKET_LEN: usize = 16;
 
 /// A matched pair: the byte ranges of the opener and the closer.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct BracketPair {
-    pub(crate) open: Range<usize>,
-    pub(crate) close: Range<usize>,
+pub struct BracketPair {
+    pub open: Range<usize>,
+    pub close: Range<usize>,
 }
 
 impl SyntaxState {
     /// The pair whose opener or closer touches `offset`: the bracket ending
     /// at `offset` first, else the one starting there. The first range is the
     /// bracket at `offset`, the second its partner.
-    pub(crate) fn bracket_at(
+    pub fn bracket_at(
         &self,
         text: &TextSnapshot,
         offset: usize,
@@ -42,11 +42,7 @@ impl SyntaxState {
 
     /// The innermost pair whose opener ends at or before `offset` and whose
     /// closer starts at or after it.
-    pub(crate) fn enclosing_brackets(
-        &self,
-        text: &TextSnapshot,
-        offset: usize,
-    ) -> Option<BracketPair> {
+    pub fn enclosing_brackets(&self, text: &TextSnapshot, offset: usize) -> Option<BracketPair> {
         self.layers_at(offset).into_iter().find_map(|layer| {
             let tree = layer.tree.as_ref()?;
             let brackets = matching_pairs(&layer.language.editing.brackets);

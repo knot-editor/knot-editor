@@ -18,9 +18,8 @@ mod entry;
 #[cfg(test)]
 pub(crate) use extensions::host::handlers as declared_host;
 mod extensions;
+use knot_model::{history, indentation, keys, style, syntax};
 mod filesystem;
-mod history;
-mod indentation;
 mod languages;
 pub mod model;
 mod open;
@@ -30,14 +29,11 @@ mod picker;
 mod product;
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) use product::driver;
-mod keys;
 mod record_store;
 mod recovery;
 mod resource;
 mod settings;
 mod status_bar;
-mod style;
-mod syntax;
 mod terminal;
 mod text_input;
 mod text_view;

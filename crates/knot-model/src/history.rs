@@ -11,7 +11,7 @@ use knot_protocol::ExtensionKey;
 const GROUPING_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum EditGroupKind {
+pub enum EditGroupKind {
     Typing,
     Composition,
     DeleteBackward,
@@ -19,26 +19,26 @@ pub(crate) enum EditGroupKind {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct EditGrouping {
+pub struct EditGrouping {
     pub context: u64,
     pub kind: EditGroupKind,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct HistoryViewState {
+pub struct HistoryViewState {
     pub context: u64,
     pub anchor: usize,
     pub caret: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct HistoryViewChange {
+pub struct HistoryViewChange {
     pub before: HistoryViewState,
     pub after: HistoryViewState,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct HistoryReplay {
+pub struct HistoryReplay {
     pub content_state: u64,
     pub view_state: Option<HistoryViewState>,
 }
@@ -60,7 +60,7 @@ struct GroupState {
 }
 
 #[derive(Default)]
-pub(crate) struct EditHistory {
+pub struct EditHistory {
     undo: Vec<HistoryEntry>,
     redo: Vec<HistoryEntry>,
     open: Option<OpenGroup>,
@@ -78,7 +78,7 @@ struct OpenGroup {
 }
 
 impl EditHistory {
-    pub(crate) fn apply_replace(
+    pub fn apply_replace(
         &mut self,
         buffer: &mut TextBuffer,
         edit: (Range<usize>, &str),
@@ -128,7 +128,7 @@ impl EditHistory {
         self.start_open_group();
     }
 
-    pub(crate) fn apply_batch<'a>(
+    pub fn apply_batch<'a>(
         &mut self,
         buffer: &mut TextBuffer,
         edits: impl DoubleEndedIterator<Item = (Range<usize>, &'a str)>,
@@ -165,7 +165,7 @@ impl EditHistory {
     /// the view opening it, the step restores that view's selection from
     /// when the group opens to when it ends, so commits that record no view,
     /// such as an extension's edit batches, still restore the caret.
-    pub(crate) fn begin_open_group(
+    pub fn begin_open_group(
         &mut self,
         owner: ExtensionKey,
         view: Option<HistoryViewState>,
@@ -184,7 +184,7 @@ impl EditHistory {
 
     /// End the open group if `owner` holds it, with `view_after` the opening
     /// view's selection now.
-    pub(crate) fn end_open_group(
+    pub fn end_open_group(
         &mut self,
         owner: ExtensionKey,
         view_after: Option<HistoryViewState>,
@@ -197,7 +197,7 @@ impl EditHistory {
     }
 
     /// End the open group whoever holds it.
-    pub(crate) fn end_any_open_group(&mut self) {
+    pub fn end_any_open_group(&mut self) {
         if self.open.is_some() {
             self.finish_open_group(None);
         }
@@ -235,7 +235,7 @@ impl EditHistory {
     /// A typing group the edits precede keeps growing at its shifted
     /// position; one they touch ends. `false`, applying nothing, when there
     /// is no step to extend.
-    pub(crate) fn amend<'a>(
+    pub fn amend<'a>(
         &mut self,
         buffer: &mut TextBuffer,
         edits: impl DoubleEndedIterator<Item = (Range<usize>, &'a str)>,
@@ -269,13 +269,13 @@ impl EditHistory {
         true
     }
 
-    pub(crate) fn break_group(&mut self) {
+    pub fn break_group(&mut self) {
         if let Some(entry) = self.undo.last_mut() {
             entry.group = None;
         }
     }
 
-    pub(crate) fn undo(&mut self, buffer: &mut TextBuffer) -> Option<HistoryReplay> {
+    pub fn undo(&mut self, buffer: &mut TextBuffer) -> Option<HistoryReplay> {
         self.end_any_open_group();
         let mut entry = self.undo.pop()?;
         entry.group = None;
@@ -290,7 +290,7 @@ impl EditHistory {
         Some(replay)
     }
 
-    pub(crate) fn redo(&mut self, buffer: &mut TextBuffer) -> Option<HistoryReplay> {
+    pub fn redo(&mut self, buffer: &mut TextBuffer) -> Option<HistoryReplay> {
         self.end_any_open_group();
         let mut entry = self.redo.pop()?;
         entry.transaction.prepare_for_history_replay(buffer);

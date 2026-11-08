@@ -33,7 +33,7 @@ const GRAMMARS: &[Grammar] = &[
 ];
 
 /// The grammar named `id`.
-pub(crate) fn grammar(id: &str) -> Option<Language> {
+pub fn grammar(id: &str) -> Option<Language> {
     GRAMMARS
         .binary_search_by_key(&id, |(known, _)| known)
         .ok()
@@ -41,7 +41,7 @@ pub(crate) fn grammar(id: &str) -> Option<Language> {
 }
 
 /// Every compiled-in grammar ID, sorted.
-pub(crate) fn grammar_ids() -> impl Iterator<Item = &'static str> {
+pub fn grammar_ids() -> impl Iterator<Item = &'static str> {
     GRAMMARS.iter().map(|(id, _)| *id)
 }
 
@@ -60,7 +60,7 @@ mod tests {
     /// The in-memory extension test host lists the same grammars.
     #[test]
     fn fake_host_lists_every_grammar() {
-        let fake = include_str!("../../../scripts/extensions/testing/host.ts")
+        let fake = include_str!("../../../../scripts/extensions/testing/host.ts")
             .split("const GRAMMARS = [")
             .nth(1)
             .unwrap()

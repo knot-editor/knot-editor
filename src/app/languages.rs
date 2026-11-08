@@ -22,7 +22,7 @@ use serde::Serialize;
 
 use knot_protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
-pub(crate) mod editing;
+pub(crate) use knot_model::editing;
 
 use editing::EditingDefinition;
 
