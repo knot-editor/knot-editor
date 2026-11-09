@@ -83,7 +83,10 @@ fn the_pack_setting_selects_the_pack_and_follows_changes(cx: &mut TestAppContext
             [("file".to_owned(), svg)].into(),
         );
         apply_at_startup(cx);
-        assert_eq!(file_definition(None, cx), IconDefinition::lucide("file"));
+        assert_eq!(
+            file_definition(None, None, cx),
+            IconDefinition::lucide("file")
+        );
     });
     cx.update(|cx| {
         cx.global_mut::<ApplicationSettings>()
@@ -93,9 +96,9 @@ fn the_pack_setting_selects_the_pack_and_follows_changes(cx: &mut TestAppContext
     });
     cx.run_until_parked();
     cx.update(|cx| {
-        assert_eq!(file_definition(None, cx).color, IconColor::Original);
+        assert_eq!(file_definition(None, None, cx).color, IconColor::Original);
         assert_eq!(
-            folder_definition(false, cx),
+            folder_definition(None, false, cx),
             IconDefinition::lucide("folder")
         );
         cx.global_mut::<ApplicationSettings>()
@@ -104,5 +107,10 @@ fn the_pack_setting_selects_the_pack_and_follows_changes(cx: &mut TestAppContext
             .unwrap();
     });
     cx.run_until_parked();
-    cx.update(|cx| assert_eq!(file_definition(None, cx), IconDefinition::lucide("file")));
+    cx.update(|cx| {
+        assert_eq!(
+            file_definition(None, None, cx),
+            IconDefinition::lucide("file")
+        )
+    });
 }

@@ -134,6 +134,7 @@ function emptyState() {
     iconDefaults: new Map<string, Knot.IconDefinition>(),
     iconOverrides: [] as { name: string; definition: Knot.IconDefinition }[],
     iconPacks: [] as Knot.IconPack[],
+    iconAssociations: [] as Knot.IconAssociations[],
     keymapPresets: [] as Knot.KeymapPresetDefinition[],
     bindings: [] as FakeBinding[],
     colors: new Map<string, Knot.ColorDefinition>(),
@@ -1073,6 +1074,11 @@ export function themeDefinitions(): readonly Knot.ThemeDefinition[] {
   return state.themes;
 }
 
+/** Every live icon association, in the order it was made. */
+export function iconAssociations(): readonly Knot.IconAssociations[] {
+  return state.iconAssociations;
+}
+
 /** The native icon names; defining one is a DuplicateIcon. */
 const NATIVE_ICON_NAMES = ["file", "folder", "folder.open", "symbol", "tree.collapsed", "tree.expanded", "fallback"];
 
@@ -1340,6 +1346,14 @@ export const api: KnotApi = {
       return {
         dispose: async () => {
           state.iconOverrides = state.iconOverrides.filter((candidate) => candidate !== entry);
+        },
+      };
+    },
+    associate: async (associations) => {
+      state.iconAssociations.push(associations);
+      return {
+        dispose: async () => {
+          state.iconAssociations = state.iconAssociations.filter((candidate) => candidate !== associations);
         },
       };
     },

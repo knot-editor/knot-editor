@@ -148,9 +148,25 @@ struct Pack {
     icons: BTreeMap<String, IconDefinition>,
 }
 
+/// Icon names claimed for file names, extensions (without the dot, any
+/// case), and folder names.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct IconAssociation {
+    pub files: BTreeMap<String, String>,
+    pub extensions: BTreeMap<String, String>,
+    pub folders: BTreeMap<String, String>,
+}
+
+struct Association {
+    id: u64,
+    owner: IconOwner,
+    claims: IconAssociation,
+}
+
 #[derive(Default)]
 pub struct IconRegistry {
     overrides: Vec<Override>,
+    associations: Vec<Association>,
     packs: Vec<Pack>,
     defined: Vec<(IconOwner, String, IconDefinition)>,
     active_pack: String,
@@ -222,11 +238,33 @@ impl IconRegistry {
         self.packs.len() != before
     }
 
+    /// Claim icon names for file and folder patterns, returning the
+    /// registration's ID. The latest claim of a pattern wins.
+    pub fn associate(&mut self, owner: IconOwner, claims: IconAssociation) -> u64 {
+        self.next_id += 1;
+        self.associations.push(Association {
+            id: self.next_id,
+            owner,
+            claims,
+        });
+        self.next_id
+    }
+
+    /// Remove an owned association; false when it is not live.
+    pub fn unassociate(&mut self, owner: IconOwner, id: u64) -> bool {
+        let before = self.associations.len();
+        self.associations
+            .retain(|registration| registration.id != id || registration.owner != owner);
+        self.associations.len() != before
+    }
+
     pub fn remove_lifecycle(&mut self, extension: ExtensionId, lifecycle: ExtensionLifecycleId) {
         let owner = IconOwner {
             extension,
             lifecycle,
         };
+        self.associations
+            .retain(|registration| registration.owner != owner);
         self.overrides
             .retain(|registration| registration.owner != owner);
         self.packs
@@ -301,21 +339,55 @@ impl IconRegistry {
             .unwrap_or_else(|| self.icon(FALLBACK))
     }
 
-    /// The icon for a file: its language's `file.<id>`, else `file`.
-    pub fn file_icon(&self, language: Option<&str>) -> IconDefinition {
-        let language = language.map(|id| format!("file.{id}"));
-        let candidates = language.iter().map(String::as_str).chain(["file"]);
-        self.first_defined(&candidates.collect::<Vec<_>>())
+    /// The latest association that claims a pattern.
+    fn claimed(&self, claim: impl Fn(&IconAssociation) -> Option<&String>) -> Option<&str> {
+        self.associations
+            .iter()
+            .rev()
+            .find_map(|registration| claim(&registration.claims))
+            .map(String::as_str)
     }
 
-    /// The icon for a directory, in its expanded form when `open`.
-    pub fn folder_icon(&self, open: bool) -> IconDefinition {
-        let candidates: &[&str] = if open {
-            &["folder.open", "folder"]
-        } else {
-            &["folder"]
-        };
-        self.first_defined(candidates)
+    /// The icon for a file: the name its file name or extension is associated
+    /// with, its language's `file.<id>`, then `file`. A name nothing defines
+    /// is skipped. The longest extension claimed wins, so `d.ts` beats `ts`.
+    pub fn file_icon(&self, file_name: Option<&str>, language: Option<&str>) -> IconDefinition {
+        let mut candidates = Vec::new();
+        if let Some(name) = file_name {
+            candidates.extend(self.claimed(|claims| claims.files.get(name)));
+            let lowercase = name.to_lowercase();
+            for (index, _) in lowercase.match_indices('.') {
+                let extension = &lowercase[index + 1..];
+                candidates.extend(self.claimed(|claims| {
+                    claims
+                        .extensions
+                        .iter()
+                        .find(|(key, _)| key.to_lowercase() == extension)
+                        .map(|(_, icon)| icon)
+                }));
+            }
+        }
+        let language = language.map(|id| format!("file.{id}"));
+        candidates.extend(language.as_deref());
+        candidates.push("file");
+        self.first_defined(&candidates)
+    }
+
+    /// The icon for a directory, in its expanded form when `open`: the name
+    /// its folder name is associated with, then `folder`.
+    pub fn folder_icon(&self, name: Option<&str>, open: bool) -> IconDefinition {
+        let associated = name.and_then(|name| self.claimed(|claims| claims.folders.get(name)));
+        let open_associated = associated.map(|name| format!("{name}.open"));
+        let mut candidates = Vec::new();
+        if open {
+            candidates.extend(open_associated.as_deref());
+        }
+        candidates.extend(associated);
+        if open {
+            candidates.push("folder.open");
+        }
+        candidates.push("folder");
+        self.first_defined(&candidates)
     }
 }
 

@@ -108,37 +108,137 @@ fn removing_a_lifecycle_removes_its_registrations_only() {
 fn file_icons_try_the_language_then_the_generic_file() {
     let mut registry = IconRegistry::default();
     assert_eq!(
-        registry.file_icon(Some("rust")),
+        registry.file_icon(None, Some("rust")),
         IconDefinition::lucide("file")
     );
     registry.define(owner(1), "file.rust", svg("crab")).unwrap();
-    assert_eq!(registry.file_icon(Some("rust")), svg("crab"));
+    assert_eq!(registry.file_icon(None, Some("rust")), svg("crab"));
     assert_eq!(
-        registry.file_icon(Some("go")),
+        registry.file_icon(None, Some("go")),
         IconDefinition::lucide("file")
     );
-    assert_eq!(registry.file_icon(None), IconDefinition::lucide("file"));
+    assert_eq!(
+        registry.file_icon(None, None),
+        IconDefinition::lucide("file")
+    );
     registry.register_override(owner(1), "file", svg("generic"));
-    assert_eq!(registry.file_icon(Some("go")), svg("generic"));
+    assert_eq!(registry.file_icon(None, Some("go")), svg("generic"));
 }
 
 #[test]
 fn folders_use_the_open_form_only_when_expanded() {
     let mut registry = IconRegistry::default();
     assert_eq!(
-        registry.folder_icon(false),
+        registry.folder_icon(None, false),
         IconDefinition::lucide("folder")
     );
     assert_eq!(
-        registry.folder_icon(true),
+        registry.folder_icon(None, true),
         IconDefinition::lucide("folder-open")
     );
     registry.register_override(owner(1), "folder", svg("closed"));
-    assert_eq!(registry.folder_icon(false), svg("closed"));
+    assert_eq!(registry.folder_icon(None, false), svg("closed"));
     assert_eq!(
-        registry.folder_icon(true),
+        registry.folder_icon(None, true),
         IconDefinition::lucide("folder-open")
     );
+}
+
+fn names(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
+    entries
+        .iter()
+        .map(|(pattern, icon)| ((*pattern).to_owned(), (*icon).to_owned()))
+        .collect()
+}
+
+#[test]
+fn associations_pick_names_by_file_name_then_longest_extension_then_language() {
+    let mut registry = IconRegistry::default();
+    for name in ["file.cargo", "file.ts", "file.dts", "file.rust"] {
+        registry.define(owner(1), name, svg(name)).unwrap();
+    }
+    registry.associate(
+        owner(1),
+        IconAssociation {
+            files: names(&[("Cargo.toml", "file.cargo")]),
+            extensions: names(&[("ts", "file.ts"), ("D.TS", "file.dts")]),
+            ..Default::default()
+        },
+    );
+    let icon = |file: &str, language| registry.file_icon(Some(file), language);
+    assert_eq!(icon("Cargo.toml", Some("toml")), svg("file.cargo"));
+    assert_eq!(icon("a.ts", None), svg("file.ts"));
+    assert_eq!(icon("a.d.ts", None), svg("file.dts"));
+    assert_eq!(icon("a.TS", None), svg("file.ts"));
+    assert_eq!(icon("main.rs", Some("rust")), svg("file.rust"));
+    assert_eq!(icon("notes", None), IconDefinition::lucide("file"));
+
+    // The latest claim of a pattern wins, and disposal reveals the previous.
+    let second = registry.associate(
+        owner(2),
+        IconAssociation {
+            extensions: names(&[("ts", "file.rust")]),
+            ..Default::default()
+        },
+    );
+    assert_eq!(registry.file_icon(Some("a.ts"), None), svg("file.rust"));
+    assert!(!registry.unassociate(owner(1), second));
+    assert!(registry.unassociate(owner(2), second));
+    assert_eq!(registry.file_icon(Some("a.ts"), None), svg("file.ts"));
+    registry.remove_lifecycle(owner(1).extension, owner(1).lifecycle);
+    assert_eq!(
+        registry.file_icon(Some("a.ts"), None),
+        IconDefinition::lucide("file")
+    );
+}
+
+#[test]
+fn an_associated_name_the_active_pack_lacks_falls_through() {
+    let mut registry = IconRegistry::default();
+    registry.define(owner(1), "file.rust", svg("crab")).unwrap();
+    registry.associate(
+        owner(1),
+        IconAssociation {
+            extensions: names(&[("rs", "file.material-rust")]),
+            ..Default::default()
+        },
+    );
+    assert_eq!(registry.file_icon(Some("a.rs"), Some("rust")), svg("crab"));
+    registry.register_pack(
+        owner(1),
+        "Material",
+        pack(&[("file.material-rust", "gear")]),
+    );
+    registry.select_pack("Material");
+    assert_eq!(registry.file_icon(Some("a.rs"), Some("rust")), svg("gear"));
+}
+
+#[test]
+fn named_folders_prefer_their_open_form_when_expanded() {
+    let mut registry = IconRegistry::default();
+    registry.define(owner(1), "folder.src", svg("src")).unwrap();
+    registry
+        .define(owner(1), "folder.src.open", svg("src open"))
+        .unwrap();
+    registry.define(owner(1), "folder.git", svg("git")).unwrap();
+    registry.associate(
+        owner(1),
+        IconAssociation {
+            folders: names(&[
+                ("src", "folder.src"),
+                (".git", "folder.git"),
+                ("x", "folder.none"),
+            ]),
+            ..Default::default()
+        },
+    );
+    let icon = |name, open| registry.folder_icon(Some(name), open);
+    assert_eq!(icon("src", false), svg("src"));
+    assert_eq!(icon("src", true), svg("src open"));
+    assert_eq!(icon(".git", false), svg("git"));
+    assert_eq!(icon(".git", true), svg("git"));
+    assert_eq!(icon("x", true), IconDefinition::lucide("folder-open"));
+    assert_eq!(icon("other", false), IconDefinition::lucide("folder"));
 }
 
 fn spec(json: &str) -> Result<IconDefinition, &'static str> {

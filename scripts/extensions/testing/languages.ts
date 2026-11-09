@@ -49,11 +49,13 @@ function assertToken(token: string, message: string) {
   assert.ok(token.length > 0 && token.trim() === token, `${message}: ${JSON.stringify(token)}`);
 }
 
-/** Checks one package's registrations and the queries it ships. `editing`
- * names the languages that must declare comment tokens. */
+/** Checks one package's registrations and the queries it ships. `fileIcons`
+ * is the package's `file.<id>` icons by language ID, and `editing` names the
+ * languages that must declare comment tokens. */
 export function testLanguagePackage(
   start: () => Promise<void>,
   definitions: readonly LanguageDefinition[],
+  fileIcons: Readonly<Record<string, unknown>>,
   editing: readonly string[] = [],
 ) {
   beforeEach(() => host.reset());
@@ -88,6 +90,16 @@ export function testLanguagePackage(
       definitions.map((language) => language.id),
     );
     assert.equal((await languages.list()).length, definitions.length);
+  });
+
+  test("every file icon belongs to a language and resolves after start", async () => {
+    await start();
+    const ids = definitions.map((language) => language.id);
+    for (const id of Object.keys(fileIcons)) {
+      assert.ok(ids.includes(id), `${id} is not registered`);
+      assert.notEqual(host.resolveIcon(`file.${id}`), null, `file.${id}`);
+    }
+    assert.ok(Object.keys(fileIcons).length > 0);
   });
 
   test("highlight queries capture only known highlight names", () => {

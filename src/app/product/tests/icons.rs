@@ -136,3 +136,88 @@ fn definitions_packs_and_overrides_layer_and_teardown_reveals_the_previous_level
         );
     });
 }
+
+const FILE_ICONS: &str = r##"
+import { commands, documents, icons, languages } from "knot";
+await languages.register({ id: "rust", name: "Rust", grammar: "rust", queries: { highlights: "" } });
+await icons.define("file.rust", { lucide: "star" });
+await icons.define("file.custom", { lucide: "box" });
+for (const invalid of [
+  { files: { "a.txt": 1 } },
+  { extensions: { rs: "not a name" } },
+  { folders: { "": "folder.x" } },
+  { files: [] },
+]) {
+  try { await icons.associate(invalid); } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    continue;
+  }
+  throw new Error("expected a TypeError");
+}
+let association = null;
+await commands.register("assoc.add", async () => {
+  association = await icons.associate({ files: { Untitled: "file.custom" } });
+});
+await commands.register("assoc.drop", async () => { await association.dispose(); });
+await commands.register("lang.rust", async ({ buffer }) => {
+  const document = (await documents.list()).find((candidate) => candidate.buffer === buffer);
+  await documents.setLanguage(document.id, "rust");
+});
+"##;
+
+#[gpui::test]
+fn tab_icons_follow_the_language_and_associations(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    let key = ExtensionKey::new(ExtensionId::new(963), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(None));
+    let result = loaded.clone();
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, FILE_ICONS).unwrap();
+        cx.spawn(async move |_, _| {
+            *result.lock().unwrap() = Some(execution.await.map(|_| ()));
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
+    loaded.lock().unwrap().take().unwrap().unwrap();
+
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(&shell, window, name, cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+        cx.run_until_parked();
+    };
+    let tab_icon = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            let language = crate::app::languages::effective_language(model.read(cx), cx);
+            crate::app::icons::file_definition(Some("Untitled"), Some(&language), cx)
+        })
+    };
+    let tab = shell.read_with(cx, |shell, cx| {
+        shell
+            .workbench
+            .read(cx)
+            .focused_pane()
+            .unwrap()
+            .active_tab()
+            .id()
+            .value()
+    });
+    let mut visual = VisualTestContext::from_window(window, cx);
+    visual.run_until_parked();
+    let bounds = visual
+        .debug_bounds(format!("tab-icon-{tab}").leak())
+        .expect("the document tab paints an icon");
+    assert!(bounds.size.width > px(0.));
+
+    assert_eq!(tab_icon(cx), IconDefinition::lucide("file"));
+    run("lang.rust", cx);
+    assert_eq!(tab_icon(cx), star());
+    run("assoc.add", cx);
+    assert_eq!(tab_icon(cx), IconDefinition::lucide("box"));
+    run("assoc.drop", cx);
+    assert_eq!(tab_icon(cx), star());
+}

@@ -24,3 +24,11 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     autoCloseBefore: ",]}",
   },
 ];
+
+/** The `file.<id>` icon of each language: a Lucide glyph, in a color of the
+ * language's own where it has one (the `icon.<id>` color key). */
+export const FILE_ICONS: Readonly<
+  Record<string, { lucide: string; color?: { dark: string; light: string } }>
+> = {
+  toml: { lucide: "file-cog", color: { dark: "#c8845a", light: "#9c4221" } },
+};

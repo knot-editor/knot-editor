@@ -3,9 +3,9 @@ import { test } from "node:test";
 import { settings } from "knot";
 import { testLanguagePackage } from "knot/testing/languages";
 import { start } from "../src/extension.js";
-import { LANGUAGES } from "../src/languages.js";
+import { FILE_ICONS, LANGUAGES } from "../src/languages.js";
 
-testLanguagePackage(start, LANGUAGES, ["markdown"]);
+testLanguagePackage(start, LANGUAGES, FILE_ICONS, ["markdown"]);
 
 test("Markdown documents wrap their long lines", async () => {
   await start();

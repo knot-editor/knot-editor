@@ -75,3 +75,14 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     ...EDITING,
   },
 ];
+
+/** The `file.<id>` icon of each language: a Lucide glyph, in a color of the
+ * language's own where it has one (the `icon.<id>` color key). */
+export const FILE_ICONS: Readonly<
+  Record<string, { lucide: string; color?: { dark: string; light: string } }>
+> = {
+  typescript: { lucide: "file-code", color: { dark: "#5aa0e6", light: "#3178c6" } },
+  typescriptreact: { lucide: "file-code", color: { dark: "#4bc0d9", light: "#1f7a99" } },
+  javascript: { lucide: "file-code", color: { dark: "#e5c84b", light: "#a58a00" } },
+  javascriptreact: { lucide: "file-code", color: { dark: "#4bc0d9", light: "#1f7a99" } },
+};

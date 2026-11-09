@@ -43,3 +43,11 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     ...EDITING,
   },
 ];
+
+/** The `file.<id>` icon of each language: a Lucide glyph, in a color of the
+ * language's own where it has one (the `icon.<id>` color key). */
+export const FILE_ICONS: Readonly<
+  Record<string, { lucide: string; color?: { dark: string; light: string } }>
+> = {
+  markdown: { lucide: "file-text", color: { dark: "#6cb6ff", light: "#0969da" } },
+};

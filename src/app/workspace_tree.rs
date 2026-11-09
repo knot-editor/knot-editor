@@ -6,7 +6,7 @@ use gpui::{prelude::FluentBuilder, *};
 use super::keys::Keystroke;
 use knot_model::icons::IconDefinition;
 
-use super::icons::{AppIcon, file_definition, folder_definition, icon_definition};
+use super::icons::{AppIcon, folder_definition, icon_definition, named_file_definition};
 use super::theme::{color, theme};
 
 use super::{
@@ -445,10 +445,15 @@ impl WorkspaceTree {
         }
     }
 
-    fn icon_definition(kind: &ResourceKind, expanded: bool, cx: &App) -> IconDefinition {
+    fn icon_definition(
+        kind: &ResourceKind,
+        name: &str,
+        expanded: bool,
+        cx: &App,
+    ) -> IconDefinition {
         match kind {
-            ResourceKind::File => file_definition(None, cx),
-            ResourceKind::Directory => folder_definition(expanded, cx),
+            ResourceKind::File => named_file_definition(name, cx),
+            ResourceKind::Directory => folder_definition(Some(name), expanded, cx),
         }
     }
 }
@@ -584,7 +589,12 @@ impl Render for WorkspaceTree {
                         .items_center()
                         .child(Self::disclosure(&kind, is_expanded, cx))
                         .when(!is_root, |row| {
-                            row.child(AppIcon::new(Self::icon_definition(&kind, is_expanded, cx)))
+                            row.child(AppIcon::new(Self::icon_definition(
+                                &kind,
+                                &label,
+                                is_expanded,
+                                cx,
+                            )))
                         })
                         .child(label)
                         .on_click({
@@ -626,7 +636,7 @@ mod tests {
     fn rows_resolve_file_and_folder_icons(cx: &mut TestAppContext) {
         use knot_model::icons::IconDefinition;
         cx.update(|cx| {
-            let icon = |kind, expanded| WorkspaceTree::icon_definition(&kind, expanded, cx);
+            let icon = |kind, expanded| WorkspaceTree::icon_definition(&kind, "x", expanded, cx);
             assert_eq!(
                 icon(ResourceKind::File, false),
                 IconDefinition::lucide("file")

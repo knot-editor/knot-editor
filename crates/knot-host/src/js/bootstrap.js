@@ -1411,6 +1411,17 @@ export async function overrideIcon(name, definition) {
   const owned = ownership(() => {}, () => request("unregisterIconOverride", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
+export async function associateIcons(patterns) {
+  const value = record(patterns, "icons.associate requires patterns");
+  const claims = ["files", "extensions", "folders"].map((field) => {
+    const entries = record(value[field] ?? {}, `icon associations of ${field} must be an object`);
+    for (const name of Object.values(entries)) string(name, "associated icon names must be text");
+    return entries;
+  });
+  const registration = await request("registerIconAssociation", ...claims);
+  const owned = ownership(() => {}, () => request("unregisterIconAssociation", registration));
+  return Object.freeze({ dispose: () => owned.dispose() });
+}
 export async function registerIconPack(definition) {
   const value = record(definition, "icons.registerPack requires a pack object");
   const name = string(value.name, "icon pack name must be text");

@@ -108,6 +108,12 @@ pub(crate) fn effective_language(model: &BufferModel, cx: &App) -> String {
         .to_owned()
 }
 
+/// The language a file called `file_name` is detected as, ignoring its text.
+pub(crate) fn detect_file_name(file_name: &str, cx: &App) -> Option<String> {
+    cx.try_global::<ApplicationLanguages>()
+        .and_then(|languages| languages.registry.detect(Some(file_name), ""))
+}
+
 /// The editing configuration of a registered language ID.
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) fn editing_configuration(

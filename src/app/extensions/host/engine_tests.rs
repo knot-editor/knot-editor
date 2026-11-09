@@ -4170,7 +4170,7 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (!Object.isFrozen(knot.themes) || Object.keys(knot.themes).sort().join(",") !== "defineColor,get,list,register") {
                 throw new Error("themes facade is incomplete");
             }
-            if (!Object.isFrozen(knot.icons) || Object.keys(knot.icons).sort().join(",") !== "define,listPacks,override,registerPack") {
+            if (!Object.isFrozen(knot.icons) || Object.keys(knot.icons).sort().join(",") !== "associate,define,listPacks,override,registerPack") {
                 throw new Error("icons facade is incomplete");
             }
             if (!Object.isFrozen(knot.keymaps) || Object.keys(knot.keymaps).sort().join(",") !== "bind,bindText,getPreset,listPresets,registerPreset,unbind,unbindText") {

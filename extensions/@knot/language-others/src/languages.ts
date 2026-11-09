@@ -102,3 +102,21 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     queries: { highlights: yaml.highlights },
   },
 ];
+
+/** The `file.<id>` icon of each language: a Lucide glyph, in a color of the
+ * language's own where it has one (the `icon.<id>` color key). */
+export const FILE_ICONS: Readonly<
+  Record<string, { lucide: string; color?: { dark: string; light: string } }>
+> = {
+  c: { lucide: "file-code", color: { dark: "#7aa2f7", light: "#3b64c4" } },
+  cpp: { lucide: "file-code", color: { dark: "#5c9bd1", light: "#00599c" } },
+  css: { lucide: "file-code", color: { dark: "#a37de0", light: "#7a3fc4" } },
+  go: { lucide: "file-code", color: { dark: "#4dc9e6", light: "#007d9c" } },
+  html: { lucide: "file-code", color: { dark: "#e8774f", light: "#c2410c" } },
+  java: { lucide: "file-code", color: { dark: "#e0a05a", light: "#b0450f" } },
+  json: { lucide: "file-braces", color: { dark: "#e5c07b", light: "#a07400" } },
+  jsonc: { lucide: "file-braces", color: { dark: "#e5c07b", light: "#a07400" } },
+  query: { lucide: "file-code" },
+  shellscript: { lucide: "file-terminal", color: { dark: "#89e051", light: "#3f8a1c" } },
+  yaml: { lucide: "file-cog", color: { dark: "#e06c75", light: "#b8323f" } },
+};

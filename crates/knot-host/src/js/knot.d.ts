@@ -617,6 +617,19 @@ declare module "knot" {
      * the default level. */
     readonly icons: Readonly<Record<string, IconDefinition>>;
   }
+  /** Icon names for the files and folders a surface shows. A file name or
+   * extension is claimed by the name of an icon, such as "file.rust", which
+   * need not be defined by whoever claims it. */
+  export interface IconAssociations {
+    /** Exact file names, such as "Cargo.toml". */
+    readonly files?: Readonly<Record<string, string>>;
+    /** Extensions without the dot, any case, such as "rs" or "d.ts". The
+     * longest extension of a file wins. */
+    readonly extensions?: Readonly<Record<string, string>>;
+    /** Exact folder names, such as "src". A folder icon name may have a
+     * `.open` variant, such as "folder.src.open", used when expanded. */
+    readonly folders?: Readonly<Record<string, string>>;
+  }
   /**
    * Icons are identified by flat dotted names such as "file", "folder.open",
    * or "symbol". For one name the first of these that defines it wins: an
@@ -636,6 +649,14 @@ declare module "knot" {
     /** Replace one icon above every pack, mainly for personal config.
      * @throws TypeError as define; HostError with Cancelled. */
     override(name: string, definition: IconDefinition): Promise<Disposable>;
+    /** Claim icon names for file names, extensions, and folder names. A file
+     * paints its first name that has a definition: the name claimed for its
+     * file name, for its extension, `file.<languageId>` for its language,
+     * then "file"; a folder paints its claimed name, then "folder", in the
+     * `.open` form of each when expanded. The latest claim of a pattern wins,
+     * and disposal or teardown reveals the previous one.
+     * @throws TypeError for invalid names; HostError with Cancelled. */
+    associate(associations: IconAssociations): Promise<Disposable>;
     /** Register a lifecycle-owned icon pack; the latest registration of a
      * name defines it.
      * @throws TypeError as define; HostError with Cancelled. */

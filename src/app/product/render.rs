@@ -210,7 +210,22 @@ impl ProductShell {
                 };
                 let capture = workbench.capture_tab_move(pane_id, tab_id).unwrap();
                 let source = self.capture_tab_relocation(pane_id, tab_id, cx).unwrap();
-                let drag_label = self.tab_drag_label(title.clone().into(), cx);
+                let icon = match tab.surface_id() {
+                    TabSurfaceId::Document(document_id) => {
+                        let document = documents.get(document_id).unwrap();
+                        let language = crate::app::languages::effective_language(
+                            document.model().read(cx),
+                            cx,
+                        );
+                        Some(crate::app::icons::file_definition(
+                            Some(document.title()),
+                            Some(&language),
+                            cx,
+                        ))
+                    }
+                    _ => None,
+                };
+                let drag_label = self.tab_drag_label(title.clone().into(), icon.clone(), cx);
                 div()
                     .id(("tab", tab_id.value()))
                     .debug_selector(move || format!("tab-{}", tab_id.value()))
@@ -236,6 +251,11 @@ impl ProductShell {
                     .items_center()
                     .gap_1()
                     .when(tab.is_preview(), |element| element.italic())
+                    .children(icon.map(|icon| {
+                        div()
+                            .debug_selector(move || format!("tab-icon-{}", tab_id.value()))
+                            .child(crate::app::icons::AppIcon::new(icon))
+                    }))
                     .child(title)
                     .when(tab.is_pinned(), |element| {
                         element.child(

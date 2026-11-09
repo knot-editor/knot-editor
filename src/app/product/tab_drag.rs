@@ -7,6 +7,7 @@ use crate::app::theme::{color, theme};
 use crate::app::workbench::{
     DockLocation, SplitEdge, TabMoveCapture, TabMoveDestination, TabMovePlacement,
 };
+use knot_model::icons::IconDefinition;
 use std::rc::Rc;
 
 /// Distance from the workbench frame edge that starts a dock drop target for
@@ -438,6 +439,7 @@ fn commit_drop_with(
 
 pub(super) struct TabDragLabel {
     title: SharedString,
+    icon: Option<IconDefinition>,
     coordinator: Rc<RefCell<TabDragCoordinator>>,
 }
 impl Render for TabDragLabel {
@@ -461,9 +463,14 @@ impl Render for TabDragLabel {
                     .debug_selector(|| "tab-drag-label".to_owned())
                     .px_3()
                     .py_1()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_1()
                     .text_sm()
                     .bg(theme(cx).paint_color(color::LIST_SELECTED_BACKGROUND))
                     .text_color(theme(cx).paint_color(color::LIST_SELECTED_FOREGROUND))
+                    .children(self.icon.clone().map(crate::app::icons::AppIcon::new))
                     .child(self.title.clone()),
             )
         })
@@ -474,6 +481,7 @@ impl ProductShell {
     pub(super) fn tab_drag_label(
         &self,
         title: SharedString,
+        icon: Option<IconDefinition>,
         cx: &Context<Self>,
     ) -> impl Fn(&TabRelocationSource, Point<Pixels>, &mut Window, &mut App) -> Entity<TabDragLabel>
     + use<> {
@@ -496,6 +504,7 @@ impl ProductShell {
             cx.refresh_windows();
             cx.new(|_| TabDragLabel {
                 title: title.clone(),
+                icon: icon.clone(),
                 coordinator: coordinator.clone(),
             })
         }

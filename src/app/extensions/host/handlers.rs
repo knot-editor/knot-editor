@@ -3790,7 +3790,7 @@ async fn unregister_theme(
 }
 
 use crate::app::icons::{ApplicationIcons, glyph_exists, refresh_icons};
-use knot_model::icons::{IconDefinition, IconOwner, IconSpec};
+use knot_model::icons::{IconAssociation, IconDefinition, IconOwner, IconSpec};
 
 /// Failures of an icon operation.
 #[derive(Debug, HostError)]
@@ -3977,6 +3977,75 @@ async fn unregister_icon_pack(
             .default_global::<ApplicationIcons>()
             .0
             .unregister_pack(owner, arguments.registration)
+        {
+            refresh_icons(cx);
+            Ok(())
+        } else {
+            Err(IconError::RegistrationNotFound)
+        }
+    })?
+}
+
+/// Pattern-to-name maps for files, extensions, and folders.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct IconAssociationArguments(IconAssociation);
+
+impl HostArguments for IconAssociationArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let mut claims = |index| {
+            let knot_protocol::CommandArgumentValue::Object(entries) =
+                reader.command_arguments(index)?
+            else {
+                return Err(DecodeError::Type("icon associations must be objects"));
+            };
+            entries
+                .into_iter()
+                .map(|(pattern, value)| {
+                    let knot_protocol::CommandArgumentValue::String(icon) = value else {
+                        return Err(DecodeError::Type("associated icon names must be text"));
+                    };
+                    if pattern.is_empty() {
+                        return Err(DecodeError::Type("association patterns must be nonempty"));
+                    }
+                    Ok((pattern, icon_name(icon)?))
+                })
+                .collect::<Result<_, DecodeError>>()
+        };
+        Ok(Self(IconAssociation {
+            files: claims(2)?,
+            extensions: claims(3)?,
+            folders: claims(4)?,
+        }))
+    }
+}
+
+#[host_operation("registerIconAssociation")]
+async fn register_icon_association(
+    context: HostContext,
+    arguments: IconAssociationArguments,
+) -> Result<u64, IconError> {
+    let owner = icon_owner(&context);
+    Ok(context.foreground(|_, cx| {
+        let id = cx
+            .default_global::<ApplicationIcons>()
+            .0
+            .associate(owner, arguments.0);
+        refresh_icons(cx);
+        id
+    })?)
+}
+
+#[host_operation("unregisterIconAssociation")]
+async fn unregister_icon_association(
+    context: HostContext,
+    arguments: IconRegistrationArguments,
+) -> Result<(), IconError> {
+    let owner = icon_owner(&context);
+    context.foreground(|_, cx| {
+        if cx
+            .default_global::<ApplicationIcons>()
+            .0
+            .unassociate(owner, arguments.registration)
         {
             refresh_icons(cx);
             Ok(())

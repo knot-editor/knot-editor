@@ -71,14 +71,26 @@ pub(crate) fn icon_definition(name: &str, cx: &App) -> IconDefinition {
     with_registry(cx, |registry| registry.icon(name))
 }
 
-/// The definition for a file of `language`.
-pub(crate) fn file_definition(language: Option<&str>, cx: &App) -> IconDefinition {
-    with_registry(cx, |registry| registry.file_icon(language))
+/// The definition for a file called `file_name` of `language`.
+pub(crate) fn file_definition(
+    file_name: Option<&str>,
+    language: Option<&str>,
+    cx: &App,
+) -> IconDefinition {
+    with_registry(cx, |registry| registry.file_icon(file_name, language))
 }
 
-/// The definition for a directory, in its expanded form when `open`.
-pub(crate) fn folder_definition(open: bool, cx: &App) -> IconDefinition {
-    with_registry(cx, |registry| registry.folder_icon(open))
+/// The definition for a file known only by its name: the language is the one
+/// that name detects.
+pub(crate) fn named_file_definition(file_name: &str, cx: &App) -> IconDefinition {
+    let language = super::languages::detect_file_name(file_name, cx);
+    file_definition(Some(file_name), language.as_deref(), cx)
+}
+
+/// The definition for a directory called `name`, in its expanded form when
+/// `open`.
+pub(crate) fn folder_definition(name: Option<&str>, open: bool, cx: &App) -> IconDefinition {
+    with_registry(cx, |registry| registry.folder_icon(name, open))
 }
 
 /// Resolve against the application registry, or the native defaults before

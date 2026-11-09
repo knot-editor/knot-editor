@@ -25,3 +25,11 @@ export const LANGUAGES: readonly LanguageDefinition[] = [
     autoCloseBefore: ";:.,=}])>",
   },
 ];
+
+/** The `file.<id>` icon of each language: a Lucide glyph, in a color of the
+ * language's own where it has one (the `icon.<id>` color key). */
+export const FILE_ICONS: Readonly<
+  Record<string, { lucide: string; color?: { dark: string; light: string } }>
+> = {
+  python: { lucide: "file-code", color: { dark: "#6ea8d9", light: "#3572a5" } },
+};
