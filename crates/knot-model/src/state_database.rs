@@ -44,7 +44,6 @@ struct Database {
 
 /// SQLite's name for a private in-memory database, which lives as long as
 /// its one connection.
-#[cfg(any(test, feature = "test-support"))]
 pub const IN_MEMORY: &str = ":memory:";
 
 /// Shared handle to the application state database.

@@ -23,7 +23,7 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId, LanguageInfo};
 
 use crate::{
     buffer::BufferModel,
-    editing::{self, EditingDefinition},
+    editing::EditingDefinition,
     syntax::{LanguageResolver, SyntaxLanguage, SyntaxLanguageError},
 };
 
@@ -266,7 +266,7 @@ impl LanguageRegistry {
 
     /// The editing configuration of the registration that defines `id`.
     #[cfg(any(test, feature = "test-support"))]
-    pub fn editing(&self, id: &str) -> Option<Arc<editing::EditingConfiguration>> {
+    pub fn editing(&self, id: &str) -> Option<Arc<crate::editing::EditingConfiguration>> {
         self.resolve(id)
             .map(|language| Arc::clone(language.editing()))
     }

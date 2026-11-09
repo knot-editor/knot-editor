@@ -1,7 +1,5 @@
-use super::{
-    editing::{Bracket, BracketPair, CommentTokens, SyntaxFamily},
-    *,
-};
+use super::*;
+use crate::editing::{Bracket, BracketPair, CommentTokens, SyntaxFamily};
 use crate::syntax::SyntaxQuery;
 
 fn owner(extension: u64) -> LanguageOwner {
