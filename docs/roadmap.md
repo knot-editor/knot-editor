@@ -57,7 +57,7 @@ The editor API and Vim mode initiative is complete: key contexts, long-lived
 editor handles with selection observation, the status bar, undo groups, view
 controls, decoration styles, visual-line movement, and folding, proven by a
 bundled JavaScript Vim mode. Vim features left for later are D113, D142, D144,
-D146, D150, D151, D152, and D158. Language servers
+D146, D150, D151, and D152. Language servers
 (D067) follow it.
 
 The [package manager](plans/package-manager.md) initiative is selected: extension
@@ -250,15 +250,12 @@ complete list for that item.
     differs from the default.
   - Order: after D070; with D045.
 
-- **D061 — Empty normal-group start panel**
-  - Deferred: A workbench whose normal document group would be empty receives
-    an untitled document, so docks never fill the window, including after a
-    project switch to a session with no documents. A dedicated empty panel needs
-    its own surface, focus, and command-routing rules.
-  - Reconsider: The placeholder untitled document gets in the way in daily use,
-    or a start surface (recent projects and files, common commands) is
-    selected. Then replace the placeholder with a native empty-group panel that
-    keeps the normal group's position and accepts opened documents.
+- **D061 — Start surface in the empty center**
+  - Deferred: An empty center paints a blank surface that opens documents and
+    takes drops, but lists nothing.
+  - Reconsider: A start surface (recent projects and files, common commands) is
+    selected. Then draw it in the empty center, keeping its focus and drop
+    behavior.
   - Order: after D083 and D084, whose recent files and projects a start
     surface lists.
 
@@ -676,16 +673,6 @@ Kakoune mode could use it too. The
     the Vim package over existing primitives, with cases beside the others;
     tag objects may wait for D144's syntax-tree queries.
   - Order: after D058; tag objects with or after D144; `n` with D061.
-
-- **D158 — Leaving a dock tool from Vim's `ctrl-w`**
-  - Deferred: Vim's `ctrl-w h j k l` (D058) uses directional pane focus,
-    which reaches a dock's tool pane such as the explorer. Vim follows
-    editors only, so `ctrl-w` does nothing there, and Knot's own chords
-    or a click leave. Pane cycling (`w W t b`) already skips docks.
-  - Reconsider: Landing in a dock by `ctrl-w` gets in the way. Then choose
-    between binding the `ctrl-w` window keys in tool panes' key contexts,
-    and skipping docks for `ctrl-w` direction keys while Vim is active.
-  - Order: after D058.
 
 - **D152 — Persistent Vim global marks**
   - Deferred: The Vim mode's (D058) global marks `A`–`Z` hold a document

@@ -2,7 +2,7 @@
 use super::*;
 use crate::app::commands::declarations::{CommandContext, command};
 use crate::app::workbench::{PaneId, SplitDirection, SplitEdge, Workbench};
-use knot_protocol::CommandOutcome;
+use knot_protocol::{CommandArgumentValue, CommandOutcome};
 
 #[command("file.new", title = "New Document", description = "Open an untitled document.", id = NEW_COMMAND, participant = Workbench)]
 pub(crate) async fn new(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
@@ -311,26 +311,35 @@ pub(crate) async fn go_to_last_tab(context: CommandContext, (): ()) -> Result<()
 }
 
 #[command("workbench.focus-pane-left", title = "Focus Pane Left", description = "Focus the pane to the left.", id = FOCUS_PANE_LEFT_COMMAND, participant = Workbench)]
-pub(crate) async fn focus_pane_left(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    focus_toward(context, SplitEdge::Left).await
+pub(crate) async fn focus_pane_left(
+    context: CommandContext,
+    scope: FocusScope,
+) -> Result<(), CommandOutcome> {
+    focus_toward(context, SplitEdge::Left, scope).await
 }
 
 #[command("workbench.focus-pane-right", title = "Focus Pane Right", description = "Focus the pane to the right.", id = FOCUS_PANE_RIGHT_COMMAND, participant = Workbench)]
 pub(crate) async fn focus_pane_right(
     context: CommandContext,
-    (): (),
+    scope: FocusScope,
 ) -> Result<(), CommandOutcome> {
-    focus_toward(context, SplitEdge::Right).await
+    focus_toward(context, SplitEdge::Right, scope).await
 }
 
 #[command("workbench.focus-pane-up", title = "Focus Pane Up", description = "Focus the pane above.", id = FOCUS_PANE_UP_COMMAND, participant = Workbench)]
-pub(crate) async fn focus_pane_up(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    focus_toward(context, SplitEdge::Top).await
+pub(crate) async fn focus_pane_up(
+    context: CommandContext,
+    scope: FocusScope,
+) -> Result<(), CommandOutcome> {
+    focus_toward(context, SplitEdge::Top, scope).await
 }
 
 #[command("workbench.focus-pane-down", title = "Focus Pane Down", description = "Focus the pane below.", id = FOCUS_PANE_DOWN_COMMAND, participant = Workbench)]
-pub(crate) async fn focus_pane_down(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    focus_toward(context, SplitEdge::Bottom).await
+pub(crate) async fn focus_pane_down(
+    context: CommandContext,
+    scope: FocusScope,
+) -> Result<(), CommandOutcome> {
+    focus_toward(context, SplitEdge::Bottom, scope).await
 }
 
 #[command("workbench.move-tab-left", title = "Move Tab Left", description = "Move the focused tab to the pane on the left, splitting when there is none.", id = MOVE_TAB_LEFT_COMMAND, participant = Workbench)]
@@ -396,9 +405,41 @@ async fn focus_chosen(
         .await
 }
 
-async fn focus_toward(context: CommandContext, edge: SplitEdge) -> Result<(), CommandOutcome> {
+/// Where directional focus may land: any painted pane, or, with
+/// `{ "withinArea": true }`, only panes of the focused pane's area, as Vim's
+/// `ctrl-w` keys keep to the center.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct FocusScope {
+    within_area: bool,
+}
+
+impl crate::app::commands::declarations::CommandArguments for FocusScope {
+    fn decode(value: &CommandArgumentValue) -> Result<Self, CommandOutcome> {
+        let invalid = || CommandOutcome::InvalidArgument {
+            message: "expected null or { withinArea: boolean }".into(),
+        };
+        match value {
+            CommandArgumentValue::Null => Ok(Self::default()),
+            CommandArgumentValue::Object(fields) => match fields.get("withinArea") {
+                Some(CommandArgumentValue::Boolean(within_area)) if fields.len() == 1 => Ok(Self {
+                    within_area: *within_area,
+                }),
+                _ => Err(invalid()),
+            },
+            _ => Err(invalid()),
+        }
+    }
+}
+
+async fn focus_toward(
+    context: CommandContext,
+    edge: SplitEdge,
+    scope: FocusScope,
+) -> Result<(), CommandOutcome> {
     context
-        .shell(move |shell, target, cx| shell.focus_pane_toward(target.tab()?.pane, edge, cx))
+        .shell(move |shell, target, cx| {
+            shell.focus_pane_toward(target.tab()?.pane, edge, scope.within_area, cx)
+        })
         .await
 }
 

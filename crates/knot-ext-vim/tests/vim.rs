@@ -705,6 +705,23 @@ fn ctrl_w_splits_moves_between_and_closes_panes(cx: &mut TestAppContext) {
     assert_eq!(session.focused_pane(cx), 0);
 }
 
+/// `ctrl-w` moves between the center's editors and never into a dock's
+/// tool, where Vim's keys do not apply; Knot's own directional focus still
+/// reaches the dock.
+#[gpui::test]
+fn ctrl_w_directions_stay_in_the_center(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let session = open(&product, "one", 0, cx);
+    let (editor, explorer) = (0, 1);
+    session.run_command("workbench.toggle-explorer", cx);
+    assert_eq!(session.pane_count(cx), 2);
+    assert_eq!(session.focused_pane(cx), editor);
+    session.press("<c-w>h", cx);
+    assert_eq!(session.focused_pane(cx), editor);
+    session.run_command("workbench.focus-pane-left", cx);
+    assert_eq!(session.focused_pane(cx), explorer);
+}
+
 /// A `ctrl-w` left pending shows `^W`, and the next key either completes it
 /// or cancels it without acting as its own command.
 #[gpui::test]

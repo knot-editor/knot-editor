@@ -412,9 +412,14 @@ const WINDOW_REPEAT_LIMIT = 20;
  * moving focus: every child command keeps the pane the command started in. */
 const REPEATED = new Set<WindowAction>(["taller", "shorter", "wider", "narrower"]);
 
+/** Moving focus by direction stays among the center's editors, never
+ * entering a dock's tool, where Vim's keys do not apply. */
+const IN_AREA = new Set<WindowAction>(["focus-left", "focus-down", "focus-up", "focus-right"]);
+
 async function windowCommand(action: WindowAction, count: number | null) {
   const times = REPEATED.has(action) ? Math.min(count ?? 1, WINDOW_REPEAT_LIMIT) : 1;
-  for (let n = 0; n < times; n++) await commands.invoke(WINDOW_COMMANDS[action]);
+  const args = IN_AREA.has(action) ? { withinArea: true } : undefined;
+  for (let n = 0; n < times; n++) await commands.invoke(WINDOW_COMMANDS[action], args);
 }
 
 const MODE_TEXT: Readonly<Record<Mode, string>> = {

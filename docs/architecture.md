@@ -71,9 +71,9 @@ its language and syntax state. Extensions contribute language definitions and
 themes; native code owns grammars, parsing, and the defaults of the color keys
 it paints with, and the application theme maps color keys and highlight names
 to styles.
-Each product session owns a workbench whose split panes contain typed
-document, terminal, or native tool tabs, along with Knot-side focus and key
-routing; tabs hold identities, and the session's workbench entity owns the
+Each product session owns a workbench of areas, a center of document and
+terminal tabs surrounded by docks of native tool tabs, each split into panes,
+along with Knot-side focus and key routing; tabs hold identities, and the session's workbench entity owns the
 view behind each one; the application keeps the registry of open sessions, and a window
 renders one session and forwards raw input to it.
 The workbench retains native tool definitions independently of visible tab
