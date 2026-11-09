@@ -119,18 +119,30 @@ fn svg_bytes(source: &IconSource) -> Option<std::borrow::Cow<'static, [u8]>> {
 #[derive(IntoElement)]
 pub(crate) struct AppIcon {
     definition: Option<IconDefinition>,
+    /// A color key for an icon that has no color of its own.
+    tint: Option<String>,
 }
 
 impl AppIcon {
     pub(crate) fn new(definition: IconDefinition) -> Self {
         Self {
             definition: Some(definition),
+            tint: None,
         }
+    }
+
+    /// Paint an icon without a color of its own in the theme color `key`.
+    pub(crate) fn tinted(mut self, key: Option<String>) -> Self {
+        self.tint = key;
+        self
     }
 
     /// Empty space the size of an icon, to keep rows aligned.
     pub(crate) fn blank() -> Self {
-        Self { definition: None }
+        Self {
+            definition: None,
+            tint: None,
+        }
     }
 }
 
@@ -153,7 +165,7 @@ impl RenderOnce for AppIcon {
                     .object_fit(ObjectFit::Contain)
                     .into_any_element();
             }
-            IconColor::Surface => color::ICON,
+            IconColor::Surface => self.tint.as_deref().unwrap_or(color::ICON),
             IconColor::Key(key) => key,
         };
         let tint = theme(cx).paint_color(key);

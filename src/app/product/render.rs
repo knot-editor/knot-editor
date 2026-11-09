@@ -385,21 +385,23 @@ impl ProductShell {
         let BarItem { id, item } = bar_item;
         let StatusItem {
             text,
+            icon,
             tooltip,
             command,
             color: color_key,
             ..
         } = item;
         let hover = theme(cx).paint_color(color::STATUS_BAR_ITEM_HOVER_BACKGROUND);
+        let item_selector = format!("status-item-{id}");
         div()
-            .id(SharedString::from(format!("status-item-{id}")))
-            .debug_selector(move || format!("status-item-{id}"))
+            .id(SharedString::from(item_selector.clone()))
+            .debug_selector(move || item_selector.clone())
             .flex()
             .items_center()
             .h_full()
             .px_2()
-            .when_some(color_key, |element, key| {
-                element.text_color(theme(cx).paint_color(&key))
+            .when_some(color_key.as_ref(), |element, key| {
+                element.text_color(theme(cx).paint_color(key))
             })
             .when_some(command, |element, command| {
                 element
@@ -428,6 +430,15 @@ impl ProductShell {
                         .text_xs()
                         .build(window, cx)
                 })
+            })
+            .when_some(icon, |element, name| {
+                let icon =
+                    crate::app::icons::AppIcon::new(crate::app::icons::icon_definition(&name, cx))
+                        .tinted(color_key);
+                let selector = format!("status-icon-{id}");
+                element
+                    .gap_1()
+                    .child(div().debug_selector(move || selector.clone()).child(icon))
             })
             .child(text)
             .into_any_element()

@@ -24,6 +24,27 @@ use super::TREE_KEY_CONTEXT;
 use super::icons::{AppIcon, icon_definition};
 use super::theme::{color, theme};
 
+/// An action's face: its icon when it has one, else its label.
+fn action_content(action: &TreeAction, cx: &App) -> AnyElement {
+    match action.icon.as_deref() {
+        Some(name) => AppIcon::new(icon_definition(name, cx)).into_any_element(),
+        None => action.label.clone().into_any_element(),
+    }
+}
+
+/// An icon-only action names itself in a tooltip.
+fn action_tooltip(
+    action: &TreeAction,
+) -> Option<impl Fn(&mut Window, &mut App) -> AnyView + use<>> {
+    action.icon.as_ref()?;
+    let label = SharedString::from(action.label.clone());
+    Some(move |window: &mut Window, cx: &mut App| {
+        gpui_component::tooltip::Tooltip::new(label.clone())
+            .text_xs()
+            .build(window, cx)
+    })
+}
+
 pub(crate) static NEXT_VIEW_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_TREE_GENERATION: AtomicU64 = AtomicU64::new(1);
 
@@ -859,7 +880,10 @@ impl Render for TreeView {
                         .text_color(button_text)
                         .bg(if focused { button_focused } else { button })
                         .hover(|style| style.bg(button_hover))
-                        .child(action.label)
+                        .child(action_content(&action, cx))
+                        .when_some(action_tooltip(&action), |button, tooltip| {
+                            button.tooltip(tooltip)
+                        })
                         .on_click(move |_, window, cx| {
                             entity.update(cx, |tree, cx| {
                                 tree.focus_handle(cx).focus(window, cx);
@@ -962,7 +986,10 @@ impl Render for TreeView {
                                     .hover(|style| {
                                         style.bg(theme.paint_color(color::BUTTON_HOVER_BACKGROUND))
                                     })
-                                    .child(action.label.clone())
+                                    .child(action_content(action, cx))
+                                    .when_some(action_tooltip(action), |button, tooltip| {
+                                        button.tooltip(tooltip)
+                                    })
                                     .on_click(move |_, window, cx| {
                                         entity.update(cx, |tree, cx| {
                                             tree.focus_handle(cx).focus(window, cx);

@@ -292,6 +292,7 @@ fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
         label: "Refresh".into(),
         command: "example.refresh".into(),
         arguments: CommandArgumentValue::Null,
+        icon: None,
     };
     let generation = tree.update(cx, |tree, cx| {
         tree.register_provider("example.git", owner(registration), vec![frame_action], cx)
@@ -309,6 +310,7 @@ fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
             )]
             .into(),
         ),
+        icon: Some("action.stage".into()),
     };
     tree.update(cx, |tree, cx| {
         assert!(tree.apply_response(

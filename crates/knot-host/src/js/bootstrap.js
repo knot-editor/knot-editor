@@ -686,6 +686,7 @@ function statusItemValue(options) {
   if (!Number.isSafeInteger(priority)) throw new TypeError("status item priority must be an integer");
   return {
     text: string(value.text, "status item text must be text"),
+    icon: optionalText(value.icon),
     tooltip: optionalText(value.tooltip),
     command: command && {
       name: string(command.name, "status item command name must be text"),

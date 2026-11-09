@@ -1289,9 +1289,13 @@ declare module "knot" {
    * One semantic command-backed action on a row, group header, or frame.
    * Arguments are JSON and are passed to the command as its argument value;
    * an absent value is null. Clicking an action never activates the row.
+   * An action with an `icon` renders as an icon button that shows `label` as
+   * its tooltip; otherwise it renders as a text button.
    */
   export interface TreeAction {
     readonly label: string;
+    /** An icon name such as `action.refresh`; an unknown name paints a fallback icon. */
+    readonly icon?: string;
     readonly command: string;
     readonly arguments?: JsonValue;
   }
@@ -1482,6 +1486,9 @@ declare module "knot" {
     /** An item with empty text is not shown, so a window's value can hide an
      * item there. */
     readonly text: string;
+    /** An icon name painted before the text, in `color` when one is set; an
+     * unknown name paints a fallback icon. */
+    readonly icon?: string;
     /** Shown while the pointer rests on the item. */
     readonly tooltip?: string;
     /** Run when the item is clicked, in the window that shows it. */

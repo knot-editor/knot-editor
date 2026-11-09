@@ -10,6 +10,7 @@ fn owner(lifecycle: u64) -> StatusOwner {
 fn item(text: &str, side: StatusSide, priority: i64) -> StatusItem {
     StatusItem {
         text: text.into(),
+        icon: None,
         tooltip: None,
         command: None,
         color: None,
@@ -131,6 +132,7 @@ fn hidden_ids_are_skipped_but_keep_their_registration() {
 fn items_decode_from_javascript_values() {
     let item: StatusItem = serde_json::from_value(serde_json::json!({
         "text": "Ln 1, Col 1",
+        "icon": "status.position",
         "tooltip": null,
         "command": { "name": "go-to-line.go", "arguments": null },
         "color": "warning",
@@ -139,10 +141,11 @@ fn items_decode_from_javascript_values() {
     }))
     .unwrap();
     assert_eq!(item.side, StatusSide::Right);
+    assert_eq!(item.icon.as_deref(), Some("status.position"));
     assert_eq!(item.command.unwrap().name, "go-to-line.go");
     assert!(serde_json::from_value::<StatusItem>(serde_json::json!({ "text": 1 })).is_err());
     assert!(
-        serde_json::from_value::<StatusItem>(serde_json::json!({ "text": "x", "icon": "y" }))
+        serde_json::from_value::<StatusItem>(serde_json::json!({ "text": "x", "bogus": "y" }))
             .is_err()
     );
 }

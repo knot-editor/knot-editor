@@ -976,15 +976,7 @@ pub(super) fn tree_item_from_v8<'s>(
             _ => return Err(BoundaryError::Type("invalid tree item kind")),
         },
     };
-    let icon = optional_text_property(scope, object, "icon")?;
-    if icon.as_deref().is_some_and(|icon| {
-        icon.is_empty()
-            || !icon
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-    }) {
-        return Err(BoundaryError::Type("invalid tree icon name"));
-    }
+    let icon = icon_name_property(scope, object)?;
     Ok(TreeItem {
         id: string_property(scope, object, "id")?,
         label: string_property(scope, object, "label")?,
@@ -997,6 +989,22 @@ pub(super) fn tree_item_from_v8<'s>(
         badge: optional_text_property(scope, object, "badge")?,
         actions: tree_actions_from_v8(scope, object, "actions")?,
     })
+}
+
+fn icon_name_property<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    object: v8::Local<'s, v8::Object>,
+) -> Result<Option<String>, BoundaryError> {
+    let icon = optional_text_property(scope, object, "icon")?;
+    if icon.as_deref().is_some_and(|icon| {
+        icon.is_empty()
+            || !icon
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    }) {
+        return Err(BoundaryError::Type("invalid icon name"));
+    }
+    Ok(icon)
 }
 
 pub(super) fn tree_actions_from_v8<'s>(
@@ -1034,6 +1042,7 @@ pub(super) fn tree_action_from_v8<'s>(
         label: string_property(scope, object, "label")?,
         command: string_property(scope, object, "command")?,
         arguments,
+        icon: icon_name_property(scope, object)?,
     })
 }
 

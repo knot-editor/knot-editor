@@ -361,6 +361,9 @@ pub struct TreeAction {
     pub label: String,
     pub command: String,
     pub arguments: CommandArgumentValue,
+    /// An icon name; the action then renders as an icon button.
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 /// Whether a tree row is ordinary selectable content or a group header.

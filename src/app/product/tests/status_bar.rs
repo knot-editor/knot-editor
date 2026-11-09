@@ -19,7 +19,7 @@ const position = await workbench.registerStatusItem("position", {
   command: { name: "status.click", arguments: [7] },
 });
 await workbench.registerStatusItem("language", { text: "Rust", side: "right" });
-await workbench.registerStatusItem("branch", { text: "main" });
+await workbench.registerStatusItem("branch", { text: "main", icon: "folder", color: "warning" });
 await commands.register("status.override", async () => {
   const [window] = await windows.list();
   await position.update({ text: "Ln 9", side: "right", priority: 2 }, { window: window.target });
@@ -99,6 +99,13 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
     assert!(branch.right() <= position.left());
     assert!(position.right() <= language.left());
     assert!(language.right() <= bar.right());
+
+    // An item paints its icon before the text; one without an icon paints none.
+    let icon = bounds(window, "status-icon-branch", cx).expect("the icon is painted");
+    assert!(
+        icon.size.width > px(0.) && icon.left() >= branch.left() && icon.right() < branch.right()
+    );
+    assert!(bounds(window, "status-icon-language", cx).is_none());
 
     // Clicking an item runs its command with its arguments, in the window's
     // focused view.
