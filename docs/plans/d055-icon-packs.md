@@ -127,7 +127,15 @@ string, validated for characters at the host boundary in
 `crates/knot-host/src/engine/marshal.rs`. An unknown name paints the fallback
 icon. `mod icons` no longer needs `#[allow(dead_code)]`.
 
-### 3. Extension API and pack selection
+### 3. Extension API and pack selection ✅ (awaiting review)
+
+Implemented: `icons.define`, `icons.override`, `icons.registerPack`, and
+`icons.listPacks` (handlers in `src/app/extensions/host/handlers.rs`,
+`IconSpec` validation in `crates/knot-model/src/icons.rs`), lifecycle teardown
+that repaints, the fake host, and Select Icon Pack in `@knot/themes`
+(`icon-pack.ts`). `docs/schemas/knot.schema.json` only describes package
+manifests, so the `icons.pack` setting is declared in `knot.d.ts`; its row in
+`docs/settings.md` lands with checkpoint 6.
 
 - Deliverables: `icons.define`, `icons.override`, `icons.registerPack`, and
   `icons.listPacks` in `knot.d.ts`, `knot.js`, and `bootstrap.js`, with SVG
