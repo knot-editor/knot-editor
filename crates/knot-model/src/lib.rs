@@ -24,6 +24,7 @@ pub mod history;
 pub mod indentation;
 pub mod keys;
 pub mod languages;
+pub mod observation;
 pub mod open;
 pub mod resource;
 pub mod settings;
