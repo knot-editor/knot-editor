@@ -273,7 +273,8 @@ impl TabKind {
     /// relocation, and restore checks this declaration.
     pub fn allows(self, area: Area) -> bool {
         match self {
-            Self::Document | Self::Terminal => area == Area::Center,
+            Self::Document => area == Area::Center,
+            Self::Terminal => true,
             Self::Tool => area != Area::Center,
         }
     }
@@ -432,6 +433,10 @@ pub struct Workbench {
     next_tab_id: u64,
     next_presentation_id: u64,
     next_tool_id: u64,
+    /// The dock new terminals open in when no dock terminal exists.
+    terminal_home: DockLocation,
+    /// Dock terminal tabs, most recently focused first.
+    terminal_recent: Vec<TabId>,
     panes: Vec<Pane>,
     focused_pane: Option<PaneId>,
     /// The pane that had focus before the focused one, for going back.
@@ -452,6 +457,8 @@ impl Workbench {
             next_tab_id: 1,
             next_presentation_id: 1,
             next_tool_id: 1,
+            terminal_home: DockLocation::Right,
+            terminal_recent: Vec::new(),
             panes: Vec::new(),
             focused_pane: None,
             previous_pane: None,
@@ -588,6 +595,17 @@ impl Workbench {
         self.tree_mut(area).focused = Some(pane_id);
         if let Area::Dock(dock) = area {
             self.docks[dock.index()].visible = true;
+            let active = self.pane(pane_id).and_then(|pane| {
+                pane.tabs
+                    .iter()
+                    .find(|tab| tab.id == pane.active_tab)
+                    .filter(|tab| tab.surface.kind() == TabKind::Terminal)
+                    .map(|tab| tab.id)
+            });
+            if let Some(id) = active {
+                self.terminal_recent.retain(|recent| *recent != id);
+                self.terminal_recent.insert(0, id);
+            }
         }
     }
 
@@ -1169,6 +1187,8 @@ struct RemovedTab {
     removed_pane: Option<PaneId>,
 }
 
+mod terminals;
+pub use terminals::TerminalToggle;
 mod tools;
 pub use tools::{
     DockLocation, EXPLORER_TOOL_ID, HiddenTool, StoredDock, StoredNode, StoredPlacement,
@@ -1292,14 +1312,10 @@ mod tests {
         assert_eq!(workbench.focused_pane_id(), Some(right));
         assert_eq!(workbench.dock_size(DockLocation::Right), 300.);
         assert!(!workbench.dock_visible(DockLocation::Bottom));
-        // A tab restored into a gone pane, or one its kind does not allow,
-        // lands in the center.
-        let (center, _) = workbench.insert_arranged(
-            right,
-            0,
-            TabSurfaceId::Terminal(TerminalSessionId(1)),
-            false,
-        );
+        // A tab restored into a pane whose area does not allow its kind lands
+        // in the center.
+        let (center, _) =
+            workbench.insert_arranged(right, 0, TabSurfaceId::Document(DocumentId::new(9)), false);
         assert_eq!(workbench.pane_area(center), Some(Area::Center));
     }
 

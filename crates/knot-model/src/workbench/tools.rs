@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::*;
 
-pub const TOOL_LAYOUT_VERSION: u32 = 2;
+pub const TOOL_LAYOUT_VERSION: u32 = 3;
 pub const EXPLORER_TOOL_ID: &str = "knot.explorer";
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -173,14 +173,16 @@ pub struct HiddenTool {
 }
 
 /// The tool-only layout record: each dock's size, visibility, and split tree
-/// of stable tool IDs, and hidden tools' docks, never documents or
-/// terminals.
+/// of stable tool IDs, hidden tools' docks, and the terminal home dock, never
+/// documents or terminals.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ToolLayoutSnapshot {
     pub version: u32,
     /// The left, right, and bottom docks.
     pub docks: [StoredDock; 3],
     pub hidden: Vec<HiddenTool>,
+    /// The dock new terminals open in when none lives in a dock.
+    pub terminal_home: DockLocation,
     /// Whether the user has ever customized the arrangement. Fresh windows
     /// only auto-show stored tools once set, preserving first-run behavior
     /// (no eager explorer before any folder or toggle) on fresh installs.
@@ -220,6 +222,7 @@ impl ToolLayoutSnapshot {
                 dock(DockLocation::Bottom, None),
             ],
             hidden: Vec::new(),
+            terminal_home: DockLocation::Right,
             customized: false,
         }
     }
@@ -470,6 +473,33 @@ impl Workbench {
         }
     }
 
+    fn dock_holds_terminals(&self, dock: DockLocation) -> bool {
+        self.panes.iter().any(|pane| {
+            pane.area == Area::Dock(dock)
+                && pane
+                    .tabs
+                    .iter()
+                    .any(|tab| tab.surface.kind() == TabKind::Terminal)
+        })
+    }
+
+    /// Move every terminal tab of a dock to the center.
+    fn evict_dock_terminals(&mut self, dock: DockLocation) {
+        let terminals = self
+            .panes
+            .iter()
+            .filter(|pane| pane.area == Area::Dock(dock))
+            .flat_map(|pane| pane.tabs.iter().map(move |tab| (pane.id, tab)))
+            .filter(|(_, tab)| tab.surface.kind() == TabKind::Terminal)
+            .map(|(pane, tab)| (pane, tab.id))
+            .collect::<Vec<_>>();
+        for (pane, tab) in terminals {
+            if let Some(source) = self.capture_tab_move(pane, tab) {
+                self.relocate_tab(source, TabMoveDestination::Area(Area::Center));
+            }
+        }
+    }
+
     /// A dock's tree of stable tool IDs, as a tool-only record keeps it.
     fn stored_dock_tree(&self, dock: DockLocation) -> Option<StoredNode> {
         fn node(workbench: &Workbench, layout: &WorkbenchLayout) -> Option<StoredNode> {
@@ -530,12 +560,14 @@ impl Workbench {
                     index: tool.remembered.index,
                 })
                 .collect(),
+            terminal_home: self.terminal_home,
             customized: false,
         }
     }
 
     /// Replace a dock's tools with `root`, a tree of registered tools, and
-    /// set its visibility. Displaced tools are hidden.
+    /// set its visibility. Displaced tools are hidden, and the dock's
+    /// terminals move to the center.
     pub fn arrange_dock(
         &mut self,
         dock: DockLocation,
@@ -562,7 +594,8 @@ impl Workbench {
         for id in displaced.into_iter().chain(placed.iter().copied()) {
             self.hide_tool(id);
         }
-        debug_assert!(self.area_layout(area).is_none(), "docks hold only tools");
+        self.evict_dock_terminals(dock);
+        debug_assert!(self.area_layout(area).is_none(), "the dock is empty");
         let mut focused = None;
         let mut installed = Vec::new();
         let root = root.map(|root| root.map(&mut |id| (TabSurfaceId::Tool(id), ())));
@@ -579,6 +612,7 @@ impl Workbench {
     /// are hidden.
     pub fn restore_tool_layout(&mut self, snapshot: &ToolLayoutSnapshot) {
         self.set_dock_sizes(snapshot.dock_sizes());
+        self.terminal_home = snapshot.terminal_home;
         let registered = self
             .tools
             .iter()
@@ -660,7 +694,10 @@ impl Workbench {
             .root
             .as_ref()
             .and_then(|root| root.prune(&|tool| tool != stable && registered.contains(tool)));
-        if self.stored_dock_tree(dock) == others && self.tool_tab(id).is_none() {
+        if self.stored_dock_tree(dock) == others
+            && self.tool_tab(id).is_none()
+            && !self.dock_holds_terminals(dock)
+        {
             let root = stored
                 .root
                 .as_ref()
@@ -764,10 +801,6 @@ mod tests {
         let (dock, tool_tab) = workbench.show_tool(id).unwrap();
         assert_eq!(workbench.center(), None);
         assert_eq!(workbench.open_tab_for_document(dock, document), None);
-        assert_eq!(
-            workbench.open_terminal_tab(dock, TerminalSessionId(3)),
-            None
-        );
         // A document opened from a dock goes to the center.
         let (pane, _, _) = workbench.open_preview_for_document(dock, document).unwrap();
         assert_eq!(workbench.pane_area(pane), Some(Area::Center));
@@ -983,12 +1016,13 @@ mod tests {
         );
         assert_eq!(snapshot.placement("gone"), None);
         let payload = serde_json::to_string(&snapshot).unwrap();
-        for forbidden in ["document", "terminal", "presentation"] {
+        for forbidden in ["document", "presentation"] {
             assert!(
                 !payload.contains(forbidden),
                 "tool record leaks {forbidden}"
             );
         }
+        assert_eq!(payload.matches("terminal").count(), 1, "only the home");
         let decoded: ToolLayoutSnapshot = serde_json::from_str(&payload).unwrap();
         assert_eq!(decoded, snapshot);
         assert!(workbench.tool(hidden).is_some());
