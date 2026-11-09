@@ -106,6 +106,10 @@ updated. Use ✅ and other emoji to mark executed steps.
   (`~/Library/Application Support/Knot` on macOS unless `~/.config/knot`
   exists). Look at the existing file first; replace it only when it tests
   finished work.
+- At the end of every plan checkpoint, and before reporting Rust work as
+  done, run `just check` and fix everything it reports, warnings included. It
+  covers what CI covers, including a lint of the product build without test
+  features, which test-oriented commands can mask through feature unification.
 - Run `cargo fmt` once at the end of Rust work, before committing. Do not use
   `cargo fmt --check` or manually format individual files.
 - Keep the design simple. Let's not build overly complex abstractions "just in

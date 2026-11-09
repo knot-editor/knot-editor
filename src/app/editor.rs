@@ -293,6 +293,7 @@ impl Editor {
 
     /// Move the selection to byte offsets on character boundaries within the
     /// text. Like other caret moves, this ends the current typing undo group.
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn set_selection(
         &mut self,
         anchor: usize,
@@ -451,6 +452,7 @@ impl Editor {
     }
 
     /// Collapse the lines `lines`; see [`EditorState::fold`].
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn fold(&mut self, lines: Range<usize>, cx: &mut Context<Self>) -> bool {
         self.update_state(cx, |editor, buffer| editor.fold(lines, buffer))
     }
