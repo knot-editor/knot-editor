@@ -150,6 +150,7 @@ function treeAction(value) {
   return {
     label: string(value.label, "tree action label must be text"),
     command: string(value.command, "tree action command must be text"),
+    icon: optionalText(value.icon),
     arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
   };
 }
@@ -165,7 +166,7 @@ function treeItem(value) {
     id: string(value.id, "tree item ID must be text"),
     label: string(value.label, "tree item label must be text"),
     description: optionalText(value.description),
-    icon: token(value.icon, ["file", "folder", "symbol"]),
+    icon: optionalText(value.icon),
     collapsibleState,
     command: optionalText(value.command),
     kind: kind === null ? "item" : kind,

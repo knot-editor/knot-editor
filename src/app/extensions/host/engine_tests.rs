@@ -1111,7 +1111,7 @@ fn provider_results_require_iterables_and_validate_only_recognized_item_fields()
           if (parent === "missing") return [{ id: "id", label: "label" }];
           if (parent === "null-state") return [{ id: "id", label: "label", collapsibleState: null }];
           if (parent === "wrong-description") return [{ id: "id", label: "label", collapsibleState: "none", description: 4 }];
-          if (parent === "bad-token") return [{ id: "id", label: "label", collapsibleState: "none", icon: "other" }];
+          if (parent === "bad-token") return [{ id: "id", label: "label", collapsibleState: "none", icon: "bad icon" }];
           return new Set([{ id: "id", label: "label", collapsibleState: "none", unknown: () => {}, toJSON() { throw new Error("unknown item field evaluated"); } }]);
         },
       } } });
@@ -2730,6 +2730,7 @@ fn install_semantic_providers(
                         label: "Tree item",
                         description: "fixture",
                         icon: "symbol",
+                        actions: [{ label: "Open", icon: "action.open", command: "example.open" }],
                         collapsibleState: parentId === null ? "expanded" : "none",
                       }];
                     },
@@ -2826,6 +2827,7 @@ fn semantic_provider_callbacks_preserve_typed_generations_and_recover_from_failu
     let item = &tree.result.unwrap()[0];
     assert_eq!(item.id, "root");
     assert_eq!(item.icon, Some("symbol".to_owned()));
+    assert_eq!(item.actions[0].icon.as_deref(), Some("action.open"));
     assert_eq!(
         item.collapsible_state,
         knot_protocol::TreeCollapsibleState::Expanded
