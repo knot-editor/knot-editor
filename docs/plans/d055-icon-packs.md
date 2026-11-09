@@ -1,6 +1,6 @@
 # D055 — Icon packs
 
-Status: 🚧 in progress; checkpoints 1–3 done. Roadmap item
+Status: 🚧 in progress; checkpoints 1–4 implemented; 4 awaits review. Roadmap item
 [D055](../roadmap.md); builds on the theme system (D064) and on the
 [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component),
 whose painting and asset APIs this plan uses.
@@ -160,7 +160,13 @@ manifests, so the `icons.pack` setting is declared in `knot.d.ts`; its row in
 - Review gate: a personal-config `post-init.js` with `try.*` commands that
   register a full-color pack, select it, and override one icon.
 
-### 4. File associations, language icons, and tabs
+### 4. File associations, language icons, and tabs ✅
+
+Implemented, awaiting review: `icons.associate` and the full resolver in
+`IconRegistry` (file name, longest extension, language, generic; named folders
+with `.open` forms), `file.<id>` icons with `icon.<id>` color keys in each
+`language-*` package (their own default colors; the bundled themes do not
+restyle them), and the document tab and tab drag label icons.
 
 - Deliverables: `icons.associate` and the full resolver (file-name and
   extension associations, language, generic; named folders and `.open`
