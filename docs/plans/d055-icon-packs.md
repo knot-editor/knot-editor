@@ -1,6 +1,6 @@
 # D055 — Icon packs
 
-Status: 🚧 in progress; checkpoints 1–4 done. Roadmap item
+Status: 🚧 in progress; checkpoints 1–5 done. Roadmap item
 [D055](../roadmap.md); builds on the theme system (D064) and on the
 [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component),
 whose painting and asset APIs this plan uses.
@@ -189,7 +189,7 @@ restyle them), and the document tab and tab drag label icons.
 
 ### 5. Action and status bar icons ✅
 
-Implemented, awaiting review: `TreeAction.icon` and `StatusItemOptions.icon`
+Done and reviewed: `TreeAction.icon` and `StatusItemOptions.icon`
 (`knot.d.ts`, decoded in `marshal.rs` and `bootstrap.js`); an action with an
 icon renders as an icon button with a `Tooltip` of its label in
 `src/app/tree_view.rs`; status items paint the icon before the text, tinted by
