@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 next. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 awaiting its review gate. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -137,21 +137,27 @@ roughly one full run in thirty (vim never draws). It predates this work, and
 the terminal is out of scope. Flaky product tests that raced the extension
 package's worker thread now wait for it to settle.
 
-### 4. Extension-API semantics
+### 4. Extension-API semantics — ✅ implemented, review gate pending
 
-- Deliverables: the conversion, validation, and operation logic of the
-  extension handlers as `knot-model` functions over the plain models; the
-  handlers keep entity resolution, captured-target revalidation, effects,
-  and notification.
-- Validation: plain tests for the moved semantics, including the failures an
-  extension receives; the extension API, observation, editor API, and
-  package case tests unchanged.
-- **Implementation context:** `src/app/extensions/host/handlers.rs`,
-  `extensions/buffers.rs`, `extensions/semantics.rs`, and the dispatch in
-  `extensions/host.rs`. Annotated handlers stay in the shell, so
-  `knot-handler-macros` and `host::declarations` validation are unchanged.
-  Work through handler groups (buffers and editors, workbench and views,
-  documents and resources, semantic UI), each a commit.
+Most handler decisions already sat in models and stores: buffer edits and
+contributions in `BufferModel`, document, language, theme, keymap, and record
+semantics in the checkpoint 3 stores, and open, close, and workspace flows in
+`product::operations` (checkpoint 5). The remaining semantics moved into
+`knot-model` with plain tests:
+
+- `BufferModel::{line_content_range, text_offset, line_at_offset}` answer the
+  line and offset lookups; `BufferSubscriptionRegistry` is plain model code.
+- `EditorState::{set_selection_checked, fold_through, unfold_through}` validate
+  the offsets and line ranges an extension names.
+- `SettingsStore::set_all` writes a batch atomically, naming the offending
+  key; `restore_integers` and `SettingsScope::describe` convert and describe.
+- `ApplicationObservation` (`observation.rs`) compares snapshots and owns the
+  subscriptions; the shell keeps the wake-up signal.
+
+The handlers that remain (workbench and views, documents and resources,
+semantic UI, transient pickers, records) resolve entities, call an owner,
+await, revalidate, and notify, so they were left in place.
+
 - Review gate: a sample of handlers reads as lookup, call, effects, notify.
 
 ### 5. Product operations
