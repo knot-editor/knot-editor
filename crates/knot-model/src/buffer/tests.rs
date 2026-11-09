@@ -1120,3 +1120,38 @@ fn marks_validate_offsets_and_end_with_disposal_or_their_lifecycle() {
         Err(ContributionError::InvalidRange)
     );
 }
+
+#[test]
+fn line_content_excludes_terminators_and_rejects_missing_lines() {
+    let model = BufferModel::from_text("one\r\ntwo\nthree");
+    assert_eq!(model.line_content_range(0), Some(0..3));
+    assert_eq!(model.line_content_range(1), Some(5..8));
+    assert_eq!(model.line_content_range(2), Some(9..14));
+    assert_eq!(model.line_content_range(3), None);
+}
+
+#[test]
+fn line_at_offset_requires_a_character_boundary_within_the_text() {
+    let model = BufferModel::from_text("a\u{e9}\nb");
+    assert_eq!(model.line_at_offset(0), Some(0));
+    assert_eq!(model.line_at_offset(2), None);
+    assert_eq!(model.line_at_offset(4), Some(1));
+    assert_eq!(model.line_at_offset(5), Some(1));
+    assert_eq!(model.line_at_offset(6), None);
+}
+
+#[test]
+fn subscriptions_belong_to_their_lifecycle_and_buffer() {
+    let (extension, other) = (ExtensionId::new(1), ExtensionId::new(2));
+    let lifecycle = ExtensionLifecycleId::new(1);
+    let (first, second) = (BufferHandle::new(1), BufferHandle::new(2));
+    let mut registry = BufferSubscriptionRegistry::new();
+    let a = registry.subscribe(first, extension, lifecycle);
+    let b = registry.subscribe(second, other, lifecycle);
+    assert!(!registry.unsubscribe(a, other, lifecycle));
+    assert_eq!(registry.for_buffer(first).count(), 1);
+    registry.remove_buffer(first);
+    assert_eq!(registry.for_buffer(first).count(), 0);
+    registry.remove_lifecycle(other, lifecycle);
+    assert!(!registry.unsubscribe(b, other, lifecycle));
+}

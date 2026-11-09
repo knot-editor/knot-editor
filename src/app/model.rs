@@ -7,7 +7,7 @@ use std::{
 };
 
 use gpui::{AppContext, Context, Entity, Subscription, WeakEntity};
-use knot_protocol::{BufferHandle, BufferSubscriptionId, ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{BufferHandle, ExtensionId, ExtensionLifecycleId};
 
 pub use knot_model::buffer::*;
 
@@ -170,99 +170,6 @@ impl BufferRegistry {
 }
 
 impl Default for BufferRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Foreground-authoritative buffer-change subscriptions.
-pub struct BufferSubscriptionRegistry {
-    next_subscription: u64,
-    subscriptions: HashMap<BufferSubscriptionId, BufferSubscription>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct BufferSubscription {
-    pub id: BufferSubscriptionId,
-    pub buffer: BufferHandle,
-    pub extension: ExtensionId,
-    pub lifecycle: ExtensionLifecycleId,
-}
-
-impl BufferSubscriptionRegistry {
-    pub fn new() -> Self {
-        Self {
-            next_subscription: 1,
-            subscriptions: HashMap::new(),
-        }
-    }
-
-    pub(crate) fn subscribe(
-        &mut self,
-        buffer: BufferHandle,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-    ) -> BufferSubscriptionId {
-        let id = BufferSubscriptionId::new(self.next_subscription);
-        self.next_subscription = self
-            .next_subscription
-            .checked_add(1)
-            .expect("subscription space exhausted");
-        self.subscriptions.insert(
-            id,
-            BufferSubscription {
-                id,
-                buffer,
-                extension,
-                lifecycle,
-            },
-        );
-        id
-    }
-
-    pub(crate) fn unsubscribe(
-        &mut self,
-        id: BufferSubscriptionId,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-    ) -> bool {
-        if self.subscriptions.get(&id).is_some_and(|subscription| {
-            subscription.extension == extension && subscription.lifecycle == lifecycle
-        }) {
-            self.subscriptions.remove(&id);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub(crate) fn for_buffer(
-        &self,
-        buffer: BufferHandle,
-    ) -> impl Iterator<Item = BufferSubscription> + '_ {
-        self.subscriptions
-            .values()
-            .copied()
-            .filter(move |subscription| subscription.buffer == buffer)
-    }
-
-    pub(crate) fn remove_lifecycle(
-        &mut self,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-    ) {
-        self.subscriptions.retain(|_, subscription| {
-            subscription.extension != extension || subscription.lifecycle != lifecycle
-        });
-    }
-
-    pub(crate) fn remove_buffer(&mut self, buffer: BufferHandle) {
-        self.subscriptions
-            .retain(|_, subscription| subscription.buffer != buffer);
-    }
-}
-
-impl Default for BufferSubscriptionRegistry {
     fn default() -> Self {
         Self::new()
     }

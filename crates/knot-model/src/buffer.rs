@@ -13,7 +13,7 @@ use knot_core::{
     anchored_range::{AnchoredRangeId, AnchoredRangeStore},
     buffer::{BufferEdit, TextBuffer},
 };
-use knot_protocol::ExtensionKey;
+use knot_protocol::{BufferHandle, BufferSubscriptionId, ExtensionKey};
 use knot_protocol::{
     ByteRange, Decoration, EditorContribution, ExtensionId, ExtensionLifecycleId, SnapshotText,
 };
@@ -380,6 +380,32 @@ impl BufferModel {
 
     pub fn line_of_offset(&self, offset: usize) -> usize {
         self.buffer.line_of_offset(offset)
+    }
+
+    /// The range of a 0-based line without its `\n` or `\r\n` terminator, or
+    /// `None` past the last line.
+    pub fn line_content_range(&self, line: u64) -> Option<Range<usize>> {
+        let line = usize::try_from(line)
+            .ok()
+            .filter(|line| *line < self.line_count())?;
+        let mut range = self.line_range(line);
+        if line + 1 < self.line_count()
+            && range.end > range.start
+            && self.is_char_boundary(range.end - 1)
+            && self.read(range.end - 1..range.end) == "\r"
+        {
+            range.end -= 1;
+        }
+        Some(range)
+    }
+
+    /// The 0-based line holding a byte offset, or `None` unless the offset is
+    /// on a character boundary within the text.
+    pub fn line_at_offset(&self, offset: u64) -> Option<usize> {
+        let offset = usize::try_from(offset)
+            .ok()
+            .filter(|offset| *offset <= self.len() && self.is_char_boundary(*offset))?;
+        Some(self.line_of_offset(offset))
     }
 
     /// Document-wide UTF-16 offset of a byte offset on a character boundary.
@@ -1343,6 +1369,95 @@ pub enum BufferAccessError {
 }
 
 mod folds;
+
+/// Foreground-authoritative buffer-change subscriptions.
+pub struct BufferSubscriptionRegistry {
+    next_subscription: u64,
+    subscriptions: HashMap<BufferSubscriptionId, BufferSubscription>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BufferSubscription {
+    pub id: BufferSubscriptionId,
+    pub buffer: BufferHandle,
+    pub extension: ExtensionId,
+    pub lifecycle: ExtensionLifecycleId,
+}
+
+impl BufferSubscriptionRegistry {
+    pub fn new() -> Self {
+        Self {
+            next_subscription: 1,
+            subscriptions: HashMap::new(),
+        }
+    }
+
+    pub fn subscribe(
+        &mut self,
+        buffer: BufferHandle,
+        extension: ExtensionId,
+        lifecycle: ExtensionLifecycleId,
+    ) -> BufferSubscriptionId {
+        let id = BufferSubscriptionId::new(self.next_subscription);
+        self.next_subscription = self
+            .next_subscription
+            .checked_add(1)
+            .expect("subscription space exhausted");
+        self.subscriptions.insert(
+            id,
+            BufferSubscription {
+                id,
+                buffer,
+                extension,
+                lifecycle,
+            },
+        );
+        id
+    }
+
+    pub fn unsubscribe(
+        &mut self,
+        id: BufferSubscriptionId,
+        extension: ExtensionId,
+        lifecycle: ExtensionLifecycleId,
+    ) -> bool {
+        if self.subscriptions.get(&id).is_some_and(|subscription| {
+            subscription.extension == extension && subscription.lifecycle == lifecycle
+        }) {
+            self.subscriptions.remove(&id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn for_buffer(
+        &self,
+        buffer: BufferHandle,
+    ) -> impl Iterator<Item = BufferSubscription> + '_ {
+        self.subscriptions
+            .values()
+            .copied()
+            .filter(move |subscription| subscription.buffer == buffer)
+    }
+
+    pub fn remove_lifecycle(&mut self, extension: ExtensionId, lifecycle: ExtensionLifecycleId) {
+        self.subscriptions.retain(|_, subscription| {
+            subscription.extension != extension || subscription.lifecycle != lifecycle
+        });
+    }
+
+    pub fn remove_buffer(&mut self, buffer: BufferHandle) {
+        self.subscriptions
+            .retain(|_, subscription| subscription.buffer != buffer);
+    }
+}
+
+impl Default for BufferSubscriptionRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[cfg(test)]
 mod tests;

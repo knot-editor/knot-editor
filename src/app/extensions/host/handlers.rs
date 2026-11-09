@@ -783,18 +783,9 @@ pub(crate) async fn line_range(
             || commands.is_cancelled(request.invocation),
             cx,
             |model| {
-                let line = usize::try_from(arguments.value)
-                    .ok()
-                    .filter(|line| *line < model.line_count())
+                let range = model
+                    .line_content_range(arguments.value)
                     .ok_or(BufferError::InvalidRange)?;
-                let mut range = model.line_range(line);
-                if line + 1 < model.line_count()
-                    && range.end > range.start
-                    && model.is_char_boundary(range.end - 1)
-                    && model.read(range.end - 1..range.end) == "\r"
-                {
-                    range.end -= 1;
-                }
                 Ok(ByteRange {
                     start_byte_offset: range.start,
                     end_byte_offset: range.end,
@@ -819,11 +810,10 @@ pub(crate) async fn line_at(
             || commands.is_cancelled(request.invocation),
             cx,
             |model| {
-                let offset = usize::try_from(arguments.value)
-                    .ok()
-                    .filter(|offset| *offset <= model.len() && model.is_char_boundary(*offset))
+                let line = model
+                    .line_at_offset(arguments.value)
                     .ok_or(BufferError::InvalidRange)?;
-                Ok(model.line_of_offset(offset) as u64)
+                Ok(line as u64)
             },
         )
     })?
