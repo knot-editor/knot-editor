@@ -1,6 +1,6 @@
 # Dock lanes
 
-Status: 🚧 checkpoint 2 implemented, awaiting its review gate. Checkpoint 5's
+Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 next. Checkpoint 5's
 icons come from the completed icon packs (D055).
 
 ## Goal
@@ -122,49 +122,21 @@ empty, and window layouts and tool-layout memory are version 2; see
 Carried forward: the workbench decisions still describe tools as dock groups
 of one split tree (checkpoint 6).
 
-### 2. 🔍 Dock interactions and homes
+### 2. ✅ Dock interactions and homes
 
-Docks become directly manageable: whole-dock toggles, the shared toggle
-pattern, remembered homes, move-to-area commands, and drag targets by kind.
+Done and approved. Docks and tools toggle on one show/focus/hide pattern
+(`Workbench::toggle_dock`, `Workbench::toggle_tool`), Move Tab to Left / Right
+/ Bottom Dock / Center move tabs through `TabMoveDestination::Area`, and drags
+offer targets only where `TabKind::allows` the area; see
+[workbench](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
+Choices made along the way:
 
-Implemented, awaiting the review gate:
-
-- ✅ Toggle Left / Right / Bottom Dock (`workbench.toggle-*-dock`), Toggle
-  Explorer, and Toggle Tool… on the show/focus/hide pattern
-  (`Workbench::toggle_dock`, `Workbench::toggle_tool`); Toggle Explorer now
-  focuses the explorer it shows.
-- ✅ A tool's home is the dock it is in or last left, which the existing
-  tool-only record already carries to fresh windows; no separate home field
-  was needed for tools (the terminal home arrives with checkpoint 3).
-- ✅ Move Tab to Left Dock / Right Dock / Bottom Dock / Center through
-  `TabMoveDestination::Area`; Move Tool to Dock… and its picker are gone. The
-  palette has no per-target availability, so "offered only when allowed"
-  means the command returns Unavailable for a disallowed or current area.
-- ✅ Drop targets filter by `TabKind::allows`: workbench edges only for
-  dock-capable kinds, panes and the empty center only for kinds their area
-  allows.
-- ✅ Reset Layout already returned tools to declared defaults; covered by the
-  existing test.
-- No default keys were added; none existed for these commands.
-
-- **Deliverables:** Toggle Left / Right / Bottom Dock; Toggle Explorer and a
-  Toggle Tool… picker on the show/focus/hide pattern; tool hide restoring last
-  pane and position, else home; remembered homes published on explicit moves
-  and inherited by fresh windows; Move Tab to Left Dock / Right Dock / Bottom
-  Dock / Center replacing Move Tool to Dock…; drag drop targets by allowed
-  area; Reset Layout to declared defaults.
-- **Validation:** product tests for each toggle state transition and focus
-  return, hide/show restoring position, homes published only by explicit moves
-  and inherited by a fresh window, move commands availability per kind, drop
-  rejection of disallowed kinds (`product/tab_drag/tests.rs`).
-- **Review gate:** try commands that move tools between docks, toggle docks,
-  and open a fresh window to check inherited homes.
-- **Implementation context:** commands in `src/app/product/commands.rs`
-  (`toggle-explorer`, `toggle-bottom-dock`, `move-tool-to-dock`,
-  `reset-layout`), `product/move_tool.rs`, `product/tools.rs`;
-  drop targets in `product/tab_drag.rs`; homes in `src/app/tool_layout.rs`
-  beside the existing publish rules; keymap presets in
-  `src/app/commands/keymaps/presets.rs`.
+- A tool's home is the dock it is in or last left, which the tool-only record
+  already carries to fresh windows; only the terminal home (checkpoint 3)
+  needs a new field.
+- The palette has no per-target availability, so move commands a tab's kind
+  or current area rules out return Unavailable.
+- Toggle Explorer now focuses the explorer it shows.
 
 ### 3. ⏳ Terminals in docks
 
