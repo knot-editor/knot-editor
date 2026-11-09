@@ -112,6 +112,24 @@ impl EditorState {
         valid
     }
 
+    /// Collapse the lines an extension named, `start` through `last`
+    /// inclusive; see [`Self::fold`].
+    pub fn fold_through(&mut self, start: u64, last: u64, buffer: &mut BufferModel) -> bool {
+        let lines = usize::try_from(start).ok().zip(usize::try_from(last).ok());
+        lines
+            .and_then(|(start, last)| Some(start..last.checked_add(1)?))
+            .is_some_and(|lines| self.fold(lines, buffer))
+    }
+
+    /// Expand the fold over the lines `start` through `last` inclusive, if
+    /// there is one.
+    pub fn unfold_through(&mut self, start: u64, last: u64, buffer: &mut BufferModel) {
+        let lines = usize::try_from(start).ok().zip(usize::try_from(last).ok());
+        if let Some(lines) = lines.and_then(|(start, last)| Some(start..last.checked_add(1)?)) {
+            self.unfold(&lines, buffer);
+        }
+    }
+
     /// Collapse every range of `all` that is a valid, uncollapsed fold, and
     /// hide their lines once.
     fn fold_all_of(&mut self, all: &[Range<usize>], buffer: &mut BufferModel) {

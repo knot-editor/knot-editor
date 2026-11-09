@@ -620,6 +620,24 @@ impl EditorState {
         self.caret_shapes.retain(|(key, _)| *key != owner);
     }
 
+    /// Move the selection to offsets an extension named, or return `false`
+    /// and change nothing unless both lie on character boundaries within the
+    /// text.
+    pub fn set_selection_checked(
+        &mut self,
+        anchor: u64,
+        caret: u64,
+        reveal: Reveal,
+        buffer: &mut BufferModel,
+    ) -> bool {
+        let (Some(anchor), Some(caret)) = (buffer.text_offset(anchor), buffer.text_offset(caret))
+        else {
+            return false;
+        };
+        self.set_selection(anchor, caret, reveal, buffer);
+        true
+    }
+
     /// Move the selection to byte offsets on character boundaries within the
     /// text. Like other caret moves, this ends the current typing undo group.
     pub fn set_selection(

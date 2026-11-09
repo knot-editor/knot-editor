@@ -399,13 +399,18 @@ impl BufferModel {
         Some(range)
     }
 
-    /// The 0-based line holding a byte offset, or `None` unless the offset is
-    /// on a character boundary within the text.
-    pub fn line_at_offset(&self, offset: u64) -> Option<usize> {
-        let offset = usize::try_from(offset)
+    /// A byte offset an extension named, or `None` unless it is on a
+    /// character boundary within the text.
+    pub fn text_offset(&self, offset: u64) -> Option<usize> {
+        usize::try_from(offset)
             .ok()
-            .filter(|offset| *offset <= self.len() && self.is_char_boundary(*offset))?;
-        Some(self.line_of_offset(offset))
+            .filter(|offset| *offset <= self.len() && self.is_char_boundary(*offset))
+    }
+
+    /// The 0-based line holding a byte offset; see [`Self::text_offset`].
+    pub fn line_at_offset(&self, offset: u64) -> Option<usize> {
+        self.text_offset(offset)
+            .map(|offset| self.line_of_offset(offset))
     }
 
     /// Document-wide UTF-16 offset of a byte offset on a character boundary.

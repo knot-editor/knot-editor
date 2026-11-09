@@ -305,6 +305,20 @@ impl Editor {
         });
     }
 
+    /// Move the selection to extension-named offsets; see
+    /// [`EditorState::set_selection_checked`].
+    pub(crate) fn set_selection_checked(
+        &mut self,
+        anchor: u64,
+        caret: u64,
+        reveal: Reveal,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.update_state(cx, |editor, buffer| {
+            editor.set_selection_checked(anchor, caret, reveal, buffer)
+        })
+    }
+
     /// Select from `anchor` to `caret`, a caret alone when they are equal,
     /// as a click or drag does.
     pub(super) fn select_from(
@@ -444,6 +458,21 @@ impl Editor {
     /// Expand the collapsed fold over exactly `lines`, if there is one.
     pub(crate) fn unfold(&mut self, lines: &Range<usize>, cx: &mut Context<Self>) {
         self.update_state(cx, |editor, buffer| editor.unfold(lines, buffer));
+    }
+
+    /// Collapse the lines `start` through `last` inclusive; see
+    /// [`EditorState::fold_through`].
+    pub(crate) fn fold_through(&mut self, start: u64, last: u64, cx: &mut Context<Self>) -> bool {
+        self.update_state(cx, |editor, buffer| {
+            editor.fold_through(start, last, buffer)
+        })
+    }
+
+    /// Expand the fold over the lines `start` through `last` inclusive.
+    pub(crate) fn unfold_through(&mut self, start: u64, last: u64, cx: &mut Context<Self>) {
+        self.update_state(cx, |editor, buffer| {
+            editor.unfold_through(start, last, buffer)
+        });
     }
 
     /// The regions the language's `folds` query or, without one, the text's

@@ -2103,19 +2103,10 @@ pub(crate) async fn editor_set_selection(
     let request = context.request;
     context.foreground(|host, cx| {
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
-        let valid = |offset: u64| {
-            let model = editor.read(cx).model().read(cx);
-            usize::try_from(offset)
-                .ok()
-                .filter(|offset| *offset <= model.len() && model.is_char_boundary(*offset))
-        };
-        let (Some(anchor), Some(caret)) = (valid(arguments.anchor), valid(arguments.caret)) else {
-            return Err(EditorError::InvalidRange);
-        };
-        editor.update(cx, |editor, cx| {
-            editor.set_selection(anchor, caret, arguments.reveal, cx);
+        let moved = editor.update(cx, |editor, cx| {
+            editor.set_selection_checked(arguments.anchor, arguments.caret, arguments.reveal, cx)
         });
-        Ok(())
+        moved.then_some(()).ok_or(EditorError::InvalidRange)
     })?
 }
 
@@ -2356,11 +2347,8 @@ pub(crate) async fn editor_fold(
     let request = context.request;
     context.foreground(|host, cx| {
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
-        let start = usize::try_from(arguments.start).map_err(|_| EditorError::InvalidRange)?;
-        let end = usize::try_from(arguments.end).map_err(|_| EditorError::InvalidRange)?;
         let folded = editor.update(cx, |editor, cx| {
-            end.checked_add(1)
-                .is_some_and(|end| editor.fold(start..end, cx))
+            editor.fold_through(arguments.start, arguments.end, cx)
         });
         folded.then_some(()).ok_or(EditorError::InvalidRange)
     })?
@@ -2376,11 +2364,9 @@ pub(crate) async fn editor_unfold(
     let request = context.request;
     context.foreground(|host, cx| {
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
-        let start = usize::try_from(arguments.start).map_err(|_| EditorError::InvalidRange)?;
-        let end = usize::try_from(arguments.end).map_err(|_| EditorError::InvalidRange)?;
-        if let Some(end) = end.checked_add(1) {
-            editor.update(cx, |editor, cx| editor.unfold(&(start..end), cx));
-        }
+        editor.update(cx, |editor, cx| {
+            editor.unfold_through(arguments.start, arguments.end, cx)
+        });
         Ok(())
     })?
 }

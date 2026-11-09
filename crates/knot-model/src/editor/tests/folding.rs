@@ -268,3 +268,34 @@ fn restored_folds_clamp_to_shorter_text_and_drop_when_empty() {
     assert_eq!(shorter.editor.folds(), vec![1..3]);
     assert_eq!(rows(&shorter), 2);
 }
+
+#[test]
+fn extension_folds_take_inclusive_lines_and_reject_other_ranges() {
+    let mut f = editor();
+    assert!(f.editor.fold_through(2, 4, &mut f.buffer));
+    assert_eq!(f.editor.folds(), vec![2..5]);
+    assert!(!f.editor.fold_through(2, 2, &mut f.buffer));
+    assert!(!f.editor.fold_through(8, 10, &mut f.buffer));
+    assert!(!f.editor.fold_through(1, u64::MAX, &mut f.buffer));
+    f.editor.unfold_through(2, 4, &mut f.buffer);
+    assert!(f.editor.folds().is_empty());
+}
+
+#[test]
+fn extension_selections_need_character_boundaries_within_the_text() {
+    let mut f = Fixture::new("a\u{e9}b");
+    assert!(
+        f.editor
+            .set_selection_checked(1, 3, Reveal::Nearest, &mut f.buffer)
+    );
+    assert_eq!(f.editor.selection(&f.buffer), (1, 3));
+    assert!(
+        !f.editor
+            .set_selection_checked(0, 2, Reveal::Nearest, &mut f.buffer)
+    );
+    assert!(
+        !f.editor
+            .set_selection_checked(0, 5, Reveal::Nearest, &mut f.buffer)
+    );
+    assert_eq!(f.editor.selection(&f.buffer), (1, 3));
+}
