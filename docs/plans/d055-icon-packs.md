@@ -26,10 +26,12 @@ setting, or replace a single icon.
   - `"original"`: the SVG's own colors are kept (`svg` only);
   - absent: the surface's ordinary icon color.
 
-  Tinted icons go through gpui's `svg()` single-color shape rendering, served
-  by an application `AssetSource` whose paths are keyed by content, so
-  replacing a definition changes the path and invalidates gpui's raster
-  cache. Full-color icons go through `img()` with an SVG image source.
+  Tinted icons go through gpui-component's `Icon` (gpui's `svg()` single-color
+  shape rendering) fed with the SVG bytes through `Icon::data`; gpui keys its
+  raster cache by a hash of the bytes, so replacing a definition invalidates
+  it with no asset source. `Icon` supplies sizing at the surface's text size,
+  so zoom needs no extra work. Full-color icons go through gpui's `img()` with
+  an `ImageFormat::Svg` image source.
 - **Lookup.** For one name, the first of these that defines it wins:
   1. **override**: `icons.override(name, definition)`, intended mainly for
      personal config. The latest override wins, and disposing it reveals the
@@ -53,13 +55,11 @@ setting, or replace a single icon.
 - **Native defaults.** The builtin Lucide glyphs and the native default
   table live in Rust, for the same reason native color-key defaults do:
   native surfaces paint before packages start and when they fail. Lucide comes
-  from the `lucide-static-svg` crate (ISC icons, MIT wrapper, no dependencies,
-  tracking upstream releases; `Icon::all()`, `name()`, `svg_bytes()`). If it
-  stops tracking upstream, vendor `lucide-static` through the existing npm
-  toolchain in `build.rs` instead. `lucide-gpui` is rejected: it depends on
-  `gpui-kit`, Longbridge's umbrella bundle, which Knot does not use (it
-  depends on gpui-component alone), and its own value is only an asset
-  source over the same SVGs.
+  from `gpui-kit-assets`, which gpui-component already
+  depends on (ISC icons, the full Lucide catalog; `AllAssets::get("icons/<name>.svg")`
+  returns the bytes of a Lucide name, `IconName::ALL` lists them). Knot adds
+  no new crate; it reads the bytes and never registers `AllAssets` as an
+  asset source.
 - **File icons** are resolved apart from the icons themselves. For a file,
   the resolver tries, in order, the names that a registered association gives
   for the exact file name and for the extension, then `file.<languageId>`
@@ -83,7 +83,9 @@ setting, or replace a single icon.
 - Extension trees: `TreeItem.icon` becomes an icon name, which replaces the
   fixed `TreeIcon` enum.
 - Tree row and frame toolbar actions: an optional `icon`. An action with an
-  icon renders as an icon button and shows its label as a tooltip.
+  icon renders as an icon button and shows its label as a tooltip
+  (gpui-component's `Tooltip`, as in `src/app/product/render.rs`). Buttons
+  stay native, since action focus and key routing are Knot's.
 - Document tabs: the resolved file icon before the title.
 - Status bar items: an optional `icon` before the text, painted in the item's
   `color` when one is set.
@@ -104,9 +106,6 @@ setting, or replace a single icon.
   Grow it as packages ask, rather than reproducing every Lucide name.
 - Whether folder name associations should also match path suffixes such as
   `.github/workflows`. Plain names until a pack needs more.
-- Whether icons paint through gpui-component's `Icon` element or Knot's own
-  `svg()` element. Decide in checkpoint 1, after re-reading the painting and
-  asset APIs of the current gpui.
 
 ## Checkpoints
 
@@ -115,22 +114,21 @@ setting, or replace a single icon.
 - Deliverables: an application icon registry with the four-level lookup,
   the native default table (`file`, `folder`, `folder.open`, `symbol`,
   `tree.collapsed`, `tree.expanded`, and the fallback) over Lucide, an icon
-  element that paints tinted and full-color definitions at the surface's text
-  size and zoom, the content-keyed asset source, the `icons.pack` setting
+  element that paints tinted (gpui-component `Icon::data`) and full-color
+  (`img()`) definitions at the surface's text size and zoom, the
+  `icons.pack` setting
   read on change, and a file resolver covering only language and generic
   candidates. No surface uses icons yet.
 - Validation: unit tests for lookup precedence (override over pack over
-  default over fallback, disposal revealing the previous level), for the
-  invalidation of content keys, and for resolver candidates; a gpui test
-  window that paints a tinted and a full-color icon through the asset
-  source; a test that every native default names an existing Lucide glyph.
+  default over fallback, disposal revealing the previous level), for
+  resolver candidates; a gpui test
+  window that paints a tinted and a full-color icon; a test that every native default names an existing Lucide glyph.
 - **Implementation context:** add `src/app/icons.rs`, declared in
   `src/app/mod.rs` and exposed as an `ApplicationIcons` global. Mirror the
   registration, owner, and lifecycle structure of `ThemeRegistry` in
   `crates/knot-model/src/themes.rs`, and the native defaults table of
-  `native_color_definitions` in `crates/knot-model/src/theme.rs`. Register the asset source
-  with `Application::new().with_assets(..)` in `src/app/product/launch.rs`
-  (around line 393), and in the test application setup. Detection uses
+  `native_color_definitions` in `crates/knot-model/src/theme.rs`.
+  Detection uses
   `LanguageRegistry::detect(file_name, "")` in `crates/knot-model/src/languages.rs`.
   Add the setting beside `THEME_*` in `crates/knot-model/src/settings.rs` and observe it
   like `themes::apply`. Add an `icon` color key, the default icon tint, to the
@@ -231,8 +229,9 @@ setting, or replace a single icon.
   native Lucide defaults, live application); the tree decision's D055
   sentence updated; an extension guide section on defining icons, packs, and
   associations, replacing `docs/extension-api.md:254`; `icons.pack` in
-  `docs/settings.md`; Lucide's ISC licence noted wherever bundled licences
-  are listed; D055 removed from the roadmap and its ordering line; this plan
+  `docs/settings.md`; Lucide's ISC licence (via `gpui-kit-assets`) noted wherever bundled
+  licences are listed; the gpui-component paragraph of the platform decision
+  updated to name `Icon` as an adopted leaf; D055 removed from the roadmap and its ordering line; this plan
   removed.
 - Validation: the `review-docs` checks for the touched files.
 - Review gate: the docs describe the shipped behavior only.
