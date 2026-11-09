@@ -27,6 +27,26 @@ impl Rect {
     }
 }
 
+/// Where the bottom dock sits relative to the side docks.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BottomDockLayout {
+    /// Under the center, between the side docks, which span the full height.
+    #[default]
+    Contained,
+    /// Across the full width, with the side docks above it.
+    Full,
+}
+
+impl BottomDockLayout {
+    /// The layout a setting value names; unknown values are contained.
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "full" => Self::Full,
+            _ => Self::Contained,
+        }
+    }
+}
+
 /// The share of a split's extent that one grow or shrink moves.
 const RESIZE_STEP: f32 = 0.05;
 /// Logical pixels that one grow or shrink adds to or removes from a dock.
@@ -141,10 +161,23 @@ pub fn neighbor(rects: &[(PaneId, Rect)], from: PaneId, edge: SplitEdge) -> Opti
 
 impl Workbench {
     /// Each painted area's rectangle when the workbench fills `bounds`: the
-    /// side docks span the full height, the bottom dock sits under the center
-    /// between them, and the center takes the rest.
-    pub fn area_rects(&self, bounds: Rect) -> Vec<(Area, Rect)> {
+    /// side docks and the bottom dock surround the center as `layout`
+    /// arranges them, and the center takes the rest.
+    pub fn area_rects(&self, bounds: Rect, layout: BottomDockLayout) -> Vec<(Area, Rect)> {
         let shown = |dock: DockLocation| self.area_shown(Area::Dock(dock));
+        let bottom = if shown(DockLocation::Bottom) {
+            self.dock_size(DockLocation::Bottom).min(bounds.height)
+        } else {
+            0.
+        };
+        // The band the side docks and the center share.
+        let upper = match layout {
+            BottomDockLayout::Contained => bounds,
+            BottomDockLayout::Full => Rect {
+                height: bounds.height - bottom,
+                ..bounds
+            },
+        };
         let left = if shown(DockLocation::Left) {
             self.dock_size(DockLocation::Left).min(bounds.width)
         } else {
@@ -158,17 +191,16 @@ impl Workbench {
         let middle = Rect {
             x: bounds.x + left,
             width: bounds.width - left - right,
-            ..bounds
+            ..upper
         };
-        let bottom = if shown(DockLocation::Bottom) {
-            self.dock_size(DockLocation::Bottom).min(bounds.height)
-        } else {
-            0.
+        let center_height = match layout {
+            BottomDockLayout::Contained => middle.height - bottom,
+            BottomDockLayout::Full => middle.height,
         };
         let mut rects = vec![(
             Area::Center,
             Rect {
-                height: middle.height - bottom,
+                height: center_height,
                 ..middle
             },
         )];
@@ -177,7 +209,7 @@ impl Workbench {
                 Area::Dock(DockLocation::Left),
                 Rect {
                     width: left,
-                    ..bounds
+                    ..upper
                 },
             ));
         }
@@ -187,17 +219,21 @@ impl Workbench {
                 Rect {
                     x: middle.x + middle.width,
                     width: right,
-                    ..bounds
+                    ..upper
                 },
             ));
         }
         if bottom > 0. {
+            let span = match layout {
+                BottomDockLayout::Contained => middle,
+                BottomDockLayout::Full => bounds,
+            };
             rects.push((
                 Area::Dock(DockLocation::Bottom),
                 Rect {
-                    y: middle.y + middle.height - bottom,
+                    y: bounds.y + bounds.height - bottom,
                     height: bottom,
-                    ..middle
+                    ..span
                 },
             ));
         }
@@ -205,9 +241,9 @@ impl Workbench {
     }
 
     /// Every painted pane's rectangle when the workbench fills `bounds`.
-    pub fn pane_rects(&self, bounds: Rect) -> Vec<(PaneId, Rect)> {
+    pub fn pane_rects(&self, bounds: Rect, layout: BottomDockLayout) -> Vec<(PaneId, Rect)> {
         let mut result = Vec::new();
-        for (area, rect) in self.area_rects(bounds) {
+        for (area, rect) in self.area_rects(bounds, layout) {
             if let Some(layout) = self.area_layout(area) {
                 place(layout, rect, &mut result);
             }
@@ -486,7 +522,8 @@ mod tests {
         let (bottom, _) = workbench.show_tool(other).unwrap();
         workbench.set_dock_size(DockLocation::Left, 200.);
         workbench.set_dock_size(DockLocation::Bottom, 100.);
-        let rects = workbench.pane_rects(rect(0., 0., 1000., 500.));
+        let bounds = rect(0., 0., 1000., 500.);
+        let rects = workbench.pane_rects(bounds, BottomDockLayout::Contained);
         assert_eq!(
             rects,
             [
@@ -498,9 +535,22 @@ mod tests {
         );
         assert_eq!(neighbor(&rects, bottom, SplitEdge::Left), Some(dock));
         assert_eq!(neighbor(&rects, left, SplitEdge::Bottom), Some(bottom));
+        // A full-width bottom dock runs under the side dock, which stops above it.
+        let rects = workbench.pane_rects(bounds, BottomDockLayout::Full);
+        assert_eq!(
+            rects,
+            [
+                (left, rect(200., 0., 200., 400.)),
+                (right, rect(400., 0., 600., 400.)),
+                (dock, rect(0., 0., 200., 400.)),
+                (bottom, rect(0., 400., 1000., 100.)),
+            ]
+        );
+        assert_eq!(neighbor(&rects, bottom, SplitEdge::Left), None);
+        assert_eq!(neighbor(&rects, dock, SplitEdge::Bottom), Some(bottom));
         // A hidden dock gives its room back and is never a neighbor.
         workbench.set_dock_visible(DockLocation::Left, false);
-        let rects = workbench.pane_rects(rect(0., 0., 1000., 500.));
+        let rects = workbench.pane_rects(bounds, BottomDockLayout::Contained);
         assert_eq!(rects[0], (left, rect(0., 0., 250., 400.)));
         assert_eq!(neighbor(&rects, left, SplitEdge::Left), None);
     }

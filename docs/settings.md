@@ -63,6 +63,7 @@ and `icons.pack` when the user runs Select Icon Pack.
 | --- | --- | --- | --- | --- | --- |
 | `keymap.preset` | string | `"knot"` | Global; an unregistered name selects `knot` | native | Keymap preset that supplies default key bindings. |
 | `workbench.previewTabs` | boolean | `true` | Global | native | Open documents browsed from the explorer or search as preview tabs that the next preview replaces. |
+| `workbench.bottomDockLayout` | string | `"contained"` | Global; an unknown value is `contained` | native | Where the bottom dock sits: `"contained"` under the center between the side docks, or `"full"` across the window width under them. |
 | `statusBar.visible` | boolean | `true` | Global | native | Show the status bar below the workbench. |
 | `statusBar.hiddenItems` | strings | `[]` | Global | native | IDs of status bar items the bar skips; hidden items keep running. |
 

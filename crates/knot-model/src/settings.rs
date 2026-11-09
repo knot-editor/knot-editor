@@ -56,6 +56,8 @@ pub const ICONS_PACK: &str = "icons.pack";
 pub const KEYMAP_PRESET: &str = "keymap.preset";
 /// Whether documents browsed from the explorer and search open as previews.
 pub const WORKBENCH_PREVIEW_TABS: &str = "workbench.previewTabs";
+/// Where the bottom dock sits: `contained` between the side docks or `full` width.
+pub const WORKBENCH_BOTTOM_DOCK_LAYOUT: &str = "workbench.bottomDockLayout";
 /// Whether product windows show the status bar.
 pub const STATUS_BAR_VISIBLE: &str = "statusBar.visible";
 /// IDs of status items the bar skips.
@@ -307,6 +309,11 @@ fn native_definitions() -> Vec<SettingDefinition> {
             default: true.into(),
             description: "Open documents browsed from the explorer or search as preview tabs that the next preview replaces".into(),
         },
+        text(
+            WORKBENCH_BOTTOM_DOCK_LAYOUT,
+            "contained",
+            "Where the bottom dock sits: \"contained\" under the center between the side docks, or \"full\" across the window width under them",
+        ),
         SettingDefinition {
             key: STATUS_BAR_VISIBLE.into(),
             value_type: SettingType::Boolean,

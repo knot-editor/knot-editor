@@ -1182,7 +1182,7 @@ mod recent;
 pub use recent::{RecentWalk, RecentlyClosed};
 mod relocate;
 mod resize;
-pub use resize::{Rect, neighbor};
+pub use resize::{BottomDockLayout, Rect, neighbor};
 
 pub use arrange::{Arrangement, DockArrangement, PlanNode};
 

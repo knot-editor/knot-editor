@@ -18,7 +18,9 @@ free-form split tree, where docks are groups among document panes, goes away.
   trees, using the same split, pane, and tab types. Docks are not nodes of the
   center tree. Each dock has an absolute size, a visible flag, and its own
   focused-pane memory. The bottom dock sits under the center, between the side
-  docks; this is fixed. The center may be empty; the placeholder untitled
+  docks, or across the full width under them with
+  `workbench.bottomDockLayout`, as Zed's `bottom_dock_layout` and VS Code's
+  `panel.alignment` allow. The center may be empty; the placeholder untitled
   document is gone everywhere (final-tab closure, project switch, fresh
   window), and an empty center paints a blank surface that accepts opened
   documents and drops.
@@ -137,6 +139,9 @@ Choices made along the way:
 - The palette has no per-target availability, so move commands a tab's kind
   or current area rules out return Unavailable.
 - Toggle Explorer now focuses the explorer it shows.
+- Review follow-ups: Close Tab with no focused tab closes the window, and
+  `workbench.bottomDockLayout` (default `contained`) offers a full-width
+  bottom dock.
 
 ### 3. ⏳ Terminals in docks
 

@@ -357,3 +357,65 @@ fn pane_cycling_stays_in_the_focused_area(cx: &mut TestAppContext) {
     run(&shell, window, FOCUS_PREVIOUS_FOCUSED_PANE_COMMAND, cx);
     assert_eq!(focused(&shell, cx), main);
 }
+
+#[gpui::test]
+fn a_full_width_bottom_dock_runs_under_the_side_docks(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::FOCUS_PANE_DOWN_COMMAND;
+    use crate::app::workbench::{DockLocation, ToolContent};
+    use crate::app::workspace_tree::WorkspaceTree;
+    let (shell, window) = docked_window(cx);
+    let (dock, _) = dock_and_main(&shell, cx);
+    let bottom = shell.update(cx, |shell, cx| {
+        let tree = cx.new(|cx| WorkspaceTree::new(shell.workspace.snapshot(), cx));
+        let bottom = shell.workbench.update(cx, |workbench, _| {
+            let id = workbench.register_tool(
+                "test.bottom",
+                "Bottom",
+                ToolContent::Workspace(tree),
+                DockLocation::Bottom,
+            );
+            workbench.show_tool(id).unwrap().0
+        });
+        cx.notify();
+        bottom
+    });
+    cx.run_until_parked();
+    let bounds = |cx: &mut TestAppContext| {
+        let mut visual = VisualTestContext::from_window(window, cx);
+        let side = visual.debug_bounds("dock-0").unwrap();
+        let bottom = visual.debug_bounds("dock-2").unwrap();
+        (side, bottom)
+    };
+
+    // Contained: the side dock spans the height and nothing lies below it.
+    let (side, under) = bounds(cx);
+    assert!(side.bottom() > under.top(), "{side:?} {under:?}");
+    assert!(under.left() >= side.right());
+    focus(&shell, window, dock, cx);
+    assert_eq!(
+        run(&shell, window, FOCUS_PANE_DOWN_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+
+    // Full: the side dock stops above the bottom dock, which spans the width.
+    cx.update(|cx| {
+        cx.default_global::<crate::app::settings::ApplicationSettings>()
+            .0
+            .set(
+                crate::app::settings::WORKBENCH_BOTTOM_DOCK_LAYOUT,
+                "full".into(),
+                Default::default(),
+            )
+            .unwrap();
+    });
+    shell.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    let (side, under) = bounds(cx);
+    assert!(side.bottom() <= under.top(), "{side:?} {under:?}");
+    assert!(under.left() <= side.left());
+    assert_eq!(
+        run(&shell, window, FOCUS_PANE_DOWN_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(focused(&shell, cx), bottom);
+}

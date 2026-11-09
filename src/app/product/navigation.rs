@@ -150,7 +150,7 @@ impl ProductShell {
                 height: 800.,
             });
         let workbench = self.workbench.read(cx);
-        let mut rects = workbench.pane_rects(area);
+        let mut rects = workbench.pane_rects(area, crate::app::settings::bottom_dock_layout(cx));
         rects.retain(|(candidate, _)| {
             *candidate == pane || workbench.pane_area(*candidate).is_some_and(&accepts)
         });

@@ -213,6 +213,11 @@ pub(crate) fn text(key: &str, cx: &App) -> String {
     .expect("a native text setting")
 }
 
+/// Where product windows place the bottom dock.
+pub(crate) fn bottom_dock_layout(cx: &App) -> knot_model::workbench::BottomDockLayout {
+    knot_model::workbench::BottomDockLayout::parse(&text(WORKBENCH_BOTTOM_DOCK_LAYOUT, cx))
+}
+
 /// Write a native boolean setting for every context.
 pub(crate) fn set_boolean(key: &str, value: bool, cx: &mut App) {
     cx.default_global::<ApplicationSettings>()

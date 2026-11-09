@@ -317,8 +317,10 @@ fresh whenever it opens, shows another document, or moves to another window. A
 terminal tab presents the sole attached view of an application-owned session,
 with no document model. A tool tab presents its tool's native frame, whose
 definition and presentation survive hiding.
-The side docks span the window's height and the bottom dock sits under the
-center between them. Each dock has an absolute window-local size, a visible
+By default the side docks span the window's height and the bottom dock sits
+under the center between them; `workbench.bottomDockLayout` set to `full` runs
+the bottom dock across the window's width under the side docks. Painting,
+directional navigation, and `Workbench::area_rects` share the arrangement. Each dock has an absolute window-local size, a visible
 flag, and its own last focused pane; hiding a dock keeps its arrangement, and
 focusing a pane of a hidden dock shows it. Toggling a dock or a tool follows
 one pattern: a hidden one shows and takes focus, a shown but unfocused one

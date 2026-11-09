@@ -5,6 +5,7 @@ use crate::app::convert::ThemePaint as _;
 use crate::app::documents::DocumentDirty;
 use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Theme, color, theme};
+use crate::app::workbench::BottomDockLayout;
 use crate::app::zoom;
 
 /// What dragging a divider resizes.
@@ -17,9 +18,8 @@ pub(super) enum Divider {
 }
 
 impl ProductShell {
-    /// The workbench's areas: the side docks span its height, the bottom
-    /// dock sits under the center between them, and a maximized pane fills
-    /// it alone.
+    /// The workbench's areas, arranged as `workbench.bottomDockLayout`
+    /// places the bottom dock; a maximized pane fills it alone.
     pub(super) fn render_workbench(&mut self, cx: &mut Context<Self>) -> AnyElement {
         if let Some(pane) = self.maximized_pane(cx) {
             return self.render_pane(pane, cx);
@@ -65,30 +65,34 @@ impl ProductShell {
             docks[dock.index()] = Some((element, divider));
         }
         let [left, right, bottom] = docks;
-        let middle = div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_w_0()
-            .min_h_0()
-            .child(div().flex_1().min_w_0().min_h_0().child(center))
-            .when_some(bottom, |element, (dock, divider)| {
-                element.child(divider).child(dock)
-            });
-        div()
-            .flex()
-            .flex_row()
-            .size_full()
-            .min_w_0()
-            .min_h_0()
-            .when_some(left, |element, (dock, divider)| {
-                element.child(dock).child(divider)
-            })
-            .child(middle)
-            .when_some(right, |element, (dock, divider)| {
+        let center = div().flex_1().min_w_0().min_h_0().child(center);
+        let column = |element: Div| element.flex().flex_col().min_w_0().min_h_0();
+        let row = |element: Div| element.flex().flex_row().min_w_0().min_h_0();
+        let sides = |element: Div, middle: Div| {
+            element
+                .when_some(left, |element, (dock, divider)| {
+                    element.child(dock).child(divider)
+                })
+                .child(middle)
+                .when_some(right, |element, (dock, divider)| {
+                    element.child(divider).child(dock)
+                })
+        };
+        let bottom_under = |element: Div| {
+            element.when_some(bottom, |element, (dock, divider)| {
                 element.child(divider).child(dock)
             })
-            .into_any_element()
+        };
+        match crate::app::settings::bottom_dock_layout(cx) {
+            BottomDockLayout::Contained => {
+                let middle = bottom_under(column(div()).flex_1().child(center));
+                sides(row(div()).size_full(), middle).into_any_element()
+            }
+            BottomDockLayout::Full => {
+                let upper = sides(row(div()).flex_1(), center);
+                bottom_under(column(div()).size_full().child(upper)).into_any_element()
+            }
+        }
     }
 
     pub(super) fn render_layout(
