@@ -68,7 +68,7 @@ Windows and Linux every global binding whose first keystroke is ctrl with a
 printable character other than backtick is unbound in terminals, so the shell
 receives readline and job-control keys, and terminals copy and paste with
 ctrl-shift-c and ctrl-shift-v. Named keys such as tab and pageup, and ctrl-`,
-stay global because shells do not read them, so tab navigation and New
+stay global because shells do not read them, so tab navigation and Toggle
 Terminal work from a terminal. On every platform Shift+F10, which shows a
 tree's context menu, is unbound in terminals, whose programs read function
 keys.

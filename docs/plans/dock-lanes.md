@@ -1,6 +1,7 @@
 # Dock lanes
 
-Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 next. Checkpoint 5's
+Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 implemented, awaiting its
+review gate. Checkpoint 5's
 icons come from the completed icon packs (D055).
 
 ## Goal
@@ -143,28 +144,34 @@ Choices made along the way:
   `workbench.bottomDockLayout` (default `contained`) offers a full-width
   bottom dock.
 
-### 3. ⏳ Terminals in docks
+### 3. 🔎 Terminals in docks
 
 Terminals live in docks by default, flat, with their own home.
 
-- **Deliverables:** terminal kind allowed in center and docks with default dock
-  right; terminal home in tool-layout memory; Toggle Terminal on `ctrl-``,
-  New Terminal, New Terminal in Center; `terminals.open` `location`; dock
-  terminals restored by window layouts while fresh windows inherit only the
+- ✅ **Deliverables:** terminal kind allowed in center and docks with default dock
+  right; terminal home in tool-layout memory (version 3); Toggle Terminal on
+  `ctrl-``, New Terminal, New Terminal in Center; `terminals.open` `location`;
+  dock terminals restored by window layouts while fresh windows inherit only the
   home; splitting a dock terminal starting a new session.
-- **Validation:** product tests in `src/app/product/tests/terminal.rs` for each
+- ✅ **Validation:** product tests in `src/app/product/tests/terminal.rs` for each
   Toggle Terminal state, New Terminal placement from a terminal, a tool, and
   the center, home change on move, restore of dock terminals; keymap tests;
-  an extension package test for `terminals.open` with both locations.
-- **Review gate:** try commands that toggle the terminal, open several,
+  `terminals.open` with both locations in the extension fixture of
+  `tests/operations.rs` (the fake host does not fake terminals).
+- ⏳ **Review gate:** try commands that toggle the terminal, open several,
   split one, move one to the bottom dock and to the center, and open a fresh
-  window.
-- **Implementation context:** `NEW_TERMINAL_COMMAND` and its peers in
-  `src/app/product/commands.rs`; terminal creation and directory rule in
-  `src/app/terminal/directory.rs` (unchanged rule, new destination);
-  `terminals.open` handler in `src/app/extensions/host/handlers.rs` and its
-  declaration in `knot.d.ts`; `ctrl-`` in
-  `src/app/commands/keymaps/presets.rs` and `keymaps/tests.rs`.
+  window (`post-init.js` `try.*` commands and the built-in ones).
+- **Choices made along the way:**
+  - The workbench ranks dock terminals by recent focus
+    (`Workbench::recent_dock_terminal`); Toggle Terminal and New Terminal use it.
+  - Rebuilding a dock from the tool record (Reset Layout, `arrange_dock`) moves
+    its terminals to the center; tools attaching later join a dock that holds
+    terminals instead of rebuilding it.
+  - Moving a terminal into a dock within one window sets the home and publishes;
+    a cross-window drop does not.
+  - Toggle Terminal publishes the layout, as the dock toggles do.
+  - Existing tests that assumed New Terminal opens in the center now use New
+    Terminal in Center.
 
 ### 4. ⏳ Maximize across areas
 

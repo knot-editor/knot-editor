@@ -329,11 +329,11 @@ focused pane. A tool's home is the dock it is in or last left, so moving it
 to another dock rehomes it. Move Tab to Left, Right, or Bottom Dock and Move
 Tab to Center move a tab to the end of that area's last focused pane, and
 are unavailable when the tab is already there. Each tab kind declares the areas it
-may occupy (`TabKind::allows`): documents and terminals the center, tools the
-docks. Placement, relocation, directional moves, and restore check the
+may occupy (`TabKind::allows`): documents the center, tools the docks, and
+terminals either. Placement, relocation, directional moves, and restore check the
 declaration, so a tool never joins the center and a document never enters a
 dock. Splitting a document creates another view; splitting a terminal creates
-another session. Empty panes collapse, keeping their siblings' ratios. The
+another session, in a dock as in the center. Empty panes collapse, keeping their siblings' ratios. The
 center may be empty; it then paints a blank surface that takes keyboard focus
 while no pane has it, opens new documents and terminals, and accepts dropped
 tabs. When the focused pane goes, focus moves to another pane of its area, then
@@ -562,8 +562,8 @@ backs [native window hot exit](#native-window-hot-exit). Quit flushes every
 pending record. Unsaved-text recovery keeps its own database, because a
 damaged recovery file is preserved and reported rather than treated as empty. It records each dock's size, visibility, and split tree of stable namespaced
 tool IDs with each pane's selection, and the dock each hidden tool returns to,
-so each tool's home reaches fresh windows. Documents, terminals, the center,
-and live handles never enter the record.
+so each tool's home reaches fresh windows, and the terminal home dock. Documents,
+terminals, the center, and live handles never enter the record.
 
 A fresh window takes the stored dock sizes and gives each tool its stored place
 as the tool registers: the explorer when a folder opens or a customized record
@@ -619,6 +619,20 @@ or the root above the selection). Each edit replaces the whole set computed from
 live foreground state.
 
 ## Terminal sessions and views
+
+A terminal tab lives in the center or in any dock, as an ordinary flat tab. The
+terminal home is the dock new terminals open in when none lives in a dock; it
+starts on the right, and moving a terminal tab into a dock makes that dock the
+home, which the tool-layout record carries to fresh windows. The workbench
+tracks dock terminals by recent focus. Toggle Terminal (ctrl-`) shows and
+focuses the most recently used dock terminal, hides its dock when it is already
+focused, and with no dock terminal opens one in the home dock; center terminals
+are ignored. New Terminal opens beside the focused terminal wherever it is,
+otherwise beside the most recently used dock terminal, else in the home dock,
+and shows the dock; New Terminal in Center opens in the last focused center
+pane. `terminals.open` takes the same choice as `location`. Window layouts
+restore dock terminals in their docks, while resetting the layout or
+rebuilding a dock from the tool record moves the dock's terminals to the center.
 
 The application registry owns stable `TerminalSession`s. A session owns its PTY,
 Alacritty grid, process status, authoritative size, session preferences, and event

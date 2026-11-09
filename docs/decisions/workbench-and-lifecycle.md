@@ -55,10 +55,10 @@ than an arrangement worth restoring, so none is recorded. Reopen Closed Tab
 recreates tabs through the layout's per-kind step rather than its own, so a
 reopened tab matches one restored after a restart.
 
-New Terminal is on ctrl-` because Reopen Closed Tab takes ⌘⇧T, as in browsers
-and VS Code; Knot has no terminal panel, so the key that shows one elsewhere
-opens a terminal tab. Named keys and ctrl-` stay global in terminals on Windows
-and Linux, because shells read ctrl only with printable characters.
+Toggle Terminal is on ctrl-` because Reopen Closed Tab takes ⌘⇧T, as in browsers
+and VS Code, and ctrl-` is the key they use to show the terminal. Named keys
+and ctrl-` stay global in terminals on Windows and Linux, because shells read
+ctrl only with printable characters.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
 
