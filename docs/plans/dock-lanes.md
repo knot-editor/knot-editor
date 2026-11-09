@@ -100,68 +100,28 @@ free-form split tree, where docks are groups among document panes, goes away.
 
 ## Checkpoints
 
-### 1. 🔍 Center and dock areas (implemented; review gate pending)
+### 1. ✅ Center and dock areas
 
-The workbench model, rendering, layout value, and tool memory move to one
-center tree plus three dock trees with per-kind placement. Tools appear only
-in docks; terminals and documents only in the center for now. Empty center
-supported. Existing tool commands keep working on the new model.
+Done and approved. The workbench is a center tree plus three dock trees, each
+tab kind declares the areas it allows (`TabKind::allows`), the center may be
+empty, and window layouts and tool-layout memory are version 2; see
+[workbench](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure) and
+`crates/knot-model/src/workbench.rs`. Choices made along the way:
 
-- **Deliverables:** ✅ `Workbench` area model and transitions; ✅ per-kind
-  allowed-area declaration (`TabKind::allows`); ✅ navigation and closure
-  scoping by area; ✅ rendering of center and docks with dock-adjacent
-  dividers; ✅ empty-center surface and removal of placeholder untitled
-  replacement; ✅ `WindowLayout` version 2 with a center tree and per-dock
-  trees, sizes, and visibility; ✅ tool-layout memory version 2 storing dock
-  trees of tools and hidden tools' docks; ✅ extension types updated
-  (`LayoutNode` without `dock`, `WindowLayout` docks, `ViewLocation` without
-  `"document"`).
-- **Scope decisions while implementing:**
-  - An empty window has no focused pane, so command and open targets carry an
-    optional tab: commands that need one report `Unavailable`; New, Open, and
-    terminal commands open in the center; window and quit closes plan from the
-    session (`closure::CloseOrigin`). The empty center owns a focus handle so
-    keys still reach the shell.
-  - Tools attaching one by one rebuild a stored dock tree while the dock
-    still matches the record of the tools registered so far, else join the
-    dock (`Workbench::restore_stored_tool`).
-  - A collapsed pane hands focus to its own area first, then to the center's
-    last focused pane, else to the empty center: docks never take focus by
-    fallback (review feedback: cmd-w in a fresh window closed a tool).
-  - Vim's `ctrl-w` direction keys pass `{ withinArea: true }` to the focus
-    commands, so D158 was removed from the roadmap now rather than at
-    checkpoint 6; D061 was reworded for the empty center at the same time.
-  - Drop targets do not yet filter by kind before release: a disallowed drop
-    previews and is then refused. Filtering stays in checkpoint 2.
-- **Validation:** ✅ workbench unit tests for split/collapse within each area,
-  placement rejection, area-scoped cycling and Close Other Panes, directional
-  focus across areas; ✅ layout capture/restore round trips and pruning of
-  disallowed placements; ✅ tool-layout memory round trip and version
-  fallback; ✅ product tests for closing the last document leaving an empty
-  center, an empty center taking a dropped tab, and project switch into a
-  session with no documents; ✅ extension package tests using
-  `captureLayout`/`replaceWindows` updated; ✅ Vim `ctrl-w` staying in the
-  center. `just check` passes.
-- **Review gate:** ⏳ try commands that open tools stacked in a dock, close
-  every document, and switch projects into an empty session; confirm layout
-  feels right before docks gain terminals.
-- **Implementation context:** `crates/knot-model/src/workbench.rs` replaces `layout`,
-  `docks`, `dock_sizes`, and `dock_selected` with a center layout and a
-  per-`DockLocation` dock state; `workbench/tools.rs` (`ToolPlacement` loses
-  `DocumentGroup`/`Group` in favor of dock pane positions), `arrange.rs`,
-  `resize.rs` (dock sizes stay absolute; `neighbor` walks all visible areas),
-  `close.rs`, `relocate.rs`. Shell side: `product/render.rs` (area layout and
-  dividers), `product/navigation.rs` (scoping, maximize), `product/tools.rs`,
-  `product/closure.rs` and `product/sessions.rs` (empty-workbench untitled
-  replacement), `product/reopen.rs`. Persistence: `src/app/window_layout.rs`,
-  `src/app/window_sessions.rs`, and `TOOL_LAYOUT_VERSION` in
-  `crates/knot-model/src/workbench/tools.rs`; `src/app/workbench.rs` keeps the
-  views. Extension contract: `crates/knot-host/src/js/knot.d.ts`
-  (`ViewLocation`, `LayoutNode`, `WindowLayout`), `docs/schemas/knot.schema.json`,
-  `src/app/extensions/host/handlers.rs`, and `@knot/projects` callers. Tests
-  under `src/app/product/tests/` (`tools.rs`, `tool_layout.rs`,
-  `window_restore.rs`, `project_sessions.rs`, `navigation.rs`) and
-  `crates/knot-model/src/workbench/relocate/tests.rs`.
+- An empty window has no focused pane, so command and open targets carry an
+  optional tab, and window and quit closes plan from the session
+  (`closure::CloseOrigin`).
+- Focus falls back to the pane's own area, then the center, else the empty
+  center; docks never take focus by fallback (review: cmd-w in a fresh window
+  closed a tool).
+- Tools attaching one by one rebuild a stored dock tree while the dock still
+  matches the record (`Workbench::restore_stored_tool`).
+- Vim's `ctrl-w` keys pass `{ withinArea: true }`; D158 was removed and D061
+  reworded with this checkpoint.
+
+Carried forward: drop targets still preview disallowed drops and refuse them
+on release (checkpoint 2); the workbench decisions still describe tools as
+dock groups of one split tree (checkpoint 6).
 
 ### 2. ⏳ Dock interactions and homes
 
