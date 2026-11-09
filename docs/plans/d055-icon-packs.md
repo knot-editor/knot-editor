@@ -187,7 +187,15 @@ restyle them), and the document tab and tab drag label icons.
 - Review gate: the explorer and tabs in a real Rust/TypeScript project
   look like a familiar colored file tree.
 
-### 5. Action and status bar icons
+### 5. Action and status bar icons ✅
+
+Implemented, awaiting review: `TreeAction.icon` and `StatusItemOptions.icon`
+(`knot.d.ts`, decoded in `marshal.rs` and `bootstrap.js`); an action with an
+icon renders as an icon button with a `Tooltip` of its label in
+`src/app/tree_view.rs`; status items paint the icon before the text, tinted by
+the item's `color` (`AppIcon::tinted`). `@knot/projects` defines `action.*`
+icons for its toolbar and row actions. `@knot/status-bar` keeps text-only
+items, since position, indentation and language read better without icons.
 
 - Deliverables: an optional `icon` on `TreeAction` (row and frame toolbar)
   and on `StatusItemOptions`; icon buttons with label tooltips; status items
