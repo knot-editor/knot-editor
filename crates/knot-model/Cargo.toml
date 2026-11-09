@@ -7,42 +7,42 @@ publish = false
 
 # Editor state and policy that need no UI toolkit, scripting runtime, or host.
 [dependencies]
-directories = "6"
-jsonc-parser = { version = "0.34", features = ["serde", "serde_json"] }
+directories = { workspace = true }
+jsonc-parser = { workspace = true }
 knot-core = { path = "../knot-core" }
 knot-protocol = { path = "../knot-protocol" }
-percent-encoding = "2"
-rusqlite = { version = "0.41.1", features = ["bundled"] }
-semver = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tempfile = "3"
-tokio = { version = "1.53", features = ["sync"] }
-tree-sitter = "0.27"
-tree-sitter-html = "0.23.2"
-tree-sitter-css = "0.25.0"
-tree-sitter-javascript = "0.25.0"
-tree-sitter-typescript = "0.23.2"
-tree-sitter-rust = "0.24.2"
-tree-sitter-c = "0.24.2"
-tree-sitter-cpp = "0.23.4"
-tree-sitter-go = "0.25.0"
-tree-sitter-java = "0.23.5"
-tree-sitter-python = "0.25.0"
-tree-sitter-bash = "0.25.1"
-tree-sitter-json = "0.24.8"
-tree-sitter-toml-ng = "0.7.0"
-tree-sitter-yaml = "0.7.2"
-tree-sitter-md = "0.5.4"
-tree-sitter-tsquery = "0.8.0"
-unicode-segmentation = "1"
-unicode-width = "0.2"
-url = "2"
-uuid = { version = "1", features = ["v4"] }
+percent-encoding = { workspace = true }
+rusqlite = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-html = { workspace = true }
+tree-sitter-css = { workspace = true }
+tree-sitter-javascript = { workspace = true }
+tree-sitter-typescript = { workspace = true }
+tree-sitter-rust = { workspace = true }
+tree-sitter-c = { workspace = true }
+tree-sitter-cpp = { workspace = true }
+tree-sitter-go = { workspace = true }
+tree-sitter-java = { workspace = true }
+tree-sitter-python = { workspace = true }
+tree-sitter-bash = { workspace = true }
+tree-sitter-json = { workspace = true }
+tree-sitter-toml-ng = { workspace = true }
+tree-sitter-yaml = { workspace = true }
+tree-sitter-md = { workspace = true }
+tree-sitter-tsquery = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 knot-core = { path = "../knot-core", features = ["test-support"] }
-pollster = "1"
+pollster = { workspace = true }
 
 [features]
 # Test-only helpers for the application's tests.
