@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 checkpoints 1–2 complete; checkpoint 3 ready for review. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 next. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -120,41 +120,22 @@ Single-editor command tests are plain; the shell keeps the painting,
 hit-testing, layout, settings-integration, and background-parse cases, which
 reach state through `test-support` helpers.
 
-### 3. Application stores — 🔎 ready for review
+### 3. Application stores — ✅ complete
 
 The document collection, settings store, language registry, theme registry,
-and command-history ranking are plain `knot-model` code
+command-history ranking, and state database are plain `knot-model` code
 (`documents.rs`, `settings.rs`, `languages.rs`, `themes.rs`,
-`command_history.rs`) with plain tests. Their globals stay in `src/app`:
+`command_history.rs`, `state_database.rs`) with plain tests. Their globals in
+`src/app` wrap them and add the effects: `DocumentCollection` derefs to the
+plain collection and runs language detection, model stamping, recovery, and
+observation; `record_store.rs` supplies the executor for debounced writes;
+language reattachment over entities stays in the shell. Extension handlers
+wrap moved types that need `HostArguments` in local argument types.
 
-- `DocumentCollection` there derefs to the plain collection over buffer
-  entities and runs the effects of changes (language and indentation
-  detection, model stamping, recovery, observation); `DocumentDirty` reads
-  dirty state through the entity.
-- The settings, language, and theme globals wrap their registries. The theme
-  registry's `select` returns the theme to install; the shell reads the
-  settings and system appearance.
-- The state database and its record stores are plain
-  (`crates/knot-model/src/state_database.rs`): `publish` returns the
-  debounced write and `flush_job` the pending writes, and the shell's
-  `record_store.rs` supplies the executor that waits out the debounce and
-  runs them. Command history persists its plain `RecentCommands` through a
-  record store; the tool-layout store is unchanged.
-- Extension handlers wrap moved types that need `HostArguments`
-  (`SettingDefinitionArguments`, `ThemeDefinitionArguments`,
-  `LanguageArguments`, `LanguageAssociationArguments`), as the orphan rule
-  requires.
-- Language reattachment (`attach`, `refresh`) and the entity-keyed model
-  table stay in the shell. They are entity work, and checkpoint 4 or 5 can
-  revisit them if a model function needs them.
-
-Validation limitation: the vim fixture in `terminal/session_tests.rs`
-fails in roughly one full run in thirty (vim never draws). It predates this
-checkpoint, and the terminal is out of scope. Four other flaky product tests
-were races between a test's keys or commands and the extension package's
-worker thread; they now wait for the package to settle.
-
-Review gate: each global is a thin wrapper over its store.
+Validation limitation: the vim fixture in `terminal/session_tests.rs` fails in
+roughly one full run in thirty (vim never draws). It predates this work, and
+the terminal is out of scope. Flaky product tests that raced the extension
+package's worker thread now wait for it to settle.
 
 ### 4. Extension-API semantics
 
