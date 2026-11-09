@@ -1,6 +1,6 @@
 # D055 — Icon packs
 
-Status: 🚧 in progress; checkpoints 1–2 done. Roadmap item
+Status: 🚧 in progress; checkpoints 1–3 done. Roadmap item
 [D055](../roadmap.md); builds on the theme system (D064) and on the
 [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component),
 whose painting and asset APIs this plan uses.
@@ -127,9 +127,9 @@ string, validated for characters at the host boundary in
 `crates/knot-host/src/engine/marshal.rs`. An unknown name paints the fallback
 icon. `mod icons` no longer needs `#[allow(dead_code)]`.
 
-### 3. Extension API and pack selection ✅ (awaiting review)
+### 3. Extension API and pack selection ✅
 
-Implemented: `icons.define`, `icons.override`, `icons.registerPack`, and
+Done and reviewed: `icons.define`, `icons.override`, `icons.registerPack`, and
 `icons.listPacks` (handlers in `src/app/extensions/host/handlers.rs`,
 `IconSpec` validation in `crates/knot-model/src/icons.rs`), lifecycle teardown
 that repaints, the fake host, and Select Icon Pack in `@knot/themes`
