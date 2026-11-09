@@ -38,7 +38,11 @@ an API that a plain test cannot call without imitating gpui is redesigned. Knot
 owns key, color, and string vocabulary and converts at the view edge only, and
 workbench tabs hold identities with the product session owning the views. No
 Knot runtime abstraction over spawn, notify, observe, or globals was added:
-nothing measured needed one, and it would duplicate gpui's own.
+nothing measured needed one, and it would duplicate gpui's own. The gpui
+application is instead a thin shell: with one framework and one
+implementation, an abstraction would copy gpui's shape without easing a
+migration, whereas behavior in model functions leaves a port only the views
+and a mechanical shell to rewrite.
 
 Bundled packages are compiled in domain group crates and injected into a
 library-only `knot` as `&'static [BundledSource]` by the `knot-app` binary. Cargo

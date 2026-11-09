@@ -863,15 +863,6 @@ Kakoune mode could use it too. The
 
 ## Platforms and accessibility
 
-- **D162 — Plain models and a thin gpui shell**
-  - Deferred: the buffer model, editor state, application stores, extension
-    handlers, and product operations mix behavior with gpui runtime use, so
-    their tests need a gpui application and a framework change would revisit
-    behavior.
-  - 🚧 Planned: [D162 plan](plans/d162-thin-gpui-shell.md): move that
-    behavior into the model crate and keep a shell that resolves entities,
-    calls the model, runs effects, and notifies.
-
 - **D163 — Vim tests on a minimal language fixture**
   - Deferred: `knot-ext-vim`'s tests load the real language packages,
     because Vim's indentation, key-context, and `o`/`O` cases need language

@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 complete; checkpoint 5 implemented, awaiting its review gate. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 complete; checkpoint 5 complete; checkpoint 6 next. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -148,7 +148,7 @@ entities, call an owner, await, revalidate, and notify, and stay in
 `src/app/extensions/host/handlers.rs`; the open, close, and workspace flows
 they call move with checkpoint 5.
 
-### 5. Product operations — ✅ implemented, review gate pending
+### 5. Product operations — ✅ complete
 
 The protected-closure decisions are plain `knot-model` code with plain tests
 (`workbench/closure.rs`): which views a close covers, which dirty documents it
@@ -164,10 +164,6 @@ and window handling, and stays in the shell as the plan's stopping rule allows.
 Validation limitation: the terminal tests (`terminal::view::mouse_tests`, and
 `product` terminal cases) fail intermittently in full runs in this environment,
 also at the previous commit; nothing else fails.
-
-- Review gate: a personal-config `post-init.js` with `try.*` commands over
-  closing dirty documents, reopening, and moving tabs between windows;
-  everything behaves as before.
 
 ### 6. Documentation
 

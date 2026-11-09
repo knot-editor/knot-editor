@@ -36,9 +36,11 @@ gpui application and native views
   theme registries, syntax and the compiled-in grammars, edit history, indentation and language
   editing configuration, key notation, the command catalog, keymap registries
   and matching, theme values, resource URIs and providers, package
-  discovery, and the workbench layout over tab identities. Its functions take
-  plain data and the models they change and return results as data;
-  application globals and entities wrap its state.
+  discovery, the workbench layout over tab identities, extension-API
+  semantics such as checked ranges and atomic setting writes, and the
+  protected-closure decisions. Its functions take plain data and the models
+  they change and return results or effects as data; application globals and
+  entities wrap its state.
 - `knot-bundled` owns the `BundledSource` type and the build-script helper
   that compiles bundled TypeScript packages. The `knot-ext-*` group crates
   (languages, vim, workbench) compile and expose the packages of one domain,
@@ -98,6 +100,15 @@ not a second ownership catalog. Each session owns its native semantic surfaces;
 extensions supply asynchronous content rather than rendering callbacks.
 
 ## Invariants
+
+- The gpui application is a thin shell over `knot-model`. A command, handler,
+  or product operation resolves the entities and captured targets, calls a
+  model function, runs the effects it returns (clipboard writes, background
+  parse jobs, prompts, saves, closes), and notifies. What an operation means
+  (validation, protocol and model conversion, scope, and revalidation checks)
+  is model code with plain tests. Awaiting, revalidating after an await, and
+  scheduling stay in the shell; views, painting, and platform input stay in
+  views.
 
 - Text and history are shared buffer state. Cursor, selection, folding,
   scroll, and wrapping are per-editor state that runs without a window, and

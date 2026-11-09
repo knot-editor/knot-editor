@@ -327,7 +327,7 @@ by its boundary pane, the first pane of its second child; a split beside a dock
 gives the dock its absolute size instead. Grow and shrink move the focused
 pane's nearest ordinary split by a step, or a focused dock's size, and equalize
 gives every pane of a same-direction chain an even share. Each pane keeps its
-tabs in recently activated order; a recent-tab walk shows tabs without
+tabs in recently activated order; a recent-tab walk (`workbench::RecentWalk`) shows tabs without
 reordering them and commits one activation when ctrl is released. Pinned tabs
 form a prefix of their pane, and every insertion, move, and restore keeps a tab
 in its pinned or unpinned section. A document opened as a preview replaces the
@@ -344,10 +344,13 @@ limited to the width or the height, which changes the nearest split along that
 axis. Maximize is shell render state that lasts while its pane stays focused.
 
 One application-level coordinator protects tab, pane, window, and quit
-closure; Close Other Tabs covers a pane's unpinned tabs but the origin, and
-Close Pane every tab of the pane, hiding tools in a dock, and Close Other
-Panes every tab of the session's other panes outside the docks. It
-captures exact session, workbench, tab, surface, and presentation identities,
+closure. The product session collects its open views and the documents' state
+and runs the prompts, saves, and closes; which views a close covers, which
+dirty documents need a prompt, and whether a plan still holds at commit are
+decided by `knot_model::workbench::closure`. A close covers a tab; Close Other
+Tabs a pane's unpinned tabs but the origin; Close Pane every tab of the pane, hiding tools in a dock, and Close Other
+Panes every tab of the session's other panes outside the docks. The
+coordinator captures exact session, workbench, tab, surface, and presentation identities,
 counts live document views across sessions, and deduplicates dirty documents
 losing their final view. Native Save / Don't Save / Cancel prompts run serially;
 Save reuses the ordinary persistence path. Quit is a hot exit: it first commits
@@ -377,7 +380,7 @@ document closes; closed documents are removed normally. Closing a tool hides
 its attachment without entering document confirmation. Hiding the last visible
 tool can leave an empty window; native window closure needs no document prompt.
 
-Each window keeps its last 20 closed document and terminal tabs as layout tabs
+Each window keeps its last 20 closed document and terminal tabs (`workbench::RecentlyClosed`) as layout tabs
 with their pane and position. Reopen Closed Tab recreates the latest through
 the [layout](#window-layouts) per-kind step, in its pane when that still exists
 and otherwise in the focused one; untitled documents and tools are not kept.
