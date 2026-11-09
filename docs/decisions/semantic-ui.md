@@ -114,8 +114,8 @@ actions. Groups are tree headers rather than a second list model, so grouping,
 expansion, and invalidation share one provider tree. Actions are command names
 with JSON arguments over the captured-window command route, so native controls
 need no parallel dispatch path. Row status names a color key rather than a
-feature's change-state taxonomy, and glyphs stay out of the boundary until an
-extension-replaceable icon system exists (D055).
+feature's change-state taxonomy, and glyphs stay out of the boundary: items and
+actions name [icons](#icons).
 
 Text frames push read-only text into a private buffer rendered by the ordinary
 editor surface, which avoids a second text renderer and reuses selection, copy,
@@ -123,6 +123,35 @@ and scrolling. The embedding is provisional; a dedicated read-only presentation
 is D054.
 
 Reference: [semantic UI](../architecture/semantic-ui.md#extension-trees).
+
+## Icons
+
+Icons are names, never glyphs, resolved by a registry in layers: override,
+selected pack, defaults, fallback. `define` and `override` are separate levels
+because they have different jobs: a package defining the icon for its own name
+must not silently replace another package's, so a duplicate default is an error
+like `defineColor`, while personal config must be able to replace any icon, so
+the latest override wins. Defining a name at the default level lets a pack
+restyle every package's icons. An unknown name paints a fallback and is not an
+error, as an undefined color key does nothing.
+
+File and folder associations are global rather than part of a pack, so a
+Material-style pack registers many of them without every other pack having to
+repeat the language table; a name the active pack lacks falls through to the
+next candidate. Language packages define `file.<id>` rather than carrying an
+icon field, which keeps language definitions free of presentation.
+
+The native table and Lucide glyphs stay in Rust: native surfaces paint before
+packages start and when they fail. Lucide comes from `gpui-kit-assets`, already
+a gpui-component dependency, so Knot adds no crate and no asset source; gpui
+caches rasters by the SVG bytes, so a replaced definition needs no
+invalidation. Registrations apply live to every window instead of at startup,
+because packs and selection are cheap to repaint and a restart-only pack would
+make Select Icon Pack unusable. Package-shipped asset files, icon fonts, raster
+formats, and per-appearance variants are rejected for now: SVG text and Lucide
+names cover the surfaces, and tinted icons already follow the theme.
+
+Reference: [semantic UI](../architecture/semantic-ui.md#icons).
 
 ## Extension transient interactions
 

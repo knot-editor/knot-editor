@@ -60,6 +60,9 @@ touches.
   color-key defaults, selection through settings.
 - [Decoration styles](decisions/semantic-ui.md#decoration-styles): a color key
   plus exactly one required style; backgrounds as quads.
+- [Icons](decisions/semantic-ui.md#icons): named icons in override, pack,
+  default, fallback layers; associations apart from packs; native Lucide
+  defaults; live application.
 - [Extension tree content and actions](decisions/semantic-ui.md#extension-tree-content-and-actions):
   one frame registration; text frames reuse the editor surface.
 - [Extension transient interactions](decisions/semantic-ui.md#extension-transient-interactions):

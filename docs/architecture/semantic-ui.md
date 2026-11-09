@@ -253,6 +253,48 @@ revision-checked prefix replacement.
 Applicability, automatic triggers, streaming, active cancellation of superseded
 requests, timeouts, backpressure, richer edits, and popup polish remain deferred.
 
+## Icons
+
+An icon is a flat dotted name (`file`, `folder.open`, `file.rust`,
+`action.refresh`); contributions name icons and never carry glyphs.
+`IconRegistry` in `knot-model` resolves a name to a definition, either SVG text
+or a Lucide glyph name, with a color that is a theme color key, the SVG's own
+colors (`original`, SVG only), or the surface's icon color. For one name the
+first of these wins: an override (`icons.override`, latest wins, disposal
+reveals the previous), the pack selected by the `icons.pack` setting, the
+defaults, then the generic fallback icon. Defaults are the native table plus
+names extensions `define`; defining a name that already has a default is a
+`DuplicateIcon` error, and an unknown name paints the fallback rather than
+failing. A pack (`icons.registerPack`) maps names to definitions and falls back
+per name to the defaults, so it can restyle any package's icons.
+
+The native table (`file`, `folder`, `folder.open`, `symbol`, `tree.collapsed`,
+`tree.expanded`, `fallback`) lives in Rust, as native color-key defaults do,
+because native surfaces paint before packages start and when they fail. Lucide
+glyphs come from `gpui-kit-assets`, a dependency of gpui-component under the
+ISC licence; Knot reads the SVG bytes and registers no asset source, and the
+host rejects an unknown Lucide name when a definition registers. Registrations,
+selection, and lifecycle teardown repaint every window, and icons register
+during activation, before startup restores windows, so load order does not
+change the first frame.
+
+File icons resolve apart from the definitions. A file tries the name
+`icons.associate` claims for its file name, then for its extension (longest
+first, case-insensitive), then `file.<languageId>` for the detected language,
+then `file`; a folder tries its claimed name and then `folder`, using the
+`.open` variant of each when expanded. The first candidate that has a
+definition at any level wins, so a pack that lacks an associated name never
+leaves a file without an icon. Associations are global rather than per pack,
+and the latest claim of a pattern wins. Each bundled `language-*` package
+defines `file.<id>` with its own color key.
+
+`AppIcon` paints a definition at the surrounding text size, so zoom needs no
+extra work. Tinted icons go through gpui-component's `Icon`, which gpui keys by
+the SVG bytes, so replacing a definition invalidates the cache without an
+asset source; full-color icons go through gpui's `img()` with an SVG image.
+Surfaces: tree rows and disclosure icons, document tabs and their drag labels,
+tree actions, and status items.
+
 ## Extension trees
 
 `TreeView` owns cached semantic items, expansion, selection, focus, scroll, and
@@ -270,10 +312,9 @@ Items are ordinary content or `group` headers. A group is neither activatable
 nor disclosable: its children are fetched when it first appears and remain
 visible, so a grouped list is one provider tree rather than a second model.
 Items expose optional right-aligned status text and a badge dot in a named
-color key. Actions are labeled text
-commands; icon glyphs are not part of the boundary yet. A general,
-extension-replaceable icon/status source (icon packs) is deferred (roadmap
-D055).
+color key. Items name an [icon](#icons).
+Actions are labeled commands; an action with an `icon` renders as an icon
+button that shows its label as a tooltip.
 
 Frame, group, and row actions are semantic command references with JSON
 arguments, never drawing callbacks. The native view renders them as controls

@@ -52,7 +52,10 @@ values take effect.
 | `theme.dark` | string | `"One Dark"` | Global | native | Theme name used in dark mode. |
 | `theme.light` | string | `"One Light"` | Global | native | Theme name used in light mode. |
 
-The `themes` package writes the three `theme.*` keys when the user picks a theme.
+| `icons.pack` | string | `""` | Global | native | Name of the registered icon pack that restyles icons; empty means no pack. |
+
+The `themes` package writes the three `theme.*` keys when the user picks a theme,
+and `icons.pack` when the user runs Select Icon Pack.
 
 ## Workbench
 

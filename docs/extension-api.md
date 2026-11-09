@@ -250,8 +250,9 @@ organizes child rows: the native view fetches its children immediately, shows no
 disclosure, and keeps them visible. Items carry optional `statusText` plus a
 `badge` naming a [color key](#register-a-theme-and-define-colors), such as
 `warning` or `text.muted`, and either kind may declare command-backed `actions`. A
-contribution's own `actions` populate the frame toolbar. Action labels are
-text; a general extensible icon system is deferred (roadmap D055).
+contribution's own `actions` populate the frame toolbar. An item or action may
+name an [icon](#define-icons-packs-and-associations); an action with an `icon`
+renders as an icon button and shows its `label` as a tooltip.
 
 ```js
 const view = await workbench.registerView({
@@ -598,6 +599,45 @@ await buffer.contributions.replace([
 ], { ifRevision: revision });
 ```
 
+## Define icons, packs, and associations
+
+Icons are named, such as `file.rust` or `action.refresh`, and trees, tabs,
+actions, and status items refer to them by name. A definition is a builtin
+Lucide glyph (`{ lucide: "star" }`) or SVG text (`{ svg }`), with an optional
+`color`: a color key paints the icon in that one color, `"original"` keeps an
+SVG's own colors, and no color uses the surface's icon color. An unknown name
+paints a generic fallback icon.
+
+```js
+import { icons, themes } from "knot";
+
+await themes.defineColor({
+  key: "icon.docs", description: "The docs icon", defaults: { dark: "#61afef", light: "#2a6fb0" },
+});
+await icons.define("file.docs", { lucide: "book-open", color: "icon.docs" });
+await icons.associate({
+  files: { "README.md": "file.docs" },
+  extensions: { md: "file.docs", "d.ts": "file.docs" },
+  folders: { docs: "folder.docs" },
+});
+await icons.override("action.refresh", { svg: "<svg ...>...</svg>", color: "original" });
+await icons.registerPack({ name: "Mine", icons: { "file.docs": { lucide: "file-text" } } });
+```
+
+For one name the first definition wins among overrides (mainly for personal
+config), the pack named by the `icons.pack` setting, defaults, and the
+fallback. `define` adds a default for a name your package introduces and fails
+with `DuplicateIcon` when the name already has one, so a pack or override
+restyles it instead. A file paints the name claimed for its file name, then for
+its extension (the longest wins), then `file.<languageId>`, then `file`; a
+folder paints its claimed name, then `folder`, using the `.open` variant of each
+when expanded. A name that nothing defines is skipped. Associations are global,
+not per pack, and the latest claim of a pattern wins. Everything is
+lifecycle-owned and applies to every window at once. The Select Icon Pack
+command in the `themes` package sets `icons.pack`. Names may use letters,
+digits, `.`, `-`, and `_`; an unknown Lucide glyph, malformed SVG, or invalid
+name is a `TypeError`. The Lucide glyphs are ISC-licensed.
+
 ## Bind keys and modal contexts
 
 `keymaps.bind` binds a key to a command in the calling package's lifecycle.
@@ -736,7 +776,8 @@ const position = await workbench.registerStatusItem("position", {
 await position.update({ text: "Ln 4, Col 2", side: "right", priority: 10 });
 ```
 
-An item has text, which hides it while empty, and optionally a tooltip, a command with JSON arguments that a
+An item has text, which hides it while empty, and optionally an `icon` name
+painted before the text (in the item's color), a tooltip, a command with JSON arguments that a
 click runs in the window it was clicked in, and a theme color key for its
 text. It sits on the `left` or `right` side; within a side, a higher `priority`
 sits further left and equal priorities keep registration order. `update`

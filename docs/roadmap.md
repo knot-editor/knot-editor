@@ -526,22 +526,6 @@ complete list for that item.
   - Order: after D103, whose git sources it extends; a per-project package
     set also after D089.
 
-- **D055 — Extensible icon and status-glyph system (icon packs)**
-  - Deferred: Contributed tree items use a small fixed `TreeIcon` set, status
-    badges are colored dots in a theme color key, and actions are label-only.
-    Themes (D064) carry only colors and syntax styles. There is no way
-    for a theme or an extension to replace or extend item, action, or status
-    glyphs, and no icon-pack mechanism. Shipping a demo's verbs as tokens in the
-    shared API would bake one feature's vocabulary into the boundary.
-  - Reconsider: A theme or extension needs to supply or override glyphs (for
-    example a file-type or source-control icon pack). Then define an
-    application-owned icon registry with named tokens and lifecycle-owned
-    packs registered like themes (`themes.register`), selected through a
-    setting as `theme.*` selects themes, with a deterministic native
-    fallback, and migrate the fixed `TreeIcon` set and label-only actions
-    onto it.
-  - 🚧 Planned: [D055 plan](plans/d055-icon-packs.md).
-
 - **D022 — Rich completion policy and presentation**
   - Deferred: The prototype validated provider aggregation and replaceable
     native presentation.

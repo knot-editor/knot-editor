@@ -1,6 +1,6 @@
 # D055 — Icon packs
 
-Status: 🚧 in progress; checkpoints 1–5 done. Roadmap item
+Status: 🚧 in progress; checkpoints 1–6 implemented, docs awaiting review. Roadmap item
 [D055](../roadmap.md); builds on the theme system (D064) and on the
 [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component),
 whose painting and asset APIs this plan uses.
@@ -214,7 +214,12 @@ items, since position, indentation and language read better without icons.
 - Review gate: icon-only toolbars stay discoverable through their tooltips
   and keyboard focus.
 
-### 6. Documentation
+### 6. Documentation ✅
+
+Implemented, awaiting review: the icons sections of the semantic UI
+architecture reference, the **Icons** decision, the extension guide, and
+`icons.pack` in the settings reference; D055 is gone from the roadmap. The
+plan is removed in a separate commit once the docs are approved.
 
 - Deliverables: an icons section in
   `docs/architecture/semantic-ui.md` (lookup levels, resolver, ownership of

@@ -82,8 +82,8 @@ macOS constructor scans the executable's directory for a bundle, and with
 at load, taking the suite to 105 s.
 
 Knot adopts gpui-component only for leaf widgets whose state is purely
-presentational, such as tooltips and popup menus, each when a feature needs
-it. Its dock, code editor, `Input`, and theme registry are rejected: Knot's
+presentational, such as tooltips, popup menus, and `Icon`, each when a feature
+needs it. Its dock, code editor, `Input`, and theme registry are rejected: Knot's
 workbench, editor, terminal, pickers, and key routing are product state that
 runs without a window, and its single-line `TextInput` stays native because
 windowless sessions and package tests drive it, which `Input` cannot provide.

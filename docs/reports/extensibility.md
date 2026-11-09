@@ -167,8 +167,8 @@ and avoid a second input queue.
 
 - **Generic primitives.** Key contexts, selection sets, undo groups, and
   recorded command streams, not registers or operators. A Helix or Kakoune
-  mode should fit on the same primitives, as D055 warns against baking one
-  feature's vocabulary into the boundary.
+  mode should fit on the same primitives, with no one feature's vocabulary baked
+  into the boundary.
 - **No private bypass.** If the Vim extension needs something, every extension
   gets it.
 - **Commands over data.** Prefer exposing native movement as parameterized
