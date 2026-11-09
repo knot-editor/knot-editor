@@ -140,10 +140,7 @@ supported. Existing tool commands keep working on the new model.
   center, an empty center taking a dropped tab, and project switch into a
   session with no documents; ✅ extension package tests using
   `captureLayout`/`replaceWindows` updated; ✅ Vim `ctrl-w` staying in the
-  center. Limitation: the last full runs could not start terminal-session
-  tests because the machine had exhausted its PTYs (orphaned `login` shells
-  from earlier test runs); every other test passes, and the terminal tests
-  passed in the run before the PTYs ran out.
+  center. `just check` passes.
 - **Review gate:** ⏳ try commands that open tools stacked in a dock, close
   every document, and switch projects into an empty session; confirm layout
   feels right before docks gain terminals.
