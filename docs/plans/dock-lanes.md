@@ -126,7 +126,8 @@ supported. Existing tool commands keep working on the new model.
     still matches the record of the tools registered so far, else join the
     dock (`Workbench::restore_stored_tool`).
   - A collapsed pane hands focus to its own area first, then to the center's
-    last focused pane.
+    last focused pane, else to the empty center: docks never take focus by
+    fallback (review feedback: cmd-w in a fresh window closed a tool).
   - Vim's `ctrl-w` direction keys pass `{ withinArea: true }` to the focus
     commands, so D158 was removed from the roadmap now rather than at
     checkpoint 6; D061 was reworded for the empty center at the same time.

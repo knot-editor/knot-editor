@@ -139,8 +139,10 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
     });
     cx.update_window(window, |_, _, cx| {
         let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
-        assert!(matches!(target.tab.unwrap().surface, TabSurfaceId::Tool(_)));
-        assert_eq!(target.validate_view(cx), Ok(()));
+        assert!(
+            target.tab.is_none(),
+            "the tool beside the empty center keeps no focus"
+        );
     })
     .unwrap();
     let new = dispatch_product_command(&shell, window, NEW_COMMAND, cx);

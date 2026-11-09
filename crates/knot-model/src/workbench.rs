@@ -600,15 +600,15 @@ impl Workbench {
     }
 
     /// Keep focus on a painted pane: when the focused pane is gone or
-    /// hidden, focus moves to `preferred`'s pane, then the center's, then the
-    /// first painted dock's, else nowhere.
+    /// hidden, focus moves to `preferred`'s pane, then the center's, else to
+    /// the empty center. Docks take focus only when asked to.
     fn settle_focus(&mut self, preferred: Option<Area>) {
         if self.focused_pane.is_some_and(|pane| self.pane_shown(pane)) {
             return;
         }
         let candidate = preferred
             .into_iter()
-            .chain(Area::ALL)
+            .chain([Area::Center])
             .filter(|area| self.area_shown(*area))
             .find_map(|area| self.area_focus(area));
         self.focused_pane = candidate;
@@ -1115,8 +1115,7 @@ impl Workbench {
             let pane_set = self.panes.iter().map(Pane::id).collect::<HashSet<_>>();
             debug_assert_eq!(layout_panes.len(), layout_pane_set.len());
             debug_assert_eq!(layout_pane_set, pane_set);
-            let any_shown = self.panes.iter().any(|pane| self.area_shown(pane.area));
-            debug_assert_eq!(self.focused_pane.is_some(), any_shown);
+            debug_assert!(self.center.layout.is_none() || self.focused_pane.is_some());
             debug_assert!(
                 self.focused_pane
                     .is_none_or(|focused| self.pane_shown(focused))
@@ -1225,13 +1224,14 @@ mod tests {
         workbench.hide_tool(second);
         assert_eq!(workbench.focused_pane_id(), Some(main));
         assert_eq!(workbench.center_pane(), Some(main));
-        // An empty center leaves focus in a dock.
+        // Emptying the center leaves focus on the empty center, not a dock.
         let (upper, _) = workbench.show_tool(second).unwrap();
         workbench.focus_pane(main);
         workbench.remove_document_tabs();
         assert_eq!(workbench.center(), None);
         assert_eq!(workbench.center_pane(), None);
-        assert_eq!(workbench.focused_pane_id(), Some(upper));
+        assert_eq!(workbench.focused_pane_id(), None);
+        assert!(workbench.focus_pane(upper));
         let (center, _) = workbench.open_document_in_center(document);
         assert_eq!(workbench.pane_area(center), Some(Area::Center));
         assert_eq!(workbench.focused_pane_id(), Some(center));

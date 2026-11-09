@@ -329,7 +329,9 @@ another session. Empty panes collapse, keeping their siblings' ratios. The
 center may be empty; it then paints a blank surface that takes keyboard focus
 while no pane has it, opens new documents and terminals, and accepts dropped
 tabs. When the focused pane goes, focus moves to another pane of its area, then
-the center's last focused pane, then a visible dock's.
+the center's last focused pane, else to the empty center; a dock takes focus
+only when the user or a command focuses it, so a fresh window or an emptied
+center never leaves keys aimed at a tool.
 
 Each split gives a ratio of its extent to its first child, addressed by its
 boundary pane, the first pane of its second child. Grow and shrink move a dock
