@@ -143,6 +143,23 @@ impl SettingsScope {
             + usize::from(self.document.is_some())
     }
 
+    /// The scope's facts for a message, `every context` when it has none.
+    pub fn describe(&self) -> String {
+        let facts = [
+            ("language", &self.language),
+            ("view", &self.view),
+            ("document", &self.document),
+        ]
+        .into_iter()
+        .filter_map(|(name, value)| value.as_ref().map(|value| format!("{name} {value}")))
+        .collect::<Vec<_>>();
+        if facts.is_empty() {
+            "every context".into()
+        } else {
+            facts.join(", ")
+        }
+    }
+
     fn matches(&self, context: &SettingsScope) -> bool {
         fn fact(scope: &Option<String>, context: &Option<String>) -> bool {
             scope.is_none() || scope == context
@@ -394,6 +411,27 @@ impl SettingsStore {
         Ok(())
     }
 
+    /// Write every value in `values` at `scope`, or none: the first value
+    /// that does not fit its definition rejects the whole call, naming its
+    /// key.
+    pub fn set_all(
+        &mut self,
+        values: Vec<(String, Value)>,
+        scope: &SettingsScope,
+    ) -> Result<Vec<String>, (String, SettingsError)> {
+        for (key, value) in &values {
+            self.check(key, value)
+                .map_err(|error| (key.clone(), error))?;
+        }
+        let mut keys = Vec::with_capacity(values.len());
+        for (key, value) in values {
+            self.set(&key, value, scope.clone())
+                .expect("checked setting value");
+            keys.push(key);
+        }
+        Ok(keys)
+    }
+
     /// Remove the value for exactly `key` and `scope`. Returns false when
     /// there was none.
     pub fn reset(&mut self, key: &str, scope: &SettingsScope) -> bool {
@@ -424,6 +462,25 @@ impl SettingsStore {
             .filter(|entry| entry.scope.matches(context))
             .max_by_key(|entry| (entry.scope.fact_count(), entry.sequence));
         Some(resolved.map_or(&definition.default, |entry| &entry.value))
+    }
+}
+
+/// A JSON value from JavaScript, whose numbers all arrive as doubles, with
+/// integral numbers restored as integers so they satisfy `integer`.
+pub fn restore_integers(value: Value) -> Value {
+    match value {
+        Value::Number(number) => match number.as_f64() {
+            Some(float) if float.fract() == 0.0 && float.abs() <= 9_007_199_254_740_991.0 => {
+                (float as i64).into()
+            }
+            _ => Value::Number(number),
+        },
+        Value::Array(items) => items.into_iter().map(restore_integers).collect(),
+        Value::Object(fields) => fields
+            .into_iter()
+            .map(|(key, value)| (key, restore_integers(value)))
+            .collect(),
+        other => other,
     }
 }
 

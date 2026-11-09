@@ -375,3 +375,42 @@ fn file_cleanup_settings_default_on_and_read_any_other_text_as_all() {
         Some(&json!("all"))
     );
 }
+
+#[test]
+fn doubles_that_hold_integers_become_integers() {
+    let restored = restore_integers(json!({"a": [1.0, 2.5, "x"], "b": 9.0e18, "c": null}));
+    assert_eq!(restored["a"][0].as_i64(), Some(1));
+    assert!(restored["a"][1].as_i64().is_none());
+    assert!(restored["b"].as_i64().is_none());
+    assert!(restored["c"].is_null());
+}
+
+#[test]
+fn a_scope_names_its_facts() {
+    assert_eq!(SettingsScope::default().describe(), "every context");
+    assert_eq!(rust_editor().describe(), "language rust, view editor");
+}
+
+#[test]
+fn a_batch_of_settings_writes_every_value_or_none() {
+    let mut store = SettingsStore::default();
+    store
+        .define(extension(1), definition(SettingType::Integer, json!(4)))
+        .unwrap();
+    let scope = rust_editor();
+    let rejected = store.set_all(
+        vec![
+            ("other.key".into(), json!(true)),
+            (KEY.into(), json!("wide")),
+        ],
+        &scope,
+    );
+    assert!(matches!(
+        rejected,
+        Err((key, SettingsError::TypeMismatch { .. })) if key == KEY
+    ));
+    assert_eq!(store.get("other.key", &scope), None);
+    let written = store.set_all(vec![(KEY.into(), json!(8))], &scope).unwrap();
+    assert_eq!(written, [KEY]);
+    assert_eq!(store.get(KEY, &scope), Some(&json!(8)));
+}

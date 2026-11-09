@@ -3362,26 +3362,9 @@ impl SettingError {
     }
 }
 
-/// A JSON value from JavaScript, whose numbers all arrive as doubles, with
-/// integral numbers restored as integers so they satisfy `integer`.
+/// A JSON value from JavaScript; see [`knot_model::settings::restore_integers`].
 fn setting_value(value: knot_protocol::CommandArgumentValue) -> serde_json::Value {
-    fn integral(value: serde_json::Value) -> serde_json::Value {
-        match value {
-            serde_json::Value::Number(number) => match number.as_f64() {
-                Some(float) if float.fract() == 0.0 && float.abs() <= 9_007_199_254_740_991.0 => {
-                    (float as i64).into()
-                }
-                _ => serde_json::Value::Number(number),
-            },
-            serde_json::Value::Array(items) => items.into_iter().map(integral).collect(),
-            serde_json::Value::Object(fields) => fields
-                .into_iter()
-                .map(|(key, value)| (key, integral(value)))
-                .collect(),
-            other => other,
-        }
-    }
-    integral(serde_json::to_value(value).expect("validated JSON"))
+    knot_model::settings::restore_integers(serde_json::to_value(value).expect("validated JSON"))
 }
 
 fn settings_scope(
@@ -3436,7 +3419,7 @@ async fn define_setting(
             host.report_setting_warning(
                 format!(
                     "Setting {key}: dropped the value for {} because it is not of type {}",
-                    describe_scope(&scope),
+                    scope.describe(),
                     value_type.name()
                 ),
                 cx,
@@ -3444,22 +3427,6 @@ async fn define_setting(
         }
         Ok(())
     })?
-}
-
-fn describe_scope(scope: &SettingsScope) -> String {
-    let facts = [
-        ("language", &scope.language),
-        ("view", &scope.view),
-        ("document", &scope.document),
-    ]
-    .into_iter()
-    .filter_map(|(name, value)| value.as_ref().map(|value| format!("{name} {value}")))
-    .collect::<Vec<_>>();
-    if facts.is_empty() {
-        "every context".into()
-    } else {
-        facts.join(", ")
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -3485,15 +3452,10 @@ impl HostArguments for SettingWrites {
 async fn set_settings(context: HostContext, arguments: SettingWrites) -> Result<(), SettingError> {
     context.foreground(|host, cx| {
         let settings = &mut cx.default_global::<ApplicationSettings>().0;
-        for (key, value) in &arguments.values {
-            settings
-                .check(key, value)
-                .map_err(|error| SettingError::from_settings(error, key))?;
-        }
-        for (key, value) in arguments.values {
-            settings
-                .set(&key, value, arguments.scope.clone())
-                .expect("checked setting value");
+        let keys = settings
+            .set_all(arguments.values, &arguments.scope)
+            .map_err(|(key, error)| SettingError::from_settings(error, &key))?;
+        for key in keys {
             host.setting_changed(&key);
         }
         crate::app::application_observation::changed(cx);
