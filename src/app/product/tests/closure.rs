@@ -285,8 +285,8 @@ fn replacing_a_prompted_editor_cannot_close_its_replacement(cx: &mut TestAppCont
     first.update(cx, |shell, cx| {
         shell.workbench.update(cx, |workbench, cx| {
             assert!(workbench.replace_tab_document(
-                target.pane,
-                target.tab,
+                target.tab.unwrap().pane,
+                target.tab.unwrap().tab,
                 document,
                 model.clone(),
                 cx
@@ -413,7 +413,7 @@ fn an_edit_racing_a_public_close_save_preserves_the_live_dirty_document(cx: &mut
 }
 
 #[gpui::test]
-fn activation_can_close_the_final_tab_and_observe_its_replacement(cx: &mut TestAppContext) {
+fn activation_can_close_the_final_tab_and_observe_an_empty_window(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (shell, _) = empty_product_window(&documents, cx);
     let old_workbench = cx.read(|cx| shell.read(cx).workbench.clone());
@@ -428,7 +428,7 @@ if (closed.kind !== "closed" || await documents.get(old.document) !== null) thro
 try { await old.buffer.snapshot(); throw new Error("retained buffer usable"); }
 catch (error) { if (error.code !== "BufferClosed") throw error; }
 const fresh = await windows.get(window.target);
-if (fresh.panes.length !== 1 || fresh.panes[0].tabs.length !== 1 || fresh.panes[0].selected === old.target) throw new Error("missing replacement");
+if (fresh.panes.length !== 0) throw new Error("window not empty");
 try { await workbench.close(old.target); throw new Error("closed view accepted"); }
 catch (error) { if (error.code !== "InvalidTarget") throw error; }
 await commands.register("close.activation-ready", () => {});
@@ -437,8 +437,8 @@ await commands.register("close.activation-ready", () => {});
         cx,
     );
     cx.read(|cx| {
-        assert_ne!(old_workbench, shell.read(cx).workbench);
-        assert_eq!(documents.read(cx).documents().count(), 1);
+        assert_eq!(old_workbench, shell.read(cx).workbench);
+        assert_eq!(documents.read(cx).documents().count(), 0);
     });
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }
@@ -512,7 +512,7 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
         let target = current_open_target(&first, cx);
         first
             .read(cx)
-            .capture_tab_relocation(target.pane, target.tab, cx)
+            .capture_tab_relocation(target.tab.unwrap().pane, target.tab.unwrap().tab, cx)
             .unwrap()
     });
     let destination = cx.read(|cx| {
@@ -524,7 +524,7 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
             tab: crate::app::workbench::TabMoveDestination::At {
                 anchor: workbench
                     .read(cx)
-                    .capture_tab_move(target.pane, target.tab)
+                    .capture_tab_move(target.tab.unwrap().pane, target.tab.unwrap().tab)
                     .unwrap(),
                 placement: crate::app::workbench::TabMovePlacement::End,
             },
@@ -617,7 +617,7 @@ async fn dirty_final_tab_close_cancel_preserves_the_document_and_view(cx: &mut T
 }
 
 #[gpui::test]
-async fn discarding_a_dirty_final_tab_closes_it_and_installs_a_replacement(
+async fn discarding_a_dirty_final_tab_closes_it_and_leaves_an_empty_center(
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
@@ -636,17 +636,10 @@ async fn discarding_a_dirty_final_tab_closes_it_and_installs_a_replacement(
     );
     cx.read(|cx| {
         assert!(documents.read(cx).get(document).is_none());
-        let replacement = shell
-            .read(cx)
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .document_id()
-            .unwrap();
-        assert_ne!(replacement, document);
-        assert!(documents.read(cx).get(replacement).is_some());
+        assert_eq!(documents.read(cx).documents().count(), 0);
+        let workbench = shell.read(cx).workbench.read(cx);
+        assert_eq!(workbench.center(), None);
+        assert_eq!(workbench.focused_pane_id(), None);
     });
 }
 
@@ -1136,7 +1129,7 @@ async fn concurrent_close_is_rejected_without_a_second_prompt(cx: &mut TestAppCo
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -1307,7 +1300,7 @@ async fn close_other_tabs_prompts_once_per_dirty_document_and_keeps_pinned_tabs(
         assert!(documents.read(cx).get(other).is_none());
     });
 
-    // Close Pane closes pinned tabs too, leaving a replacement document.
+    // Close Pane closes pinned tabs too, leaving an empty center.
     let execution = dispatch_product_command(
         &shell,
         window,
@@ -1318,9 +1311,8 @@ async fn close_other_tabs_prompts_once_per_dirty_document_and_keeps_pinned_tabs(
         execution.completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    let remaining = tab_documents(&shell, cx);
-    assert_eq!(remaining.len(), 1);
-    assert!(!remaining.contains(&pinned) && !remaining.contains(&focused));
+    assert!(tab_documents(&shell, cx).is_empty());
+    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).center(), None));
 }
 
 #[gpui::test]
@@ -1453,9 +1445,7 @@ fn close_discarding(
     let result = std::rc::Rc::new(std::cell::RefCell::new(None));
     let sink = result.clone();
     cx.update(|cx| {
-        let origin = shell
-            .update(cx, |shell, cx| shell.capture_command_target(cx))
-            .unwrap();
+        let origin = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
         ProductShell::begin_protected_operation(
             ProtectedCloseRequest {
                 kind: ProtectedCloseKind::Tab,

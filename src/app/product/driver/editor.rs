@@ -187,7 +187,7 @@ impl TestEditor {
     pub fn run_command(&self, name: &str, cx: &mut TestAppContext) {
         let target = self
             .shell
-            .update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
+            .update(cx, |shell, cx| shell.capture_command_target(cx));
         let mut execution = cx.update(|cx| {
             let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
             dispatcher.update(cx, |dispatcher, cx| {

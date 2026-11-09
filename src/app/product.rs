@@ -61,7 +61,7 @@ use super::{
         PASTE_COMMAND, ProductCommandDispatcher, ProductCommandSource, ProductCommandTarget,
         QUIT_COMMAND, REDO_COMMAND, RESET_ZOOM_COMMAND, SAVE_AS_COMMAND, SAVE_COMMAND,
         SELECT_ALL_COMMAND, SHOW_EXTENSION_REPORT_COMMAND, SPLIT_HORIZONTAL_COMMAND,
-        SPLIT_VERTICAL_COMMAND, UNDO_COMMAND, ZOOM_IN_COMMAND, ZOOM_OUT_COMMAND,
+        SPLIT_VERTICAL_COMMAND, TargetTab, UNDO_COMMAND, ZOOM_IN_COMMAND, ZOOM_OUT_COMMAND,
         dispatch_close_to_captured_target, dispatch_open_to_captured_target,
         dispatch_save_to_captured_target,
     },
@@ -82,9 +82,9 @@ use super::{
         InputEvent, InputView, PromptText, TransientOutcome, TransientOwner, TransientSurface,
     },
     workbench::{
-        Area, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, PresentationId,
-        SplitDirection, SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent,
-        ToolFrameId, Workbench, WorkbenchLayout,
+        Area, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, SplitDirection,
+        SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent, ToolFrameId,
+        Workbench, WorkbenchLayout,
     },
     workspace::WorkspaceState,
     workspace_tree::{
@@ -444,14 +444,13 @@ pub(crate) fn session_window(shell: EntityId, cx: &App) -> Option<AnyWindowHandl
     cx.global::<ApplicationSessions>().window(shell)
 }
 
+/// Where an open lands: beside the captured tab, or in the center when the
+/// open was captured without one.
 #[derive(Clone)]
 struct OpenTarget {
     shell: WeakEntity<ProductShell>,
     workbench: WeakEntity<Workbench>,
-    pane: PaneId,
-    tab: TabId,
-    surface: TabSurfaceId,
-    presentation: PresentationId,
+    tab: Option<TargetTab>,
 }
 
 impl OpenTarget {
@@ -459,21 +458,37 @@ impl OpenTarget {
         Self {
             shell: target.shell.clone(),
             workbench: target.workbench.clone(),
-            pane: target.pane,
             tab: target.tab,
-            surface: target.surface,
-            presentation: target.presentation,
+        }
+    }
+
+    /// A target at a live tab of `workbench`.
+    fn at(
+        shell: WeakEntity<ProductShell>,
+        workbench: &Entity<Workbench>,
+        pane: PaneId,
+        tab: TabId,
+        cx: &App,
+    ) -> Self {
+        let capture = workbench
+            .read(cx)
+            .capture_tab_move(pane, tab)
+            .expect("open targets name live tabs");
+        Self {
+            shell,
+            workbench: workbench.downgrade(),
+            tab: Some(TargetTab {
+                pane,
+                tab,
+                surface: capture.tab.surface,
+                presentation: capture.presentation,
+            }),
         }
     }
 
     fn matches_presentation(&self, workbench: &Entity<Workbench>, cx: &App) -> bool {
         self.workbench.upgrade().as_ref() == Some(workbench)
-            && workbench
-                .read(cx)
-                .capture_tab_move(self.pane, self.tab)
-                .is_some_and(|capture| {
-                    capture.tab.surface == self.surface && capture.presentation == self.presentation
-                })
+            && self.tab.is_none_or(|tab| tab.is_live(workbench.read(cx)))
     }
 }
 
@@ -514,7 +529,7 @@ impl OpenFailure {
 }
 
 fn target_document(target: &ProductCommandTarget) -> Option<DocumentId> {
-    match target.surface {
+    match target.surface()? {
         TabSurfaceId::Document(document) => Some(document),
         TabSurfaceId::Terminal(_) | TabSurfaceId::Tool(_) => None,
     }
@@ -567,6 +582,9 @@ pub(crate) struct ProductShell {
     /// What has Knot-side focus. The attached window focuses its handle and
     /// reports focus a click moves.
     focus: Focus,
+    /// The empty center's handle, which takes keyboard input while no pane
+    /// has focus.
+    empty_focus: FocusHandle,
 }
 
 /// What has Knot-side focus, by identity.
@@ -700,6 +718,7 @@ impl ProductShell {
             key_hold_generation: 0,
             keys: Default::default(),
             focus: Focus::default(),
+            empty_focus: cx.focus_handle(),
         }
     }
 
@@ -1175,11 +1194,15 @@ impl ProductShell {
     /// The focus handle of what has Knot-side focus.
     fn focused_handle(&self, cx: &App) -> Option<FocusHandle> {
         match self.focus {
-            Focus::Workbench => self
-                .workbench
-                .read(cx)
-                .focused_command_view()
-                .map(|view| view.focus_handle(cx)),
+            Focus::Workbench => {
+                let workbench = self.workbench.read(cx);
+                match workbench.focused_pane_id() {
+                    Some(_) => workbench
+                        .focused_command_view()
+                        .map(|view| view.focus_handle(cx)),
+                    None => Some(self.empty_focus.clone()),
+                }
+            }
             Focus::Palette => self
                 .command_palette
                 .as_ref()
@@ -1213,27 +1236,33 @@ impl ProductShell {
     pub(crate) fn capture_command_target(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> Option<ProductCommandTarget> {
+    ) -> ProductCommandTarget {
         let workbench = self.workbench.read(cx);
-        let pane = workbench.focused_pane()?;
-        let tab = pane.active_tab();
         let focused = self.focus == Focus::Workbench;
-        let view = match workbench.command_view(tab) {
-            Some(super::workbench::CommandView::Extension(extension)) if focused => {
-                Some(extension.instance_id(cx))
-            }
-            _ => None,
-        };
-        Some(ProductCommandTarget {
+        let pane = workbench.focused_pane();
+        let view = pane
+            .and_then(|pane| workbench.command_view(pane.active_tab()))
+            .and_then(|view| match view {
+                super::workbench::CommandView::Extension(extension) if focused => {
+                    Some(extension.instance_id(cx))
+                }
+                _ => None,
+            });
+        ProductCommandTarget {
             shell: cx.entity().downgrade(),
             workbench: self.workbench.downgrade(),
-            pane: pane.id(),
-            tab: tab.id(),
-            surface: tab.surface_id(),
-            presentation: tab.presentation(),
+            tab: pane.map(|pane| {
+                let tab = pane.active_tab();
+                TargetTab {
+                    pane: pane.id(),
+                    tab: tab.id(),
+                    surface: tab.surface_id(),
+                    presentation: tab.presentation(),
+                }
+            }),
             focused,
             view,
-        })
+        }
     }
 
     fn dispatch_command(
@@ -1248,18 +1277,13 @@ impl ProductShell {
     }
 
     fn dispatch_source(&mut self, source: &ProductCommandSource, cx: &mut Context<Self>) {
-        let Some(target) = self.capture_command_target(cx) else {
-            cx.notify();
-            return;
-        };
+        let target = self.capture_command_target(cx);
         self.dispatch_command(source.command(), target, cx);
     }
 
     #[cfg(test)]
     fn open_command_palette(&mut self, cx: &mut Context<Self>) {
-        let Some(origin) = self.capture_command_target(cx) else {
-            return;
-        };
+        let origin = self.capture_command_target(cx);
         self.open_command_palette_from(origin, cx);
     }
 
@@ -1358,7 +1382,9 @@ impl ProductShell {
         origin: &ProductCommandTarget,
         cx: &mut Context<Self>,
     ) {
-        if self.workbench.read(cx).pane(origin.pane).is_some() {
+        if let Some(origin) = origin.tab
+            && self.workbench.read(cx).pane(origin.pane).is_some()
+        {
             self.focus_pane_surface(origin.pane, cx);
         } else {
             self.focus_active_surface(cx);
@@ -1663,105 +1689,97 @@ impl ProductShell {
 
     #[cfg(any(test, feature = "test-support"))]
     fn new_tab(&mut self, cx: &mut Context<Self>) {
-        let Some(pane) = self.workbench.read(cx).focused_pane_id() else {
-            return;
-        };
+        let pane = self.workbench.read(cx).focused_pane_id();
         self.new_document_in_pane(pane, cx);
     }
 
     fn new_document_in_pane(
         &mut self,
-        pane: PaneId,
+        pane: Option<PaneId>,
         cx: &mut Context<Self>,
     ) -> Option<(DocumentId, OpenTarget)> {
         self.new_untitled_in_pane(pane, "Untitled", "", cx)
     }
 
-    /// Open an untitled document holding `text` in `pane` and focus it. The
-    /// text is its clean state, so closing it unedited never prompts.
+    /// The center pane a new tab beside `pane` opens in: `pane` itself when
+    /// it is in the center, else the center pane, or `None` when the center
+    /// is empty. A pane that no longer exists yields `Err`.
+    fn center_destination(&self, pane: Option<PaneId>, cx: &App) -> Result<Option<PaneId>, ()> {
+        let workbench = self.workbench.read(cx);
+        match pane {
+            Some(pane) => match workbench.pane_area(pane).ok_or(())? {
+                Area::Center => Ok(Some(pane)),
+                Area::Dock(_) => Ok(workbench.center_pane()),
+            },
+            None => Ok(workbench.center_pane()),
+        }
+    }
+
+    /// Open an untitled document holding `text` beside `pane`, in the center,
+    /// and focus it. The text is its clean state, so closing it unedited
+    /// never prompts.
     fn new_untitled_in_pane(
         &mut self,
-        pane: PaneId,
+        pane: Option<PaneId>,
         title: &str,
         text: &str,
         cx: &mut Context<Self>,
     ) -> Option<(DocumentId, OpenTarget)> {
+        let destination = self.center_destination(pane, cx).ok()?;
         self.next_open_generation();
-        self.workbench.read(cx).pane(pane)?;
         let documents = Self::documents(cx);
         let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
         let document = documents.update(cx, |documents, cx| {
             documents.create_untitled(title.to_owned(), model, cx)
         });
         let model = documents.read(cx).get(document).unwrap().model().clone();
-        let (pane, tab) = self.workbench.update(cx, |workbench, cx| {
-            if workbench.dock_location(pane).is_some() {
-                workbench.open_document_in_center(document, model, cx)
-            } else {
-                let tab = workbench
-                    .open_tab_for_document(pane, document, model, cx)
-                    .unwrap();
-                (pane, tab)
-            }
-        });
-        let presentation = self
+        let (pane, tab) = self
             .workbench
-            .read(cx)
-            .tab(pane, tab)
-            .unwrap()
-            .presentation();
+            .update(cx, |workbench, cx| match destination {
+                Some(pane) => {
+                    let tab = workbench
+                        .open_tab_for_document(pane, document, model, cx)
+                        .unwrap();
+                    (pane, tab)
+                }
+                None => workbench.open_document_in_center(document, model, cx),
+            });
         self.focus_active_surface(cx);
         cx.notify();
         Some((
             document,
-            OpenTarget {
-                shell: cx.weak_entity(),
-                workbench: self.workbench.downgrade(),
-                pane,
-                tab,
-                surface: TabSurfaceId::Document(document),
-                presentation,
-            },
+            OpenTarget::at(cx.weak_entity(), &self.workbench, pane, tab, cx),
         ))
     }
 
-    /// Opens a focused terminal starting in `directory`, in `pane` or, when
-    /// `pane` is a dock, in the center.
+    /// Opens a focused terminal starting in `directory` beside `pane`, in the
+    /// center.
     fn new_terminal_in_pane(
         &mut self,
-        pane: PaneId,
+        pane: Option<PaneId>,
         directory: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) -> Option<OpenTarget> {
-        self.workbench.read(cx).pane(pane)?;
+        let destination = self.center_destination(pane, cx).ok()?;
         let (id, view) = self.create_terminal_in(directory, cx);
-        let Some((pane, tab)) = self.workbench.update(cx, |workbench, _| {
-            if workbench.dock_location(pane).is_some() {
-                workbench.open_terminal_in_center(id, view)
-            } else {
-                workbench
-                    .open_terminal_tab(pane, id, view)
-                    .map(|tab| (pane, tab))
-            }
+        let Some((pane, tab)) = self.workbench.update(cx, |workbench, _| match destination {
+            Some(pane) => workbench
+                .open_terminal_tab(pane, id, view)
+                .map(|tab| (pane, tab)),
+            None => workbench.open_terminal_in_center(id, view),
         }) else {
             self.close_terminal(id, cx);
             return None;
         };
         self.focus_active_surface(cx);
         cx.notify();
-        Some(OpenTarget {
-            shell: cx.weak_entity(),
-            workbench: self.workbench.downgrade(),
+        Some(OpenTarget::at(
+            cx.weak_entity(),
+            &self.workbench,
             pane,
             tab,
-            surface: TabSurfaceId::Terminal(id),
-            presentation: self
-                .workbench
-                .read(cx)
-                .tab(pane, tab)
-                .unwrap()
-                .presentation(),
-        })
+            cx,
+        ))
     }
 
     #[cfg(test)]
@@ -1829,24 +1847,6 @@ impl ProductShell {
     #[cfg(any(test, feature = "test-support"))]
     fn focus_active_editor(&mut self, cx: &mut Context<Self>) {
         self.focus_active_surface(cx);
-    }
-
-    /// Give `shell`, this session, a fresh untitled document after its last
-    /// tab closed or moved away.
-    fn replace_empty_workbench(&mut self, shell: WeakEntity<Self>, cx: &mut App) {
-        let documents = Self::documents(cx);
-        let replacement = create_untitled_document(&documents, cx);
-        let model = documents.read(cx).get(replacement).unwrap().model().clone();
-        if !self.workbench.read(cx).tools().is_empty() {
-            self.workbench.update(cx, |workbench, cx| {
-                workbench.open_document_in_center(replacement, model, cx);
-            });
-            return;
-        }
-        let workbench = cx.new(|cx| Workbench::new_for_document(replacement, model, cx));
-        cx.global::<ApplicationSessions>()
-            .register(shell, &workbench);
-        self.workbench = workbench;
     }
 
     /// Report an outcome that has no other visible effect in this session.
@@ -1920,6 +1920,7 @@ pub(super) fn show_notice(
     ));
 }
 
+#[cfg(any(test, feature = "test-support"))]
 fn create_untitled_document(documents: &Entity<DocumentCollection>, cx: &mut App) -> DocumentId {
     let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
     documents.update(cx, |documents, cx| {

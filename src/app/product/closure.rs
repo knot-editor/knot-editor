@@ -6,14 +6,20 @@ use crate::app::documents::DocumentDirty;
 use knot_model::workbench::closure as model;
 
 impl ProductCommandTarget {
-    fn view_key(&self) -> ProtectedViewKey {
-        ProtectedViewKey {
-            session: self.shell.entity_id().as_u64(),
-            workbench: self.workbench.entity_id().as_u64(),
-            presentation: self.presentation,
-            pane: self.pane,
-            tab: self.tab,
-            surface: self.surface,
+    fn close_origin(&self) -> model::CloseOrigin {
+        let session = self.shell.entity_id().as_u64();
+        let workbench = self.workbench.entity_id().as_u64();
+        model::CloseOrigin {
+            session,
+            workbench,
+            view: self.tab.map(|tab| ProtectedViewKey {
+                session,
+                workbench,
+                presentation: tab.presentation,
+                pane: tab.pane,
+                tab: tab.tab,
+                surface: tab.surface,
+            }),
         }
     }
 }
@@ -86,10 +92,12 @@ impl ProductShell {
                     target: has_editor.then(|| ProductCommandTarget {
                         shell: shell.downgrade(),
                         workbench: workbench.downgrade(),
-                        pane: snapshot.pane_id,
-                        tab: snapshot.tab_id,
-                        surface: snapshot.surface,
-                        presentation,
+                        tab: Some(TargetTab {
+                            pane: snapshot.pane_id,
+                            tab: snapshot.tab_id,
+                            surface: snapshot.surface,
+                            presentation,
+                        }),
                         focused: true,
                         view: None,
                     }),
@@ -103,12 +111,14 @@ impl ProductShell {
         request: ProtectedCloseRequest,
         cx: &mut App,
     ) -> Result<ProtectedClosePlan, ProtectedCloseFailure> {
-        request
-            .origin
-            .validate_tab(cx)
-            .map_err(|_| ProtectedCloseFailure::InvalidTarget)?;
+        let validated = if request.origin.tab.is_some() {
+            request.origin.validate_tab(cx).map(|_| ())
+        } else {
+            request.origin.validate(cx)
+        };
+        validated.map_err(|_| ProtectedCloseFailure::InvalidTarget)?;
         let views = Self::collect_product_views(cx);
-        let origin = request.origin.view_key();
+        let origin = request.origin.close_origin();
         let decided = model::plan(
             request.kind,
             &origin,
@@ -205,10 +215,12 @@ impl ProductShell {
         let target = ProductCommandTarget {
             shell: cx.entity().downgrade(),
             workbench: self.workbench.downgrade(),
-            pane,
-            tab: tab.id(),
-            surface: tab.surface_id(),
-            presentation: tab.presentation(),
+            tab: Some(TargetTab {
+                pane,
+                tab: tab.id(),
+                surface: tab.surface_id(),
+                presentation: tab.presentation(),
+            }),
             focused: true,
             view: None,
         };
@@ -499,7 +511,7 @@ impl ProductShell {
             final_documents,
         } = model::revalidate(
             plan.request.kind,
-            &plan.request.origin.view_key(),
+            &plan.request.origin.close_origin(),
             &plan.scope,
             plan.hot_exit,
             approvals,
@@ -524,12 +536,14 @@ impl ProductShell {
         }
 
         match plan.request.kind {
-            ProtectedCloseKind::Tab => self.close_tab_after_approval(
-                plan.request.origin.pane,
-                plan.request.origin.tab,
-                plan.request.origin.surface,
-                cx,
-            ),
+            ProtectedCloseKind::Tab => {
+                let tab = plan
+                    .request
+                    .origin
+                    .tab
+                    .ok_or(ProtectedCloseFailure::InvalidTarget)?;
+                self.close_tab_after_approval(tab.pane, tab.tab, tab.surface, cx)
+            }
             ProtectedCloseKind::OtherTabs
             | ProtectedCloseKind::Pane
             | ProtectedCloseKind::OtherPanes => {
@@ -612,14 +626,6 @@ impl ProductShell {
                 documents.remove(document, cx);
             });
         }
-        if transition.workbench_is_empty() {
-            let replacement = create_untitled_document(&documents, cx);
-            let model = documents.read(cx).get(replacement).unwrap().model().clone();
-            let workbench = cx.new(|cx| Workbench::new_for_document(replacement, model, cx));
-            cx.global::<ApplicationSessions>()
-                .register(cx.weak_entity(), &workbench);
-            self.workbench = workbench;
-        }
         self.focus_active_editor(cx);
         cx.notify();
         CommandOutcome::Completed
@@ -653,13 +659,10 @@ impl ProductShell {
             let outcome = self.workbench.update(cx, |workbench, _| {
                 workbench.request_close_terminal_tab(pane, tab, session_id)
             });
-            let Some(transition) = outcome else {
+            if outcome.is_none() {
                 return Err(ProtectedCloseFailure::InvalidTarget);
-            };
-            self.close_terminal(session_id, cx);
-            if transition.workbench_is_empty() {
-                self.replace_empty_workbench(cx.weak_entity(), cx);
             }
+            self.close_terminal(session_id, cx);
             self.focus_active_surface(cx);
             cx.notify();
             return Ok(());
@@ -692,9 +695,6 @@ impl ProductShell {
                 documents.remove(document, cx);
             });
         }
-        if transition.workbench_is_empty() {
-            self.replace_empty_workbench(cx.weak_entity(), cx);
-        }
         self.focus_active_surface(cx);
         cx.notify();
         Ok(())
@@ -715,11 +715,9 @@ pub(super) fn install_protected_window_close(
             return true;
         }
         let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
-        if let Some(target) = target {
-            cx.defer(move |cx| {
-                ProductShell::begin_protected_close(ProtectedCloseKind::Window, target, None, cx);
-            });
-        }
+        cx.defer(move |cx| {
+            ProductShell::begin_protected_close(ProtectedCloseKind::Window, target, None, cx);
+        });
         false
     });
 }

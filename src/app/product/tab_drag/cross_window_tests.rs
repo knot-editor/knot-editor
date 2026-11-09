@@ -215,6 +215,48 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
 }
 
 #[gpui::test]
+fn an_empty_center_takes_a_dropped_document(cx: &mut TestAppContext) {
+    let (source, source_window, destination, destination_window) = pair(cx, 2);
+    // The destination's own document is dirty; drop its tab without closure.
+    destination.update(cx, |shell, cx| {
+        shell
+            .workbench
+            .update(cx, |workbench, _| workbench.remove_document_tabs());
+        cx.notify();
+    });
+    cx.run_until_parked();
+    let (moving, document) = cx.read(|cx| {
+        assert!(destination.read(cx).workbench.read(cx).panes().is_empty());
+        let tab = &source.read(cx).workbench.read(cx).tab_snapshots()[0];
+        (tab.tab_id, tab.surface)
+    });
+    let target = VisualTestContext::from_window(destination_window, cx)
+        .debug_bounds("empty-center")
+        .unwrap()
+        .center();
+    let offset = offset(cx, source_window, destination_window);
+    let mut visual = VisualTestContext::from_window(source_window, cx);
+    start_drag(&mut visual, moving.value());
+    visual.simulate_mouse_move(target + offset, MouseButton::Left, Modifiers::default());
+    visual.run_until_parked();
+    visual.read(|cx| {
+        let preview = destination.read(cx).tab_drag.borrow().preview.unwrap();
+        assert_eq!(preview.tab, TabMoveDestination::Empty);
+    });
+    visual.simulate_mouse_up(target + offset, MouseButton::Left, Modifiers::default());
+    visual.run_until_parked();
+    visual.read(|cx| {
+        let workbench = destination.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        assert_eq!(pane.area(), crate::app::workbench::Area::Center);
+        assert_eq!(pane.active_tab().surface_id(), document);
+        assert_eq!(source.read(cx).workbench.read(cx).tab_snapshots().len(), 1);
+    });
+    drop(visual);
+    assert_cleared(cx);
+}
+
+#[gpui::test]
 fn destination_preview_tracks_source_pointer_and_either_receiver_can_drop_or_cancel(
     cx: &mut TestAppContext,
 ) {
@@ -342,7 +384,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                         )
                     })
                 });
-                (document, editor, shell.capture_command_target(cx).unwrap())
+                (document, editor, shell.capture_command_target(cx))
             })
         })
         .unwrap();
@@ -387,17 +429,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                     .unwrap()
                     .is_dirty(cx)
             );
-            assert_ne!(
-                source
-                    .read(cx)
-                    .workbench
-                    .read(cx)
-                    .focused_pane()
-                    .unwrap()
-                    .active_tab()
-                    .document_id(),
-                Some(document)
-            );
+            assert_eq!(source.read(cx).workbench.read(cx).center(), None);
             assert!(command.validate_tab(cx).is_err());
         })
         .unwrap();
@@ -488,7 +520,7 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
     cx.update_window(source_window, |_, _, cx| {
         source.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.new_terminal_in_pane(pane, None, cx).is_some());
+            assert!(shell.new_terminal_in_pane(Some(pane), None, cx).is_some());
         })
     })
     .unwrap();
@@ -716,7 +748,7 @@ fn closing_final_source_window_clears_framework_drag_before_reopening(cx: &mut T
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_surface(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();

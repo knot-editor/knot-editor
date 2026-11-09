@@ -140,7 +140,7 @@ impl ProductShell {
                 return;
             };
             let dispatched = entity.update(cx, |this, cx| {
-                let target = this.capture_command_target(cx)?;
+                let target = this.capture_command_target(cx);
                 let execution = ProductShell::command_dispatcher(cx)
                     .update(cx, |dispatcher, cx| {
                         dispatcher.dispatch(command, target, cx)

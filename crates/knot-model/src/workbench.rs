@@ -756,6 +756,17 @@ impl Workbench {
         Some((pane_id, tab, replaced))
     }
 
+    /// Open a document as the center pane's preview tab, creating the
+    /// center's first pane when the center is empty.
+    pub fn open_preview_in_center(
+        &mut self,
+        document_id: DocumentId,
+    ) -> (PaneId, TabId, Option<DocumentId>) {
+        let pane = self.ensure_center_pane();
+        self.open_preview_for_document(pane, document_id)
+            .expect("the center pane is live")
+    }
+
     /// Make a preview tab regular. Returns whether it was a preview.
     pub fn promote_preview(&mut self, pane_id: PaneId, tab_id: TabId) -> bool {
         let Some(tab) = self

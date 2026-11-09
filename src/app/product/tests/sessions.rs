@@ -590,18 +590,13 @@ fn multi_window_sessions_close_every_source_and_create_every_destination(cx: &mu
             .collect::<Vec<_>>()
     });
     assert_eq!(created_roots, ["mem://product/a", "mem://product/b"]);
-    // A destination without documents gets an untitled document, so its
-    // root's explorer dock never fills the window.
-    assert_eq!(h.texts(&created_shell, cx), [""]);
+    // A destination without documents has an empty center beside its
+    // root's explorer dock.
+    assert!(h.texts(&created_shell, cx).is_empty());
     cx.read(|cx| {
-        assert!(
-            created_shell
-                .read(cx)
-                .workbench
-                .read(cx)
-                .center_pane()
-                .is_some()
-        )
+        let workbench = created_shell.read(cx).workbench.read(cx);
+        assert_eq!(workbench.center(), None);
+        assert!(workbench.tool_visible(created_shell.read(cx).explorer_frame(cx).unwrap()));
     });
     assert_eq!(h.texts(&first_shell, cx), ["one"]);
 }
@@ -726,7 +721,7 @@ fn concurrent_operations_and_caller_unload_during_staging_leave_the_source(
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_surface(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();

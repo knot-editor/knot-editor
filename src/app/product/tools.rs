@@ -392,15 +392,7 @@ impl ProductShell {
                 let Some((pane, tab)) = workbench.tool_tab(id) else {
                     return;
                 };
-                let capture = workbench.capture_tab_move(pane, tab).unwrap();
-                let target = OpenTarget {
-                    shell: cx.weak_entity(),
-                    workbench: self.workbench.downgrade(),
-                    pane,
-                    tab,
-                    surface: capture.tab.surface,
-                    presentation: capture.presentation,
-                };
+                let target = OpenTarget::at(cx.weak_entity(), &self.workbench, pane, tab, cx);
                 drop(self.start_open_operation_with(
                     OpenRequest::from_uri_for_product(uri),
                     target,

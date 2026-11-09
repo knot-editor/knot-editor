@@ -94,7 +94,7 @@ impl TestWindow {
             .update_window(self.window, |_, _, cx| {
                 self.shell.update(cx, |shell, cx| {
                     shell.focus_active_surface(cx);
-                    shell.capture_command_target(cx).unwrap()
+                    shell.capture_command_target(cx)
                 })
             })
             .unwrap();
@@ -204,12 +204,11 @@ impl TestWindow {
         assert!(result.unwrap().is_ok(), "{} did not open", path.display());
     }
 
-    /// Open an untitled document in the normal group.
+    /// Open an untitled document in the center.
     pub fn new_document(&self, cx: &mut TestAppContext) {
         cx.update_window(self.window, |_, _, cx| {
             self.shell.update(cx, |shell, cx| {
-                let pane = shell.workbench.read(cx).center_pane().unwrap();
-                shell.new_document_in_pane(pane, cx);
+                shell.new_document_in_pane(None, cx);
             });
         })
         .unwrap();
@@ -252,8 +251,8 @@ impl TestWindow {
         })
     }
 
-    /// Whether the window has a normal pane group beside its docks.
-    pub fn has_normal_group(&self, cx: &mut TestAppContext) -> bool {
+    /// Whether the window's center holds a pane.
+    pub fn has_center_pane(&self, cx: &mut TestAppContext) -> bool {
         cx.read(|cx| {
             self.shell
                 .read(cx)
@@ -348,7 +347,7 @@ impl TestWindow {
         serde_json::to_value(layout).unwrap()
     }
 
-    /// Focus the normal group's active document.
+    /// Focus the center pane's active document.
     pub fn focus_document(&self, cx: &mut TestAppContext) {
         let located = cx.read(|cx| {
             let workbench = self.shell.read(cx).workbench.read(cx);
@@ -543,10 +542,12 @@ fn open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarget {
     OpenTarget {
         shell: session,
         workbench: shell.workbench.downgrade(),
-        pane: pane.id(),
-        tab: tab.id(),
-        surface: tab.surface_id(),
-        presentation: tab.presentation(),
+        tab: Some(crate::app::commands::dispatch::TargetTab {
+            pane: pane.id(),
+            tab: tab.id(),
+            surface: tab.surface_id(),
+            presentation: tab.presentation(),
+        }),
     }
 }
 

@@ -20,7 +20,7 @@ impl ProductShell {
         target: &ProductCommandTarget,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
-        let TabSurfaceId::Tool(id) = target.surface else {
+        let Some(TabSurfaceId::Tool(id)) = target.surface() else {
             return Err(CommandOutcome::Unavailable);
         };
         let items = DESTINATIONS

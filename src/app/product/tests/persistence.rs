@@ -15,7 +15,7 @@ async fn cancelling_the_native_open_selection_settles_the_command(cx: &mut TestA
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -56,7 +56,7 @@ async fn save_creates_a_destination_before_binding_it_as_persisted(cx: &mut Test
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -181,7 +181,7 @@ async fn edit_racing_save_keeps_the_newer_revision_dirty(cx: &mut TestAppContext
     cx.update_window(window_handle, |_, _, cx| {
         let target = shell.update(cx, |shell, cx| {
             shell.focus_active_editor(cx);
-            shell.capture_command_target(cx).unwrap()
+            shell.capture_command_target(cx)
         });
         shell.update(cx, |shell, cx| {
             shell.start_save_command(false, target, completion, cx)
@@ -235,13 +235,13 @@ async fn save_completion_rejects_a_closed_captured_tab(cx: &mut TestAppContext) 
                 cx,
             ));
         });
-        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
+        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
         shell.update(cx, |shell, cx| {
             shell.start_save_command(false, target.clone(), completion, cx);
             assert_eq!(
                 shell.close_tab(
-                    target.pane,
-                    target.tab,
+                    target.tab.unwrap().pane,
+                    target.tab.unwrap().tab,
                     super::super::target_document(&target).unwrap(),
                     window,
                     cx
@@ -283,7 +283,7 @@ async fn save_as_overwrites_the_selected_file_and_retargets_only_after_success(
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -329,7 +329,7 @@ async fn save_as_cancellation_preserves_untitled_identity(cx: &mut TestAppContex
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -378,7 +378,7 @@ async fn save_as_failure_preserves_text_and_document_identity(cx: &mut TestAppCo
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -435,7 +435,7 @@ async fn external_save_conflict_offers_reload_and_installs_the_external_version(
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -559,7 +559,7 @@ async fn cancelling_an_external_save_conflict_preserves_the_dirty_document(
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -628,7 +628,7 @@ async fn save_as_after_an_external_conflict_retargets_only_after_saving(cx: &mut
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();

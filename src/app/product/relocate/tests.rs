@@ -49,7 +49,7 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
         .update_window(source_window, |_, _, cx| {
             source.update(cx, |shell, cx| {
                 shell.focus_active_surface(cx);
-                let command = shell.capture_command_target(cx).unwrap();
+                let command = shell.capture_command_target(cx);
                 let editor = shell.workbench.read(cx).focused_editor().unwrap().clone();
                 editor.update(cx, |editor, cx| {
                     editor.editor().clone().update(cx, |editor, cx| {
@@ -67,7 +67,11 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
                 });
                 (
                     shell
-                        .capture_tab_relocation(command.pane, command.tab, cx)
+                        .capture_tab_relocation(
+                            command.tab.unwrap().pane,
+                            command.tab.unwrap().tab,
+                            cx,
+                        )
                         .unwrap(),
                     command,
                     editor,
@@ -116,17 +120,10 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
         assert_eq!(model.read(cx).text(), text);
         assert!(!*cx.global::<ApplicationProtectedClosure>().0.borrow());
         assert_eq!(command.validate_tab(cx), Err(CommandOutcome::InvalidTarget));
-        assert_ne!(
-            source
-                .read(cx)
-                .workbench
-                .read(cx)
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .document_id(),
-            Some(document)
-        );
+        // The source window is left with an empty center.
+        let source = source.read(cx).workbench.read(cx);
+        assert_eq!(source.center(), None);
+        assert_eq!(source.focused_pane_id(), None);
     });
     cx.update_window(destination_window, |_, window, cx| {
         assert!(editor.focus_handle(cx).is_focused(window))
@@ -319,7 +316,7 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
     cx.update_window(source_window, |_, _, cx| {
         source.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.new_terminal_in_pane(pane, None, cx).is_some());
+            assert!(shell.new_terminal_in_pane(Some(pane), None, cx).is_some());
         })
     })
     .unwrap();
@@ -408,17 +405,7 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
                 .sessions[&id],
             session
         );
-        assert!(
-            source
-                .read(cx)
-                .workbench
-                .read(cx)
-                .focused_pane()
-                .unwrap()
-                .active_tab()
-                .document_id()
-                .is_some()
-        );
+        assert!(source.read(cx).workbench.read(cx).panes().is_empty());
         assert_eq!(
             cx.global::<ApplicationSessions>().view_count(document, cx),
             1

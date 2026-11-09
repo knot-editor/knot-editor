@@ -10,7 +10,7 @@ async fn editing_commands_keep_the_captured_view_and_native_clipboard(cx: &mut T
     let (target, dispatcher) = cx
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
+            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                 "fn café() {\n    👩‍💻\n}\n".into(),
             ));
@@ -123,7 +123,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
     .unwrap();
     let editor_target = cx
         .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
         })
         .unwrap();
     let editor_copy = dispatch_product_command(&shell, window, super::super::COPY_COMMAND, cx);
@@ -197,7 +197,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
                     workbench.open_terminal_tab(pane, session, view).unwrap()
                 });
                 shell.activate_tab(pane, tab, cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -237,7 +237,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
         CommandOutcome::Unavailable
     );
     cx.read(|cx| {
-        let session_id = match target.surface {
+        let session_id = match target.tab.unwrap().surface {
             TabSurfaceId::Terminal(id) => id,
             _ => unreachable!(),
         };
@@ -262,7 +262,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
         terminal.selection = Some(selection);
     });
     let selected_text = cx.read(|cx| {
-        let session_id = match target.surface {
+        let session_id = match target.tab.unwrap().surface {
             TabSurfaceId::Terminal(id) => id,
             _ => unreachable!(),
         };
@@ -336,7 +336,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
     );
 
     let mut stale = target;
-    stale.surface = TabSurfaceId::Document(document);
+    stale.tab.as_mut().unwrap().surface = TabSurfaceId::Document(document);
     let execution = dispatcher.update(cx, |dispatcher, cx| {
         dispatcher.dispatch(
             Command {
@@ -499,7 +499,7 @@ async fn undo_command_routes_to_the_captured_editor(cx: &mut TestAppContext) {
     let (target, dispatcher) = cx
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
+            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
             (target, cx.global::<ApplicationProductCommands>().0.clone())
         })
         .unwrap();
@@ -567,7 +567,7 @@ async fn every_editor_motion_command_reaches_the_focused_view(cx: &mut TestAppCo
     let target = cx
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
         })
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
@@ -637,7 +637,7 @@ async fn undo_keeps_the_document_captured_before_focus_changes(cx: &mut TestAppC
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.activate_tab(pane, first_tab, cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();

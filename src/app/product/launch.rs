@@ -19,26 +19,19 @@ pub(crate) fn open_product_window(request: Option<OpenRequest>, cx: &mut App) {
     open_product_window_with(request, None, cx);
 }
 
-/// Open a product window, presenting documents restored at startup. Without an
-/// open request the first restored document replaces the untitled placeholder.
+/// Open a product window, presenting documents restored at startup in its
+/// center, which is otherwise empty.
 pub(super) fn open_product_window_with(
     request: Option<OpenRequest>,
     recovery: Option<crate::app::recovery::StartupRecovery>,
     cx: &mut App,
 ) -> AnyWindowHandle {
     let documents = cx.global::<ApplicationDocuments>().0.clone();
-    let mut restored = recovery
+    let restored = recovery
         .as_ref()
         .map(|recovery| recovery.restored.clone())
         .unwrap_or_default()
-        .into_iter();
-    let document = match request {
-        None => restored.next(),
-        Some(_) => None,
-    }
-    .unwrap_or_else(|| create_untitled_document(&documents, cx));
-    let model = documents.read(cx).get(document).unwrap().model().clone();
-    let restored = restored
+        .into_iter()
         .filter_map(|document| {
             documents
                 .read(cx)
@@ -47,30 +40,25 @@ pub(super) fn open_product_window_with(
         })
         .collect::<Vec<_>>();
     let notice = recovery.as_ref().and_then(recovery_listing::startup_notice);
-    let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
+    let workbench = cx.new(|_| Workbench::empty());
     let shell = cx.new(|cx| ProductShell::new(workbench, cx));
     shell.update(cx, |shell, cx| {
         shell.restore_fresh_window_layout(cx);
-        let workbench = shell.workbench.read(cx);
-        let pane = workbench.focused_pane().unwrap();
-        let tab = pane.active_tab();
-        let target = OpenTarget {
-            shell: cx.weak_entity(),
-            workbench: shell.workbench.downgrade(),
-            pane: pane.id(),
-            tab: tab.id(),
-            surface: tab.surface_id(),
-            presentation: tab.presentation(),
-        };
         shell.workbench.update(cx, |workbench, cx| {
-            for (document, model) in restored {
-                workbench.open_tab_for_document(target.pane, document, model, cx);
+            let first = restored
+                .into_iter()
+                .map(|(document, model)| workbench.open_document_in_center(document, model, cx))
+                .collect::<Vec<_>>()
+                .first()
+                .copied();
+            if let Some((pane, tab)) = first {
+                workbench.activate_tab(pane, tab);
             }
-            workbench.activate_tab(target.pane, target.tab);
         });
         shell.focus_active_surface(cx);
         if let Some(request) = request {
-            drop(shell.start_open_operation(request, target, true, cx));
+            let target = OpenTarget::from_command(&shell.capture_command_target(cx));
+            drop(shell.start_open_operation(request, target, false, cx));
         }
     });
     let bounds = Bounds::centered(None, size(px(1000.), px(720.)), cx);

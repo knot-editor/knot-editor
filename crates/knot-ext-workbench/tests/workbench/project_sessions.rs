@@ -112,10 +112,9 @@ fn switching_suspends_and_restores_unsaved_documents_across_windows(cx: &mut Tes
     projects.create(b.path(), "B", cx);
     assert_eq!(projects.window.roots(cx), [file_uri(b.path())]);
     assert!(!second.is_open(cx));
-    // A project without a session opens with an untitled document in the
-    // normal group, never only its docks.
-    assert_eq!(projects.window.document_texts(cx), [""]);
-    assert!(projects.window.has_normal_group(cx));
+    // A project without a session opens with an empty center.
+    assert!(projects.window.document_texts(cx).is_empty());
+    assert!(!projects.window.has_center_pane(cx));
     let listed = projects.list(cx);
     let (a_id, b_id) = (project_id(&listed, "A"), project_id(&listed, "B"));
     let suspended = &listed["sessions"][&a_id];

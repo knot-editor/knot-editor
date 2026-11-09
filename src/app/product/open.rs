@@ -434,11 +434,13 @@ impl ProductShell {
         } else if preview {
             let documents = Self::documents(cx);
             let model = documents.read(cx).get(document).unwrap().model().clone();
-            let (pane, tab, replaced) = self.workbench.update(cx, |workbench, cx| {
-                workbench
-                    .open_preview_for_document(target.pane, document, model, cx)
-                    .expect("validated destination pane")
-            });
+            let (pane, tab, replaced) =
+                self.workbench.update(cx, |workbench, cx| match target.tab {
+                    Some(tab) => workbench
+                        .open_preview_for_document(tab.pane, document, model, cx)
+                        .expect("validated destination pane"),
+                    None => workbench.open_preview_in_center(document, model, cx),
+                });
             if let Some(replaced) = replaced.filter(|replaced| *replaced != document)
                 && cx.global::<ApplicationSessions>().view_count(replaced, cx) == 0
             {
@@ -450,40 +452,49 @@ impl ProductShell {
         } else {
             let documents = Self::documents(cx);
             let model = documents.read(cx).get(document).unwrap().model().clone();
-            if replace_target && let TabSurfaceId::Document(previous) = target.surface {
-                let replaced = self.workbench.update(cx, |workbench, cx| {
-                    workbench.replace_tab_document(target.pane, target.tab, document, model, cx)
-                });
-                if replaced
-                    && previous != document
-                    && cx.global::<ApplicationSessions>().view_count(previous, cx) == 0
+            match target.tab {
+                Some(captured)
+                    if replace_target
+                        && let TabSurfaceId::Document(previous) = captured.surface =>
                 {
-                    documents.update(cx, |documents, cx| {
-                        documents.remove(previous, cx);
+                    let replaced = self.workbench.update(cx, |workbench, cx| {
+                        workbench.replace_tab_document(
+                            captured.pane,
+                            captured.tab,
+                            document,
+                            model,
+                            cx,
+                        )
                     });
-                }
-                (target.pane, target.tab)
-            } else {
-                self.workbench.update(cx, |workbench, cx| {
-                    if workbench.dock_location(target.pane).is_some() {
-                        workbench.open_document_in_center(document, model, cx)
-                    } else {
-                        let tab = workbench
-                            .open_tab_for_document(target.pane, document, model, cx)
-                            .expect("validated destination pane");
-                        (target.pane, tab)
+                    if replaced
+                        && previous != document
+                        && cx.global::<ApplicationSessions>().view_count(previous, cx) == 0
+                    {
+                        documents.update(cx, |documents, cx| {
+                            documents.remove(previous, cx);
+                        });
                     }
-                })
+                    (captured.pane, captured.tab)
+                }
+                Some(captured)
+                    if self
+                        .workbench
+                        .read(cx)
+                        .dock_location(captured.pane)
+                        .is_none() =>
+                {
+                    self.workbench.update(cx, |workbench, cx| {
+                        let tab = workbench
+                            .open_tab_for_document(captured.pane, document, model, cx)
+                            .expect("validated destination pane");
+                        (captured.pane, tab)
+                    })
+                }
+                _ => self.workbench.update(cx, |workbench, cx| {
+                    workbench.open_document_in_center(document, model, cx)
+                }),
             }
         };
-        let capture = self.workbench.read(cx).capture_tab_move(pane, tab).unwrap();
-        OpenTarget {
-            shell: target.shell.clone(),
-            workbench: self.workbench.downgrade(),
-            pane,
-            tab,
-            surface: capture.tab.surface,
-            presentation: capture.presentation,
-        }
+        OpenTarget::at(target.shell.clone(), &self.workbench, pane, tab, cx)
     }
 }

@@ -159,9 +159,6 @@ impl ProductShell {
                 if moved.is_none() {
                     return CommandOutcome::InvalidTarget;
                 }
-                if self.workbench.read(cx).panes().is_empty() {
-                    self.replace_empty_workbench(this.clone(), cx);
-                }
                 shell.focus_relocated_surface(cx);
                 if !matches!(destination.tab, TabMoveDestination::Empty) {
                     shell.activate_window(cx);

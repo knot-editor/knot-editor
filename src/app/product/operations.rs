@@ -75,61 +75,67 @@ fn capture_destination(
     cx: &mut App,
 ) -> Result<(Entity<ProductShell>, OpenTarget), AccessError> {
     let shell = capture_session(window_target(destination), cx)?;
-    {
-        let state = shell.read(cx);
-        let workbench = state.workbench.read(cx);
-        let pane = match destination {
-            DocumentDestination::Window(_) => workbench.focused_pane(),
-            DocumentDestination::Pane(target)
-            | DocumentDestination::View(PresentationTarget { pane: target, .. }) => {
-                if target.workbench != state.workbench.entity_id().as_u64().to_string() {
-                    return Err(AccessError::InvalidTarget);
-                }
-                workbench
-                    .panes()
-                    .iter()
-                    .find(|pane| pane.id().value().to_string() == target.pane)
+    let state = shell.read(cx);
+    let workbench = state.workbench.read(cx);
+    let (pane, tab) = match destination {
+        // A window with no focused pane opens in its center.
+        DocumentDestination::Window(_) => match workbench.focused_pane() {
+            Some(pane) => (pane, pane.active_tab()),
+            None => {
+                return Ok((
+                    shell.clone(),
+                    OpenTarget {
+                        shell: shell.downgrade(),
+                        workbench: state.workbench.downgrade(),
+                        tab: None,
+                    },
+                ));
             }
-        }
-        .ok_or(AccessError::InvalidTarget)?;
-        let tab = match destination {
-            DocumentDestination::View(target) => pane
-                .tabs()
+        },
+        DocumentDestination::Pane(target)
+        | DocumentDestination::View(PresentationTarget { pane: target, .. }) => {
+            if target.workbench != state.workbench.entity_id().as_u64().to_string() {
+                return Err(AccessError::InvalidTarget);
+            }
+            let pane = workbench
+                .panes()
                 .iter()
-                .find(|tab| tab.id().value().to_string() == target.tab),
-            _ => Some(pane.active_tab()),
+                .find(|pane| pane.id().value().to_string() == target.pane)
+                .ok_or(AccessError::InvalidTarget)?;
+            let tab = match destination {
+                DocumentDestination::View(target) => pane
+                    .tabs()
+                    .iter()
+                    .find(|tab| tab.id().value().to_string() == target.tab)
+                    .ok_or(AccessError::InvalidTarget)?,
+                _ => pane.active_tab(),
+            };
+            (pane, tab)
         }
-        .ok_or(AccessError::InvalidTarget)?;
-        let presentation = tab.presentation();
-        if let DocumentDestination::View(target) = destination
-            && presentation.value().to_string() != target.presentation
-        {
-            return Err(AccessError::InvalidTarget);
-        }
-        let target = OpenTarget {
-            shell: shell.downgrade(),
-            workbench: state.workbench.downgrade(),
-            pane: pane.id(),
-            tab: tab.id(),
-            surface: tab.surface_id(),
-            presentation,
-        };
-        Ok((shell.clone(), target))
+    };
+    if let DocumentDestination::View(target) = destination
+        && tab.presentation().value().to_string() != target.presentation
+    {
+        return Err(AccessError::InvalidTarget);
     }
+    let target = OpenTarget::at(shell.downgrade(), &state.workbench, pane.id(), tab.id(), cx);
+    Ok((shell.clone(), target))
 }
 
 impl OpenTarget {
+    /// The public identity of the tab an open landed in.
     fn public_target(&self) -> PresentationTarget {
+        let tab = self.tab.expect("opened targets name their tab");
         PresentationTarget {
             pane: PaneTarget {
                 window: WindowTarget {
                     window: session_id(self.shell.entity_id()),
                 },
                 workbench: self.workbench.entity_id().as_u64().to_string(),
-                pane: self.pane.value().to_string(),
+                pane: tab.pane.value().to_string(),
             },
-            tab: self.tab.value().to_string(),
-            presentation: self.presentation.value().to_string(),
+            tab: tab.tab.value().to_string(),
+            presentation: tab.presentation.value().to_string(),
         }
     }
 }
@@ -233,7 +239,7 @@ pub(crate) fn open_terminal(
     shell.update(cx, |shell, cx| {
         let directory = directory.or_else(|| shell.terminal_directory(cx));
         shell
-            .new_terminal_in_pane(target.pane, directory, cx)
+            .new_terminal_in_pane(target.tab.map(|tab| tab.pane), directory, cx)
             .map(|target| target.public_target())
             .ok_or(AccessError::InvalidTarget)
     })
@@ -255,10 +261,8 @@ impl EditorTab {
             return None;
         }
         let workbench = workbench.read(cx);
-        let tab = workbench
-            .tab(target.pane, target.tab)
-            .filter(|tab| tab.surface_id() == target.surface)?;
-        match workbench.command_view(tab)? {
+        let captured = target.tab?;
+        match workbench.command_view(workbench.tab(captured.pane, captured.tab)?)? {
             crate::app::workbench::CommandView::Editor(view) => {
                 Some(view.read(cx).editor().clone())
             }
@@ -331,7 +335,7 @@ pub(crate) fn create_untitled(
     let (shell, target) = capture_destination(&destination, cx)?;
     shell.update(cx, |shell, cx| {
         let (document, target) = shell
-            .new_document_in_pane(target.pane, cx)
+            .new_document_in_pane(target.tab.map(|tab| tab.pane), cx)
             .ok_or(OpenError::Access(AccessError::InvalidTarget))?;
         Ok((document, target.public_target()))
     })
@@ -462,17 +466,15 @@ pub(crate) fn close_presentation(
         .upgrade()
         .ok_or(CloseError::Access(AccessError::InvalidTarget))?;
     let workbench_state = workbench.read(cx);
-    workbench_state
-        .tab(target.pane, target.tab)
+    target
+        .tab
+        .and_then(|tab| workbench_state.tab(tab.pane, tab.tab))
         .and_then(|tab| workbench_state.command_view(tab))
         .ok_or(CloseError::Access(AccessError::InvalidTarget))?;
     let origin = ProductCommandTarget {
         shell: shell.downgrade(),
         workbench: target.workbench,
-        pane: target.pane,
         tab: target.tab,
-        surface: target.surface,
-        presentation: target.presentation,
         focused: true,
         view: None,
     };

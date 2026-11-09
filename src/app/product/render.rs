@@ -39,8 +39,11 @@ impl ProductShell {
             None => div()
                 .id("empty-center")
                 .debug_selector(|| "empty-center".to_owned())
+                .track_focus(&self.empty_focus)
+                .relative()
                 .size_full()
                 .bg(theme(cx).paint_color(color::BACKGROUND))
+                .child(self.empty_center_drag_geometry())
                 .into_any_element(),
         };
         let mut docks = [None, None, None];
@@ -460,9 +463,7 @@ impl ProductShell {
                     .cursor_pointer()
                     .hover(move |style| style.bg(hover))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        let Some(target) = this.capture_command_target(cx) else {
-                            return;
-                        };
+                        let target = this.capture_command_target(cx);
                         let name = command.name.clone();
                         let arguments = command.arguments.clone();
                         this.dispatch_command(

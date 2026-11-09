@@ -109,7 +109,9 @@ fn new_tab_targets_the_pane_whose_editor_has_focus(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn closing_the_final_clean_tab_creates_a_replacement(cx: &mut TestAppContext) {
+fn closing_the_final_clean_tab_leaves_an_empty_center_that_takes_new_documents(
+    cx: &mut TestAppContext,
+) {
     let documents = install_globals(cx);
     let original = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(original).unwrap().model().clone());
@@ -124,19 +126,23 @@ fn closing_the_final_clean_tab_creates_a_replacement(cx: &mut TestAppContext) {
     cx.run_until_parked();
 
     cx.read(|cx| {
-        let replacement = shell
-            .read(cx)
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .unwrap()
-            .active_tab()
-            .document_id()
-            .unwrap();
-        assert_ne!(replacement, original);
+        let workbench = shell.read(cx).workbench.read(cx);
+        assert!(workbench.panes().is_empty());
         assert!(documents.read(cx).get(original).is_none());
-        assert!(documents.read(cx).get(replacement).is_some());
+        assert_eq!(documents.read(cx).documents().count(), 0);
     });
+    // The empty center paints and still opens documents.
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("empty-center").is_some());
+    shell.update(cx, |shell, cx| shell.new_tab(cx));
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        assert_eq!(pane.area(), crate::app::workbench::Area::Center);
+        assert!(pane.active_tab().document_id().is_some());
+    });
+    assert!(cx.debug_bounds("empty-center").is_none());
 }
 
 #[gpui::test]
@@ -154,10 +160,12 @@ fn replacing_a_shared_blank_tab_preserves_the_other_windows_document(cx: &mut Te
             let target = super::super::OpenTarget {
                 shell: cx.weak_entity(),
                 workbench: shell.workbench.downgrade(),
-                pane: pane.id(),
-                tab: pane.active_tab_id(),
-                surface: pane.active_tab().surface_id(),
-                presentation: pane.active_tab().presentation(),
+                tab: Some(crate::app::commands::dispatch::TargetTab {
+                    pane: pane.id(),
+                    tab: pane.active_tab_id(),
+                    surface: pane.active_tab().surface_id(),
+                    presentation: pane.active_tab().presentation(),
+                }),
             };
             shell.present_open_document(replacement, &target, true, false, cx);
         });

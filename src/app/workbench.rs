@@ -212,6 +212,7 @@ impl Workbench {
         }
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn new_for_document(
         document_id: DocumentId,
         model: Entity<Buffer>,
@@ -356,6 +357,20 @@ impl Workbench {
         self.attach_editor(self.presentation_of(opened.0, opened.1), model, cx);
         self.drop_ended_views();
         Some(opened)
+    }
+
+    /// Open a document as the center's preview tab; see
+    /// [`layout::Workbench::open_preview_in_center`].
+    pub(crate) fn open_preview_in_center(
+        &mut self,
+        document_id: DocumentId,
+        model: Entity<Buffer>,
+        cx: &mut Context<Self>,
+    ) -> (PaneId, TabId, Option<DocumentId>) {
+        let opened = self.layout.open_preview_in_center(document_id);
+        self.attach_editor(self.presentation_of(opened.0, opened.1), model, cx);
+        self.drop_ended_views();
+        opened
     }
 
     pub(crate) fn replace_tab_document(

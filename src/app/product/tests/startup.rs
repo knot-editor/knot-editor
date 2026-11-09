@@ -525,7 +525,7 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_surface(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();

@@ -391,8 +391,7 @@ pub(crate) fn start_view_command(
     completion: crate::app::CommandCompletion,
     cx: &mut App,
 ) -> Result<(), knot_protocol::CommandOutcome> {
-    target.validate_tab(cx)?;
-    target.validate_view(cx)?;
+    target.validate(cx)?;
     let host = entity(cx).ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
     host.update(cx, |host, cx| {
         host.start_view_command(command, target, handler, completion, cx)
@@ -1367,8 +1366,7 @@ impl ProductExtensionHost {
             .get(&root)
             .ok_or(AccessError::InvalidTarget)?;
         target
-            .validate_tab(cx)
-            .and_then(|()| target.validate_view(cx))
+            .validate(cx)
             .map_err(|_| AccessError::InvalidTarget)?;
         Ok(target)
     }
@@ -1776,10 +1774,7 @@ impl ProductExtensionHost {
         let Some(target) = self.command_targets.get(&root) else {
             return CommandOutcome::InvalidTarget;
         };
-        if let Err(invalid) = target
-            .validate_tab(cx)
-            .and_then(|()| target.validate_view(cx))
-        {
+        if let Err(invalid) = target.validate(cx) {
             return invalid;
         }
         if !self
@@ -1856,10 +1851,8 @@ impl ProductExtensionHost {
                     return;
                 }
                 // The tree must still have focus in its session.
-                let Some(target) =
-                    crate::app::product::find_session(window, cx).and_then(|shell| {
-                        shell.update(cx, |shell, cx| shell.capture_command_target(cx))
-                    })
+                let Some(target) = crate::app::product::find_session(window, cx)
+                    .map(|shell| shell.update(cx, |shell, cx| shell.capture_command_target(cx)))
                 else {
                     return;
                 };
@@ -1891,8 +1884,7 @@ impl ProductExtensionHost {
     ) -> Result<(), knot_protocol::CommandOutcome> {
         use knot_protocol::CommandOutcome;
 
-        target.validate_tab(cx)?;
-        target.validate_view(cx)?;
+        target.validate(cx)?;
         if target.session(cx).is_none() {
             return Err(CommandOutcome::InvalidTarget);
         }
@@ -1920,10 +1912,7 @@ impl ProductExtensionHost {
                 if target.session(cx).is_none() {
                     return CommandOutcome::InvalidTarget;
                 }
-                if let Err(invalid) = target
-                    .validate_tab(cx)
-                    .and_then(|()| target.validate_view(cx))
-                {
+                if let Err(invalid) = target.validate(cx) {
                     return invalid;
                 }
                 let Some(host) = this.upgrade() else {
@@ -2033,9 +2022,10 @@ impl ProductExtensionHost {
             return knot_protocol::CommandOutcome::InvalidTarget;
         };
         let workbench = workbench.read(cx);
-        let Some(editor) = workbench
-            .tab(target.pane, target.tab)
-            .filter(|tab| tab.surface_id() == target.surface)
+        let Some(editor) = target
+            .tab
+            .and_then(|captured| workbench.tab(captured.pane, captured.tab))
+            .filter(|tab| Some(tab.surface_id()) == target.surface())
             .and_then(|tab| workbench.editor(tab))
             .map(|view| view.read(cx).editor().clone())
         else {
@@ -2122,9 +2112,10 @@ impl ProductExtensionHost {
         target.document_id(cx).ok()?;
         let workbench = target.workbench.upgrade()?;
         let workbench = workbench.read(cx);
+        let captured = target.tab?;
         let tab = workbench
-            .tab(target.pane, target.tab)
-            .filter(|tab| tab.surface_id() == target.surface)?;
+            .tab(captured.pane, captured.tab)
+            .filter(|tab| tab.surface_id() == captured.surface)?;
         let model = workbench.editor(tab)?.read(cx).model().clone();
         Some(self.track_buffer(&model, cx))
     }

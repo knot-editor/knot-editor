@@ -39,11 +39,11 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
     let target = cx
         .update_window(window, |_, window, cx| {
             focus_view(&tree.focus_handle(cx), window, cx);
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
         })
         .unwrap();
     cx.read(|cx| {
-        assert!(matches!(target.surface, TabSurfaceId::Tool(_)));
+        assert!(matches!(target.tab.unwrap().surface, TabSurfaceId::Tool(_)));
         assert!(target.document_id(cx).is_err());
     });
     let copy = cx.update(|cx| {
@@ -138,8 +138,8 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
         ));
     });
     cx.update_window(window, |_, _, cx| {
-        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
-        assert!(matches!(target.surface, TabSurfaceId::Tool(_)));
+        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+        assert!(matches!(target.tab.unwrap().surface, TabSurfaceId::Tool(_)));
         assert_eq!(target.validate_view(cx), Ok(()));
     })
     .unwrap();
@@ -155,7 +155,8 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     cx.read(|cx| {
         assert_eq!(&shell.read(cx).workbench, &workbench);
-        assert_eq!(documents.read(cx).documents().count(), 1);
+        assert_eq!(documents.read(cx).documents().count(), 0);
+        assert_eq!(workbench.read(cx).center(), None);
         assert_eq!(workbench.read(cx).tools().len(), 1);
         assert!(
             workbench

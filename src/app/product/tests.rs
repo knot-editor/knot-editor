@@ -269,10 +269,12 @@ fn current_open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarg
     OpenTarget {
         shell: session,
         workbench: shell.workbench.downgrade(),
-        pane: pane.id(),
-        tab: tab.id(),
-        surface: tab.surface_id(),
-        presentation: tab.presentation(),
+        tab: Some(crate::app::commands::dispatch::TargetTab {
+            pane: pane.id(),
+            tab: tab.id(),
+            surface: tab.surface_id(),
+            presentation: tab.presentation(),
+        }),
     }
 }
 
@@ -311,7 +313,7 @@ fn dispatch_product_command_with(
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_surface(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -445,7 +447,7 @@ fn dispatch_tree_command(
 ) -> crate::app::CommandExecution {
     let target = cx
         .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
         })
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());

@@ -24,6 +24,8 @@ pub(super) struct TabDragState {
     /// Painted bounds of each ordinary split, keyed by its boundary pane.
     splits: Vec<(PaneId, Bounds<Pixels>)>,
     workbench: Option<Bounds<Pixels>>,
+    /// The painted empty center, which takes documents and terminals.
+    empty_center: Option<Bounds<Pixels>>,
     preview: Option<DropTarget>,
 }
 
@@ -91,6 +93,15 @@ impl TabDragState {
     fn target_at(&self, position: Point<Pixels>, is_tool: bool) -> Option<DropTarget> {
         if is_tool && let Some(dock) = self.workbench_dock_target(position) {
             return Some(dock);
+        }
+        if !is_tool
+            && let Some(center) = self.empty_center
+            && center.contains(&position)
+        {
+            return Some(DropTarget {
+                tab: TabMoveDestination::Empty,
+                bounds: center,
+            });
         }
         let pane = self
             .panes
@@ -166,6 +177,7 @@ impl TabDragState {
         self.panes.clear();
         self.splits.clear();
         self.workbench = None;
+        self.empty_center = None;
     }
 
     #[cfg(test)]
@@ -515,6 +527,20 @@ impl ProductShell {
         canvas(
             move |bounds, _, _| {
                 state.borrow_mut().workbench = Some(bounds);
+            },
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+    }
+
+    pub(super) fn empty_center_drag_geometry(&self) -> impl IntoElement + use<> {
+        let state = self.tab_drag.clone();
+        canvas(
+            move |bounds, _, _| {
+                state.borrow_mut().empty_center = Some(bounds);
             },
             |_, _, _, _| {},
         )

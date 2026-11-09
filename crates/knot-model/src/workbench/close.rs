@@ -14,12 +14,6 @@ pub struct CloseTransition {
     pub document: Option<DocumentCloseDisposition>,
 }
 
-impl CloseTransition {
-    pub fn workbench_is_empty(self) -> bool {
-        self.focused_pane.is_none()
-    }
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct PendingClose {
     pane_id: PaneId,
@@ -275,7 +269,7 @@ mod tests {
             let transition = workbench
                 .resolve_pending_close(pending, CloseConfirmation::Close, 1)
                 .unwrap();
-            assert!(transition.workbench_is_empty());
+            assert_eq!(transition.focused_pane, None);
             assert_eq!(transition.removed_pane, Some(pane));
             assert_eq!(
                 transition.document,

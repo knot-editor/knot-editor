@@ -17,7 +17,7 @@ impl ProductShell {
         target: &ProductCommandTarget,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
-        let TabSurfaceId::Document(document) = target.surface else {
+        let Some(TabSurfaceId::Document(document)) = target.surface() else {
             return Err(CommandOutcome::Unavailable);
         };
         let model = Self::documents(cx)

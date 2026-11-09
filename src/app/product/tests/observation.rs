@@ -547,8 +547,8 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
         assert!(before_replacement.matches_presentation(&shell.workbench, cx));
         shell.workbench.update(cx, |workbench, cx| {
             assert!(workbench.replace_tab_document(
-                before_replacement.pane,
-                before_replacement.tab,
+                before_replacement.tab.unwrap().pane,
+                before_replacement.tab.unwrap().tab,
                 document,
                 model.clone(),
                 cx
@@ -581,10 +581,12 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
         OpenTarget {
             shell: shell.downgrade(),
             workbench: workbench.downgrade(),
-            pane: first_pane.id(),
-            tab: tab.id(),
-            surface: tab.surface_id(),
-            presentation: tab.presentation(),
+            tab: Some(crate::app::commands::dispatch::TargetTab {
+                pane: first_pane.id(),
+                tab: tab.id(),
+                surface: tab.surface_id(),
+                presentation: tab.presentation(),
+            }),
         }
     });
     let session = shell.downgrade();
@@ -594,7 +596,11 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
         let target_pane = &workbench.panes()[1];
         (
             shell
-                .capture_tab_relocation(old_target.pane, old_target.tab, cx)
+                .capture_tab_relocation(
+                    old_target.tab.unwrap().pane,
+                    old_target.tab.unwrap().tab,
+                    cx,
+                )
                 .unwrap(),
             super::super::relocate::TabRelocationDestination {
                 shell: session.clone(),
@@ -677,7 +683,7 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_surface(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -685,30 +691,19 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     let closed = take_events(&host, cx);
     assert!(closed.iter().any(|event| matches!(&event.change, ApplicationChange::DocumentClosed { document } if document == &info.id)));
-    assert!(
-        changed_documents(&closed)
-            .iter()
-            .any(|document| document.kind == DocumentKind::Untitled)
-    );
-    let new_target = closed
-        .iter()
-        .rev()
-        .find_map(|event| match &event.change {
-            ApplicationChange::PresentationsChanged { window } => {
-                Some(window.panes[0].tabs[0].target.clone())
-            }
-            _ => None,
-        })
-        .unwrap();
+    // The window is empty again, with no replacement document.
+    assert!(changed_documents(&closed).is_empty());
+    assert!(closed.iter().any(|event| matches!(&event.change,
+        ApplicationChange::PresentationsChanged { window }
+            if window.panes.is_empty() && window.target == old_target.pane.window)));
     cx.read(|cx| {
         assert_eq!(retained_workbench.read(cx).view_count(document), 0);
+        assert_eq!(&shell.read(cx).workbench, &retained_workbench);
         assert_eq!(
             old_command_target.validate_tab(cx),
             Err(CommandOutcome::InvalidTarget)
         );
     });
-    assert_ne!(old_target.pane, new_target.pane);
-    assert_eq!(old_target.pane.window, new_target.pane.window);
     assert!(!cx.read(|cx| model.read(cx).is_open()));
 }
 

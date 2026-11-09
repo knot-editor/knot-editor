@@ -30,15 +30,34 @@ impl ProductCommandSource {
     }
 }
 
+/// The exact tab presentation a command or an open was captured on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct TargetTab {
+    pub(crate) pane: crate::app::workbench::PaneId,
+    pub(crate) tab: crate::app::workbench::TabId,
+    pub(crate) surface: crate::app::workbench::TabSurfaceId,
+    pub(crate) presentation: crate::app::workbench::PresentationId,
+}
+
+impl TargetTab {
+    /// Whether the workbench still shows this exact presentation.
+    pub(crate) fn is_live(&self, workbench: &crate::app::workbench::Workbench) -> bool {
+        workbench
+            .capture_tab_move(self.pane, self.tab)
+            .is_some_and(|capture| {
+                capture.tab.surface == self.surface && capture.presentation == self.presentation
+            })
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub(crate) struct ProductCommandTarget {
     /// The session the command runs in.
     pub(crate) shell: WeakEntity<ProductShell>,
     pub(crate) workbench: WeakEntity<crate::app::workbench::Workbench>,
-    pub(crate) pane: crate::app::workbench::PaneId,
-    pub(crate) tab: crate::app::workbench::TabId,
-    pub(crate) surface: crate::app::workbench::TabSurfaceId,
-    pub(crate) presentation: crate::app::workbench::PresentationId,
+    /// The focused tab, absent while no pane has focus, as in an empty
+    /// window.
+    pub(crate) tab: Option<TargetTab>,
     /// Whether the tab's view had Knot-side focus when captured; only a
     /// focused view takes its own commands.
     pub(crate) focused: bool,
@@ -60,22 +79,28 @@ impl ProductCommandTarget {
         crate::app::product::session_window(self.shell.entity_id(), cx)
     }
 
+    /// The captured tab; a command captured without one is unavailable.
+    pub(crate) fn tab(&self) -> Result<TargetTab, CommandOutcome> {
+        self.tab.ok_or(CommandOutcome::Unavailable)
+    }
+
+    /// The captured tab's surface, if any.
+    pub(crate) fn surface(&self) -> Option<crate::app::workbench::TabSurfaceId> {
+        self.tab.map(|tab| tab.surface)
+    }
+
     /// Validate the session, its workbench, and the exact captured
     /// presentation.
-    pub(crate) fn validate_tab(&self, cx: &App) -> Result<(), CommandOutcome> {
+    pub(crate) fn validate_tab(&self, cx: &App) -> Result<TargetTab, CommandOutcome> {
+        let tab = self.tab()?;
         let workbench = self
             .workbench
             .upgrade()
             .ok_or(CommandOutcome::InvalidTarget)?;
         if crate::app::product::session_is_live(&self.shell, &workbench, cx)
-            && workbench
-                .read(cx)
-                .capture_tab_move(self.pane, self.tab)
-                .is_some_and(|capture| {
-                    capture.tab.surface == self.surface && capture.presentation == self.presentation
-                })
+            && tab.is_live(workbench.read(cx))
         {
-            Ok(())
+            Ok(tab)
         } else {
             Err(CommandOutcome::InvalidTarget)
         }
@@ -83,10 +108,10 @@ impl ProductCommandTarget {
 
     /// Stable contribution ID for a captured contributed tool surface.
     pub(crate) fn extension_tool_id(&self, cx: &App) -> Option<String> {
-        self.validate_tab(cx).ok()?;
+        let tab = self.validate_tab(cx).ok()?;
         let workbench = self.workbench.upgrade()?;
         let workbench = workbench.read(cx);
-        match self.surface {
+        match tab.surface {
             crate::app::workbench::TabSurfaceId::Tool(id) => {
                 workbench.tool(id).map(|tool| tool.stable_id.clone())
             }
@@ -99,8 +124,7 @@ impl ProductCommandTarget {
         &self,
         cx: &App,
     ) -> Result<crate::app::documents::DocumentId, CommandOutcome> {
-        self.validate_tab(cx)?;
-        match self.surface {
+        match self.validate_tab(cx)?.surface {
             crate::app::workbench::TabSurfaceId::Document(document) => Ok(document),
             crate::app::workbench::TabSurfaceId::Terminal(_)
             | crate::app::workbench::TabSurfaceId::Tool(_) => Err(CommandOutcome::Unavailable),
@@ -108,13 +132,24 @@ impl ProductCommandTarget {
     }
 
     pub(crate) fn command_view(&self, cx: &App) -> Option<crate::app::workbench::CommandView> {
-        self.validate_tab(cx).ok()?;
+        let tab = self.validate_tab(cx).ok()?;
         let workbench = self.workbench.upgrade()?;
         let workbench = workbench.read(cx);
-        let tab = workbench
-            .tab(self.pane, self.tab)
-            .filter(|tab| tab.surface_id() == self.surface)?;
-        workbench.command_view(tab)
+        workbench.command_view(workbench.tab(tab.pane, tab.tab)?)
+    }
+
+    /// Validate the captured tab and its view, or, for a target captured
+    /// without a tab, the session; a command that needs a tab asks for it
+    /// with [`tab`](Self::tab).
+    pub(crate) fn validate(&self, cx: &App) -> Result<(), CommandOutcome> {
+        if self.tab.is_some() {
+            self.validate_tab(cx)?;
+            self.validate_view(cx)
+        } else {
+            self.session(cx)
+                .map(|_| ())
+                .ok_or(CommandOutcome::InvalidTarget)
+        }
     }
 
     pub(crate) fn validate_view(&self, cx: &App) -> Result<(), CommandOutcome> {
@@ -273,13 +308,13 @@ impl ProductCommandDispatcher {
 }
 
 pub(crate) fn break_captured_history_group(target: &ProductCommandTarget, cx: &mut App) {
-    let Some(workbench) = target.workbench.upgrade() else {
+    let (Some(workbench), Some(captured)) = (target.workbench.upgrade(), target.tab) else {
         return;
     };
     let workbench = workbench.read(cx);
     let model = workbench
-        .tab(target.pane, target.tab)
-        .filter(|tab| tab.surface_id() == target.surface)
+        .tab(captured.pane, captured.tab)
+        .filter(|tab| tab.surface_id() == captured.surface)
         .and_then(|tab| workbench.editor(tab))
         .map(|editor| editor.read(cx).model().clone());
     if let Some(model) = model {
@@ -293,7 +328,9 @@ pub(crate) fn dispatch_open_to_captured_target(
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
     let shell = target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
-    target.validate_tab(cx)?;
+    if target.tab.is_some() {
+        target.validate_tab(cx)?;
+    }
     break_captured_history_group(target, cx);
     let target = target.clone();
     shell.update(cx, |shell, cx| {
@@ -325,7 +362,7 @@ pub(crate) fn dispatch_close_to_captured_target(
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
     target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
-    target.validate_tab(cx)?;
+    target.validate(cx)?;
     break_captured_history_group(target, cx);
     ProductShell::begin_protected_close(kind, target.clone(), Some(completion), cx);
     Ok(())
@@ -340,10 +377,7 @@ pub(crate) fn dispatch_to_captured_target(
     if target.session(cx).is_none() {
         return CommandClaim::Finished(CommandOutcome::InvalidTarget);
     }
-    if let Err(outcome) = target.validate_tab(cx) {
-        return CommandClaim::Finished(outcome);
-    }
-    if let Err(outcome) = target.validate_view(cx) {
+    if let Err(outcome) = target.validate(cx) {
         return CommandClaim::Finished(outcome);
     }
     if let Some(view) = target.command_view(cx)

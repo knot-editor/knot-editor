@@ -187,11 +187,11 @@ async fn terminal_tab_has_a_captured_surface_and_document_commands_are_unavailab
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.activate_tab(pane, tab, cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
-    assert_eq!(target.surface, session);
+    assert_eq!(target.tab.unwrap().surface, session);
     cx.read(|cx| {
         assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
         assert_eq!(
@@ -220,7 +220,7 @@ async fn terminal_tab_has_a_captured_surface_and_document_commands_are_unavailab
         CommandOutcome::Unavailable
     );
     let mut wrong_surface = target;
-    wrong_surface.surface = TabSurfaceId::Document(document);
+    wrong_surface.tab.as_mut().unwrap().surface = TabSurfaceId::Document(document);
     let result = dispatcher.update(cx, |dispatcher, cx| {
         dispatcher.dispatch(
             Command {
@@ -258,7 +258,7 @@ async fn closing_terminal_tab_preserves_dirty_document_and_invalidates_its_targe
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.activate_tab(pane, tab, cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -539,7 +539,7 @@ async fn terminal_close_and_reopen_settle_the_exact_session(cx: &mut TestAppCont
 }
 
 #[gpui::test]
-async fn closing_the_final_terminal_tab_installs_an_untitled_workbench(cx: &mut TestAppContext) {
+async fn closing_the_final_terminal_tab_leaves_an_empty_center(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
@@ -595,9 +595,7 @@ async fn closing_the_final_terminal_tab_installs_an_untitled_workbench(cx: &mut 
     );
     cx.read(|cx| {
         let shell = shell.read(cx);
-        let tabs = shell.workbench.read(cx).tab_snapshots();
-        assert_eq!(tabs.len(), 1);
-        assert!(matches!(tabs[0].surface, TabSurfaceId::Document(_)));
+        assert!(shell.workbench.read(cx).tab_snapshots().is_empty());
         assert_eq!(
             session.read(cx).status(),
             crate::app::terminal::session::TerminalStatus::Closed
@@ -1269,7 +1267,7 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
             shell.replace_workspace_roots(vec![directory_uri(&root)], cx);
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
             shell
-                .new_terminal_in_pane(pane, Some(nested.clone()), cx)
+                .new_terminal_in_pane(Some(pane), Some(nested.clone()), cx)
                 .unwrap();
         });
     })

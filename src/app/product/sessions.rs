@@ -565,11 +565,6 @@ fn commit(
                         .update(cx, |workbench, _| workbench.activate_tab(pane, tab));
                 }
             }
-            // A window left with only docks would let them fill it; give it
-            // the ordinary untitled document in the center instead.
-            if shell.workbench.read(cx).center().is_none() {
-                shell.replace_empty_workbench(cx.weak_entity(), cx);
-            }
             cx.notify();
             outcome
         });

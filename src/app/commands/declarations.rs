@@ -110,15 +110,15 @@ impl CommandContext {
         receiver.await.map_err(|_| CommandOutcome::Cancelled)
     }
 
-    /// Run `access` against the validated target.
+    /// Run `access` against the validated target; see
+    /// [`ProductCommandTarget::validate`].
     pub(crate) async fn foreground<R: 'static>(
         &self,
         access: impl FnOnce(&ProductCommandTarget, &mut App) -> Result<R, CommandOutcome> + 'static,
     ) -> Result<R, CommandOutcome> {
         let target = self.target.clone();
         self.application(move |cx| {
-            target.validate_tab(cx)?;
-            target.validate_view(cx)?;
+            target.validate(cx)?;
             access(&target, cx)
         })
         .await?
@@ -136,8 +136,7 @@ impl CommandContext {
     ) -> Result<R, CommandOutcome> {
         let target = self.target.clone();
         self.application(move |cx| {
-            target.validate_tab(cx)?;
-            target.validate_view(cx)?;
+            target.validate(cx)?;
             let shell = target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
             shell.update(cx, |shell, cx| access(shell, &target, cx))
         })

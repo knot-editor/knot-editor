@@ -254,7 +254,7 @@ await commands.register("api.nontext", async (context) => {
         wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
         let target = cx
             .update_window(window, |_, _, cx| {
-                shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
+                shell.update(cx, |shell, cx| shell.capture_command_target(cx))
             })
             .unwrap();
         match change {
@@ -262,8 +262,8 @@ await commands.register("api.nontext", async (context) => {
                 let workbench = cx.read(|cx| shell.read(cx).workbench.clone());
                 workbench.update(cx, |workbench, cx| {
                     assert!(workbench.replace_tab_document(
-                        target.pane,
-                        target.tab,
+                        target.tab.unwrap().pane,
+                        target.tab.unwrap().tab,
                         document,
                         model.clone(),
                         cx
@@ -289,7 +289,11 @@ await commands.register("api.nontext", async (context) => {
                 let source = cx.read(|cx| {
                     shell
                         .read(cx)
-                        .capture_tab_relocation(target.pane, target.tab, cx)
+                        .capture_tab_relocation(
+                            target.tab.unwrap().pane,
+                            target.tab.unwrap().tab,
+                            cx,
+                        )
                         .unwrap()
                 });
                 let destination = cx.read(|cx| {
@@ -726,7 +730,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
 
     cx.update_window(window, |_, window, cx| {
         focus_view(&tree.focus_handle(cx), window, cx);
-        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
+        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
         assert_eq!(target.view, Some(tree.read(cx).instance_id()));
     })
     .unwrap();
@@ -1058,7 +1062,7 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
     let target = cx
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
         })
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());

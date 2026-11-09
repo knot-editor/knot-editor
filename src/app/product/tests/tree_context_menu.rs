@@ -219,7 +219,7 @@ fn a_session_without_a_window_opens_no_menu(cx: &mut TestAppContext) {
         shell.update(cx, |shell, cx| shell.focus_view(&handle, cx));
     });
 
-    let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap());
+    let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
     let execution = dispatcher.update(cx, |dispatcher, cx| {
         dispatcher.dispatch(

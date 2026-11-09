@@ -39,7 +39,10 @@ fn semantic_open_returns_the_actual_created_or_reused_presentation(cx: &mut Test
     assert_ne!(target.tab, original.tab);
     cx.read(|cx| {
         assert!(target.matches_presentation(&shell.read(cx).workbench, cx));
-        assert_eq!(target.surface, TabSurfaceId::Document(document));
+        assert_eq!(
+            target.tab.unwrap().surface,
+            TabSurfaceId::Document(document)
+        );
         assert_eq!(
             documents
                 .read(cx)
@@ -54,7 +57,7 @@ fn semantic_open_returns_the_actual_created_or_reused_presentation(cx: &mut Test
     // Admission from another tab must still return the reused file presentation.
     shell.update(cx, |shell, cx| {
         shell.workbench.update(cx, |workbench, _| {
-            assert!(workbench.activate_tab(original.pane, original.tab));
+            assert!(workbench.activate_tab(original.tab.unwrap().pane, original.tab.unwrap().tab));
         })
     });
     let mut reopened = begin_open(&shell, "mem://product/notes.txt", cx);
@@ -67,9 +70,12 @@ fn semantic_open_returns_the_actual_created_or_reused_presentation(cx: &mut Test
         panic!("file Open returned a workspace");
     };
     assert_eq!(document, shared);
-    assert_eq!(target.pane, selected.pane);
+    assert_eq!(target.tab.unwrap().pane, selected.tab.unwrap().pane);
     assert_eq!(target.tab, selected.tab);
-    assert_eq!(target.presentation, selected.presentation);
+    assert_eq!(
+        target.tab.unwrap().presentation,
+        selected.tab.unwrap().presentation
+    );
     assert_eq!(cx.read(|cx| documents.read(cx).documents().count()), 2);
 }
 
@@ -131,7 +137,13 @@ async fn semantic_open_rejects_a_replaced_presentation_without_creating_a_docume
     let target = cx.read(|cx| current_open_target(&shell, cx));
     shell.update(cx, |shell, cx| {
         shell.workbench.update(cx, |workbench, cx| {
-            assert!(workbench.replace_tab_document(target.pane, target.tab, document, model, cx));
+            assert!(workbench.replace_tab_document(
+                target.tab.unwrap().pane,
+                target.tab.unwrap().tab,
+                document,
+                model,
+                cx
+            ));
         })
     });
     release.send(()).unwrap();
@@ -341,8 +353,8 @@ await commands.register("operations.stale", async () => {
             shell.update(cx, |shell, cx| {
                 shell.workbench.update(cx, |workbench, cx| {
                     assert!(workbench.replace_tab_document(
-                        target.pane,
-                        target.tab,
+                        target.tab.unwrap().pane,
+                        target.tab.unwrap().tab,
                         document,
                         model,
                         cx

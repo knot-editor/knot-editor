@@ -249,9 +249,7 @@ impl ProductShell {
     /// The contexts are the view's own rather than gpui's, which reflect the
     /// last rendered frame, since the previous key may have changed them.
     fn key_scope(&mut self, cx: &mut Context<Self>) -> (Option<String>, Vec<String>) {
-        let Some(target) = self.capture_command_target(cx) else {
-            return (None, Vec::new());
-        };
+        let target = self.capture_command_target(cx);
         let contexts = Self::target_editor(&target, cx)
             .map(|editor| {
                 editor
@@ -280,9 +278,7 @@ impl ProductShell {
     /// extension command; native ones run in this turn. False when nothing
     /// can be targeted.
     fn run_key_command(&mut self, command: Command, cx: &mut Context<Self>) -> bool {
-        let Some(target) = self.capture_command_target(cx) else {
-            return false;
-        };
+        let target = self.capture_command_target(cx);
         let editor = Self::target_editor(&target, cx);
         let dispatcher = Self::command_dispatcher(cx);
         let native = matches!(

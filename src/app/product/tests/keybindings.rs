@@ -96,7 +96,7 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_surface(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -235,34 +235,10 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
 
     cx.simulate_keystrokes(window, "cmd-n");
     cx.run_until_parked();
-    cx.read(|cx| {
-        assert_eq!(
-            shell
-                .read(cx)
-                .workbench
-                .read(cx)
-                .focused_pane()
-                .unwrap()
-                .tabs()
-                .len(),
-            1
-        )
-    });
+    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 0));
     cx.simulate_keystrokes(window, "cmd-g");
     cx.run_until_parked();
-    cx.read(|cx| {
-        assert_eq!(
-            shell
-                .read(cx)
-                .workbench
-                .read(cx)
-                .focused_pane()
-                .unwrap()
-                .tabs()
-                .len(),
-            2
-        )
-    });
+    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 1));
 
     cx.simulate_keystrokes(window, "cmd-r");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -280,19 +256,7 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
     }
 
     cx.dispatch_action(window, ProductCommandSource::new(NEW_COMMAND));
-    cx.read(|cx| {
-        assert_eq!(
-            shell
-                .read(cx)
-                .workbench
-                .read(cx)
-                .focused_pane()
-                .unwrap()
-                .tabs()
-                .len(),
-            3
-        )
-    });
+    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 2));
     cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| shell.open_command_palette(cx));
     })
@@ -300,19 +264,7 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
     cx.refresh().unwrap();
     cx.simulate_keystrokes(window, "f i l e . n e w enter");
     cx.run_until_parked();
-    cx.read(|cx| {
-        assert_eq!(
-            shell
-                .read(cx)
-                .workbench
-                .read(cx)
-                .focused_pane()
-                .unwrap()
-                .tabs()
-                .len(),
-            4
-        )
-    });
+    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 3));
 }
 
 #[gpui::test]
@@ -391,6 +343,9 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
         assert!(std::time::Instant::now() < deadline, "outline did not load");
         std::thread::yield_now();
     }
+    // The launched window starts empty; a new document gives it an editor.
+    cx.dispatch_action(window, ProductCommandSource::new(NEW_COMMAND));
+    cx.run_until_parked();
 
     cx.update_window(window, |_, window, cx| {
         let editor = shell
@@ -884,7 +839,7 @@ async fn linux_preset_leaves_plain_control_keys_to_the_terminal(cx: &mut TestApp
     );
     cx.refresh().unwrap();
     let tabs = |cx: &mut TestAppContext| {
-        cx.read(|cx| shell.read(cx).workbench.read(cx).panes()[0].tabs().len())
+        cx.read(|cx| shell.read(cx).workbench.read(cx).tab_snapshots().len())
     };
     assert_eq!(tabs(cx), 2);
     cx.simulate_keystrokes(window, "ctrl-w");
@@ -948,7 +903,7 @@ fn selected_contributed_preset_replaces_knot_beneath_extension_bindings(cx: &mut
     })
     .unwrap();
     let tabs = |cx: &mut TestAppContext| {
-        cx.read(|cx| shell.read(cx).workbench.read(cx).panes()[0].tabs().len())
+        cx.read(|cx| shell.read(cx).workbench.read(cx).tab_snapshots().len())
     };
     let before = tabs(cx);
     cx.refresh().unwrap();
@@ -1057,7 +1012,7 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
         }));
     });
     let tabs = |cx: &mut TestAppContext| {
-        cx.read(|cx| shell.read(cx).workbench.read(cx).panes()[0].tabs().len())
+        cx.read(|cx| shell.read(cx).workbench.read(cx).tab_snapshots().len())
     };
     let before = tabs(cx);
     cx.simulate_input(window, "New Document");

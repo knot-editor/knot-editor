@@ -149,18 +149,7 @@ impl ProductShell {
         document: DocumentId,
         cx: &mut Context<Self>,
     ) {
-        let Some(pane) = self.workbench.read(cx).focused_pane() else {
-            return;
-        };
-        let tab = pane.active_tab();
-        let target = OpenTarget {
-            shell: cx.weak_entity(),
-            workbench: self.workbench.downgrade(),
-            pane: pane.id(),
-            tab: tab.id(),
-            surface: tab.surface_id(),
-            presentation: tab.presentation(),
-        };
+        let target = OpenTarget::from_command(&self.capture_command_target(cx));
         self.present_open_document(document, &target, false, false, cx);
     }
 

@@ -145,7 +145,7 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
     let target = cx
         .update_window(window_handle, |_, window, cx| {
             focus_view(&first_editor.focus_handle(cx), window, cx);
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
         })
         .unwrap();
     let execution = cx.update(|cx| {
@@ -189,7 +189,7 @@ async fn destroyed_product_targets_are_not_retargeted(cx: &mut TestAppContext) {
         .update_window(window_handle, |_, _, cx| {
             shell.update(cx, |shell, cx| {
                 shell.focus_active_editor(cx);
-                shell.capture_command_target(cx).unwrap()
+                shell.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -215,7 +215,7 @@ async fn destroyed_product_targets_are_not_retargeted(cx: &mut TestAppContext) {
         execution.completion.await.unwrap(),
         CommandOutcome::InvalidTarget
     );
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).panes().len(), 1));
+    cx.read(|cx| assert!(shell.read(cx).workbench.read(cx).panes().is_empty()));
 }
 
 #[gpui::test]
@@ -310,7 +310,7 @@ async fn native_participants_reject_arguments_before_mutation(cx: &mut TestAppCo
     let target = cx
         .update_window(window, |_, _, cx| {
             shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx).unwrap())
+            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
         })
         .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("ignored".into())));
@@ -539,9 +539,7 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
     });
     let run = |name: &'static str, cx: &mut TestAppContext| {
         let execution = cx.update(|cx| {
-            let target = shell
-                .update(cx, |shell, cx| shell.capture_command_target(cx))
-                .expect("a session without a window still has a target");
+            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
             ProductShell::command_dispatcher(cx).update(cx, |dispatcher, cx| {
                 dispatcher.dispatch(
                     Command {

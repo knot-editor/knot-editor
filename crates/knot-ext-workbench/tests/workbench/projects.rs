@@ -252,7 +252,8 @@ fn command_invoked_project_tool_changes_publish_the_window_default(cx: &mut Test
     projects.window.restore_fresh_layout(cx);
     wait_until(cx, |cx| tree.is_focused(cx));
 
-    projects.window.focus_document(cx);
+    // Hiding from a document is an explicit arrangement too.
+    projects.window.new_document(cx);
     assert_eq!(
         projects.window.run_command("projects.hide", cx),
         CommandOutcome::Completed

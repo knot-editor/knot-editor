@@ -188,7 +188,9 @@ fn texts(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<String> {
 
 fn first_document(shell: &Entity<ProductShell>, cx: &TestAppContext) -> DocumentId {
     cx.read(|cx| {
-        shell.read(cx).workbench.read(cx).panes()[0].tabs()[0]
+        let workbench = shell.read(cx).workbench.read(cx);
+        let pane = workbench.area_panes(crate::app::workbench::Area::Center)[0];
+        workbench.pane(pane).unwrap().tabs()[0]
             .document_id()
             .unwrap()
     })
@@ -281,7 +283,8 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     first.update(cx, |shell, cx| {
         shell.replace_workspace_roots(vec![uri("a"), uri("b")], cx);
     });
-    // The placeholder holds unsaved text, so recovery restores it too.
+    // An untitled document holds unsaved text, so recovery restores it too.
+    first.update(cx, |shell, cx| shell.new_document_in_pane(None, cx));
     edit(first_document(&first, cx), "scratch", cx);
     let long = launch.open_file(&first, "a/long.txt", cx);
     edit(long, "dirty", cx);
@@ -324,6 +327,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     second.update(cx, |shell, cx| {
         shell.replace_workspace_roots(vec![uri("b")], cx);
     });
+    second.update(cx, |shell, cx| shell.new_document_in_pane(None, cx));
     edit(first_document(&second, cx), "notes", cx);
     launch.open_file(&second, "b/two.txt", cx);
     cx.update_window(first_window, |_, window, _| window.activate_window())
@@ -444,7 +448,7 @@ fn queued_requests_open_after_restoration_without_duplicating_documents(cx: &mut
     cx.run_until_parked();
     let windows = shells(cx);
     assert_eq!(windows.len(), 4);
-    assert_eq!(texts(&windows[3].1, cx), [""]);
+    assert!(texts(&windows[3].1, cx).is_empty());
 }
 
 #[gpui::test]
@@ -508,7 +512,7 @@ fn lost_unsupported_and_consumed_records_open_the_default_window(cx: &mut TestAp
     launch.relaunch(Vec::new(), cx);
     let windows = shells(cx);
     assert_eq!(windows.len(), 1);
-    assert_eq!(texts(&windows[0].1, cx), [""]);
+    assert!(texts(&windows[0].1, cx).is_empty());
 
     // An unreadable record behaves like a missing one.
     std::fs::write(launch.path(), "not a database").unwrap();

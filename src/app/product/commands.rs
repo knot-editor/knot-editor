@@ -15,7 +15,7 @@ pub(crate) async fn new(context: CommandContext, (): ()) -> Result<(), CommandOu
     context
         .shell(move |shell, target, cx| {
             shell
-                .new_document_in_pane(target.pane, cx)
+                .new_document_in_pane(target.tab.map(|tab| tab.pane), cx)
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         })
@@ -34,7 +34,7 @@ pub(crate) async fn new_terminal(context: CommandContext, (): ()) -> Result<(), 
         .shell(move |shell, target, cx| {
             let directory = shell.terminal_directory(cx);
             shell
-                .new_terminal_in_pane(target.pane, directory, cx)
+                .new_terminal_in_pane(target.tab.map(|tab| tab.pane), directory, cx)
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         })
@@ -111,11 +111,10 @@ pub(crate) async fn close_other_panes(
 pub(crate) async fn toggle_pin_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
         .shell(|shell, target, cx| {
+            let tab = target.tab()?;
             shell
                 .workbench
-                .update(cx, |workbench, _| {
-                    workbench.toggle_pin(target.pane, target.tab)
-                })
+                .update(cx, |workbench, _| workbench.toggle_pin(tab.pane, tab.tab))
                 .ok_or(CommandOutcome::InvalidTarget)?;
             cx.notify();
             Ok(())
@@ -127,8 +126,9 @@ pub(crate) async fn toggle_pin_tab(context: CommandContext, (): ()) -> Result<()
 pub(crate) async fn keep_tab_open(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
         .shell(|shell, target, cx| {
+            let tab = target.tab()?;
             if shell.workbench.update(cx, |workbench, _| {
-                workbench.promote_preview(target.pane, target.tab)
+                workbench.promote_preview(tab.pane, tab.tab)
             }) {
                 cx.notify();
             }
@@ -214,8 +214,9 @@ resize_along! {
 pub(crate) async fn equalize_panes(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
         .shell(|shell, target, cx| {
+            let pane = target.tab()?.pane;
             shell.workbench.update(cx, |workbench, _| {
-                if let Some(area) = workbench.pane_area(target.pane) {
+                if let Some(area) = workbench.pane_area(pane) {
                     workbench.equalize_splits(area);
                 }
             });
@@ -232,7 +233,7 @@ async fn resize(
 ) -> Result<(), CommandOutcome> {
     context
         .shell(move |shell, target, cx| {
-            let pane = target.pane;
+            let pane = target.tab()?.pane;
             let dock = shell.workbench.read(cx).dock_location(pane);
             if !shell
                 .workbench
@@ -252,21 +253,21 @@ async fn resize(
 #[command("workbench.next-tab", title = "Next Tab", description = "Show the next tab of the focused pane.", id = NEXT_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn next_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, cx| shell.cycle_tab(target.pane, true, cx))
+        .shell(|shell, target, cx| shell.cycle_tab(target.tab()?.pane, true, cx))
         .await
 }
 
 #[command("workbench.previous-tab", title = "Previous Tab", description = "Show the previous tab of the focused pane.", id = PREVIOUS_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn previous_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, cx| shell.cycle_tab(target.pane, false, cx))
+        .shell(|shell, target, cx| shell.cycle_tab(target.tab()?.pane, false, cx))
         .await
 }
 
 #[command("workbench.next-recent-tab", title = "Next Recently Used Tab", description = "Walk the focused pane's tabs from most to least recently used.", id = NEXT_RECENT_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn next_recent_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, cx| shell.walk_recent_tabs(target.pane, true, cx))
+        .shell(|shell, target, cx| shell.walk_recent_tabs(target.tab()?.pane, true, cx))
         .await
 }
 
@@ -276,7 +277,7 @@ pub(crate) async fn previous_recent_tab(
     (): (),
 ) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, cx| shell.walk_recent_tabs(target.pane, false, cx))
+        .shell(|shell, target, cx| shell.walk_recent_tabs(target.tab()?.pane, false, cx))
         .await
 }
 
@@ -285,7 +286,7 @@ macro_rules! go_to_tab {
         #[command($name, title = $title, palette = false, id = $id, participant = Workbench)]
         pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
             context
-                .shell(|shell, target, cx| shell.go_to_tab(target.pane, $index, cx))
+                .shell(|shell, target, cx| shell.go_to_tab(target.tab()?.pane, $index, cx))
                 .await
         }
     )*};
@@ -305,7 +306,7 @@ go_to_tab! {
 #[command("workbench.go-to-last-tab", title = "Go to Last Tab", description = "Show the last tab of the focused pane.", id = GO_TO_LAST_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn go_to_last_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, target, cx| shell.go_to_tab(target.pane, None, cx))
+        .shell(|shell, target, cx| shell.go_to_tab(target.tab()?.pane, None, cx))
         .await
 }
 
@@ -397,13 +398,16 @@ async fn focus_chosen(
 
 async fn focus_toward(context: CommandContext, edge: SplitEdge) -> Result<(), CommandOutcome> {
     context
-        .shell(move |shell, target, cx| shell.focus_pane_toward(target.pane, edge, cx))
+        .shell(move |shell, target, cx| shell.focus_pane_toward(target.tab()?.pane, edge, cx))
         .await
 }
 
 async fn move_toward(context: CommandContext, edge: SplitEdge) -> Result<(), CommandOutcome> {
     context
-        .shell(move |shell, target, cx| shell.move_tab_toward(target.pane, target.tab, edge, cx))
+        .shell(move |shell, target, cx| {
+            let tab = target.tab()?;
+            shell.move_tab_toward(tab.pane, tab.tab, edge, cx)
+        })
         .await
 }
 
@@ -414,7 +418,7 @@ pub(crate) async fn toggle_maximize_pane(
 ) -> Result<(), CommandOutcome> {
     context
         .shell(|shell, target, cx| {
-            shell.toggle_maximize(target.pane, cx);
+            shell.toggle_maximize(target.tab()?.pane, cx);
             Ok(())
         })
         .await
@@ -582,7 +586,12 @@ pub(crate) async fn show_extension_memory(
         .shell(|shell, target, cx| {
             let report = super::super::extensions::host::memory_report(cx);
             shell
-                .new_untitled_in_pane(target.pane, "Extension Memory", &report, cx)
+                .new_untitled_in_pane(
+                    target.tab.map(|tab| tab.pane),
+                    "Extension Memory",
+                    &report,
+                    cx,
+                )
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         })
@@ -640,7 +649,7 @@ async fn split(
 ) -> Result<(), CommandOutcome> {
     context
         .shell(move |shell, target, cx| {
-            if shell.split_pane(target.pane, direction, placement, cx) {
+            if shell.split_pane(target.tab()?.pane, direction, placement, cx) {
                 Ok(())
             } else {
                 Err(CommandOutcome::InvalidTarget)

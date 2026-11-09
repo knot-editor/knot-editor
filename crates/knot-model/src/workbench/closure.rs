@@ -34,6 +34,25 @@ pub struct ViewKey {
     pub surface: TabSurfaceId,
 }
 
+/// Where a close starts: its session and workbench, and the tab it was
+/// captured on, which every kind but `Window` and `Quit` needs.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CloseOrigin {
+    pub session: u64,
+    pub workbench: u64,
+    pub view: Option<ViewKey>,
+}
+
+impl From<ViewKey> for CloseOrigin {
+    fn from(view: ViewKey) -> Self {
+        Self {
+            session: view.session,
+            workbench: view.workbench,
+            view: Some(view),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ClosureView {
     pub key: ViewKey,
@@ -79,36 +98,42 @@ pub struct ClosePlan {
 }
 
 /// The views a close of `kind` from `origin` covers.
-pub fn scope(kind: CloseKind, origin: &ViewKey, views: &[ClosureView]) -> Vec<ViewKey> {
+pub fn scope(kind: CloseKind, origin: &CloseOrigin, views: &[ClosureView]) -> Vec<ViewKey> {
+    let view = origin.view;
     let origin_area = views
         .iter()
-        .find(|view| view.key == *origin)
-        .map(|view| view.area);
+        .find(|candidate| Some(candidate.key) == view)
+        .map(|candidate| candidate.area);
+    let same_workbench = |candidate: &ClosureView| {
+        candidate.key.session == origin.session && candidate.key.workbench == origin.workbench
+    };
     views
         .iter()
-        .filter(|view| match kind {
-            CloseKind::Tab => view.key == *origin,
-            CloseKind::OtherTabs => {
-                same_workbench(view, origin)
-                    && view.key.pane == origin.pane
-                    && view.key.tab != origin.tab
-                    && !view.pinned
+        .filter(|candidate| match (kind, view) {
+            (CloseKind::Tab, Some(view)) => candidate.key == view,
+            (CloseKind::OtherTabs, Some(view)) => {
+                same_workbench(candidate)
+                    && candidate.key.pane == view.pane
+                    && candidate.key.tab != view.tab
+                    && !candidate.pinned
             }
-            CloseKind::Pane => same_workbench(view, origin) && view.key.pane == origin.pane,
-            CloseKind::OtherPanes => {
-                same_workbench(view, origin)
-                    && view.key.pane != origin.pane
-                    && Some(view.area) == origin_area
+            (CloseKind::Pane, Some(view)) => {
+                same_workbench(candidate) && candidate.key.pane == view.pane
             }
-            CloseKind::Window => view.key.session == origin.session,
-            CloseKind::Quit => true,
+            (CloseKind::OtherPanes, Some(view)) => {
+                same_workbench(candidate)
+                    && candidate.key.pane != view.pane
+                    && Some(candidate.area) == origin_area
+            }
+            (CloseKind::Window, _) => candidate.key.session == origin.session,
+            (CloseKind::Quit, _) => true,
+            (
+                CloseKind::Tab | CloseKind::OtherTabs | CloseKind::Pane | CloseKind::OtherPanes,
+                None,
+            ) => false,
         })
-        .map(|view| view.key)
+        .map(|candidate| candidate.key)
         .collect()
-}
-
-fn same_workbench(view: &ClosureView, origin: &ViewKey) -> bool {
-    view.key.session == origin.session && view.key.workbench == origin.workbench
 }
 
 fn document_counts<'a>(keys: impl IntoIterator<Item = &'a ViewKey>) -> HashMap<DocumentId, usize> {
@@ -125,13 +150,18 @@ fn document_counts<'a>(keys: impl IntoIterator<Item = &'a ViewKey>) -> HashMap<D
 /// loses its final view instead of prompting.
 pub fn plan(
     kind: CloseKind,
-    origin: &ViewKey,
+    origin: &CloseOrigin,
     discard: bool,
     views: &[ClosureView],
     documents: &[DocumentStatus],
 ) -> Result<ClosePlan, InvalidTarget> {
-    if !views.iter().any(|view| view.key == *origin) {
-        return Err(InvalidTarget);
+    let needs_view = !matches!(kind, CloseKind::Window | CloseKind::Quit);
+    match origin.view {
+        Some(origin) if !views.iter().any(|view| view.key == origin) => {
+            return Err(InvalidTarget);
+        }
+        None if needs_view => return Err(InvalidTarget),
+        _ => {}
     }
     let scope = scope(kind, origin, views);
     let total = document_counts(views.iter().map(|view| &view.key));
@@ -197,7 +227,7 @@ pub struct Commit {
 /// recovery instead).
 pub fn revalidate(
     kind: CloseKind,
-    origin: &ViewKey,
+    origin: &CloseOrigin,
     planned: &[ViewKey],
     hot_exit: bool,
     approvals: &[Approval],
@@ -285,17 +315,24 @@ mod tests {
         let (a, b) = (key(1, 1, 1), key(1, 2, 1));
         let views = [view(a), view(b)];
         let documents = [status(1, true)];
-        let plan = plan(CloseKind::Tab, &a, false, &views, &documents).unwrap();
+        let plan = plan(CloseKind::Tab, &a.into(), false, &views, &documents).unwrap();
         assert!(plan.prompts.is_empty());
 
-        let plan = super::plan(CloseKind::Tab, &a, false, &views[..1], &documents).unwrap();
+        let plan = super::plan(CloseKind::Tab, &a.into(), false, &views[..1], &documents).unwrap();
         assert_eq!(plan.prompts, vec![(DocumentId::new(1), a)]);
     }
 
     #[test]
     fn discarding_replaces_prompts_with_approvals_at_the_planned_revision() {
         let a = key(1, 1, 1);
-        let plan = plan(CloseKind::Tab, &a, true, &[view(a)], &[status(1, true)]).unwrap();
+        let plan = plan(
+            CloseKind::Tab,
+            &a.into(),
+            true,
+            &[view(a)],
+            &[status(1, true)],
+        )
+        .unwrap();
         assert!(plan.prompts.is_empty());
         assert_eq!(
             plan.discarded,
@@ -308,10 +345,26 @@ mod tests {
     }
 
     #[test]
+    fn window_and_quit_closes_need_no_origin_tab() {
+        let views = [view(key(1, 1, 1)), view(key(2, 2, 2))];
+        let origin = CloseOrigin {
+            session: SESSION,
+            workbench: 10,
+            view: None,
+        };
+        assert_eq!(scope(CloseKind::Window, &origin, &views).len(), 2);
+        assert!(plan(CloseKind::Window, &origin, false, &views, &[]).is_ok());
+        assert_eq!(
+            plan(CloseKind::Tab, &origin, false, &views, &[]).unwrap_err(),
+            InvalidTarget
+        );
+    }
+
+    #[test]
     fn an_origin_outside_the_views_is_invalid() {
         let a = key(1, 1, 1);
         assert_eq!(
-            plan(CloseKind::Tab, &a, false, &[], &[]).unwrap_err(),
+            plan(CloseKind::Tab, &a.into(), false, &[], &[]).unwrap_err(),
             InvalidTarget
         );
     }
@@ -341,7 +394,7 @@ mod tests {
             dock,
             other_window,
         ];
-        let keys = |kind| scope(kind, &origin, &views);
+        let keys = |kind| scope(kind, &origin.into(), &views);
         assert_eq!(keys(CloseKind::OtherTabs), vec![sibling.key]);
         assert_eq!(keys(CloseKind::Pane), vec![origin, pinned.key, sibling.key]);
         assert_eq!(keys(CloseKind::OtherPanes), vec![other_pane.key]);
@@ -353,12 +406,19 @@ mod tests {
     fn quit_prompts_for_dirty_documents_and_rejects_unviewed_ones() {
         let a = key(1, 1, 1);
         let views = [view(a)];
-        let plan = plan(CloseKind::Quit, &a, false, &views, &[status(1, true)]).unwrap();
+        let plan = plan(
+            CloseKind::Quit,
+            &a.into(),
+            false,
+            &views,
+            &[status(1, true)],
+        )
+        .unwrap();
         assert_eq!(plan.prompts.len(), 1);
         assert_eq!(
             super::plan(
                 CloseKind::Quit,
-                &a,
+                &a.into(),
                 false,
                 &views,
                 &[status(1, false), status(2, true)]
@@ -380,7 +440,7 @@ mod tests {
         let documents = [status(1, true), status(2, false)];
         let commit = revalidate(
             CloseKind::Window,
-            &a,
+            &a.into(),
             &[a, b],
             false,
             &[approval],
@@ -394,7 +454,7 @@ mod tests {
         let check = |planned: &[ViewKey], approvals: &[Approval], documents: &[DocumentStatus]| {
             revalidate(
                 CloseKind::Window,
-                &a,
+                &a.into(),
                 planned,
                 false,
                 approvals,
@@ -429,7 +489,7 @@ mod tests {
         assert!(
             revalidate(
                 CloseKind::Quit,
-                &a,
+                &a.into(),
                 &[a],
                 true,
                 &[],
@@ -446,7 +506,7 @@ mod tests {
         let views = [view(a), view(b)];
         let commit = revalidate(
             CloseKind::Tab,
-            &a,
+            &a.into(),
             &[a],
             false,
             &[],

@@ -230,7 +230,7 @@ fn terminal_drag_preserves_live_view_session_and_attachment(cx: &mut TestAppCont
     cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.new_terminal_in_pane(pane, None, cx).is_some());
+            assert!(shell.new_terminal_in_pane(Some(pane), None, cx).is_some());
         });
     })
     .unwrap();
