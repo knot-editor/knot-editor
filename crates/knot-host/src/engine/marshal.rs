@@ -976,14 +976,15 @@ pub(super) fn tree_item_from_v8<'s>(
             _ => return Err(BoundaryError::Type("invalid tree item kind")),
         },
     };
-    let icon = optional_text_property(scope, object, "icon")?
-        .map(|icon| match icon.as_str() {
-            "file" => Ok(TreeIcon::File),
-            "folder" => Ok(TreeIcon::Folder),
-            "symbol" => Ok(TreeIcon::Symbol),
-            _ => Err(BoundaryError::Type("invalid tree icon")),
-        })
-        .transpose()?;
+    let icon = optional_text_property(scope, object, "icon")?;
+    if icon.as_deref().is_some_and(|icon| {
+        icon.is_empty()
+            || !icon
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    }) {
+        return Err(BoundaryError::Type("invalid tree icon name"));
+    }
     Ok(TreeItem {
         id: string_property(scope, object, "id")?,
         label: string_property(scope, object, "label")?,

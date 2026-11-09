@@ -20,7 +20,6 @@ mod entry;
 pub(crate) use extensions::host::handlers as declared_host;
 mod extensions;
 use knot_model::{filesystem, indentation, keys, open, resource, style, syntax, workspace};
-#[allow(dead_code)]
 mod icons;
 mod languages;
 pub mod model;

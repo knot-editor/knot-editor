@@ -119,7 +119,12 @@ levels, packs, lifecycle removal, file and folder resolver, native table), the
 module carries `#[allow(dead_code)]` in `src/app/mod.rs`; checkpoint 2 removes
 it once a surface uses icons.
 
-### 2. Icons in the workspace and extension trees
+### 2. Icons in the workspace and extension trees ✅ (awaiting review)
+
+Implemented: `TreeItem.icon` is an icon-name string (`Option<String>` in the
+protocol, validated for characters at the host boundary); both trees paint
+`AppIcon` disclosure and row icons; `#[allow(dead_code)]` is gone from
+`mod icons`.
 
 - Deliverables: workspace tree rows paint resolved file and folder icons
   and icon disclosure triangles; extension tree rows paint their named icon.

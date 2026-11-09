@@ -4,7 +4,9 @@ use std::collections::{HashMap, HashSet};
 use gpui::{prelude::FluentBuilder, *};
 
 use super::keys::Keystroke;
+use knot_model::icons::IconDefinition;
 
+use super::icons::{AppIcon, file_definition, folder_definition, icon_definition};
 use super::theme::{color, theme};
 
 use super::{
@@ -429,18 +431,24 @@ impl WorkspaceTree {
         true
     }
 
-    fn disclosure(kind: &ResourceKind, expanded: bool) -> &'static str {
+    fn disclosure(kind: &ResourceKind, expanded: bool, cx: &App) -> AppIcon {
         match kind {
-            ResourceKind::File => " ",
-            ResourceKind::Directory if expanded => "▾",
-            ResourceKind::Directory => "▸",
+            ResourceKind::File => AppIcon::blank(),
+            ResourceKind::Directory => AppIcon::new(icon_definition(
+                if expanded {
+                    "tree.expanded"
+                } else {
+                    "tree.collapsed"
+                },
+                cx,
+            )),
         }
     }
 
-    fn icon(kind: &ResourceKind) -> &'static str {
+    fn icon_definition(kind: &ResourceKind, expanded: bool, cx: &App) -> IconDefinition {
         match kind {
-            ResourceKind::File => "▧",
-            ResourceKind::Directory => "□",
+            ResourceKind::File => file_definition(None, cx),
+            ResourceKind::Directory => folder_definition(expanded, cx),
         }
     }
 }
@@ -573,8 +581,11 @@ impl Render for WorkspaceTree {
                                 .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
                         })
                         .hover(|style| style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND)))
-                        .child(Self::disclosure(&kind, is_expanded))
-                        .when(!is_root, |row| row.child(Self::icon(&kind)))
+                        .items_center()
+                        .child(Self::disclosure(&kind, is_expanded, cx))
+                        .when(!is_root, |row| {
+                            row.child(AppIcon::new(Self::icon_definition(&kind, is_expanded, cx)))
+                        })
                         .child(label)
                         .on_click({
                             let entity = entity.clone();
@@ -609,6 +620,26 @@ mod tests {
 
     fn uri(value: &str) -> ResourceUri {
         ResourceUri::parse(value).unwrap()
+    }
+
+    #[gpui::test]
+    fn rows_resolve_file_and_folder_icons(cx: &mut TestAppContext) {
+        use knot_model::icons::IconDefinition;
+        cx.update(|cx| {
+            let icon = |kind, expanded| WorkspaceTree::icon_definition(&kind, expanded, cx);
+            assert_eq!(
+                icon(ResourceKind::File, false),
+                IconDefinition::lucide("file")
+            );
+            assert_eq!(
+                icon(ResourceKind::Directory, false),
+                IconDefinition::lucide("folder")
+            );
+            assert_eq!(
+                icon(ResourceKind::Directory, true),
+                IconDefinition::lucide("folder-open")
+            );
+        });
     }
 
     fn entry(value: &str, name: &str, kind: ResourceKind) -> ResourceEntry {

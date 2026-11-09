@@ -487,3 +487,41 @@ fn root_refresh_keeps_rows_and_reloads_group_children(cx: &mut TestAppContext) {
         assert!(reloaded > group_generation);
     });
 }
+
+#[test]
+fn only_expandable_item_rows_have_a_disclosure_icon() {
+    let mut expandable = item("a", "a", TreeItemKind::Item, Vec::new());
+    expandable.collapsible_state = TreeCollapsibleState::Collapsed;
+    assert_eq!(
+        TreeView::disclosure_name(&expandable, false),
+        Some("tree.collapsed")
+    );
+    assert_eq!(
+        TreeView::disclosure_name(&expandable, true),
+        Some("tree.expanded")
+    );
+    let leaf = item("b", "b", TreeItemKind::Item, Vec::new());
+    assert_eq!(TreeView::disclosure_name(&leaf, false), None);
+    let mut group = item("c", "c", TreeItemKind::Group, Vec::new());
+    group.collapsible_state = TreeCollapsibleState::Expanded;
+    assert_eq!(TreeView::disclosure_name(&group, true), None);
+}
+
+#[gpui::test]
+fn row_icons_follow_the_item_name_and_fall_back_when_unknown(cx: &mut TestAppContext) {
+    use knot_model::icons::IconDefinition;
+    let mut named = item("a", "a", TreeItemKind::Item, Vec::new());
+    cx.update(|cx| {
+        assert!(TreeView::icon(&named, cx).is_none());
+        named.icon = Some("folder".into());
+        assert!(TreeView::icon(&named, cx).is_some());
+        assert_eq!(
+            crate::app::icons::icon_definition("folder", cx),
+            IconDefinition::lucide("folder")
+        );
+        assert_eq!(
+            crate::app::icons::icon_definition("no.such.icon", cx),
+            IconDefinition::lucide("circle-question-mark")
+        );
+    });
+}

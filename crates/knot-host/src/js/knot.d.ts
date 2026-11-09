@@ -1237,7 +1237,8 @@ declare module "knot" {
     readonly id: string;
     readonly label: string;
     readonly description?: string | null;
-    readonly icon?: "file" | "folder" | "symbol" | null;
+    /** An icon name such as `file`, `folder`, or `symbol`; an unknown name paints a fallback icon. */
+    readonly icon?: string | null;
     /** Required expansion state; never inferred from child results. */
     readonly collapsibleState: "none" | "collapsed" | "expanded";
     /** Activation command for ordinary item rows; ignored for groups. */

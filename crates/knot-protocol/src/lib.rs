@@ -344,15 +344,6 @@ pub enum DecorationStyle {
     Wavy,
 }
 
-/// Theme-aware icon tokens supported by native tree views.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TreeIcon {
-    File,
-    Folder,
-    Symbol,
-}
-
 /// Whether a tree item can be expanded.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -390,7 +381,8 @@ pub struct TreeItem {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
-    pub icon: Option<TreeIcon>,
+    /// An icon name; an unknown name paints the fallback icon.
+    pub icon: Option<String>,
     #[serde(default)]
     pub collapsible_state: TreeCollapsibleState,
     #[serde(default)]

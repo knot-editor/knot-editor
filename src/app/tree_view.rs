@@ -16,11 +16,12 @@ use super::keys::Keystroke;
 
 use knot_protocol::{
     Command, CommandArgumentValue, ExtensionId, ExtensionLifecycleId, TreeAction,
-    TreeChildrenRequest, TreeChildrenResponse, TreeCollapsibleState, TreeIcon, TreeItem,
-    TreeItemKind, TreeProviderRegistrationId, ViewId,
+    TreeChildrenRequest, TreeChildrenResponse, TreeCollapsibleState, TreeItem, TreeItemKind,
+    TreeProviderRegistrationId, ViewId,
 };
 
 use super::TREE_KEY_CONTEXT;
+use super::icons::{AppIcon, icon_definition};
 use super::theme::{color, theme};
 
 pub(crate) static NEXT_VIEW_ID: AtomicU64 = AtomicU64::new(1);
@@ -770,24 +771,28 @@ impl TreeView {
         true
     }
 
-    fn disclosure(item: &TreeItem, expanded: bool) -> &'static str {
+    /// The disclosure icon's name; none for a row that cannot expand.
+    fn disclosure_name(item: &TreeItem, expanded: bool) -> Option<&'static str> {
         if item.kind == TreeItemKind::Group || item.collapsible_state == TreeCollapsibleState::None
         {
-            " "
+            None
         } else if expanded {
-            "▾"
+            Some("tree.expanded")
         } else {
-            "▸"
+            Some("tree.collapsed")
         }
     }
 
-    fn icon(item: &TreeItem) -> &'static str {
-        match item.icon {
-            Some(TreeIcon::File) => "▧",
-            Some(TreeIcon::Folder) => "□",
-            Some(TreeIcon::Symbol) => "◇",
-            None => "",
+    fn disclosure(item: &TreeItem, expanded: bool, cx: &App) -> AppIcon {
+        match Self::disclosure_name(item, expanded) {
+            Some(name) => AppIcon::new(icon_definition(name, cx)),
+            None => AppIcon::blank(),
         }
+    }
+
+    fn icon(item: &TreeItem, cx: &App) -> Option<AppIcon> {
+        let name = item.icon.as_deref()?;
+        Some(AppIcon::new(icon_definition(name, cx)))
     }
 }
 
@@ -905,8 +910,8 @@ impl Render for TreeView {
                                     style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
                                 })
                             })
-                            .child(Self::disclosure(item, expanded.contains(&item.id)))
-                            .child(Self::icon(item))
+                            .child(Self::disclosure(item, expanded.contains(&item.id), cx))
+                            .children(Self::icon(item, cx))
                             .child(div().flex_1().truncate().child(item.label.clone()))
                             .when_some(item.description.clone(), |row, description| {
                                 row.child(

@@ -10,8 +10,8 @@
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, App, Global, Image, ImageFormat, IntoElement, ObjectFit, Pixels, RenderOnce,
-    Styled, Window, div, img, prelude::*,
+    App, Global, Image, ImageFormat, IntoElement, ObjectFit, RenderOnce, Styled, Window, div, img,
+    prelude::*,
 };
 use gpui_component::Icon;
 use gpui_kit_assets::AllAssets;
@@ -78,36 +78,36 @@ fn svg_bytes(source: &IconSource) -> Option<std::borrow::Cow<'static, [u8]>> {
     }
 }
 
-/// An icon at the size of the text around it, or at `size`.
+/// An icon at the size of the text around it.
 #[derive(IntoElement)]
 pub(crate) struct AppIcon {
-    definition: IconDefinition,
-    size: Option<Pixels>,
+    definition: Option<IconDefinition>,
 }
 
 impl AppIcon {
     pub(crate) fn new(definition: IconDefinition) -> Self {
         Self {
-            definition,
-            size: None,
+            definition: Some(definition),
         }
     }
 
-    pub(crate) fn size(mut self, size: Pixels) -> Self {
-        self.size = Some(size);
-        self
+    /// Empty space the size of an icon, to keep rows aligned.
+    pub(crate) fn blank() -> Self {
+        Self { definition: None }
     }
 }
 
 impl RenderOnce for AppIcon {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let size = self
-            .size
-            .unwrap_or_else(|| window.text_style().font_size.to_pixels(window.rem_size()));
-        let Some(bytes) = svg_bytes(&self.definition.source) else {
+        let size = window.text_style().font_size.to_pixels(window.rem_size());
+        let Some((definition, bytes)) = self
+            .definition
+            .and_then(|definition| Some((svg_bytes(&definition.source)?, definition)))
+            .map(|(bytes, definition)| (definition, bytes))
+        else {
             return div().size(size).flex_shrink_0().into_any_element();
         };
-        let key = match &self.definition.color {
+        let key = match &definition.color {
             IconColor::Original => {
                 let image = Image::from_bytes(ImageFormat::Svg, bytes.into_owned());
                 return img(Arc::new(image))
@@ -126,11 +126,6 @@ impl RenderOnce for AppIcon {
             .text_color(tint)
             .into_any_element()
     }
-}
-
-/// An element painting `definition`.
-pub(crate) fn element(definition: IconDefinition) -> AnyElement {
-    AppIcon::new(definition).into_any_element()
 }
 
 #[cfg(test)]

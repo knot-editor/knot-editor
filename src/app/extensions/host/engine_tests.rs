@@ -2825,7 +2825,7 @@ fn semantic_provider_callbacks_preserve_typed_generations_and_recover_from_failu
     assert_eq!(tree.generation, 8);
     let item = &tree.result.unwrap()[0];
     assert_eq!(item.id, "root");
-    assert_eq!(item.icon, Some(knot_protocol::TreeIcon::Symbol));
+    assert_eq!(item.icon, Some("symbol".to_owned()));
     assert_eq!(
         item.collapsible_state,
         knot_protocol::TreeCollapsibleState::Expanded

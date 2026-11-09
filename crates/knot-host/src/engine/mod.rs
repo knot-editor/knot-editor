@@ -41,8 +41,8 @@ use knot_protocol::{
     CompletionResultItem, Decoration, DecorationStyle, EditorContribution, EditorEvent,
     ExtensionId, HostRequest, HostResponse, KeybindingMutation, ProviderIdentity, RequestId,
     SettingsSubscriptionId, SnapshotText, TextEdit, TextSnapshot, TreeAction, TreeChildrenRequest,
-    TreeChildrenResponse, TreeCollapsibleState, TreeIcon, TreeItem, TreeItemKind,
-    TreeProviderError, WorkbenchSubscriptionId,
+    TreeChildrenResponse, TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderError,
+    WorkbenchSubscriptionId,
 };
 
 static V8_INITIALIZATION: Once = Once::new();
