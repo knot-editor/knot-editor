@@ -47,6 +47,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "editor.markedText": `${p.text}99`,
       "editor.selection": `${p.overlay2}40`,
       "error": p.red,
+      "icon": dark ? p.subtext1 : p.text,
       "info": p.blue,
       "list.group.background": dark ? p.base : p.crust,
       "list.hover.background": p.surface0,

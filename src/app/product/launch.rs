@@ -260,6 +260,7 @@ pub(in crate::app) fn finish_product_startup(
             // themes and keymap presets, so the selected ones can resolve
             // before windows open.
             crate::app::themes::apply_at_startup(cx);
+            crate::app::icons::apply_at_startup(cx);
             crate::app::commands::keymaps::apply_at_startup(cx);
             // Restore unsaved work, then the recorded windows, before the
             // launch gate opens, so restored windows present recovered

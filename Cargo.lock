@@ -3737,6 +3737,7 @@ dependencies = [
  "anyhow",
  "directories",
  "gpui-component",
+ "gpui-kit-assets",
  "gpui-pre",
  "inventory",
  "jsonc-parser",

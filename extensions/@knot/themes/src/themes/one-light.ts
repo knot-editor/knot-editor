@@ -36,6 +36,7 @@ export const ONE_LIGHT: ThemeDefinition = {
     "editor.markedText": "#383a4299",
     "editor.selection": "#e5e5e6",
     "error": red,
+    "icon": fg,
     "info": blue,
     "list.group.background": "#e5e5e6",
     "list.hover.background": "#dbdbdc",

@@ -36,6 +36,7 @@ export const ONE_DARK: ThemeDefinition = {
     "editor.markedText": "#abb2bf99",
     "editor.selection": "#3e4451",
     "error": red,
+    "icon": "#9da5b4",
     "info": blue,
     "list.group.background": bg,
     "list.hover.background": "#2c313a",

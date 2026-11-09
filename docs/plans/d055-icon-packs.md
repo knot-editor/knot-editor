@@ -1,6 +1,6 @@
 # D055 — Icon packs
 
-Status: 🚧 approved, not started. Roadmap item
+Status: 🚧 in progress; checkpoint 1 awaits review. Roadmap item
 [D055](../roadmap.md); builds on the theme system (D064) and on the
 [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component),
 whose painting and asset APIs this plan uses.
@@ -109,7 +109,16 @@ setting, or replace a single icon.
 
 ## Checkpoints
 
-### 1. Native icon registry and painting
+### 1. Native icon registry and painting ✅ (awaiting review)
+
+Done: `IconRegistry` in `crates/knot-model/src/icons.rs` (the four lookup
+levels, packs, lifecycle removal, the file and folder resolver with language
+and generic candidates, and the native table `NATIVE_ICONS`); the
+`ApplicationIcons` global, the `icons.pack` setting, and the `AppIcon` element
+in `src/app/icons.rs`; the `icon` color key, which every bundled theme sets.
+`gpui-kit-assets` is a direct dependency, pinned like gpui-component, to read
+Lucide bytes. The module carries `#[allow(dead_code)]` in `src/app/mod.rs`
+until checkpoint 2 uses it; remove it there.
 
 - Deliverables: an application icon registry with the four-level lookup,
   the native default table (`file`, `folder`, `folder.open`, `symbol`,
