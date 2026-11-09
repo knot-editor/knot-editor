@@ -41,18 +41,21 @@ pub(crate) async fn new_terminal(context: CommandContext, (): ()) -> Result<(), 
         .await
 }
 
-#[command("workbench.close-tab", title = "Close Tab", description = "Close the focused tab.", id = CLOSE_TAB_COMMAND, participant = Workbench)]
+#[command("workbench.close-tab", title = "Close Tab", description = "Close the focused tab, or the window when no tab has focus.", id = CLOSE_TAB_COMMAND, participant = Workbench)]
 pub(crate) async fn close_tab(
     context: CommandContext,
     (): (),
 ) -> Result<CommandOutcome, CommandOutcome> {
     context
-        .foreground(move |target, cx| {
-            super::super::commands::dispatch::break_captured_history_group(target, cx);
-            Ok(())
+        .pending(move |target, completion, cx| {
+            let kind = if target.tab.is_some() {
+                ProtectedCloseKind::Tab
+            } else {
+                ProtectedCloseKind::Window
+            };
+            dispatch_close_to_captured_target(target, kind, completion, cx)
         })
-        .await?;
-    close_target(&context, ProtectedCloseKind::Tab).await
+        .await
 }
 
 #[command("workbench.reopen-closed-tab", title = "Reopen Closed Tab", description = "Reopen the tab this window closed most recently.", id = REOPEN_CLOSED_TAB_COMMAND, participant = Workbench)]

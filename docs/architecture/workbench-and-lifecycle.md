@@ -396,8 +396,9 @@ invalidating transport access even if a stale view retains the entity. Nonfinal
 view closure leaves the shared document open. Closing the final document or
 terminal leaves an empty center, beside any docks, and keeps hidden tool
 definitions; no placeholder document replaces it. Closing a tool hides its
-attachment without entering document confirmation. A window with no tabs closes
-without a prompt.
+attachment without entering document confirmation. Close Tab with no focused
+tab, as in an empty center, closes the window through window closure. A window
+with no tabs closes without a prompt.
 
 Each window keeps its last 20 closed document and terminal tabs (`workbench::RecentlyClosed`) as layout tabs
 with their pane and position. Reopen Closed Tab recreates the latest through

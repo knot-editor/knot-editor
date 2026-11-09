@@ -617,7 +617,7 @@ async fn dirty_final_tab_close_cancel_preserves_the_document_and_view(cx: &mut T
 }
 
 #[gpui::test]
-async fn discarding_a_dirty_final_tab_closes_it_and_leaves_an_empty_center(
+async fn discarding_a_dirty_final_tab_leaves_an_empty_center_that_close_tab_closes(
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
@@ -641,6 +641,13 @@ async fn discarding_a_dirty_final_tab_closes_it_and_leaves_an_empty_center(
         assert_eq!(workbench.center(), None);
         assert_eq!(workbench.focused_pane_id(), None);
     });
+
+    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    cx.read(|cx| assert!(!cx.windows().contains(&window)));
 }
 
 #[gpui::test]
