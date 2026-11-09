@@ -873,6 +873,12 @@ await commands.register("operations.terminal", async () => {{
   if (!listed.some(tab => tab.target === opened.target)) throw new Error("listing");
   const docked = await terminals.open({{ target: dock }});
   if (docked.kind !== "terminal" || docked.target.pane === dock) throw new Error("dock target");
+  const home = (await windows.get(win.target)).panes.find(pane => pane.tabs.some(tab => tab.target === docked.target));
+  if (!home || home.tabs.some(tab => tab.kind !== "terminal") || home.target === pane) throw new Error("terminal home dock");
+  const beside = await terminals.open({{ location: "dock", target: dock }});
+  if (beside.target.pane !== docked.target.pane) throw new Error("beside the recent dock terminal");
+  try {{ await terminals.open({{ location: "floating" }}); throw new Error("location accepted"); }}
+  catch (error) {{ if (!(error instanceof TypeError)) throw error; }}
   await rejects(() => terminals.open({{ cwd: "mem://product/src" }}), "InvalidUri");
   await rejects(() => terminals.open({{ cwd: "not a URI" }}), "InvalidUri");
   await rejects(() => terminals.open({{ cwd: "{missing}" }}), "ResourceNotFound");
@@ -926,8 +932,10 @@ await commands.register("operations.terminal", async () => {{
             })
             .collect::<Vec<_>>()
     });
-    // Without a directory, the second terminal follows the focused first one.
+    // Without a directory, a terminal follows the focused one; the center
+    // terminal comes first, the dock terminals after it.
     let explicit = std::fs::canonicalize(explicit).unwrap();
-    assert_eq!(directories, [explicit.clone(), explicit]);
+    assert_eq!(directories.len(), 3);
+    assert_eq!(directories[0], explicit);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }

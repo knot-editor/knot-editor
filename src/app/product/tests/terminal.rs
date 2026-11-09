@@ -1340,3 +1340,276 @@ async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_
         Some(temp.path().to_owned())
     );
 }
+
+/// The area and kind of the focused tab, and how many terminal sessions live.
+fn focused_area(
+    shell: &Entity<ProductShell>,
+    cx: &TestAppContext,
+) -> Option<crate::app::workbench::Area> {
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        workbench.focused_pane().map(|pane| pane.area())
+    })
+}
+
+fn session_count(cx: &TestAppContext) -> usize {
+    cx.read(|cx| {
+        cx.global::<ApplicationTerminalSessions>()
+            .0
+            .borrow()
+            .sessions
+            .len()
+    })
+}
+
+fn terminal_panes(
+    shell: &Entity<ProductShell>,
+    cx: &TestAppContext,
+) -> Vec<(crate::app::workbench::Area, usize)> {
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        workbench
+            .panes()
+            .iter()
+            .filter_map(|pane| {
+                let terminals = pane
+                    .tabs()
+                    .iter()
+                    .filter(|tab| matches!(tab.surface_id(), TabSurfaceId::Terminal(_)))
+                    .count();
+                (terminals > 0).then_some((pane.area(), terminals))
+            })
+            .collect()
+    })
+}
+
+#[gpui::test]
+async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
+    cx: &mut TestAppContext,
+) {
+    use crate::app::workbench::{Area, DockLocation};
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let right = Area::Dock(DockLocation::Right);
+    let toggle = |cx: &mut TestAppContext| {
+        dispatch_product_command(&shell, window, TOGGLE_TERMINAL_COMMAND, cx)
+    };
+
+    // With no dock terminal, one opens in the home dock and takes focus.
+    assert_eq!(
+        toggle(cx).completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&shell, cx), [(right, 1)]);
+    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(session_count(cx), 1);
+
+    // Focused: its dock hides and focus returns to the document.
+    assert_eq!(
+        toggle(cx).completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(focused_area(&shell, cx), Some(Area::Center));
+    cx.read(|cx| {
+        assert!(
+            !shell
+                .read(cx)
+                .workbench
+                .read(cx)
+                .dock_visible(DockLocation::Right)
+        );
+    });
+
+    // Hidden: it shows again, the same session.
+    assert_eq!(
+        toggle(cx).completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(session_count(cx), 1);
+
+    // Visible but unfocused: it takes focus without hiding.
+    focus_document(&shell, window, document, cx);
+    assert_eq!(focused_area(&shell, cx), Some(Area::Center));
+    assert_eq!(
+        toggle(cx).completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(focused_area(&shell, cx), Some(right));
+    cx.read(|cx| {
+        assert!(
+            shell
+                .read(cx)
+                .workbench
+                .read(cx)
+                .dock_visible(DockLocation::Right)
+        );
+    });
+
+    // Center terminals are ignored: the dock terminal still toggles.
+    focus_document(&shell, window, document, cx);
+    let center = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
+    assert_eq!(center.completion.await.unwrap(), CommandOutcome::Completed);
+    assert_eq!(focused_area(&shell, cx), Some(Area::Center));
+    assert_eq!(
+        toggle(cx).completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(session_count(cx), 2);
+}
+
+#[gpui::test]
+async fn new_terminal_follows_a_terminal_then_the_recent_dock_terminal_then_the_home_dock(
+    cx: &mut TestAppContext,
+) {
+    use crate::app::workbench::{Area, DockLocation};
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let right = Area::Dock(DockLocation::Right);
+    let new = |name: &'static str, cx: &mut TestAppContext| {
+        dispatch_product_command(&shell, window, name, cx)
+    };
+
+    // From a document with no dock terminal: the home dock, which it shows.
+    assert_eq!(
+        new(NEW_TERMINAL_COMMAND, cx).completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&shell, cx), [(right, 1)]);
+
+    // From a document: beside the most recently used dock terminal.
+    focus_document(&shell, window, document, cx);
+    assert_eq!(
+        new(NEW_TERMINAL_COMMAND, cx).completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&shell, cx), [(right, 2)]);
+    assert_eq!(focused_area(&shell, cx), Some(right));
+
+    // New Terminal in Center: the last focused center pane.
+    assert_eq!(
+        new(NEW_TERMINAL_IN_CENTER_COMMAND, cx)
+            .completion
+            .await
+            .unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&shell, cx), [(Area::Center, 1), (right, 2)]);
+
+    // From a center terminal: beside it, in the center.
+    assert_eq!(
+        new(NEW_TERMINAL_COMMAND, cx).completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&shell, cx), [(Area::Center, 2), (right, 2)]);
+
+    // Splitting a dock terminal starts a new session beside it, in the dock.
+    cx.update_window(window, |_, _, cx| {
+        shell.update(cx, |shell, cx| {
+            let workbench = shell.workbench.read(cx);
+            let pane = workbench.recent_dock_terminal().unwrap().0;
+            assert!(shell.split_pane(
+                pane,
+                SplitDirection::Horizontal,
+                super::super::SplitPlacement::After,
+                cx
+            ));
+        });
+    })
+    .unwrap();
+    assert_eq!(
+        terminal_panes(&shell, cx),
+        [(Area::Center, 2), (right, 2), (right, 1)]
+    );
+    assert_eq!(session_count(cx), 5);
+    assert_eq!(focused_area(&shell, cx), Some(right));
+}
+
+#[gpui::test]
+async fn moving_a_terminal_to_a_dock_rehomes_terminals_for_fresh_windows(cx: &mut TestAppContext) {
+    use crate::app::tool_layout::ApplicationToolLayout;
+    use crate::app::workbench::{Area, DockLocation};
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let bottom = Area::Dock(DockLocation::Bottom);
+    let home = |shell: &Entity<ProductShell>, cx: &TestAppContext| {
+        cx.read(|cx| shell.read(cx).workbench.read(cx).terminal_home())
+    };
+    assert_eq!(home(&shell, cx), DockLocation::Right);
+
+    let center = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
+    assert_eq!(center.completion.await.unwrap(), CommandOutcome::Completed);
+    // Moving within the center or to the center never rehomes.
+    let to_bottom =
+        dispatch_product_command(&shell, window, "workbench.move-tab-to-bottom-dock", cx);
+    assert_eq!(
+        to_bottom.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&shell, cx), [(bottom, 1)]);
+    assert_eq!(home(&shell, cx), DockLocation::Bottom);
+    assert_eq!(
+        cx.read(|cx| cx
+            .global::<ApplicationToolLayout>()
+            .0
+            .current()
+            .terminal_home),
+        DockLocation::Bottom
+    );
+    let to_center = dispatch_product_command(&shell, window, "workbench.move-tab-to-center", cx);
+    assert_eq!(
+        to_center.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&shell, cx), [(Area::Center, 1)]);
+    assert_eq!(home(&shell, cx), DockLocation::Bottom);
+
+    // A fresh window inherits the home, and opens its first dock terminal there.
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (fresh, fresh_window) = product_window(document, model, cx);
+    fresh.update(cx, |fresh, cx| fresh.restore_fresh_window_layout(cx));
+    assert_eq!(home(&fresh, cx), DockLocation::Bottom);
+    let toggle = dispatch_product_command(&fresh, fresh_window, TOGGLE_TERMINAL_COMMAND, cx);
+    assert_eq!(toggle.completion.await.unwrap(), CommandOutcome::Completed);
+    assert_eq!(terminal_panes(&fresh, cx), [(bottom, 1)]);
+}
+
+#[gpui::test]
+async fn window_layouts_restore_dock_terminals_in_their_docks(cx: &mut TestAppContext) {
+    use crate::app::workbench::{Area, DockLocation};
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (source, source_window) = product_window(document, model, cx);
+    let toggle = dispatch_product_command(&source, source_window, TOGGLE_TERMINAL_COMMAND, cx);
+    assert_eq!(toggle.completion.await.unwrap(), CommandOutcome::Completed);
+    let layout = cx
+        .update_window(source_window, |_, window, cx| {
+            source.read(cx).capture_layout(Some(window), cx)
+        })
+        .unwrap();
+    let value = serde_json::to_value(&layout).unwrap();
+    assert_eq!(
+        value["docks"]["right"]["root"]["tabs"][0]["kind"],
+        "terminal"
+    );
+
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (restored, _) = product_window(document, model, cx);
+    restored.update(cx, |shell, cx| shell.apply_layout(&layout, &[], &[], cx));
+    assert_eq!(
+        terminal_panes(&restored, cx),
+        [(Area::Dock(DockLocation::Right), 1)]
+    );
+    // Restored terminals are fresh sessions: one per terminal tab, per window.
+    assert_eq!(session_count(cx), 2);
+}
