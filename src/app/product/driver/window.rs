@@ -208,7 +208,7 @@ impl TestWindow {
     pub fn new_document(&self, cx: &mut TestAppContext) {
         cx.update_window(self.window, |_, _, cx| {
             self.shell.update(cx, |shell, cx| {
-                let pane = shell.workbench.read(cx).normal_pane().unwrap();
+                let pane = shell.workbench.read(cx).center_pane().unwrap();
                 shell.new_document_in_pane(pane, cx);
             });
         })
@@ -220,7 +220,7 @@ impl TestWindow {
     pub fn append(&self, text: &str, cx: &mut TestAppContext) {
         let model = cx.read(|cx| {
             let workbench = self.shell.read(cx).workbench.read(cx);
-            let pane = workbench.normal_pane().unwrap();
+            let pane = workbench.center_pane().unwrap();
             let tab = workbench.pane(pane).unwrap().active_tab();
             workbench.editor(tab).unwrap().read(cx).model().clone()
         });
@@ -259,7 +259,7 @@ impl TestWindow {
                 .read(cx)
                 .workbench
                 .read(cx)
-                .normal_pane()
+                .center_pane()
                 .is_some()
         })
     }
@@ -289,7 +289,7 @@ impl TestWindow {
     /// Split the normal group's pane, moving focus to the new pane beside it.
     pub fn split(&self, cx: &mut TestAppContext) {
         self.shell.update(cx, |shell, cx| {
-            let pane = shell.workbench.read(cx).normal_pane().unwrap();
+            let pane = shell.workbench.read(cx).center_pane().unwrap();
             shell.workbench.update(cx, |workbench, cx| {
                 workbench.split_pane(pane, SplitDirection::Horizontal, SplitPlacement::After, cx);
             });
@@ -352,7 +352,7 @@ impl TestWindow {
     pub fn focus_document(&self, cx: &mut TestAppContext) {
         let located = cx.read(|cx| {
             let workbench = self.shell.read(cx).workbench.read(cx);
-            let pane = workbench.normal_pane()?;
+            let pane = workbench.center_pane()?;
             Some((pane, workbench.pane(pane)?.active_tab_id()))
         });
         let (pane, tab) = located.expect("a normal pane");

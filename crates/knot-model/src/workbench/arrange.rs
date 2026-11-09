@@ -2,12 +2,11 @@
 
 use super::*;
 
-/// A pruned arrangement whose tabs are materialized per kind before the
+/// A pruned split tree whose tabs are materialized per kind before the
 /// workbench installs it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlanNode<T> {
     Pane {
-        dock: Option<DockLocation>,
         selected: usize,
         focused: bool,
         /// How many of the leading tabs are pinned.
@@ -26,13 +25,11 @@ impl<T> PlanNode<T> {
     pub fn map<U>(self, step: &mut impl FnMut(T) -> U) -> PlanNode<U> {
         match self {
             Self::Pane {
-                dock,
                 selected,
                 focused,
                 pinned,
                 tabs,
             } => PlanNode::Pane {
-                dock,
                 selected,
                 focused,
                 pinned,
@@ -51,11 +48,54 @@ impl<T> PlanNode<T> {
             },
         }
     }
+
+    pub fn for_each(&self, visit: &mut impl FnMut(&T)) {
+        match self {
+            Self::Pane { tabs, .. } => tabs.iter().for_each(&mut *visit),
+            Self::Split { first, second, .. } => {
+                first.for_each(visit);
+                second.for_each(visit);
+            }
+        }
+    }
+}
+
+/// One dock of a restored arrangement.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DockArrangement<T> {
+    pub root: Option<PlanNode<T>>,
+    pub size: f32,
+    pub visible: bool,
+}
+
+/// A restored arrangement of the center and the left, right, and bottom
+/// docks.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Arrangement<T> {
+    pub center: Option<PlanNode<T>>,
+    pub docks: [DockArrangement<T>; 3],
+}
+
+impl<T> Arrangement<T> {
+    pub fn map<U>(self, step: &mut impl FnMut(T) -> U) -> Arrangement<U> {
+        let [left, right, bottom] = self.docks;
+        let mut dock = |dock: DockArrangement<T>| DockArrangement {
+            root: dock.root.map(|root| root.map(step)),
+            size: dock.size,
+            visible: dock.visible,
+        };
+        let docks = [dock(left), dock(right), dock(bottom)];
+        Arrangement {
+            center: self.center.map(|root| root.map(step)),
+            docks,
+        }
+    }
 }
 
 impl Workbench {
-    /// Install one restored tab at `index` of `pane`, or at the end of the
-    /// normal group when that pane is gone, and activate it.
+    /// Install one restored tab at `index` of `pane`, or, when that pane is
+    /// gone or its area does not allow the tab's kind, at the end of the
+    /// center pane or the tool's dock; and activate it.
     pub fn insert_arranged(
         &mut self,
         pane: PaneId,
@@ -63,12 +103,21 @@ impl Workbench {
         surface: TabSurfaceId,
         pinned: bool,
     ) -> (PaneId, TabId) {
-        let (pane, index) = if self.pane(pane).is_some() {
+        let fits = self
+            .pane_area(pane)
+            .is_some_and(|area| surface.kind().allows(area));
+        let (pane, index) = if fits {
             (pane, index)
         } else {
-            let pane = self
-                .normal_pane()
-                .unwrap_or_else(|| self.create_group(None));
+            let pane = match surface {
+                TabSurfaceId::Tool(id) => {
+                    let area =
+                        Area::Dock(self.tool(id).expect("registered tool").remembered_dock());
+                    self.area_focus(area)
+                        .unwrap_or_else(|| self.create_pane(area))
+                }
+                TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_) => self.ensure_center_pane(),
+            };
             (pane, usize::MAX)
         };
         let tab = self.new_tab(surface, pinned);
@@ -81,7 +130,7 @@ impl Workbench {
         let index = group.section_index(pinned, index);
         group.tabs.insert(index, tab);
         group.select(id);
-        self.focused_pane = Some(pane);
+        self.set_focus(pane);
         self.debug_assert_invariants();
         (pane, id)
     }
@@ -90,12 +139,11 @@ impl Workbench {
     /// hidden first, keeping their remembered placement, so tools the
     /// arrangement does not name stay hidden. Each arranged tab carries a value
     /// the caller gets back with the tab's presentation, in plan order. The
-    /// focused pane is the marked one, else the first ordinary group, else the
-    /// first pane.
+    /// focused pane is the marked one, else the center's first, else the
+    /// first painted dock's.
     pub fn arrange<T>(
         &mut self,
-        root: Option<PlanNode<(TabSurfaceId, T)>>,
-        dock_sizes: [f32; 3],
+        arrangement: Arrangement<(TabSurfaceId, T)>,
     ) -> Vec<(PresentationId, T)> {
         let visible = self
             .tools
@@ -109,30 +157,45 @@ impl Workbench {
         self.remove_document_tabs();
         debug_assert!(self.panes.is_empty(), "arranged workbenches start empty");
         self.panes.clear();
-        self.docks.clear();
+        self.focused_pane = None;
         let mut focused = None;
         let mut installed = Vec::new();
-        self.layout = root.map(|root| self.install(root, &mut focused, &mut installed));
-        self.focused_pane = focused.or_else(|| {
-            self.panes
-                .iter()
-                .find(|pane| self.dock_location(pane.id).is_none())
-                .or(self.panes.first())
-                .map(|pane| pane.id)
-        });
-        self.set_dock_sizes(dock_sizes);
+        let Arrangement { center, docks } = arrangement;
+        self.center = AreaTree {
+            layout: center
+                .map(|root| self.install(root, Area::Center, &mut focused, &mut installed)),
+            focused: None,
+        };
+        for (dock, arranged) in DockLocation::ALL.into_iter().zip(docks) {
+            let area = Area::Dock(dock);
+            let layout = arranged
+                .root
+                .map(|root| self.install(root, area, &mut focused, &mut installed));
+            let state = &mut self.docks[dock.index()];
+            state.tree = AreaTree {
+                layout,
+                focused: None,
+            };
+            state.visible = arranged.visible;
+            self.set_dock_size(dock, arranged.size);
+        }
+        match focused.filter(|pane| self.pane_shown(*pane)) {
+            Some(pane) => self.set_focus(pane),
+            None => self.settle_focus(None),
+        }
+        self.debug_assert_invariants();
         installed
     }
 
-    fn install<T>(
+    pub(super) fn install<T>(
         &mut self,
         node: PlanNode<(TabSurfaceId, T)>,
+        area: Area,
         focused: &mut Option<PaneId>,
         installed: &mut Vec<(PresentationId, T)>,
     ) -> WorkbenchLayout {
         match node {
             PlanNode::Pane {
-                dock,
                 selected,
                 focused: is_focused,
                 pinned,
@@ -149,10 +212,7 @@ impl Workbench {
                     })
                     .collect::<Vec<_>>();
                 let active_tab = tabs[selected.min(tabs.len() - 1)].id;
-                self.panes.push(Pane::new(pane, tabs, active_tab));
-                if let Some(dock) = dock {
-                    self.docks.push((pane, dock));
-                }
+                self.panes.push(Pane::new(pane, area, tabs, active_tab));
                 if is_focused {
                     *focused = Some(pane);
                 }
@@ -166,8 +226,8 @@ impl Workbench {
             } => WorkbenchLayout::Split {
                 direction,
                 ratio: WorkbenchLayout::clamp_ratio(ratio),
-                first: Box::new(self.install(*first, focused, installed)),
-                second: Box::new(self.install(*second, focused, installed)),
+                first: Box::new(self.install(*first, area, focused, installed)),
+                second: Box::new(self.install(*second, area, focused, installed)),
             },
         }
     }

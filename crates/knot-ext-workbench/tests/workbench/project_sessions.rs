@@ -246,7 +246,7 @@ fn closing_the_last_window_suspends_without_captures(cx: &mut TestAppContext) {
     );
     assert_eq!(windows[0]["selected"], 0);
     // Each session window keeps its captured layout.
-    assert_eq!(windows[0]["layout"]["version"], 1);
+    assert_eq!(windows[0]["layout"]["version"], 2);
 
     // Closing the last one suspends the project with its last membership,
     // which records the dirty document's identity once tracking sees it.
@@ -492,10 +492,11 @@ fn arrangement(layout: Value) -> Value {
             }
         }
     }
-    let mut root = layout["root"].clone();
-    forget(&mut root);
-    root["first"]["selected"] = Value::Null;
-    serde_json::json!({ "root": root, "dockSizes": layout["dockSizes"] })
+    let mut center = layout["center"].clone();
+    forget(&mut center);
+    let mut docks = layout["docks"].clone();
+    docks["left"]["root"]["selected"] = Value::Null;
+    serde_json::json!({ "center": center, "docks": docks })
 }
 
 #[gpui::test]
@@ -523,8 +524,8 @@ fn a_multi_root_layout_with_shared_views_survives_repeated_switches(cx: &mut Tes
         projects.select(&a_id, cx);
         projects.follow_roots(&[&a_uri, &c_uri], cx);
         let current = arrangement(projects.window.layout(cx));
-        assert_eq!(current["root"]["second"]["kind"], "split");
-        assert_eq!(current["dockSizes"]["left"], 300.);
+        assert_eq!(current["center"]["kind"], "split");
+        assert_eq!(current["docks"]["left"]["size"], 300.);
         assert_eq!(
             before.get_or_insert(current.clone()),
             &current,

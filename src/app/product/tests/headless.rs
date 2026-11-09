@@ -199,7 +199,7 @@ fn explorer_keys_select_and_open_a_file(cx: &mut TestAppContext) {
     cx.read(|cx| {
         let documents = documents.read(cx);
         let workbench = shell.read(cx).workbench.read(cx);
-        let pane = workbench.pane(workbench.normal_pane().unwrap()).unwrap();
+        let pane = workbench.pane(workbench.center_pane().unwrap()).unwrap();
         let uri = pane
             .active_tab()
             .document_id()

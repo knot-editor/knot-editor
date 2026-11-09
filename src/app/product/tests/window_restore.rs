@@ -141,7 +141,7 @@ impl Launch {
         });
         shell.update(cx, |shell, cx| {
             shell.workbench.update(cx, |workbench, cx| {
-                workbench.open_document_in_normal_group(document, model, cx)
+                workbench.open_document_in_center(document, model, cx)
             });
             cx.notify();
         });
@@ -238,12 +238,12 @@ fn arrangement(record: &WindowSession) -> Vec<serde_json::Value> {
             let mut layout = serde_json::to_value(&window.layout).unwrap();
             // Reopened clean files get new identities; dirty and untitled
             // documents keep theirs.
-            forget_file_identities(&mut layout["root"]);
+            forget_file_identities(&mut layout["center"]);
             serde_json::json!({
                 "roots": window.roots,
-                "root": layout["root"],
+                "center": layout["center"],
                 "focused": layout["focused"],
-                "dockSizes": layout["dockSizes"],
+                "docks": layout["docks"],
             })
         })
         .collect()
@@ -286,7 +286,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     let long = launch.open_file(&first, "a/long.txt", cx);
     edit(long, "dirty", cx);
     let terminal = first.update(cx, |shell, cx| {
-        let pane = shell.workbench.read(cx).normal_pane().unwrap();
+        let pane = shell.workbench.read(cx).center_pane().unwrap();
         let (terminal, view) = shell.create_terminal(cx);
         shell.workbench.update(cx, |workbench, cx| {
             let split = workbench
@@ -340,7 +340,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     // A contributed tool whose package fails at the next launch is pruned.
     let mut failing = before.clone();
     let mut layout = serde_json::to_value(&failing.windows[1].layout).unwrap();
-    layout["root"]["second"]["tabs"]
+    layout["docks"]["left"]["root"]["tabs"]
         .as_array_mut()
         .unwrap()
         .push(serde_json::json!({ "kind": "tool", "tool": "@example/failed.view" }));

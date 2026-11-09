@@ -81,21 +81,6 @@ impl ProductShell {
             return;
         }
         let stored = Self::stored_tool_layout(cx);
-        let record = stored
-            .as_ref()
-            .and_then(|snapshot| snapshot.tool(&definition.id))
-            .cloned();
-        let visible = record
-            .as_ref()
-            .map_or(definition.visible, |record| record.visible);
-        let placement = record
-            .as_ref()
-            .map_or(definition.location.placement(), |record| {
-                record.location.placement()
-            });
-        let index = record
-            .as_ref()
-            .map_or(definition.order, |record| record.index);
         let workbench_view = content.clone();
         self.workbench.update(cx, |workbench, _| {
             let previous = workbench.focused_pane_id();
@@ -103,12 +88,15 @@ impl ProductShell {
                 definition.id.clone(),
                 definition.title.clone(),
                 ToolContent::Extension(workbench_view),
-                DockLocation::Left,
+                definition.location,
             );
-            workbench.remember_tool_placement(id, placement, index);
-            if visible {
-                workbench.show_tool(id);
-            }
+            workbench.place_registered_tool(
+                id,
+                stored.as_ref(),
+                definition.location,
+                definition.order,
+                definition.visible,
+            );
             if let Some(pane) = previous {
                 workbench.focus_pane(pane);
             }
@@ -154,7 +142,7 @@ impl ProductShell {
         let Some(frame) = self.workbench.read(cx).tool_by_stable_id(stable_id) else {
             return false;
         };
-        let visible_now = self.workbench.read(cx).tool_tab(frame).is_some();
+        let visible_now = self.workbench.read(cx).tool_visible(frame);
         if visible_now == visible {
             return true;
         }
@@ -215,12 +203,12 @@ impl ProductShell {
     pub(crate) fn place_tool(
         &mut self,
         id: ToolFrameId,
-        placement: ToolPlacement,
+        dock: DockLocation,
         cx: &mut Context<Self>,
     ) -> bool {
         let placed = self
             .workbench
-            .update(cx, |workbench, _| workbench.place_tool(id, placement));
+            .update(cx, |workbench, _| workbench.place_tool(id, dock));
         if placed {
             self.publish_tool_layout(cx);
         }
@@ -235,7 +223,7 @@ impl ProductShell {
         } else {
             let id = self.explorer_frame(cx).unwrap();
             self.workbench.update(cx, |workbench, _| {
-                if workbench.tool_tab(id).is_some() {
+                if workbench.tool_visible(id) {
                     workbench.hide_tool(id);
                 } else {
                     workbench.show_tool(id);
@@ -296,22 +284,11 @@ impl ProductShell {
                 ToolContent::Workspace(tree.clone()),
                 DockLocation::Left,
             );
-            let visible = show
-                || stored
-                    .as_ref()
-                    .and_then(|snapshot| snapshot.tool(crate::app::tool_layout::EXPLORER_TOOL_ID))
-                    .is_none_or(|record| record.visible);
             if let Some(snapshot) = &stored {
-                workbench.set_dock_sizes(snapshot.dock_sizes);
-                if let Some(record) = snapshot.tool(crate::app::tool_layout::EXPLORER_TOOL_ID) {
-                    workbench.remember_tool_placement(
-                        id,
-                        record.location.placement(),
-                        record.index,
-                    );
-                }
+                workbench.set_dock_sizes(snapshot.dock_sizes());
             }
-            if visible {
+            workbench.place_registered_tool(id, stored.as_ref(), DockLocation::Left, 0, true);
+            if show {
                 workbench.show_tool(id);
             }
             if let Some(pane) = previous {
@@ -349,19 +326,15 @@ impl ProductShell {
             self.ensure_explorer(false, cx);
         }
         let defaults = crate::app::tool_layout::ToolLayoutSnapshot::product_default();
-        self.restore_tool_layout(&defaults, cx);
         let definitions = crate::app::extensions::host::view_definitions(cx);
         self.workbench.update(cx, |workbench, _| {
+            workbench.restore_tool_layout(&defaults);
             for definition in definitions {
                 let Some(id) = workbench.tool_by_stable_id(&definition.id) else {
                     continue;
                 };
                 workbench.hide_tool(id);
-                workbench.remember_tool_placement(
-                    id,
-                    definition.location.placement(),
-                    definition.order,
-                );
+                workbench.remember_tool_placement(id, definition.location, definition.order);
                 if definition.visible {
                     workbench.show_tool(id);
                 }
@@ -375,152 +348,24 @@ impl ProductShell {
     /// Inherit the last customized arrangement on a fresh window. Only runs
     /// at window creation: already-open windows never re-read the default.
     /// Uncustomized stores keep first-run behavior (no eager explorer before
-    /// any folder or toggle); hidden tools stay hidden. Never publishes.
+    /// any folder or toggle); hidden tools stay hidden; contributed tools
+    /// take their stored places as they attach. Never publishes.
     pub(super) fn restore_fresh_window_layout(&mut self, cx: &mut Context<Self>) {
         let Some(snapshot) = Self::stored_tool_layout(cx) else {
             return;
         };
         self.workbench.update(cx, |workbench, _| {
-            workbench.set_dock_sizes(snapshot.dock_sizes);
+            workbench.set_dock_sizes(snapshot.dock_sizes());
         });
         if !snapshot.customized {
             return;
         }
-        let visible = snapshot
-            .tool(crate::app::tool_layout::EXPLORER_TOOL_ID)
-            .is_some_and(|record| record.visible);
-        if visible {
+        if matches!(
+            snapshot.placement(crate::app::tool_layout::EXPLORER_TOOL_ID),
+            Some(knot_model::workbench::StoredPlacement::Docked(_))
+        ) {
             self.ensure_explorer(false, cx);
         }
-        // Explorer registration selects itself; restore the stored dock selection
-        // so a contributed tool that was selected stays selected.
-        self.apply_stored_selection(&snapshot, cx);
-    }
-
-    /// Select each dock's stored tool when it is already registered. Unknown or
-    /// hidden tools are skipped without changing the live selection.
-    pub(super) fn apply_stored_selection(
-        &mut self,
-        snapshot: &crate::app::tool_layout::ToolLayoutSnapshot,
-        cx: &mut Context<Self>,
-    ) {
-        self.workbench.update(cx, |workbench, _| {
-            for dock in DockLocation::ALL {
-                if let Some(selected) = &snapshot.dock_selected[dock.index()]
-                    && let Some(id) = workbench.tool_by_stable_id(selected)
-                    && workbench.tool_tab(id).is_some()
-                {
-                    workbench.show_tool(id);
-                }
-            }
-        });
-    }
-
-    /// Restore the full stored arrangement onto this window's registered tools.
-    /// Unknown stored tools are skipped without blank frames; registered tools
-    /// without a stored record keep their live placement. Never publishes.
-    pub(super) fn restore_tool_layout(
-        &mut self,
-        snapshot: &crate::app::tool_layout::ToolLayoutSnapshot,
-        cx: &mut Context<Self>,
-    ) {
-        use crate::app::tool_layout::StoredLocation;
-        self.workbench.update(cx, |workbench, _| {
-            workbench.set_dock_sizes(snapshot.dock_sizes);
-            let known: Vec<(ToolFrameId, String)> = workbench
-                .tools()
-                .iter()
-                .map(|tool| (tool.id, tool.stable_id.to_owned()))
-                .collect();
-            let live_location = |workbench: &Workbench, id: ToolFrameId| {
-                workbench
-                    .tool_tab(id)
-                    .map(|(pane, _)| match workbench.dock_location(pane) {
-                        Some(dock) => StoredLocation::from(dock),
-                        None => StoredLocation::DocumentGroup,
-                    })
-            };
-            // Visible dock tools restore in stored order so tab order matches.
-            // Docks already in stored order are left untouched so live command
-            // targets survive.
-            for dock in DockLocation::ALL {
-                let mut ordered: Vec<(usize, ToolFrameId)> = known
-                    .iter()
-                    .filter_map(|(id, stable)| {
-                        snapshot
-                            .tool(stable)
-                            .filter(|record| {
-                                record.visible && record.location == StoredLocation::from(dock)
-                            })
-                            .map(|record| (record.index, *id))
-                    })
-                    .collect();
-                ordered.sort_by_key(|(order, _)| *order);
-                let want: Vec<ToolFrameId> = ordered.iter().map(|(_, id)| *id).collect();
-                let live: Vec<ToolFrameId> = workbench
-                    .dock_pane(dock)
-                    .and_then(|pane| workbench.pane(pane))
-                    .map(|pane| {
-                        pane.tabs()
-                            .iter()
-                            .filter_map(|tab| match tab.surface_id() {
-                                TabSurfaceId::Tool(id) => Some(id),
-                                _ => None,
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if live == want {
-                    for (index, id) in &ordered {
-                        workbench.remember_tool_placement(
-                            *id,
-                            StoredLocation::from(dock).placement(),
-                            *index,
-                        );
-                    }
-                    continue;
-                }
-                for (index, id) in &ordered {
-                    workbench.hide_tool(*id);
-                    workbench.remember_tool_placement(
-                        *id,
-                        StoredLocation::from(dock).placement(),
-                        *index,
-                    );
-                    workbench.show_tool(*id);
-                }
-            }
-            // Visible document-group tools and hidden tools restore next.
-            for (id, stable) in &known {
-                let Some(record) = snapshot.tool(stable) else {
-                    continue;
-                };
-                if record.visible && record.location != StoredLocation::DocumentGroup {
-                    continue;
-                }
-                if record.visible && live_location(workbench, *id) == Some(record.location) {
-                    workbench.remember_tool_placement(
-                        *id,
-                        record.location.placement(),
-                        record.index,
-                    );
-                    continue;
-                }
-                workbench.hide_tool(*id);
-                workbench.remember_tool_placement(*id, record.location.placement(), record.index);
-                if record.visible {
-                    workbench.show_tool(*id);
-                }
-            }
-            for dock in DockLocation::ALL {
-                if let Some(selected) = &snapshot.dock_selected[dock.index()]
-                    && let Some(id) = workbench.tool_by_stable_id(selected)
-                    && workbench.tool_tab(id).is_some()
-                {
-                    workbench.show_tool(id);
-                }
-            }
-        });
     }
 
     pub(super) fn handle_workspace_tree_event(

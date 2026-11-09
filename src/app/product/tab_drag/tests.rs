@@ -310,7 +310,7 @@ fn assert_tool_focused(shell: &Entity<ProductShell>, visual: &mut VisualTestCont
 }
 
 #[gpui::test]
-fn tool_drag_joins_group_splits_edges_and_docks_with_focus(cx: &mut TestAppContext) {
+fn tool_drag_moves_between_docks_and_never_enters_the_center(cx: &mut TestAppContext) {
     let (shell, window) = tool_fixture(cx);
     let presentation = tool_presentation(&shell, cx);
     let mut visual = VisualTestContext::from_window(window, cx);
@@ -328,118 +328,52 @@ fn tool_drag_joins_group_splits_edges_and_docks_with_focus(cx: &mut TestAppConte
         assert!(shell.read(cx).tab_drag.borrow().preview.is_none());
     });
 
-    // Center drop joins the document group.
+    // The center's document pane rejects the tool.
     start_drag(&mut visual, tool_tab_id(&shell, cx));
-    let pane = visual.debug_bounds("pane-1").unwrap();
-    let center = pane.center();
     visual.simulate_mouse_move(center, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    shell.read_with(&visual, |shell, _| {
-        assert!(matches!(
-            shell.tab_drag.borrow().preview.unwrap().tab,
-            TabMoveDestination::At {
-                placement: TabMovePlacement::End,
-                ..
-            }
-        ));
-    });
     visual.simulate_mouse_up(center, MouseButton::Left, Modifiers::default());
     visual.run_until_parked();
     visual.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
-        assert_eq!(workbench.panes().len(), 1);
-        assert_eq!(workbench.tab_snapshots().len(), 2);
-        let id = shell.read(cx).explorer_frame(cx).unwrap();
-        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
-        assert!(
-            workbench
-                .dock_location(workbench.tool_tab(id).unwrap().0)
-                .is_none()
-        );
+        assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots(), before);
     });
-    assert_tool_focused(&shell, &mut visual);
 
-    // Pane left edge creates a side split.
-    start_drag(&mut visual, tool_tab_id(&shell, cx));
-    let pane = visual.debug_bounds("pane-1").unwrap();
-    let edge = point(pane.left() + px(30.), pane.center().y);
-    visual.simulate_mouse_move(edge, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    shell.read_with(&visual, |shell, _| {
-        assert!(matches!(
-            shell.tab_drag.borrow().preview.unwrap().tab,
-            TabMoveDestination::At {
-                placement: TabMovePlacement::Split(SplitEdge::Left),
-                ..
-            }
-        ));
-    });
-    visual.simulate_mouse_up(edge, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    visual.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
-        assert_eq!(workbench.panes().len(), 2);
-        let id = shell.read(cx).explorer_frame(cx).unwrap();
-        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
-    });
-    assert_tool_focused(&shell, &mut visual);
-
-    // Workbench left edge docks around the whole layout. The dragged tool
-    // pane is leftmost after the split, so its left edge is the workbench edge.
-    start_drag(&mut visual, tool_tab_id(&shell, cx));
-    let tool_pane = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
-        let id = shell.read(cx).explorer_frame(cx).unwrap();
-        workbench.tool_tab(id).unwrap().0.value()
-    });
-    let selector: &'static str = Box::leak(format!("pane-{tool_pane}").into_boxed_str());
-    let pane = visual.debug_bounds(selector).unwrap();
-    let dock_point = point(pane.left() + px(2.), pane.center().y);
-    visual.simulate_mouse_move(dock_point, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    shell.read_with(&visual, |shell, _| {
-        assert!(matches!(
-            shell.tab_drag.borrow().preview.unwrap().tab,
-            TabMoveDestination::Dock(DockLocation::Left)
-        ));
-    });
-    visual.simulate_mouse_up(dock_point, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    visual.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
-        let id = shell.read(cx).explorer_frame(cx).unwrap();
-        assert_eq!(
-            workbench.dock_location(workbench.tool_tab(id).unwrap().0),
-            Some(DockLocation::Left)
+    // Workbench edges move the same frame between docks.
+    for (dock, at) in [
+        (DockLocation::Right, (1., 0.5)),
+        (DockLocation::Bottom, (0.5, 1.)),
+        (DockLocation::Left, (0., 0.5)),
+    ] {
+        start_drag(&mut visual, tool_tab_id(&shell, cx));
+        let bounds = shell.read_with(&visual, |shell, _| {
+            shell.tab_drag.borrow().workbench_bounds().unwrap()
+        });
+        let target = point(
+            (bounds.left() + bounds.size.width * at.0)
+                .clamp(bounds.left() + px(2.), bounds.right() - px(2.)),
+            (bounds.top() + bounds.size.height * at.1)
+                .clamp(bounds.top() + px(2.), bounds.bottom() - px(2.)),
         );
-        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
-    });
-    assert_tool_focused(&shell, &mut visual);
-
-    // Workbench bottom edge moves the same frame to the bottom dock.
-    start_drag(&mut visual, tool_tab_id(&shell, cx));
-    let pane = visual.debug_bounds("pane-1").unwrap();
-    let bottom = point(pane.center().x, pane.bottom() - px(2.));
-    visual.simulate_mouse_move(bottom, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    shell.read_with(&visual, |shell, _| {
-        assert!(matches!(
-            shell.tab_drag.borrow().preview.unwrap().tab,
-            TabMoveDestination::Dock(DockLocation::Bottom)
-        ));
-    });
-    visual.simulate_mouse_up(bottom, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    visual.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
-        let id = shell.read(cx).explorer_frame(cx).unwrap();
-        assert_eq!(
-            workbench.dock_location(workbench.tool_tab(id).unwrap().0),
-            Some(DockLocation::Bottom)
-        );
-        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
-    });
-    assert_tool_focused(&shell, &mut visual);
+        visual.simulate_mouse_move(target, MouseButton::Left, Modifiers::default());
+        visual.run_until_parked();
+        shell.read_with(&visual, |shell, _| {
+            assert_eq!(
+                shell.tab_drag.borrow().preview.unwrap().tab,
+                TabMoveDestination::Dock(dock)
+            );
+        });
+        visual.simulate_mouse_up(target, MouseButton::Left, Modifiers::default());
+        visual.run_until_parked();
+        visual.read(|cx| {
+            let workbench = shell.read(cx).workbench.read(cx);
+            let id = shell.read(cx).explorer_frame(cx).unwrap();
+            assert_eq!(
+                workbench.dock_location(workbench.tool_tab(id).unwrap().0),
+                Some(dock)
+            );
+            assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
+        });
+        assert_tool_focused(&shell, &mut visual);
+    }
 
     // Invalid release above the pane keeps the model unchanged.
     let before = cx.read(|cx| shell.read(cx).workbench.read(cx).tab_snapshots());

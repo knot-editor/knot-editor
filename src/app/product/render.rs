@@ -7,7 +7,87 @@ use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Theme, color, theme};
 use crate::app::zoom;
 
+/// What dragging a divider resizes.
+#[derive(Clone, Copy)]
+pub(super) enum Divider {
+    /// A dock's absolute size.
+    Dock(DockLocation),
+    /// The ratio of the split identified by its boundary pane.
+    Split(PaneId),
+}
+
 impl ProductShell {
+    /// The workbench's areas: the side docks span its height, the bottom
+    /// dock sits under the center between them, and a maximized pane fills
+    /// it alone.
+    pub(super) fn render_workbench(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(pane) = self.maximized_pane(cx) {
+            return self.render_pane(pane, cx);
+        }
+        let workbench = self.workbench.read(cx);
+        let dock = |dock: DockLocation| {
+            workbench
+                .area_shown(Area::Dock(dock))
+                .then(|| workbench.area_layout(Area::Dock(dock)).cloned())
+                .flatten()
+                .map(|layout| (layout, workbench.dock_size(dock)))
+        };
+        let [left, right, bottom] = DockLocation::ALL.map(dock);
+        let center = workbench.center().cloned();
+        let center = match center {
+            Some(layout) => self.render_layout(&layout, cx),
+            None => div()
+                .id("empty-center")
+                .debug_selector(|| "empty-center".to_owned())
+                .size_full()
+                .bg(theme(cx).paint_color(color::BACKGROUND))
+                .into_any_element(),
+        };
+        let mut docks = [None, None, None];
+        for (dock, shown) in DockLocation::ALL.into_iter().zip([left, right, bottom]) {
+            let Some((layout, size)) = shown else {
+                continue;
+            };
+            let element = div()
+                .flex_none()
+                .min_w_0()
+                .min_h_0()
+                .debug_selector(move || format!("dock-{}", dock.index()))
+                .map(|element| match dock {
+                    DockLocation::Bottom => element.h(px(size)).w_full(),
+                    DockLocation::Left | DockLocation::Right => element.w(px(size)).h_full(),
+                })
+                .child(self.render_layout(&layout, cx));
+            let divider = self.render_divider(dock.axis(), Divider::Dock(dock), cx);
+            docks[dock.index()] = Some((element, divider));
+        }
+        let [left, right, bottom] = docks;
+        let middle = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .child(div().flex_1().min_w_0().min_h_0().child(center))
+            .when_some(bottom, |element, (dock, divider)| {
+                element.child(divider).child(dock)
+            });
+        div()
+            .flex()
+            .flex_row()
+            .size_full()
+            .min_w_0()
+            .min_h_0()
+            .when_some(left, |element, (dock, divider)| {
+                element.child(dock).child(divider)
+            })
+            .child(middle)
+            .when_some(right, |element, (dock, divider)| {
+                element.child(divider).child(dock)
+            })
+            .into_any_element()
+    }
+
     pub(super) fn render_layout(
         &self,
         layout: &WorkbenchLayout,
@@ -22,76 +102,48 @@ impl ProductShell {
                 second,
             } => {
                 let direction = *direction;
-                let workbench = self.workbench.read(cx);
-                // A dock keeps its absolute size and its sibling takes the
-                // rest; an ordinary split divides its extent by ratio.
-                let dock = workbench.split_dock(layout);
-                let extent = |child: &WorkbenchLayout| match (child, dock) {
-                    (WorkbenchLayout::Pane(pane), Some(dock))
-                        if workbench.dock_location(*pane) == Some(dock) =>
-                    {
-                        Some(workbench.dock_size(dock))
-                    }
-                    _ => None,
-                };
-                let first_extent = extent(first);
-                let second_extent = extent(second);
                 let boundary = layout.boundary().expect("splits have a boundary");
-                let horizontal = direction == SplitDirection::Horizontal;
-                let child = |extent: Option<f32>, grow: f32| {
-                    let mut element = div().min_w_0().min_h_0();
-                    match extent {
-                        Some(extent) => {
-                            element = element
-                                .flex_none()
-                                .when(horizontal, |element| element.w(px(extent)))
-                                .when(!horizontal, |element| element.h(px(extent)));
-                        }
-                        None if dock.is_some() => element = element.flex_1(),
-                        None => {
-                            element = element.flex_basis(px(0.)).flex_shrink(1.);
-                            element.style().flex_grow = Some(grow);
-                        }
-                    }
+                let child = |grow: f32| {
+                    let mut element = div().min_w_0().min_h_0().flex_basis(px(0.)).flex_shrink(1.);
+                    element.style().flex_grow = Some(grow);
                     element
                 };
-                let first_child = child(first_extent, *ratio);
-                let second_child = child(second_extent, 1. - *ratio);
                 div()
                     .flex()
-                    .when(horizontal, |element| element.flex_row())
-                    .when(!horizontal, |element| element.flex_col())
+                    .when(direction == SplitDirection::Horizontal, |element| {
+                        element.flex_row()
+                    })
+                    .when(direction == SplitDirection::Vertical, |element| {
+                        element.flex_col()
+                    })
                     .size_full()
                     .min_w_0()
                     .min_h_0()
                     .relative()
-                    .when(dock.is_none(), |element| {
-                        element.child(self.split_drag_geometry(boundary))
-                    })
-                    .child(first_child.child(self.render_layout(first, cx)))
-                    .child(self.render_divider(direction, dock, boundary, cx))
-                    .child(second_child.child(self.render_layout(second, cx)))
+                    .child(self.split_drag_geometry(boundary))
+                    .child(child(*ratio).child(self.render_layout(first, cx)))
+                    .child(self.render_divider(direction, Divider::Split(boundary), cx))
+                    .child(child(1. - *ratio).child(self.render_layout(second, cx)))
                     .into_any_element()
             }
         }
     }
 
-    /// Divider between two split children, with a wider hit area that drags
-    /// to resize: a dock's divider changes its size, an ordinary divider its
-    /// split's ratio.
+    /// Divider between two areas or split children, with a wider hit area
+    /// that drags to resize: a dock's divider changes its size, a split's
+    /// divider its ratio.
     pub(super) fn render_divider(
         &self,
         direction: SplitDirection,
-        dock: Option<DockLocation>,
-        boundary: PaneId,
+        divider: Divider,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let horizontal = direction == SplitDirection::Horizontal;
-        let element = match dock {
-            Some(dock) => div()
+        let element = match divider {
+            Divider::Dock(dock) => div()
                 .id(("dock-divider", dock.index()))
                 .debug_selector(move || format!("dock-divider-{}", dock.index())),
-            None => div()
+            Divider::Split(boundary) => div()
                 .id(("split-divider", boundary.value()))
                 .debug_selector(move || format!("split-divider-{}", boundary.value())),
         };
@@ -127,8 +179,8 @@ impl ProductShell {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                    match dock {
-                        Some(dock) => {
+                    match divider {
+                        Divider::Dock(dock) => {
                             let size = this.workbench.read(cx).dock_size(dock);
                             this.dock_resize = Some(DockResizeDrag {
                                 dock,
@@ -136,7 +188,7 @@ impl ProductShell {
                                 start_size: size,
                             });
                         }
-                        None => {
+                        Divider::Split(boundary) => {
                             let ratio = this.workbench.read(cx).split_ratio(boundary);
                             let bounds = this.tab_drag.borrow().split_bounds(boundary);
                             if let (Some(ratio), Some(bounds)) = (ratio, bounds) {
@@ -454,10 +506,7 @@ impl Render for ProductShell {
         window.set_rem_size(px(zoom::BASE_REM * zoom::factor(cx)));
         tab_drag::coordinator(cx);
         self.tab_drag.borrow_mut().begin_frame();
-        let layout = match self.maximized_pane(cx) {
-            Some(pane) => Some(WorkbenchLayout::Pane(pane)),
-            None => self.workbench.read(cx).layout().cloned(),
-        };
+        let workbench = self.render_workbench(cx);
         let entity = cx.entity();
         let command_palette = self
             .command_palette
@@ -491,23 +540,15 @@ impl Render for ProductShell {
             .bg(theme(cx).paint_color(color::BACKGROUND))
             .text_color(theme(cx).paint_color(color::TEXT))
             .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_row()
-                    .min_h_0()
-                    .min_w_0()
-                    .when_some(layout, |element, layout| {
-                        element.child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .min_h_0()
-                                .relative()
-                                .child(self.render_layout(&layout, cx))
-                                .child(self.workbench_drag_geometry()),
-                        )
-                    }),
+                div().flex_1().flex().flex_row().min_h_0().min_w_0().child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .relative()
+                        .child(workbench)
+                        .child(self.workbench_drag_geometry()),
+                ),
             )
             .children(status_bar)
             .child(self.drag_listener(cx))

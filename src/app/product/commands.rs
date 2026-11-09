@@ -93,7 +93,7 @@ pub(crate) async fn close_pane(
     close_target(&context, ProtectedCloseKind::Pane).await
 }
 
-#[command("workbench.close-other-panes", title = "Close Other Panes", description = "Close every tab of the other panes outside the docks.", id = CLOSE_OTHER_PANES_COMMAND, participant = Workbench)]
+#[command("workbench.close-other-panes", title = "Close Other Panes", description = "Close every tab of the other panes in the focused pane's area.", id = CLOSE_OTHER_PANES_COMMAND, participant = Workbench)]
 pub(crate) async fn close_other_panes(
     context: CommandContext,
     (): (),
@@ -210,13 +210,15 @@ resize_along! {
     "workbench.shrink-pane-width", "Shrink Pane Width", "Give the focused pane less width.", SHRINK_PANE_WIDTH_COMMAND, shrink_pane_width, false, SplitDirection::Horizontal;
 }
 
-#[command("workbench.equalize-panes", title = "Equalize Panes", description = "Give every split pane an even share.", id = EQUALIZE_PANES_COMMAND, participant = Workbench)]
+#[command("workbench.equalize-panes", title = "Equalize Panes", description = "Give every split pane of the focused pane's area an even share.", id = EQUALIZE_PANES_COMMAND, participant = Workbench)]
 pub(crate) async fn equalize_panes(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .shell(|shell, _, cx| {
-            shell
-                .workbench
-                .update(cx, |workbench, _| workbench.equalize_splits());
+        .shell(|shell, target, cx| {
+            shell.workbench.update(cx, |workbench, _| {
+                if let Some(area) = workbench.pane_area(target.pane) {
+                    workbench.equalize_splits(area);
+                }
+            });
             cx.notify();
             Ok(())
         })
@@ -768,7 +770,7 @@ async fn toggle_dock(context: CommandContext, dock: DockLocation) -> Result<(), 
         .await
 }
 
-#[command("workbench.move-tool-to-dock", title = "Move Tool to Dock…", description = "Move the focused tool to a dock or the document area.", id = MOVE_TOOL_TO_DOCK_COMMAND, participant = Workbench)]
+#[command("workbench.move-tool-to-dock", title = "Move Tool to Dock…", description = "Move the focused tool to a dock.", id = MOVE_TOOL_TO_DOCK_COMMAND, participant = Workbench)]
 pub(crate) async fn move_tool_to_dock(
     context: CommandContext,
     (): (),

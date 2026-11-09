@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::{DocumentId, PaneId, PresentationId, TabId, TabSurfaceId};
+use super::{Area, DocumentId, PaneId, PresentationId, TabId, TabSurfaceId};
 
 /// What a close covers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -17,7 +17,7 @@ pub enum CloseKind {
     OtherTabs,
     /// Every tab of the origin's pane.
     Pane,
-    /// Every tab of the session's other panes outside the docks.
+    /// Every tab of the session's other panes in the origin's area.
     OtherPanes,
     Window,
     Quit,
@@ -38,8 +38,8 @@ pub struct ViewKey {
 pub struct ClosureView {
     pub key: ViewKey,
     pub pinned: bool,
-    /// Whether the view's pane is a dock's tool pane.
-    pub dock: bool,
+    /// The area of the view's pane.
+    pub area: Area,
 }
 
 /// A document's state as a close sees it.
@@ -80,6 +80,10 @@ pub struct ClosePlan {
 
 /// The views a close of `kind` from `origin` covers.
 pub fn scope(kind: CloseKind, origin: &ViewKey, views: &[ClosureView]) -> Vec<ViewKey> {
+    let origin_area = views
+        .iter()
+        .find(|view| view.key == *origin)
+        .map(|view| view.area);
     views
         .iter()
         .filter(|view| match kind {
@@ -92,7 +96,9 @@ pub fn scope(kind: CloseKind, origin: &ViewKey, views: &[ClosureView]) -> Vec<Vi
             }
             CloseKind::Pane => same_workbench(view, origin) && view.key.pane == origin.pane,
             CloseKind::OtherPanes => {
-                same_workbench(view, origin) && view.key.pane != origin.pane && !view.dock
+                same_workbench(view, origin)
+                    && view.key.pane != origin.pane
+                    && Some(view.area) == origin_area
             }
             CloseKind::Window => view.key.session == origin.session,
             CloseKind::Quit => true,
@@ -262,7 +268,7 @@ mod tests {
         ClosureView {
             key,
             pinned: false,
-            dock: false,
+            area: Area::Center,
         }
     }
 
@@ -320,7 +326,7 @@ mod tests {
         let sibling = view(key(1, 3, 3));
         let other_pane = view(key(2, 4, 4));
         let dock = ClosureView {
-            dock: true,
+            area: Area::Dock(super::super::DockLocation::Left),
             ..view(key(3, 5, 5))
         };
         let other_window = view(ViewKey {

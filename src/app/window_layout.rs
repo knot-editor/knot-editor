@@ -1,17 +1,18 @@
 //! Versioned window layouts shared by native window hot exit and extension
 //! sessions.
 //!
-//! A layout records window geometry, the split tree with dock groups, ordered
-//! tabs and the selected tab per pane, the focused pane, dock sizes, and each
-//! editor tab's view state. It never contains pane, tab, view, or window
-//! handles. Every tab records only what its kind needs to recreate a
-//! presentation in the same position: a document tab its document identity,
-//! resource URI, and explicit language, a tool tab its stable tool ID, and a
-//! terminal tab its shell's working directory.
+//! A layout records window geometry, the center's split tree, each dock's
+//! size, visibility, and split tree, ordered tabs and the selected tab per
+//! pane, the focused pane, and each editor tab's view state. It never contains
+//! pane, tab, view, or window handles. Every tab records only what its kind
+//! needs to recreate a presentation in the same position: a document tab its
+//! document identity, resource URI, and explicit language, a tool tab its
+//! stable tool ID, and a terminal tab its shell's working directory.
 //!
 //! Restoring plans a pruned arrangement in one place for both restorers:
-//! unresolved documents, unregistered or repeated tools, and repeated documents
-//! within a pane are dropped, then empty panes and one-child splits collapse.
+//! unresolved documents, unregistered or repeated tools, tabs whose kind the
+//! area does not allow, and repeated documents within a pane are dropped,
+//! then empty panes and one-child splits collapse.
 
 use gpui::App;
 use serde::{Deserialize, Serialize};
@@ -20,13 +21,14 @@ use super::{
     documents::DocumentCollection,
     editor::EditorViewState,
     workbench::{
-        DockLocation, SplitDirection, TabSurfaceId, TerminalSessionId, Workbench, WorkbenchLayout,
-        WorkbenchTab,
+        Area, DockLocation, SplitDirection, TabSurfaceId, TerminalSessionId, Workbench,
+        WorkbenchLayout, WorkbenchTab,
     },
 };
-pub(crate) use knot_model::workbench::{PlanNode, Rect};
+use knot_model::workbench::TabKind;
+pub(crate) use knot_model::workbench::{Arrangement, DockArrangement, PlanNode, Rect};
 
-pub(crate) const WINDOW_LAYOUT_VERSION: u32 = 1;
+pub(crate) const WINDOW_LAYOUT_VERSION: u32 = 2;
 
 /// Maps a document tab's identity and URI to a live document.
 type Resolve<'a, D> = dyn FnMut(Option<&str>, Option<&str>) -> Option<D> + 'a;
@@ -36,38 +38,41 @@ type Resolve<'a, D> = dyn FnMut(Option<&str>, Option<&str>) -> Option<D> + 'a;
 pub(crate) struct WindowLayout {
     pub(crate) version: u32,
     pub(crate) geometry: Option<WindowGeometry>,
-    pub(crate) root: Option<LayoutNode>,
-    /// Index of the focused pane in layout order.
+    pub(crate) center: Option<LayoutNode>,
+    pub(crate) docks: LayoutDocks,
+    /// Index of the focused pane in layout order: the center's panes, then
+    /// the left, right, and bottom docks'.
     pub(crate) focused: Option<usize>,
-    pub(crate) dock_sizes: DockSizes,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
-pub(crate) struct DockSizes {
-    pub(crate) left: f32,
-    pub(crate) right: f32,
-    pub(crate) bottom: f32,
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub(crate) struct LayoutDocks {
+    pub(crate) left: LayoutDock,
+    pub(crate) right: LayoutDock,
+    pub(crate) bottom: LayoutDock,
 }
 
-impl DockSizes {
-    fn from_array([left, right, bottom]: [f32; 3]) -> Self {
-        Self {
-            left,
-            right,
-            bottom,
+impl LayoutDocks {
+    pub(crate) fn dock(&self, dock: DockLocation) -> &LayoutDock {
+        match dock {
+            DockLocation::Left => &self.left,
+            DockLocation::Right => &self.right,
+            DockLocation::Bottom => &self.bottom,
         }
     }
+}
 
-    pub(crate) fn to_array(self) -> [f32; 3] {
-        [self.left, self.right, self.bottom]
-    }
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub(crate) struct LayoutDock {
+    pub(crate) size: f32,
+    pub(crate) visible: bool,
+    pub(crate) root: Option<LayoutNode>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum LayoutNode {
     Pane {
-        dock: Option<DockLocation>,
         selected: usize,
         tabs: Vec<LayoutTab>,
     },
@@ -78,6 +83,18 @@ pub(crate) enum LayoutNode {
         first: Box<LayoutNode>,
         second: Box<LayoutNode>,
     },
+}
+
+impl LayoutNode {
+    fn tabs(&self, visit: &mut impl FnMut(&LayoutTab)) {
+        match self {
+            Self::Pane { tabs, .. } => tabs.iter().for_each(&mut *visit),
+            Self::Split { first, second, .. } => {
+                first.tabs(visit);
+                second.tabs(visit);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -113,6 +130,14 @@ fn is_false(value: &bool) -> bool {
 }
 
 impl LayoutTab {
+    fn kind(&self) -> TabKind {
+        match self {
+            Self::Document { .. } => TabKind::Document,
+            Self::Tool { .. } => TabKind::Tool,
+            Self::Terminal { .. } => TabKind::Terminal,
+        }
+    }
+
     pub(crate) fn is_pinned(&self) -> bool {
         match self {
             Self::Document { pinned, .. }
@@ -185,7 +210,7 @@ impl WindowLayout {
             return None;
         }
         let layout: Self = serde_json::from_value(value).ok()?;
-        let sizes = layout.dock_sizes.to_array();
+        let sizes = DockLocation::ALL.map(|dock| layout.docks.dock(dock).size);
         let geometry = layout.geometry.as_ref().is_none_or(|geometry| {
             [geometry.x, geometry.y, geometry.width, geometry.height]
                 .iter()
@@ -229,7 +254,6 @@ impl WindowLayout {
                         })
                         .collect();
                     LayoutNode::Pane {
-                        dock: workbench.dock_location(*id),
                         selected: pane
                             .tabs()
                             .iter()
@@ -251,28 +275,31 @@ impl WindowLayout {
                 },
             }
         }
-        let order = workbench
-            .tab_snapshots()
-            .into_iter()
-            .map(|tab| tab.pane_id)
-            .fold(Vec::new(), |mut panes, pane| {
-                if !panes.contains(&pane) {
-                    panes.push(pane);
-                }
-                panes
-            });
+        let root = |area| {
+            workbench
+                .area_layout(area)
+                .map(|layout| node(layout, workbench, documents, terminal_directory, cx))
+        };
+        let dock = |dock: DockLocation| LayoutDock {
+            size: workbench.dock_size(dock),
+            visible: workbench.dock_visible(dock),
+            root: root(Area::Dock(dock)),
+        };
         Self {
             version: WINDOW_LAYOUT_VERSION,
             geometry,
-            root: workbench
-                .layout()
-                .map(|layout| node(layout, workbench, documents, terminal_directory, cx)),
-            focused: workbench
-                .focused_pane_id()
-                .and_then(|focused| order.iter().position(|pane| *pane == focused)),
-            dock_sizes: DockSizes::from_array(
-                DockLocation::ALL.map(|dock| workbench.dock_size(dock)),
-            ),
+            center: root(Area::Center),
+            docks: LayoutDocks {
+                left: dock(DockLocation::Left),
+                right: dock(DockLocation::Right),
+                bottom: dock(DockLocation::Bottom),
+            },
+            focused: workbench.focused_pane_id().and_then(|focused| {
+                workbench
+                    .pane_order()
+                    .iter()
+                    .position(|pane| *pane == focused)
+            }),
         }
     }
 
@@ -320,45 +347,44 @@ impl WindowLayout {
         }
     }
 
+    /// The roots of the center and the left, right, and bottom docks.
+    fn roots(&self) -> impl Iterator<Item = &LayoutNode> {
+        [
+            self.center.as_ref(),
+            self.docks.left.root.as_ref(),
+            self.docks.right.root.as_ref(),
+            self.docks.bottom.root.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+    }
+
     /// Distinct document references of this layout's document tabs, as
     /// identity and URI, in layout order.
     pub(crate) fn documents(&self) -> Vec<(Option<String>, Option<String>)> {
-        fn walk(node: &LayoutNode, documents: &mut Vec<(Option<String>, Option<String>)>) {
-            match node {
-                LayoutNode::Pane { tabs, .. } => {
-                    for tab in tabs {
-                        if let LayoutTab::Document { document, uri, .. } = tab {
-                            let reference = (document.clone(), uri.clone());
-                            if !documents.contains(&reference) {
-                                documents.push(reference);
-                            }
-                        }
+        let mut documents = Vec::new();
+        for root in self.roots() {
+            root.tabs(&mut |tab| {
+                if let LayoutTab::Document { document, uri, .. } = tab {
+                    let reference = (document.clone(), uri.clone());
+                    if !documents.contains(&reference) {
+                        documents.push(reference);
                     }
                 }
-                LayoutNode::Split { first, second, .. } => {
-                    walk(first, documents);
-                    walk(second, documents);
-                }
-            }
-        }
-        let mut documents = Vec::new();
-        if let Some(root) = &self.root {
-            walk(root, &mut documents);
+            });
         }
         documents
     }
 
     /// Whether any tab of this layout presents the given tool.
     pub(crate) fn names_tool(&self, tool: &str) -> bool {
-        fn walk(node: &LayoutNode, tool: &str) -> bool {
-            match node {
-                LayoutNode::Pane { tabs, .. } => tabs
-                    .iter()
-                    .any(|tab| matches!(tab, LayoutTab::Tool { tool: named, .. } if named == tool)),
-                LayoutNode::Split { first, second, .. } => walk(first, tool) || walk(second, tool),
-            }
+        let mut named = false;
+        for root in self.roots() {
+            root.tabs(&mut |tab| {
+                named |= matches!(tab, LayoutTab::Tool { tool: id, .. } if id == tool);
+            });
         }
-        self.root.as_ref().is_some_and(|root| walk(root, tool))
+        named
     }
 
     /// Plan the pruned arrangement of this layout. `resolve` maps a document
@@ -368,12 +394,12 @@ impl WindowLayout {
         &self,
         mut resolve: impl FnMut(Option<&str>, Option<&str>) -> Option<D>,
         has_tool: impl Fn(&str) -> bool,
-    ) -> Option<PlanNode<PlannedTab<D>>> {
+    ) -> Arrangement<PlannedTab<D>> {
         struct Pruning<'a, D> {
             resolve: &'a mut Resolve<'a, D>,
             has_tool: &'a dyn Fn(&str) -> bool,
+            area: Area,
             tools: Vec<String>,
-            docks: Vec<DockLocation>,
             pane: usize,
             focused: Option<usize>,
         }
@@ -382,11 +408,7 @@ impl WindowLayout {
             state: &mut Pruning<'_, D>,
         ) -> Option<PlanNode<PlannedTab<D>>> {
             match node {
-                LayoutNode::Pane {
-                    dock,
-                    selected,
-                    tabs,
-                } => {
+                LayoutNode::Pane { selected, tabs } => {
                     let index = state.pane;
                     state.pane += 1;
                     let mut planned = Vec::new();
@@ -399,6 +421,9 @@ impl WindowLayout {
                         .filter(|(_, tab)| tab.is_pinned())
                         .chain(tabs.iter().enumerate().filter(|(_, tab)| !tab.is_pinned()));
                     for (position, tab) in ordered {
+                        if !tab.kind().allows(state.area) {
+                            continue;
+                        }
                         let kept = match tab {
                             LayoutTab::Document {
                                 document,
@@ -441,10 +466,7 @@ impl WindowLayout {
                     if planned.is_empty() {
                         return None;
                     }
-                    let dock = dock.filter(|dock| !state.docks.contains(dock));
-                    state.docks.extend(dock);
                     Some(PlanNode::Pane {
-                        dock,
                         selected: selection,
                         focused: state.focused == Some(index),
                         pinned,
@@ -468,18 +490,31 @@ impl WindowLayout {
                 },
             }
         }
-        let root = self.root.as_ref()?;
-        prune(
-            root,
-            &mut Pruning {
-                resolve: &mut resolve,
-                has_tool: &has_tool,
-                tools: Vec::new(),
-                docks: Vec::new(),
-                pane: 0,
-                focused: self.focused,
-            },
-        )
+        let mut state = Pruning {
+            resolve: &mut resolve,
+            has_tool: &has_tool,
+            area: Area::Center,
+            tools: Vec::new(),
+            pane: 0,
+            focused: self.focused,
+        };
+        let center = self
+            .center
+            .as_ref()
+            .and_then(|root| prune(root, &mut state));
+        let docks = DockLocation::ALL.map(|dock| {
+            let layout = self.docks.dock(dock);
+            state.area = Area::Dock(dock);
+            DockArrangement {
+                root: layout
+                    .root
+                    .as_ref()
+                    .and_then(|root| prune(root, &mut state)),
+                size: layout.size,
+                visible: layout.visible,
+            }
+        });
+        Arrangement { center, docks }
     }
 }
 
@@ -579,13 +614,21 @@ mod tests {
                 "view": { "anchor": 1, "caret": 1, "top": 0, "scrollX": 0 } })
     }
 
-    fn layout(root: serde_json::Value, focused: Option<usize>) -> WindowLayout {
+    fn layout(
+        center: serde_json::Value,
+        left: serde_json::Value,
+        focused: Option<usize>,
+    ) -> WindowLayout {
         WindowLayout::decode(&json!({
-            "version": 1,
+            "version": 2,
             "geometry": null,
-            "root": root,
+            "center": center,
+            "docks": {
+                "left": { "size": 240, "visible": true, "root": left },
+                "right": { "size": 250, "visible": true, "root": null },
+                "bottom": { "size": 220, "visible": false, "root": null },
+            },
             "focused": focused,
-            "dockSizes": { "left": 240, "right": 240, "bottom": 220 },
         }))
         .unwrap()
     }
@@ -599,13 +642,17 @@ mod tests {
         }
     }
 
+    fn explorer() -> serde_json::Value {
+        json!({ "kind": "pane", "selected": 0,
+                "tabs": [{ "kind": "tool", "tool": "knot.explorer" }] })
+    }
+
     #[test]
     fn layouts_round_trip_through_json() {
         let original = layout(
             json!({ "kind": "split", "direction": "horizontal", "ratio": 0.25,
-                    "first": { "kind": "pane", "dock": "left", "selected": 0,
-                               "tabs": [{ "kind": "tool", "tool": "knot.explorer" }] },
-                    "second": { "kind": "pane", "dock": null, "selected": 1,
+                    "first": { "kind": "pane", "selected": 0, "tabs": [document("b")] },
+                    "second": { "kind": "pane", "selected": 1,
                                 "tabs": [document("a"),
                                          { "kind": "terminal", "directory": "file:///work/",
                                            "pinned": true },
@@ -613,6 +660,7 @@ mod tests {
                                          { "kind": "document", "document": "b", "uri": null,
                                            "language": "rust",
                                            "view": { "anchor": 0, "caret": 0, "top": 0, "scrollX": 0 } }] } }),
+            explorer(),
             Some(1),
         );
         let encoded = serde_json::to_value(&original).unwrap();
@@ -632,16 +680,20 @@ mod tests {
 
     #[test]
     fn unsupported_versions_and_invalid_shapes_are_ignored() {
-        let valid = serde_json::to_value(layout(json!(null), None)).unwrap();
+        let valid = serde_json::to_value(layout(json!(null), json!(null), None)).unwrap();
+        let mut infinite = valid.clone();
+        infinite["docks"]["left"]["size"] = json!(f64::INFINITY);
         for invalid in [
-            json!({ "version": 2 }),
+            json!({ "version": 1, "root": null, "focused": null, "geometry": null,
+                    "dockSizes": { "left": 240, "right": 240, "bottom": 220 } }),
             json!("layout"),
-            json!({ "version": 1, "root": { "kind": "window" }, "focused": null,
-                    "geometry": null, "dockSizes": valid["dockSizes"] }),
-            json!({ "version": 1, "root": null, "focused": null, "geometry": null }),
-            json!({ "version": 1, "root": null, "focused": null, "dockSizes": valid["dockSizes"],
+            json!({ "version": 2, "center": { "kind": "window" }, "focused": null,
+                    "geometry": null, "docks": valid["docks"] }),
+            json!({ "version": 2, "center": null, "focused": null, "geometry": null }),
+            json!({ "version": 2, "center": null, "focused": null, "docks": valid["docks"],
                     "geometry": { "x": 0, "y": 0, "width": 0, "height": 10,
                                   "state": "windowed", "display": null } }),
+            infinite,
         ] {
             assert_eq!(WindowLayout::decode(&invalid), None, "{invalid}");
         }
@@ -649,74 +701,89 @@ mod tests {
     }
 
     #[test]
-    fn pruning_drops_unknown_tools_unmatched_documents_and_duplicates() {
+    fn pruning_drops_unknown_tools_unmatched_documents_duplicates_and_misplaced_kinds() {
         let layout = layout(
-            json!({ "kind": "split", "direction": "horizontal", "ratio": 0.3,
-                    "first": { "kind": "pane", "dock": "left", "selected": 1, "tabs": [
+            json!({ "kind": "pane", "selected": 3, "tabs": [
+                document("a"), document("missing"), document("a"),
+                { "kind": "document", "document": null, "uri": "mem://c",
+                  "language": "rust",
+                  "view": { "anchor": 0, "caret": 0, "top": 0, "scrollX": 0 } },
+                { "kind": "tool", "tool": "knot.other" },
+                { "kind": "terminal" },
+                { "kind": "terminal", "directory": "file:///work/" },
+                { "kind": "terminal", "directory": "not a uri" },
+            ] }),
+            json!({ "kind": "split", "direction": "vertical", "ratio": 0.3,
+                    "first": { "kind": "pane", "selected": 1, "tabs": [
                         { "kind": "tool", "tool": "knot.explorer" },
                         { "kind": "tool", "tool": "gone.tool" },
                         { "kind": "tool", "tool": "knot.explorer" },
                     ] },
-                    "second": { "kind": "pane", "dock": "left", "selected": 3, "tabs": [
-                        document("a"), document("missing"), document("a"),
-                        { "kind": "document", "document": null, "uri": "mem://c",
-                          "language": "rust",
-                          "view": { "anchor": 0, "caret": 0, "top": 0, "scrollX": 0 } },
-                        { "kind": "terminal" },
-                        { "kind": "terminal", "directory": "file:///work/" },
-                        { "kind": "terminal", "directory": "not a uri" },
+                    "second": { "kind": "pane", "selected": 0, "tabs": [
+                        document("b"), { "kind": "terminal" }, { "kind": "tool", "tool": "knot.other" },
                     ] } }),
-            Some(1),
+            Some(2),
         );
-        let plan = layout
-            .plan(resolve, |tool| tool == "knot.explorer")
-            .unwrap();
+        let plan = layout.plan(resolve, |tool| tool != "gone.tool");
         assert_eq!(
-            plan,
-            PlanNode::Split {
-                direction: SplitDirection::Horizontal,
-                ratio: 0.3,
-                first: Box::new(PlanNode::Pane {
-                    dock: Some(DockLocation::Left),
-                    // The selected tool was pruned, so the first tab is selected.
-                    selected: 0,
-                    focused: false,
-                    pinned: 0,
-                    tabs: vec![PlannedTab::Tool("knot.explorer".into())],
+            plan.center,
+            Some(PlanNode::Pane {
+                selected: 1,
+                focused: false,
+                pinned: 0,
+                tabs: vec![
+                    PlannedTab::Document {
+                        document: 1,
+                        view: view(1),
+                        language: None,
+                    },
+                    PlannedTab::Document {
+                        document: 3,
+                        view: view(0),
+                        language: Some("rust".into()),
+                    },
+                    PlannedTab::Terminal { directory: None },
+                    PlannedTab::Terminal {
+                        directory: url::Url::parse("file:///work/")
+                            .unwrap()
+                            .to_file_path()
+                            .ok(),
+                    },
+                    PlannedTab::Terminal { directory: None },
+                ],
+            })
+        );
+        assert_eq!(
+            plan.docks[0],
+            DockArrangement {
+                root: Some(PlanNode::Split {
+                    direction: SplitDirection::Vertical,
+                    ratio: 0.3,
+                    first: Box::new(PlanNode::Pane {
+                        // The selected tool was pruned, so the first tab is selected.
+                        selected: 0,
+                        focused: false,
+                        pinned: 0,
+                        tabs: vec![PlannedTab::Tool("knot.explorer".into())],
+                    }),
+                    // Focus counts panes across areas: the center's, then the left dock's.
+                    second: Box::new(PlanNode::Pane {
+                        selected: 0,
+                        focused: true,
+                        pinned: 0,
+                        tabs: vec![PlannedTab::Tool("knot.other".into())],
+                    }),
                 }),
-                second: Box::new(PlanNode::Pane {
-                    // A second pane claiming the same dock becomes ordinary.
-                    dock: None,
-                    selected: 1,
-                    focused: true,
-                    pinned: 0,
-                    tabs: vec![
-                        PlannedTab::Document {
-                            document: 1,
-                            view: EditorViewState {
-                                anchor: 1,
-                                caret: 1,
-                                top: 0,
-                                scroll_x: 0.,
-                                folds: Vec::new(),
-                            },
-                            language: None,
-                        },
-                        PlannedTab::Document {
-                            document: 3,
-                            view: view(0),
-                            language: Some("rust".into()),
-                        },
-                        PlannedTab::Terminal { directory: None },
-                        PlannedTab::Terminal {
-                            directory: url::Url::parse("file:///work/")
-                                .unwrap()
-                                .to_file_path()
-                                .ok(),
-                        },
-                        PlannedTab::Terminal { directory: None },
-                    ],
-                }),
+                size: 240.,
+                visible: true,
+            }
+        );
+        assert_eq!(
+            plan.docks[2],
+            DockArrangement {
+                root: None,
+                size: 220.,
+                visible: false,
             }
         );
     }
@@ -724,7 +791,7 @@ mod tests {
     #[test]
     fn pinned_tabs_plan_first_and_count_only_kept_tabs() {
         let layout = layout(
-            json!({ "kind": "pane", "dock": null, "selected": 2, "tabs": [
+            json!({ "kind": "pane", "selected": 2, "tabs": [
                 document("a"),
                 { "kind": "terminal", "pinned": true },
                 { "kind": "document", "document": "missing", "uri": null, "pinned": true,
@@ -732,6 +799,7 @@ mod tests {
                 { "kind": "document", "document": "b", "uri": null, "pinned": true,
                   "view": { "anchor": 0, "caret": 0, "top": 0, "scrollX": 0 } },
             ] }),
+            json!(null),
             Some(0),
         );
         let Some(PlanNode::Pane {
@@ -739,7 +807,7 @@ mod tests {
             selected,
             tabs,
             ..
-        }) = layout.plan(resolve, |_| true)
+        }) = layout.plan(resolve, |_| true).center
         else {
             panic!("expected a pane");
         };
@@ -756,49 +824,33 @@ mod tests {
         let layout = layout(
             json!({ "kind": "split", "direction": "vertical", "ratio": 0.5,
                     "first": { "kind": "split", "direction": "horizontal", "ratio": 0.5,
-                               "first": { "kind": "pane", "dock": null, "selected": 0,
+                               "first": { "kind": "pane", "selected": 0,
                                           "tabs": [document("missing")] },
                                "second": { "kind": "split", "direction": "vertical", "ratio": 0.5,
-                                           "first": { "kind": "pane", "dock": null, "selected": 9,
+                                           "first": { "kind": "pane", "selected": 9,
                                                       "tabs": [document("b")] },
-                                           "second": { "kind": "pane", "dock": "bottom", "selected": 0,
+                                           "second": { "kind": "pane", "selected": 0,
                                                        "tabs": [{ "kind": "tool", "tool": "gone" }] } } },
-                    "second": { "kind": "pane", "dock": null, "selected": 0, "tabs": [] } }),
+                    "second": { "kind": "pane", "selected": 0, "tabs": [] } }),
+            explorer(),
             Some(7),
         );
+        let plan = layout.plan(resolve, |_| false);
         assert_eq!(
-            layout.plan(resolve, |_| false),
+            plan.center,
             Some(PlanNode::Pane {
-                dock: None,
                 selected: 0,
                 // An out-of-range focus marks no pane; the installer falls back.
                 focused: false,
                 pinned: 0,
                 tabs: vec![PlannedTab::Document {
                     document: 2,
-                    view: EditorViewState {
-                        anchor: 1,
-                        caret: 1,
-                        top: 0,
-                        scroll_x: 0.,
-                        folds: Vec::new(),
-                    },
+                    view: view(1),
                     language: None,
                 }],
             })
         );
-        assert_eq!(
-            super::super::window_layout::WindowLayout {
-                root: Some(LayoutNode::Pane {
-                    dock: None,
-                    selected: 0,
-                    tabs: vec![],
-                }),
-                ..layout
-            }
-            .plan(resolve, |_| true),
-            None
-        );
+        assert_eq!(plan.docks[0].root, None);
     }
 
     fn display(uuid: &str, x: f32, y: f32, width: f32, height: f32) -> DisplayArea {

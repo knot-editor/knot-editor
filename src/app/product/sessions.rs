@@ -548,8 +548,8 @@ fn commit(
                 Some(None) => Some(LayoutOutcome::Ignored),
                 None => None,
             };
-            // Entries the layout does not place still present in the normal
-            // group, so restored text is never hidden.
+            // Entries the layout does not place still present in the center,
+            // so restored text is never hidden.
             let mut tabs = Vec::new();
             for document in resolved {
                 tabs.push(document.map(|document| shell.present_session_document(document, cx)));
@@ -566,8 +566,8 @@ fn commit(
                 }
             }
             // A window left with only docks would let them fill it; give it
-            // the ordinary untitled document in the normal group instead.
-            if shell.workbench.read(cx).normal_pane().is_none() {
+            // the ordinary untitled document in the center instead.
+            if shell.workbench.read(cx).center().is_none() {
                 shell.replace_empty_workbench(cx.weak_entity(), cx);
             }
             cx.notify();
@@ -770,7 +770,7 @@ impl ProductShell {
         };
         let documents = Self::documents(cx);
         let mut languages_changed = false;
-        let root = plan.map(|plan| {
+        let arrangement = {
             plan.map(&mut |tab| match tab {
                 PlannedTab::Document {
                     document,
@@ -815,17 +815,15 @@ impl ProductShell {
                     ArrangedTab::Terminal(id, Some(view))
                 }
             })
-        });
-        let sizes = layout.dock_sizes.to_array();
+        };
         self.workbench
-            .update(cx, |workbench, cx| workbench.arrange(root, sizes, cx));
+            .update(cx, |workbench, cx| workbench.arrange(arrangement, cx));
         if languages_changed {
             crate::app::application_observation::changed(cx);
         }
     }
 
-    /// Present a document in this window's normal document group, reusing an
-    /// existing tab.
+    /// Present a document in this window's center, reusing an existing tab.
     pub(super) fn present_session_document(
         &mut self,
         document: DocumentId,
@@ -847,7 +845,7 @@ impl ProductShell {
             .model()
             .clone();
         self.workbench.update(cx, |workbench, cx| {
-            workbench.open_document_in_normal_group(document, model, cx)
+            workbench.open_document_in_center(document, model, cx)
         })
     }
 }

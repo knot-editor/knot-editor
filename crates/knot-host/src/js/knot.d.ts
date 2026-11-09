@@ -1343,12 +1343,13 @@ declare module "knot" {
      */
     getChildren(parentId: string | null, context: ViewContext): Iterable<TreeItem> | Promise<Iterable<TreeItem>>;
   }
-  export type ViewLocation = "left" | "right" | "bottom" | "document";
+  /** Views are tools and live in the docks around the document center. */
+  export type ViewLocation = "left" | "right" | "bottom";
   /** Initial placement; remembered user layout overrides it on later windows. */
   export interface ViewPlacement {
-    /** Dock or document group. Defaults to the left dock. */
+    /** Dock. Defaults to the left dock. */
     readonly location?: ViewLocation;
-    /** Deterministic order within a group; defaults after native tools. */
+    /** Deterministic order within a dock; defaults after native tools. */
     readonly order?: number;
     /** Initial visibility. Defaults to true. */
     readonly visible?: boolean;
@@ -1635,7 +1636,7 @@ declare module "knot" {
     | Readonly<{ kind: "tool"; tool: string }>
     | Readonly<{ kind: "terminal"; directory?: string }>;
   export type LayoutNode =
-    | Readonly<{ kind: "pane"; dock: "left" | "right" | "bottom" | null; selected: number; tabs: readonly LayoutTab[] }>
+    | Readonly<{ kind: "pane"; selected: number; tabs: readonly LayoutTab[] }>
     | Readonly<{
         kind: "split";
         direction: "horizontal" | "vertical";
@@ -1656,13 +1657,18 @@ declare module "knot" {
   /** Versioned, JSON-compatible window layout from workbench.captureLayout.
    * Store it verbatim; it holds no live handles and is assignable to JsonValue. */
   export type WindowLayout = Readonly<{
-    version: 1;
+    version: 2;
     geometry: WindowGeometry | null;
-    root: LayoutNode | null;
-    /** Index of the focused pane in layout order. */
+    /** The document center's split tree; documents and terminals restore
+     * only here, tools only in docks. */
+    center: LayoutNode | null;
+    docks: Readonly<{ left: LayoutDock; right: LayoutDock; bottom: LayoutDock }>;
+    /** Index of the focused pane in layout order: the center's panes, then
+     * the left, right, and bottom docks'. */
     focused: number | null;
-    dockSizes: Readonly<{ left: number; right: number; bottom: number }>;
   }>;
+  /** A dock keeps its size and arrangement while hidden. */
+  export type LayoutDock = Readonly<{ size: number; visible: boolean; root: LayoutNode | null }>;
   export interface SessionWindow {
     /** Ordered directory roots, validated and deduplicated as in
      * workspaces.replaceRoots. */

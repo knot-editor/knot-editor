@@ -2,7 +2,7 @@
 use super::operations::empty_product_window;
 use super::*;
 use crate::app::documents::DocumentDirty;
-use crate::app::workbench::{DockLocation, ToolPlacement};
+use crate::app::workbench::DockLocation;
 
 #[gpui::test]
 fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut TestAppContext) {
@@ -25,7 +25,7 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
     cx.run_until_parked();
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
-        let pane = workbench.normal_pane().unwrap();
+        let pane = workbench.center_pane().unwrap();
         assert!(workbench.pane(pane).unwrap().tabs().iter().any(|tab| {
             tab.document_id()
                 .is_some_and(|id| documents.read(cx).get(id).unwrap().resource_uri() == Some(&uri))
@@ -85,7 +85,7 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
         assert_eq!(state.current_target, Some(tool.target.clone()));
     })
     .unwrap();
-    place_explorer(&shell, window, ToolPlacement::DocumentGroup, cx);
+    place_explorer(&shell, window, DockLocation::Bottom, cx);
     cx.read(|cx| assert_eq!(target.validate_tab(cx), Err(CommandOutcome::InvalidTarget)));
     let close = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
@@ -98,16 +98,9 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
             workbench.tool_presenting(tree.entity_id()),
             Some(id_of(workbench))
         );
+        // The closed tool returns to the dock it was moved to.
         let pane = workbench.tool_tab(id_of(workbench)).unwrap().0;
-        assert!(workbench.dock_location(pane).is_none());
-        assert!(
-            workbench
-                .pane(pane)
-                .unwrap()
-                .tabs()
-                .iter()
-                .any(|tab| tab.document_id().is_some())
-        );
+        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Bottom));
     });
 }
 
@@ -182,7 +175,7 @@ fn workspace_refresh_does_not_reopen_or_reposition_tool(cx: &mut TestAppContext)
         shell.ensure_explorer(false, cx);
         let id = id_of(shell.workbench.read(cx));
         shell.workbench.update(cx, |workbench, _| {
-            workbench.place_tool(id, ToolPlacement::Dock(DockLocation::Bottom));
+            workbench.place_tool(id, DockLocation::Bottom);
             workbench.hide_tool(id);
         });
         shell.install_workspace(ResourceUri::parse("mem://product/src").unwrap(), cx);
@@ -208,7 +201,7 @@ async fn tools_do_not_bypass_dirty_document_or_terminal_protection(cx: &mut Test
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Cancel");
     assert_eq!(close.completion.await.unwrap(), CommandOutcome::Cancelled);
-    place_explorer(&shell, window, ToolPlacement::DocumentGroup, cx);
+    place_explorer(&shell, window, DockLocation::Bottom, cx);
     let close_tool = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close_tool, cx), CommandOutcome::Completed);
     assert!(!cx.has_pending_prompt());
@@ -283,7 +276,7 @@ fn explorer_docks_have_visible_geometry_and_open_files_by_click(cx: &mut TestApp
             shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
             let id = shell.explorer_frame(cx).unwrap();
             shell.workbench.update(cx, |workbench, _| {
-                assert!(workbench.place_tool(id, ToolPlacement::Dock(dock)));
+                assert!(workbench.place_tool(id, dock));
                 assert_eq!(workbench.tool_tab(id).unwrap().0.value(), 3);
             });
             cx.notify();
@@ -421,7 +414,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     cx.update(|cx| {
         let workbench = shell.read(cx).workbench.clone();
         workbench.update(cx, |workbench, _| {
-            let pane = workbench.normal_pane().unwrap();
+            let pane = workbench.center_pane().unwrap();
             let tab = workbench.pane(pane).unwrap().tabs()[0].id();
             assert!(workbench.activate_tab(pane, tab));
         });

@@ -886,7 +886,7 @@ await commands.register("operations.terminal", async () => {{
     place_explorer(
         &shell,
         window,
-        crate::app::workbench::ToolPlacement::Dock(crate::app::workbench::DockLocation::Left),
+        crate::app::workbench::DockLocation::Left,
         cx,
     );
     assert_eq!(

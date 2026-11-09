@@ -1,8 +1,8 @@
 //! Atomic relocation of one tab without document or session closure.
 
 use super::{
-    DockLocation, Pane, PaneId, PresentationId, SplitDirection, SplitPlacement, TabId, Workbench,
-    WorkbenchLayout, WorkbenchTab, WorkbenchTabSnapshot,
+    Area, DockLocation, Pane, PaneId, PresentationId, SplitDirection, SplitPlacement, TabId,
+    TabKind, Workbench, WorkbenchLayout, WorkbenchTab, WorkbenchTabSnapshot,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,11 +45,11 @@ pub enum TabMoveDestination {
         anchor: TabMoveCapture,
         placement: TabMovePlacement,
     },
-    /// Move to a sidebar or bottom dock, creating the dock group around the
-    /// whole workbench when it is not visible. Produced by workbench-edge
-    /// drops; pane-edge splits keep using `At` with `Split`.
+    /// Move to the end of a dock's focused pane, creating the dock's first
+    /// pane when it has none. Produced by workbench-edge drops; pane-edge
+    /// splits keep using `At` with `Split`.
     Dock(DockLocation),
-    /// Install the first pane in an empty workbench.
+    /// Install the first pane of an empty center.
     Empty,
 }
 
@@ -57,16 +57,15 @@ pub enum TabMoveDestination {
 pub struct TabMoveTransition {
     pub destination: WorkbenchTabSnapshot,
     pub removed_pane: Option<PaneId>,
-    pub source_is_empty: bool,
 }
 
 struct PreparedDestination {
+    area: Area,
     pane: PaneId,
     tab: TabId,
     index: usize,
     new_pane: bool,
     new_tab: bool,
-    dock: Option<DockLocation>,
     layout: WorkbenchLayout,
 }
 
@@ -92,58 +91,53 @@ impl Workbench {
         self.capture_tab_move(captured.tab.pane_id, captured.tab.tab_id) == Some(captured)
     }
 
-    pub fn accepts_tab_move(&self, target: TabMoveDestination) -> bool {
+    /// The area a destination puts a tab in, while the destination is live.
+    fn destination_area(&self, target: TabMoveDestination) -> Option<Area> {
         match target {
-            TabMoveDestination::Empty => self.layout.is_none() && self.panes.is_empty(),
-            TabMoveDestination::Dock(_) => true,
-            TabMoveDestination::At { anchor, .. } => self.contains_tab_move(anchor),
+            TabMoveDestination::Empty => self.center.layout.is_none().then_some(Area::Center),
+            TabMoveDestination::Dock(dock) => Some(Area::Dock(dock)),
+            TabMoveDestination::At { anchor, .. } => self
+                .contains_tab_move(anchor)
+                .then(|| self.pane_area(anchor.tab.pane_id))
+                .flatten(),
         }
+    }
+
+    /// Whether a tab of `kind` may move to `target`.
+    pub fn accepts_tab_move(&self, kind: TabKind, target: TabMoveDestination) -> bool {
+        self.destination_area(target)
+            .is_some_and(|area| kind.allows(area))
     }
 
     fn prepare_destination(
         &self,
+        kind: TabKind,
         target: TabMoveDestination,
         reused_tab: Option<TabId>,
     ) -> Option<PreparedDestination> {
-        if !self.accepts_tab_move(target) {
+        if !self.accepts_tab_move(kind, target) {
             return None;
         }
+        let area = self.destination_area(target)?;
         let tab = reused_tab.unwrap_or(TabId(self.next_tab_id));
-        let (pane, index, new_pane, dock, layout) = match target {
-            TabMoveDestination::Empty => {
-                let pane = PaneId(self.next_pane_id);
-                (pane, 0, true, None, WorkbenchLayout::Pane(pane))
-            }
-            TabMoveDestination::Dock(dock) => {
-                if let Some(pane) = self
-                    .docks
-                    .iter()
-                    .find(|(_, location)| *location == dock)
-                    .map(|(pane, _)| *pane)
-                {
-                    let index = self.pane(pane).map(|pane| pane.tabs.len()).unwrap_or(0);
-                    let layout = self.layout.clone().unwrap_or(WorkbenchLayout::Pane(pane));
-                    (pane, index, false, Some(dock), layout)
-                } else {
-                    let pane = PaneId(self.next_pane_id);
-                    let leaf = WorkbenchLayout::Pane(pane);
-                    let layout = match self.layout.clone() {
-                        None => leaf,
-                        Some(root) => {
-                            let (direction, first, second) = match dock {
-                                DockLocation::Left => (SplitDirection::Horizontal, leaf, root),
-                                DockLocation::Right => (SplitDirection::Horizontal, root, leaf),
-                                DockLocation::Bottom => (SplitDirection::Vertical, root, leaf),
-                            };
-                            WorkbenchLayout::split(direction, first, second)
-                        }
-                    };
-                    (pane, 0, true, Some(dock), layout)
-                }
-            }
+        let fresh = || {
+            let pane = PaneId(self.next_pane_id);
+            (pane, 0, true, WorkbenchLayout::Pane(pane))
+        };
+        let (pane, index, new_pane, layout) = match target {
+            TabMoveDestination::Empty => fresh(),
+            TabMoveDestination::Dock(_) => match self.area_focus(area) {
+                Some(pane) => (
+                    pane,
+                    self.pane(pane)?.tabs.len(),
+                    false,
+                    self.tree(area).layout.clone()?,
+                ),
+                None => fresh(),
+            },
             TabMoveDestination::At { anchor, placement } => {
                 let pane = self.pane(anchor.tab.pane_id)?;
-                let mut layout = self.layout.clone()?;
+                let mut layout = self.tree(area).layout.clone()?;
                 match placement {
                     TabMovePlacement::Before => (
                         pane.id,
@@ -151,26 +145,25 @@ impl Workbench {
                             .iter()
                             .position(|tab| tab.id == anchor.tab.tab_id)?,
                         false,
-                        None,
                         layout,
                     ),
-                    TabMovePlacement::End => (pane.id, pane.tabs.len(), false, None, layout),
+                    TabMovePlacement::End => (pane.id, pane.tabs.len(), false, layout),
                     TabMovePlacement::Split(edge) => {
                         let new_pane = PaneId(self.next_pane_id);
                         let (direction, placement) = edge.split();
                         assert!(layout.split_pane(pane.id, new_pane, direction, placement));
-                        (new_pane, 0, true, None, layout)
+                        (new_pane, 0, true, layout)
                     }
                 }
             }
         };
         Some(PreparedDestination {
+            area,
             pane,
             tab,
             index,
             new_pane,
             new_tab: reused_tab.is_none(),
-            dock,
             layout,
         })
     }
@@ -195,11 +188,12 @@ impl Workbench {
         }
         if prepared.new_pane {
             assert_eq!(self.allocate_pane_id(), prepared.pane);
-            if let Some(dock) = prepared.dock {
-                self.docks.push((prepared.pane, dock));
-            }
-            self.panes
-                .push(Pane::new(prepared.pane, vec![tab], snapshot.tab_id));
+            self.panes.push(Pane::new(
+                prepared.pane,
+                prepared.area,
+                vec![tab],
+                snapshot.tab_id,
+            ));
         } else {
             let pane = self
                 .panes
@@ -210,8 +204,8 @@ impl Workbench {
             pane.tabs.insert(index, tab);
             pane.select(snapshot.tab_id);
         }
-        self.layout = Some(prepared.layout);
-        self.focused_pane = Some(prepared.pane);
+        self.tree_mut(prepared.area).layout = Some(prepared.layout);
+        self.set_focus(prepared.pane);
         self.debug_assert_invariants();
         snapshot
     }
@@ -224,7 +218,8 @@ impl Workbench {
         if !self.contains_tab_move(source) {
             return None;
         }
-        let mut prepared = self.prepare_destination(target, Some(source.tab.tab_id))?;
+        let kind = source.tab.surface.kind();
+        let mut prepared = self.prepare_destination(kind, target, Some(source.tab.tab_id))?;
         if prepared.pane == source.tab.pane_id {
             let pane = self
                 .panes
@@ -242,10 +237,11 @@ impl Workbench {
             return Some(TabMoveTransition {
                 destination,
                 removed_pane: None,
-                source_is_empty: false,
             });
         }
-        if self.pane(source.tab.pane_id)?.tabs.len() == 1 {
+        if self.pane(source.tab.pane_id)?.tabs.len() == 1
+            && self.pane_area(source.tab.pane_id) == Some(prepared.area)
+        {
             prepared.layout = prepared
                 .layout
                 .remove_pane(source.tab.pane_id)
@@ -258,7 +254,6 @@ impl Workbench {
         Some(TabMoveTransition {
             destination,
             removed_pane: removed.removed_pane,
-            source_is_empty: false,
         })
     }
 
@@ -281,7 +276,7 @@ impl Workbench {
         {
             return None;
         }
-        let prepared = destination.prepare_destination(target, None)?;
+        let prepared = destination.prepare_destination(source.tab.surface.kind(), target, None)?;
         let removed = self
             .remove_tab(source.tab.pane_id, source.tab.tab_id)
             .expect("validated source tab");
@@ -290,7 +285,6 @@ impl Workbench {
         Some(TabMoveTransition {
             destination: snapshot,
             removed_pane: removed.removed_pane,
-            source_is_empty: self.panes.is_empty(),
         })
     }
 }

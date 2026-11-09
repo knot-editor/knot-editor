@@ -236,7 +236,7 @@ mod tests {
                 Some(DocumentCloseDisposition::Retained)
             );
             assert_eq!(
-                workbench.layout(),
+                workbench.center(),
                 Some(&super::super::WorkbenchLayout::Pane(remaining_pane))
             );
             assert_eq!(workbench.panes().len(), 1);
@@ -281,7 +281,7 @@ mod tests {
                 transition.document,
                 Some(DocumentCloseDisposition::CloseRequested)
             );
-            assert!(workbench.layout().is_none());
+            assert!(workbench.center().is_none());
             assert!(workbench.panes().is_empty());
         }
     }

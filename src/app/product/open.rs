@@ -466,7 +466,7 @@ impl ProductShell {
             } else {
                 self.workbench.update(cx, |workbench, cx| {
                     if workbench.dock_location(target.pane).is_some() {
-                        workbench.open_document_in_normal_group(document, model, cx)
+                        workbench.open_document_in_center(document, model, cx)
                     } else {
                         let tab = workbench
                             .open_tab_for_document(target.pane, document, model, cx)

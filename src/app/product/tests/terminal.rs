@@ -1319,7 +1319,7 @@ async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_
         })
         .unwrap();
     let mut value = serde_json::to_value(&layout).unwrap();
-    for tab in value["root"]["tabs"].as_array_mut().unwrap() {
+    for tab in value["center"]["tabs"].as_array_mut().unwrap() {
         tab.as_object_mut().unwrap().remove("directory");
     }
     let layout = crate::app::window_layout::WindowLayout::decode(&value).unwrap();

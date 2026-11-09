@@ -1,8 +1,8 @@
 //! Automatic tool-layout memory: one versioned tool-only snapshot in application-owned SQLite.
 //!
-//! The snapshot records stable namespaced tool IDs, dock location, grouping
-//! and order, sizes, visibility, the selected tool per dock, and hidden tools'
-//! remembered locations. Document tabs, document split structure, terminal
+//! The snapshot records each dock's size, visibility, and split tree of
+//! stable namespaced tool IDs with each pane's selection, and the dock each
+//! hidden tool returns to. Document tabs, document split structure, terminal
 //! contents, and empty placeholders are never serialized here.
 //!
 //! A fresh window reads the last published snapshot; already-open windows keep
@@ -16,9 +16,7 @@
 use std::time::Duration;
 
 use gpui::Global;
-pub(crate) use knot_model::workbench::{
-    EXPLORER_TOOL_ID, StoredLocation, TOOL_LAYOUT_VERSION, ToolLayoutSnapshot,
-};
+pub(crate) use knot_model::workbench::{EXPLORER_TOOL_ID, TOOL_LAYOUT_VERSION, ToolLayoutSnapshot};
 
 use super::record_store::{RecordStore, StateDatabase};
 
@@ -98,8 +96,8 @@ mod tests {
 
     fn customized(size: f32) -> ToolLayoutSnapshot {
         let mut snapshot = ToolLayoutSnapshot::product_default();
-        snapshot.dock_sizes = [size, 200., 180.];
-        snapshot.tools[0].location = StoredLocation::Bottom;
+        snapshot.docks[0].size = size;
+        snapshot.docks.swap(0, 2);
         // Publish marks the arrangement customized; stored snapshots compare
         // against that form.
         snapshot.customized = true;

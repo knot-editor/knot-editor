@@ -6,16 +6,14 @@ use knot_protocol::{CommandOutcome, PickerItem};
 
 pub(super) const MOVE_TOOL_TITLE: &str = "Move Tool to Dock";
 
-const DESTINATIONS: [(&str, ToolPlacement); 4] = [
-    ("Left", ToolPlacement::Dock(DockLocation::Left)),
-    ("Right", ToolPlacement::Dock(DockLocation::Right)),
-    ("Bottom", ToolPlacement::Dock(DockLocation::Bottom)),
-    ("Document Area", ToolPlacement::DocumentGroup),
+const DESTINATIONS: [(&str, DockLocation); 3] = [
+    ("Left", DockLocation::Left),
+    ("Right", DockLocation::Right),
+    ("Bottom", DockLocation::Bottom),
 ];
 
 impl ProductShell {
-    /// Offer the docks and the document area for the captured tool and place
-    /// it at the choice, publishing the tool-only default as any explicit
+    /// Offer the docks for the captured tool and place it at the choice, publishing the tool-only default as any explicit
     /// move does.
     pub(crate) fn start_move_tool(
         &mut self,
@@ -45,14 +43,14 @@ impl ProductShell {
             let Ok(TransientOutcome::Picker(choice)) = receiver.await else {
                 return;
             };
-            let Some((_, placement)) = choice
+            let Some((_, dock)) = choice
                 .parse::<usize>()
                 .ok()
                 .and_then(|index| DESTINATIONS.get(index))
             else {
                 return;
             };
-            let _ = this.update(cx, |shell, cx| shell.place_tool(id, *placement, cx));
+            let _ = this.update(cx, |shell, cx| shell.place_tool(id, *dock, cx));
         });
         self.tasks.push(task);
         Ok(())

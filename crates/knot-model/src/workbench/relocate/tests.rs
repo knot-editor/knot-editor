@@ -81,7 +81,7 @@ fn all_edges_move_the_tab_and_order_the_new_pane() {
             (pane, new_pane)
         };
         assert_eq!(
-            workbench.layout(),
+            workbench.center(),
             Some(&WorkbenchLayout::Split {
                 direction,
                 ratio: 0.5,
@@ -97,7 +97,6 @@ fn all_edges_move_the_tab_and_order_the_new_pane() {
         );
         assert_eq!(workbench.view_count(document), 2);
         assert!(!workbench.contains_tab_move(source));
-        assert!(!moved.source_is_empty);
     }
 }
 
@@ -114,7 +113,7 @@ fn single_tab_edge_move_collapses_the_original_pane() {
         .unwrap();
     assert_eq!(moved.removed_pane, Some(old.pane_id));
     assert_eq!(
-        workbench.layout(),
+        workbench.center(),
         Some(&WorkbenchLayout::Pane(moved.destination.pane_id))
     );
     assert_eq!(workbench.panes.len(), 1);
@@ -142,7 +141,7 @@ fn moving_between_panes_collapses_a_nested_branch() {
         .unwrap();
     assert_eq!(moved.removed_pane, Some(second));
     assert_eq!(
-        workbench.layout(),
+        workbench.center(),
         Some(&WorkbenchLayout::Split {
             direction: SplitDirection::Horizontal,
             ratio: 0.5,
@@ -175,8 +174,7 @@ fn cross_workbench_transfer_allocates_destination_ids() {
         )
         .unwrap();
     assert_eq!(moved.destination.tab_id, TabId(2));
-    assert!(moved.source_is_empty);
-    assert!(source.layout().is_none());
+    assert!(source.center().is_none());
     assert!(!source.contains_tab_move(capture));
     let arrived = destination.focused_pane().unwrap().active_tab();
     assert_eq!(arrived.id(), moved.destination.tab_id);

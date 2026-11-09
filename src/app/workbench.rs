@@ -13,10 +13,10 @@ use std::ops::{Deref, DerefMut};
 use gpui::{App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable};
 use knot_model::workbench as layout;
 pub(crate) use knot_model::workbench::{
-    CloseConfirmation, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, DocumentId,
-    PaneId, PlanNode, PresentationId, SplitDirection, SplitEdge, SplitPlacement, TabId,
-    TabMoveCapture, TabMoveDestination, TabMovePlacement, TabSurfaceId, TerminalSessionId,
-    ToolFrameId, ToolPlacement, WorkbenchLayout, WorkbenchTab, neighbor,
+    Area, Arrangement, CloseConfirmation, CloseRequestOutcome, DockLocation,
+    DocumentCloseDisposition, DocumentId, PaneId, PresentationId, SplitDirection, SplitEdge,
+    SplitPlacement, TabId, TabMoveCapture, TabMoveDestination, TabMovePlacement, TabSurfaceId,
+    TerminalSessionId, ToolFrameId, WorkbenchLayout, WorkbenchTab, neighbor,
 };
 
 use super::{
@@ -330,13 +330,13 @@ impl Workbench {
         Some(tab)
     }
 
-    pub(crate) fn open_document_in_normal_group(
+    pub(crate) fn open_document_in_center(
         &mut self,
         document: DocumentId,
         model: Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> (PaneId, TabId) {
-        let (pane, tab) = self.layout.open_document_in_normal_group(document);
+        let (pane, tab) = self.layout.open_document_in_center(document);
         self.attach_editor(self.presentation_of(pane, tab), model, cx);
         (pane, tab)
     }
@@ -391,12 +391,12 @@ impl Workbench {
         Some(tab)
     }
 
-    pub(crate) fn open_terminal_in_normal_group(
+    pub(crate) fn open_terminal_in_center(
         &mut self,
         session: TerminalSessionId,
         view: Entity<TerminalView>,
     ) -> Option<(PaneId, TabId)> {
-        let (pane, tab) = self.layout.open_terminal_in_normal_group(session)?;
+        let (pane, tab) = self.layout.open_terminal_in_center(session)?;
         self.views.insert(
             self.presentation_of(pane, tab),
             PresentationView::Terminal(view),
@@ -568,12 +568,12 @@ impl Workbench {
     /// [`layout::Workbench::arrange`].
     pub(crate) fn arrange(
         &mut self,
-        root: Option<PlanNode<ArrangedTab>>,
-        dock_sizes: [f32; 3],
+        arrangement: Arrangement<ArrangedTab>,
         cx: &mut Context<Self>,
     ) {
-        let root = root.map(|root| root.map(&mut ArrangedTab::split));
-        let installed = self.layout.arrange(root, dock_sizes);
+        let installed = self
+            .layout
+            .arrange(arrangement.map(&mut ArrangedTab::split));
         self.drop_ended_views();
         for (presentation, view) in installed {
             if let Some(view) = view {

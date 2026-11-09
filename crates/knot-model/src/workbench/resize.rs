@@ -32,35 +32,6 @@ const RESIZE_STEP: f32 = 0.05;
 /// Logical pixels that one grow or shrink adds to or removes from a dock.
 const DOCK_RESIZE_STEP: f32 = 40.;
 
-/// The dock whose absolute size a split's divider controls: a direct child
-/// that is a dock lying along the split's direction.
-fn dock_of_split(
-    docks: &[(PaneId, DockLocation)],
-    layout: &WorkbenchLayout,
-) -> Option<DockLocation> {
-    let WorkbenchLayout::Split {
-        direction,
-        first,
-        second,
-        ..
-    } = layout
-    else {
-        return None;
-    };
-    [first, second]
-        .into_iter()
-        .find_map(|child| match child.as_ref() {
-            WorkbenchLayout::Pane(pane) => docks
-                .iter()
-                .find(|(id, _)| id == pane)
-                .map(|(_, dock)| *dock)
-                .filter(|dock| {
-                    (*direction == SplitDirection::Vertical) == (*dock == DockLocation::Bottom)
-                }),
-            WorkbenchLayout::Split { .. } => None,
-        })
-}
-
 fn find_split(layout: &WorkbenchLayout, boundary: PaneId) -> Option<&WorkbenchLayout> {
     if layout.boundary() == Some(boundary) {
         return Some(layout);
@@ -73,8 +44,7 @@ fn find_split(layout: &WorkbenchLayout, boundary: PaneId) -> Option<&WorkbenchLa
     }
 }
 
-fn equalize(layout: &mut WorkbenchLayout, docks: &[(PaneId, DockLocation)]) {
-    let ordinary = dock_of_split(docks, layout).is_none();
+fn equalize(layout: &mut WorkbenchLayout) {
     if let WorkbenchLayout::Split {
         direction,
         ratio,
@@ -82,24 +52,15 @@ fn equalize(layout: &mut WorkbenchLayout, docks: &[(PaneId, DockLocation)]) {
         second,
     } = layout
     {
-        if ordinary {
-            let first_weight = first.weight(*direction);
-            *ratio = first_weight / (first_weight + second.weight(*direction));
-        }
-        equalize(first, docks);
-        equalize(second, docks);
+        let first_weight = first.weight(*direction);
+        *ratio = first_weight / (first_weight + second.weight(*direction));
+        equalize(first);
+        equalize(second);
     }
 }
 
-/// Lay panes out in `area` from split ratios and dock sizes, ignoring
-/// dividers.
-fn place(
-    layout: &WorkbenchLayout,
-    area: Rect,
-    docks: &[(PaneId, DockLocation)],
-    sizes: [f32; 3],
-    result: &mut Vec<(PaneId, Rect)>,
-) {
+/// Lay panes out in `area` from split ratios, ignoring dividers.
+fn place(layout: &WorkbenchLayout, area: Rect, result: &mut Vec<(PaneId, Rect)>) {
     let WorkbenchLayout::Split {
         direction,
         ratio,
@@ -112,44 +73,35 @@ fn place(
         }
         return;
     };
-    let horizontal = *direction == SplitDirection::Horizontal;
-    let extent = if horizontal { area.width } else { area.height };
-    let first_extent = match dock_of_split(docks, layout) {
-        Some(dock) => {
-            let size = sizes[dock.index()].min(extent);
-            let first_is_dock = matches!(first.as_ref(), WorkbenchLayout::Pane(pane)
-                if docks.contains(&(*pane, dock)));
-            if first_is_dock { size } else { extent - size }
-        }
-        None => extent * ratio,
-    };
-    let (first_area, second_area) = if horizontal {
+    let (first_area, second_area) = if *direction == SplitDirection::Horizontal {
+        let extent = area.width * ratio;
         (
             Rect {
-                width: first_extent,
+                width: extent,
                 ..area
             },
             Rect {
-                x: area.x + first_extent,
-                width: area.width - first_extent,
+                x: area.x + extent,
+                width: area.width - extent,
                 ..area
             },
         )
     } else {
+        let extent = area.height * ratio;
         (
             Rect {
-                height: first_extent,
+                height: extent,
                 ..area
             },
             Rect {
-                y: area.y + first_extent,
-                height: area.height - first_extent,
+                y: area.y + extent,
+                height: area.height - extent,
                 ..area
             },
         )
     };
-    place(first, first_area, docks, sizes, result);
-    place(second, second_area, docks, sizes, result);
+    place(first, first_area, result);
+    place(second, second_area, result);
 }
 
 /// The pane beside `from` toward `edge`: of the panes lying entirely on that
@@ -188,23 +140,92 @@ pub fn neighbor(rects: &[(PaneId, Rect)], from: PaneId, edge: SplitEdge) -> Opti
 }
 
 impl Workbench {
-    /// Every pane's rectangle when the workbench fills `area`.
-    pub fn pane_rects(&self, area: Rect) -> Vec<(PaneId, Rect)> {
+    /// Each painted area's rectangle when the workbench fills `bounds`: the
+    /// side docks span the full height, the bottom dock sits under the center
+    /// between them, and the center takes the rest.
+    pub fn area_rects(&self, bounds: Rect) -> Vec<(Area, Rect)> {
+        let shown = |dock: DockLocation| self.area_shown(Area::Dock(dock));
+        let left = if shown(DockLocation::Left) {
+            self.dock_size(DockLocation::Left).min(bounds.width)
+        } else {
+            0.
+        };
+        let right = if shown(DockLocation::Right) {
+            self.dock_size(DockLocation::Right).min(bounds.width - left)
+        } else {
+            0.
+        };
+        let middle = Rect {
+            x: bounds.x + left,
+            width: bounds.width - left - right,
+            ..bounds
+        };
+        let bottom = if shown(DockLocation::Bottom) {
+            self.dock_size(DockLocation::Bottom).min(bounds.height)
+        } else {
+            0.
+        };
+        let mut rects = vec![(
+            Area::Center,
+            Rect {
+                height: middle.height - bottom,
+                ..middle
+            },
+        )];
+        if left > 0. {
+            rects.push((
+                Area::Dock(DockLocation::Left),
+                Rect {
+                    width: left,
+                    ..bounds
+                },
+            ));
+        }
+        if right > 0. {
+            rects.push((
+                Area::Dock(DockLocation::Right),
+                Rect {
+                    x: middle.x + middle.width,
+                    width: right,
+                    ..bounds
+                },
+            ));
+        }
+        if bottom > 0. {
+            rects.push((
+                Area::Dock(DockLocation::Bottom),
+                Rect {
+                    y: middle.y + middle.height - bottom,
+                    height: bottom,
+                    ..middle
+                },
+            ));
+        }
+        rects
+    }
+
+    /// Every painted pane's rectangle when the workbench fills `bounds`.
+    pub fn pane_rects(&self, bounds: Rect) -> Vec<(PaneId, Rect)> {
         let mut result = Vec::new();
-        if let Some(layout) = &self.layout {
-            place(layout, area, &self.docks, self.dock_sizes, &mut result);
+        for (area, rect) in self.area_rects(bounds) {
+            if let Some(layout) = self.area_layout(area) {
+                place(layout, rect, &mut result);
+            }
         }
         result
     }
 
-    /// The dock a split's divider resizes, or `None` for an ordinary split
-    /// that divides its extent by ratio.
-    pub fn split_dock(&self, layout: &WorkbenchLayout) -> Option<DockLocation> {
-        dock_of_split(&self.docks, layout)
+    fn split_with_boundary_mut(&mut self, boundary: PaneId) -> Option<&mut WorkbenchLayout> {
+        let area = self.pane_area(boundary)?;
+        self.tree_mut(area)
+            .layout
+            .as_mut()?
+            .split_with_boundary_mut(boundary)
     }
 
     pub fn split_ratio(&self, boundary: PaneId) -> Option<f32> {
-        match find_split(self.layout.as_ref()?, boundary)? {
+        let layout = self.area_layout(self.pane_area(boundary)?)?;
+        match find_split(layout, boundary)? {
             WorkbenchLayout::Split { ratio, .. } => Some(*ratio),
             WorkbenchLayout::Pane(_) => None,
         }
@@ -213,10 +234,7 @@ impl Workbench {
     /// Set the ratio of the split identified by `boundary`, clamped so
     /// neither side drops below the minimum share.
     pub fn set_split_ratio(&mut self, boundary: PaneId, value: f32) -> bool {
-        let Some(WorkbenchLayout::Split { ratio, .. }) = self
-            .layout
-            .as_mut()
-            .and_then(|layout| layout.split_with_boundary_mut(boundary))
+        let Some(WorkbenchLayout::Split { ratio, .. }) = self.split_with_boundary_mut(boundary)
         else {
             return false;
         };
@@ -224,35 +242,32 @@ impl Workbench {
         true
     }
 
-    /// Grow or shrink a pane by one step: a dock changes its size, any other
-    /// pane the ratio of its nearest enclosing ordinary split. With an
-    /// `axis`, only a dock or a split along it changes: a horizontal split
-    /// sets the width and a vertical one the height. Returns whether
-    /// anything changed.
+    /// Grow or shrink a pane by one step. A dock pane changes its dock's
+    /// size, unless an `axis` across the dock picks a split inside it; any
+    /// other pane changes the ratio of its nearest enclosing split, along
+    /// `axis` when given: a horizontal split sets the width and a vertical
+    /// one the height. Returns whether anything changed.
     pub fn resize_pane(&mut self, pane: PaneId, grow: bool, axis: Option<SplitDirection>) -> bool {
         let sign = if grow { 1. } else { -1. };
-        if let Some(dock) = self.dock_location(pane) {
-            let dock_axis = match dock {
-                DockLocation::Bottom => SplitDirection::Vertical,
-                _ => SplitDirection::Horizontal,
-            };
-            if axis.is_some_and(|axis| axis != dock_axis) {
-                return false;
-            }
+        let Some(area) = self.pane_area(pane) else {
+            return false;
+        };
+        if let Area::Dock(dock) = area
+            && axis.is_none_or(|axis| axis == dock.axis())
+        {
             let before = self.dock_size(dock);
             self.set_dock_size(dock, before + sign * DOCK_RESIZE_STEP);
             return self.dock_size(dock) != before;
         }
-        let Some((boundary, in_second, ratio)) = self.layout.as_ref().and_then(|layout| {
+        let Some((boundary, in_second, ratio)) = self.area_layout(area).and_then(|layout| {
             layout
                 .ancestors(pane)
                 .into_iter()
                 .rev()
                 .find(|(split, _)| {
-                    self.split_dock(split).is_none()
-                        && axis.is_none_or(|axis| {
-                            matches!(split, WorkbenchLayout::Split { direction, .. } if *direction == axis)
-                        })
+                    axis.is_none_or(|axis| {
+                        matches!(split, WorkbenchLayout::Split { direction, .. } if *direction == axis)
+                    })
                 })
                 .and_then(|(split, in_second)| match split {
                     WorkbenchLayout::Split { ratio, .. } => {
@@ -268,10 +283,10 @@ impl Workbench {
         self.split_ratio(boundary) != Some(ratio)
     }
 
-    /// Give every pane of each ordinary split chain an even share.
-    pub fn equalize_splits(&mut self) {
-        if let Some(layout) = self.layout.as_mut() {
-            equalize(layout, &self.docks);
+    /// Give every pane of each split chain in `area` an even share.
+    pub fn equalize_splits(&mut self, area: Area) {
+        if let Some(layout) = self.tree_mut(area).layout.as_mut() {
+            equalize(layout);
         }
     }
 }
@@ -390,8 +405,8 @@ mod tests {
                 .unwrap();
             workbench.set_split_ratio(second, 0.8);
             workbench.set_split_ratio(third, 0.2);
-            workbench.equalize_splits();
-            let layout = workbench.layout().unwrap();
+            workbench.equalize_splits(Area::Center);
+            let layout = workbench.center().unwrap();
             // first | (second | (third / fourth)): thirds across, halves down.
             let found = ratios(layout);
             assert!(close(found[0], 1. / 3.), "{found:?}");
@@ -419,7 +434,7 @@ mod tests {
             let tab = workbench.pane(first).unwrap().active_tab_id();
             workbench.remove_tab(first, tab).unwrap();
             assert_eq!(workbench.split_ratio(third), Some(0.3));
-            assert_eq!(ratios(workbench.layout().unwrap()), vec![0.3]);
+            assert_eq!(ratios(workbench.center().unwrap()), vec![0.3]);
         }
     }
 
@@ -458,50 +473,71 @@ mod tests {
     }
 
     #[test]
-    fn pane_rects_follow_ratios_and_dock_sizes() {
+    fn pane_rects_lay_docks_around_the_center() {
         let workbench = &mut Workbench::empty();
-        {
-            let document = DocumentId::new(5);
-            let (left, _) = workbench.open_document_in_normal_group(document);
-            let right = workbench
-                .split_pane(left, SplitDirection::Horizontal, SplitPlacement::After)
-                .unwrap();
-            workbench.set_split_ratio(right, 0.25);
-            let id = workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
-            let (dock, _) = workbench.show_tool(id).unwrap();
-            workbench.set_dock_size(DockLocation::Left, 200.);
-            let rects = workbench.pane_rects(rect(0., 0., 1000., 500.));
-            assert_eq!(
-                rects,
-                [
-                    (dock, rect(0., 0., 200., 500.)),
-                    (left, rect(200., 0., 200., 500.)),
-                    (right, rect(400., 0., 600., 500.)),
-                ]
-            );
-        }
+        let (left, _) = workbench.open_document_in_center(DocumentId::new(5));
+        let right = workbench
+            .split_pane(left, SplitDirection::Horizontal, SplitPlacement::After)
+            .unwrap();
+        workbench.set_split_ratio(right, 0.25);
+        let explorer = workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
+        let (dock, _) = workbench.show_tool(explorer).unwrap();
+        let other = workbench.register_tool("knot.other", "Other", DockLocation::Bottom);
+        let (bottom, _) = workbench.show_tool(other).unwrap();
+        workbench.set_dock_size(DockLocation::Left, 200.);
+        workbench.set_dock_size(DockLocation::Bottom, 100.);
+        let rects = workbench.pane_rects(rect(0., 0., 1000., 500.));
+        assert_eq!(
+            rects,
+            [
+                (left, rect(200., 0., 200., 400.)),
+                (right, rect(400., 0., 600., 400.)),
+                (dock, rect(0., 0., 200., 500.)),
+                (bottom, rect(200., 400., 800., 100.)),
+            ]
+        );
+        assert_eq!(neighbor(&rects, bottom, SplitEdge::Left), Some(dock));
+        assert_eq!(neighbor(&rects, left, SplitEdge::Bottom), Some(bottom));
+        // A hidden dock gives its room back and is never a neighbor.
+        workbench.set_dock_visible(DockLocation::Left, false);
+        let rects = workbench.pane_rects(rect(0., 0., 1000., 500.));
+        assert_eq!(rects[0], (left, rect(0., 0., 250., 400.)));
+        assert_eq!(neighbor(&rects, left, SplitEdge::Left), None);
     }
 
     #[test]
-    fn docks_resize_by_size_and_keep_their_split_out_of_equalize() {
+    fn dock_panes_resize_their_dock_and_splits_across_it() {
         let workbench = &mut Workbench::empty();
-        {
-            let document = DocumentId::new(6);
-            let (pane, _) = workbench.open_document_in_normal_group(document);
-            let id = workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
-            let (dock, _) = workbench.show_tool(id).unwrap();
-            let before = workbench.dock_size(DockLocation::Left);
-            assert!(workbench.resize_pane(dock, true, None));
-            assert_eq!(workbench.dock_size(DockLocation::Left), before + 40.);
-            // The document pane's only split is the dock's, so nothing moves.
-            assert!(!workbench.resize_pane(pane, true, None));
-            assert_eq!(
-                workbench.split_dock(workbench.layout().unwrap()),
-                Some(DockLocation::Left)
-            );
-            workbench.set_split_ratio(pane, 0.3);
-            workbench.equalize_splits();
-            assert_eq!(workbench.split_ratio(pane), Some(0.3));
-        }
+        let (pane, _) = workbench.open_document_in_center(DocumentId::new(6));
+        let first = workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
+        let (dock, tab) = workbench.show_tool(first).unwrap();
+        let second = workbench.register_tool("knot.other", "Other", DockLocation::Left);
+        workbench.show_tool(second).unwrap();
+        let source = workbench.capture_tab_move(dock, tab).unwrap();
+        let lower = workbench
+            .relocate_tab(
+                source,
+                TabMoveDestination::At {
+                    anchor: source,
+                    placement: TabMovePlacement::Split(SplitEdge::Bottom),
+                },
+            )
+            .unwrap()
+            .destination
+            .pane_id;
+        let before = workbench.dock_size(DockLocation::Left);
+        assert!(workbench.resize_pane(lower, true, None));
+        assert_eq!(workbench.dock_size(DockLocation::Left), before + 40.);
+        assert!(workbench.resize_pane(lower, true, Some(SplitDirection::Vertical)));
+        assert!(close(workbench.split_ratio(lower).unwrap(), 0.45));
+        assert_eq!(workbench.dock_size(DockLocation::Left), before + 40.);
+        // An unsplit center pane has nothing to resize.
+        assert!(!workbench.resize_pane(pane, true, None));
+        // Equalizing stays in one area.
+        workbench.set_split_ratio(lower, 0.3);
+        workbench.equalize_splits(Area::Center);
+        assert_eq!(workbench.split_ratio(lower), Some(0.3));
+        workbench.equalize_splits(Area::Dock(DockLocation::Left));
+        assert_eq!(workbench.split_ratio(lower), Some(0.5));
     }
 }

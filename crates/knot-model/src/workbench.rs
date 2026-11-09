@@ -1,7 +1,8 @@
 //! Window-local workbench layout.
 //!
-//! A workbench is a binary split tree whose leaves are tabbed panes, with
-//! docks and native tool definitions. Tabs carry the identity of what they
+//! A workbench is a center area of documents surrounded by left, right, and
+//! bottom docks of tools, each a binary split tree whose leaves are tabbed
+//! panes, with native tool definitions. Tabs carry the identity of what they
 //! show (a document, a terminal session, or a tool) and a presentation
 //! identity; the application owns the views behind presentations. This module
 //! models layout and lifecycle transitions independently of native windows,
@@ -242,6 +243,52 @@ impl WorkbenchLayout {
     }
 }
 
+/// Where a pane lives: the center document area or one of the docks.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Area {
+    Center,
+    Dock(DockLocation),
+}
+
+impl Area {
+    /// Every area, in layout order.
+    pub const ALL: [Self; 4] = [
+        Self::Center,
+        Self::Dock(DockLocation::Left),
+        Self::Dock(DockLocation::Right),
+        Self::Dock(DockLocation::Bottom),
+    ];
+}
+
+/// What a tab presents, as far as placement cares.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TabKind {
+    Document,
+    Terminal,
+    Tool,
+}
+
+impl TabKind {
+    /// Whether tabs of this kind may occupy `area`. Every placement,
+    /// relocation, and restore checks this declaration.
+    pub fn allows(self, area: Area) -> bool {
+        match self {
+            Self::Document | Self::Terminal => area == Area::Center,
+            Self::Tool => area != Area::Center,
+        }
+    }
+}
+
+impl TabSurfaceId {
+    pub fn kind(self) -> TabKind {
+        match self {
+            Self::Document(_) => TabKind::Document,
+            Self::Terminal(_) => TabKind::Terminal,
+            Self::Tool(_) => TabKind::Tool,
+        }
+    }
+}
+
 pub struct WorkbenchTab {
     id: TabId,
     /// Pinned tabs form a prefix of their pane's tabs.
@@ -283,6 +330,7 @@ impl WorkbenchTab {
 
 pub struct Pane {
     id: PaneId,
+    area: Area,
     tabs: Vec<WorkbenchTab>,
     active_tab: TabId,
     /// Tabs most recently activated first. Tabs never activated, such as
@@ -291,9 +339,10 @@ pub struct Pane {
 }
 
 impl Pane {
-    fn new(id: PaneId, tabs: Vec<WorkbenchTab>, active_tab: TabId) -> Self {
+    fn new(id: PaneId, area: Area, tabs: Vec<WorkbenchTab>, active_tab: TabId) -> Self {
         Self {
             id,
+            area,
             tabs,
             active_tab,
             recent: vec![active_tab],
@@ -341,6 +390,10 @@ impl Pane {
         self.id
     }
 
+    pub fn area(&self) -> Area {
+        self.area
+    }
+
     pub fn tabs(&self) -> &[WorkbenchTab] {
         &self.tabs
     }
@@ -357,16 +410,28 @@ impl Pane {
     }
 }
 
+/// One area's split tree and the pane it last focused.
+#[derive(Default)]
+struct AreaTree {
+    layout: Option<WorkbenchLayout>,
+    focused: Option<PaneId>,
+}
+
+/// A dock keeps its arrangement while hidden; its size is absolute.
+struct DockState {
+    tree: AreaTree,
+    size: f32,
+    visible: bool,
+}
+
 pub struct Workbench {
     tools: Vec<ToolFrame>,
-    docks: Vec<(PaneId, DockLocation)>,
-    dock_sizes: [f32; 3],
-    dock_selected: [Option<ToolFrameId>; 3],
+    center: AreaTree,
+    docks: [DockState; 3],
     next_pane_id: u64,
     next_tab_id: u64,
     next_presentation_id: u64,
     next_tool_id: u64,
-    layout: Option<WorkbenchLayout>,
     panes: Vec<Pane>,
     focused_pane: Option<PaneId>,
     /// The pane that had focus before the focused one, for going back.
@@ -377,35 +442,78 @@ impl Workbench {
     pub fn empty() -> Self {
         Self {
             tools: Vec::new(),
-            docks: Vec::new(),
-            dock_sizes: [240., 240., 220.],
-            dock_selected: [None; 3],
+            center: AreaTree::default(),
+            docks: DockLocation::ALL.map(|dock| DockState {
+                tree: AreaTree::default(),
+                size: dock.default_size(),
+                visible: true,
+            }),
             next_pane_id: 1,
             next_tab_id: 1,
             next_presentation_id: 1,
             next_tool_id: 1,
-            layout: None,
             panes: Vec::new(),
             focused_pane: None,
             previous_pane: None,
         }
     }
 
-    /// A workbench with one pane showing `document_id`.
+    /// A workbench with one center pane showing `document_id`.
     pub fn new_for_document(document_id: DocumentId) -> Self {
         let mut workbench = Self::empty();
-        let pane_id = workbench.allocate_pane_id();
+        let pane_id = workbench.create_pane(Area::Center);
         let tab = workbench.new_tab(TabSurfaceId::Document(document_id), false);
         let tab_id = tab.id;
-        workbench.layout = Some(WorkbenchLayout::Pane(pane_id));
-        workbench.panes.push(Pane::new(pane_id, vec![tab], tab_id));
-        workbench.focused_pane = Some(pane_id);
+        let pane = workbench.panes.last_mut().unwrap();
+        pane.tabs.push(tab);
+        pane.select(tab_id);
+        workbench.set_focus(pane_id);
         workbench.debug_assert_invariants();
         workbench
     }
 
-    pub fn layout(&self) -> Option<&WorkbenchLayout> {
-        self.layout.as_ref()
+    fn tree(&self, area: Area) -> &AreaTree {
+        match area {
+            Area::Center => &self.center,
+            Area::Dock(dock) => &self.docks[dock.index()].tree,
+        }
+    }
+
+    fn tree_mut(&mut self, area: Area) -> &mut AreaTree {
+        match area {
+            Area::Center => &mut self.center,
+            Area::Dock(dock) => &mut self.docks[dock.index()].tree,
+        }
+    }
+
+    /// The center's split tree, `None` while the center is empty.
+    pub fn center(&self) -> Option<&WorkbenchLayout> {
+        self.center.layout.as_ref()
+    }
+
+    pub fn area_layout(&self, area: Area) -> Option<&WorkbenchLayout> {
+        self.tree(area).layout.as_ref()
+    }
+
+    /// Whether an area is painted: the center always, a dock while it is
+    /// visible and holds panes.
+    pub fn area_shown(&self, area: Area) -> bool {
+        match area {
+            Area::Center => true,
+            Area::Dock(dock) => {
+                let state = &self.docks[dock.index()];
+                state.visible && state.tree.layout.is_some()
+            }
+        }
+    }
+
+    pub fn pane_area(&self, pane: PaneId) -> Option<Area> {
+        self.pane(pane).map(|pane| pane.area)
+    }
+
+    fn pane_shown(&self, pane: PaneId) -> bool {
+        self.pane_area(pane)
+            .is_some_and(|area| self.area_shown(area))
     }
 
     pub fn panes(&self) -> &[Pane] {
@@ -433,13 +541,27 @@ impl Workbench {
         self.focused_pane.and_then(|id| self.pane(id))
     }
 
+    /// An area's panes in layout order.
+    pub fn area_panes(&self, area: Area) -> Vec<PaneId> {
+        let mut ids = Vec::new();
+        if let Some(layout) = &self.tree(area).layout {
+            layout.pane_ids(&mut ids);
+        }
+        ids
+    }
+
+    /// Every pane in layout order: the center, then the left, right, and
+    /// bottom docks, hidden ones included.
+    pub fn pane_order(&self) -> Vec<PaneId> {
+        Area::ALL
+            .into_iter()
+            .flat_map(|area| self.area_panes(area))
+            .collect()
+    }
+
     /// Capture tab identities in layout pane order and then tab order.
     pub fn tab_snapshots(&self) -> Vec<WorkbenchTabSnapshot> {
-        let mut pane_ids = Vec::new();
-        if let Some(layout) = &self.layout {
-            layout.pane_ids(&mut pane_ids);
-        }
-        pane_ids
+        self.pane_order()
             .into_iter()
             .flat_map(|pane_id| {
                 self.pane(pane_id)
@@ -455,39 +577,70 @@ impl Workbench {
             .collect()
     }
 
-    /// Focus `pane_id`, remembering the pane it leaves.
+    /// Focus `pane_id`, remembering the pane it leaves and, for its area,
+    /// the pane. Focusing a hidden dock's pane shows the dock.
     fn set_focus(&mut self, pane_id: PaneId) {
         if self.focused_pane != Some(pane_id) {
             self.previous_pane = self.focused_pane;
         }
         self.focused_pane = Some(pane_id);
-    }
-
-    /// The panes in layout order, without the docks' tool panes.
-    fn pane_order(&self) -> Vec<PaneId> {
-        let mut ids = Vec::new();
-        if let Some(layout) = &self.layout {
-            layout.pane_ids(&mut ids);
+        let area = self.pane_area(pane_id).expect("focused panes are live");
+        self.tree_mut(area).focused = Some(pane_id);
+        if let Area::Dock(dock) = area {
+            self.docks[dock.index()].visible = true;
         }
-        ids.retain(|pane| self.dock_location(*pane).is_none());
-        ids
     }
 
-    /// The first pane in layout order, not in a dock.
+    /// The pane an area would focus: the one it last focused, else its first.
+    fn area_focus(&self, area: Area) -> Option<PaneId> {
+        let tree = self.tree(area);
+        tree.focused
+            .filter(|pane| self.pane_area(*pane) == Some(area))
+            .or_else(|| tree.layout.as_ref().map(WorkbenchLayout::first_pane))
+    }
+
+    /// Keep focus on a painted pane: when the focused pane is gone or
+    /// hidden, focus moves to `preferred`'s pane, then the center's, then the
+    /// first painted dock's, else nowhere.
+    fn settle_focus(&mut self, preferred: Option<Area>) {
+        if self.focused_pane.is_some_and(|pane| self.pane_shown(pane)) {
+            return;
+        }
+        let candidate = preferred
+            .into_iter()
+            .chain(Area::ALL)
+            .filter(|area| self.area_shown(*area))
+            .find_map(|area| self.area_focus(area));
+        self.focused_pane = candidate;
+        if let Some(pane) = candidate {
+            let area = self.pane_area(pane).unwrap();
+            self.tree_mut(area).focused = Some(pane);
+        }
+    }
+
+    /// The area commands that walk panes stay in: the focused pane's, or the
+    /// center.
+    fn focused_area(&self) -> Area {
+        self.focused_pane()
+            .map(|pane| pane.area)
+            .unwrap_or(Area::Center)
+    }
+
+    /// The first pane of the focused pane's area, in layout order.
     pub fn first_pane_id(&self) -> Option<PaneId> {
-        self.pane_order().first().copied()
+        self.area_panes(self.focused_area()).first().copied()
     }
 
-    /// The last pane in layout order, not in a dock.
+    /// The last pane of the focused pane's area, in layout order.
     pub fn last_pane_id(&self) -> Option<PaneId> {
-        self.pane_order().last().copied()
+        self.area_panes(self.focused_area()).last().copied()
     }
 
-    /// The pane after (or before) the focused one in layout order, wrapping
-    /// over panes outside the docks. From a dock, the walk starts at either
-    /// end of the editor area.
+    /// The pane after (or before) the focused one in its area's layout
+    /// order, wrapping. Without focus, the walk starts at either end of the
+    /// center.
     pub fn cycle_pane_id(&self, forward: bool) -> Option<PaneId> {
-        let order = self.pane_order();
+        let order = self.area_panes(self.focused_area());
         let count = order.len();
         let Some(index) = order
             .iter()
@@ -501,6 +654,14 @@ impl Workbench {
     /// The pane that had focus before the focused one, while it is open.
     pub fn previous_pane_id(&self) -> Option<PaneId> {
         self.previous_pane.filter(|pane| self.pane(*pane).is_some())
+    }
+
+    /// The center pane documents open in: the focused pane when it is in the
+    /// center, else the center's last focused pane.
+    pub fn center_pane(&self) -> Option<PaneId> {
+        self.focused_pane
+            .filter(|pane| self.pane_area(*pane) == Some(Area::Center))
+            .or_else(|| self.area_focus(Area::Center))
     }
 
     pub fn focus_pane(&mut self, pane_id: PaneId) -> bool {
@@ -566,26 +727,16 @@ impl Workbench {
     }
 
     /// Open a document as the pane's preview tab, replacing its current
-    /// preview in place; a dock opens it in the normal group instead. Returns
+    /// preview in place; a dock pane opens it in the center instead. Returns
     /// the pane, the tab, and the document the preview replaced.
     pub fn open_preview_for_document(
         &mut self,
         pane_id: PaneId,
         document_id: DocumentId,
     ) -> Option<(PaneId, TabId, Option<DocumentId>)> {
-        self.pane(pane_id)?;
-        if self.dock_location(pane_id).is_some() {
-            let Some(normal) = self.normal_pane() else {
-                let (pane, tab) = self.open_document_in_normal_group(document_id);
-                self.panes
-                    .iter_mut()
-                    .find(|item| item.id == pane)?
-                    .tabs
-                    .last_mut()?
-                    .preview = true;
-                return Some((pane, tab, None));
-            };
-            return self.open_preview_for_document(normal, document_id);
+        if self.pane_area(pane_id)? != Area::Center {
+            let center = self.ensure_center_pane();
+            return self.open_preview_for_document(center, document_id);
         }
         let preview = self
             .pane(pane_id)?
@@ -649,9 +800,13 @@ impl Workbench {
         self.insert_tab(pane_id, TabSurfaceId::Terminal(session_id))
     }
 
-    /// Append a fresh tab to a pane and activate it.
+    /// Append a fresh tab to a pane whose area allows its kind, and activate
+    /// it.
     fn insert_tab(&mut self, pane_id: PaneId, surface: TabSurfaceId) -> Option<TabId> {
         let pane_index = self.panes.iter().position(|pane| pane.id == pane_id)?;
+        if !surface.kind().allows(self.panes[pane_index].area) {
+            return None;
+        }
         let tab = self.new_tab(surface, false);
         let tab_id = tab.id;
         let pane = &mut self.panes[pane_index];
@@ -660,6 +815,42 @@ impl Workbench {
         self.set_focus(pane_id);
         self.debug_assert_invariants();
         Some(tab_id)
+    }
+
+    /// Open a document in the center pane, creating the center's first pane
+    /// when the center is empty.
+    pub fn open_document_in_center(&mut self, document: DocumentId) -> (PaneId, TabId) {
+        let pane = self.ensure_center_pane();
+        let tab = self.open_tab_for_document(pane, document).unwrap();
+        (pane, tab)
+    }
+
+    pub fn open_terminal_in_center(
+        &mut self,
+        session: TerminalSessionId,
+    ) -> Option<(PaneId, TabId)> {
+        if self.has_terminal_session(session) {
+            return None;
+        }
+        let pane = self.ensure_center_pane();
+        self.open_terminal_tab(pane, session).map(|tab| (pane, tab))
+    }
+
+    /// The center pane, or a fresh empty one when the center is empty. The
+    /// caller installs the first tab of a fresh pane before publishing this
+    /// transition.
+    fn ensure_center_pane(&mut self) -> PaneId {
+        self.center_pane()
+            .unwrap_or_else(|| self.create_pane(Area::Center))
+    }
+
+    /// Install an empty pane as the root of an area that has none.
+    pub(super) fn create_pane(&mut self, area: Area) -> PaneId {
+        debug_assert!(self.tree(area).layout.is_none());
+        let pane = self.allocate_pane_id();
+        self.tree_mut(area).layout = Some(WorkbenchLayout::Pane(pane));
+        self.panes.push(Pane::new(pane, area, Vec::new(), TabId(0)));
+        pane
     }
 
     /// Show another document in a document tab, as a fresh presentation.
@@ -739,6 +930,8 @@ impl Workbench {
         )
     }
 
+    /// Split a pane within its area, showing `surface` in the new pane when
+    /// the area allows its kind.
     fn split_with(
         &mut self,
         pane_id: PaneId,
@@ -746,15 +939,20 @@ impl Workbench {
         placement: SplitPlacement,
         surface: TabSurfaceId,
     ) -> Option<PaneId> {
+        let area = self.pane_area(pane_id)?;
+        if !surface.kind().allows(area) {
+            return None;
+        }
         let new_pane_id = self.allocate_pane_id();
         let tab = self.new_tab(surface, false);
         let tab_id = tab.id;
-        let layout = self.layout.as_mut()?;
+        let layout = self.tree_mut(area).layout.as_mut()?;
         assert!(
             layout.split_pane(pane_id, new_pane_id, direction, placement),
             "captured pane must occur exactly once in the layout"
         );
-        self.panes.push(Pane::new(new_pane_id, vec![tab], tab_id));
+        self.panes
+            .push(Pane::new(new_pane_id, area, vec![tab], tab_id));
         self.set_focus(new_pane_id);
         self.debug_assert_invariants();
         Some(new_pane_id)
@@ -848,16 +1046,13 @@ impl Workbench {
         let tab = self.panes[pane_index].tabs.remove(tab_index);
 
         if self.panes[pane_index].tabs.is_empty() {
-            let previous_focus = self.focused_pane;
-            self.panes.remove(pane_index);
-            self.docks.retain(|(pane, _)| *pane != pane_id);
-            self.layout = self
+            let area = self.panes.remove(pane_index).area;
+            let tree = self.tree_mut(area);
+            tree.layout = tree
                 .layout
                 .take()
                 .and_then(|layout| layout.remove_pane(pane_id));
-            self.focused_pane = previous_focus
-                .filter(|focused| self.pane(*focused).is_some())
-                .or_else(|| self.layout.as_ref().map(WorkbenchLayout::first_pane));
+            self.settle_focus(Some(area));
             let removed = RemovedTab {
                 tab,
                 removed_pane: Some(pane_id),
@@ -899,51 +1094,47 @@ impl Workbench {
         #[cfg(debug_assertions)]
         {
             let mut layout_panes = Vec::new();
-            if let Some(layout) = &self.layout {
-                layout.pane_ids(&mut layout_panes);
+            for area in Area::ALL {
+                for pane in self.area_panes(area) {
+                    debug_assert_eq!(self.pane_area(pane), Some(area));
+                    layout_panes.push(pane);
+                }
             }
             let layout_pane_set = layout_panes.iter().copied().collect::<HashSet<_>>();
             let pane_set = self.panes.iter().map(Pane::id).collect::<HashSet<_>>();
             debug_assert_eq!(layout_panes.len(), layout_pane_set.len());
             debug_assert_eq!(layout_pane_set, pane_set);
-            debug_assert_eq!(self.layout.is_none(), self.panes.is_empty());
-            debug_assert_eq!(self.focused_pane.is_none(), self.panes.is_empty());
+            let any_shown = self.panes.iter().any(|pane| self.area_shown(pane.area));
+            debug_assert_eq!(self.focused_pane.is_some(), any_shown);
             debug_assert!(
                 self.focused_pane
-                    .is_none_or(|focused| pane_set.contains(&focused))
+                    .is_none_or(|focused| self.pane_shown(focused))
             );
 
             let mut tool_ids = HashSet::new();
-            for pane in &self.panes {
-                for tab in &pane.tabs {
-                    if let TabSurfaceId::Tool(id) = tab.surface_id() {
-                        debug_assert!(self.tool(id).is_some());
-                        debug_assert!(tool_ids.insert(id));
-                    }
-                }
-            }
-            debug_assert!(self.docks.iter().all(|(pane, _)| pane_set.contains(pane)));
             let mut presentations = HashSet::new();
-            for tab in self.panes.iter().flat_map(|pane| &pane.tabs) {
-                if let TabSurfaceId::Tool(id) = tab.surface {
-                    debug_assert_eq!(
-                        Some(tab.presentation),
-                        self.tool(id).map(|tool| tool.presentation)
-                    );
-                }
-                debug_assert!(presentations.insert(tab.presentation));
-            }
             let mut tab_ids = HashSet::new();
             for pane in &self.panes {
                 debug_assert!(!pane.tabs.is_empty());
                 debug_assert!(pane.tabs.iter().any(|tab| tab.id == pane.active_tab));
-                debug_assert!(pane.tabs.iter().all(|tab| tab_ids.insert(tab.id)));
                 debug_assert!(
                     pane.tabs
                         .iter()
                         .skip_while(|tab| tab.pinned)
                         .all(|tab| !tab.pinned)
                 );
+                for tab in &pane.tabs {
+                    debug_assert!(tab.surface.kind().allows(pane.area));
+                    debug_assert!(tab_ids.insert(tab.id));
+                    debug_assert!(presentations.insert(tab.presentation));
+                    if let TabSurfaceId::Tool(id) = tab.surface {
+                        debug_assert!(tool_ids.insert(id));
+                        debug_assert_eq!(
+                            Some(tab.presentation),
+                            self.tool(id).map(|tool| tool.presentation)
+                        );
+                    }
+                }
             }
         }
     }
@@ -956,8 +1147,8 @@ struct RemovedTab {
 
 mod tools;
 pub use tools::{
-    DockLocation, EXPLORER_TOOL_ID, StoredLocation, StoredTool, TOOL_LAYOUT_VERSION, ToolFrame,
-    ToolFrameId, ToolLayoutSnapshot, ToolPlacement,
+    DockLocation, EXPLORER_TOOL_ID, HiddenTool, StoredDock, StoredNode, StoredPlacement,
+    TOOL_LAYOUT_VERSION, ToolFrame, ToolFrameId, ToolLayoutSnapshot,
 };
 
 mod arrange;
@@ -969,7 +1160,7 @@ mod relocate;
 mod resize;
 pub use resize::{Rect, neighbor};
 
-pub use arrange::PlanNode;
+pub use arrange::{Arrangement, DockArrangement, PlanNode};
 
 pub use relocate::{
     SplitEdge, TabMoveCapture, TabMoveDestination, TabMovePlacement, TabMoveTransition,
@@ -982,6 +1173,110 @@ pub use close::{
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pane_walks_stay_in_the_focused_area_and_focus_falls_back_to_the_center() {
+        let document = DocumentId::new(20);
+        let workbench = &mut Workbench::new_for_document(document);
+        let main = workbench.focused_pane_id().unwrap();
+        let split = workbench
+            .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
+            .unwrap();
+        let [first, second] = ["knot.first", "knot.second"]
+            .map(|stable| workbench.register_tool(stable, stable, DockLocation::Left));
+        let (upper, tab) = workbench.show_tool(first).unwrap();
+        workbench.show_tool(second);
+        let source = workbench.capture_tab_move(upper, tab).unwrap();
+        let lower = workbench
+            .relocate_tab(
+                source,
+                TabMoveDestination::At {
+                    anchor: source,
+                    placement: TabMovePlacement::Split(SplitEdge::Bottom),
+                },
+            )
+            .unwrap()
+            .destination
+            .pane_id;
+        assert_eq!(workbench.area_panes(Area::Center), [main, split]);
+        assert_eq!(workbench.pane_order(), [main, split, upper, lower]);
+        assert_eq!(workbench.cycle_pane_id(true), Some(upper));
+        assert_eq!(workbench.first_pane_id(), Some(upper));
+        workbench.focus_pane(main);
+        assert_eq!(workbench.cycle_pane_id(true), Some(split));
+        assert_eq!(workbench.last_pane_id(), Some(split));
+        workbench.focus_pane(lower);
+
+        // A collapsed pane hands focus to its area, and the dock's last pane
+        // to the center pane it last focused.
+        workbench.hide_tool(first);
+        assert_eq!(workbench.focused_pane_id(), Some(upper));
+        workbench.hide_tool(second);
+        assert_eq!(workbench.focused_pane_id(), Some(main));
+        assert_eq!(workbench.center_pane(), Some(main));
+        // An empty center leaves focus in a dock.
+        let (upper, _) = workbench.show_tool(second).unwrap();
+        workbench.focus_pane(main);
+        workbench.remove_document_tabs();
+        assert_eq!(workbench.center(), None);
+        assert_eq!(workbench.center_pane(), None);
+        assert_eq!(workbench.focused_pane_id(), Some(upper));
+        let (center, _) = workbench.open_document_in_center(document);
+        assert_eq!(workbench.pane_area(center), Some(Area::Center));
+        assert_eq!(workbench.focused_pane_id(), Some(center));
+    }
+
+    #[test]
+    fn arranging_installs_each_area_and_focuses_the_marked_pane() {
+        let workbench = &mut Workbench::empty();
+        let tool = workbench.register_tool("knot.tool", "Tool", DockLocation::Right);
+        let pane = |tabs, focused| PlanNode::Pane {
+            selected: 0,
+            focused,
+            pinned: 0,
+            tabs,
+        };
+        let dock = |root, visible| DockArrangement {
+            root,
+            size: 300.,
+            visible,
+        };
+        let installed = workbench.arrange(Arrangement {
+            center: Some(pane(
+                vec![(TabSurfaceId::Document(DocumentId::new(21)), 'a')],
+                false,
+            )),
+            docks: [
+                dock(None, true),
+                dock(
+                    Some(pane(vec![(TabSurfaceId::Tool(tool), 'b')], true)),
+                    true,
+                ),
+                dock(None, false),
+            ],
+        });
+        assert_eq!(
+            installed
+                .iter()
+                .map(|(_, value)| *value)
+                .collect::<Vec<_>>(),
+            ['a', 'b']
+        );
+        let right = workbench.tool_tab(tool).unwrap().0;
+        assert_eq!(workbench.dock_location(right), Some(DockLocation::Right));
+        assert_eq!(workbench.focused_pane_id(), Some(right));
+        assert_eq!(workbench.dock_size(DockLocation::Right), 300.);
+        assert!(!workbench.dock_visible(DockLocation::Bottom));
+        // A tab restored into a gone pane, or one its kind does not allow,
+        // lands in the center.
+        let (center, _) = workbench.insert_arranged(
+            right,
+            0,
+            TabSurfaceId::Terminal(TerminalSessionId(1)),
+            false,
+        );
+        assert_eq!(workbench.pane_area(center), Some(Area::Center));
+    }
 
     #[test]
     fn mixed_tabs_keep_identity_activation_and_document_views() {
@@ -1384,13 +1679,13 @@ mod tests {
                 .unwrap();
 
             let mut pane_ids = Vec::new();
-            workbench.layout().unwrap().pane_ids(&mut pane_ids);
+            workbench.center().unwrap().pane_ids(&mut pane_ids);
             assert_eq!(pane_ids, vec![first, third, second]);
             assert_eq!(workbench.focused_pane_id(), Some(third));
             assert_eq!(workbench.panes().len(), 3);
             assert_eq!(workbench.view_count(document), 3);
             assert!(matches!(
-                workbench.layout(),
+                workbench.center(),
                 Some(WorkbenchLayout::Split {
                     direction: SplitDirection::Horizontal,
                     second,
@@ -1417,7 +1712,7 @@ mod tests {
                 .split_focused(SplitDirection::Horizontal, SplitPlacement::Before)
                 .unwrap();
             let mut pane_ids = Vec::new();
-            workbench.layout().unwrap().pane_ids(&mut pane_ids);
+            workbench.center().unwrap().pane_ids(&mut pane_ids);
 
             assert_eq!(pane_ids, vec![new, existing]);
             assert_eq!(workbench.focused_pane_id(), Some(new));

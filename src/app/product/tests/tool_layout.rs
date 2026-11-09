@@ -1,16 +1,16 @@
 //! Automatic tool-layout memory across windows and restarts.
 use super::operations::empty_product_window;
 use super::*;
-use crate::app::tool_layout::{
-    ApplicationToolLayout, EXPLORER_TOOL_ID, StoredLocation, ToolLayoutSnapshot,
-};
-use crate::app::workbench::{
-    DockLocation, SplitEdge, TabMoveDestination, TabMovePlacement, ToolFrameId, ToolPlacement,
-    WorkbenchLayout,
-};
+use crate::app::tool_layout::{ApplicationToolLayout, EXPLORER_TOOL_ID, ToolLayoutSnapshot};
+use crate::app::workbench::{DockLocation, ToolFrameId, WorkbenchLayout};
+use knot_model::workbench::{StoredNode, StoredPlacement};
 
 fn stored(cx: &TestAppContext) -> ToolLayoutSnapshot {
     cx.read(|cx| cx.global::<ApplicationToolLayout>().0.current())
+}
+
+fn explorer_placement(cx: &TestAppContext) -> Option<StoredPlacement> {
+    stored(cx).placement(EXPLORER_TOOL_ID)
 }
 
 fn explorer_id(shell: &Entity<ProductShell>, cx: &gpui::App) -> ToolFrameId {
@@ -43,18 +43,14 @@ fn user_customization_becomes_the_fresh_window_default(cx: &mut TestAppContext) 
             workbench.set_dock_size(DockLocation::Bottom, 300.);
         });
     });
-    place_explorer(
-        &shell,
-        window,
-        ToolPlacement::Dock(DockLocation::Bottom),
-        cx,
-    );
+    place_explorer(&shell, window, DockLocation::Bottom, cx);
     let snapshot = stored(cx);
-    let record = snapshot.tool(EXPLORER_TOOL_ID).unwrap();
-    assert_eq!(record.location, StoredLocation::Bottom);
-    assert!(record.visible);
-    assert_eq!(snapshot.dock_sizes[DockLocation::Left.index()], 311.);
-    assert_eq!(snapshot.dock_sizes[DockLocation::Bottom.index()], 300.);
+    assert_eq!(
+        snapshot.placement(EXPLORER_TOOL_ID),
+        Some(StoredPlacement::Docked(DockLocation::Bottom))
+    );
+    assert_eq!(snapshot.dock(DockLocation::Left).size, 311.);
+    assert_eq!(snapshot.dock(DockLocation::Bottom).size, 300.);
 
     // A fresh window inherits the customized arrangement.
     let (fresh, fresh_window) = empty_product_window(&documents, cx);
@@ -84,7 +80,7 @@ fn existing_windows_keep_live_state_and_activation_does_not_publish(cx: &mut Tes
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
     open_workspace(&shell, cx);
-    place_explorer(&shell, window, ToolPlacement::Dock(DockLocation::Right), cx);
+    place_explorer(&shell, window, DockLocation::Right, cx);
     let published = stored(cx);
 
     let (fresh, _) = empty_product_window(&documents, cx);
@@ -118,17 +114,16 @@ fn hidden_tools_restore_placement_and_size_across_windows(cx: &mut TestAppContex
             workbench.set_dock_size(DockLocation::Bottom, 300.);
         });
     });
-    place_explorer(
-        &shell,
-        window,
-        ToolPlacement::Dock(DockLocation::Bottom),
-        cx,
-    );
+    place_explorer(&shell, window, DockLocation::Bottom, cx);
     let hidden = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
     assert_eq!(wait_for_command(hidden, cx), CommandOutcome::Completed);
-    let record = stored(cx).tool(EXPLORER_TOOL_ID).unwrap().clone();
-    assert!(!record.visible);
-    assert_eq!(record.location, StoredLocation::Bottom);
+    assert!(matches!(
+        explorer_placement(cx),
+        Some(StoredPlacement::Hidden {
+            dock: DockLocation::Bottom,
+            ..
+        })
+    ));
 
     // A fresh window remembers the hidden placement without showing the tool.
     let (fresh, fresh_window) = empty_product_window(&documents, cx);
@@ -150,55 +145,46 @@ fn hidden_tools_restore_placement_and_size_across_windows(cx: &mut TestAppContex
 }
 
 #[gpui::test]
-fn mixed_document_groups_leave_no_splits_or_placeholders(cx: &mut TestAppContext) {
+fn document_splits_and_dock_visibility_reach_fresh_windows_only_as_dock_state(
+    cx: &mut TestAppContext,
+) {
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
     open_workspace(&shell, cx);
-    place_explorer(&shell, window, ToolPlacement::DocumentGroup, cx);
-    assert_eq!(
-        stored(cx).tool(EXPLORER_TOOL_ID).unwrap().location,
-        StoredLocation::DocumentGroup
-    );
+    place_explorer(&shell, window, DockLocation::Left, cx);
     // Document splits are not layout changes and never publish.
     shell.update(cx, |shell, cx| {
-        let (pane, tab) = shell
+        let pane = shell.workbench.read(cx).center_pane().unwrap();
+        shell
             .workbench
-            .read(cx)
-            .panes()
-            .iter()
-            .find_map(|pane| {
-                pane.tabs()
-                    .iter()
-                    .find(|tab| tab.document_id().is_some())
-                    .map(|tab| (pane.id(), tab.id()))
-            })
-            .unwrap();
-        shell.workbench.update(cx, |workbench, _| {
-            workbench.activate_tab(pane, tab);
-        });
+            .update(cx, |workbench, _| workbench.focus_pane(pane));
     });
+    let published = stored(cx);
     let split = dispatch_product_command(&shell, window, "workbench.split-horizontal", cx);
     assert_eq!(wait_for_command(split, cx), CommandOutcome::Completed);
-    let published = stored(cx);
+    assert_eq!(stored(cx), published);
+    assert_eq!(
+        published.dock(DockLocation::Left).root,
+        Some(StoredNode::Pane {
+            selected: 0,
+            tools: vec![EXPLORER_TOOL_ID.into()],
+        })
+    );
 
+    // A hidden dock keeps the explorer in it, and fresh windows inherit both.
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-left-sidebar", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    assert!(!stored(cx).dock(DockLocation::Left).visible);
     let (fresh, _) = empty_product_window(&documents, cx);
     open_workspace(&fresh, cx);
     cx.read(|cx| {
         let workbench = fresh.read(cx).workbench.read(cx);
-        assert!(matches!(workbench.layout(), Some(WorkbenchLayout::Pane(_))));
-        let (pane, _) = workbench.tool_tab(explorer_id(&fresh, cx)).unwrap();
-        assert_eq!(workbench.dock_location(pane), None);
-        assert_eq!(pane, workbench.normal_pane().unwrap());
-        assert!(
-            workbench
-                .pane(pane)
-                .unwrap()
-                .tabs()
-                .iter()
-                .any(|tab| tab.document_id().is_some())
-        );
+        assert!(matches!(workbench.center(), Some(WorkbenchLayout::Pane(_))));
+        let id = explorer_id(&fresh, cx);
+        let (pane, _) = workbench.tool_tab(id).unwrap();
+        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Left));
+        assert!(!workbench.tool_visible(id));
     });
-    assert_eq!(stored(cx), published);
 }
 
 #[gpui::test]
@@ -206,12 +192,7 @@ fn reset_layout_restores_product_defaults(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
     open_workspace(&shell, cx);
-    place_explorer(
-        &shell,
-        window,
-        ToolPlacement::Dock(DockLocation::Bottom),
-        cx,
-    );
+    place_explorer(&shell, window, DockLocation::Bottom, cx);
     let hidden = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
     assert_eq!(wait_for_command(hidden, cx), CommandOutcome::Completed);
     assert_ne!(stored(cx), ToolLayoutSnapshot::product_default());
@@ -229,7 +210,7 @@ fn reset_layout_restores_product_defaults(cx: &mut TestAppContext) {
         for dock in DockLocation::ALL {
             assert_eq!(
                 workbench.dock_size(dock),
-                ToolLayoutSnapshot::product_default().dock_sizes[dock.index()]
+                ToolLayoutSnapshot::product_default().dock(dock).size
             );
         }
     });
@@ -242,22 +223,24 @@ fn restore_skips_unknown_tools_without_blank_frames(cx: &mut TestAppContext) {
     open_workspace(&shell, cx);
     let before = stored(cx);
     let mut snapshot = ToolLayoutSnapshot::product_default();
-    snapshot.tools.push(knot_model::workbench::StoredTool {
-        id: "knot.missing".into(),
-        location: StoredLocation::Right,
-        index: 0,
-        visible: true,
-    });
-    snapshot.tools[0].location = StoredLocation::DocumentGroup;
+    let pane = |tool: &str| StoredNode::Pane {
+        selected: 0,
+        tools: vec![tool.to_owned()],
+    };
+    snapshot.docks[DockLocation::Left.index()].root = None;
+    snapshot.docks[DockLocation::Right.index()].root = Some(pane("knot.missing"));
+    snapshot.docks[DockLocation::Bottom.index()].root = Some(pane(EXPLORER_TOOL_ID));
     shell.update(cx, |shell, cx| {
-        shell.restore_tool_layout(&snapshot, cx);
+        shell
+            .workbench
+            .update(cx, |workbench, _| workbench.restore_tool_layout(&snapshot));
     });
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         assert_eq!(workbench.tools().len(), 1);
         let (pane, _) = workbench.tool_tab(explorer_id(&shell, cx)).unwrap();
-        assert_eq!(workbench.dock_location(pane), None);
-        assert_eq!(workbench.panes().len(), 1);
+        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Bottom));
+        assert_eq!(workbench.panes().len(), 2);
     });
     // Restore is never a customization: the stored default is untouched.
     assert_eq!(stored(cx), before);
@@ -268,7 +251,7 @@ fn fresh_window_restores_visible_tools_without_folder(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
     open_workspace(&shell, cx);
-    place_explorer(&shell, window, ToolPlacement::Dock(DockLocation::Right), cx);
+    place_explorer(&shell, window, DockLocation::Right, cx);
     // A fresh window with no folder inherits the visible right dock.
     let (fresh, _) = empty_product_window(&documents, cx);
     fresh.update(cx, |fresh, cx| fresh.restore_fresh_window_layout(cx));
@@ -301,7 +284,7 @@ fn fresh_window_with_hidden_tool_restores_nothing(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
     open_workspace(&shell, cx);
-    place_explorer(&shell, window, ToolPlacement::Dock(DockLocation::Right), cx);
+    place_explorer(&shell, window, DockLocation::Right, cx);
     let hidden = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
     assert_eq!(wait_for_command(hidden, cx), CommandOutcome::Completed);
     let (fresh, _) = empty_product_window(&documents, cx);
@@ -319,58 +302,6 @@ fn fresh_window_with_hidden_tool_restores_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn split_right_tool_restores_as_right_dock(cx: &mut TestAppContext) {
-    let documents = install_globals(cx);
-    let (shell, _) = empty_product_window(&documents, cx);
-    open_workspace(&shell, cx);
-    // Drag the explorer to the pane's right edge: an ordinary tool-only split.
-    shell.update(cx, |shell, cx| {
-        let id = shell
-            .workbench
-            .read(cx)
-            .tool_by_stable_id(EXPLORER_TOOL_ID)
-            .unwrap();
-        shell.workbench.update(cx, |workbench, _| {
-            let (dock, tab) = workbench.tool_tab(id).unwrap();
-            let source = workbench.capture_tab_move(dock, tab).unwrap();
-            let (doc_pane, doc_tab) = workbench
-                .panes()
-                .iter()
-                .find_map(|pane| {
-                    pane.tabs()
-                        .iter()
-                        .find(|tab| tab.document_id().is_some())
-                        .map(|tab| (pane.id(), tab.id()))
-                })
-                .unwrap();
-            let anchor = workbench.capture_tab_move(doc_pane, doc_tab).unwrap();
-            workbench
-                .relocate_tab(
-                    source,
-                    TabMoveDestination::At {
-                        anchor,
-                        placement: TabMovePlacement::Split(SplitEdge::Right),
-                    },
-                )
-                .unwrap();
-        });
-        shell.publish_tool_layout(cx);
-    });
-    // A tool alone in a right split is remembered as the right dock.
-    assert_eq!(
-        stored(cx).tool(EXPLORER_TOOL_ID).unwrap().location,
-        StoredLocation::Right
-    );
-    let (fresh, _) = empty_product_window(&documents, cx);
-    fresh.update(cx, |fresh, cx| fresh.restore_fresh_window_layout(cx));
-    cx.read(|cx| {
-        let workbench = fresh.read(cx).workbench.read(cx);
-        let (pane, _) = workbench.tool_tab(explorer_id(&fresh, cx)).unwrap();
-        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Right));
-    });
-}
-
-#[gpui::test]
 fn move_tool_to_dock_places_the_focused_tool_and_publishes_the_default(cx: &mut TestAppContext) {
     use crate::app::commands::dispatch::MOVE_TOOL_TO_DOCK_COMMAND;
     let documents = install_globals(cx);
@@ -384,11 +315,10 @@ fn move_tool_to_dock_places_the_focused_tool_and_publishes_the_default(cx: &mut 
         CommandOutcome::Unavailable
     );
     open_workspace(&shell, cx);
-    for (label, location) in [
-        ("Right", StoredLocation::Right),
-        ("Bottom", StoredLocation::Bottom),
-        ("Document Area", StoredLocation::DocumentGroup),
-        ("Left", StoredLocation::Left),
+    for (label, dock) in [
+        ("Right", DockLocation::Right),
+        ("Bottom", DockLocation::Bottom),
+        ("Left", DockLocation::Left),
     ] {
         let id = cx.read(|cx| explorer_id(&shell, cx));
         shell.update(cx, |shell, cx| {
@@ -403,9 +333,11 @@ fn move_tool_to_dock_places_the_focused_tool_and_publishes_the_default(cx: &mut 
         cx.simulate_input(window, label);
         cx.simulate_keystrokes(window, "enter");
         cx.run_until_parked();
-        let record = stored(cx).tool(EXPLORER_TOOL_ID).unwrap().clone();
-        assert_eq!(record.location, location, "{label}");
-        assert!(record.visible);
+        assert_eq!(
+            explorer_placement(cx),
+            Some(StoredPlacement::Docked(dock)),
+            "{label}"
+        );
         cx.read(|cx| {
             let workbench = shell.read(cx).workbench.read(cx);
             let (pane, _) = workbench.tool_tab(explorer_id(&shell, cx)).unwrap();

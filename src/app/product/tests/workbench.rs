@@ -22,7 +22,7 @@ fn shell_actions_render_tabs_and_both_split_directions(cx: &mut TestAppContext) 
         let workbench = shell.read(cx).workbench.read(cx);
         assert_eq!(workbench.panes().len(), 3);
         assert!(matches!(
-            workbench.layout(),
+            workbench.center(),
             Some(WorkbenchLayout::Split {
                 direction: SplitDirection::Horizontal,
                 second,

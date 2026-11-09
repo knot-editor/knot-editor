@@ -156,10 +156,10 @@ impl ProductShell {
                     }
                     moved
                 });
-                let Some(moved) = moved else {
+                if moved.is_none() {
                     return CommandOutcome::InvalidTarget;
-                };
-                if moved.source_is_empty {
+                }
+                if self.workbench.read(cx).panes().is_empty() {
                     self.replace_empty_workbench(this.clone(), cx);
                 }
                 shell.focus_relocated_surface(cx);

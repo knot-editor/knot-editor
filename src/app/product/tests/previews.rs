@@ -46,7 +46,7 @@ fn file_tabs(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<(String, 
     cx.read(|cx| {
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
         let workbench = shell.read(cx).workbench.read(cx);
-        let pane = workbench.normal_pane().unwrap();
+        let pane = workbench.center_pane().unwrap();
         workbench
             .pane(pane)
             .unwrap()

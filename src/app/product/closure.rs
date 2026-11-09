@@ -24,7 +24,7 @@ fn closure_views(views: &[ProtectedView]) -> Vec<model::ClosureView> {
         .map(|view| model::ClosureView {
             key: view.key,
             pinned: view.pinned,
-            dock: view.dock,
+            area: view.area,
         })
         .collect()
 }
@@ -79,7 +79,10 @@ impl ProductShell {
                         surface: snapshot.surface,
                     },
                     pinned,
-                    dock: workbench.read(cx).dock_location(snapshot.pane_id).is_some(),
+                    area: workbench
+                        .read(cx)
+                        .pane_area(snapshot.pane_id)
+                        .expect("snapshots name live panes"),
                     target: has_editor.then(|| ProductCommandTarget {
                         shell: shell.downgrade(),
                         workbench: workbench.downgrade(),

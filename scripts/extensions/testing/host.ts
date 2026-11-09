@@ -1198,12 +1198,13 @@ export function settingDefinitions(): ReadonlyMap<string, Knot.SettingDefinition
 
 // The "knot" module --------------------------------------------------------
 
+const DOCK = { size: 0, visible: true, root: null };
 const LAYOUT: Knot.WindowLayout = {
-  version: 1,
+  version: 2,
   geometry: null,
-  root: null,
+  center: null,
+  docks: { left: DOCK, right: DOCK, bottom: DOCK },
   focused: null,
-  dockSizes: { left: 0, right: 0, bottom: 0 },
 };
 
 export const api: KnotApi = {

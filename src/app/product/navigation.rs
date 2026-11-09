@@ -125,8 +125,14 @@ impl ProductShell {
 }
 
 impl ProductShell {
-    /// The pane beside `pane` toward `edge`.
-    fn neighbor(&self, pane: PaneId, edge: SplitEdge, cx: &App) -> Option<PaneId> {
+    /// The pane beside `pane` toward `edge`, among panes `accepts` admits.
+    fn neighbor(
+        &self,
+        pane: PaneId,
+        edge: SplitEdge,
+        accepts: impl Fn(Area) -> bool,
+        cx: &App,
+    ) -> Option<PaneId> {
         let area = self
             .tab_drag
             .borrow()
@@ -143,7 +149,11 @@ impl ProductShell {
                 width: 1200.,
                 height: 800.,
             });
-        let rects = self.workbench.read(cx).pane_rects(area);
+        let workbench = self.workbench.read(cx);
+        let mut rects = workbench.pane_rects(area);
+        rects.retain(|(candidate, _)| {
+            *candidate == pane || workbench.pane_area(*candidate).is_some_and(&accepts)
+        });
         crate::app::workbench::neighbor(&rects, pane, edge)
     }
 
@@ -157,7 +167,7 @@ impl ProductShell {
         self.maximized = None;
         cx.notify();
         let neighbor = self
-            .neighbor(pane, edge, cx)
+            .neighbor(pane, edge, |_| true, cx)
             .ok_or(CommandOutcome::Unavailable)?;
         self.workbench
             .update(cx, |workbench, _| workbench.focus_pane(neighbor));
@@ -180,8 +190,9 @@ impl ProductShell {
         Ok(())
     }
 
-    /// Move a tab into the pane beside its own toward `edge`, or split its
-    /// pane on that side when no pane lies there.
+    /// Move a tab into the pane beside its own toward `edge` whose area
+    /// allows the tab's kind, or split its pane on that side when no such
+    /// pane lies there.
     pub(super) fn move_tab_toward(
         &mut self,
         pane: PaneId,
@@ -194,8 +205,9 @@ impl ProductShell {
         let source = self
             .capture_tab_relocation(pane, tab, cx)
             .ok_or(CommandOutcome::InvalidTarget)?;
+        let kind = source.tab.tab.surface.kind();
         let workbench = self.workbench.read(cx);
-        let target = match self.neighbor(pane, edge, cx) {
+        let target = match self.neighbor(pane, edge, |area| kind.allows(area), cx) {
             Some(neighbor) => TabMoveDestination::At {
                 anchor: workbench
                     .capture_tab_move(neighbor, workbench.pane(neighbor).unwrap().active_tab_id())

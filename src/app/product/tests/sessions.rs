@@ -7,7 +7,7 @@ use super::*;
 use crate::app::extensions::host::handlers::{AccessError, OpenError, ReplaceError};
 use crate::app::product::sessions::{EntryOutcome, ReplaceWindowsResult};
 use crate::app::recovery::{ApplicationRecovery, SnapshotKind};
-use crate::app::workbench::{DockLocation, SplitPlacement, ToolPlacement};
+use crate::app::workbench::{DockLocation, SplitPlacement};
 use knot_protocol::ExtensionKey;
 use serde_json::json;
 
@@ -599,7 +599,7 @@ fn multi_window_sessions_close_every_source_and_create_every_destination(cx: &mu
                 .read(cx)
                 .workbench
                 .read(cx)
-                .normal_pane()
+                .center_pane()
                 .is_some()
         )
     });
@@ -995,7 +995,7 @@ fn capture_layout(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> ser
 /// The parts of a layout restoration reproduces exactly; geometry is fitted
 /// to the displays instead.
 fn arrangement(layout: &serde_json::Value) -> serde_json::Value {
-    json!({ "root": layout["root"], "focused": layout["focused"], "dockSizes": layout["dockSizes"] })
+    json!({ "center": layout["center"], "focused": layout["focused"], "docks": layout["docks"] })
 }
 
 fn editors(
@@ -1061,7 +1061,7 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
     ];
     shell.update(cx, |shell, cx| {
         shell.replace_workspace_roots(vec![uri("a")], cx);
-        let pane = shell.workbench.read(cx).normal_pane().unwrap();
+        let pane = shell.workbench.read(cx).center_pane().unwrap();
         let (terminal, view) = shell.create_terminal(cx);
         shell.workbench.update(cx, |workbench, cx| {
             let split = workbench
@@ -1077,8 +1077,9 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
     }
     let source_terminals = terminal_sessions(&shell, cx);
     let layout = capture_layout(window, cx);
-    assert_eq!(layout["root"]["kind"], "split");
-    assert_eq!(layout["root"]["first"]["dock"], "left");
+    assert_eq!(layout["center"]["kind"], "split");
+    assert_eq!(layout["docks"]["left"]["root"]["kind"], "pane");
+    assert_eq!(layout["docks"]["left"]["size"], 310.);
 
     let result = h
         .replace(
@@ -1125,18 +1126,20 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
         assert!(!sessions.borrow().sessions.contains_key(&stopped));
     });
 
-    // A tool sharing a document group is placed exactly too.
+    // A tool in another dock, beside a hidden one, is placed exactly too.
     let tab = restored.update(cx, |shell, cx| {
         let explorer = shell.explorer_frame(cx).unwrap();
-        let pane = shell.workbench.read(cx).normal_pane().unwrap();
+        let pane = shell.workbench.read(cx).center_pane().unwrap();
         shell.workbench.update(cx, |workbench, _| {
-            workbench.place_tool(explorer, ToolPlacement::Group(pane));
+            workbench.place_tool(explorer, DockLocation::Bottom);
+            workbench.set_dock_visible(DockLocation::Left, false);
             workbench.focus_pane(pane);
         });
         pane
     });
     let shared = capture_layout(restored_window, cx);
-    assert_eq!(shared["root"]["kind"], "split");
+    assert_eq!(shared["docks"]["bottom"]["root"]["kind"], "pane");
+    assert_eq!(shared["docks"]["left"]["visible"], false);
     let result = h
         .replace(
             json!({
@@ -1242,21 +1245,29 @@ fn layouts_prune_unknown_tabs_hide_unnamed_tools_and_ignore_unsupported_versions
     let (one, _, window) = h.file_window("a/one.txt", cx);
     let untitled = h.untitled("loose", cx);
     let view = json!({ "anchor": 0, "caret": 2, "top": 0, "scrollX": 0 });
-    // The explorer is registered by the roots but not named, the second
-    // pane holds only an unknown tool and an unmatched document, and the
-    // first pane repeats its document.
+    // The explorer is registered by the roots but named only in the center,
+    // which does not allow tools; the second center pane holds it and an
+    // unmatched document, the first repeats its document, and the bottom dock
+    // holds only an unknown tool and a document, which docks do not allow.
     let layout = json!({
-        "version": 1, "geometry": null, "focused": 1,
-        "dockSizes": { "left": 200, "right": 240, "bottom": 220 },
-        "root": { "kind": "split", "direction": "vertical", "ratio": 0.5,
-            "first": { "kind": "pane", "dock": null, "selected": 5, "tabs": [
+        "version": 2, "geometry": null, "focused": 1,
+        "center": { "kind": "split", "direction": "vertical", "ratio": 0.5,
+            "first": { "kind": "pane", "selected": 5, "tabs": [
                 { "kind": "document", "document": null, "uri": "mem://product/a/one.txt", "view": view },
                 { "kind": "document", "document": null, "uri": "mem://product/a/./one.txt", "view": view },
             ] },
-            "second": { "kind": "pane", "dock": "bottom", "selected": 0, "tabs": [
-                { "kind": "tool", "tool": "@example/gone.view" },
+            "second": { "kind": "pane", "selected": 0, "tabs": [
+                { "kind": "tool", "tool": "knot.explorer" },
                 { "kind": "document", "document": "not-an-entry", "uri": null, "view": view },
             ] } },
+        "docks": {
+            "left": { "size": 200, "visible": true, "root": null },
+            "right": { "size": 240, "visible": true, "root": null },
+            "bottom": { "size": 220, "visible": true, "root": { "kind": "pane", "selected": 0, "tabs": [
+                { "kind": "tool", "tool": "@example/gone.view" },
+                { "kind": "document", "document": null, "uri": "mem://product/a/one.txt", "view": view },
+            ] } },
+        },
     });
     let result = h
         .replace(
@@ -1282,12 +1293,12 @@ fn layouts_prune_unknown_tabs_hide_unnamed_tools_and_ignore_unsupported_versions
     let (pruned, pruned_window) = created(&result, 0, cx);
     let captured = capture_layout(pruned_window, cx);
     // One pane remains with the document once; the unplaced entry follows in
-    // the normal group, so its text is never hidden.
-    assert_eq!(captured["root"]["kind"], "pane");
-    assert_eq!(captured["root"]["dock"], serde_json::Value::Null);
-    assert_eq!(captured["root"]["tabs"][0]["view"]["caret"], 2);
+    // the center, so its text is never hidden.
+    assert_eq!(captured["center"]["kind"], "pane");
+    assert_eq!(captured["center"]["tabs"][0]["view"]["caret"], 2);
+    assert_eq!(captured["docks"]["bottom"]["root"], serde_json::Value::Null);
     assert_eq!(h.texts(&pruned, cx), ["one", "loose"]);
-    assert_eq!(captured["dockSizes"]["left"], 200.);
+    assert_eq!(captured["docks"]["left"]["size"], 200.);
     cx.read(|cx| {
         let shell = pruned.read(cx);
         let explorer = shell.explorer_frame(cx).unwrap();

@@ -97,6 +97,9 @@ const tree = await workbench.registerView({
   actions: [{ label: "Refresh", command: "check.refresh", arguments: {} }],
   placement: { location: "left", order: 1, visible: true },
 });
+// @ts-expect-error views are tools and live only in docks
+const centered: import("knot").ViewPlacement = { location: "document" };
+void centered;
 const invalidation: Promise<void> = tree.invalidate(null);
 const disposal: Promise<void> = tree.dispose();
 void [invalidation, disposal];
@@ -411,11 +414,17 @@ if (sourceWindow && openDocument) {
   await windows.focus(sourceWindow.target);
   const kept = await recovery.retain(openDocument.id);
   const layout: WindowLayout = await workbench.captureLayout(sourceWindow.target);
-  const version: 1 = layout.version;
+  const version: 2 = layout.version;
   const describeNode = (node: LayoutNode): number => node.kind === "split"
     ? describeNode(node.first) + describeNode(node.second)
     : node.tabs.filter((tab: LayoutTab) => tab.kind === "document" && tab.view.caret >= 0).length;
-  void [version, layout.geometry?.state, layout.root === null ? 0 : describeNode(layout.root)];
+  void [
+    version,
+    layout.geometry?.state,
+    layout.center === null ? 0 : describeNode(layout.center),
+    layout.docks.bottom.visible,
+    layout.docks.left.root === null ? 0 : describeNode(layout.docks.left.root),
+  ];
   // Layouts are JSON data, so a session record can store them verbatim.
   await storage.write("session", { layout });
   // @ts-expect-error layouts are read-only snapshots

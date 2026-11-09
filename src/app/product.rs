@@ -82,9 +82,9 @@ use super::{
         InputEvent, InputView, PromptText, TransientOutcome, TransientOwner, TransientSurface,
     },
     workbench::{
-        CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, PresentationId,
+        Area, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, PresentationId,
         SplitDirection, SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent,
-        ToolFrameId, ToolPlacement, Workbench, WorkbenchLayout,
+        ToolFrameId, Workbench, WorkbenchLayout,
     },
     workspace::WorkspaceState,
     workspace_tree::{
@@ -196,8 +196,8 @@ struct ProtectedCloseRequest {
 struct ProtectedView {
     key: ProtectedViewKey,
     pinned: bool,
-    /// Whether the view's pane is a dock's tool pane.
-    dock: bool,
+    /// The area of the view's pane.
+    area: Area,
     target: Option<ProductCommandTarget>,
 }
 
@@ -1696,7 +1696,7 @@ impl ProductShell {
         let model = documents.read(cx).get(document).unwrap().model().clone();
         let (pane, tab) = self.workbench.update(cx, |workbench, cx| {
             if workbench.dock_location(pane).is_some() {
-                workbench.open_document_in_normal_group(document, model, cx)
+                workbench.open_document_in_center(document, model, cx)
             } else {
                 let tab = workbench
                     .open_tab_for_document(pane, document, model, cx)
@@ -1726,7 +1726,7 @@ impl ProductShell {
     }
 
     /// Opens a focused terminal starting in `directory`, in `pane` or, when
-    /// `pane` is a dock, in the normal group.
+    /// `pane` is a dock, in the center.
     fn new_terminal_in_pane(
         &mut self,
         pane: PaneId,
@@ -1737,7 +1737,7 @@ impl ProductShell {
         let (id, view) = self.create_terminal_in(directory, cx);
         let Some((pane, tab)) = self.workbench.update(cx, |workbench, _| {
             if workbench.dock_location(pane).is_some() {
-                workbench.open_terminal_in_normal_group(id, view)
+                workbench.open_terminal_in_center(id, view)
             } else {
                 workbench
                     .open_terminal_tab(pane, id, view)
@@ -1839,7 +1839,7 @@ impl ProductShell {
         let model = documents.read(cx).get(replacement).unwrap().model().clone();
         if !self.workbench.read(cx).tools().is_empty() {
             self.workbench.update(cx, |workbench, cx| {
-                workbench.open_document_in_normal_group(replacement, model, cx);
+                workbench.open_document_in_center(replacement, model, cx);
             });
             return;
         }

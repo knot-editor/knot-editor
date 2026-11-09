@@ -2762,7 +2762,7 @@ fn install_semantic_providers(
             title: "Outline".into(),
             content: knot_protocol::ViewContentKind::Tree,
             actions: Vec::new(),
-            location: crate::app::tool_layout::StoredLocation::Left,
+            location: crate::app::workbench::DockLocation::Left,
             order: None,
             visible: true,
             language: None,

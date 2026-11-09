@@ -197,7 +197,7 @@ fn docked_window(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyWin
     let (shell, window) = four_tabs(cx);
     shell.update(cx, |shell, cx| {
         shell.ensure_explorer(true, cx);
-        let pane = shell.workbench.read(cx).normal_pane().unwrap();
+        let pane = shell.workbench.read(cx).center_pane().unwrap();
         shell
             .workbench
             .update(cx, |workbench, _| workbench.focus_pane(pane));
@@ -213,15 +213,15 @@ fn dock_and_main(
 ) -> (crate::app::workbench::PaneId, crate::app::workbench::PaneId) {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
-        let dock = workbench
-            .dock_pane(crate::app::workbench::DockLocation::Left)
-            .unwrap();
-        (dock, workbench.normal_pane().unwrap())
+        let dock = workbench.area_panes(crate::app::workbench::Area::Dock(
+            crate::app::workbench::DockLocation::Left,
+        ))[0];
+        (dock, workbench.center_pane().unwrap())
     })
 }
 
 #[gpui::test]
-fn moving_tabs_by_direction_splits_at_edges_enters_docks_and_collapses_emptied_panes(
+fn moving_tabs_by_direction_splits_at_edges_skips_docks_and_collapses_emptied_panes(
     cx: &mut TestAppContext,
 ) {
     use crate::app::commands::dispatch::{
@@ -265,10 +265,13 @@ fn moving_tabs_by_direction_splits_at_edges_enters_docks_and_collapses_emptied_p
     );
     run(&shell, window, FOCUS_PANE_RIGHT_COMMAND, cx);
     assert_eq!(focused(&shell, cx), main);
+    // A document never enters the dock: moving it left splits its pane.
     run(&shell, window, MOVE_TAB_LEFT_COMMAND, cx);
-    assert_eq!(focused(&shell, cx), dock);
-    assert_eq!(active(&shell, cx), moved);
-    assert_eq!(tabs(&shell, cx).len(), 2);
+    let left = focused(&shell, cx);
+    assert_ne!(left, dock);
+    assert_ne!(left, main);
+    assert_eq!(tabs(&shell, cx), [moved]);
+    assert_eq!(dock_and_main(&shell, cx).0, dock);
 }
 
 #[gpui::test]
@@ -319,7 +322,7 @@ fn maximize_ends_on_toggle_split_close_and_directional_focus(cx: &mut TestAppCon
 }
 
 #[gpui::test]
-fn pane_cycling_skips_dock_panes_and_starts_from_the_editor_area(cx: &mut TestAppContext) {
+fn pane_cycling_stays_in_the_focused_area(cx: &mut TestAppContext) {
     use crate::app::commands::dispatch::{
         FOCUS_FIRST_PANE_COMMAND, FOCUS_LAST_PANE_COMMAND, FOCUS_NEXT_PANE_COMMAND,
         FOCUS_PANE_LEFT_COMMAND, FOCUS_PREVIOUS_FOCUSED_PANE_COMMAND, FOCUS_PREVIOUS_PANE_COMMAND,
@@ -331,7 +334,7 @@ fn pane_cycling_skips_dock_panes_and_starts_from_the_editor_area(cx: &mut TestAp
     run(&shell, window, SPLIT_HORIZONTAL_COMMAND, cx);
     let split = focused(&shell, cx);
 
-    // The walk wraps over the editor area without entering the dock.
+    // The walk wraps over the center without entering the dock.
     run(&shell, window, FOCUS_NEXT_PANE_COMMAND, cx);
     assert_eq!(focused(&shell, cx), main);
     run(&shell, window, FOCUS_NEXT_PANE_COMMAND, cx);
@@ -343,12 +346,14 @@ fn pane_cycling_skips_dock_panes_and_starts_from_the_editor_area(cx: &mut TestAp
     run(&shell, window, FOCUS_FIRST_PANE_COMMAND, cx);
     assert_eq!(focused(&shell, cx), main);
 
-    // Directional focus still reaches the dock, a walk leaves it, and the
-    // previously focused pane goes back to it.
+    // Directional focus reaches the dock, a walk stays in it, and the
+    // previously focused pane goes back to the center.
     run(&shell, window, FOCUS_PANE_LEFT_COMMAND, cx);
     assert_eq!(focused(&shell, cx), dock);
     run(&shell, window, FOCUS_NEXT_PANE_COMMAND, cx);
-    assert_eq!(focused(&shell, cx), main);
-    run(&shell, window, FOCUS_PREVIOUS_FOCUSED_PANE_COMMAND, cx);
     assert_eq!(focused(&shell, cx), dock);
+    run(&shell, window, FOCUS_LAST_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), dock);
+    run(&shell, window, FOCUS_PREVIOUS_FOCUSED_PANE_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), main);
 }
