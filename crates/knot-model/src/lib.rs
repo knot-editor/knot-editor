@@ -21,6 +21,7 @@ pub mod editor;
 pub mod extensions;
 pub mod filesystem;
 pub mod history;
+pub mod icons;
 pub mod indentation;
 pub mod keys;
 pub mod languages;

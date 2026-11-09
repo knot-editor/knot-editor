@@ -237,6 +237,7 @@ native_colors! {
     EDITOR_MARKED_TEXT = "editor.markedText", "Underline of text being composed by an input method.", Rgba(0xb3b3b3cc), Rgba(0x595959cc);
     EDITOR_SELECTION = "editor.selection", "Selected text.", Rgba(0x3c7cdd59), Rgba(0x3b82d640);
     ERROR = "error", "Errors and failures.", Rgb(0xf48771), Rgb(0xc4314b);
+    ICON = "icon", "Icons that choose no color.", Key(TEXT), Key(TEXT);
     INFO = "info", "Informational markers.", Rgb(0x6cb6ff), Rgb(0x1a73c7);
     LIST_GROUP_BACKGROUND = "list.group.background", "Group headers in trees.", Rgb(0x262626), Rgb(0xf0f0f0);
     LIST_MATCH_FOREGROUND = "list.match.foreground", "Characters a filter query matched in a list row.", Key(TEXT_ACCENT), Key(TEXT_ACCENT);

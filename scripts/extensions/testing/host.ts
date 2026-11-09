@@ -1050,7 +1050,7 @@ export const NATIVE_COLOR_KEYS: readonly string[] = [
   "background", "border", "border.hover", "button.background", "button.hover.background",
   "dropTarget.background", "editor.background", "editor.bracketMatch", "editor.cursor", "editor.foldPlaceholder", "editor.foreground",
   "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
-  "editor.markedText", "editor.selection", "error", "info", "list.group.background",
+  "editor.markedText", "editor.selection", "error", "icon", "info", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",
   "popover.background", "popover.border", "scrim", "scrollbar.thumb",
   "statusBar.background", "statusBar.border", "statusBar.foreground", "statusBar.item.hover.background", "success",

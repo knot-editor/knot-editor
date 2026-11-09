@@ -50,6 +50,8 @@ pub const THEME_MODE: &str = "theme.mode";
 pub const THEME_DARK: &str = "theme.dark";
 /// The theme name used in light mode.
 pub const THEME_LIGHT: &str = "theme.light";
+/// The icon pack that restyles icons; empty means no pack.
+pub const ICONS_PACK: &str = "icons.pack";
 /// The keymap preset that supplies default bindings.
 pub const KEYMAP_PRESET: &str = "keymap.preset";
 /// Whether documents browsed from the explorer and search open as previews.
@@ -289,6 +291,11 @@ fn native_definitions() -> Vec<SettingDefinition> {
         ),
         text(THEME_DARK, "One Dark", "The theme used in dark mode"),
         text(THEME_LIGHT, "One Light", "The theme used in light mode"),
+        text(
+            ICONS_PACK,
+            "",
+            "The name of the icon pack that restyles icons; empty uses the default icons",
+        ),
         text(
             KEYMAP_PRESET,
             "knot",

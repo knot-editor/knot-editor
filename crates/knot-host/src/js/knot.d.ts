@@ -453,6 +453,8 @@ declare module "knot" {
     readonly "editor.selection"?: string;
     /** Errors and failures. */
     readonly "error"?: string;
+    /** Icons that choose no color. */
+    readonly "icon"?: string;
     /** Informational markers. */
     readonly "info"?: string;
     /** Group headers in trees. */
