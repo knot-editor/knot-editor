@@ -223,7 +223,8 @@ impl TerminalSession {
         working_directory: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let options = Options {
+        #[allow(unused_mut)]
+        let mut options = Options {
             working_directory,
             drain_on_exit: true,
             env: [
@@ -233,6 +234,13 @@ impl TerminalSession {
             .into(),
             ..Options::default()
         };
+        // Tests may exit without dropping a session. A plain shell hangs up
+        // with its PTY, whereas the platform login wrapper survives and is
+        // orphaned.
+        #[cfg(test)]
+        {
+            options.shell = Some(tty::Shell::new("/bin/sh".into(), vec![]));
+        }
         Self::new_with_options(options, cx)
     }
 
