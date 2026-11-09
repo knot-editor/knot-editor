@@ -399,7 +399,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
 
     // A focused terminal clears the editor items, and its tab hides the
     // editor, so the editor does not return when focus moves to the tool.
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(wait_for_command(command, cx), CommandOutcome::Completed);
     cx.update_window(window, |_, window, cx| {
         shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));

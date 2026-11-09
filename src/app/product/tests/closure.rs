@@ -558,7 +558,7 @@ fn public_close_removes_a_terminal_without_closing_document_models(cx: &mut Test
     let (shell, window) = empty_product_window(&documents, cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx),
+            dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx),
             cx
         ),
         CommandOutcome::Completed

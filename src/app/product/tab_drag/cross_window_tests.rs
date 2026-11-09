@@ -520,7 +520,16 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
     cx.update_window(source_window, |_, _, cx| {
         source.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.new_terminal_in_pane(Some(pane), None, cx).is_some());
+            assert!(
+                shell
+                    .new_terminal_in_pane(
+                        Some(pane),
+                        crate::app::product::operations::TerminalLocation::Center,
+                        None,
+                        cx
+                    )
+                    .is_some()
+            );
         })
     })
     .unwrap();

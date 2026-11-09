@@ -22,8 +22,10 @@ pub(crate) async fn new(context: CommandContext, (): ()) -> Result<(), CommandOu
         .await
 }
 
-#[command("terminal.new", title = "New Terminal", description = "Open a terminal in a new tab.", id = NEW_TERMINAL_COMMAND, participant = Workbench)]
-pub(crate) async fn new_terminal(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+async fn open_new_terminal(
+    context: CommandContext,
+    location: operations::TerminalLocation,
+) -> Result<(), CommandOutcome> {
     context
         .foreground(move |target, cx| {
             super::super::commands::dispatch::break_captured_history_group(target, cx);
@@ -34,10 +36,30 @@ pub(crate) async fn new_terminal(context: CommandContext, (): ()) -> Result<(), 
         .shell(move |shell, target, cx| {
             let directory = shell.terminal_directory(cx);
             shell
-                .new_terminal_in_pane(target.tab.map(|tab| tab.pane), directory, cx)
+                .new_terminal_in_pane(target.tab.map(|tab| tab.pane), location, directory, cx)
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         })
+        .await
+}
+
+#[command("terminal.new", title = "New Terminal", description = "Open a terminal beside the focused or last used dock terminal, else in the terminal dock.", id = NEW_TERMINAL_COMMAND, participant = Workbench)]
+pub(crate) async fn new_terminal(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    open_new_terminal(context, operations::TerminalLocation::Dock).await
+}
+
+#[command("terminal.new-in-center", title = "New Terminal in Center", description = "Open a terminal in the last focused center pane.", id = NEW_TERMINAL_IN_CENTER_COMMAND, participant = Workbench)]
+pub(crate) async fn new_terminal_in_center(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    open_new_terminal(context, operations::TerminalLocation::Center).await
+}
+
+#[command("terminal.toggle", title = "Toggle Terminal", description = "Show and focus the dock terminals, or hide their dock when one is focused.", id = TOGGLE_TERMINAL_COMMAND, participant = Workbench)]
+pub(crate) async fn toggle_terminal(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .shell(|shell, _, cx| shell.toggle_terminal(cx))
         .await
 }
 

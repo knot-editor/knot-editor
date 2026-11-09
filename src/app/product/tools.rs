@@ -384,6 +384,7 @@ impl ProductShell {
         };
         self.workbench.update(cx, |workbench, _| {
             workbench.set_dock_sizes(snapshot.dock_sizes());
+            workbench.set_terminal_home(snapshot.terminal_home);
         });
         if !snapshot.customized {
             return;

@@ -169,7 +169,7 @@ fn windows_and_linux_terminals_leave_plain_control_keys_to_the_shell() {
             ("ctrl-shift-tab", PREVIOUS_RECENT_TAB_COMMAND),
             ("ctrl-pagedown", NEXT_TAB_COMMAND),
             ("ctrl-pageup", PREVIOUS_TAB_COMMAND),
-            ("ctrl-`", NEW_TERMINAL_COMMAND),
+            ("ctrl-`", TOGGLE_TERMINAL_COMMAND),
             ("ctrl-shift-t", REOPEN_CLOSED_TAB_COMMAND),
             ("alt-1", GO_TO_TAB_1_COMMAND),
             ("alt-9", GO_TO_LAST_TAB_COMMAND),
@@ -223,7 +223,7 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
         ("cmd-8", GO_TO_TAB_8_COMMAND),
         ("cmd-9", GO_TO_LAST_TAB_COMMAND),
         ("ctrl-tab", NEXT_RECENT_TAB_COMMAND),
-        ("ctrl-`", NEW_TERMINAL_COMMAND),
+        ("ctrl-`", TOGGLE_TERMINAL_COMMAND),
         ("cmd-shift-t", REOPEN_CLOSED_TAB_COMMAND),
     ] {
         assert_eq!(

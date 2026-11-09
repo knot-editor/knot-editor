@@ -228,18 +228,29 @@ pub(crate) fn resolve_terminal_directory(
     Ok(())
 }
 
+/// Where a new terminal opens.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TerminalLocation {
+    /// Beside the terminal it is opened from, else beside the most recently
+    /// used dock terminal, else in the terminal home dock.
+    Dock,
+    /// In the last focused center pane.
+    Center,
+}
+
 /// Opens a focused terminal at `destination`, starting in `directory` or, when
 /// it is omitted, in the window's default terminal directory.
 pub(crate) fn open_terminal(
     destination: DocumentDestination,
     directory: Option<std::path::PathBuf>,
+    location: TerminalLocation,
     cx: &mut App,
 ) -> Result<PresentationTarget, AccessError> {
     let (shell, target) = capture_destination(&destination, cx)?;
     shell.update(cx, |shell, cx| {
         let directory = directory.or_else(|| shell.terminal_directory(cx));
         shell
-            .new_terminal_in_pane(target.tab.map(|tab| tab.pane), directory, cx)
+            .new_terminal_in_pane(target.tab.map(|tab| tab.pane), location, directory, cx)
             .map(|target| target.public_target())
             .ok_or(AccessError::InvalidTarget)
     })

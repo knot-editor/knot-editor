@@ -601,7 +601,7 @@ await commands.register("operations.clean", async () => {
     let (second, second_window) = empty_product_window(&documents, cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&second, second_window, NEW_TERMINAL_COMMAND, cx),
+            dispatch_product_command(&second, second_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx),
             cx
         ),
         CommandOutcome::Completed
@@ -866,7 +866,7 @@ await commands.register("operations.terminal", async () => {{
   const [win] = await windows.list();
   const pane = win.panes.find(pane => pane.tabs.some(tab => tab.kind === "document")).target;
   const dock = win.panes.find(pane => pane.tabs.some(tab => tab.kind === "tool")).target;
-  const opened = await terminals.open({{ cwd: "{explicit}", target: pane }});
+  const opened = await terminals.open({{ cwd: "{explicit}", target: pane, location: "center" }});
   if (opened.kind !== "terminal" || opened.document !== null || opened.buffer !== null || opened.tool !== null) throw new Error("metadata");
   if (opened.target.pane !== pane || !Object.isFrozen(opened)) throw new Error("destination");
   const listed = (await windows.get(win.target)).panes.flatMap(pane => pane.tabs);

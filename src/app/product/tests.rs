@@ -61,6 +61,7 @@ use super::{
     Workbench, WorkbenchLayout, create_untitled_document, install_protected_window_close,
     open_tab_transfer_window, product_filesystems,
 };
+use crate::app::commands::dispatch::{NEW_TERMINAL_IN_CENTER_COMMAND, TOGGLE_TERMINAL_COMMAND};
 use crate::app::{
     documents::DocumentState,
     filesystem::{

@@ -672,7 +672,7 @@ async fn editor_unbind_leaves_global_binding_available_in_terminal(cx: &mut Test
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).panes()[0].tabs().len(), 1));
 
-    let terminal = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    let terminal = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(
         terminal.completion.await.unwrap(),
         CommandOutcome::Completed

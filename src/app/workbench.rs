@@ -419,6 +419,22 @@ impl Workbench {
         Some((pane, tab))
     }
 
+    /// Open a terminal in `dock`'s last focused pane, creating the dock's
+    /// first pane when it has none, and show the dock.
+    pub(crate) fn open_terminal_in_dock(
+        &mut self,
+        dock: DockLocation,
+        session: TerminalSessionId,
+        view: Entity<TerminalView>,
+    ) -> Option<(PaneId, TabId)> {
+        let (pane, tab) = self.layout.open_terminal_in_dock(dock, session)?;
+        self.views.insert(
+            self.presentation_of(pane, tab),
+            PresentationView::Terminal(view),
+        );
+        Some((pane, tab))
+    }
+
     /// Split one captured pane and show its active document in a fresh view.
     pub(crate) fn split_pane(
         &mut self,

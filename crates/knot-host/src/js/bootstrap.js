@@ -1130,9 +1130,13 @@ export async function openDocument(uri, options) {
 }
 
 export async function openTerminal(options) {
-  const cwd = options === undefined ? undefined : record(options, "terminal options must be an object").cwd;
+  const fields = options === undefined ? {} : record(options, "terminal options must be an object");
+  const { cwd, location } = fields;
+  if (location !== undefined && location !== "dock" && location !== "center") {
+    throw new TypeError("terminal location must be \"dock\" or \"center\"");
+  }
   const tab = await request("openTerminal", cwd === undefined ? null : string(cwd, "terminal directory must be text"),
-    destinationAuthority(options));
+    destinationAuthority(options), location ?? null);
   return presentationFromNative(tab);
 }
 

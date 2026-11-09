@@ -1752,21 +1752,47 @@ impl ProductShell {
         ))
     }
 
-    /// Opens a focused terminal starting in `directory` beside `pane`, in the
-    /// center.
+    /// Opens a focused terminal starting in `directory`. In a dock it opens
+    /// beside the terminal in `pane`, else beside the most recently used dock
+    /// terminal, else in the terminal home dock; in the center, beside `pane`
+    /// or in the center pane.
     fn new_terminal_in_pane(
         &mut self,
         pane: Option<PaneId>,
+        location: operations::TerminalLocation,
         directory: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) -> Option<OpenTarget> {
-        let destination = self.center_destination(pane, cx).ok()?;
+        enum Destination {
+            Pane(PaneId),
+            Dock(DockLocation),
+            Center,
+        }
+        let destination = match location {
+            operations::TerminalLocation::Dock => {
+                let workbench = self.workbench.read(cx);
+                let beside = pane.filter(|pane| {
+                    workbench.pane(*pane).is_some_and(|pane| {
+                        matches!(pane.active_tab().surface_id(), TabSurfaceId::Terminal(_))
+                    })
+                });
+                match beside.or_else(|| workbench.recent_dock_terminal().map(|(pane, _)| pane)) {
+                    Some(pane) => Destination::Pane(pane),
+                    None => Destination::Dock(workbench.terminal_home()),
+                }
+            }
+            operations::TerminalLocation::Center => match self.center_destination(pane, cx).ok()? {
+                Some(pane) => Destination::Pane(pane),
+                None => Destination::Center,
+            },
+        };
         let (id, view) = self.create_terminal_in(directory, cx);
         let Some((pane, tab)) = self.workbench.update(cx, |workbench, _| match destination {
-            Some(pane) => workbench
+            Destination::Pane(pane) => workbench
                 .open_terminal_tab(pane, id, view)
                 .map(|tab| (pane, tab)),
-            None => workbench.open_terminal_in_center(id, view),
+            Destination::Dock(dock) => workbench.open_terminal_in_dock(dock, id, view),
+            Destination::Center => workbench.open_terminal_in_center(id, view),
         }) else {
             self.close_terminal(id, cx);
             return None;
@@ -1780,6 +1806,26 @@ impl ProductShell {
             tab,
             cx,
         ))
+    }
+
+    /// Toggle the dock terminals (see [`Workbench::toggle_terminal`]); with
+    /// none, open one in the terminal home dock.
+    pub(super) fn toggle_terminal(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<(), knot_protocol::CommandOutcome> {
+        let toggle = self
+            .workbench
+            .update(cx, |workbench, _| workbench.toggle_terminal());
+        if toggle == knot_model::workbench::TerminalToggle::NeedsTerminal {
+            let directory = self.terminal_directory(cx);
+            self.new_terminal_in_pane(None, operations::TerminalLocation::Dock, directory, cx)
+                .ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
+        }
+        self.publish_tool_layout(cx);
+        self.focus_active_surface(cx);
+        cx.notify();
+        Ok(())
     }
 
     #[cfg(test)]

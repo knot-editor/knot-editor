@@ -362,7 +362,7 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
 
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
     let (pane, first, document_tab) = cx.read(|cx| {
         let shell = shell.read(cx);
@@ -545,7 +545,7 @@ async fn closing_the_final_terminal_tab_leaves_an_empty_center(cx: &mut TestAppC
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx)
             .completion
             .await
             .unwrap(),
@@ -1267,7 +1267,12 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
             shell.replace_workspace_roots(vec![directory_uri(&root)], cx);
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
             shell
-                .new_terminal_in_pane(Some(pane), Some(nested.clone()), cx)
+                .new_terminal_in_pane(
+                    Some(pane),
+                    crate::app::product::operations::TerminalLocation::Center,
+                    Some(nested.clone()),
+                    cx,
+                )
                 .unwrap();
         });
     })
@@ -1309,7 +1314,8 @@ async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (source, source_window) = product_window(document, model, cx);
-    let command = dispatch_product_command(&source, source_window, NEW_TERMINAL_COMMAND, cx);
+    let command =
+        dispatch_product_command(&source, source_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
     let layout = cx
         .update_window(source_window, |_, window, cx| {

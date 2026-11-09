@@ -771,7 +771,10 @@ mod tests {
                         selected: 0,
                         focused: true,
                         pinned: 0,
-                        tabs: vec![PlannedTab::Tool("knot.other".into())],
+                        tabs: vec![
+                            PlannedTab::Terminal { directory: None },
+                            PlannedTab::Tool("knot.other".into()),
+                        ],
                     }),
                 }),
                 size: 240.,

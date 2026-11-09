@@ -176,7 +176,7 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("ctrl-g", GO_TO_LINE_COMMAND, Some("editor")),
     ("shift-f10", SHOW_TREE_CONTEXT_MENU_COMMAND, None),
     ("secondary-n", NEW_COMMAND, None),
-    ("ctrl-`", NEW_TERMINAL_COMMAND, None),
+    ("ctrl-`", TOGGLE_TERMINAL_COMMAND, None),
     ("ctrl-tab", NEXT_RECENT_TAB_COMMAND, None),
     ("ctrl-shift-tab", PREVIOUS_RECENT_TAB_COMMAND, None),
     ("secondary-shift-t", REOPEN_CLOSED_TAB_COMMAND, None),

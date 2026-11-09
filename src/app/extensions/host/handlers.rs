@@ -242,6 +242,7 @@ async fn open_document(
 pub(crate) struct TerminalArguments {
     pub cwd: Option<String>,
     pub target: Option<knot_protocol::DocumentDestination>,
+    pub location: product::operations::TerminalLocation,
 }
 
 impl HostArguments for TerminalArguments {
@@ -249,6 +250,18 @@ impl HostArguments for TerminalArguments {
         Ok(Self {
             cwd: reader.optional_text(2, "terminal directory must be text")?,
             target: reader.destination(3)?,
+            location: match reader
+                .optional_text(4, "terminal location must be text")?
+                .as_deref()
+            {
+                None | Some("dock") => product::operations::TerminalLocation::Dock,
+                Some("center") => product::operations::TerminalLocation::Center,
+                Some(_) => {
+                    return Err(DecodeError::Range(
+                        "terminal location must be dock or center",
+                    ));
+                }
+            },
         })
     }
 }
@@ -277,8 +290,9 @@ async fn open_terminal(
         }
         None => None,
     };
+    let location = arguments.location;
     let target = context.foreground(move |_, cx| {
-        product::operations::open_terminal(destination, directory, cx)
+        product::operations::open_terminal(destination, directory, location, cx)
     })??;
     Ok(knot_protocol::PresentationInfo {
         target,

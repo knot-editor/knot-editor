@@ -316,7 +316,16 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
     cx.update_window(source_window, |_, _, cx| {
         source.update(cx, |shell, cx| {
             let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.new_terminal_in_pane(Some(pane), None, cx).is_some());
+            assert!(
+                shell
+                    .new_terminal_in_pane(
+                        Some(pane),
+                        crate::app::product::operations::TerminalLocation::Center,
+                        None,
+                        cx
+                    )
+                    .is_some()
+            );
         })
     })
     .unwrap();
