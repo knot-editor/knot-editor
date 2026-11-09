@@ -664,6 +664,20 @@ impl Workbench {
             .or_else(|| self.area_focus(Area::Center))
     }
 
+    /// Focus the center's last focused pane, or the empty center.
+    fn focus_center(&mut self) {
+        match self.area_focus(Area::Center) {
+            Some(pane) => self.set_focus(pane),
+            None => {
+                if self.focused_pane.is_some() {
+                    self.previous_pane = self.focused_pane;
+                }
+                self.focused_pane = None;
+            }
+        }
+        self.debug_assert_invariants();
+    }
+
     pub fn focus_pane(&mut self, pane_id: PaneId) -> bool {
         if self.pane(pane_id).is_none() {
             return false;

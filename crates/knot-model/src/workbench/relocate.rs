@@ -1,8 +1,8 @@
 //! Atomic relocation of one tab without document or session closure.
 
 use super::{
-    Area, DockLocation, Pane, PaneId, PresentationId, SplitDirection, SplitPlacement, TabId,
-    TabKind, Workbench, WorkbenchLayout, WorkbenchTab, WorkbenchTabSnapshot,
+    Area, Pane, PaneId, PresentationId, SplitDirection, SplitPlacement, TabId, TabKind, Workbench,
+    WorkbenchLayout, WorkbenchTab, WorkbenchTabSnapshot,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,10 +45,10 @@ pub enum TabMoveDestination {
         anchor: TabMoveCapture,
         placement: TabMovePlacement,
     },
-    /// Move to the end of a dock's focused pane, creating the dock's first
-    /// pane when it has none. Produced by workbench-edge drops; pane-edge
-    /// splits keep using `At` with `Split`.
-    Dock(DockLocation),
+    /// Move to the end of an area's last focused pane, creating the area's
+    /// first pane when it has none. Produced by workbench-edge drops and the
+    /// move-to-area commands; pane-edge splits keep using `At` with `Split`.
+    Area(Area),
     /// Install the first pane of an empty center.
     Empty,
 }
@@ -95,7 +95,7 @@ impl Workbench {
     fn destination_area(&self, target: TabMoveDestination) -> Option<Area> {
         match target {
             TabMoveDestination::Empty => self.center.layout.is_none().then_some(Area::Center),
-            TabMoveDestination::Dock(dock) => Some(Area::Dock(dock)),
+            TabMoveDestination::Area(area) => Some(area),
             TabMoveDestination::At { anchor, .. } => self
                 .contains_tab_move(anchor)
                 .then(|| self.pane_area(anchor.tab.pane_id))
@@ -126,7 +126,7 @@ impl Workbench {
         };
         let (pane, index, new_pane, layout) = match target {
             TabMoveDestination::Empty => fresh(),
-            TabMoveDestination::Dock(_) => match self.area_focus(area) {
+            TabMoveDestination::Area(_) => match self.area_focus(area) {
                 Some(pane) => (
                     pane,
                     self.pane(pane)?.tabs.len(),

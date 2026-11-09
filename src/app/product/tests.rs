@@ -287,7 +287,11 @@ fn place_explorer(
     cx.update_window(window_handle, |_, _, cx| {
         shell.update(cx, |shell, cx| {
             let id = shell.explorer_frame(cx).unwrap();
-            assert!(shell.place_tool(id, dock, cx));
+            let (pane, tab) = shell.workbench.read(cx).tool_tab(id).unwrap();
+            let area = crate::app::workbench::Area::Dock(dock);
+            if shell.workbench.read(cx).pane_area(pane) != Some(area) {
+                shell.move_tab_to_area(pane, tab, area, cx).unwrap();
+            }
         })
     })
     .unwrap();

@@ -23,7 +23,6 @@ mod key_hold;
 mod key_routing;
 mod language_mode;
 mod launch;
-mod move_tool;
 mod navigation;
 mod open;
 pub(super) mod operations;
@@ -36,6 +35,7 @@ mod save;
 pub(super) mod sessions;
 mod show_keybindings;
 mod tab_drag;
+mod tool_picker;
 mod tools;
 mod view_state;
 

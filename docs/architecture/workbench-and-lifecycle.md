@@ -320,7 +320,13 @@ definition and presentation survive hiding.
 The side docks span the window's height and the bottom dock sits under the
 center between them. Each dock has an absolute window-local size, a visible
 flag, and its own last focused pane; hiding a dock keeps its arrangement, and
-focusing a pane of a hidden dock shows it. Each tab kind declares the areas it
+focusing a pane of a hidden dock shows it. Toggling a dock or a tool follows
+one pattern: a hidden one shows and takes focus, a shown but unfocused one
+takes focus, and a focused one hides, returning focus to the center's last
+focused pane. A tool's home is the dock it is in or last left, so moving it
+to another dock rehomes it. Move Tab to Left, Right, or Bottom Dock and Move
+Tab to Center move a tab to the end of that area's last focused pane, and
+are unavailable when the tab is already there. Each tab kind declares the areas it
 may occupy (`TabKind::allows`): documents and terminals the center, tools the
 docks. Placement, relocation, directional moves, and restore check the
 declaration, so a tool never joins the center and a document never enters a
@@ -514,11 +520,12 @@ reveals still apply. Terminal cross-window moves hand off the sole attachment to
 a destination view of the same session; same-window moves retain their view.
 Replacement or pane/window transfer invalidates old exact command targets.
 
-Native tools stay in their owning product window and in the docks. Dragging a
-tool tab reorders, joins, or splits dock panes like any tab, and dropping near a
-workbench left/right/bottom edge moves it to the end of that dock; the center
-rejects it, as docks reject documents and terminals. Releasing a tool outside all Knot frames
-cancels without creating a window. Dock-adjacent dividers drag to resize the
+Native tools stay in their owning product window and in the docks. A drag
+offers targets only in areas its tab's kind allows: dropping near a workbench
+left/right/bottom edge moves a dock-capable tab to the end of that dock, while
+other kinds keep the pane-local edge split there, and panes or an empty center
+of a disallowed area show no target and refuse the release. Releasing a tool
+outside all Knot frames cancels without creating a window. Dock-adjacent dividers drag to resize the
 window-local dock size within usable limits; other dividers drag the split's
 ratio, leaving each side a minimum size.
 
@@ -551,8 +558,9 @@ UI-state record and one connection that serializes their writes, which also
 backs [native window hot exit](#native-window-hot-exit). Quit flushes every
 pending record. Unsaved-text recovery keeps its own database, because a
 damaged recovery file is preserved and reported rather than treated as empty. It records each dock's size, visibility, and split tree of stable namespaced
-tool IDs with each pane's selection, and the dock each hidden tool returns to.
-Documents, terminals, the center, and live handles never enter the record.
+tool IDs with each pane's selection, and the dock each hidden tool returns to,
+so each tool's home reaches fresh windows. Documents, terminals, the center,
+and live handles never enter the record.
 
 A fresh window takes the stored dock sizes and gives each tool its stored place
 as the tool registers: the explorer when a folder opens or a customized record
@@ -568,7 +576,8 @@ reaches storage, and identical publishes skip storage. Restore, window
 activation, listener callbacks, automatic presentation, and document structure
 changes never publish. The cache updates synchronously so the next window
 inherits immediately; writes run off the foreground and the quit path flushes a
-pending write before exit. Reset Layout returns to product defaults. A missing,
+pending write before exit. Reset Layout returns to product defaults, every
+tool to its declared dock. A missing,
 corrupt, or version-mismatched record falls back to defaults, and unknown stored
 IDs are skipped without creating blank frames.
 

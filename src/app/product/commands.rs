@@ -719,11 +719,21 @@ async fn close_target(
         .await
 }
 
-#[command("workbench.toggle-explorer", title = "Toggle Explorer", description = "Show or hide the file explorer.", id = TOGGLE_EXPLORER_COMMAND, participant = Workbench)]
+#[command("workbench.toggle-explorer", title = "Toggle Explorer", description = "Show and focus the file explorer, or hide it when focused.", id = TOGGLE_EXPLORER_COMMAND, participant = Workbench)]
 pub(crate) async fn toggle_explorer(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
         .shell(|shell, _, cx| {
-            shell.toggle_explorer(cx);
+            shell.toggle_tool(crate::app::tool_layout::EXPLORER_TOOL_ID, cx);
+            Ok(())
+        })
+        .await
+}
+
+#[command("workbench.toggle-tool", title = "Toggle Tool…", description = "Choose a tool to show and focus, or to hide when focused.", id = TOGGLE_TOOL_COMMAND, participant = Workbench)]
+pub(crate) async fn toggle_tool(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .shell(|shell, _, cx| {
+            shell.start_toggle_tool(cx);
             Ok(())
         })
         .await
@@ -782,52 +792,45 @@ pub(crate) async fn move_folder_down(
         .await
 }
 
-#[command("workbench.toggle-left-sidebar", title = "Toggle Left Sidebar", description = "Show or hide the left dock.", id = TOGGLE_LEFT_SIDEBAR_COMMAND, participant = Workbench)]
-pub(crate) async fn toggle_left_sidebar(
-    context: CommandContext,
-    (): (),
-) -> Result<(), CommandOutcome> {
-    toggle_dock(context, DockLocation::Left).await
+macro_rules! toggle_dock {
+    ($($name:literal, $title:literal, $description:literal, $id:ident, $function:ident, $dock:expr;)*) => {$(
+        #[command($name, title = $title, description = $description, id = $id, participant = Workbench)]
+        pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+            context
+                .shell(|shell, _, cx| {
+                    shell.toggle_dock($dock, cx);
+                    Ok(())
+                })
+                .await
+        }
+    )*};
 }
 
-#[command("workbench.toggle-right-sidebar", title = "Toggle Right Sidebar", description = "Show or hide the right dock.", id = TOGGLE_RIGHT_SIDEBAR_COMMAND, participant = Workbench)]
-pub(crate) async fn toggle_right_sidebar(
-    context: CommandContext,
-    (): (),
-) -> Result<(), CommandOutcome> {
-    toggle_dock(context, DockLocation::Right).await
+toggle_dock! {
+    "workbench.toggle-left-dock", "Toggle Left Dock", "Show and focus the left dock, or hide it when focused.", TOGGLE_LEFT_DOCK_COMMAND, toggle_left_dock, DockLocation::Left;
+    "workbench.toggle-right-dock", "Toggle Right Dock", "Show and focus the right dock, or hide it when focused.", TOGGLE_RIGHT_DOCK_COMMAND, toggle_right_dock, DockLocation::Right;
+    "workbench.toggle-bottom-dock", "Toggle Bottom Dock", "Show and focus the bottom dock, or hide it when focused.", TOGGLE_BOTTOM_DOCK_COMMAND, toggle_bottom_dock, DockLocation::Bottom;
 }
 
-#[command("workbench.toggle-bottom-dock", title = "Toggle Bottom Dock", description = "Show or hide the bottom dock.", id = TOGGLE_BOTTOM_DOCK_COMMAND, participant = Workbench)]
-pub(crate) async fn toggle_bottom_dock(
-    context: CommandContext,
-    (): (),
-) -> Result<(), CommandOutcome> {
-    toggle_dock(context, DockLocation::Bottom).await
+macro_rules! move_tab_to_area {
+    ($($name:literal, $title:literal, $description:literal, $id:ident, $function:ident, $area:expr;)*) => {$(
+        #[command($name, title = $title, description = $description, id = $id, participant = Workbench)]
+        pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+            context
+                .shell(|shell, target, cx| {
+                    let tab = target.tab()?;
+                    shell.move_tab_to_area(tab.pane, tab.tab, $area, cx)
+                })
+                .await
+        }
+    )*};
 }
 
-async fn toggle_dock(context: CommandContext, dock: DockLocation) -> Result<(), CommandOutcome> {
-    context
-        .shell(move |shell, _, cx| {
-            shell
-                .workbench
-                .update(cx, |workbench, _| workbench.toggle_dock(dock));
-            shell.publish_tool_layout(cx);
-            shell.focus_active_surface(cx);
-            cx.notify();
-            Ok(())
-        })
-        .await
-}
-
-#[command("workbench.move-tool-to-dock", title = "Move Tool to Dock…", description = "Move the focused tool to a dock.", id = MOVE_TOOL_TO_DOCK_COMMAND, participant = Workbench)]
-pub(crate) async fn move_tool_to_dock(
-    context: CommandContext,
-    (): (),
-) -> Result<(), CommandOutcome> {
-    context
-        .shell(|shell, target, cx| shell.start_move_tool(target, cx))
-        .await
+move_tab_to_area! {
+    "workbench.move-tab-to-left-dock", "Move Tab to Left Dock", "Move the focused tab to the left dock.", MOVE_TAB_TO_LEFT_DOCK_COMMAND, move_tab_to_left_dock, Area::Dock(DockLocation::Left);
+    "workbench.move-tab-to-right-dock", "Move Tab to Right Dock", "Move the focused tab to the right dock.", MOVE_TAB_TO_RIGHT_DOCK_COMMAND, move_tab_to_right_dock, Area::Dock(DockLocation::Right);
+    "workbench.move-tab-to-bottom-dock", "Move Tab to Bottom Dock", "Move the focused tab to the bottom dock.", MOVE_TAB_TO_BOTTOM_DOCK_COMMAND, move_tab_to_bottom_dock, Area::Dock(DockLocation::Bottom);
+    "workbench.move-tab-to-center", "Move Tab to Center", "Move the focused tab to the center.", MOVE_TAB_TO_CENTER_COMMAND, move_tab_to_center, Area::Center;
 }
 
 #[command("workbench.reset-layout", title = "Reset Layout", description = "Return docks and tools to their default arrangement.", id = RESET_LAYOUT_COMMAND, participant = Workbench)]

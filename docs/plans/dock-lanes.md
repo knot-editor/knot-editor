@@ -1,6 +1,6 @@
 # Dock lanes
 
-Status: 🚧 checkpoint 1 implemented, awaiting its review gate. Checkpoint 5's
+Status: 🚧 checkpoint 2 implemented, awaiting its review gate. Checkpoint 5's
 icons come from the completed icon packs (D055).
 
 ## Goal
@@ -119,14 +119,33 @@ empty, and window layouts and tool-layout memory are version 2; see
 - Vim's `ctrl-w` keys pass `{ withinArea: true }`; D158 was removed and D061
   reworded with this checkpoint.
 
-Carried forward: drop targets still preview disallowed drops and refuse them
-on release (checkpoint 2); the workbench decisions still describe tools as
-dock groups of one split tree (checkpoint 6).
+Carried forward: the workbench decisions still describe tools as dock groups
+of one split tree (checkpoint 6).
 
-### 2. ⏳ Dock interactions and homes
+### 2. 🔍 Dock interactions and homes
 
 Docks become directly manageable: whole-dock toggles, the shared toggle
 pattern, remembered homes, move-to-area commands, and drag targets by kind.
+
+Implemented, awaiting the review gate:
+
+- ✅ Toggle Left / Right / Bottom Dock (`workbench.toggle-*-dock`), Toggle
+  Explorer, and Toggle Tool… on the show/focus/hide pattern
+  (`Workbench::toggle_dock`, `Workbench::toggle_tool`); Toggle Explorer now
+  focuses the explorer it shows.
+- ✅ A tool's home is the dock it is in or last left, which the existing
+  tool-only record already carries to fresh windows; no separate home field
+  was needed for tools (the terminal home arrives with checkpoint 3).
+- ✅ Move Tab to Left Dock / Right Dock / Bottom Dock / Center through
+  `TabMoveDestination::Area`; Move Tool to Dock… and its picker are gone. The
+  palette has no per-target availability, so "offered only when allowed"
+  means the command returns Unavailable for a disallowed or current area.
+- ✅ Drop targets filter by `TabKind::allows`: workbench edges only for
+  dock-capable kinds, panes and the empty center only for kinds their area
+  allows.
+- ✅ Reset Layout already returned tools to declared defaults; covered by the
+  existing test.
+- No default keys were added; none existed for these commands.
 
 - **Deliverables:** Toggle Left / Right / Bottom Dock; Toggle Explorer and a
   Toggle Tool… picker on the show/focus/hide pattern; tool hide restoring last

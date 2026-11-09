@@ -171,9 +171,22 @@ fn document_splits_and_dock_visibility_reach_fresh_windows_only_as_dock_state(
         })
     );
 
-    // A hidden dock keeps the explorer in it, and fresh windows inherit both.
-    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-left-sidebar", cx);
+    // The unfocused dock takes focus, then hides back to the center.
+    let center = cx.read(|cx| shell.read(cx).workbench.read(cx).focused_pane_id());
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-left-dock", cx);
     assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        let (pane, _) = workbench.tool_tab(explorer_id(&shell, cx)).unwrap();
+        assert_eq!(workbench.focused_pane_id(), Some(pane));
+    });
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-left-dock", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    assert_eq!(
+        cx.read(|cx| shell.read(cx).workbench.read(cx).focused_pane_id()),
+        center
+    );
+    // A hidden dock keeps the explorer in it, and fresh windows inherit both.
     assert!(!stored(cx).dock(DockLocation::Left).visible);
     let (fresh, _) = empty_product_window(&documents, cx);
     open_workspace(&fresh, cx);
@@ -302,46 +315,90 @@ fn fresh_window_with_hidden_tool_restores_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn move_tool_to_dock_places_the_focused_tool_and_publishes_the_default(cx: &mut TestAppContext) {
-    use crate::app::commands::dispatch::MOVE_TOOL_TO_DOCK_COMMAND;
+fn move_tab_commands_follow_the_kind_and_rehome_tools(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
-    // A document has focus, so there is no tool to move.
-    assert_eq!(
-        wait_for_command(
-            dispatch_product_command(&shell, window, MOVE_TOOL_TO_DOCK_COMMAND, cx),
-            cx
-        ),
-        CommandOutcome::Unavailable
-    );
-    open_workspace(&shell, cx);
-    for (label, dock) in [
-        ("Right", DockLocation::Right),
-        ("Bottom", DockLocation::Bottom),
-        ("Left", DockLocation::Left),
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        wait_for_command(dispatch_product_command(&shell, window, name, cx), cx)
+    };
+    // A document stays in the center.
+    for name in [
+        "workbench.move-tab-to-left-dock",
+        "workbench.move-tab-to-right-dock",
+        "workbench.move-tab-to-bottom-dock",
+        "workbench.move-tab-to-center",
     ] {
-        let id = cx.read(|cx| explorer_id(&shell, cx));
+        assert_eq!(run(name, cx), CommandOutcome::Unavailable, "{name}");
+    }
+    open_workspace(&shell, cx);
+    let published = stored(cx);
+    let focus_explorer = |cx: &mut TestAppContext| {
         shell.update(cx, |shell, cx| {
+            let id = shell.explorer_frame(cx).unwrap();
             shell.workbench.update(cx, |workbench, _| {
                 let (pane, tab) = workbench.tool_tab(id).unwrap();
                 workbench.activate_tab(pane, tab);
             });
         });
-        let execution = dispatch_product_command(&shell, window, MOVE_TOOL_TO_DOCK_COMMAND, cx);
-        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-        wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
-        cx.simulate_input(window, label);
-        cx.simulate_keystrokes(window, "enter");
-        cx.run_until_parked();
-        assert_eq!(
-            explorer_placement(cx),
-            Some(StoredPlacement::Docked(dock)),
-            "{label}"
-        );
+    };
+    // A tool never enters the center, nor moves to the dock it is in.
+    focus_explorer(cx);
+    for name in [
+        "workbench.move-tab-to-center",
+        "workbench.move-tab-to-left-dock",
+    ] {
+        assert_eq!(run(name, cx), CommandOutcome::Unavailable, "{name}");
+    }
+    assert_eq!(stored(cx), published);
+    // Moving a tool to another dock rehomes it, focused, and publishes.
+    for (name, dock) in [
+        ("workbench.move-tab-to-right-dock", DockLocation::Right),
+        ("workbench.move-tab-to-bottom-dock", DockLocation::Bottom),
+        ("workbench.move-tab-to-left-dock", DockLocation::Left),
+    ] {
+        focus_explorer(cx);
+        assert_eq!(run(name, cx), CommandOutcome::Completed, "{name}");
+        assert_eq!(explorer_placement(cx), Some(StoredPlacement::Docked(dock)));
         cx.read(|cx| {
             let workbench = shell.read(cx).workbench.read(cx);
             let (pane, _) = workbench.tool_tab(explorer_id(&shell, cx)).unwrap();
+            assert_eq!(workbench.dock_location(pane), Some(dock));
             assert_eq!(workbench.focused_pane_id(), Some(pane));
         });
     }
+}
+
+#[gpui::test]
+fn moved_tools_return_to_their_new_home_when_hidden_and_in_fresh_windows(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (shell, window) = empty_product_window(&documents, cx);
+    open_workspace(&shell, cx);
+    place_explorer(&shell, window, DockLocation::Right, cx);
+    // Hiding the moved tool and showing it again returns it to its new dock.
+    for expected in [false, true] {
+        let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
+        assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+        cx.read(|cx| {
+            let workbench = shell.read(cx).workbench.read(cx);
+            let id = explorer_id(&shell, cx);
+            assert_eq!(workbench.tool_visible(id), expected);
+            if expected {
+                let (pane, _) = workbench.tool_tab(id).unwrap();
+                assert_eq!(workbench.dock_location(pane), Some(DockLocation::Right));
+            }
+        });
+    }
+    // A fresh window inherits the home: hidden there, the explorer still
+    // first shows in the right dock.
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    let (fresh, fresh_window) = empty_product_window(&documents, cx);
+    let toggle = dispatch_product_command(&fresh, fresh_window, "workbench.toggle-explorer", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    cx.read(|cx| {
+        let workbench = fresh.read(cx).workbench.read(cx);
+        let (pane, _) = workbench.tool_tab(explorer_id(&fresh, cx)).unwrap();
+        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Right));
+        assert_eq!(workbench.focused_pane_id(), Some(pane));
+    });
 }

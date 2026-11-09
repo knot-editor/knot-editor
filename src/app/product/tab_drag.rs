@@ -5,15 +5,15 @@ use super::*;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{color, theme};
 use crate::app::workbench::{
-    DockLocation, SplitEdge, TabMoveCapture, TabMoveDestination, TabMovePlacement,
+    DockLocation, SplitEdge, TabKind, TabMoveCapture, TabMoveDestination, TabMovePlacement,
 };
 use knot_model::icons::IconDefinition;
 use std::rc::Rc;
 
 /// Distance from the workbench frame edge that starts a dock drop target for
-/// tool frames. Pane-edge splits keep handling the interior; only tools use
-/// these whole-workbench strips so documents and terminals keep their
-/// pane-local split behavior.
+/// tabs whose kind allows the dock. Pane-edge splits keep handling the
+/// interior, so kinds kept out of the docks keep their pane-local split
+/// behavior at the edges.
 const WORKBENCH_EDGE_WIDTH: f32 = 20.;
 const DOCK_PREVIEW_SIDE: f32 = 240.;
 const DOCK_PREVIEW_BOTTOM: f32 = 220.;
@@ -24,13 +24,14 @@ pub(super) struct TabDragState {
     /// Painted bounds of each ordinary split, keyed by its boundary pane.
     splits: Vec<(PaneId, Bounds<Pixels>)>,
     workbench: Option<Bounds<Pixels>>,
-    /// The painted empty center, which takes documents and terminals.
+    /// The painted empty center, which takes center-capable kinds.
     empty_center: Option<Bounds<Pixels>>,
     preview: Option<DropTarget>,
 }
 
 struct PaneGeometry {
     pane: PaneId,
+    area: Area,
     bounds: Bounds<Pixels>,
     tabs: Vec<(TabMoveCapture, Bounds<Pixels>)>,
     bar: Option<Bounds<Pixels>>,
@@ -43,7 +44,7 @@ struct DropTarget {
 }
 
 impl TabDragState {
-    fn workbench_dock_target(&self, position: Point<Pixels>) -> Option<DropTarget> {
+    fn workbench_dock_target(&self, position: Point<Pixels>, kind: TabKind) -> Option<DropTarget> {
         let bounds = self.workbench?;
         if !bounds.contains(&position) {
             return None;
@@ -84,21 +85,25 @@ impl TabDragState {
         } else {
             return None;
         };
+        if !kind.allows(Area::Dock(dock)) {
+            return None;
+        }
         Some(DropTarget {
-            tab: TabMoveDestination::Dock(dock),
+            tab: TabMoveDestination::Area(Area::Dock(dock)),
             bounds: preview,
         })
     }
 
-    fn target_at(&self, position: Point<Pixels>, is_tool: bool) -> Option<DropTarget> {
-        if is_tool && let Some(dock) = self.workbench_dock_target(position) {
+    /// The drop target under `position` for a tab of `kind`: only areas the
+    /// kind allows offer one.
+    fn target_at(&self, position: Point<Pixels>, kind: TabKind) -> Option<DropTarget> {
+        if let Some(dock) = self.workbench_dock_target(position, kind) {
             return Some(dock);
         }
-        if !is_tool
-            && let Some(center) = self.empty_center
+        if let Some(center) = self.empty_center
             && center.contains(&position)
         {
-            return Some(DropTarget {
+            return kind.allows(Area::Center).then_some(DropTarget {
                 tab: TabMoveDestination::Empty,
                 bounds: center,
             });
@@ -107,6 +112,9 @@ impl TabDragState {
             .panes
             .iter()
             .find(|pane| pane.bounds.contains(&position))?;
+        if !kind.allows(pane.area) {
+            return None;
+        }
         let &(first, _) = pane.tabs.first()?;
         let bar = pane.bar?;
         let bounds = pane.bounds;
@@ -330,15 +338,10 @@ impl TabDragCoordinator {
         if !entry.accepts_drop {
             return DropAction::Invalid;
         }
-        let is_tool = matches!(
-            source.tab.tab.surface,
-            crate::app::workbench::TabSurfaceId::Tool(_)
-        );
-        let Some(target) = entry
-            .state
-            .borrow()
-            .target_at(pointer - front.content.origin, is_tool)
-        else {
+        let Some(target) = entry.state.borrow().target_at(
+            pointer - front.content.origin,
+            source.tab.tab.surface.kind(),
+        ) else {
             return DropAction::Invalid;
         };
         DropAction::Target(TabRelocationDestination {
@@ -354,12 +357,13 @@ impl TabDragCoordinator {
             .iter()
             .find(|window| window.frame.contains(&pointer))
             .map(|window| window.window);
-        let is_tool = self.active.as_ref().is_some_and(|active| {
-            matches!(
-                active.source.tab.tab.surface,
-                crate::app::workbench::TabSurfaceId::Tool(_)
-            )
-        });
+        let Some(kind) = self
+            .active
+            .as_ref()
+            .map(|active| active.source.tab.tab.surface.kind())
+        else {
+            return;
+        };
         for entry in &self.windows {
             let target = geometry
                 .iter()
@@ -373,7 +377,7 @@ impl TabDragCoordinator {
                     entry
                         .state
                         .borrow()
-                        .target_at(pointer - window.content.origin, is_tool)
+                        .target_at(pointer - window.content.origin, kind)
                 });
             entry.state.borrow_mut().preview = target;
         }
@@ -550,12 +554,13 @@ impl ProductShell {
         .size_full()
     }
 
-    pub(super) fn pane_drag_geometry(&self, pane: PaneId) -> impl IntoElement + use<> {
+    pub(super) fn pane_drag_geometry(&self, pane: PaneId, area: Area) -> impl IntoElement + use<> {
         let state = self.tab_drag.clone();
         canvas(
             move |bounds, _, _| {
                 state.borrow_mut().panes.push(PaneGeometry {
                     pane,
+                    area,
                     bounds,
                     tabs: Vec::new(),
                     bar: None,

@@ -1,6 +1,8 @@
 //! Contributed views, the native explorer, workspace roots, and tool-layout memory.
 
 use super::*;
+use crate::app::workbench::TabMoveDestination;
+use knot_protocol::CommandOutcome;
 
 impl ProductShell {
     /// Reconcile this window's contributed frames with the application-owned
@@ -194,42 +196,68 @@ impl ProductShell {
         self.workbench.read(cx).tool_presenting(tree)
     }
 
-    /// Place a tool as an explicit user arrangement, publishing the
-    /// fresh-window default.
-    #[cfg_attr(
-        not(test),
-        allow(dead_code, reason = "no product command places a tool yet")
-    )]
-    pub(crate) fn place_tool(
+    /// Move a tab to the end of another area's last focused pane. Unavailable
+    /// when the tab is already there or its kind does not allow the area.
+    /// Moving a tool rehomes it, publishing the fresh-window default as any
+    /// explicit move does.
+    pub(crate) fn move_tab_to_area(
         &mut self,
-        id: ToolFrameId,
-        dock: DockLocation,
+        pane: PaneId,
+        tab: TabId,
+        area: Area,
         cx: &mut Context<Self>,
-    ) -> bool {
-        let placed = self
-            .workbench
-            .update(cx, |workbench, _| workbench.place_tool(id, dock));
-        if placed {
-            self.publish_tool_layout(cx);
+    ) -> Result<(), CommandOutcome> {
+        let source = self
+            .capture_tab_relocation(pane, tab, cx)
+            .ok_or(CommandOutcome::InvalidTarget)?;
+        let destination = TabMoveDestination::Area(area);
+        let workbench = self.workbench.read(cx);
+        if workbench.pane_area(pane) == Some(area)
+            || !workbench.accepts_tab_move(source.tab.tab.surface.kind(), destination)
+        {
+            return Err(CommandOutcome::Unavailable);
         }
-        self.focus_active_surface(cx);
-        cx.notify();
-        placed
+        let destination = relocate::TabRelocationDestination {
+            shell: cx.weak_entity(),
+            workbench: self.workbench.downgrade(),
+            tab: destination,
+        };
+        match self.relocate_tab_to(&source, &destination, cx) {
+            CommandOutcome::Completed => Ok(()),
+            outcome => Err(outcome),
+        }
     }
 
-    pub(super) fn toggle_explorer(&mut self, cx: &mut Context<Self>) {
-        if self.workspace_tree.is_none() {
-            self.ensure_explorer(true, cx);
-        } else {
-            let id = self.explorer_frame(cx).unwrap();
-            self.workbench.update(cx, |workbench, _| {
-                if workbench.tool_visible(id) {
-                    workbench.hide_tool(id);
-                } else {
-                    workbench.show_tool(id);
-                }
-            });
+    /// Toggle a tool by stable ID: show and focus it, focus it, or hide it
+    /// and return to the center (see [`Workbench::toggle_tool`]). Toggling
+    /// the explorer registers it first.
+    pub(super) fn toggle_tool(&mut self, stable_id: &str, cx: &mut Context<Self>) {
+        if stable_id == crate::app::tool_layout::EXPLORER_TOOL_ID {
+            self.ensure_explorer(false, cx);
         }
+        let Some(id) = self.workbench.read(cx).tool_by_stable_id(stable_id) else {
+            return;
+        };
+        let shown = self
+            .workbench
+            .update(cx, |workbench, _| workbench.toggle_tool(id));
+        if shown
+            && let Some(crate::app::workbench::ExtensionView::Tree(tree)) = self
+                .contributed_views
+                .get(stable_id)
+                .map(|instance| instance.content.clone())
+        {
+            tree.update(cx, |tree, cx| tree.refresh_root(cx));
+        }
+        self.publish_tool_layout(cx);
+        self.focus_active_surface(cx);
+        cx.notify();
+    }
+
+    /// Toggle a dock (see [`Workbench::toggle_dock`]).
+    pub(super) fn toggle_dock(&mut self, dock: DockLocation, cx: &mut Context<Self>) {
+        self.workbench
+            .update(cx, |workbench, _| workbench.toggle_dock(dock));
         self.publish_tool_layout(cx);
         self.focus_active_surface(cx);
         cx.notify();

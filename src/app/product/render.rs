@@ -219,6 +219,7 @@ impl ProductShell {
     pub(super) fn render_pane(&self, pane_id: PaneId, cx: &mut Context<Self>) -> AnyElement {
         let workbench = self.workbench.read(cx);
         let pane = workbench.pane(pane_id).unwrap();
+        let area = pane.area();
         let active_tab = pane.active_tab_id();
         let active_view: Option<AnyElement> = workbench
             .editor(pane.active_tab())
@@ -359,7 +360,7 @@ impl ProductShell {
             .id(("pane", pane_id.value()))
             .debug_selector(move || format!("pane-{}", pane_id.value()))
             .relative()
-            .child(self.pane_drag_geometry(pane_id))
+            .child(self.pane_drag_geometry(pane_id, area))
             .flex()
             .flex_col()
             .size_full()

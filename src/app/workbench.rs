@@ -15,8 +15,8 @@ use knot_model::workbench as layout;
 pub(crate) use knot_model::workbench::{
     Area, Arrangement, CloseConfirmation, CloseRequestOutcome, DockLocation,
     DocumentCloseDisposition, DocumentId, PaneId, PresentationId, SplitDirection, SplitEdge,
-    SplitPlacement, TabId, TabMoveCapture, TabMoveDestination, TabMovePlacement, TabSurfaceId,
-    TerminalSessionId, ToolFrameId, WorkbenchLayout, WorkbenchTab, neighbor,
+    SplitPlacement, TabId, TabKind, TabMoveCapture, TabMoveDestination, TabMovePlacement,
+    TabSurfaceId, TerminalSessionId, ToolFrameId, WorkbenchLayout, WorkbenchTab, neighbor,
 };
 
 use super::{

@@ -424,3 +424,54 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     });
     assert_eq!(state(cx).status_target, Some(editor));
 }
+
+#[gpui::test]
+fn toggle_explorer_and_toggle_tool_show_focus_then_hide_to_the_center(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    cx.set_global(ApplicationFileSystems(memory_filesystems()));
+    let (shell, window) = empty_product_window(&documents, cx);
+    let center = cx.read(|cx| shell.read(cx).workbench.read(cx).focused_pane_id().unwrap());
+    let state = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            let workbench = shell.read(cx).workbench.read(cx);
+            let explorer = workbench
+                .tool_by_stable_id(crate::app::tool_layout::EXPLORER_TOOL_ID)
+                .unwrap();
+            (
+                workbench.tool_visible(explorer),
+                workbench.focused_pane_id() == Some(center),
+            )
+        })
+    };
+    // Not registered yet: it shows and takes focus.
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    assert_eq!(state(cx), (true, false));
+    // Focused: it hides and the center takes focus back.
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    assert_eq!(state(cx), (false, true));
+
+    // The picker toggles the chosen tool the same way.
+    for expected in [(true, false), (false, true)] {
+        let picker = dispatch_product_command(&shell, window, "workbench.toggle-tool", cx);
+        assert_eq!(wait_for_command(picker, cx), CommandOutcome::Completed);
+        wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
+        cx.simulate_input(window, "Explorer");
+        cx.simulate_keystrokes(window, "enter");
+        cx.run_until_parked();
+        assert_eq!(state(cx), expected);
+    }
+
+    // Visible but unfocused: it takes focus instead of hiding.
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    shell.update(cx, |shell, cx| {
+        shell
+            .workbench
+            .update(cx, |workbench, _| workbench.focus_pane(center));
+    });
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    assert_eq!(state(cx), (true, false));
+}

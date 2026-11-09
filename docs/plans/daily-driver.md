@@ -63,8 +63,8 @@ to be rebuilt later:
 
 - ✅ **D069 — Remove demo and test-only commands**
   - Move Terminal to New Window and the explorer placement commands are gone;
-    tab drag moves terminals, and `ProductShell::place_tool` is the seam for
-    D072's Move Tool to Dock…. Developer tooling carries a `Developer:` title
+    tab drag moves terminals, and the Move Tab to Dock commands move tools.
+    Developer tooling carries a `Developer:` title
     prefix. The window toolbar and status string are gone: failures use a
     warning prompt, and a failed package startup opens the extension report
     ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#product-application-launch)).
@@ -135,7 +135,7 @@ to be rebuilt later:
     from the keyboard. Tabs switch in order, by position, and by recent use on
     ctrl-tab without an overlay. Pinned tabs, Close Other Tabs, Close Pane,
     Reopen Closed Tab, preview tabs from the explorer and `documents.open`,
-    and Move Tool to Dock… complete the set; New Terminal moved to ctrl-`
+    and the Move Tab to Dock commands complete the set; New Terminal moved to ctrl-`
     ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure),
     [commands](../architecture/commands.md#keymaps),
     [decisions](../decisions/workbench-and-lifecycle.md#workbench-navigation)).

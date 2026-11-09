@@ -429,11 +429,29 @@ impl Workbench {
         self.show_tool(id).is_some()
     }
 
-    /// Hide a painted dock, keeping its arrangement, or show it again. An
-    /// empty dock shows the hidden tools that return to it.
+    /// Toggle a tool: a hidden or unfocused tool shows and takes focus, and a
+    /// focused one hides, returning focus to the center. Returns whether the
+    /// tool is shown afterwards.
+    pub fn toggle_tool(&mut self, id: ToolFrameId) -> bool {
+        let focused = self.tool_tab(id).is_some_and(|(pane, tab)| {
+            self.focused_pane_id() == Some(pane) && self.pane(pane).unwrap().active_tab == tab
+        });
+        if focused {
+            self.hide_tool(id);
+            self.focus_center();
+            false
+        } else {
+            self.show_tool(id).is_some()
+        }
+    }
+
+    /// Toggle a dock with its arrangement: a hidden dock shows and takes
+    /// focus, a shown but unfocused one takes focus, and a focused one hides,
+    /// returning focus to the center. An empty dock shows the hidden tools
+    /// that return to it.
     pub fn toggle_dock(&mut self, dock: DockLocation) {
         let area = Area::Dock(dock);
-        if self.area_shown(area) {
+        if self.focused_pane().is_some_and(|pane| pane.area == area) {
             self.set_dock_visible(dock, false);
         } else if let Some(pane) = self.area_focus(area) {
             self.set_focus(pane);
@@ -771,7 +789,10 @@ mod tests {
         }
         assert!(
             workbench
-                .relocate_tab(doc, TabMoveDestination::Dock(DockLocation::Right))
+                .relocate_tab(
+                    doc,
+                    TabMoveDestination::Area(Area::Dock(DockLocation::Right))
+                )
                 .is_none()
         );
         // Tools never move to another window.
@@ -822,12 +843,65 @@ mod tests {
         let dock = workbench.tool_tab(ids[0]).unwrap().0;
         assert_eq!(tool_ids(workbench, dock), ids.map(TabSurfaceId::Tool));
 
+        // A shown dock without focus takes focus before it hides.
+        workbench.focus_pane(center);
+        workbench.toggle_dock(DockLocation::Right);
+        assert_eq!(workbench.focused_pane_id(), Some(dock));
+        assert!(workbench.area_shown(Area::Dock(DockLocation::Right)));
+        workbench.toggle_dock(DockLocation::Right);
+        assert_eq!(workbench.focused_pane_id(), Some(center));
+
         // With no center, hiding the only dock leaves nothing focused.
+        workbench.toggle_dock(DockLocation::Right);
         workbench.remove_document_tabs();
         workbench.toggle_dock(DockLocation::Right);
         assert_eq!(workbench.focused_pane_id(), None);
         workbench.toggle_dock(DockLocation::Right);
         assert_eq!(workbench.focused_pane_id(), Some(dock));
+    }
+
+    #[test]
+    fn toggling_a_tool_shows_focuses_then_hides_it_and_returns_to_the_center() {
+        let workbench = &mut Workbench::empty();
+        let (center, _) = workbench.open_document_in_center(DocumentId::new(6));
+        let [first, second] = ["knot.first", "knot.second"]
+            .map(|stable| workbench.register_tool(stable, stable, DockLocation::Left));
+        workbench.show_tool(first);
+        workbench.show_tool(second);
+        let (dock, _) = workbench.tool_tab(first).unwrap();
+        workbench.focus_pane(center);
+
+        // Visible but unfocused, behind another tab: it takes focus.
+        assert!(workbench.toggle_tool(first));
+        assert_eq!(workbench.focused_pane_id(), Some(dock));
+        assert_eq!(
+            workbench.pane(dock).unwrap().active_tab().surface_id(),
+            TabSurfaceId::Tool(first)
+        );
+        // Focused: it hides, and focus returns to the center although its
+        // pane survives with the other tool.
+        assert!(!workbench.toggle_tool(first));
+        assert!(workbench.tool_tab(first).is_none());
+        assert_eq!(workbench.focused_pane_id(), Some(center));
+        // Hidden: it returns to its pane and position, focused.
+        assert!(workbench.toggle_tool(first));
+        assert_eq!(
+            tool_ids(workbench, dock),
+            [first, second].map(TabSurfaceId::Tool)
+        );
+        assert_eq!(workbench.focused_pane_id(), Some(dock));
+        // A tool of a hidden dock shows the dock.
+        workbench.toggle_dock(DockLocation::Left);
+        assert!(!workbench.tool_visible(second));
+        assert!(workbench.toggle_tool(second));
+        assert!(workbench.tool_visible(first));
+        assert_eq!(workbench.focused_pane_id(), Some(dock));
+
+        // With an empty center, hiding a focused tool leaves nothing focused.
+        workbench.remove_document_tabs();
+        workbench.toggle_tool(second);
+        assert_eq!(workbench.focused_pane_id(), None);
+        assert!(workbench.tool_visible(first));
     }
 
     #[test]
