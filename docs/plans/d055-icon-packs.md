@@ -1,6 +1,6 @@
 # D055 — Icon packs
 
-Status: 🚧 in progress; checkpoint 1 awaits review. Roadmap item
+Status: 🚧 in progress; checkpoint 1 done. Roadmap item
 [D055](../roadmap.md); builds on the theme system (D064) and on the
 [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component),
 whose painting and asset APIs this plan uses.
@@ -109,41 +109,15 @@ setting, or replace a single icon.
 
 ## Checkpoints
 
-### 1. Native icon registry and painting ✅ (awaiting review)
+### 1. Native icon registry and painting ✅
 
-Done: `IconRegistry` in `crates/knot-model/src/icons.rs` (the four lookup
-levels, packs, lifecycle removal, the file and folder resolver with language
-and generic candidates, and the native table `NATIVE_ICONS`); the
-`ApplicationIcons` global, the `icons.pack` setting, and the `AppIcon` element
-in `src/app/icons.rs`; the `icon` color key, which every bundled theme sets.
-`gpui-kit-assets` is a direct dependency, pinned like gpui-component, to read
-Lucide bytes. The module carries `#[allow(dead_code)]` in `src/app/mod.rs`
-until checkpoint 2 uses it; remove it there.
-
-- Deliverables: an application icon registry with the four-level lookup,
-  the native default table (`file`, `folder`, `folder.open`, `symbol`,
-  `tree.collapsed`, `tree.expanded`, and the fallback) over Lucide, an icon
-  element that paints tinted (gpui-component `Icon::data`) and full-color
-  (`img()`) definitions at the surface's text size and zoom, the
-  `icons.pack` setting
-  read on change, and a file resolver covering only language and generic
-  candidates. No surface uses icons yet.
-- Validation: unit tests for lookup precedence (override over pack over
-  default over fallback, disposal revealing the previous level), for
-  resolver candidates; a gpui test
-  window that paints a tinted and a full-color icon; a test that every native default names an existing Lucide glyph.
-- **Implementation context:** add `src/app/icons.rs`, declared in
-  `src/app/mod.rs` and exposed as an `ApplicationIcons` global. Mirror the
-  registration, owner, and lifecycle structure of `ThemeRegistry` in
-  `crates/knot-model/src/themes.rs`, and the native defaults table of
-  `native_color_definitions` in `crates/knot-model/src/theme.rs`.
-  Detection uses
-  `LanguageRegistry::detect(file_name, "")` in `crates/knot-model/src/languages.rs`.
-  Add the setting beside `THEME_*` in `crates/knot-model/src/settings.rs` and observe it
-  like `themes::apply`. Add an `icon` color key, the default icon tint, to the
-  native color table.
-- Review gate: the registry shape and the element's sizing API, before
-  any surface depends on them.
+Done and reviewed: `IconRegistry` in `crates/knot-model/src/icons.rs` (lookup
+levels, packs, lifecycle removal, file and folder resolver, native table), the
+`ApplicationIcons` global and `AppIcon` element in `src/app/icons.rs`, the
+`icons.pack` setting, and the `icon` color key that every bundled theme sets.
+`gpui-kit-assets` is a direct dependency, pinned like gpui-component. The
+module carries `#[allow(dead_code)]` in `src/app/mod.rs`; checkpoint 2 removes
+it once a surface uses icons.
 
 ### 2. Icons in the workspace and extension trees
 
