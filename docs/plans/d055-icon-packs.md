@@ -1,6 +1,6 @@
 # D055 — Icon packs
 
-Status: 🚧 in progress; checkpoint 1 done. Roadmap item
+Status: 🚧 in progress; checkpoints 1–2 done. Roadmap item
 [D055](../roadmap.md); builds on the theme system (D064) and on the
 [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component),
 whose painting and asset APIs this plan uses.
@@ -119,28 +119,13 @@ levels, packs, lifecycle removal, file and folder resolver, native table), the
 module carries `#[allow(dead_code)]` in `src/app/mod.rs`; checkpoint 2 removes
 it once a surface uses icons.
 
-### 2. Icons in the workspace and extension trees ✅ (awaiting review)
+### 2. Icons in the workspace and extension trees ✅
 
-Implemented: `TreeItem.icon` is an icon-name string (`Option<String>` in the
-protocol, validated for characters at the host boundary); both trees paint
-`AppIcon` disclosure and row icons; `#[allow(dead_code)]` is gone from
-`mod icons`.
-
-- Deliverables: workspace tree rows paint resolved file and folder icons
-  and icon disclosure triangles; extension tree rows paint their named icon.
-  `TreeIcon` becomes a validated icon name in the protocol and `knot.d.ts`
-  (`"file" | "folder" | "symbol"` remain valid names).
-- Validation: tree view and workspace tree tests that rows carry the
-  resolved icon name, including the `.open` variant for expanded folders and
-  the fallback for an unknown name; existing tree keyboard and pointer tests
-  pass unchanged.
-- **Implementation context:** replace `TreeView::icon` and `disclosure` in
-  `src/app/tree_view.rs` (around line 668), the same pair in
-  `src/app/workspace_tree.rs` (around line 429), and `TreeIcon` in
-  `crates/knot-protocol/src/lib.rs:332` with its marshalling in
-  `crates/knot-host/src/engine/marshal.rs` and `src/app/extensions/semantics.rs`.
-- Review gate: icons look right at every zoom level in both bundled theme
-  appearances, and the tree rows align as before.
+Done and reviewed: both trees paint `AppIcon` row and disclosure icons
+(`tree.collapsed` / `tree.expanded`), and `TreeItem.icon` is an icon-name
+string, validated for characters at the host boundary in
+`crates/knot-host/src/engine/marshal.rs`. An unknown name paints the fallback
+icon. `mod icons` no longer needs `#[allow(dead_code)]`.
 
 ### 3. Extension API and pack selection
 
