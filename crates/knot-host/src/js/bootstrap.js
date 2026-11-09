@@ -1397,6 +1397,34 @@ export async function defineColor(definition) {
   };
   await request("defineColor", key, description, fallback("dark"), fallback("light"));
 }
+function iconSpec(value, name) {
+  const spec = record(value, `icon ${name} must be a definition object`);
+  return Object.fromEntries(Object.entries(spec).filter(([, entry]) => entry !== undefined));
+}
+export async function defineIcon(name, definition) {
+  const key = string(name, "icon name must be text");
+  await request("defineIcon", key, iconSpec(definition, key));
+}
+export async function overrideIcon(name, definition) {
+  const key = string(name, "icon name must be text");
+  const registration = await request("registerIconOverride", key, iconSpec(definition, key));
+  const owned = ownership(() => {}, () => request("unregisterIconOverride", registration));
+  return Object.freeze({ dispose: () => owned.dispose() });
+}
+export async function registerIconPack(definition) {
+  const value = record(definition, "icons.registerPack requires a pack object");
+  const name = string(value.name, "icon pack name must be text");
+  const icons = {};
+  for (const [key, spec] of Object.entries(record(value.icons, "icon pack icons must be an object"))) {
+    if (spec !== undefined) icons[key] = iconSpec(spec, key);
+  }
+  const registration = await request("registerIconPack", name, icons);
+  const owned = ownership(() => {}, () => request("unregisterIconPack", registration));
+  return Object.freeze({ dispose: () => owned.dispose() });
+}
+export async function listIconPacks() {
+  return Object.freeze(await request("listIconPacks"));
+}
 function presetCommand(command) {
   if (command === null) return null;
   if (typeof command === "string") return { name: command, arguments: null };

@@ -140,3 +140,40 @@ fn folders_use_the_open_form_only_when_expanded() {
         IconDefinition::lucide("folder-open")
     );
 }
+
+fn spec(json: &str) -> Result<IconDefinition, &'static str> {
+    serde_json::from_str::<IconSpec>(json).unwrap().definition()
+}
+
+#[test]
+fn specs_name_one_source_and_a_compatible_color() {
+    let svg = r#""<svg viewBox=\"0 0 1 1\"></svg>""#;
+    assert_eq!(
+        spec(r#"{"lucide":"folder-open"}"#),
+        Ok(IconDefinition::lucide("folder-open"))
+    );
+    assert_eq!(
+        spec(&format!(r#"{{"svg":{svg},"color":"original"}}"#))
+            .unwrap()
+            .color,
+        IconColor::Original
+    );
+    assert_eq!(
+        spec(&format!(r#"{{"svg":{svg},"color":"icon.rust"}}"#))
+            .unwrap()
+            .color,
+        IconColor::Key("icon.rust".into())
+    );
+    for invalid in [
+        r#"{}"#,
+        r#"{"svg":"<svg></svg>","lucide":"file"}"#,
+        r#"{"svg":"just text"}"#,
+        r#"{"svg":"<svg>"}"#,
+        r#"{"lucide":"Not A Glyph"}"#,
+        r#"{"lucide":"file","color":"original"}"#,
+        r#"{"lucide":"file","color":""}"#,
+    ] {
+        assert!(spec(invalid).is_err(), "{invalid}");
+    }
+    assert!(serde_json::from_str::<IconSpec>(r#"{"lucide":"file","size":2}"#).is_err());
+}

@@ -32,6 +32,7 @@ import {
   listGrammars,
   defineSetting, setSettings, getSetting, resetSetting, observeSetting,
   registerTheme, getTheme, listThemes, defineColor,
+  defineIcon, overrideIcon, registerIconPack, listIconPacks,
 } from "knot:bootstrap";
 
 export { platform };
@@ -81,6 +82,7 @@ export const languages = Object.freeze({ register: registerLanguage, associate: 
 export const settings = Object.freeze({ define: defineSetting, set: setSettings, get: getSetting, reset: resetSetting, observe: observeSetting });
 export const terminals = Object.freeze({ open: openTerminal });
 export const themes = Object.freeze({ register: registerTheme, get: getTheme, list: listThemes, defineColor });
+export const icons = Object.freeze({ define: defineIcon, override: overrideIcon, registerPack: registerIconPack, listPacks: listIconPacks });
 export const windows = Object.freeze({ list: listWindows, get: getWindow, open: openWindow, focus: focusWindow });
 export const workspaces = Object.freeze({ get: getWorkspace, openFolder, replaceRoots: replaceWorkspaceRoots, pickFolder });
 

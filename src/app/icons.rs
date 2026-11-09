@@ -22,6 +22,7 @@ use super::{
     theme::{color, theme},
 };
 use knot_model::icons::{IconColor, IconDefinition, IconRegistry, IconSource};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 #[derive(Default)]
 pub(crate) struct ApplicationIcons(pub(crate) IconRegistry);
@@ -39,6 +40,30 @@ fn apply(cx: &mut App) {
     if cx.default_global::<ApplicationIcons>().0.select_pack(&pack) {
         cx.refresh_windows();
     }
+}
+
+/// Repaint every window after the registry changed.
+pub(crate) fn refresh_icons(cx: &mut App) {
+    cx.refresh_windows();
+}
+
+/// Drop what a torn-down lifecycle registered.
+pub(crate) fn remove_lifecycle(
+    extension: ExtensionId,
+    lifecycle: ExtensionLifecycleId,
+    cx: &mut App,
+) {
+    if cx.has_global::<ApplicationIcons>() {
+        cx.global_mut::<ApplicationIcons>()
+            .0
+            .remove_lifecycle(extension, lifecycle);
+        refresh_icons(cx);
+    }
+}
+
+/// Whether `name` is a glyph of the builtin Lucide set.
+pub(crate) fn glyph_exists(name: &str) -> bool {
+    AllAssets::get(&format!("icons/{name}.svg")).is_some()
 }
 
 /// The definition of the icon `name`.

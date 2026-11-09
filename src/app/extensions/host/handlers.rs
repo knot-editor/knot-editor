@@ -3789,6 +3789,212 @@ async fn unregister_theme(
     })?
 }
 
+use crate::app::icons::{ApplicationIcons, glyph_exists, refresh_icons};
+use knot_model::icons::{IconDefinition, IconOwner, IconSpec};
+
+/// Failures of an icon operation.
+#[derive(Debug, HostError)]
+pub(crate) enum IconError {
+    #[error(transparent)]
+    Access(AccessError),
+    #[error(code = "DuplicateIcon", message = "{name} already has a default icon")]
+    DuplicateIcon { name: String },
+    #[error(
+        code = "IconRegistrationNotFound",
+        message = "IconRegistrationNotFound"
+    )]
+    RegistrationNotFound,
+}
+
+impl From<AccessError> for IconError {
+    fn from(error: AccessError) -> Self {
+        Self::Access(error)
+    }
+}
+
+fn icon_owner(context: &HostContext) -> IconOwner {
+    IconOwner {
+        extension: context.request.extension,
+        lifecycle: context.request.lifecycle,
+    }
+}
+
+fn icon_name(name: String) -> Result<String, DecodeError> {
+    let valid = !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'));
+    if valid {
+        Ok(name)
+    } else {
+        Err(DecodeError::Type(
+            "icon name must use letters, digits, and . - _",
+        ))
+    }
+}
+
+fn icon_definition(
+    value: knot_protocol::CommandArgumentValue,
+) -> Result<IconDefinition, DecodeError> {
+    let spec: IconSpec = serde_json::from_value(setting_value(value))
+        .map_err(|_| DecodeError::Type("invalid icon definition"))?;
+    if spec.lucide_name().is_some_and(|name| !glyph_exists(name)) {
+        return Err(DecodeError::Type("unknown Lucide icon"));
+    }
+    spec.definition().map_err(DecodeError::Type)
+}
+
+/// A name and the definition it gets.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NamedIcon {
+    name: String,
+    definition: IconDefinition,
+}
+
+impl HostArguments for NamedIcon {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            name: icon_name(reader.text(2, "icon name must be text")?)?,
+            definition: icon_definition(reader.command_arguments(3)?)?,
+        })
+    }
+}
+
+/// A pack's name and the icons it defines.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct IconPackArguments {
+    name: String,
+    icons: std::collections::BTreeMap<String, IconDefinition>,
+}
+
+impl HostArguments for IconPackArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let name = reader.text(2, "icon pack name must be text")?;
+        if name.is_empty() {
+            return Err(DecodeError::Type("icon pack name must be nonempty"));
+        }
+        let knot_protocol::CommandArgumentValue::Object(entries) = reader.command_arguments(3)?
+        else {
+            return Err(DecodeError::Type("icon pack icons must be an object"));
+        };
+        let icons = entries
+            .into_iter()
+            .map(|(icon, value)| Ok((icon_name(icon)?, icon_definition(value)?)))
+            .collect::<Result<_, DecodeError>>()?;
+        Ok(Self { name, icons })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct IconRegistrationArguments {
+    registration: u64,
+}
+
+impl HostArguments for IconRegistrationArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            registration: reader.integer(2)?,
+        })
+    }
+}
+
+#[host_operation("defineIcon")]
+async fn define_icon(context: HostContext, arguments: NamedIcon) -> Result<(), IconError> {
+    let owner = icon_owner(&context);
+    context.foreground(|_, cx| {
+        let NamedIcon { name, definition } = arguments;
+        cx.default_global::<ApplicationIcons>()
+            .0
+            .define(owner, &name, definition)
+            .map_err(|_| IconError::DuplicateIcon { name })?;
+        refresh_icons(cx);
+        Ok(())
+    })?
+}
+
+#[host_operation("registerIconOverride")]
+async fn register_icon_override(
+    context: HostContext,
+    arguments: NamedIcon,
+) -> Result<u64, IconError> {
+    let owner = icon_owner(&context);
+    Ok(context.foreground(|_, cx| {
+        let id = cx.default_global::<ApplicationIcons>().0.register_override(
+            owner,
+            &arguments.name,
+            arguments.definition,
+        );
+        refresh_icons(cx);
+        id
+    })?)
+}
+
+#[host_operation("unregisterIconOverride")]
+async fn unregister_icon_override(
+    context: HostContext,
+    arguments: IconRegistrationArguments,
+) -> Result<(), IconError> {
+    let owner = icon_owner(&context);
+    context.foreground(|_, cx| {
+        if cx
+            .default_global::<ApplicationIcons>()
+            .0
+            .unregister_override(owner, arguments.registration)
+        {
+            refresh_icons(cx);
+            Ok(())
+        } else {
+            Err(IconError::RegistrationNotFound)
+        }
+    })?
+}
+
+#[host_operation("registerIconPack")]
+async fn register_icon_pack(
+    context: HostContext,
+    arguments: IconPackArguments,
+) -> Result<u64, IconError> {
+    let owner = icon_owner(&context);
+    Ok(context.foreground(|_, cx| {
+        let id = cx.default_global::<ApplicationIcons>().0.register_pack(
+            owner,
+            &arguments.name,
+            arguments.icons,
+        );
+        refresh_icons(cx);
+        id
+    })?)
+}
+
+#[host_operation("unregisterIconPack")]
+async fn unregister_icon_pack(
+    context: HostContext,
+    arguments: IconRegistrationArguments,
+) -> Result<(), IconError> {
+    let owner = icon_owner(&context);
+    context.foreground(|_, cx| {
+        if cx
+            .default_global::<ApplicationIcons>()
+            .0
+            .unregister_pack(owner, arguments.registration)
+        {
+            refresh_icons(cx);
+            Ok(())
+        } else {
+            Err(IconError::RegistrationNotFound)
+        }
+    })?
+}
+
+#[host_operation("listIconPacks")]
+async fn list_icon_packs(context: HostContext, _: ()) -> Result<Vec<String>, AccessError> {
+    context.foreground(|_, cx| {
+        cx.try_global::<ApplicationIcons>()
+            .map(|icons| icons.0.pack_names())
+            .unwrap_or_default()
+    })
+}
+
 use crate::app::status_bar::{ApplicationStatusBar, StatusItem, StatusOwner};
 
 /// Failures of a status item operation.

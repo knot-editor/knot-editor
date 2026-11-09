@@ -123,6 +123,7 @@ function emptyState() {
       ["theme.mode", { key: "theme.mode", type: "string", default: "dark", description: "Which theme applies" }],
       ["theme.dark", { key: "theme.dark", type: "string", default: "One Dark", description: "The theme used in dark mode" }],
       ["theme.light", { key: "theme.light", type: "string", default: "One Light", description: "The theme used in light mode" }],
+      ["icons.pack", { key: "icons.pack", type: "string", default: "", description: "The icon pack that restyles icons" }],
       ["keymap.preset", { key: "keymap.preset", type: "string", default: "knot", description: "The keymap preset that supplies default key bindings" }],
       ["statusBar.visible", { key: "statusBar.visible", type: "boolean", default: true, description: "Show the status bar below the workbench" }],
       ["statusBar.hiddenItems", { key: "statusBar.hiddenItems", type: "strings", default: [], description: "IDs of status bar items the bar skips" }],
@@ -130,6 +131,9 @@ function emptyState() {
     settingValues: [] as FakeSettingValue[],
     settingListeners: [] as { key: string; listener: (key: Knot.SettingKey) => void | Promise<void> }[],
     themes: [] as Knot.ThemeDefinition[],
+    iconDefaults: new Map<string, Knot.IconDefinition>(),
+    iconOverrides: [] as { name: string; definition: Knot.IconDefinition }[],
+    iconPacks: [] as Knot.IconPack[],
     keymapPresets: [] as Knot.KeymapPresetDefinition[],
     bindings: [] as FakeBinding[],
     colors: new Map<string, Knot.ColorDefinition>(),
@@ -1069,6 +1073,30 @@ export function themeDefinitions(): readonly Knot.ThemeDefinition[] {
   return state.themes;
 }
 
+/** The native icon names; defining one is a DuplicateIcon. */
+const NATIVE_ICON_NAMES = ["file", "folder", "folder.open", "symbol", "tree.collapsed", "tree.expanded", "fallback"];
+
+/** The definition `name` has: an override, else the pack `icons.pack`
+ * selects, else a package default; null for a native or unknown name. */
+export function resolveIcon(name: string): Knot.IconDefinition | null {
+  const overridden = [...state.iconOverrides].reverse().find((entry) => entry.name === name);
+  if (overridden !== undefined) return overridden.definition;
+  const selected = resolveSetting("icons.pack", settingScope(undefined));
+  const pack = [...state.iconPacks].reverse().find((candidate) => candidate.name === selected);
+  return pack?.icons[name] ?? state.iconDefaults.get(name) ?? null;
+}
+
+function checkedIcon(definition: Knot.IconDefinition): Knot.IconDefinition {
+  const { svg, lucide, color } = definition as { svg?: string; lucide?: string; color?: string };
+  if ((svg === undefined) === (lucide === undefined)) {
+    throw new TypeError("an icon needs exactly one of svg and lucide");
+  }
+  if (color === "original" && svg === undefined) {
+    throw new TypeError("only an svg icon can keep its original colors");
+  }
+  return definition;
+}
+
 /** Every live keymap preset registration, in registration order. */
 export function keymapPresetDefinitions(): readonly Knot.KeymapPresetDefinition[] {
   return state.keymapPresets;
@@ -1300,6 +1328,31 @@ export const api: KnotApi = {
       }
       state.colors.set(definition.key, definition);
     },
+  },
+  icons: {
+    define: async (name, definition) => {
+      if (NATIVE_ICON_NAMES.includes(name) || state.iconDefaults.has(name)) throw hostError("DuplicateIcon");
+      state.iconDefaults.set(name, checkedIcon(definition));
+    },
+    override: async (name, definition) => {
+      const entry = { name, definition: checkedIcon(definition) };
+      state.iconOverrides.push(entry);
+      return {
+        dispose: async () => {
+          state.iconOverrides = state.iconOverrides.filter((candidate) => candidate !== entry);
+        },
+      };
+    },
+    registerPack: async (pack) => {
+      for (const definition of Object.values(pack.icons)) checkedIcon(definition);
+      state.iconPacks.push(pack);
+      return {
+        dispose: async () => {
+          state.iconPacks = state.iconPacks.filter((candidate) => candidate !== pack);
+        },
+      };
+    },
+    listPacks: async () => [...new Set(state.iconPacks.map((pack) => pack.name))].sort(),
   },
   windows: {
     list: async () => state.windows.map(windowInfo),

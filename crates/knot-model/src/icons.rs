@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 
+use serde::Deserialize;
+
 use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// The name of the icon painted for a name no level defines.
@@ -54,6 +56,60 @@ impl IconDefinition {
             color: IconColor::Surface,
         }
     }
+}
+
+/// An icon definition as an extension writes it: exactly one of `svg` and
+/// `lucide`, and an optional `color`.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IconSpec {
+    #[serde(default)]
+    svg: Option<String>,
+    #[serde(default)]
+    lucide: Option<String>,
+    #[serde(default)]
+    color: Option<String>,
+}
+
+impl IconSpec {
+    /// The Lucide glyph this spec names, which the caller checks exists.
+    pub fn lucide_name(&self) -> Option<&str> {
+        self.lucide.as_deref()
+    }
+
+    /// The definition, or why the spec is invalid.
+    pub fn definition(self) -> Result<IconDefinition, &'static str> {
+        let source = match (self.svg, self.lucide) {
+            (Some(svg), None) if looks_like_svg(&svg) => IconSource::Svg(svg),
+            (Some(_), None) => return Err("icon svg must be an SVG document"),
+            (None, Some(name)) if is_glyph_name(&name) => IconSource::Lucide(name),
+            (None, Some(_)) => return Err("icon lucide must be a glyph name"),
+            _ => return Err("an icon needs exactly one of svg and lucide"),
+        };
+        let color = match self.color.as_deref() {
+            None => IconColor::Surface,
+            Some("") => return Err("icon color must be nonempty"),
+            Some("original") if matches!(source, IconSource::Svg(_)) => IconColor::Original,
+            Some("original") => return Err("only an svg icon can keep its original colors"),
+            Some(key) => IconColor::Key(key.to_owned()),
+        };
+        Ok(IconDefinition { source, color })
+    }
+}
+
+fn is_glyph_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+/// A document that begins with an `<svg` element (after an optional XML
+/// declaration) and ends with its close.
+fn looks_like_svg(text: &str) -> bool {
+    let text = text.trim();
+    (text.starts_with("<svg") || text.starts_with("<?xml") && text.contains("<svg"))
+        && (text.ends_with("</svg>") || text.ends_with("/>"))
 }
 
 /// The extension lifecycle that owns a registration.

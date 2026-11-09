@@ -2,6 +2,7 @@
 // because the application resolves the selected theme once every package has
 // started, before it restores windows.
 import { commands, themes } from "knot";
+import { restore as restorePack, select as selectPack } from "./icon-pack.js";
 import { restore, select } from "./selection.js";
 import { THEMES } from "./themes.js";
 
@@ -11,4 +12,8 @@ export async function start() {
   await commands.register("themes.select", async () => {
     selection = await select(selection);
   }, { title: "Select Theme…", description: "Choose the color theme." });
+  let pack = await restorePack();
+  await commands.register("themes.selectIconPack", async () => {
+    pack = await selectPack(pack);
+  }, { title: "Select Icon Pack…", description: "Choose the icon pack." });
 }

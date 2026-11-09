@@ -328,6 +328,9 @@ declare module "knot" {
     "theme.dark": string;
     /** The theme name used in light mode. Native default "One Light". */
     "theme.light": string;
+    /** The icon pack that restyles icons; empty uses the default icons.
+     * Native default "". */
+    "icons.pack": string;
     /** The keymap preset that supplies default bindings. Native default
      * "knot"; an unregistered name selects "knot". */
     "keymap.preset": string;
@@ -597,6 +600,49 @@ declare module "knot" {
      * when native code or a live lifecycle defined the key, or Cancelled. */
     defineColor(definition: ColorDefinition): Promise<void>;
   }>;
+  /**
+   * What an icon draws: a builtin Lucide glyph by its kebab-case name
+   * (`{ lucide: "folder-open" }`) or an SVG document (`{ svg }`). `color`
+   * is a color key, which paints the icon in that single color, or
+   * "original", which keeps an SVG's own colors; without it the surface's
+   * icon color applies.
+   */
+  export type IconDefinition =
+    | { readonly lucide: string; readonly color?: ColorKey }
+    | { readonly svg: string; readonly color?: ColorKey | "original" };
+  export interface IconPack {
+    /** The value of the `icons.pack` setting that selects this pack. */
+    readonly name: string;
+    /** Icon definitions by name; a name the pack leaves out falls back to
+     * the default level. */
+    readonly icons: Readonly<Record<string, IconDefinition>>;
+  }
+  /**
+   * Icons are identified by flat dotted names such as "file", "folder.open",
+   * or "symbol". For one name the first of these that defines it wins: an
+   * override, the active pack (the `icons.pack` setting), the defaults (the
+   * native ones, then names packages `define`), and then a generic fallback
+   * icon, so an unknown name is not an error. Registrations and selection
+   * repaint every window; the latest registration of an override or pack
+   * name wins, and disposal or teardown reveals the previous one.
+   */
+  export const icons: Readonly<{
+    /** Define a lifecycle-owned default icon for a name your package
+     * introduces; a pack or override may still restyle it.
+     * @throws TypeError for an invalid name or definition, an unknown Lucide
+     * glyph, or `"original"` with `lucide`; HostError with DuplicateIcon
+     * (details: name) when the name already has a default, or Cancelled. */
+    define(name: string, definition: IconDefinition): Promise<void>;
+    /** Replace one icon above every pack, mainly for personal config.
+     * @throws TypeError as define; HostError with Cancelled. */
+    override(name: string, definition: IconDefinition): Promise<Disposable>;
+    /** Register a lifecycle-owned icon pack; the latest registration of a
+     * name defines it.
+     * @throws TypeError as define; HostError with Cancelled. */
+    registerPack(pack: IconPack): Promise<Disposable>;
+    /** Every registered pack name, sorted. */
+    listPacks(): Promise<readonly string[]>;
+  }>;
   /** Only product windows; diagnostic and startup-error windows are excluded.
    * get returns null after closure; fabricated/command targets reject InvalidTarget. */
   export const windows: Readonly<{
@@ -787,6 +833,7 @@ declare module "knot" {
     | "UnknownGrammar" | "InvalidQuery" | "LanguageRegistrationNotFound"
     | "DuplicateSetting" | "SettingTypeMismatch"
     | "UnknownCapture" | "DuplicateColor" | "ThemeRegistrationNotFound"
+    | "DuplicateIcon" | "IconRegistrationNotFound"
     | "StatusItemRegistrationNotFound"
     | "KeymapPresetRegistrationNotFound";
   /**
