@@ -13,14 +13,8 @@ use super::relocate::TabRelocationDestination;
 use super::*;
 use crate::app::window_layout::Rect;
 use crate::app::workbench::{SplitEdge, TabMoveDestination, TabMovePlacement};
+use knot_model::workbench::RecentWalk;
 use knot_protocol::CommandOutcome;
-
-/// An uncommitted walk through one pane's recently used tabs.
-pub(super) struct RecentWalk {
-    pane: PaneId,
-    order: Vec<TabId>,
-    index: usize,
-}
 
 impl ProductShell {
     /// Activate the next or previous tab of a pane in tab order, wrapping.
@@ -72,7 +66,7 @@ impl ProductShell {
         if self
             .recent_walk
             .as_ref()
-            .is_some_and(|walk| walk.pane != pane)
+            .is_some_and(|walk| walk.pane() != pane)
         {
             self.commit_recent_walk(cx);
         }
@@ -85,18 +79,10 @@ impl ProductShell {
         if order.len() < 2 {
             return Err(CommandOutcome::Unavailable);
         }
-        let walk = self.recent_walk.get_or_insert(RecentWalk {
-            pane,
-            order,
-            index: 0,
-        });
-        let count = walk.order.len();
-        walk.index = if forward {
-            (walk.index + 1) % count
-        } else {
-            (walk.index + count - 1) % count
-        };
-        let tab = walk.order[walk.index];
+        let tab = self
+            .recent_walk
+            .get_or_insert_with(|| RecentWalk::new(pane, order))
+            .step(forward);
         let shown = self
             .workbench
             .update(cx, |workbench, _| workbench.show_tab(pane, tab, false));
@@ -117,11 +103,11 @@ impl ProductShell {
         let Some(walk) = self.recent_walk.take() else {
             return;
         };
-        let tab = walk.order[walk.index];
+        let (walk_pane, tab) = (walk.pane(), walk.current());
         self.workbench.update(cx, |workbench, _| {
-            let pane = workbench.pane(walk.pane);
+            let pane = workbench.pane(walk_pane);
             if pane.is_some_and(|pane| pane.active_tab_id() == tab) {
-                workbench.activate_tab(walk.pane, tab);
+                workbench.activate_tab(walk_pane, tab);
             }
         });
     }

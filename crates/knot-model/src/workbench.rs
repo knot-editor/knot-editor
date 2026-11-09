@@ -962,6 +962,9 @@ pub use tools::{
 
 mod arrange;
 mod close;
+pub mod closure;
+mod recent;
+pub use recent::{RecentWalk, RecentlyClosed};
 mod relocate;
 mod resize;
 pub use resize::{Rect, neighbor};

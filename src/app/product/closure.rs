@@ -3,6 +3,44 @@
 
 use super::*;
 use crate::app::documents::DocumentDirty;
+use knot_model::workbench::closure as model;
+
+impl ProductCommandTarget {
+    fn view_key(&self) -> ProtectedViewKey {
+        ProtectedViewKey {
+            session: self.shell.entity_id().as_u64(),
+            workbench: self.workbench.entity_id().as_u64(),
+            presentation: self.presentation,
+            pane: self.pane,
+            tab: self.tab,
+            surface: self.surface,
+        }
+    }
+}
+
+fn closure_views(views: &[ProtectedView]) -> Vec<model::ClosureView> {
+    views
+        .iter()
+        .map(|view| model::ClosureView {
+            key: view.key,
+            pinned: view.pinned,
+            dock: view.dock,
+        })
+        .collect()
+}
+
+/// Every open document's state for the closure decisions.
+fn document_statuses(cx: &App) -> Vec<model::DocumentStatus> {
+    ProductShell::documents(cx)
+        .read(cx)
+        .documents()
+        .map(|document| model::DocumentStatus {
+            id: document.id(),
+            revision: document.model().read(cx).revision(),
+            dirty: document.is_dirty(cx),
+        })
+        .collect()
+}
 
 impl ProductShell {
     pub(super) fn protected_closure_is_active(cx: &App) -> bool {
@@ -33,8 +71,8 @@ impl ProductShell {
                 };
                 ProtectedView {
                     key: ProtectedViewKey {
-                        session,
-                        workbench: workbench.entity_id(),
+                        session: session.as_u64(),
+                        workbench: workbench.entity_id().as_u64(),
                         presentation,
                         pane: snapshot.pane_id,
                         tab: snapshot.tab_id,
@@ -67,97 +105,32 @@ impl ProductShell {
             .validate_tab(cx)
             .map_err(|_| ProtectedCloseFailure::InvalidTarget)?;
         let views = Self::collect_product_views(cx);
-        let origin_key = ProtectedViewKey {
-            session: request.origin.shell.entity_id(),
-            workbench: request.origin.workbench.entity_id(),
-            presentation: request.origin.presentation,
-            pane: request.origin.pane,
-            tab: request.origin.tab,
-            surface: request.origin.surface,
-        };
-        if !views.iter().any(|view| view.key == origin_key) {
-            return Err(ProtectedCloseFailure::InvalidTarget);
-        }
-        let scoped = views
-            .iter()
-            .filter(|view| match request.kind {
-                ProtectedCloseKind::Tab => view.key == origin_key,
-                ProtectedCloseKind::OtherTabs
-                | ProtectedCloseKind::Pane
-                | ProtectedCloseKind::OtherPanes => {
-                    in_pane_scope(request.kind, &request.origin, view)
-                }
-                ProtectedCloseKind::Window => view.key.session == request.origin.shell.entity_id(),
-                ProtectedCloseKind::Quit => true,
+        let origin = request.origin.view_key();
+        let decided = model::plan(
+            request.kind,
+            &origin,
+            request.discard,
+            &closure_views(&views),
+            &document_statuses(cx),
+        )
+        .map_err(|_| ProtectedCloseFailure::InvalidTarget)?;
+        let prompts = decided
+            .prompts
+            .into_iter()
+            .map(|(document, key)| {
+                let view = views.iter().find(|view| view.key == key);
+                (
+                    document,
+                    view.and_then(|view| view.target.clone())
+                        .expect("document tab has editor focus"),
+                )
             })
-            .cloned()
-            .collect::<Vec<_>>();
-        let scope = scoped.iter().map(|view| view.key).collect::<Vec<_>>();
-        let total_counts = views.iter().fold(HashMap::new(), |mut counts, view| {
-            if let TabSurfaceId::Document(document) = view.key.surface {
-                *counts.entry(document).or_insert(0usize) += 1;
-            }
-            counts
-        });
-        let scoped_counts = scoped.iter().fold(HashMap::new(), |mut counts, view| {
-            if let TabSurfaceId::Document(document) = view.key.surface {
-                *counts.entry(document).or_insert(0usize) += 1;
-            }
-            counts
-        });
-        let documents = Self::documents(cx);
-        let mut prompted = HashSet::new();
-        let mut prompts = Vec::new();
-        for view in &scoped {
-            let TabSurfaceId::Document(document) = view.key.surface else {
-                continue;
-            };
-            let loses_final_view = request.kind == ProtectedCloseKind::Quit
-                || scoped_counts.get(&document) == total_counts.get(&document);
-            if loses_final_view
-                && prompted.insert(document)
-                && documents
-                    .read(cx)
-                    .get(document)
-                    .is_some_and(|document| document.is_dirty(cx))
-            {
-                prompts.push((
-                    document,
-                    view.target.clone().expect("document tab has editor focus"),
-                ));
-            }
-        }
-        if request.kind == ProtectedCloseKind::Quit
-            && documents
-                .read(cx)
-                .documents()
-                .any(|document| document.is_dirty(cx) && !prompted.contains(&document.id()))
-        {
-            return Err(ProtectedCloseFailure::InvalidTarget);
-        }
-        let discarded = if request.discard {
-            prompts
-                .drain(..)
-                .map(|(document, _)| CloseApproval {
-                    document,
-                    revision: documents
-                        .read(cx)
-                        .get(document)
-                        .expect("prompted document is live")
-                        .model()
-                        .read(cx)
-                        .revision(),
-                    kind: CloseApprovalKind::Discarded,
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
+            .collect();
         Ok(ProtectedClosePlan {
             request,
-            scope,
+            scope: decided.scope,
             prompts,
-            discarded,
+            discarded: decided.discarded,
             hot_exit: false,
         })
     }
@@ -517,87 +490,34 @@ impl ProductShell {
         views: &[ProtectedView],
         cx: &mut Context<Self>,
     ) -> Result<(), ProtectedCloseFailure> {
-        let current_scope = views
-            .iter()
-            .filter(|view| match plan.request.kind {
-                ProtectedCloseKind::Tab => {
-                    view.key.session == plan.request.origin.shell.entity_id()
-                        && view.key.pane == plan.request.origin.pane
-                        && view.key.tab == plan.request.origin.tab
-                        && view.key.surface == plan.request.origin.surface
-                }
-                ProtectedCloseKind::OtherTabs
-                | ProtectedCloseKind::Pane
-                | ProtectedCloseKind::OtherPanes => {
-                    in_pane_scope(plan.request.kind, &plan.request.origin, view)
-                }
-                ProtectedCloseKind::Window => {
-                    view.key.session == plan.request.origin.shell.entity_id()
-                }
-                ProtectedCloseKind::Quit => true,
-            })
-            .map(|view| view.key)
-            .collect::<Vec<_>>();
-        if current_scope.len() != plan.scope.len()
-            || current_scope
-                .iter()
-                .any(|key| !plan.scope.iter().any(|planned| planned == key))
-        {
-            return Err(ProtectedCloseFailure::InvalidTarget);
-        }
+        let model::Commit {
+            scope: current_scope,
+            discarded,
+            final_documents,
+        } = model::revalidate(
+            plan.request.kind,
+            &plan.request.origin.view_key(),
+            &plan.scope,
+            plan.hot_exit,
+            approvals,
+            &closure_views(views),
+            &document_statuses(cx),
+        )
+        .map_err(|_| ProtectedCloseFailure::InvalidTarget)?;
         let documents = Self::documents(cx);
-        for approval in approvals {
-            let Some(document) = documents.read(cx).get(approval.document) else {
-                return Err(ProtectedCloseFailure::InvalidTarget);
-            };
-            if document.model().read(cx).revision() != approval.revision
-                || (approval.kind == CloseApprovalKind::Saved && document.is_dirty(cx))
-            {
-                return Err(ProtectedCloseFailure::InvalidTarget);
-            }
-        }
         // A discarded document retires its automatic protection even when the
         // quit transition keeps the document entity alive until process exit.
-        let discarded: Vec<uuid::Uuid> = documents
-            .read(cx)
-            .documents()
-            .filter(|document| {
-                approvals.iter().any(|approval| {
-                    approval.document == document.id()
-                        && approval.kind == CloseApprovalKind::Discarded
-                })
+        let discarded: Vec<uuid::Uuid> = discarded
+            .into_iter()
+            .filter_map(|id| {
+                documents
+                    .read(cx)
+                    .get(id)
+                    .map(|document| document.identity())
             })
-            .map(|document| document.identity())
             .collect();
         for identity in discarded {
             crate::app::recovery::discard(identity, cx);
-        }
-        let total_counts = views.iter().fold(HashMap::new(), |mut counts, view| {
-            if let TabSurfaceId::Document(document) = view.key.surface {
-                *counts.entry(document).or_insert(0usize) += 1;
-            }
-            counts
-        });
-        let scoped_counts = current_scope
-            .iter()
-            .fold(HashMap::new(), |mut counts, view| {
-                if let TabSurfaceId::Document(document) = view.surface {
-                    *counts.entry(document).or_insert(0usize) += 1;
-                }
-                counts
-            });
-        for document in documents.read(cx).documents() {
-            let loses_final_view = plan.request.kind == ProtectedCloseKind::Quit
-                || scoped_counts.get(&document.id()) == total_counts.get(&document.id());
-            if loses_final_view && document.is_dirty(cx) && !plan.hot_exit {
-                let approved = approvals.iter().any(|approval| {
-                    approval.document == document.id()
-                        && approval.kind == CloseApprovalKind::Discarded
-                });
-                if !approved {
-                    return Err(ProtectedCloseFailure::InvalidTarget);
-                }
-            }
         }
 
         match plan.request.kind {
@@ -621,31 +541,24 @@ impl ProductShell {
                 }
                 Ok(())
             }
-            ProtectedCloseKind::Window => {
-                let final_documents = scoped_counts
-                    .iter()
-                    .filter(|(document, count)| total_counts.get(document) == Some(count))
-                    .map(|(document, _)| *document)
-                    .collect::<Vec<_>>();
-                match self.close_window(cx) {
-                    Ok(()) => {
-                        documents.update(cx, |documents, cx| {
-                            for document in final_documents {
-                                documents.remove(document, cx);
-                            }
-                        });
-                        Self::close_terminal_ids(
-                            current_scope.iter().filter_map(|key| match key.surface {
-                                TabSurfaceId::Terminal(id) => Some(id),
-                                TabSurfaceId::Document(_) | TabSurfaceId::Tool(_) => None,
-                            }),
-                            cx,
-                        );
-                        Ok(())
-                    }
-                    Err(_) => Err(ProtectedCloseFailure::InvalidTarget),
+            ProtectedCloseKind::Window => match self.close_window(cx) {
+                Ok(()) => {
+                    documents.update(cx, |documents, cx| {
+                        for document in final_documents {
+                            documents.remove(document, cx);
+                        }
+                    });
+                    Self::close_terminal_ids(
+                        current_scope.iter().filter_map(|key| match key.surface {
+                            TabSurfaceId::Terminal(id) => Some(id),
+                            TabSurfaceId::Document(_) | TabSurfaceId::Tool(_) => None,
+                        }),
+                        cx,
+                    );
+                    Ok(())
                 }
-            }
+                Err(_) => Err(ProtectedCloseFailure::InvalidTarget),
+            },
             ProtectedCloseKind::Quit => {
                 Self::close_terminal_ids(
                     current_scope.iter().filter_map(|key| match key.surface {
@@ -783,25 +696,6 @@ impl ProductShell {
         cx.notify();
         Ok(())
     }
-}
-
-/// Whether a view belongs to a bulk close: every tab of the origin's pane for
-/// Close Pane, every unpinned tab but the origin for Close Other Tabs, and
-/// every tab of the other panes outside the docks for Close Other Panes.
-fn in_pane_scope(
-    kind: ProtectedCloseKind,
-    origin: &ProductCommandTarget,
-    view: &ProtectedView,
-) -> bool {
-    view.key.session == origin.shell.entity_id()
-        && view.key.workbench == origin.workbench.entity_id()
-        && match kind {
-            ProtectedCloseKind::OtherPanes => view.key.pane != origin.pane && !view.dock,
-            ProtectedCloseKind::OtherTabs => {
-                view.key.pane == origin.pane && view.key.tab != origin.tab && !view.pinned
-            }
-            _ => view.key.pane == origin.pane,
-        }
 }
 
 pub(super) fn install_protected_window_close(

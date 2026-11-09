@@ -10,7 +10,7 @@ use crate::app::window_layout::{LayoutTab, WindowLayout};
 use crate::app::workbench::ArrangedTab;
 use knot_protocol::CommandOutcome;
 
-const CLOSED_TAB_LIMIT: usize = 20;
+pub(super) const CLOSED_TAB_LIMIT: usize = 20;
 
 pub(super) struct ClosedTab {
     tab: LayoutTab,
@@ -44,9 +44,6 @@ impl ProductShell {
             return;
         }
         self.closed_tabs.push(ClosedTab { tab, pane, index });
-        if self.closed_tabs.len() > CLOSED_TAB_LIMIT {
-            self.closed_tabs.remove(0);
-        }
     }
 
     /// Recreate the most recently closed tab: in its pane at its position

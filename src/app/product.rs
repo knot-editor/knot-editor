@@ -177,18 +177,10 @@ impl TerminalSessions {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(crate) enum ProtectedCloseKind {
-    Tab,
-    /// Every unpinned tab of the origin's pane except the origin.
-    OtherTabs,
-    /// Every tab of the origin's pane.
-    Pane,
-    /// Every tab of the session's other panes outside the docks.
-    OtherPanes,
-    Window,
-    Quit,
-}
+pub(crate) use knot_model::workbench::closure::CloseKind as ProtectedCloseKind;
+use knot_model::workbench::closure::{
+    Approval as CloseApproval, ApprovalKind as CloseApprovalKind, ViewKey as ProtectedViewKey,
+};
 
 #[derive(Clone)]
 struct ProtectedCloseRequest {
@@ -200,16 +192,6 @@ struct ProtectedCloseRequest {
     discard: bool,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-struct ProtectedViewKey {
-    session: EntityId,
-    workbench: EntityId,
-    presentation: PresentationId,
-    pane: PaneId,
-    tab: TabId,
-    surface: TabSurfaceId,
-}
-
 #[derive(Clone)]
 struct ProtectedView {
     key: ProtectedViewKey,
@@ -217,19 +199,6 @@ struct ProtectedView {
     /// Whether the view's pane is a dock's tool pane.
     dock: bool,
     target: Option<ProductCommandTarget>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CloseApprovalKind {
-    Saved,
-    Discarded,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CloseApproval {
-    document: DocumentId,
-    revision: u64,
-    kind: CloseApprovalKind,
 }
 
 struct ProtectedClosePlan {
@@ -557,11 +526,11 @@ pub(crate) struct ProductShell {
     tab_drag: std::rc::Rc<RefCell<tab_drag::TabDragState>>,
     dock_resize: Option<DockResizeDrag>,
     split_resize: Option<SplitResizeDrag>,
-    recent_walk: Option<navigation::RecentWalk>,
+    recent_walk: Option<knot_model::workbench::RecentWalk>,
     /// The pane rendered over the whole workbench, while it stays focused.
     maximized: Option<PaneId>,
     /// Closed tabs Reopen Closed Tab recreates, most recent last.
-    closed_tabs: Vec<reopen::ClosedTab>,
+    closed_tabs: knot_model::workbench::RecentlyClosed<reopen::ClosedTab>,
     command_palette: Option<CommandPalette<ProductCommandTarget>>,
     command_palette_subscription: Option<Subscription>,
     transient: Option<ActiveTransient>,
@@ -700,7 +669,7 @@ impl ProductShell {
             split_resize: None,
             recent_walk: None,
             maximized: None,
-            closed_tabs: Vec::new(),
+            closed_tabs: knot_model::workbench::RecentlyClosed::new(reopen::CLOSED_TAB_LIMIT),
             command_palette: None,
             command_palette_subscription: None,
             transient: None,

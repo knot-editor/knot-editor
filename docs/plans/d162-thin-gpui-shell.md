@@ -1,6 +1,6 @@
 # D162 — Plain models and a thin gpui shell
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 complete; checkpoint 5 next. Roadmap item [D162](../roadmap.md).
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 complete; checkpoint 5 implemented, awaiting its review gate. Roadmap item [D162](../roadmap.md).
 Builds on the [crate boundaries](../decisions/platform.md#crate-boundaries)
 and the [gpui snapshots](../decisions/platform.md#gpui-snapshots-and-gpui-component)
 decisions. Re-read the port findings under Background first and revise these
@@ -148,17 +148,23 @@ entities, call an owner, await, revalidate, and notify, and stay in
 `src/app/extensions/host/handlers.rs`; the open, close, and workspace flows
 they call move with checkpoint 5.
 
-### 5. Product operations
+### 5. Product operations — ✅ implemented, review gate pending
 
-- Deliverables: the decisions in protected closure, open and save,
-  relocation, reopen, navigation, and product commands as model functions
-  over the workbench and stores; the product session keeps windows, views,
-  prompts, and async flow.
-- Validation: plain tests for the moved decisions; the closure, sessions,
-  operations, navigation, reopen, and tab-drag product tests unchanged.
-- **Implementation context:** `src/app/product/{closure,open,save,relocate,reopen,navigation,operations,commands}.rs`
-  and `src/app/product.rs`. Prompts and native dialogs stay in the shell;
-  the model returns what to ask and accepts the answer.
+The protected-closure decisions are plain `knot-model` code with plain tests
+(`workbench/closure.rs`): which views a close covers, which dirty documents it
+prompts for or discards, and whether a planned close still holds when it
+commits. The recent-tab walk and the stack of recently closed tabs are in
+`workbench/recent.rs`. The product session collects views and document state,
+calls them, runs the prompts, saves, and closes, and notifies.
+
+Open, save, relocation, and navigation already called model workbench
+operations, so what remained in those files is lookup, async flow, prompts,
+and window handling, and stays in the shell as the plan's stopping rule allows.
+
+Validation limitation: the terminal tests (`terminal::view::mouse_tests`, and
+`product` terminal cases) fail intermittently in full runs in this environment,
+also at the previous commit; nothing else fails.
+
 - Review gate: a personal-config `post-init.js` with `try.*` commands over
   closing dirty documents, reopening, and moving tabs between windows;
   everything behaves as before.
