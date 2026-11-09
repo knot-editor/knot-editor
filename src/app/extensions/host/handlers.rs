@@ -3458,6 +3458,8 @@ async fn set_settings(context: HostContext, arguments: SettingWrites) -> Result<
             host.setting_changed(&key);
         }
         crate::app::application_observation::changed(cx);
+        // Native views read settings while laying out.
+        cx.refresh_windows();
         Ok(())
     })?
 }
@@ -3510,6 +3512,7 @@ async fn reset_setting(context: HostContext, arguments: SettingLookup) -> Result
         {
             host.setting_changed(&arguments.key);
             crate::app::application_observation::changed(cx);
+            cx.refresh_windows();
         }
     })
 }
