@@ -76,6 +76,10 @@ canonical source before reading broadly.
 
 ## Rules
 
+- Never create a git worktree, directly or through a tool or subagent option
+  such as `isolation: "worktree"`, without the user's explicit approval. Each
+  one holds a full checkout and its own `target` build, which can exhaust the
+  disk.
 - When the user pushes back on an approach or a result, discuss it first and
   agree on the way forward before editing any code or documentation.
 - Plan a task, including any `D###` item of an index plan, with the
