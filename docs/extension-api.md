@@ -238,7 +238,8 @@ await view.dispose();
 ```
 
 Each product window owns at most one native instance. Views are tools and live
-in the left, right, or bottom dock, never among documents; users can drag them
+in the left, right, or bottom dock, never among documents, with a stripe button
+on the window edge unless the user turned stripes off. Users can drag them
 between docks and hide them, and remembered user layout overrides registration
 defaults in later windows. Programmatic `show`/`hide`/`focus` affects live windows only and never
 changes the fresh-window default. Pass a live `WindowTarget` from

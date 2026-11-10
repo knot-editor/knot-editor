@@ -120,7 +120,8 @@ touches.
 ## [Workbench and lifecycle](decisions/workbench-and-lifecycle.md)
 
 - [Workbench layout and view lifetime](decisions/workbench-and-lifecycle.md#workbench-layout-and-view-lifetime):
-  a binary split tree, protected closure, tools as docked tabs.
+  a center and three dock areas of split trees, protected closure, tools as
+  tabs, stripes that replace.
 - [Workbench navigation](decisions/workbench-and-lifecycle.md#workbench-navigation):
   a command for every operation; momentary state is never recorded.
 - [Terminal](decisions/workbench-and-lifecycle.md#terminal): `alacritty_terminal`

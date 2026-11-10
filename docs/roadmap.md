@@ -264,9 +264,18 @@ complete list for that item.
     already shows the explorer, which lives in the left dock. IntelliJ binds
     `cmd-1` and VS Code `cmd-shift-e` to focus the explorer.
   - Reconsider: Daily use wants the explorer focused or toggled apart from
-    its dock, or tool stripes (the dock-lanes plan) make tool toggles common.
-    Then choose a key against the presets.
-  - Order: with or after the dock-lanes plan.
+    its dock, or tool stripes make tool toggles common. Then choose a key
+    against the presets.
+  - Order: independent.
+
+- **D170 — Overlay mode for docked tools**
+  - Deferred: A tool is always docked, resizing the center. IntelliJ's
+    "undock" mode slides a tool over the center without resizing it, which
+    suits a wide tool opened briefly.
+  - Reconsider: Daily use shows tools opened briefly and dismissed, where the
+    center reflowing is disruptive. Then add the mode per tool as a
+    placement, with focus loss dismissing it.
+  - Order: independent.
 
 - **D037 — Whole-pane dragging and arbitrary split-tree reshaping**
   - Deferred: D004 moves individual tabs into existing panes or new edge splits;
