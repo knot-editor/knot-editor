@@ -2,6 +2,7 @@
 
 mod closure;
 mod commands;
+mod document_watch;
 mod editing;
 mod editor_api;
 mod extension_api;

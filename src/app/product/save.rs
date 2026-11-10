@@ -388,36 +388,20 @@ impl ProductShell {
                             if this.target_is_live(&target, cx)
                                 && model.read(cx).revision() == revision =>
                         {
-                            let replaced = model.update(cx, |model, cx| {
-                                let len = model.text().len();
-                                let replaced = model.replace(0..len, &text);
-                                if matches!(replaced, Ok(true)) {
-                                    cx.notify();
-                                }
-                                replaced
-                            });
-                            match replaced {
-                                Ok(_) => {
-                                    let loaded_revision = model.read(cx).revision();
-                                    if Self::documents(cx).update(cx, |documents, cx| {
-                                        documents.finish_persistence(
-                                            target_document(&target)
-                                                .expect("save target is a document"),
-                                            &model,
-                                            &capture,
-                                            (title, uri.clone()),
-                                            (version, loaded_revision),
-                                            cx,
-                                        )
-                                    }) {
-                                        knot_protocol::CommandOutcome::Completed
-                                    } else {
-                                        knot_protocol::CommandOutcome::InvalidTarget
-                                    }
-                                }
-                                Err(error) => knot_protocol::CommandOutcome::HandlerFailure {
-                                    message: format!("{error:?}"),
-                                },
+                            if Self::documents(cx).update(cx, |documents, cx| {
+                                documents.finish_reload(
+                                    target_document(&target).expect("save target is a document"),
+                                    &model,
+                                    &capture,
+                                    &text,
+                                    (title, uri.clone()),
+                                    version,
+                                    cx,
+                                )
+                            }) {
+                                knot_protocol::CommandOutcome::Completed
+                            } else {
+                                knot_protocol::CommandOutcome::InvalidTarget
                             }
                         }
                         Ok(_) => knot_protocol::CommandOutcome::InvalidTarget,

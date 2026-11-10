@@ -354,6 +354,9 @@ declare module "knot" {
     /** Whether `.gitignore`, `.ignore`, `.git/info/exclude`, and the global
      * Git excludes file mark entries ignored. Native default true. */
     "files.respectGitignore": boolean;
+    /** Whether Knot watches open documents for changes made outside it, and
+     * rechecks them when the application becomes active. Native default true. */
+    "files.watchDocuments": boolean;
     /** How pickers and completion lists match, in order of preference:
      * "prefix", "substring", "flex" (fuzzy), or "orderless" (space-separated
      * parts in any order). A candidate matches if any style matches it, and

@@ -150,6 +150,34 @@ impl DocumentCollection {
         true
     }
 
+    /// Load `text` into the document's model as one undoable edit of only the
+    /// changed lines, then commit it as the persisted state like
+    /// [`Self::finish_persistence`]. Fails when the model refuses the edits or
+    /// the capture is stale.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn finish_reload(
+        &mut self,
+        id: DocumentId,
+        model: &Entity<Buffer>,
+        capture: &PersistenceCapture,
+        text: &str,
+        resource: (impl Into<Arc<str>>, ResourceUri),
+        version: ResourceVersion,
+        cx: &mut App,
+    ) -> bool {
+        let edits = knot_model::reload::line_edits(&model.read(cx).text(), text);
+        let applied = model.update(cx, |model, cx| {
+            let revision = model.revision();
+            let applied = model.apply_edits(&edits, revision);
+            if matches!(applied, Ok(true)) {
+                cx.notify();
+            }
+            applied.is_ok()
+        });
+        let revision = model.read(cx).revision();
+        applied && self.finish_persistence(id, model, capture, resource, (version, revision), cx)
+    }
+
     fn attach_new(
         &mut self,
         inserted: knot_model::documents::Inserted,

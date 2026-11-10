@@ -57,6 +57,17 @@ impl ResourceUri {
         self.same_authority(root) && path_segments(root).is_prefix_of(&path_segments(self))
     }
 
+    /// The containing directory, or `None` at the root.
+    pub fn parent(&self) -> Option<Self> {
+        let path = self.0.path().trim_end_matches('/');
+        let end = path.rfind('/')?;
+        let mut url = self.0.clone();
+        url.set_query(None);
+        url.set_fragment(None);
+        url.set_path(if end == 0 { "/" } else { &path[..end] });
+        Some(Self(url))
+    }
+
     pub fn from_url(url: Url) -> Self {
         Self(url)
     }
@@ -108,6 +119,18 @@ impl UriPathSegments<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parent_is_the_containing_directory() {
+        let file = ResourceUri::parse("mem://workspace/src/main.rs").unwrap();
+        let parent = file.parent().unwrap();
+        assert_eq!(parent, ResourceUri::parse("mem://workspace/src").unwrap());
+        assert!(file.is_within(&parent));
+        assert_eq!(
+            ResourceUri::parse("file:///a.txt").unwrap().parent(),
+            Some(ResourceUri::parse("file:///").unwrap())
+        );
+    }
 
     #[test]
     fn requires_an_absolute_hierarchical_uri() {

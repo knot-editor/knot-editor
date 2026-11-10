@@ -18,6 +18,7 @@ use gpui::{prelude::FluentBuilder, *};
 
 mod closure;
 pub(super) mod commands;
+mod document_watch;
 mod extension_restart;
 mod key_hold;
 mod key_routing;
@@ -685,6 +686,7 @@ impl ProductShell {
     fn new(workbench: Entity<Workbench>, cx: &mut Context<Self>) -> Self {
         cx.global::<ApplicationSessions>()
             .register(cx.weak_entity(), &workbench);
+        document_watch::install(cx);
         Self {
             workbench,
             window: None,
@@ -822,10 +824,15 @@ impl ProductShell {
     fn observe_extension_host(&mut self, native_window: &mut Window, cx: &mut Context<Self>) {
         self.attach_window(native_window, cx);
         self.observe_window_bounds(native_window, cx);
-        self.application_activation =
-            Some(cx.observe_window_activation(native_window, |_, _, cx| {
-                super::extensions::host::application_changed(cx)
-            }));
+        self.application_activation = Some(cx.observe_window_activation(
+            native_window,
+            |_, window, cx| {
+                super::extensions::host::application_changed(cx);
+                if window.is_window_active() {
+                    document_watch::recheck_all(cx);
+                }
+            },
+        ));
         self._appearance_observer = Some(
             native_window.observe_window_appearance(|_, cx| super::themes::selection_changed(cx)),
         );

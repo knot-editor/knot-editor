@@ -50,6 +50,8 @@ pub const FILES_HIDDEN: &str = "files.hidden";
 pub const FILES_IGNORED: &str = "files.ignored";
 /// Whether `.gitignore`, `.ignore`, and the Git excludes files mark entries ignored.
 pub const FILES_RESPECT_GITIGNORE: &str = "files.respectGitignore";
+/// Whether open documents are watched for changes made outside Knot.
+pub const FILES_WATCH_DOCUMENTS: &str = "files.watchDocuments";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
 pub const THEME_MODE: &str = "theme.mode";
 /// The theme name used in dark mode.
@@ -320,6 +322,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: true.into(),
             description: "Treat entries that .gitignore, .ignore, .git/info/exclude, and the global Git excludes file match as ignored".into(),
+        },
+        SettingDefinition {
+            key: FILES_WATCH_DOCUMENTS.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Watch open documents for changes made outside Knot and reload clean ones".into(),
         },
         text(
             THEME_MODE,
