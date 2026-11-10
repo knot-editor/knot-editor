@@ -14,6 +14,10 @@ test:
     cargo nextest run --workspace --all-targets
     cargo test --workspace --doc
 
+# Time a file walk over a directory in release mode
+walk-bench directory runs="5":
+    cargo run --release -p knot-model --example walk_bench -- {{directory}} {{runs}}
+
 # Run Knot
 run:
     cargo run -p knot-app
