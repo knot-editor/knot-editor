@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { JsonValue } from "knot";
 import {
+  displayName,
   emptyRegistry,
-  nameTaken,
   projectWithRoots,
   registryFromJson,
+  renamed,
   rootsLabel,
+  rootsPath,
   sameRoots,
   selected,
   suggestedName,
@@ -14,7 +17,7 @@ import {
   type Project,
 } from "../src/registry.js";
 
-function project(id: string, name: string, roots: string[]): Project {
+function project(id: string, name: string | null, roots: string[]): Project {
   return { id, name, roots, createdAt: null, lastOpenedAt: null };
 }
 
@@ -24,12 +27,12 @@ const registry = { ...emptyRegistry(), projects: [alpha, beta], recentProjectId:
 
 test("parses a stored registry and defaults optional fields", () => {
   const parsed = registryFromJson({
-    schema: 1,
+    schema: 2,
     projects: [{ id: "a", name: "Alpha", roots: ["file:///alpha/", 3], createdAt: "x" }],
     recentProjectId: 7,
   });
   assert.deepEqual(parsed, {
-    schema: 1,
+    schema: 2,
     projects: [{ id: "a", name: "Alpha", roots: ["file:///alpha/"], createdAt: null, lastOpenedAt: null }],
     recentProjectId: null,
   });
@@ -37,15 +40,34 @@ test("parses a stored registry and defaults optional fields", () => {
 
 test("rejects unsupported schemas, shapes, and entries", () => {
   assert.throws(() => registryFromJson([]), /not an object/);
-  assert.throws(() => registryFromJson({ schema: 2, projects: [] }), /unsupported projects record schema: 2/);
-  assert.throws(() => registryFromJson({ schema: 1, projects: [{ id: "", name: "x", roots: [] }] }), /invalid entry/);
+  assert.throws(() => registryFromJson({ schema: 1, projects: [] }), /unsupported projects record schema: 1/);
+  assert.throws(() => registryFromJson({ schema: 2, projects: [{ id: "", name: "x", roots: [] }] }), /invalid entry/);
 });
 
-test("names compare trimmed and case-insensitively, except the renamed project", () => {
-  assert.equal(nameTaken(registry, "  alpha ", null), true);
-  assert.equal(nameTaken(registry, "BETA", null), true);
-  assert.equal(nameTaken(registry, "alpha", "a"), false);
-  assert.equal(nameTaken(registry, "Gamma", null), false);
+test("a stored name may be null, but not empty", () => {
+  const stored = (name: JsonValue) => ({ schema: 2, projects: [{ id: "a", name, roots: [] }] });
+  assert.equal(registryFromJson(stored(null)).projects[0]?.name, null);
+  assert.throws(() => registryFromJson(stored("")), /invalid entry/);
+  assert.throws(() => registryFromJson({ schema: 2, projects: [{ id: "a", roots: [] }] }), /invalid entry/);
+});
+
+test("display names fall back to the roots, and names need not be unique", () => {
+  assert.equal(displayName(alpha), "Alpha");
+  assert.equal(displayName(project("u", null, ["file:///src/app/"])), "app");
+  assert.equal(displayName(project("m", null, ["file:///src/app/", "file:///src/lib/"])), "app +1");
+  assert.equal(displayName(project("e", null, [])), "Empty project");
+  const twins = withProject(registry, project("t", "Alpha", ["file:///other/"]));
+  assert.equal(twins.projects.filter((candidate) => candidate.name === "Alpha").length, 2);
+});
+
+test("root paths tell apart folders with one name", () => {
+  assert.equal(rootsPath(project("u", null, ["file:///src/my%20app/", "file:///lib/"])), "/src/my app, /lib");
+});
+
+test("renaming sets an explicit name and null restores the inferred one", () => {
+  const named = renamed(registry, "a", "Mine");
+  assert.equal(displayName(named.projects[0]!), "Mine");
+  assert.equal(displayName(renamed(named, "a", null).projects[0]!), "alpha");
 });
 
 test("root sets match regardless of order, and an empty set matches nothing", () => {

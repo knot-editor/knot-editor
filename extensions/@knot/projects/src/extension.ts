@@ -1,5 +1,6 @@
 // Bundled project registry and project sessions. Each project has a stable
-// identity, a name, and an ordered set of roots that no other project shares.
+// identity, an optional name, and an ordered set of roots that no other project
+// shares. A project without a name displays the folder name of its first root.
 // Records are application-global extension storage and the presentation is a
 // contributed tree. Root selection, window replacement, and text retention are
 // the application's public operations, so this package needs no private host

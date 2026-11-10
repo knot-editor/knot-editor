@@ -3,7 +3,7 @@
 // live in memory and are rederived from root sets, never persisted.
 import { workspaces } from "knot";
 import type { WindowInfo, WindowTarget } from "knot";
-import { projectById, projectWithRoots, sameRoots, withRoots, type Project, type Registry } from "./registry.js";
+import { displayName, projectById, projectWithRoots, sameRoots, withRoots, type Project, type Registry } from "./registry.js";
 import { describe, report } from "./report.js";
 import { boundWindows, commit, isActive, type ProjectsState } from "./state.js";
 import { windowRoots } from "./layout.js";
@@ -42,7 +42,7 @@ async function adoptRoots(
     await commit(state, withRoots(state.registry, project.id, roots));
   } catch (error) {
     state.bindings.delete(edited.target);
-    await report(`cannot update the folders of ${project.name}: ${describe(error)}`);
+    await report(`cannot update the folders of ${displayName(project)}: ${describe(error)}`);
     return followed;
   }
   for (const window of boundWindows(state, project, list)) {

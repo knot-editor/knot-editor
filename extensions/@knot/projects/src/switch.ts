@@ -5,7 +5,7 @@ import { documents, recovery, windows, workbench } from "knot";
 import type { CaptureId, DocumentId, SessionEntryOutcome, WindowInfo, WindowTarget } from "knot";
 import { syncBindings } from "./bindings.js";
 import { describeWindow, documentsById, isReusable, needsCapture, presentedDocuments, viewCount, windowRoots } from "./layout.js";
-import { projectById, sameRoots, suggestedName, type Project } from "./registry.js";
+import { displayName, projectById, sameRoots, suggestedName, type Project } from "./registry.js";
 import { describe, errorCode, report } from "./report.js";
 import { EMPTY_WINDOW, SESSION_SCHEMA, type Entry, type Session } from "./session.js";
 import {
@@ -37,11 +37,11 @@ export function problem(outcome: SessionEntryOutcome, entry: Entry) {
  */
 export async function switchTo(state: ProjectsState, project: Project, origin: WindowTarget) {
   if (state.unreadable.has(project.id)) {
-    await report(`${project.name} has a session record this version cannot read; it is kept unchanged`);
+    await report(`${displayName(project)} has a session record this version cannot read; it is kept unchanged`);
     return;
   }
   if (project.roots.length === 0) {
-    await report(`${project.name} has no root; rename or recreate the project`);
+    await report(`${displayName(project)} has no root`);
     return;
   }
   const initialList = await windows.list();
@@ -87,7 +87,7 @@ export async function switchTo(state: ProjectsState, project: Project, origin: W
       }
     } catch (error) {
       await release(captures.values());
-      await report(`cannot switch to ${project.name}: ${describe(error)}`);
+      await report(`cannot switch to ${displayName(project)}: ${describe(error)}`);
       return;
     }
     let result;
@@ -113,7 +113,7 @@ export async function switchTo(state: ProjectsState, project: Project, origin: W
         if (suspended !== undefined) state.sessions.set(source.id, { ...suspended, state: "active" });
         await trackProject(state, source, list, documentsById(docs));
       }
-      await report(`cannot switch to ${project.name}: ${describe(error)}`);
+      await report(`cannot switch to ${displayName(project)}: ${describe(error)}`);
       return;
     }
     const [after, afterDocs] = await Promise.all([windows.list(), documents.list()]);
@@ -133,7 +133,7 @@ export async function switchTo(state: ProjectsState, project: Project, origin: W
     if (result.protected) {
       await reconcileCaptures(state);
     } else {
-      await report(`${project.name} opened, but its recovered text is not yet protected`, opened);
+      await report(`${displayName(project)} opened, but its recovered text is not yet protected`, opened);
     }
     await recordSelection(state, project);
     await refreshTree(state);
@@ -145,7 +145,7 @@ export async function switchTo(state: ProjectsState, project: Project, origin: W
         if (described !== null) problems.push(described);
       }
     }
-    if (problems.length > 0) await report(`Opened ${project.name}. ${problems.join("; ")}.`, opened);
+    if (problems.length > 0) await report(`Opened ${displayName(project)}. ${problems.join("; ")}.`, opened);
     return;
   }
 }

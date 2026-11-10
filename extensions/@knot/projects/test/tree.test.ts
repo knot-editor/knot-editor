@@ -25,7 +25,7 @@ test("rows mark the window's own project and unreadable sessions", () => {
   const [alpha, beta] = projectItems(current, window);
   assert.equal(alpha?.statusText, "active");
   assert.equal(alpha?.badge, "success");
-  assert.equal(alpha?.description, "alpha");
+  assert.equal(alpha?.description, "/alpha");
   assert.deepEqual(alpha?.actions?.map((action) => action.arguments), [{ id: "a" }, { id: "a" }]);
   assert.deepEqual(alpha?.actions?.map((action) => action.icon), ["action.rename", "action.remove"]);
   assert.equal(beta?.statusText, "unreadable");

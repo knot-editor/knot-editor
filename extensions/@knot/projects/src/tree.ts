@@ -1,7 +1,7 @@
 // The Projects tool: a contributed tree listing every project.
 import { icons, workbench } from "knot";
 import type { TreeItem, WindowTarget } from "knot";
-import { rootsLabel } from "./registry.js";
+import { displayName, rootsPath } from "./registry.js";
 import type { ProjectsState } from "./state.js";
 
 export const VIEW_ID = "builtin.projects";
@@ -32,8 +32,8 @@ export function projectItems(state: ProjectsState, window: WindowTarget): TreeIt
     const broken = state.unreadable.has(project.id);
     return {
       id: project.id,
-      label: project.name,
-      description: broken ? "session record unreadable" : rootsLabel(project),
+      label: displayName(project),
+      description: broken ? "session record unreadable" : rootsPath(project),
       icon: "folder",
       collapsibleState: "none",
       statusText: broken ? "unreadable" : active ? "active" : null,

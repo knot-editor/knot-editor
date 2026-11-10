@@ -3,14 +3,12 @@ import type { JsonValue } from "knot";
 import { syncBindings } from "./bindings.js";
 import { object } from "./json.js";
 import {
-  nameTaken,
+  displayName,
   newProjectId,
   projectById,
-  projectByName,
   projectWithRoots,
   renamed,
-  rootsLabel,
-  suggestedName,
+  rootsPath,
   withProject,
   withoutProject,
 } from "./registry.js";
@@ -43,23 +41,15 @@ export async function registerCommands(state: ProjectsState) {
     await reload(state);
     const existing = projectWithRoots(state.registry, [picked.uri]);
     if (existing !== null) {
-      await report(`${existing.name} already uses this folder`);
+      await report(`${displayName(existing)} already uses this folder`);
       return;
     }
     const named = await workbench.showInput({
-      title: "New project name",
-      value: suggestedName(picked.uri),
+      title: "New project name (blank to use the folder name)",
+      value: "",
     });
     if (named.kind === "dismissed") return;
-    const name = named.value.trim();
-    if (name.length === 0) {
-      await report("a project name cannot be empty");
-      return;
-    }
-    if (nameTaken(state.registry, name, null)) {
-      await report(`a project named ${name} already exists`);
-      return;
-    }
+    const name = named.value.trim() || null;
     const now = Date.now();
     const project = { id: newProjectId(), name, roots: [picked.uri], createdAt: now, lastOpenedAt: now };
     try {
@@ -81,8 +71,8 @@ export async function registerCommands(state: ProjectsState) {
       title: "Select project",
       items: state.registry.projects.map((project) => ({
         id: project.id,
-        label: project.name,
-        description: rootsLabel(project),
+        label: displayName(project),
+        description: rootsPath(project),
       })),
     });
     if (picked.kind === "dismissed") return;
@@ -91,12 +81,17 @@ export async function registerCommands(state: ProjectsState) {
   }, { title: "Switch Project…", description: "Replace this window's session with another project." });
 
   // Row activation routes through the focused tree instance and reads the
-  // selected row's label, which is the unique project name.
+  // selected row's label, which is the project's display name.
   await commands.registerForView(VIEW_ID, "projects.select", async ({ target }) => {
     await reload(state);
     const label = await workbench.selectedText();
-    const project = label === null ? null : projectByName(state.registry, label);
-    if (project !== null) await switchTo(state, project, target.windowTarget);
+    const matches = state.registry.projects.filter((project) => displayName(project) === label);
+    const [project] = matches;
+    if (matches.length > 1) {
+      await report(`several projects are called ${label}; use Switch Project…`);
+    } else if (project !== undefined) {
+      await switchTo(state, project, target.windowTarget);
+    }
   });
 
   // A window opened with the project's roots binds to it like any other window
@@ -113,7 +108,7 @@ export async function registerCommands(state: ProjectsState) {
     try {
       await windows.open({ roots: project.roots });
     } catch (error) {
-      await report(`cannot open a window for ${project.name}: ${describe(error)}`);
+      await report(`cannot open a window for ${displayName(project)}: ${describe(error)}`);
     }
   }, { title: "Open Project in New Window", description: "Open another window on this window's project." });
 
@@ -125,17 +120,9 @@ export async function registerCommands(state: ProjectsState) {
       await report("project not found");
       return;
     }
-    const named = await workbench.showInput({ title: "Rename project", value: project.name });
+    const named = await workbench.showInput({ title: "Rename project (blank to use the folder name)", value: project.name ?? "" });
     if (named.kind === "dismissed") return;
-    const name = named.value.trim();
-    if (name.length === 0) {
-      await report("a project name cannot be empty");
-      return;
-    }
-    if (nameTaken(state.registry, name, project.id)) {
-      await report(`a project named ${name} already exists`);
-      return;
-    }
+    const name = named.value.trim() || null;
     try {
       await commit(state, renamed(state.registry, project.id, name));
     } catch (error) {
@@ -158,7 +145,7 @@ export async function registerCommands(state: ProjectsState) {
         ? ` ${captures.size} unsaved ${captures.size === 1 ? "document" : "documents"} in its suspended session will be discarded.`
         : "";
     const confirmed = await workbench.showConfirmation({
-      title: `Remove ${project.name}?`,
+      title: `Remove ${displayName(project)}?`,
       message: `Open documents and folders stay open.${discarded}`,
       confirmLabel: "Remove",
       cancelLabel: "Cancel",

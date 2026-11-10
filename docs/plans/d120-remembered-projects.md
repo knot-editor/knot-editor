@@ -73,12 +73,15 @@ for it otherwise; see
 and the Folder Open decision in
 [its decisions](../decisions/documents-and-persistence.md).
 
-### 2. Unnamed projects and inferred names
+### 2. Unnamed projects and inferred names ✅ (awaiting review)
 
 - Deliverables: registry schema 2 with nullable names (no migration; an older
   record is reset like any unsupported schema), a display-name function used
   by the picker and every report message, rename-to-empty restoring the
   inferred name, and no uniqueness rule. `projects.create` is removed.
+  ✅ Done except the removal: with no automatic creation yet, New Project…
+  is the only way to make a project, so it stays, accepts a blank name
+  (stored as `null`), and goes in checkpoint 3.
 - Validation: `node:test` registry and command tests for inferred names,
   multi-root labels, renaming in both directions, and duplicate names.
 - **Implementation context:** `extensions/@knot/projects/src/registry.ts`

@@ -384,7 +384,11 @@ fn root_edits_in_a_bound_window_move_the_project_and_its_other_windows(cx: &mut 
         [a_uri.clone(), c_uri.clone()]
     );
     let tree = projects.window.tree(TREE, cx);
-    let description = format!("{} +1", a.path().file_name().unwrap().to_str().unwrap());
+    let description = project_roots(&projects.list(cx), &a_id)
+        .iter()
+        .map(|root| root.trim_start_matches("file://").trim_end_matches('/'))
+        .collect::<Vec<_>>()
+        .join(", ");
     wait_until(cx, |cx| {
         tree.description(&a_id, cx).as_deref() == Some(&*description)
     });

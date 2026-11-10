@@ -4,6 +4,7 @@ import { recovery, storage } from "knot";
 import type { CaptureId, ViewRegistration, WindowInfo, WindowTarget } from "knot";
 import {
   RECORD_KEY,
+  displayName,
   emptyRegistry,
   registryFromJson,
   sameRoots,
@@ -74,7 +75,7 @@ export async function recordSelection(state: ProjectsState, project: Project) {
     await storage.write(RECORD_KEY, next);
     state.registry = next;
   } catch (error) {
-    await report(`opened ${project.name}, but recording the selection failed: ${describe(error)}`);
+    await report(`opened ${displayName(project)}, but recording the selection failed: ${describe(error)}`);
   }
 }
 

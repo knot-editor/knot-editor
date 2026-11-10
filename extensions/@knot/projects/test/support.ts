@@ -11,7 +11,7 @@ export type SeededWindow = { entries: JsonValue[]; selected?: number | null; lay
 export function seedProject(id: string, name: string, roots: string[]) {
   const stored = host.record("projects") as { projects: JsonValue[] } | undefined;
   host.setRecord("projects", {
-    schema: 1,
+    schema: 2,
     projects: [...(stored?.projects ?? []), { id, name, roots, createdAt: 1, lastOpenedAt: 1 }],
     recentProjectId: null,
   });

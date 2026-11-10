@@ -1,14 +1,15 @@
 // The project registry record: one application-global storage record holding
-// every project's stable ID, name, and roots, plus the recent selection.
+// every project's stable ID, optional name, and roots, plus the recent selection.
 import type { JsonValue } from "knot";
 import { object } from "./json.js";
 
 export const RECORD_KEY = "projects";
-export const SCHEMA = 1;
+export const SCHEMA = 2;
 
 export type Project = {
   id: string;
-  name: string;
+  /** An explicit name, or null to display one inferred from the roots. */
+  name: string | null;
   roots: string[];
   createdAt: number | null;
   lastOpenedAt: number | null;
@@ -28,7 +29,7 @@ function projectFromJson(value: JsonValue): Project | null {
   const record = object(value);
   if (record === null) return null;
   if (typeof record.id !== "string" || record.id.length === 0) return null;
-  if (typeof record.name !== "string" || record.name.length === 0) return null;
+  if (record.name !== null && (typeof record.name !== "string" || record.name.length === 0)) return null;
   if (!Array.isArray(record.roots)) return null;
   const roots = record.roots.filter((root) => typeof root === "string");
   return {
@@ -74,21 +75,8 @@ export function suggestedName(uri: string): string {
   }
 }
 
-/** Names compare trimmed and case-insensitively. */
-export function nameTaken(registry: Registry, name: string, exceptId: string | null) {
-  const normalized = name.trim().toLowerCase();
-  return registry.projects.some(
-    (project) => project.id !== exceptId && project.name.trim().toLowerCase() === normalized,
-  );
-}
-
 export function projectById(registry: Registry, id: string): Project | null {
   return registry.projects.find((project) => project.id === id) ?? null;
-}
-
-export function projectByName(registry: Registry, name: string): Project | null {
-  const normalized = name.trim().toLowerCase();
-  return registry.projects.find((project) => project.name.trim().toLowerCase() === normalized) ?? null;
 }
 
 /** Order-insensitive equality of two deduplicated root lists. */
@@ -106,6 +94,25 @@ export function rootsLabel(project: Project): string | null {
   const [first, ...rest] = project.roots;
   if (first === undefined) return null;
   return rest.length === 0 ? suggestedName(first) : `${suggestedName(first)} +${rest.length}`;
+}
+
+/** The explicit name, else the one inferred from the roots. */
+export function displayName(project: Project): string {
+  return project.name ?? rootsLabel(project) ?? "Empty project";
+}
+
+/** The roots as readable paths, which tell apart folders with one name. */
+export function rootsPath(project: Project): string {
+  return project.roots.map(readablePath).join(", ");
+}
+
+function readablePath(uri: string) {
+  const path = uri.replace(/^file:\/\//, "").replace(/(.)\/$/, "$1");
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
 }
 
 function updated(registry: Registry, id: string, change: (project: Project) => Project): Registry {
@@ -128,7 +135,8 @@ export function withoutProject(registry: Registry, id: string): Registry {
   };
 }
 
-export function renamed(registry: Registry, id: string, name: string): Registry {
+/** Sets an explicit name, or restores the inferred one with null. */
+export function renamed(registry: Registry, id: string, name: string | null): Registry {
   return updated(registry, id, (project) => ({ ...project, name }));
 }
 

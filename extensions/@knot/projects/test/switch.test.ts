@@ -117,7 +117,7 @@ test("an unreadable or rootless project is reported and never switched to", asyn
   assert.equal(host.replaced().length, 0);
   assert.deepEqual(host.messages(), [
     "Alpha has a session record this version cannot read; it is kept unchanged",
-    "Empty has no root; rename or recreate the project",
+    "Empty has no root",
   ]);
   assert.deepEqual(host.record("session:a"), { schema: 9 });
 });
