@@ -1,6 +1,6 @@
 # D172 — Faster file walks
 
-Status: 🚧 in progress — checkpoint 1 awaits review. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
+Status: 🚧 in progress — checkpoint 1 done, checkpoint 2 next. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
 Precedes [D173](daily-driver.md) (workspace file index), whose first scan and
 reclassification reuse this classifier.
 
@@ -75,42 +75,20 @@ reclassification on ignore-file changes, lazy ignored directories.
 
 ### 1. Benchmark and equivalence baseline ✅
 
-- Deliverables:
-  - ✅ A benchmark that walks a given local directory with the default policy
-    and reports the time and file count, plus a `just` recipe to run it in
-    release mode (`just walk-bench <directory> [runs]`).
-  - ✅ An equivalence test comparing `files::walk` with `ignore::WalkBuilder` on
-    local fixture trees covering nested `.gitignore` and `.ignore`
-    overrides, negations, directory-only patterns, `.git/info/exclude`,
-    `.ignore` above the repository, hidden and ignored setting patterns, and
-    symlinked directories.
-  - ✅ Baseline numbers recorded in this plan.
-- Validation: the equivalence test passes against the current walk; any
-  difference it exposes is either fixed in the classifier or recorded here as
-  an intended divergence (for example, the global excludes file is not
-  configured in tests).
-- Review gate: baseline numbers and any divergences.
-- **Result:**
-  - Baseline: `just walk-bench` on a shallow clone of the Linux kernel
-    (97,336 files, Apple Silicon, release build) takes 1.13–1.26 s per walk,
-    about 1.14 s once warm.
-  - Fixed: ripgrep consults the `.ignore` files of every level, deepest first,
-    before any `.gitignore`; the classifier went level by level. It now
-    follows ripgrep, pinned by a policy test.
-  - Divergence, to fix in checkpoint 2: walking a directory *above* a
-    repository applies no `.gitignore` inside the repository below it, while
-    ripgrep does. The equivalence test does not walk from above a repository
-    yet.
-  - The global excludes file is read by both sides (`git_global`), so the
-    test depends on the machine's global excludes only for names the fixtures
-    do not use.
-- **Implementation context:** the walk is `files::walk` in
-  `crates/knot-model/src/files.rs`, and the policy tests live in
-  `crates/knot-model/src/files/ignore.rs` (their `memory` fixture uses the
-  memory provider; the equivalence test needs real directories under a
-  `tempfile` root with `LocalFileSystemProvider`). `ignore` is already a
-  `knot-model` dependency. Put the benchmark under `crates/knot-model/examples/`
-  and add a recipe to the `justfile`; run it with `pollster::block_on`.
+Approved. `just walk-bench <directory> [runs]` times `files::walk` with the
+default policy (`crates/knot-model/examples/walk_bench.rs`), and
+`crates/knot-model/src/files/equivalence.rs` compares the walk with
+`ignore::WalkBuilder` on hand-written and generated local trees.
+
+- Baseline: a shallow Linux kernel clone (97,336 files, Apple Silicon,
+  release build) walks in 1.13–1.26 s, about 1.14 s warm.
+- The classifier now applies `.ignore` files of every level before any
+  `.gitignore`, as ripgrep does.
+- Open divergence, fixed in checkpoint 2: a walk from above a repository
+  applies none of the repository's `.gitignore` files. The equivalence test
+  does not walk from above a repository yet.
+- Both sides read the machine's global excludes, so the test assumes they
+  match none of the fixtures' names.
 
 ### 2. Rule-stack classifier with per-directory classification
 
