@@ -301,8 +301,9 @@ to be rebuilt later:
     ([architecture](../architecture/documents-and-persistence.md#uri-providers),
     [decisions](../decisions/documents-and-persistence.md#extension-file-reads)).
 
-- **D143 — Input completion** (depends on D071)
-  - 🚧 [Plan](d143-input-completion.md)
+- ✅ **D143 — Input completion** (depends on D071)
+  - Shipped ([architecture](../architecture/semantic-ui.md#extension-transient-interactions),
+    [decisions](../decisions/semantic-ui.md#extension-transient-interactions)).
   - `workbench.showInput` offers completion items as the text changes,
     through the pulled input session `onChange` already uses, with keys to
     move through and accept them.

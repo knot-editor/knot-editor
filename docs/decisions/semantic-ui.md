@@ -165,6 +165,22 @@ Matching uses `nucleo-matcher` rather than a hand-written scorer, because fzf's
 ranking quality, with its boundary, camelCase, and path bonuses, is the part not
 worth redoing; it is MPL-2.0, used unmodified as a dependency.
 
+An input's completion items carry the whole new field text, so native code
+knows no tokens, replacement ranges, or caret rules and the extension owns its
+own, such as Vim's `no` and `inv` option prefixes. Tab accepts a row into the
+field and Enter always submits the field (menu accept, as fish and zsh do);
+Vim and Helix style cycling would make native code track a cycling state and
+suppress `onChange` while it runs.
+
+Matching styles are a native, ordered, user setting with built-in styles, as
+ido and Emacs users customize, rather than JavaScript functions: a registered
+function could not drive the picker, which filters natively on every
+keystroke. A per-category override is deferred until a consumer needs one.
+Recency is not a matcher input. It only orders equal matches, as IntelliJ
+does, so it never outranks a better match; extensions own it through
+`history`, a named list in their own storage, because the picker cannot know
+what a package's items mean.
+
 Highlights and input changes are pulled by the caller's own turn rather than
 pushed, because package roots run one at a time and a pushed notification
 would queue behind the command awaiting the picker until it settled. Keeping
