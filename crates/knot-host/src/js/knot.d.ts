@@ -948,6 +948,9 @@ declare module "knot" {
     /** Moves the ID to the front of the named list. Read/modify/write is not
      * atomic, as for `storage`. */
     record(name: string, id: string): Promise<void>;
+    /** Removes the ID from the named list, or the whole list when no ID is
+     * given. Read/modify/write is not atomic, as for `storage`. */
+    forget(name: string, id?: string): Promise<void>;
     /** The items with recorded ones first, most recent first, followed by the
      * rest in their given order. The key defaults to `item.id`. */
     order<T extends { readonly id: string }>(name: string, items: readonly T[]): Promise<readonly T[]>;

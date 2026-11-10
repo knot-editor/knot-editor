@@ -1699,6 +1699,10 @@ export const api: KnotApi = {
     record: async (name, id) => {
       state.records.set(`history/${name}`, JSON.stringify([id, ...recentIds(name).filter((other) => other !== id)].slice(0, 50)));
     },
+    forget: async (name, id) => {
+      if (id === undefined) state.records.delete(`history/${name}`);
+      else state.records.set(`history/${name}`, JSON.stringify(recentIds(name).filter((other) => other !== id)));
+    },
     order: async (name: string, items: readonly unknown[], key?: (item: never) => string) => {
       const places = new Map(recentIds(name).map((id, place) => [id, place]));
       const lookup = key ?? ((item: { id: string }) => item.id);

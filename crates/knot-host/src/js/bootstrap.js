@@ -1755,6 +1755,15 @@ export async function historyRecord(name, id) {
   const ids = await readHistory(name);
   await storageWrite(historyKey(name), [recorded, ...ids.filter((other) => other !== recorded)].slice(0, HISTORY_LIMIT));
 }
+export async function historyForget(name, id) {
+  if (id === undefined) {
+    await storageDelete(historyKey(name));
+    return;
+  }
+  const forgotten = string(id, "history ID must be text");
+  const ids = await readHistory(name);
+  if (ids.includes(forgotten)) await storageWrite(historyKey(name), ids.filter((other) => other !== forgotten));
+}
 export async function historyOrder(name, items, key = (item) => item.id) {
   if (!Array.isArray(items)) throw new TypeError("history items must be an array");
   if (typeof key !== "function") throw new TypeError("history key must be a function");

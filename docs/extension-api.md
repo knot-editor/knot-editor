@@ -817,7 +817,8 @@ if (picked.kind === "selected") await history.record("projects", picked.id);
 
 `history.recent(name)` returns the recorded IDs, most recent first, for lists
 that are not pickers, and `order` takes a key function for items whose identity
-is not `id`. A list keeps the 50 most recent IDs.
+is not `id`. A list keeps the 50 most recent IDs, and `history.forget(name, id)`
+removes one (without `id`, the whole list).
 
 Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. A `prompt` such as `":"` shows before the field, outside its value, and makes Backspace on an empty field dismiss the input, as a command line does. Confirmation
 and message use the native platform prompt.

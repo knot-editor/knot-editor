@@ -32,3 +32,13 @@ test("the list keeps the 50 most recent ids", async () => {
   assert.equal(recent.length, 50);
   assert.equal(recent[0], "id59");
 });
+
+test("forgetting removes one id, or the whole list without one", async () => {
+  await history.record("things", "a");
+  await history.record("things", "b");
+  await history.forget("things", "a");
+  await history.forget("things", "missing");
+  assert.deepEqual(await history.recent("things"), ["b"]);
+  await history.forget("things");
+  assert.deepEqual(await history.recent("things"), []);
+});
