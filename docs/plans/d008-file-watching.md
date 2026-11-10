@@ -16,6 +16,8 @@ Knot notices when files change outside it:
 - Knot rechecks every open document when the application becomes active.
 - Extensions watch any URI through `files.watch(uri, { recursive })` and get
   coalesced batches of changed URIs.
+- `files.watchDocuments` turns document change detection off, and
+  `files.autoReload` makes clean documents ask before reloading.
 
 ## Design
 
@@ -70,6 +72,19 @@ Knot notices when files change outside it:
   the document is then dirty and marked as changed on disk.
 - Save's conflict Reload uses the same path.
 
+### Settings
+
+Both are global booleans, default `true`, applied live, and listed in
+[settings](../settings.md).
+
+- `files.watchDocuments`: when off, Knot holds no document watches and does
+  not recheck on activation; Save still reaches the conflict prompt. Turning it
+  off releases the watches, and turning it on rechecks every open document.
+  Extension watches through `files.watch` are unaffected, so extensions never
+  go silently stale.
+- `files.autoReload`: when off, a clean document whose file changed is marked
+  and prompted like a dirty one instead of reloading.
+
 ### Dirty and deleted documents
 
 - The changed-on-disk mark is document state that records the version it was
@@ -87,13 +102,12 @@ Knot notices when files change outside it:
 
 ## Exclusions
 
-- A Show Difference option in the Reload or Keep prompt. Deferred until a diff
-  view exists.
+- A Show Difference option in the Reload or Keep prompt
+  ([D174](../roadmap.md#documents-storage-and-history)).
 - Refreshing the native workspace tree. D034 replaces it.
 - Watching workspace roots by default and a native file index (D173).
 - Rename and deletion performed through Knot (D010).
 - Created, changed, and removed kinds in watch events.
-- A setting to turn off automatic reload.
 
 ## Decisions to record
 
@@ -163,6 +177,7 @@ Deliverables:
   activation.
 - Diff reload through `apply_edits` as one undo step; Save's conflict Reload
   uses it.
+- `files.watchDocuments`, defined natively and applied live.
 - A `try.reload` command that rewrites the focused document's file outside the
   buffer.
 
@@ -174,7 +189,8 @@ Validation:
   document, keeps a cursor and fold below an unrelated hunk, and is one undo
   step; Knot's own save triggers nothing; a same-content write only records the
   version; an edit racing the read wins; activation recheck reloads a document
-  whose event was missed.
+  whose event was missed; turning `files.watchDocuments` off releases the
+  watches and stops reloads, and turning it on rechecks.
 
 Review gate: edit an open file with another tool, run `git checkout` on an
 open file, and confirm cursor, folds, and Undo behave.
@@ -195,6 +211,9 @@ open file, and confirm cursor, folds, and Undo behave.
 - Application activation: `cx.observe_window_activation` in
   `src/app/product.rs` (`observe_extension_host`) is the existing hook.
 - Read with `load_resource` from `src/app/product/open.rs`.
+- Define the settings beside the other native `files.*` definitions in
+  `src/app/settings.rs`, observe them like the ignore policy does, and add
+  them to `docs/settings.md` and the `knot.d.ts` setting key map.
 - Update [saving](../architecture/documents-and-persistence.md#saving), which
   says watching is deferred.
 
@@ -204,6 +223,7 @@ Deliverables:
 
 - The changed-on-disk mark and the deleted state, shown on the tab.
 - The Reload or Keep prompt when a marked document is focused.
+- `files.autoReload`, which routes clean documents to the mark and prompt.
 - Deletion of a clean document's file turns it into a dirty missing-file
   document; reappearance re-runs the comparison.
 - `try.conflict` and `try.delete` commands that dirty the focused document and
@@ -216,7 +236,8 @@ Validation:
 - Product tests: Keep leaves the buffer and the next save reaches the conflict
   prompt; Reload is undoable; a deleted clean file keeps the tab and makes the
   document dirty; saving recreates it; a dirty document is marked rather than
-  reloaded.
+  reloaded; with `files.autoReload` off a clean document is marked and
+  prompted instead of reloaded.
 - `just check`.
 
 Review gate: run the `try.*` commands, confirm the prompt appears only on

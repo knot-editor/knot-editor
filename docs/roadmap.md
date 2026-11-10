@@ -311,6 +311,14 @@ complete list for that item.
     same trees, with streaming results if the first results are needed sooner.
   - Order: after D081; decided in D173, before D082.
 
+- **D174 — Show Difference for files changed on disk**
+  - Deferred: The Reload or Keep prompt for a document changed on disk (D008)
+    offers no comparison, because Knot has no diff view.
+  - Reconsider: A diff view exists, such as with Git integration (D126), or
+    choosing between Reload and Keep blind becomes friction in daily use. Then
+    add Show Difference to the prompt, comparing the buffer with the file.
+  - Order: after D008.
+
 - **D011 — Remote filesystem providers**
   - Deferred: The URI boundary is validated with local and memory providers.
   - Reconsider: A specific remote workflow is selected.
