@@ -1,6 +1,6 @@
 # D083 — Recent files
 
-Status: 🚧 not started. Item of the
+Status: 🚧 checkpoint 1 implemented ✅, awaiting its review gate. Item of the
 [daily-driver plan](daily-driver.md#phase-4--files-and-workspace). Reopen closed
 tab (D072) is unrelated: it is native per-window state.
 
@@ -48,7 +48,7 @@ without roots. `Clear Recent Files` empties the list.
   `recent-files` history name.
 - No per-row remove action and no `~` shortening.
 
-## Checkpoint 1 — Open Recent and Clear Recent Files
+## Checkpoint 1 — Open Recent and Clear Recent Files ✅ (review gate pending)
 
 Deliverables: both commands; dropping missing files; the key binding; the
 `history.forget` primitive; a package description update in `knot.jsonc`
@@ -65,6 +65,10 @@ Validation:
 - Keymap test in `src/app/commands/keymaps/tests.rs` for the new binding and
   `BUNDLED_PACKAGE_COMMANDS` in `presets.rs`.
 - `just check`.
+
+Implemented: the `history.forget` primitive ✅, both commands ✅, the key ✅, tests ✅, `just check` ✅. The real-editor test reopens the list until the
+workspace index has seen the deletion, since the index follows the disk
+through the file watcher.
 
 Review gate: try `Open Recent…` in the real app (via the ⌘E key) across
 two windows, after deleting a recorded file (it should vanish from the list), and with no folder open.

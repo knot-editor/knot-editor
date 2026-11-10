@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "main": "dist/main.js",
   "displayName": "Go to File",
-  "description": "Open a file of the window's roots by typing part of its path.",
+  "description": "Open a file of the window's roots by typing part of its path, or one of the recently active files.",
   "author": "Knot",
   "license": "GPL-3.0-or-later",
 }

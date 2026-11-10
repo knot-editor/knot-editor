@@ -18,8 +18,10 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 /// reports it unavailable while its package is not running.
 pub(crate) const GO_TO_LINE_COMMAND: &str = "editor.go-to-line";
 pub(crate) const GO_TO_FILE_COMMAND: &str = "workspace.go-to-file";
+pub(crate) const OPEN_RECENT_COMMAND: &str = "workspace.open-recent";
 #[cfg(test)]
-pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] = &[GO_TO_LINE_COMMAND, GO_TO_FILE_COMMAND];
+pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] =
+    &[GO_TO_LINE_COMMAND, GO_TO_FILE_COMMAND, OPEN_RECENT_COMMAND];
 
 pub(crate) struct ApplicationKeymapPresets(pub(crate) PresetRegistry);
 
@@ -188,6 +190,7 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("secondary-shift-n", NEW_WINDOW_COMMAND, None),
     ("secondary-o", OPEN_COMMAND, None),
     ("secondary-p", GO_TO_FILE_COMMAND, None),
+    ("secondary-e", OPEN_RECENT_COMMAND, None),
     ("secondary-s", SAVE_COMMAND, None),
     ("secondary-shift-s", SAVE_AS_COMMAND, None),
     ("secondary-w", CLOSE_TAB_COMMAND, None),

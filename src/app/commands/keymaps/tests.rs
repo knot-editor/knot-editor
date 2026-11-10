@@ -105,6 +105,7 @@ fn windows_and_linux_presets_use_control_shortcuts() {
             ("ctrl-shift-p", SHOW_COMMAND_PALETTE_COMMAND),
             ("ctrl-o", OPEN_COMMAND),
             ("ctrl-p", presets::GO_TO_FILE_COMMAND),
+            ("ctrl-e", presets::OPEN_RECENT_COMMAND),
             ("ctrl-s", SAVE_COMMAND),
             ("ctrl-shift-s", SAVE_AS_COMMAND),
             ("ctrl-c", COPY_COMMAND),
@@ -191,6 +192,7 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
     let registry = preset_registry(Platform::MacOs);
     for (key, command_name) in [
         ("cmd-s", SAVE_COMMAND),
+        ("cmd-e", presets::OPEN_RECENT_COMMAND),
         ("cmd-shift-z", REDO_COMMAND),
         ("alt-left", MOVE_WORD_LEFT_COMMAND),
         ("cmd-up", MOVE_DOCUMENT_START_COMMAND),

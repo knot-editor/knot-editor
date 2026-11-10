@@ -3,7 +3,7 @@
 import { completion, documents, history, windows } from "knot";
 import type { ApplicationEvent, ViewTarget, WindowTarget } from "knot";
 
-const HISTORY = "recent-files";
+export const HISTORY = "recent-files";
 
 /** The URI of the file a tab presents, or null for anything else. */
 async function fileOf(target: ViewTarget): Promise<string | null> {
