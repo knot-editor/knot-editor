@@ -365,8 +365,7 @@ to be rebuilt later:
   - A bundled extension bound to ⌘P that fuzzy-matches workspace paths.
   - Multi-root paths are labeled by root, and open and recent files rank
     first.
-  - Decide whether the picker's complete-item-list contract holds up on large
-    repositories, or whether the picker needs incremental items.
+  - Searches with `files.search` on every keystroke, one call per root.
 
 - **D083 — Recent files** (depends on D071)
   - A bundled extension that records opened documents in extension storage

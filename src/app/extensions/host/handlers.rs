@@ -1760,36 +1760,70 @@ async fn list_files(
         .collect())
 }
 
-#[host_operation("walkFiles")]
-async fn walk_files(
+/// The most results a `files.search` returns when its caller names no limit.
+const DEFAULT_SEARCH_LIMIT: u64 = 100;
+/// The most results a `files.search` returns.
+const MAXIMUM_SEARCH_LIMIT: u64 = 1000;
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SearchFilesArguments {
+    uri: String,
+    query: String,
+    limit: Option<u64>,
+}
+
+impl HostArguments for SearchFilesArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            uri: reader.text(2, "resource URI must be text")?,
+            query: reader.text(3, "search query must be text")?,
+            limit: reader.optional_integer(4)?,
+        })
+    }
+}
+
+#[host_operation("searchFiles")]
+async fn search_files(
     context: HostContext,
-    arguments: FileUriArguments,
-) -> Result<Vec<knot_protocol::FileEntry>, OpenError> {
-    let (providers, policy) = context.foreground(|_, cx| {
+    arguments: SearchFilesArguments,
+) -> Result<knot_protocol::FileSearchResult, OpenError> {
+    use knot_model::matching::{Query, styles_from_names, utf16_ranges};
+
+    let (providers, policy, styles) = context.foreground(|_, cx| {
         (
             ProductShell::filesystems(cx),
             crate::app::settings::files_ignore_policy(cx),
+            crate::app::settings::strings(crate::app::settings::COMPLETION_STYLES, cx),
         )
     })?;
+    let query = Query::new(&arguments.query, &styles_from_names(&styles));
+    let limit = arguments
+        .limit
+        .unwrap_or(DEFAULT_SEARCH_LIMIT)
+        .clamp(1, MAXIMUM_SEARCH_LIMIT) as usize;
     let indexed = match indexed_uri(&context, &providers, &arguments.uri).await {
-        Some((index, uri)) => index.walk(&uri, &policy).await,
+        Some((index, uri)) => index.search(&uri, &query, limit, &policy).await,
         None => None,
     };
-    let files = match indexed {
-        Some(files) => files,
-        None => knot_model::files::walk(providers, &arguments.uri, &policy)
+    let found = match indexed {
+        Some(found) => found,
+        None => knot_model::files::search(providers, &arguments.uri, &query, limit, &policy)
             .await
             .map_err(|error| product::operations::resource_error(error.into()))?,
     };
-    Ok(files
-        .into_iter()
-        .map(|entry| knot_protocol::FileEntry {
-            uri: entry.uri.to_string(),
-            name: entry.name,
-            kind: knot_protocol::FileKind::File,
-            ignored: false,
-        })
-        .collect())
+    Ok(knot_protocol::FileSearchResult {
+        results: found
+            .hits
+            .into_iter()
+            .map(|hit| knot_protocol::FileSearchHit {
+                ranges: utf16_ranges(&hit.path, &hit.ranges),
+                uri: hit.uri.to_string(),
+                path: hit.path,
+                name: hit.name,
+            })
+            .collect(),
+        more: found.more,
+    })
 }
 
 #[host_operation("isFileIgnored")]

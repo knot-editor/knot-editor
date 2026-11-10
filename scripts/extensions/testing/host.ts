@@ -1584,16 +1584,37 @@ export const api: KnotApi = {
         .filter((entry) => !hidden.includes(entry.name))
         .map((entry) => ({ ...entry, ignored: ignored.includes(entry.name) || isIgnoredUri(checked) }));
     },
-    walk: async (uri) => {
-      maybeFail("files.walk");
+    search: async (uri, query, options) => {
+      maybeFail("files.search");
+      if (options?.limit !== undefined && (!Number.isInteger(options.limit) || options.limit < 1)) {
+        throw new TypeError("search limit must be a positive integer");
+      }
       const checked = checkedFileUri(uri);
       const kind = fileKind(checked);
       if (kind === null) throw hostError("ResourceNotFound");
       if (kind === "file") throw hostError("ResourceWrongKind");
-      if (isIgnoredUri(checked)) return [];
-      return [...state.files.keys()]
+      if (isIgnoredUri(checked)) return { results: [], more: false };
+      const paths = [...state.files.keys()]
         .filter((file) => file.startsWith(`${checked}/`) && !isIgnoredUri(file.slice(checked.length)))
-        .map((file) => ({ uri: file, name: file.slice(file.lastIndexOf("/") + 1), kind: "file" as const, ignored: false }));
+        .map((file) => ({ uri: file, path: file.slice(checked.length + 1) }))
+        .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      const named = matchCandidates(query, paths.map((file) => file.path.slice(file.path.lastIndexOf("/") + 1)));
+      const nameMatched = new Set(named.map((match) => match.index));
+      const byName = named.map((match) => ({ file: paths[match.index]!, ranges: match.ranges, offset: paths[match.index]!.path.lastIndexOf("/") + 1 }));
+      const rest = paths.map((file, index) => ({ file, index })).filter(({ index }) => !nameMatched.has(index));
+      const byPath = matchCandidates(query, rest.map(({ file }) => file.path))
+        .map((match) => ({ file: rest[match.index]!.file, ranges: match.ranges, offset: 0 }));
+      const limit = Math.min(options?.limit ?? 100, 1000);
+      const ranked = [...byName, ...byPath];
+      return {
+        results: ranked.slice(0, limit).map(({ file, ranges, offset }) => ({
+          uri: file.uri,
+          path: file.path,
+          name: file.path.slice(file.path.lastIndexOf("/") + 1),
+          ranges: ranges.map(([start, end]) => [start + offset, end + offset] as const),
+        })),
+        more: ranked.length > limit,
+      };
     },
     isIgnored: async (uri) => {
       maybeFail("files.isIgnored");

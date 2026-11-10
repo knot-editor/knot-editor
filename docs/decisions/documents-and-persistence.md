@@ -86,10 +86,10 @@ Reference: [URI providers](../architecture/documents-and-persistence.md#uri-prov
 ## Workspace ignore policy
 
 One native policy, set by three global settings, decides what `files.list`,
-`files.walk`, and `files.isIgnored` show. Hidden entries (`.git`,
+`files.search`, and `files.isIgnored` show. Hidden entries (`.git`,
 `.DS_Store`) never appear, so hiding is policy rather than a filter syntax a
 caller passes; ignored entries still appear in listings, marked, so the
-explorer can dim them, and walks skip them. Defaults match VS Code and Zed.
+explorer can dim them, and searches skip them. Defaults match VS Code and Zed.
 Both pattern lists use gitignore syntax, so there is no second pattern
 language, and repository ignore files follow ripgrep's semantics, which is what
 D085 gets by running `rg` with only `files.ignored` as globs.
@@ -116,24 +116,36 @@ Reference: [URI providers](../architecture/documents-and-persistence.md#uri-prov
 ## Workspace file index
 
 Each workspace root has a native in-memory tree, watched recursively, that
-answers `files.list`, `files.walk`, and `files.isIgnored`; the API is
-unchanged. Go to File walks a root of about 100k files per invocation, and a
-disk walk costs about 0.12 s on a synthetic 100,000-file tree (release build,
-Apple Silicon, warm), against 6 to 8 ms from the index. The first scan costs
-the same as a disk walk, and the tree adds about 40 MB at that size. No kernel
-checkout was available locally.
+answers `files.list` and `files.isIgnored`, and ranks paths for
+`files.search`, which returns the best hundred or so and whether more
+matched. Go to File searches on every keystroke, so it must not receive a
+URI per file. On a synthetic 100,000-file tree (release build, Apple Silicon,
+warm) a disk walk costs about 0.12 s; the first index scan costs the same, the
+tree takes about 11 MB, and a search takes 1 to 7 ms for typical queries and
+22 ms at worst. Entries store a name, kind, and flags, and build URIs when a
+query returns them, which cut memory from 42 MB to 11 MB and doubled the time
+to enumerate every file. Ranking puts a file whose name matches before one
+that matches only through its directories. No kernel checkout was available
+locally.
 
 Rejected:
 
 - An index per window: it scans and watches the same folder twice, so indexes
   are shared by root URI and leased.
-- `list` from disk with only `walk` from the index: freshness after Knot's own
+- Returning every file from the index, as `files.walk` did, or relative
+  paths for JavaScript to match: both ship 100k strings per keystroke, and a
+  URI string per file costs memory and time before JavaScript reads one.
+- Storing each entry's URI, or caching it on first use: a search touches
+  every file, so the cache fills and the memory returns.
+- A numeric bonus for matches in the last path segment: it needs matcher
+  internals and a tuned constant, where ranking by tier does not.
+- `list` from disk with only the search from the index: freshness after Knot's own
   mutations comes from updating the index, not from bypassing it.
 - A disk fallback or partial answers while the first scan runs: a disk walk
   doubles the I/O, and partial answers break the API's completeness guarantee.
   Queries wait instead, which is never slower than walking.
 - Scanning ignored directories lazily, as Zed does for its project panel:
-  nothing needs their contents, because walks skip them and listings inside
+  nothing needs their contents, because searches skip them and listings inside
   them read the disk.
 - Reusing an ancestor's index for a nested root: nested roots are rare.
 - Snapshots saved between sessions, as JetBrains does: a warm scan of the

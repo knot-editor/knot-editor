@@ -78,7 +78,7 @@ Enumeration skips entries a listing cannot represent: broken symlinks, special
 files, and names that are not UTF-8 or contain `\`. Other I/O errors reject the
 directory.
 
-Extensions read through `knot.files` (`readText`, `list`, `walk`, `isIgnored`, `stat`),
+Extensions read through `knot.files` (`readText`, `list`, `search`, `isIgnored`, `stat`),
 which runs the `knot-model` file operations over the same unscoped providers off
 the foreground. Reads see only stored content, never an open document's buffer,
 and no entitlement gates them.
@@ -93,7 +93,7 @@ URIs) the global excludes file only inside a Git repository, and a deeper file
 overrides a shallower one. Entries of an ignored or hidden directory are
 ignored. A directory whose entries include `.git` is a repository root, so a
 walk from above several repositories applies each one's ignore files and
-exclude file. `walk` returns every file that is neither hidden nor ignored: it
+exclude file. A walk visits every file that is neither hidden nor ignored: it
 does not enter ignored or hidden directories or follow symlinked directories,
 and skips unreadable subdirectories. It reads several directories at once, and
 each directory task builds that directory's rules from its parent's and its
@@ -122,7 +122,8 @@ Every workspace root has a `knot-model` `FileIndex`: an in-memory tree of its
 visible and ignored entries, built with the same classifier as the disk
 `files::list`, `walk`, and `is_ignored`, which it must agree with. Hidden
 entries are not stored, and the contents of an ignored directory are never
-scanned. An application global holds one index per root URI, shared by every
+scanned. An entry holds a name, kind, and flags; URIs are built when a query
+returns them. An application global holds one index per root URI, shared by every
 window that shows the root. Each product shell leases its roots whenever they
 change, and the last lease to drop releases the index and its recursive watch.
 A root whose provider cannot be watched is left unindexed.
@@ -136,7 +137,14 @@ a changed `.gitignore`, `.ignore`, `.git`, or `.git/info/exclude` scans the
 affected subtree again. Changes to the global Git excludes file wait for the
 next full scan.
 
-`list`, `walk`, and `is_ignored` return nothing when the index cannot answer,
+`search` offers each visible file's root-relative path to the shared matcher
+(`completion.styles`) and keeps the best `limit` in a bounded heap, so only the
+returned hits get a URI. A file whose name matches ranks above one that matches
+only through its directories; the matcher's style and score then decide, and
+then path order. `more` reports that other files matched. The disk search walks
+and ranks with the same code.
+
+`list`, `search`, and `is_ignored` return nothing when the index cannot answer,
 for a URI outside every root, below an ignored directory, or through a symlink,
 and the handlers then read the disk. A nested root has its own index.
 

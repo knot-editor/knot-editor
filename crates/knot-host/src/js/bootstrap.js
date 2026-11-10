@@ -1562,9 +1562,19 @@ export async function listFiles(uri) {
   const entries = await request("listFiles", string(uri, "resource URI must be text"));
   return Object.freeze(entries.map(entry => Object.freeze({ uri: entry.uri, name: entry.name, kind: entry.kind, ignored: entry.ignored })));
 }
-export async function walkFiles(uri) {
-  const entries = await request("walkFiles", string(uri, "resource URI must be text"));
-  return Object.freeze(entries.map(entry => Object.freeze({ uri: entry.uri, name: entry.name, kind: entry.kind, ignored: entry.ignored })));
+export async function searchFiles(uri, query, options) {
+  const limit = options == null ? null : record(options, "search options must be an object").limit ?? null;
+  if (limit !== null && (!Number.isInteger(limit) || limit < 1)) throw new TypeError("search limit must be a positive integer");
+  const found = await request("searchFiles", string(uri, "resource URI must be text"), string(query, "search query must be text"), limit);
+  return Object.freeze({
+    results: Object.freeze(found.results.map(hit => Object.freeze({
+      uri: hit.uri,
+      path: hit.path,
+      name: hit.name,
+      ranges: Object.freeze(hit.ranges.map(range => Object.freeze([range[0], range[1]]))),
+    }))),
+    more: found.more,
+  });
 }
 export function isFileIgnored(uri) {
   return request("isFileIgnored", string(uri, "resource URI must be text"));

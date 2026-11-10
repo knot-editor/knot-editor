@@ -541,6 +541,25 @@ pub struct FileEntry {
     pub ignored: bool,
 }
 
+/// One file a `files.search` matched.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct FileSearchHit {
+    pub uri: String,
+    /// The path below the searched directory, with `/` separators.
+    pub path: String,
+    pub name: String,
+    /// The UTF-16 ranges of `path` that matched.
+    pub ranges: Vec<[usize; 2]>,
+}
+
+/// The result of a `files.search`.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct FileSearchResult {
+    pub results: Vec<FileSearchHit>,
+    /// Whether more files matched than the limit returned.
+    pub more: bool,
+}
+
 /// One asynchronous child request issued by a native view instance.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TreeChildrenRequest {

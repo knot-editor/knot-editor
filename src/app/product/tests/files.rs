@@ -35,6 +35,10 @@ await commands.register("files.api", async () => {
   await rejects(() => files.readText("other://product/file"), "ProviderFailure");
   await rejects(() => files.list("mem://product/notes.txt"), "ResourceWrongKind");
   await rejects(() => files.list("mem://product/missing"), "ResourceNotFound");
+  const searched = await files.search("mem://product/", "notes");
+  if (searched.more || searched.results.map(hit => hit.path).join() !== "notes.txt") throw new Error("search");
+  await rejects(() => files.search("mem://product/notes.txt", "x"), "ResourceWrongKind");
+  await rejects(() => files.search("mem://product/missing", "x"), "ResourceNotFound");
   await rejects(() => files.stat("not a URI"), "InvalidUri");
   try { await files.readText(42); throw new Error("nontext URI accepted"); } catch (error) { if (!(error instanceof TypeError)) throw error; }
 
@@ -94,7 +98,7 @@ await commands.register("files.policy", async () => {
   if (await names() !== base) throw new Error(`default ${await names()}`);
   if (!await files.isIgnored("mem://product/.git/HEAD")) throw new Error("hidden");
   if (!await files.isIgnored("mem://product/build.log")) throw new Error("ignored");
-  const walked = async () => (await files.walk("mem://product/")).map(entry => entry.name).sort().join();
+  const walked = async () => (await files.search("mem://product/", "", { limit: 1000 })).results.map(hit => hit.name).sort().join();
   if (await walked() !== ".gitignore,invalid.txt,notes.txt,out.js") throw new Error(`walk ${await walked()}`);
   await settings.set("files.ignored", ["dist"]);
   if (await walked() !== ".gitignore,invalid.txt,notes.txt") throw new Error(`walk ignored ${await walked()}`);
@@ -198,10 +202,13 @@ fn indexed_roots_answer_from_memory_follow_the_disk_and_release_with_the_root(
         r#"
 import { commands, files, workbench } from "knot";
 await commands.register("files.report", async () => {
-  const walked = (await files.walk("mem://product/src/")).map(entry => entry.name).sort().join();
+  const walked = (await files.search("mem://product/src/", "")).results.map(hit => hit.name).sort().join();
   const listed = (await files.list("mem://product/src/")).map(entry => entry.name).sort().join();
   const outside = (await files.list("mem://product/")).map(entry => entry.name).sort().join();
-  await workbench.writeClipboardText([walked, listed, outside].join("|"));
+  const found = await files.search("mem://product/src/", "kept", { limit: 1 });
+  const hit = found.results[0];
+  const searched = hit ? `${hit.path}:${hit.ranges.map(range => range.join("-"))}:${found.more}` : "none";
+  await workbench.writeClipboardText([walked, listed, outside, searched].join("|"));
 });
 "#,
         "files.report",
@@ -236,7 +243,10 @@ await commands.register("files.report", async () => {
     });
     assert!(indexed(cx));
     assert_eq!(provider.watch_count(), 1);
-    assert_eq!(report(cx), "kept.txt|kept.txt|invalid.txt,notes.txt,src");
+    assert_eq!(
+        report(cx),
+        "kept.txt|kept.txt|invalid.txt,notes.txt,src|kept.txt:0-4:false"
+    );
 
     // An external change arrives through the watch.
     provider
@@ -257,7 +267,7 @@ await commands.register("files.report", async () => {
     }
     assert_eq!(
         seen,
-        "added.txt,kept.txt|added.txt,kept.txt|invalid.txt,notes.txt,src"
+        "added.txt,kept.txt|added.txt,kept.txt|invalid.txt,notes.txt,src|kept.txt:0-4:false"
     );
 
     // Keeping the root keeps the index; dropping it releases the watch.

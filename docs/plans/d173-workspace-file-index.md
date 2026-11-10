@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoints 1–5 ✅ approved; checkpoint 6 planned. Item of the
+Status: 🚧 checkpoints 1–5 ✅ approved; checkpoint 6 ✅ implemented, awaiting its review gate. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -246,7 +246,19 @@ build, warm, limit 100): 1.2 ms for the empty query, 3 ms for one letter, 6–7 
 for typical queries and for no match, 22 ms for a three-part query that matches
 everything.
 
-### 6. Extension API, removal of `files.walk`, and docs
+### 6. Extension API, removal of `files.walk`, and docs ✅ implemented, awaiting its review gate
+
+Implemented: `files.search(uri, query, { limit })` resolving `{ results, more }`
+(default limit 100, at most 1000; `searchFiles` handler in
+`src/app/extensions/host/handlers.rs`, protocol types in `knot-protocol`),
+`files.walk` removed, the fake host and its test, product tests, docs (API
+guide, settings, architecture, decision, D082 bullet), and `Try:` commands in
+the personal `post-init.js` ("Try: Search Roots", "Try: List Root", and the
+outside-file pair). The end-to-end time from JavaScript is for the user to read
+with "Try: Search Roots" on a large folder; the native search takes 1–22 ms on
+the synthetic 100,000-file tree.
+
+Details:
 
 Deliverables:
 

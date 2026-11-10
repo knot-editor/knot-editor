@@ -979,8 +979,12 @@ if ((await files.stat(`${root}/.editorconfig`)) !== null) {
 `list` omits hidden entries (the `files.hidden` setting: `.git`, `.DS_Store`, and
 similar) and marks entries that `.gitignore`, `.ignore`, `.git/info/exclude`, or
 the `files.ignored` setting match with `ignored: true`, so an explorer can dim
-them. `files.walk(uri)` resolves every visible, non-ignored file below a directory as
-one array, without entering ignored directories or following symlinked ones.
+them. `files.search(uri, query, { limit })` matches the query against the paths of the
+visible, non-ignored files below a directory, without entering ignored
+directories or following symlinked ones, and resolves `{ results, more }`: the
+best `limit` matches (100 by default) with their `uri`, path relative to the
+directory, `name`, and matched `ranges`, and whether others matched. A picker
+searches again on every keystroke rather than holding the list of files.
 `files.isIgnored(uri)` applies the same policy to one path. The fake host
 matches `files.hidden` and `files.ignored` as plain names and reads no ignore
 files.

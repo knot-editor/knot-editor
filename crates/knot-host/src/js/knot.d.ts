@@ -725,8 +725,24 @@ declare module "knot" {
     readonly kind: FileKind;
     /** Whether the ignore policy ignores the entry: `.gitignore` and friends,
      * or a `files.ignored` pattern, or a directory above it that is ignored.
-     * Explorers dim ignored entries; walks skip them. */
+     * Explorers dim ignored entries; searches skip them. */
     readonly ignored: boolean;
+  }
+  /** A file `files.search` matched. */
+  export interface FileSearchHit {
+    readonly uri: string;
+    /** The path below the searched directory, with `/` separators. */
+    readonly path: string;
+    /** The last segment of `path`. */
+    readonly name: string;
+    /** UTF-16 ranges of `path` that matched, sorted and disjoint. */
+    readonly ranges: readonly (readonly [start: number, end: number])[];
+  }
+  export interface FileSearchResult {
+    /** The best matches, best first. */
+    readonly results: readonly FileSearchHit[];
+    /** Whether more files matched than `results` holds. */
+    readonly more: boolean;
   }
   export interface FileStat {
     readonly kind: FileKind;
@@ -753,7 +769,7 @@ declare module "knot" {
   /** Reads, lists, and stats stored resources through the registered resource
    * providers. Any URI with a registered provider is readable, independently of
    * workspace roots. These operations see only what is stored: an open
-   * document's unsaved edits are ignored. `list`, `walk`, and `isIgnored`
+   * document's unsaved edits are ignored. `list`, `search`, and `isIgnored`
    * under an open workspace root answer from an in-memory index that follows
    * disk changes after the file watch's coalescing delay (about 100 ms); the
    * answers are otherwise the same as reading the disk. */
@@ -772,14 +788,24 @@ declare module "knot" {
      * @throws HostError with InvalidUri, ResourceNotFound, ResourceWrongKind for
      * a file, or ProviderFailure. */
     list(uri: string): Promise<readonly FileEntry[]>;
-    /** Resolves every file below a directory, at any depth, in unspecified
-     * order, as one array. Hidden and ignored entries are left out and their
-     * directories are not entered, symlinked directories are not followed, and
-     * directories that cannot be read are skipped. Walking an ignored or hidden
-     * directory resolves empty. Entries are files and never `ignored`.
-     * @throws HostError with InvalidUri, ResourceNotFound, ResourceWrongKind for
-     * a file, or ProviderFailure. */
-    walk(uri: string): Promise<readonly FileEntry[]>;
+    /** Matches `query` against the paths of the files below a directory, at
+     * any depth, and resolves the best `options.limit` (default 100, at most
+     * 1000) with whether others matched too. Matching uses the editor's shared
+     * matcher and the `completion.styles` setting. A file whose name matches
+     * ranks above one that matches only through its directories; within each
+     * group the matcher's order applies, then path order. A query of only
+     * whitespace matches every file, so the first files in path order come
+     * back. Hidden and ignored files are left out, symlinked directories are
+     * not followed, and directories that cannot be read are skipped. Searching
+     * an ignored or hidden directory resolves empty.
+     * @throws TypeError for a limit that is not a positive integer; HostError
+     * with InvalidUri, ResourceNotFound, ResourceWrongKind for a file, or
+     * ProviderFailure. */
+    search(
+      uri: string,
+      query: string,
+      options?: { readonly limit?: number },
+    ): Promise<FileSearchResult>;
     /** Resolves the kind of the resource, or null when it does not exist.
      * Symlinks report their target's kind.
      * @throws HostError with InvalidUri or ProviderFailure. */

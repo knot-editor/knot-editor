@@ -48,19 +48,27 @@ test("listing omits hidden entries and marks ignored ones", async () => {
   assert.equal(await files.isIgnored("file:///p/.git"), true);
 });
 
-test("walking resolves visible files at any depth and skips ignored directories", async () => {
+test("searching ranks name matches first, limits results, and skips ignored directories", async () => {
   host.seedFile("file:///p/.git/HEAD", "ref");
-  host.seedFile("file:///p/a.txt", "alpha");
-  host.seedFile("file:///p/src/deep/lib.rs", "");
-  host.seedFile("file:///p/dist/out.js", "");
+  host.seedFile("file:///p/docs/maintenance/notes.md", "");
+  host.seedFile("file:///p/src/main.rs", "");
+  host.seedFile("file:///p/src/lib.rs", "");
+  host.seedFile("file:///p/dist/main.js", "");
   await settings.set("files.ignored", ["dist"]);
 
-  assert.deepEqual(
-    (await files.walk("file:///p")).map((entry) => entry.uri).sort(),
-    ["file:///p/a.txt", "file:///p/src/deep/lib.rs"],
-  );
-  assert.deepEqual(await files.walk("file:///p/dist"), []);
-  await assert.rejects(files.walk("file:///p/a.txt"), { code: "ResourceWrongKind" });
+  const found = await files.search("file:///p", "main");
+  assert.deepEqual(found.results.map((hit) => hit.path), ["src/main.rs", "docs/maintenance/notes.md"]);
+  assert.equal(found.more, false);
+  assert.equal(found.results[0]!.uri, "file:///p/src/main.rs");
+  assert.equal(found.results[0]!.name, "main.rs");
+  assert.deepEqual(found.results[0]!.ranges, [[4, 8]]);
+
+  const limited = await files.search("file:///p", "", { limit: 2 });
+  assert.deepEqual(limited.results.map((hit) => hit.path), ["docs/maintenance/notes.md", "src/lib.rs"]);
+  assert.equal(limited.more, true);
+  assert.deepEqual((await files.search("file:///p/dist", "main")).results, []);
+  await assert.rejects(files.search("file:///p/src/main.rs", "x"), { code: "ResourceWrongKind" });
+  await assert.rejects(files.search("file:///p", "x", { limit: 0 }), TypeError);
 });
 
 test("watching reports changes under the directory until disposed", async () => {
