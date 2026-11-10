@@ -323,7 +323,7 @@ to be rebuilt later:
     `@knot/projects` record. Workspace trust (D124) stays deferred, so
     project settings must not run code until it exists.
 
-- **D081 — Workspace ignore rules and file enumeration** (depends on D122,
+- ✅ **D081 — Workspace ignore rules and file enumeration** (depends on D122,
   D143)
   - Shipped ([architecture](../architecture/documents-and-persistence.md#uri-providers),
     [decisions](../decisions/documents-and-persistence.md#workspace-ignore-policy),
