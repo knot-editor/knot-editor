@@ -1,12 +1,16 @@
 // Runs the Ex line `:` opens in one followed editor, over native commands
 // and document-scoped settings, and returns the message it leaves.
 import { commands, documents, settings, workbench, workspaces } from "knot";
-import { type BooleanOption, directoryOf, type ExCommand, parseEx, resolvePath, type SetArgument } from "./ex.js";
+import { type BooleanOption, completeEx, directoryOf, type ExCommand, parseEx, resolvePath, type SetArgument } from "./ex.js";
 import { run, type State } from "./normal.js";
 
 /** Asks for a command line and runs it; returns a message to show, or null. */
 export async function commandLine(state: State): Promise<string | null> {
-  const input = await workbench.showInput({ title: "Ex Command", prompt: ":" });
+  const input = await workbench.showInput({
+    title: "Ex Command",
+    prompt: ":",
+    onChange: async (line) => ({ items: await completeEx(line) }),
+  });
   if (input.kind === "dismissed") return null;
   const command = parseEx(input.value);
   if (command.kind === "none") return null;

@@ -1,5 +1,6 @@
-// Parses Ex command lines, without host calls: the commands the package
-// runs, `:set` arguments, and the paths `:e` opens.
+// Parses Ex command lines: the commands the package runs, `:set` arguments,
+// and the paths `:e` opens; and completes them through the shared matcher.
+import { completion, type InputCompletion } from "knot";
 
 export type BooleanOption = "number" | "relativenumber" | "wrap" | "expandtab";
 export type NumberOption = "tabstop" | "shiftwidth";
@@ -112,6 +113,49 @@ function parseSet(text: string): ExCommand {
     parsed.push({ option, action });
   }
   return { kind: "set", arguments: parsed };
+}
+
+/** Options completed by `:set`, each under its full name with its short form. */
+const OPTIONS: readonly (readonly [string, string])[] = [
+  ["number", "nu"], ["relativenumber", "rnu"], ["wrap", ""], ["expandtab", "et"],
+  ["tabstop", "ts"], ["shiftwidth", "sw"],
+];
+
+/** Completions for the Ex line `text`, best first: command names while the
+ * line has no space, then `:set` option names for the last word, keeping its
+ * `no` or `inv` prefix. Each item's value is the whole new line. */
+export async function completeEx(text: string): Promise<InputCompletion[]> {
+  const name = /^(\s*:?\s*)([a-zA-Z]*)$/.exec(text);
+  if (name !== null) {
+    const names = NAMES.map(([full]) => full);
+    const matches = await completion.match(name[2]!, names);
+    return matches.map(({ index, ranges }) => ({
+      label: names[index]!,
+      value: `${name[1]}${names[index]}`,
+      matches: ranges,
+    }));
+  }
+  // No option begins with `no` or `inv`, so they are prefixes to keep.
+  const set = /^(\s*:?\s*se(?:t)?\s+(?:.*\s)?(?:no|inv)?)([a-z]*)$/.exec(text);
+  if (set === null) return [];
+  const head = set[1]!;
+  const typed = set[2]!;
+  // Full names and short forms are matched, and each option is listed once,
+  // under its full name, at its best match.
+  const candidates = OPTIONS.flatMap(([full, short]) => (short === "" ? [full] : [full, short]));
+  const items: InputCompletion[] = [];
+  for (const { index, ranges } of await completion.match(typed, candidates)) {
+    const option = OPTIONS.find(([full, short]) => full === candidates[index] || short === candidates[index])!;
+    const [full, short] = option;
+    if (items.some((item) => item.label === full)) continue;
+    items.push({
+      label: full,
+      value: `${head}${full}`,
+      ...(short === "" ? {} : { detail: short }),
+      ...(candidates[index] === full ? { matches: ranges } : {}),
+    });
+  }
+  return items;
 }
 
 /** The URI `:e` opens for `path`: a URI as it is, an absolute path as a

@@ -16,6 +16,10 @@
     { "name": ":set noet indents with tabs", "before": ["‸a"], "keys": ":set noet<cr>>>", "after": ["\t‸a"] },
     { "name": ":set sw sets the indent step", "before": ["‸a"], "keys": ":set sw=2<cr>>>", "after": ["  ‸a"] },
     { "name": ":set et after noet indents with spaces", "before": ["‸a"], "keys": ":set noet<cr>:set et ts=3<cr>>>", "after": ["   ‸a"] },
-    { "name": "o after :set noet indents with a tab", "language": "rust", "before": ["‸fn f() {", "}"], "keys": ":set noet<cr>ox<esc>", "after": ["fn f() {", "\t‸x", "}"] }
+    { "name": "o after :set noet indents with a tab", "language": "rust", "before": ["‸fn f() {", "}"], "keys": ":set noet<cr>ox<esc>", "after": ["fn f() {", "\t‸x", "}"] },
+    { "name": ":s<tab> completes the command name", "before": ["‸a"], "keys": ":s<tab> noet<cr>>>", "after": ["\t‸a"] },
+    { "name": ":set completes a no-prefixed option", "before": ["‸a"], "keys": ":set noexp<tab><cr>>>", "after": ["\t‸a"] },
+    { "name": "Tab completes an option name from a prefix", "before": ["‸a"], "keys": ":set shi<tab>=2 noet<cr>>>", "after": ["\t‸a"] },
+    { "name": "Enter runs the typed text, not the highlighted row", "before": ["‸a", "b", "c"], "keys": ":2<cr>", "after": ["a", "‸b", "c"] }
   ]
 }

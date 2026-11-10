@@ -26,7 +26,9 @@ use crate::app::product::{
 use crate::app::resource::ResourceUri;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
 use crate::app::status_bar::ApplicationStatusBar;
+use crate::app::transient::TransientSurface;
 use crate::test_support::cases::{CARET, parse_keys};
+use crate::test_support::wait_until;
 
 /// The size a session lays its editor out at, as a window would, in rows
 /// and cells.
@@ -162,9 +164,11 @@ impl TestEditor {
     }
 
     /// Press `keys` and return at once, for keys that leave a command
-    /// waiting on input.
+    /// waiting on input. An input whose caller watches the field answers
+    /// each key before the next, as a person typing leaves time for it.
     pub fn press_unsettled(&self, keys: &str, cx: &mut TestAppContext) {
         for key in parse_keys(keys) {
+            self.wait_for_input_feedback(cx);
             let keystroke = Keystroke::parse(&key).unwrap();
             match &self.window {
                 Some((window, _)) => cx.dispatch_keystroke(*window, keystroke_to_gpui(&keystroke)),
@@ -173,6 +177,24 @@ impl TestEditor {
                     .update(cx, |shell, cx| shell.press_key(keystroke, cx)),
             }
         }
+    }
+
+    /// Wait until no command holds the keys and a watched input has
+    /// answered its current text.
+    fn wait_for_input_feedback(&self, cx: &mut TestAppContext) {
+        wait_until(cx, |cx| {
+            cx.read(|cx| {
+                let shell = self.shell.read(cx);
+                let input = match shell.transient.as_ref().and_then(|t| t.surface.as_ref()) {
+                    Some(TransientSurface::Input(input)) => Some(input),
+                    _ => None,
+                };
+                match input {
+                    Some(input) => !input.read(cx).awaiting_feedback(cx),
+                    None => !shell.holds_keys(),
+                }
+            })
+        });
     }
 
     /// Type `text` into the window's focused input, such as a picker's.

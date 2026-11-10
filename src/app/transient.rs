@@ -76,6 +76,8 @@ pub(crate) struct InputView {
     items: Vec<InputCompletion>,
     selected: usize,
     scroll: UniformListScrollHandle,
+    /// The field text the caller's feedback last applied to.
+    answered: Option<String>,
     _changes: Option<Subscription>,
 }
 
@@ -111,6 +113,7 @@ impl InputView {
             items: Vec::new(),
             selected: 0,
             scroll: UniformListScrollHandle::new(),
+            answered: None,
             _changes: subscription,
         }
     }
@@ -132,6 +135,7 @@ impl InputView {
         cx: &mut Context<Self>,
     ) {
         self.message = message.map(Into::into);
+        self.answered = Some(self.text(cx));
         self.items = items;
         self.selected = 0;
         self.scroll.scroll_to_item(0, ScrollStrategy::Top);
@@ -157,6 +161,13 @@ impl InputView {
         };
         let value = item.value.clone();
         self.input.update(cx, |input, cx| input.set_text(value, cx));
+    }
+
+    /// Whether the caller watches the field and has not yet answered its
+    /// current text.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn awaiting_feedback(&self, cx: &App) -> bool {
+        self._changes.is_some() && self.answered.as_deref() != Some(self.text(cx).as_str())
     }
 
     #[cfg(test)]

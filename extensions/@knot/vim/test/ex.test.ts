@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { directoryOf, parseEx, resolvePath } from "../src/ex.js";
+import { completeEx, directoryOf, parseEx, resolvePath } from "../src/ex.js";
 
 test("commands take Vim's abbreviations and a bang", () => {
   for (const line of ["w", "wr", "write", ":w", "  w  "]) assert.deepEqual(parseEx(line), { kind: "write" });
@@ -67,4 +67,38 @@ test("paths resolve against a directory, as file URIs, or as given", () => {
   assert.equal(resolvePath("mem://other/y", null), "mem://other/y");
   assert.equal(resolvePath("x", null), null);
   assert.equal(directoryOf("file:///home/me/a.txt"), "file:///home/me");
+});
+
+const values = async (line: string) => (await completeEx(line)).map((item) => item.value);
+
+test("command names complete, in the order of the matcher", async () => {
+  assert.deepEqual(await values("w"), ["write", "wq"]);
+  assert.deepEqual(await values("se"), ["set"]);
+  assert.deepEqual(await values(":q"), [":quit", ":wq"]);
+  assert.deepEqual(await values("zz"), []);
+  assert.equal((await values("")).length, 7);
+});
+
+test("line numbers and other arguments get no items", async () => {
+  assert.deepEqual(await values("12"), []);
+  assert.deepEqual(await values("$"), []);
+  assert.deepEqual(await values("w "), []);
+  assert.deepEqual(await values("e src/"), []);
+});
+
+test(":set completes option names with their short forms", async () => {
+  const items = await completeEx("set nu");
+  assert.deepEqual(items.map((item) => [item.value, item.detail]), [
+    ["set number", "nu"],
+    ["set relativenumber", "rnu"],
+  ]);
+  assert.deepEqual(await values("set wr"), ["set wrap"]);
+  assert.deepEqual(await values("set zz"), []);
+});
+
+test(":set keeps no and inv prefixes and earlier arguments", async () => {
+  assert.deepEqual(await values("set noet"), ["set noexpandtab", "set norelativenumber"]);
+  assert.deepEqual(await values("set invwr"), ["set invwrap"]);
+  assert.deepEqual(await values("set ts=2 sw"), ["set ts=2 shiftwidth"]);
+  assert.ok((await values("set no")).every((value) => value.startsWith("set no")));
 });
