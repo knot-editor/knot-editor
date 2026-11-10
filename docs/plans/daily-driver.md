@@ -302,6 +302,7 @@ to be rebuilt later:
     [decisions](../decisions/documents-and-persistence.md#extension-file-reads)).
 
 - **D143 — Input completion** (depends on D071, D122)
+  - 🚧 [Plan](d143-input-completion.md)
   - `workbench.showInput` offers completion items as the text changes,
     through the pulled input session `onChange` already uses, with keys to
     move through and accept them.
