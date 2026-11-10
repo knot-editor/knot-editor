@@ -150,7 +150,58 @@ fn nested_rules_negations_excludes_and_ancestor_ignore_files_match_ripgrep() {
     write(&root, "other/outside.txt", "");
     write(&root, "other/z.above", "");
     let policy = IgnorePolicy::default();
-    for start in ["repo", "repo/src", "repo/src/deep", "other"] {
+    for start in ["", "repo", "repo/src", "repo/src/deep", "other"] {
+        assert_equivalent(&root.join(start), &policy);
+    }
+}
+
+#[test]
+fn sibling_and_nested_repositories_use_their_own_rules_like_ripgrep() {
+    let (_guard, root) = root();
+    write(&root, ".gitignore", "outer-only.txt\n*.skip\n");
+    write(&root, ".ignore", "*.above\n");
+    write(&root, "first/.git/HEAD", "");
+    write(&root, "first/.git/info/exclude", "exclude-first.txt\n");
+    write(&root, "first/.gitignore", "*.log\n");
+    write(&root, "second/.git/HEAD", "");
+    write(&root, "second/.gitignore", "*.tmp\n");
+    write(&root, "plain/.gitignore", "*.log\n");
+    // A repository nested in another, with and without its own exclude file.
+    write(&root, "first/vendor/lib/.git", "gitdir: elsewhere\n");
+    write(&root, "first/vendor/lib/.gitignore", "*.tmp\n");
+    write(&root, "first/vendor/other/.git/HEAD", "");
+    write(&root, "first/vendor/other/.git/info/exclude", "own.txt\n");
+    write(&root, "first/vendor/.ignore", "from-ignore.txt\n");
+    for path in [
+        "first/a.log",
+        "first/a.tmp",
+        "first/exclude-first.txt",
+        "first/outer-only.txt",
+        "first/x.skip",
+        "first/x.above",
+        "first/vendor/a.log",
+        "first/vendor/from-ignore.txt",
+        "first/vendor/lib/a.log",
+        "first/vendor/lib/a.tmp",
+        "first/vendor/lib/exclude-first.txt",
+        "first/vendor/lib/from-ignore.txt",
+        "first/vendor/lib/x.above",
+        "first/vendor/other/a.log",
+        "first/vendor/other/own.txt",
+        "first/vendor/other/exclude-first.txt",
+        "second/a.log",
+        "second/a.tmp",
+        "second/outer-only.txt",
+        "plain/a.log",
+        "plain/a.tmp",
+        "plain/outer-only.txt",
+        "plain/x.skip",
+        "plain/x.above",
+    ] {
+        write(&root, path, "");
+    }
+    let policy = IgnorePolicy::default();
+    for start in ["", "first", "first/vendor", "first/vendor/lib", "plain"] {
         assert_equivalent(&root.join(start), &policy);
     }
 }
@@ -221,8 +272,8 @@ impl Random {
 }
 
 fn generate(random: &mut Random, directory: &Path, depth: usize) {
-    const NAMES: [&str; 10] = [
-        "a", "b", "src", "build", "c.log", "d.tmp", "e.txt", "x.rs", ".dot", "keep.log",
+    const NAMES: [&str; 11] = [
+        "a", "b", "src", "build", "c.log", "d.tmp", "e.txt", "x.rs", ".dot", "keep.log", ".git",
     ];
     const PATTERNS: [&str; 16] = [
         "*.log",
@@ -253,6 +304,10 @@ fn generate(random: &mut Random, directory: &Path, depth: usize) {
     }
     for _ in 0..3 + random.below(4) {
         let name = random.pick(&NAMES);
+        // The test makes the top directory a repository itself.
+        if depth == 0 && name == ".git" {
+            continue;
+        }
         let path = directory.join(name);
         if path.exists() {
             continue;
@@ -287,5 +342,6 @@ fn generated_trees_match_ripgrep() {
             ..IgnorePolicy::default()
         };
         assert_equivalent(&repository, &policy);
+        assert_equivalent(&root, &policy);
     }
 }

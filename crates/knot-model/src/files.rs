@@ -8,7 +8,7 @@
 mod equivalence;
 mod ignore;
 
-use ignore::{Classifier, Visibility, segments};
+use ignore::{Classifier, Scope, Visibility, segments};
 pub use ignore::{DEFAULT_HIDDEN, IgnorePolicy};
 
 use std::sync::Arc;
@@ -84,13 +84,12 @@ pub async fn list(
 ) -> Result<Vec<ListedEntry>, ResourceError> {
     let uri = providers.normalize(parse(uri)?).await?;
     let entries = enumerate_directory(providers.clone(), uri.clone()).await?;
-    let mut classifier = Classifier::new(providers.provider(&uri)?, &uri, policy).await;
-    let parent = segments(&uri);
-    let inherited = classifier.directory().await;
+    let classifier = Classifier::new(providers.provider(&uri)?, &uri, policy);
+    let (scope, inherited) = classifier.resolve(&uri).await;
     let mut listed = Vec::with_capacity(entries.len());
     for entry in entries {
         let is_dir = entry.kind == ResourceKind::Directory;
-        match classifier.entry(&parent, &entry.name, is_dir).await {
+        match classifier.entry(&scope, &entry.name, is_dir) {
             Visibility::Hidden => {}
             own => listed.push(ListedEntry {
                 ignored: own == Visibility::Ignored || inherited != Visibility::Visible,
@@ -99,6 +98,48 @@ pub async fn list(
         }
     }
     Ok(listed)
+}
+
+/// What one directory of a walk contributes.
+struct Visited {
+    files: Vec<ResourceEntry>,
+    /// The directories to enter: location, the scope of their parent, name.
+    directories: Vec<(ResourceUri, Arc<Scope>, String)>,
+}
+
+/// Reads one directory of a walk and classifies its entries. `entered` is the
+/// parent's scope and the directory's name, or `None` when the scope is
+/// already the directory's own.
+async fn visit(
+    providers: Arc<FileSystemProviderRegistry>,
+    classifier: Arc<Classifier>,
+    uri: ResourceUri,
+    scope: Arc<Scope>,
+    name: Option<String>,
+) -> Result<Visited, ResourceError> {
+    let entries = enumerate_directory(providers, uri.clone()).await?;
+    let scope = match name {
+        Some(name) => Arc::new(classifier.descend(&scope, &name, &uri, &entries).await),
+        None => scope,
+    };
+    let mut visited = Visited {
+        files: Vec::new(),
+        directories: Vec::new(),
+    };
+    for entry in entries {
+        let is_dir = entry.kind == ResourceKind::Directory;
+        if classifier.entry(&scope, &entry.name, is_dir) != Visibility::Visible {
+            continue;
+        }
+        if !is_dir {
+            visited.files.push(entry);
+        } else if !entry.symlink {
+            visited
+                .directories
+                .push((entry.uri, scope.clone(), entry.name));
+        }
+    }
+    Ok(visited)
 }
 
 /// Every file below the directory, at any depth, that the policy neither hides
@@ -111,46 +152,42 @@ pub async fn walk(
     policy: &IgnorePolicy,
 ) -> Result<Vec<ResourceEntry>, ResourceError> {
     let uri = providers.normalize(parse(uri)?).await?;
-    let mut classifier = Classifier::new(providers.provider(&uri)?, &uri, policy).await;
-    if classifier.directory().await != Visibility::Visible {
+    let classifier = Arc::new(Classifier::new(providers.provider(&uri)?, &uri, policy));
+    let (scope, visibility) = classifier.resolve(&uri).await;
+    if visibility != Visibility::Visible {
         return Ok(Vec::new());
     }
-    // Directories are read concurrently, because each read is a provider round
-    // trip; classifying their entries stays sequential.
-    let enumerate = |directory: ResourceUri, parent: Vec<String>| {
-        let providers = providers.clone();
-        async move { (parent, enumerate_directory(providers, directory).await) }
+    // Directories are read and classified concurrently, because each read is a
+    // provider round trip.
+    let visit = |directory: ResourceUri, scope: Arc<Scope>, name: Option<String>| {
+        visit(
+            providers.clone(),
+            classifier.clone(),
+            directory,
+            scope,
+            name,
+        )
     };
     let mut files = Vec::new();
     let mut pending = FuturesUnordered::new();
-    pending.push(enumerate(uri.clone(), segments(&uri)));
+    pending.push(visit(uri, Arc::new(scope), None));
     let mut first = true;
     let mut waiting = Vec::new();
-    while let Some((parent, entries)) = pending.next().await {
-        let entries = match entries {
-            Ok(entries) => entries,
+    while let Some(visited) = pending.next().await {
+        match visited {
+            Ok(visited) => {
+                files.extend(visited.files);
+                waiting.extend(visited.directories);
+            }
             Err(error) if first => return Err(error),
-            Err(_) => Vec::new(),
-        };
-        first = false;
-        for entry in entries {
-            let is_dir = entry.kind == ResourceKind::Directory;
-            if classifier.entry(&parent, &entry.name, is_dir).await != Visibility::Visible {
-                continue;
-            }
-            if !is_dir {
-                files.push(entry);
-            } else if !entry.symlink {
-                let mut child = parent.clone();
-                child.push(entry.name.clone());
-                waiting.push((entry.uri, child));
-            }
+            Err(_) => {}
         }
+        first = false;
         while pending.len() < WALK_CONCURRENCY {
-            let Some((directory, child)) = waiting.pop() else {
+            let Some((directory, scope, name)) = waiting.pop() else {
                 break;
             };
-            pending.push(enumerate(directory, child));
+            pending.push(visit(directory, scope, Some(name)));
         }
     }
     Ok(files)
@@ -165,8 +202,7 @@ pub async fn is_ignored(
 ) -> Result<bool, ResourceError> {
     let uri = providers.normalize(parse(uri)?).await?;
     let provider = providers.provider(&uri)?;
-    let mut path = segments(&uri);
-    let Some(name) = path.pop() else {
+    let Some(name) = segments(&uri).pop() else {
         return Ok(false);
     };
     let is_dir = provider.stat(uri.clone()).await? == ResourceStat::Directory;
@@ -179,9 +215,9 @@ pub async fn is_ignored(
         })?
         .pop();
     let parent = ResourceUri::from_url(parent);
-    let mut classifier = Classifier::new(provider, &parent, policy).await;
-    let inherited = classifier.directory().await;
-    let own = classifier.entry(&path, &name, is_dir).await;
+    let classifier = Classifier::new(provider, &parent, policy);
+    let (scope, inherited) = classifier.resolve(&parent).await;
+    let own = classifier.entry(&scope, &name, is_dir);
     Ok(own.max(inherited) != Visibility::Visible)
 }
 

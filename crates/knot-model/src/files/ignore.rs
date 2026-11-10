@@ -7,7 +7,6 @@
 //! only inside a Git repository, the nearest ancestor containing `.git`.
 
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
     sync::{Arc, OnceLock},
 };
@@ -16,7 +15,7 @@ use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use url::Url;
 
 use crate::{
-    filesystem::{FileSystemProvider, ResourceStat},
+    filesystem::{FileSystemProvider, ResourceEntry, ResourceStat},
     resource::ResourceUri,
 };
 
@@ -120,13 +119,61 @@ fn global_excludes() -> &'static Gitignore {
     GLOBAL.get_or_init(|| Gitignore::global().0)
 }
 
-#[derive(Default)]
-struct DirectoryRules {
-    ignore: Option<Gitignore>,
-    gitignore: Option<Gitignore>,
+/// The ignore files a directory holds, as far as its caller knows.
+#[derive(Clone, Copy)]
+pub(super) struct IgnoreFiles {
+    ignore: bool,
+    gitignore: bool,
+    git: bool,
 }
 
-/// Classifies entries below one directory against a policy.
+impl IgnoreFiles {
+    /// The ignore files among the entries of a directory.
+    pub(super) fn of(entries: &[ResourceEntry]) -> Self {
+        let mut files = Self {
+            ignore: false,
+            gitignore: false,
+            git: false,
+        };
+        for entry in entries {
+            match entry.name.as_str() {
+                ".ignore" => files.ignore = true,
+                ".gitignore" => files.gitignore = true,
+                ".git" => files.git = true,
+                _ => {}
+            }
+        }
+        files
+    }
+}
+
+/// The rules that apply to the entries of one directory, from the repository
+/// root or the outermost `.ignore` ancestor down to the directory itself.
+#[derive(Clone)]
+pub(super) struct Scope {
+    /// The virtual path of the directory.
+    directory: PathBuf,
+    /// Non-empty `.ignore` rule sets, outermost first.
+    ignores: Vec<Arc<Gitignore>>,
+    /// Non-empty `.gitignore` rule sets of the repository, outermost first.
+    gitignores: Vec<Arc<Gitignore>>,
+    /// The nearest repository's `.git/info/exclude`.
+    exclude: Option<Arc<Gitignore>>,
+    /// Whether the directory is inside a repository.
+    repository: bool,
+}
+
+/// `uri` with the path segment `name` appended.
+fn child(uri: &ResourceUri, name: &str) -> ResourceUri {
+    let mut url = uri.as_url().clone();
+    if let Ok(mut path) = url.path_segments_mut() {
+        path.pop_if_empty().push(name);
+    }
+    ResourceUri::from_url(url)
+}
+
+/// Classifies entries against a policy. The policy-wide state is shared by
+/// every directory; a [`Scope`] holds the rules of one.
 pub(super) struct Classifier {
     provider: Arc<dyn FileSystemProvider>,
     template: Url,
@@ -134,37 +181,25 @@ pub(super) struct Classifier {
     ignored: Gitignore,
     respect_gitignore: bool,
     uses_global_excludes: bool,
-    /// The segment count of the repository root above the directory.
-    repository: Option<usize>,
-    exclude: Option<Gitignore>,
-    directories: HashMap<Vec<String>, Arc<DirectoryRules>>,
-    directory: Vec<String>,
 }
 
 impl Classifier {
-    /// A classifier for entries of `directory`, a normalized directory URI.
-    pub(super) async fn new(
+    /// A classifier for a policy over the provider of `directory`, a
+    /// normalized directory URI.
+    pub(super) fn new(
         provider: Arc<dyn FileSystemProvider>,
         directory: &ResourceUri,
         policy: &IgnorePolicy,
     ) -> Self {
         let root = Path::new("/");
-        let mut classifier = Self {
+        Self {
             provider,
             template: directory.as_url().clone(),
             hidden: build(root, &policy.hidden),
             ignored: build(root, &policy.ignored),
             respect_gitignore: policy.respect_gitignore,
             uses_global_excludes: directory.scheme() == "file",
-            repository: None,
-            exclude: None,
-            directories: HashMap::new(),
-            directory: segments(directory),
-        };
-        if classifier.respect_gitignore {
-            classifier.find_repository().await;
         }
-        classifier
     }
 
     fn uri(&self, segments: &[String]) -> Option<ResourceUri> {
@@ -174,82 +209,126 @@ impl Classifier {
         Some(ResourceUri::from_url(url))
     }
 
-    async fn read(&self, segments: &[String]) -> Option<String> {
-        let file = self.provider.read(self.uri(segments)?).await.ok()?;
+    async fn read(&self, uri: ResourceUri) -> Option<String> {
+        let file = self.provider.read(uri).await.ok()?;
         Some(String::from_utf8_lossy(&file.bytes).into_owned())
     }
 
-    async fn find_repository(&mut self) {
-        for depth in (0..=self.directory.len()).rev() {
-            let mut git = self.directory[..depth].to_vec();
+    /// The segment count of the nearest repository root at or above the
+    /// directory.
+    async fn find_repository(&self, directory: &[String]) -> Option<usize> {
+        for depth in (0..=directory.len()).rev() {
+            let mut git = directory[..depth].to_vec();
             git.push(".git".into());
             let Some(uri) = self.uri(&git) else { continue };
-            if matches!(
+            if !matches!(
                 self.provider.stat(uri).await,
                 Ok(ResourceStat::Missing) | Err(_)
             ) {
-                continue;
+                return Some(depth);
             }
-            self.repository = Some(depth);
-            git.extend(["info".into(), "exclude".into()]);
-            let root = virtual_path(&self.directory[..depth]);
-            self.exclude = self.read(&git).await.map(|text| build(&root, text.lines()));
-            return;
         }
+        None
     }
 
-    /// The rules of `directory`, a directory at or below the classifier's
-    /// repository or the classifier's own ancestors.
-    async fn rules(&mut self, directory: &[String]) -> Arc<DirectoryRules> {
-        if let Some(rules) = self.directories.get(directory) {
-            return rules.clone();
+    /// `scope` extended with the rules of the directory at `uri`.
+    async fn extend(
+        &self,
+        mut scope: Scope,
+        directory: PathBuf,
+        uri: &ResourceUri,
+        files: IgnoreFiles,
+    ) -> Scope {
+        scope.directory = directory;
+        if !self.respect_gitignore {
+            return scope;
         }
-        let depth = directory.len();
-        let directory = directory.to_vec();
-        let root = virtual_path(&directory);
-        let file = |name: &str| {
-            let mut path = directory.clone();
-            path.push(name.into());
-            path
-        };
-        let ignore = self.read(&file(".ignore")).await;
-        let gitignore = if self
-            .repository
-            .is_some_and(|repository| depth >= repository)
-        {
-            self.read(&file(".gitignore")).await
+        let rules = |text: String| Some(Arc::new(build(&scope.directory, text.lines())));
+        if files.git {
+            let exclude = child(&child(&child(uri, ".git"), "info"), "exclude");
+            let exclude = self.read(exclude).await.and_then(rules);
+            scope.repository = true;
+            scope.gitignores.clear();
+            scope.exclude = exclude.filter(|rules| !rules.is_empty());
+        }
+        let ignore = if files.ignore {
+            self.read(child(uri, ".ignore")).await.and_then(rules)
         } else {
             None
         };
-        let rules = Arc::new(DirectoryRules {
-            ignore: ignore.map(|text| build(&root, text.lines())),
-            gitignore: gitignore.map(|text| build(&root, text.lines())),
-        });
-        self.directories.insert(directory, rules.clone());
-        rules
+        let gitignore = if files.gitignore && scope.repository {
+            self.read(child(uri, ".gitignore")).await.and_then(rules)
+        } else {
+            None
+        };
+        scope
+            .ignores
+            .extend(ignore.filter(|rules| !rules.is_empty()));
+        scope
+            .gitignores
+            .extend(gitignore.filter(|rules| !rules.is_empty()));
+        scope
     }
 
-    /// How the policy treats the ancestor of the classifier's directory that
-    /// has `depth` segments, judging it alone.
-    async fn ancestor(&mut self, depth: usize) -> Visibility {
-        let parent = self.directory[..depth].to_vec();
-        let name = self.directory[depth].clone();
-        self.entry(&parent, &name, true).await
-    }
-
-    /// How the policy treats the entry `name` of `parent`, a directory at or
-    /// below the classifier's directory or one of its ancestors, judging the
-    /// entry alone.
-    pub(super) async fn entry(
-        &mut self,
-        parent: &[String],
+    /// The scope of the subdirectory `name` of `parent`, located at `uri`,
+    /// from the ignore files among its `entries`.
+    pub(super) async fn descend(
+        &self,
+        parent: &Scope,
         name: &str,
-        is_dir: bool,
-    ) -> Visibility {
-        let depth = parent.len();
-        let mut segments = parent.to_vec();
-        segments.push(name.to_owned());
-        let path = virtual_path(&segments);
+        uri: &ResourceUri,
+        entries: &[ResourceEntry],
+    ) -> Scope {
+        let directory = parent.directory.join(name);
+        self.extend(parent.clone(), directory, uri, IgnoreFiles::of(entries))
+            .await
+    }
+
+    /// The scope of `directory`, a normalized directory URI, found through its
+    /// ancestors, and how the policy treats the directory: the most
+    /// restrictive verdict on it and its ancestors inside the repository.
+    pub(super) async fn resolve(&self, directory: &ResourceUri) -> (Scope, Visibility) {
+        let names = segments(directory);
+        let repository = if self.respect_gitignore {
+            self.find_repository(&names).await
+        } else {
+            None
+        };
+        let first = repository.unwrap_or(names.len().saturating_sub(1));
+        let mut scope = Scope {
+            directory: PathBuf::from("/"),
+            ignores: Vec::new(),
+            gitignores: Vec::new(),
+            exclude: None,
+            repository: false,
+        };
+        let mut visibility = Visibility::Visible;
+        let mut path = PathBuf::from("/");
+        let Some(mut uri) = self.uri(&[]) else {
+            return (scope, visibility);
+        };
+        for depth in 0..=names.len() {
+            let files = IgnoreFiles {
+                ignore: true,
+                gitignore: true,
+                git: repository == Some(depth),
+            };
+            scope = self.extend(scope, path.clone(), &uri, files).await;
+            if depth < names.len() {
+                if depth >= first {
+                    visibility = visibility.max(self.entry(&scope, &names[depth], true));
+                }
+                path.push(&names[depth]);
+                uri = child(&uri, &names[depth]);
+            }
+        }
+        (scope, visibility)
+    }
+
+    /// How the policy treats the entry `name` of the directory `scope` belongs
+    /// to, judging the entry alone.
+    pub(super) fn entry(&self, scope: &Scope, name: &str, is_dir: bool) -> Visibility {
+        let path = scope.directory.join(name);
         if self.hidden.matched(&path, is_dir).is_ignore() {
             return Visibility::Hidden;
         }
@@ -259,15 +338,17 @@ impl Classifier {
         if !self.respect_gitignore {
             return Visibility::Visible;
         }
-        let mut levels = Vec::with_capacity(depth + 1);
-        for level in (0..=depth).rev() {
-            levels.push(self.rules(&parent[..level]).await);
-        }
         // Like ripgrep, `.ignore` files of every level take precedence over
         // `.gitignore` files, each searched from the deepest level up.
-        let ignore = levels.iter().filter_map(|rules| rules.ignore.as_ref());
-        let gitignore = levels.iter().filter_map(|rules| rules.gitignore.as_ref());
-        for source in ignore.chain(gitignore) {
+        let ignores = scope.ignores.iter().rev();
+        let gitignores = scope.gitignores.iter().rev();
+        let global = (scope.repository && self.uses_global_excludes).then(global_excludes);
+        let excludes = scope.exclude.as_deref().into_iter().chain(global);
+        for source in ignores
+            .chain(gitignores)
+            .map(|rules| &**rules)
+            .chain(excludes)
+        {
             if let Some(ignored) = verdict(source, &path, is_dir) {
                 return if ignored {
                     Visibility::Ignored
@@ -276,31 +357,7 @@ impl Classifier {
                 };
             }
         }
-        if self.repository.is_some() {
-            let global = self.uses_global_excludes.then(global_excludes);
-            for source in [self.exclude.as_ref(), global].into_iter().flatten() {
-                if let Some(ignored) = verdict(source, &path, is_dir) {
-                    return if ignored {
-                        Visibility::Ignored
-                    } else {
-                        Visibility::Visible
-                    };
-                }
-            }
-        }
         Visibility::Visible
-    }
-
-    /// How the policy treats the classifier's directory: the most restrictive
-    /// verdict on it and its ancestors inside the repository.
-    pub(super) async fn directory(&mut self) -> Visibility {
-        let length = self.directory.len();
-        let first = self.repository.unwrap_or(length.saturating_sub(1));
-        let mut visibility = Visibility::Visible;
-        for depth in first..length {
-            visibility = visibility.max(self.ancestor(depth).await);
-        }
-        visibility
     }
 }
 

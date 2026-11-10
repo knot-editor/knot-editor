@@ -1,6 +1,6 @@
 # D172 — Faster file walks
 
-Status: 🚧 in progress — checkpoint 1 done, checkpoint 2 next. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
+Status: 🚧 in progress — checkpoint 2 awaiting review. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
 Precedes [D173](daily-driver.md) (workspace file index), whose first scan and
 reclassification reuse this classifier.
 
@@ -90,7 +90,7 @@ default policy (`crates/knot-model/examples/walk_bench.rs`), and
 - Both sides read the machine's global excludes, so the test assumes they
   match none of the fixtures' names.
 
-### 2. Rule-stack classifier with per-directory classification
+### 2. Rule-stack classifier with per-directory classification ✅ (awaiting review)
 
 - Deliverables:
   - `Classifier` split into shared policy state and per-directory rule
@@ -105,6 +105,15 @@ default policy (`crates/knot-model/examples/walk_bench.rs`), and
 - Validation: the existing policy tests, the walk and listing product test
   (`src/app/product/tests/files.rs`) pass unchanged, and the extended
   equivalence test passes. Benchmark numbers recorded.
+- Result: the walk takes about 0.62 s warm (1.20 s cold) on the kernel clone,
+  down from 1.14 s, with the same 97,336 files. `Classifier` is now the shared
+  policy state (`Arc`, immutable); a `Scope` holds one directory's rule sets
+  (`.ignore` and `.gitignore` kept apart so every `.ignore` still wins, the
+  nearest repository's exclude file). `resolve` builds the scope of a listed
+  or walked directory through its ancestors, and each walk task derives its
+  own scope from its entries, reading only the ignore files they name.
+  Walks from above repositories, sibling repositories, and nested ones match
+  ripgrep.
 - Review gate: the numbers, and the classifier's shape as D173 will reuse it.
 - **Implementation context:** `crates/knot-model/src/files/ignore.rs`
   (`Classifier::{new, rules, entry, directory}`, `DirectoryRules`, `verdict`,
