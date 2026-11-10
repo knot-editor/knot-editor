@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoints 1–4 ✅ approved; checkpoints 5–6 planned. Item of the
+Status: 🚧 checkpoints 1–4 ✅ approved; checkpoint 5 ✅ implemented, awaiting its review gate; checkpoint 6 planned. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -234,7 +234,21 @@ the directory's. Measured on the synthetic 100,000-file tree (release build,
 warm): resident memory 42 MB → 11 MB, index walk 6–8 ms → 14–16 ms, first scan
 unchanged.
 
-### 5. Native search
+### 5. Native search ✅ implemented, awaiting its review gate
+
+Implemented: `files/search.rs` (`Ranker`, `SearchHit`, `SearchResults`),
+`FileIndex::search`, and `files::search` over the disk. Ranking is the tier
+(name match before path match), the style and score of the shared matcher,
+then the relative path; a bounded heap keeps `limit` hits and a count gives
+`more`. Hit ranges are byte ranges of `path`; the API converts them to UTF-16.
+The index test now compares both searches with an independent brute-force
+ranking of `walk` for six queries, on every covered directory at every step.
+Measured on the synthetic 100,000-file tree (release build, warm, limit 100,
+best of five): empty query 1.2 ms, one letter 3 ms, typical two-to-three
+character queries 6–7 ms, a query that matches nothing 6 ms, and a
+three-part query that matches everything 22 ms.
+
+Details:
 
 Deliverables:
 

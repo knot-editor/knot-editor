@@ -19,11 +19,13 @@ use std::{
 use futures::{StreamExt, stream::FuturesUnordered};
 
 use super::{
-    ListedEntry, WALK_CONCURRENCY,
+    ListedEntry, SearchResults, WALK_CONCURRENCY,
     ignore::{Classifier, IgnorePolicy, Scope, Visibility, segments},
+    search::Ranker,
 };
 use crate::{
     filesystem::{FileSystemProvider, ResourceEntry, ResourceError, ResourceKind, child_uri},
+    matching::Query,
     resource::ResourceUri,
 };
 
@@ -109,6 +111,27 @@ impl Dir {
             dir = dir.children.get_mut(name)?.dir.as_mut()?;
         }
         Some(dir)
+    }
+
+    /// Offers the visible files below this directory to `ranker`. `path`
+    /// holds the directory's path below the searched one, ending with `/`.
+    fn offer_files(&self, path: &mut String, ranker: &mut Ranker) {
+        for entry in self.children.iter().filter(|entry| !entry.ignored) {
+            let length = path.len();
+            match (&entry.dir, entry.kind) {
+                (Some(dir), _) => {
+                    path.push_str(&entry.name);
+                    path.push('/');
+                    dir.offer_files(path, ranker);
+                }
+                (None, ResourceKind::File) => {
+                    path.push_str(&entry.name);
+                    ranker.offer(path, length);
+                }
+                (None, ResourceKind::Directory) => {}
+            }
+            path.truncate(length);
+        }
     }
 
     /// The visible files below this directory, whose URI is `uri`.
@@ -394,6 +417,26 @@ impl FileIndex {
             let mut files = Vec::new();
             root.at(&path)?.collect_files(&uri, &mut files);
             Some(files)
+        })
+        .await
+    }
+
+    /// The best `limit` visible files below the directory that match `query`,
+    /// as [`search`](super::search) returns them, or `None` when the directory
+    /// is not indexed.
+    pub async fn search(
+        &self,
+        uri: &ResourceUri,
+        query: &Query,
+        limit: usize,
+        policy: &IgnorePolicy,
+    ) -> Option<SearchResults> {
+        let path = self.relative(uri)?;
+        let uri = self.uri_at(&path);
+        self.query(policy, |_, root| {
+            let mut ranker = Ranker::new(query, limit);
+            root.at(&path)?.offer_files(&mut String::new(), &mut ranker);
+            Some(ranker.finish(&uri))
         })
         .await
     }

@@ -8,10 +8,12 @@
 mod equivalence;
 mod ignore;
 mod index;
+mod search;
 
 use ignore::{Classifier, Scope, Visibility, segments};
 pub use ignore::{DEFAULT_HIDDEN, IgnorePolicy};
 pub use index::FileIndex;
+pub use search::{SearchHit, SearchResults};
 
 use std::sync::Arc;
 
@@ -22,6 +24,7 @@ use crate::{
         FileSystemProvider, FileSystemProviderRegistry, ResourceEntry, ResourceError, ResourceKind,
         ResourceStat,
     },
+    matching::Query,
     open::{OpenResourceError, enumerate_directory},
     resource::ResourceUri,
 };
@@ -189,6 +192,26 @@ pub async fn walk(
         }
     }
     Ok(files)
+}
+
+/// The best `limit` visible files below the directory that match `query`, by
+/// walking the disk. The index answers the same without reading it.
+pub async fn search(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: &str,
+    query: &Query,
+    limit: usize,
+    policy: &IgnorePolicy,
+) -> Result<SearchResults, ResourceError> {
+    let directory = providers.normalize(parse(uri)?).await?;
+    let depth = segments(&directory).len();
+    let files = walk(providers, uri, policy).await?;
+    let mut ranker = search::Ranker::new(query, limit);
+    for file in files {
+        let path = segments(&file.uri)[depth..].join("/");
+        ranker.offer(&path, path.len() - file.name.len());
+    }
+    Ok(ranker.finish(&directory))
 }
 
 /// Whether the policy hides or ignores the resource, or any directory above it

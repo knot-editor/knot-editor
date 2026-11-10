@@ -6,8 +6,9 @@ use std::{
 
 use super::*;
 use crate::{
-    files::{equivalence::Random, is_ignored, list, walk},
+    files::{SearchHit, equivalence::Random, is_ignored, list, search, walk},
     filesystem::{FileSystemProviderRegistry, MemoryFileSystemProvider},
+    matching::{Matcher, Query},
 };
 
 fn run<T>(future: impl Future<Output = T>) -> T {
@@ -140,6 +141,9 @@ fn assert_matches_disk(fixture: &Fixture, index: &FileIndex, policy: &IgnorePoli
                 "{context}: walk {directory:?}"
             );
         }
+        if covered {
+            assert_search(fixture, index, &target, policy, context);
+        }
         for name in ["zz", ".DS_Store", "keep.log", "build"] {
             let path = if directory.is_empty() {
                 name.to_owned()
@@ -164,6 +168,95 @@ fn assert_matches_disk(fixture: &Fixture, index: &FileIndex, policy: &IgnorePoli
                 indexed,
                 disk_is_ignored(path),
                 "{context}: is_ignored {path:?}"
+            );
+        }
+    }
+}
+
+const QUERIES: [&str; 6] = ["", "a", "s", "rs", "src", "m r"];
+
+/// The best matches by ranking every file of the walk, independently of the
+/// bounded search.
+fn brute_force_search(
+    directory: &ResourceUri,
+    files: &[ResourceEntry],
+    query: &Query,
+    limit: usize,
+) -> SearchResults {
+    let depth = segments(directory).len();
+    let mut matcher = Matcher::new();
+    let mut ranked = Vec::new();
+    for file in files {
+        let path = segments(&file.uri)[depth..].join("/");
+        let (tier, found, offset) = match matcher.find(query, &file.name) {
+            Some(found) => (0, found, path.len() - file.name.len()),
+            None => match matcher.find(query, &path) {
+                Some(found) => (1, found, 0),
+                None => continue,
+            },
+        };
+        let ranges = found
+            .ranges
+            .iter()
+            .map(|range| range.start + offset..range.end + offset)
+            .collect::<Vec<_>>();
+        ranked.push((
+            (tier, found.style, std::cmp::Reverse(found.score), path),
+            ranges,
+            file,
+        ));
+    }
+    ranked.sort_by(|a, b| a.0.cmp(&b.0));
+    let more = ranked.len() > limit;
+    SearchResults {
+        hits: ranked
+            .into_iter()
+            .take(limit)
+            .map(|((_, _, _, path), ranges, file)| SearchHit {
+                uri: file.uri.clone(),
+                path,
+                name: file.name.clone(),
+                ranges,
+            })
+            .collect(),
+        more,
+    }
+}
+
+/// Asserts that `search` equals the ranking of every file, in the index and
+/// on the disk.
+fn assert_search(
+    fixture: &Fixture,
+    index: &FileIndex,
+    directory: &ResourceUri,
+    policy: &IgnorePolicy,
+    context: &str,
+) {
+    let providers = &fixture.providers;
+    let files = run(walk(providers.clone(), &directory.to_string(), policy)).unwrap();
+    for text in QUERIES {
+        let query = Query::new(text, &crate::matching::DEFAULT_STYLES);
+        for limit in [2, 100] {
+            let expected = brute_force_search(directory, &files, &query, limit);
+            let indexed = run(index.search(directory, &query, limit, policy)).unwrap();
+            assert_eq!(
+                indexed, expected,
+                "{context}: search {directory} {text:?} {limit}"
+            );
+            if limit != 2 {
+                continue;
+            }
+            let disk = run(search(
+                providers.clone(),
+                &directory.to_string(),
+                &query,
+                limit,
+                policy,
+            ))
+            .unwrap();
+            assert_eq!(
+                disk, expected,
+                "{context}: disk search {directory} {text:?} {limit}"
             );
         }
     }
@@ -366,6 +459,55 @@ fn the_index_matches_the_disk_through_random_changes_and_reclassification() {
             );
         }
     }
+}
+
+#[test]
+fn a_name_match_outranks_a_directory_match_and_the_limit_reports_more() {
+    let fixture = Fixture::new();
+    for path in [
+        "docs/maintenance/notes.md",
+        "src/main.rs",
+        "src/lib.rs",
+        "README.md",
+    ] {
+        fixture.file(path);
+    }
+    let index = fixture.scanned("");
+    let policy = IgnorePolicy::default();
+    let query = Query::new("main", &crate::matching::DEFAULT_STYLES);
+
+    let found = run(index.search(&uri(""), &query, 10, &policy)).unwrap();
+    let paths = found
+        .hits
+        .iter()
+        .map(|hit| hit.path.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(paths, ["src/main.rs", "docs/maintenance/notes.md"]);
+    assert!(!found.more);
+    assert_eq!(found.hits[0].name, "main.rs");
+    assert_eq!(found.hits[0].uri, uri("src/main.rs"));
+    assert_eq!(found.hits[0].ranges, vec![4..8]);
+
+    let limited = run(index.search(&uri(""), &query, 1, &policy)).unwrap();
+    assert_eq!(limited.hits.len(), 1);
+    assert!(limited.more);
+
+    let everything = Query::new("", &crate::matching::DEFAULT_STYLES);
+    let first = run(index.search(&uri(""), &everything, 2, &policy)).unwrap();
+    assert_eq!(
+        first
+            .hits
+            .iter()
+            .map(|hit| hit.path.as_str())
+            .collect::<Vec<_>>(),
+        ["README.md", "docs/maintenance/notes.md"]
+    );
+    assert!(first.more);
+
+    // A directory outside every indexed one falls through.
+    let nested = fixture.index("src/");
+    run(nested.scan(policy.clone()));
+    assert!(run(nested.search(&uri(""), &query, 10, &policy)).is_none());
 }
 
 #[test]
