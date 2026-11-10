@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoints 1–4 ✅ approved; checkpoint 5 ✅ implemented, awaiting its review gate; checkpoint 6 planned. Item of the
+Status: 🚧 checkpoints 1–5 ✅ approved; checkpoint 6 planned. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -234,57 +234,17 @@ the directory's. Measured on the synthetic 100,000-file tree (release build,
 warm): resident memory 42 MB → 11 MB, index walk 6–8 ms → 14–16 ms, first scan
 unchanged.
 
-### 5. Native search ✅ implemented, awaiting its review gate
+### 5. Native search ✅
 
 Implemented: `files/search.rs` (`Ranker`, `SearchHit`, `SearchResults`),
-`FileIndex::search`, and `files::search` over the disk. Ranking is the tier
-(name match before path match), the style and score of the shared matcher,
-then the relative path; a bounded heap keeps `limit` hits and a count gives
-`more`. Hit ranges are byte ranges of `path`; the API converts them to UTF-16.
-The index test now compares both searches with an independent brute-force
-ranking of `walk` for six queries, on every covered directory at every step.
-Measured on the synthetic 100,000-file tree (release build, warm, limit 100,
-best of five): empty query 1.2 ms, one letter 3 ms, typical two-to-three
-character queries 6–7 ms, a query that matches nothing 6 ms, and a
-three-part query that matches everything 22 ms.
-
-Details:
-
-Deliverables:
-
-- `FileIndex::search(uri, query, limit, policy)` in `files/index.rs` returns
-  the hits and the `more` flag, or `None` to fall through, as the other
-  queries do. A hit carries the relative path, name, ranges, and kind, and the
-  URI is built for the returned hits only.
-- Ranking by tier, then the matcher's order, then path order; a bounded heap
-  of `limit` hits and a count of the rest.
-- `files::search` over the disk, which walks and matches the same way, for
-  directories the index does not cover. Both go through one ranking function.
-
-Validation:
-
-- A property test on generated trees: for random queries and limits, the
-  index's results equal the ranking of a brute-force match over every
-  visible file from `walk`, including `more` and the empty query, and the disk
-  search equals the index.
-- Focused tests for the tiers (a name match beats a directory match), a limit
-  smaller and larger than the number of matches, and results that follow a
-  batch of changes.
-- A one-off release measurement of `search` on the 100,000-file tree for
-  short, long, and non-matching queries, recorded here.
-
-Automated tests use small trees only.
-
-Review gate: the ranking and the search time against a keystroke budget.
-
-Implementation context:
-
-- `crates/knot-model/src/matching.rs` (`Query`, `Matcher::find`, `Found`) is
-  the matcher; the caller passes the styles from `completion.styles`. Look at
-  `Matcher::rank` for how the style order and score combine.
-- `files/equivalence.rs` and `files/index/tests.rs` are the models for the
-  property test.
-- Byte ranges convert with `matching::utf16_ranges`.
+`FileIndex::search`, and `files::search` over the disk, both ranking by tier
+(name match before path match), the shared matcher's style and score, then the
+relative path, with a bounded heap and a `more` count. Hit ranges are byte
+ranges of `path`. The index test compares both searches with an independent
+brute-force ranking. Measured on the synthetic 100,000-file tree (release
+build, warm, limit 100): 1.2 ms for the empty query, 3 ms for one letter, 6–7 ms
+for typical queries and for no match, 22 ms for a three-part query that matches
+everything.
 
 ### 6. Extension API, removal of `files.walk`, and docs
 
