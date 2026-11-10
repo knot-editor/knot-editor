@@ -1,6 +1,6 @@
 # Dock lanes
 
-Status: 🚧 checkpoints 1 to 3 done, 4 awaiting review. Checkpoint 5's icons come from the
+Status: 🚧 checkpoints 1 to 4 done. Checkpoint 5's icons come from the
 completed icon packs (D055).
 
 ## Goal
@@ -158,21 +158,12 @@ and `crates/knot-model/src/workbench/terminals.rs`. Choices made along the way:
   a cross-window drop does not.
 - Toggle Terminal publishes the layout, as the dock toggles do.
 
-### 4. 🔍 Maximize across areas
+### 4. ✅ Maximize across areas
 
-Implemented, awaiting review. Dock panes already maximized like any pane; the
-shell now remembers a dock's maximized pane while the dock is hidden
-(`ProductShell::maximized_pane`) and restores it when the dock is shown with
-that pane focused, by any route.
-
-- **Deliverables:** Toggle Maximize Pane for dock panes; maximize remembered
-  per dock across hide and restored on show by any route.
-- **Validation:** product tests in `src/app/product/tests/navigation.rs` for
-  maximizing a dock pane, hiding and reshowing it maximized via Toggle
-  Terminal and dock toggle, and maximize ending on other focus changes.
-- **Review gate:** try command maximizing a dock terminal and toggling it.
-- **Implementation context:** maximize state in `product/navigation.rs` and
-  its painting in `product/render.rs`.
+Done and approved. Dock panes maximize like any pane, and the shell remembers
+a dock's maximized pane while the dock is hidden, restoring it when the dock is
+shown with that pane focused (`ProductShell::maximized_pane`); see
+[workbench](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
 
 ### 5. ⏳ Tool stripes (blocked on the icon pack plan)
 
