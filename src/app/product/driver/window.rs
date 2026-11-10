@@ -136,6 +136,23 @@ impl TestWindow {
         cx.read(|cx| self.shell.read(cx).transient.is_some())
     }
 
+    /// The labels of the rows an open picker shows, best first; empty when
+    /// no picker is open.
+    pub fn picker_labels(&self, cx: &mut TestAppContext) -> Vec<String> {
+        cx.read(|cx| {
+            match self
+                .shell
+                .read(cx)
+                .transient
+                .as_ref()
+                .and_then(|active| active.surface.as_ref())
+            {
+                Some(TransientSurface::Picker(picker)) => picker.read(cx).visible_labels(),
+                _ => Vec::new(),
+            }
+        })
+    }
+
     /// Wait until a command opens a text input, failing if it raises a
     /// prompt instead.
     pub fn wait_for_input(&self, cx: &mut TestAppContext) {

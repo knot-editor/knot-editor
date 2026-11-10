@@ -1,6 +1,6 @@
 # D082 — Go to File
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 checkpoint 1 awaiting its review gate. Item of the
 [daily-driver plan](daily-driver.md#phase-4--files-and-workspace); promotes
 [D118](../roadmap.md) (query-driven picker) in its smallest form.
 
@@ -82,7 +82,7 @@ second one, joining the package (and renaming it if needed) when it lands.
 
 ## Checkpoints
 
-### 1. Query-driven picker and a basic Go to File on ⌘P
+### 1. Query-driven picker and a basic Go to File on ⌘P ✅ (review gate pending)
 
 Deliverables:
 

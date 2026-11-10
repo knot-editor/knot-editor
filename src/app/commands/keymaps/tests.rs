@@ -104,6 +104,7 @@ fn windows_and_linux_presets_use_control_shortcuts() {
         for (key, command_name) in [
             ("ctrl-shift-p", SHOW_COMMAND_PALETTE_COMMAND),
             ("ctrl-o", OPEN_COMMAND),
+            ("ctrl-p", presets::GO_TO_FILE_COMMAND),
             ("ctrl-s", SAVE_COMMAND),
             ("ctrl-shift-s", SAVE_AS_COMMAND),
             ("ctrl-c", COPY_COMMAND),

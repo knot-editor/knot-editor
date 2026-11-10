@@ -86,5 +86,5 @@ and `icons.pack` when the user runs Select Icon Pack.
 | `vim.enabled` | boolean | `false` | Read with the editor's `document`, `language`, and `view: "editor"`, so scoped values turn Vim off for a language or view | `@knot/vim` | Edit with Vim's modes and keys. |
 | `projects.rememberedLimit` | integer | `30` | Global | `@knot/projects` | How many unnamed projects to remember. The least recently opened are forgotten first; named and active projects, and projects holding unsaved text, are kept. |
 
-The other bundled packages (`go-to-line`, `language-*`, `status-bar`, `themes`) define no settings; some write native keys, as noted
+The other bundled packages (`go-to-file`, `go-to-line`, `language-*`, `status-bar`, `themes`) define no settings; some write native keys, as noted
 above.

@@ -101,6 +101,8 @@ function emptyState() {
     answers: new Map<keyof Answers, unknown[]>(),
     prompts: [] as Prompt[],
     pickerHighlights: [] as (string | null)[],
+    pickerQueries: [] as string[],
+    pickerRows: [] as (readonly Knot.PickerRow[])[],
     inputValues: [] as string[],
     inputMessages: [] as (string | null)[],
     inputFeedback: [] as (readonly Knot.InputCompletion[])[],
@@ -578,6 +580,17 @@ export function answer<K extends keyof Answers>(kind: K, result: Answers[K]) {
  * before it settles with its scripted answer. */
 export function highlight(...ids: (string | null)[]) {
   state.pickerHighlights.push(...ids);
+}
+
+/** Queries the next picker with `onQuery` reports after the empty one, in
+ * order, before it settles with its scripted answer. */
+export function query(...queries: string[]) {
+  state.pickerQueries.push(...queries);
+}
+
+/** The rows each `onQuery` call returned, in order. */
+export function pickerRows(): readonly (readonly Knot.PickerRow[])[] {
+  return state.pickerRows;
 }
 
 /** Values the next input reports to its `onChange` after its initial value,
@@ -1367,7 +1380,25 @@ export const api: KnotApi = {
       const document = state.documents.get(id);
       return document === undefined ? null : documentInfo(document);
     },
-    open: notFaked("documents.open"),
+    open: async (uri, options = {}) => {
+      maybeFail("documents.open");
+      const target = (options.target as { window?: Knot.WindowTarget } | undefined)?.window
+        ?? state.windows[0]?.target;
+      if (target === undefined) throw hostError("ContextUnavailable");
+      const window = fakeWindow(target);
+      let document = [...state.documents.values()].find((candidate) => candidate.resourceUri === uri);
+      document ??= state.documents.get(addDocument({ uri, text: state.files.get(uri) ?? "" }))!;
+      let tab = window.tabs.find((candidate) => candidate.document === document.id);
+      if (tab === undefined) {
+        present(target, document.id);
+        tab = window.tabs.at(-1)!;
+      }
+      window.selected = window.tabs.indexOf(tab);
+      return {
+        document: documentInfo(document),
+        presentation: windowInfo(window).panes[0]!.tabs[window.selected]!,
+      };
+    },
     createUntitled: notFaked("documents.createUntitled"),
     present: notFaked("documents.present"),
     setLanguage: async (id, language) => {
@@ -1763,6 +1794,11 @@ export const api: KnotApi = {
       const result = prompt("showPicker", options);
       const highlights = state.pickerHighlights;
       state.pickerHighlights = [];
+      const queries = ["", ...state.pickerQueries];
+      state.pickerQueries = [];
+      if (options.onQuery !== undefined) {
+        for (const query of queries) state.pickerRows.push(await options.onQuery(query));
+      }
       if (options.onHighlight !== undefined) {
         for (const id of highlights) await options.onHighlight(id);
       }

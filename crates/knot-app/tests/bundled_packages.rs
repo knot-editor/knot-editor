@@ -10,6 +10,7 @@ fn bundled_packages_load_with_product_discovery(cx: &mut TestAppContext) {
     let report = product.load_report(cx);
     for name in [
         "@knot/projects",
+        "@knot/go-to-file",
         "@knot/go-to-line",
         "@knot/language-markdown",
         "@knot/language-others",

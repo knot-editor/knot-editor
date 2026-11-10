@@ -1,0 +1,11 @@
+{
+  // Bundled Go to File command.
+  "name": "@knot/go-to-file",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "displayName": "Go to File",
+  "description": "Open a file of the window's roots by typing part of its path.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}
