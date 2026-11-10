@@ -292,6 +292,15 @@ if (typed.kind === "accepted") {
   const value: string = typed.value;
   void value;
 }
+await workbench.showInput({
+  title: "Word",
+  onChange: (value) => ({
+    message: value,
+    items: [{ label: "alpha", value: "alpha", detail: "word" }],
+  }),
+});
+// @ts-expect-error a completion needs the value that replaces the field
+await workbench.showInput({ title: "Bad", onChange: () => ({ items: [{ label: "alpha" }] }) });
 const confirmed: import("knot").ConfirmationResult = await workbench.showConfirmation({
   title: "Sure?", message: "detail", confirmLabel: "Yes", cancelLabel: "No",
 });

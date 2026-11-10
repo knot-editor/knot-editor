@@ -103,6 +103,7 @@ function emptyState() {
     pickerHighlights: [] as (string | null)[],
     inputValues: [] as string[],
     inputMessages: [] as (string | null)[],
+    inputFeedback: [] as (readonly Knot.InputCompletion[])[],
     messages: [] as Knot.MessageOptions[],
     clipboard: null as string | null,
     files: new Map<string, string>(),
@@ -584,6 +585,12 @@ export function type(...values: string[]) {
  * returned nothing. */
 export function inputMessages(): readonly (string | null)[] {
   return state.inputMessages;
+}
+
+/** The completions each `onChange` call returned, in order; empty when it
+ * returned none. */
+export function inputFeedback(): readonly (readonly Knot.InputCompletion[])[] {
+  return state.inputFeedback;
 }
 
 function prompt<K extends keyof Answers>(kind: K, options: unknown): Answers[K] {
@@ -1565,8 +1572,10 @@ export const api: KnotApi = {
       state.inputValues = [];
       if (options.onChange !== undefined) {
         for (const value of values) {
-          const message = await options.onChange(value);
-          state.inputMessages.push(typeof message === "string" ? message : null);
+          const result = await options.onChange(value);
+          const feedback = typeof result === "string" ? { message: result } : (result ?? {});
+          state.inputMessages.push(feedback.message ?? null);
+          state.inputFeedback.push(feedback.items ?? []);
         }
       }
       return result;

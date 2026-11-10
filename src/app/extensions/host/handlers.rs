@@ -997,8 +997,8 @@ pub(crate) async fn dispose_editor_contributions(
 
 use crate::app::extensions::semantics::{SemanticError, ViewPresentation};
 use knot_protocol::{
-    CompletionProviderRegistrationId, ConfirmationResult, FolderPickerResult, InputResult,
-    InputUpdate, PickerItem, PickerResult, PickerUpdate, ProviderIdentity, TreeAction,
+    CompletionProviderRegistrationId, ConfirmationResult, FolderPickerResult, InputCompletion,
+    InputResult, InputUpdate, PickerItem, PickerResult, PickerUpdate, ProviderIdentity, TreeAction,
     TreeProviderRegistrationId, ViewContentKind,
 };
 
@@ -1260,6 +1260,9 @@ pub(crate) struct TransientSession {
     changes: tokio::sync::watch::Receiver<Option<String>>,
     /// The input that shows the caller's messages.
     input: Option<WeakEntity<crate::app::transient::InputView>>,
+    /// The value the caller last pulled; feedback applies only while the
+    /// field still holds it.
+    delivered: Option<String>,
 }
 
 impl TransientSession {
@@ -1301,6 +1304,7 @@ pub(crate) async fn begin_picker(
         completion,
         changes,
         input: None,
+        delivered: None,
     };
     picker_update(next_change(&context, session).await?)
 }
@@ -1382,6 +1386,7 @@ async fn next_change(
         Next::Settled(Err(_)) => Err(TransientError::Cancelled),
         Next::Changed | Next::Closed => {
             let value = session.changes.borrow_and_update().clone();
+            session.delivered.clone_from(&value);
             let session = context.foreground(|host, _| host.keep_transient_session(session))?;
             Ok(Pulled::Changed { session, value })
         }
@@ -1455,6 +1460,7 @@ pub(crate) async fn begin_input(
         completion,
         changes,
         input: Some(input),
+        delivered: None,
     };
     input_update(next_change(&context, session).await?)
 }
@@ -1463,17 +1469,24 @@ pub(crate) async fn begin_input(
 pub(crate) struct InputSessionArguments {
     pub session: u64,
     pub message: Option<String>,
+    pub items: Vec<InputCompletion>,
 }
 impl HostArguments for InputSessionArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let items = serde_json::to_value(reader.command_arguments(4)?)
+            .ok()
+            .and_then(|value| serde_json::from_value::<Vec<InputCompletion>>(value).ok())
+            .ok_or(DecodeError::Type("invalid input completions"))?;
         Ok(Self {
             session: reader.integer(2)?,
             message: reader.optional_text(3, "input message must be text or null")?,
+            items,
         })
     }
 }
 
-/// Show the message the caller derived from the last value, then settle with
+/// Show the message and completions the caller derived from the last value,
+/// unless the field has changed since, then settle with
 /// the input's next value, or with its outcome once it settles. Only the
 /// latest unread value is kept.
 #[host_operation("nextInputEvent")]
@@ -1482,12 +1495,20 @@ pub(crate) async fn next_input_event(
     arguments: InputSessionArguments,
 ) -> Result<InputUpdate, TransientError> {
     let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
-    let InputSessionArguments { session, message } = arguments;
+    let InputSessionArguments {
+        session,
+        message,
+        items,
+    } = arguments;
     let session = context
         .foreground(|host, cx| {
             let session = host.take_transient_session(owner, session)?;
             if let Some(input) = session.input.as_ref().and_then(WeakEntity::upgrade) {
-                input.update(cx, |input, cx| input.set_message(message, cx));
+                input.update(cx, |input, cx| {
+                    if session.delivered.as_deref() == Some(input.text(cx).as_str()) {
+                        input.set_feedback(message, items, cx);
+                    }
+                });
             }
             Some(session)
         })?

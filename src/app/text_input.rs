@@ -59,7 +59,6 @@ impl TextInput {
         self.focus.clone()
     }
 
-    #[cfg(test)]
     pub(crate) fn set_text(&mut self, text: impl Into<String>, cx: &mut Context<Self>) {
         self.text = text.into();
         self.caret = self.text.len();

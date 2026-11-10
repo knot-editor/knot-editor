@@ -418,7 +418,11 @@ An input with `onChange` follows its typed value through the same session:
 `beginInput` and `nextInputEvent` pull `changed(session, value)` until the
 input is accepted or dismissed, and each pull carries the message the
 callback returned for the previous value, which the input shows as a muted
-line under its field.
+line under its field, with the completion list it may return. Feedback
+applies only while the field still holds the value last delivered to the
+caller; otherwise it is dropped and the next pull delivers the current value.
+Tab accepts the highlighted completion by replacing the whole field with its
+value, which runs `onChange` again; Enter always submits the field text.
 An input with a `prompt` shows that fixed text before its field, outside its
 value, and dismisses on Backspace in an empty field, as a command line does.
 Unloading the lifecycle drops its sessions with its transients.

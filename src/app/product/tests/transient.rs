@@ -571,6 +571,31 @@ fn input_message(
     input.read(cx).message().map(str::to_string)
 }
 
+fn completion_labels(
+    input: &Entity<crate::app::transient::InputView>,
+    cx: &gpui::App,
+) -> Vec<String> {
+    input
+        .read(cx)
+        .items()
+        .iter()
+        .map(|item| item.label.clone())
+        .collect()
+}
+
+fn press(
+    input: &Entity<crate::app::transient::InputView>,
+    key: &str,
+    cx: &mut TestAppContext,
+) -> bool {
+    let keystroke = crate::app::keys::Keystroke::parse(key).unwrap();
+    input.update(cx, |input, cx| input.key_down(&keystroke, cx))
+}
+
+fn field_text(input: &Entity<crate::app::transient::InputView>, cx: &gpui::App) -> String {
+    input.read(cx).text(cx)
+}
+
 const LIVE_INPUT_SOURCE: &str = r#"
 import { commands, workbench } from "knot";
 await commands.register("transient.live-input", async () => {
@@ -604,6 +629,39 @@ await commands.register("transient.failing-input", async () => {
   }
   await workbench.writeClipboardText("not rethrown");
 });
+const WORDS = ["alpha", "alps", "beta"];
+await commands.register("transient.completing-input", async () => {
+  const result = await workbench.showInput({
+    title: "Word",
+    onChange: (value) => ({
+      items: WORDS.filter((word) => word.startsWith(value)).map((word) => ({
+        label: word,
+        value: word,
+        detail: "word",
+      })),
+    }),
+  });
+  await workbench.writeClipboardText(JSON.stringify(result));
+});
+await commands.register("transient.malformed-input", async () => {
+  try {
+    await workbench.showInput({ title: "Word", onChange: () => ({ items: "nope" }) });
+  } catch (error) {
+    await workbench.writeClipboardText(`caught ${error.message}`);
+    return;
+  }
+  await workbench.writeClipboardText("not rethrown");
+});
+await commands.register("transient.stale-input", async () => {
+  await workbench.showInput({
+    title: "Word",
+    onChange: async (value) => {
+      await workbench.writeClipboardText(`waiting ${value}`);
+      while ((await workbench.readClipboardText()) !== `go ${value}`) {}
+      return { message: `for ${value}`, items: [{ label: value, value }] };
+    },
+  });
+});
 "#;
 
 fn start_live_input(
@@ -634,7 +692,7 @@ fn start_live_input(
             .read(cx)
             .catalog()
             .borrow()
-            .resolve("transient.failing-input")
+            .resolve("transient.stale-input")
             .is_ok()
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -731,4 +789,118 @@ fn live_input_settles_on_dismissal_and_unload(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.read(|cx| assert!(shell.read(cx).transient.is_none()));
     assert_ne!(wait_for_command(pending, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, _completion) =
+        start_live_input("transient.completing-input", cx);
+    let input = transient_input(&shell, cx);
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx).len() == 3);
+    cx.read(|cx| assert_eq!(input.read(cx).selected(), 0));
+    type_into(&input, &["al"], cx);
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["alpha", "alps"]);
+    type_into(&input, &["zz"], cx);
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx).is_empty());
+}
+
+#[gpui::test]
+fn the_completion_highlight_moves_and_wraps(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, _completion) =
+        start_live_input("transient.completing-input", cx);
+    let input = transient_input(&shell, cx);
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx).len() == 3);
+    let selected = |cx: &mut TestAppContext| cx.read(|cx| input.read(cx).selected());
+    assert!(press(&input, "up", cx));
+    assert_eq!(selected(cx), 2);
+    assert!(press(&input, "down", cx));
+    assert_eq!(selected(cx), 0);
+    assert!(press(&input, "ctrl-n", cx));
+    assert_eq!(selected(cx), 1);
+    assert!(press(&input, "ctrl-p", cx));
+    assert_eq!(selected(cx), 0);
+}
+
+#[gpui::test]
+fn tab_accepts_the_highlighted_completion_and_the_next_answer_replaces_the_list(
+    cx: &mut TestAppContext,
+) {
+    let (_host, _key, shell, _window, _completion) =
+        start_live_input("transient.completing-input", cx);
+    let input = transient_input(&shell, cx);
+    type_into(&input, &["a"], cx);
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["alpha", "alps"]);
+    assert!(press(&input, "down", cx));
+    assert!(press(&input, "tab", cx));
+    cx.read(|cx| assert_eq!(field_text(&input, cx), "alps"));
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["alps"]);
+    cx.read(|cx| assert_eq!(input.read(cx).selected(), 0));
+}
+
+#[gpui::test]
+fn enter_submits_the_typed_text_with_a_row_highlighted(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, completion) =
+        start_live_input("transient.completing-input", cx);
+    let input = transient_input(&shell, cx);
+    type_into(&input, &["al"], cx);
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["alpha", "alps"]);
+    assert!(press(&input, "down", cx));
+    assert!(press(&input, "enter", cx));
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+    assert_eq!(
+        clipboard(cx).as_deref(),
+        Some(r#"{"kind":"accepted","value":"al"}"#)
+    );
+}
+
+#[gpui::test]
+fn tab_without_a_list_does_nothing(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, _completion) =
+        start_live_input("transient.completing-input", cx);
+    let input = transient_input(&shell, cx);
+    type_into(&input, &["zz"], cx);
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx).is_empty());
+    assert!(press(&input, "tab", cx));
+    cx.read(|cx| assert_eq!(field_text(&input, cx), "zz"));
+}
+
+#[gpui::test]
+fn feedback_for_older_text_is_dropped(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, _completion) = start_live_input("transient.stale-input", cx);
+    let input = transient_input(&shell, cx);
+    wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting "));
+    type_into(&input, &["al"], cx);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("go ".into()));
+    // The answer for the empty field is delivered while the field says "al".
+    wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting al"));
+    cx.read(|cx| {
+        assert!(completion_labels(&input, cx).is_empty());
+        assert_eq!(input.read(cx).message(), None);
+    });
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("go al".into()));
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["al"]);
+    cx.read(|cx| assert_eq!(input.read(cx).message(), Some("for al")));
+}
+
+fn clipboard_is(cx: &gpui::App, expected: &str) -> bool {
+    cx.read_from_clipboard()
+        .and_then(|item| item.text())
+        .is_some_and(|text| text == expected)
+}
+
+#[gpui::test]
+fn a_malformed_completion_answer_rejects_the_call(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, completion) =
+        start_live_input("transient.malformed-input", cx);
+    let input = transient_input(&shell, cx);
+    cx.run_until_parked();
+    input.update(cx, |_, cx| {
+        cx.emit(crate::app::transient::InputEvent::Dismissed)
+    });
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+    assert!(
+        clipboard(cx)
+            .as_deref()
+            .is_some_and(|text| text.starts_with("caught "))
+    );
 }

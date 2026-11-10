@@ -13,13 +13,16 @@ use gpui::{prelude::*, *};
 
 use super::keys::Keystroke;
 
-use knot_protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId};
+use knot_protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId, InputCompletion};
 
 use super::picker::Picker;
 use super::text_input::{TextInput, TextInputEvent};
 use super::theme::{color, theme};
 
 const PANEL_WIDTH: f32 = 560.;
+const ROW_HEIGHT: f32 = 26.;
+/// Completion rows visible at once; the highlight scrolls into view.
+const MAX_VISIBLE_ROWS: usize = 8;
 
 /// Identity of the extension operation that owns one active interaction.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -68,6 +71,10 @@ pub(crate) struct InputView {
     input: Entity<TextInput>,
     /// A muted line under the field, set by the interaction's owner.
     message: Option<SharedString>,
+    /// The completions under the field, in the caller's order.
+    items: Vec<InputCompletion>,
+    selected: usize,
+    scroll: UniformListScrollHandle,
     _changes: Option<Subscription>,
 }
 
@@ -100,6 +107,9 @@ impl InputView {
             prompt: prompt.map(Into::into),
             input,
             message: None,
+            items: Vec::new(),
+            selected: 0,
+            scroll: UniformListScrollHandle::new(),
             _changes: subscription,
         }
     }
@@ -108,9 +118,54 @@ impl InputView {
         self.input.read(cx).focus_handle()
     }
 
-    pub(crate) fn set_message(&mut self, message: Option<String>, cx: &mut Context<Self>) {
+    /// The current field text.
+    pub(crate) fn text(&self, cx: &App) -> String {
+        self.input.read(cx).text().to_string()
+    }
+
+    /// Show the caller's message and completions, highlighting the first row.
+    pub(crate) fn set_feedback(
+        &mut self,
+        message: Option<String>,
+        items: Vec<InputCompletion>,
+        cx: &mut Context<Self>,
+    ) {
         self.message = message.map(Into::into);
+        self.items = items;
+        self.selected = 0;
+        self.scroll.scroll_to_item(0, ScrollStrategy::Top);
         cx.notify();
+    }
+
+    fn move_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let count = self.items.len() as isize;
+        if count == 0 {
+            return;
+        }
+        self.selected = (self.selected as isize + delta).rem_euclid(count) as usize;
+        self.scroll
+            .scroll_to_item(self.selected, ScrollStrategy::Nearest);
+        cx.notify();
+    }
+
+    /// Replace the field with the highlighted completion's value. The field
+    /// reports the change, so the caller answers with the next list.
+    fn accept_completion(&mut self, cx: &mut Context<Self>) {
+        let Some(item) = self.items.get(self.selected) else {
+            return;
+        };
+        let value = item.value.clone();
+        self.input.update(cx, |input, cx| input.set_text(value, cx));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn items(&self) -> &[InputCompletion] {
+        &self.items
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selected(&self) -> usize {
+        self.selected
     }
 
     #[cfg(test)]
@@ -141,7 +196,17 @@ impl InputView {
         {
             return true;
         }
-        match keystroke.key.to_lowercase().as_str() {
+        let key = keystroke.key.to_lowercase();
+        let control = keystroke.modifiers.control
+            && !keystroke.modifiers.platform
+            && !keystroke.modifiers.alt
+            && !keystroke.modifiers.shift;
+        match key.as_str() {
+            "up" if plain => self.move_selection(-1, cx),
+            "down" if plain => self.move_selection(1, cx),
+            "p" if control => self.move_selection(-1, cx),
+            "n" if control => self.move_selection(1, cx),
+            "tab" if plain => self.accept_completion(cx),
             "escape" => cx.emit(InputEvent::Dismissed),
             "enter" => {
                 let value = self.input.read(cx).text().to_string();
@@ -163,6 +228,48 @@ impl EventEmitter<InputEvent> for InputView {}
 
 impl Render for InputView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let zoom = crate::app::zoom::factor(cx);
+        let rows = self.items.len();
+        let entity = cx.entity();
+        let list = (rows > 0).then(|| {
+            uniform_list("input-completions", rows, move |range, _, cx| {
+                let view = entity.read(cx);
+                let theme = theme(cx);
+                let muted = theme.paint_color(color::TEXT_MUTED);
+                range
+                    .map(|index| {
+                        let item = &view.items[index];
+                        let selected = index == view.selected;
+                        div()
+                            .id(("input-completion", index))
+                            .h(px(ROW_HEIGHT * zoom))
+                            .px_3()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_3()
+                            .overflow_hidden()
+                            .when(selected, |row| {
+                                row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                                    .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
+                            })
+                            .child(div().flex_shrink_0().child(item.label.clone()))
+                            .when_some(item.detail.clone(), |row, detail| {
+                                row.child(
+                                    div()
+                                        .flex_1()
+                                        .truncate()
+                                        .text_sm()
+                                        .text_color(muted)
+                                        .child(detail),
+                                )
+                            })
+                    })
+                    .collect()
+            })
+            .track_scroll(&self.scroll)
+            .h(px(rows.min(MAX_VISIBLE_ROWS) as f32 * ROW_HEIGHT * zoom))
+        });
         div()
             .id("extension-input")
             .w(crate::app::zoom::rems(PANEL_WIDTH))
@@ -207,5 +314,6 @@ impl Render for InputView {
                     .text_color(theme(cx).paint_color(color::TEXT_MUTED))
                     .child(message)
             }))
+            .children(list)
     }
 }

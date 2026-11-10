@@ -1,6 +1,6 @@
 # D143 — Input completion
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 approved; checkpoint 1 awaits its review gate. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker).
 
 ## Goal
@@ -70,7 +70,7 @@ which completes command names and `:set` options.
 
 ## Checkpoints
 
-### 1. Completions in the input API
+### 1. Completions in the input API ✅
 
 Deliverables:
 - `InputView` holds the items and the highlight, renders the list under the

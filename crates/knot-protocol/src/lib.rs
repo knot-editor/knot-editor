@@ -440,6 +440,17 @@ pub enum PickerUpdate {
     Dismissed,
 }
 
+/// One completion offered under a text input: accepting it replaces the
+/// whole field with `value`.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputCompletion {
+    pub label: String,
+    pub value: String,
+    #[serde(default)]
+    pub detail: Option<String>,
+}
+
 /// The next change of a followed text input, or its outcome.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]

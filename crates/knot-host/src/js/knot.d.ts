@@ -1489,6 +1489,21 @@ declare module "knot" {
      */
     readonly onHighlight?: (id: string | null) => void | Promise<void>;
   }
+  /** One completion listed under an input. */
+  export interface InputCompletion {
+    readonly label: string;
+    /** The whole new field text when the completion is accepted. */
+    readonly value: string;
+    /** Muted text after the label. */
+    readonly detail?: string;
+  }
+  /** What an input's `onChange` may answer with besides a plain message. */
+  export interface InputFeedback {
+    /** The muted message line; omitted or null clears it. */
+    readonly message?: string | null;
+    /** Completions in display order; omitted or empty hides the list. */
+    readonly items?: readonly InputCompletion[];
+  }
   export interface InputOptions extends TransientTargetOptions {
     readonly title: string;
     /** Initial text; defaults to empty. */
@@ -1503,11 +1518,18 @@ declare module "knot" {
      * Called with the field's text, first with the initial value and then
      * whenever it changes. Calls are serial; while one runs, later changes
      * collapse into the latest. A returned string shows as a muted message
-     * line under the field; null or nothing clears it. A throw, or a return
-     * value of another type, stops further calls and is rethrown once the
-     * input settles.
+     * line under the field; null or nothing clears it. An {@link InputFeedback}
+     * object carries a message and a completion list. The list shows under
+     * the field with its first row highlighted; Up, Down, Ctrl-N and Ctrl-P
+     * move the highlight, and Tab replaces the field with its `value`, which
+     * calls `onChange` again. Enter always submits the field as shown.
+     * Feedback applies only while the field still holds the value it answers;
+     * otherwise it is dropped. A throw, or a return value of another shape,
+     * stops further calls and is rethrown once the input settles.
      */
-    readonly onChange?: (value: string) => string | null | void | Promise<string | null | void>;
+    readonly onChange?: (
+      value: string,
+    ) => string | InputFeedback | null | void | Promise<string | InputFeedback | null | void>;
   }
   export interface ConfirmationOptions extends TransientTargetOptions {
     readonly title: string;

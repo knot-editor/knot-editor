@@ -752,6 +752,26 @@ const named = await workbench.showInput({
 });
 ```
 
+An `onChange` may instead return `{ message?, items? }`. Each item is
+`{ label, value, detail? }`, and `value` is the **whole new field text**; you
+do the filtering and ordering, and the list shows in your order under the
+field with its first row highlighted. Up, Down, Ctrl-N, and Ctrl-P move the
+highlight, and Tab replaces the field with the row's `value`, which calls
+`onChange` again with the new text. Enter always submits the field as shown.
+An empty or missing list hides it. Feedback applies only while the field still
+holds the value it answers; otherwise it is dropped, so Tab never accepts a
+completion for older text:
+
+```js
+const words = ["alpha", "alps", "beta"];
+await workbench.showInput({
+  title: "Word",
+  onChange: (value) => ({
+    items: words.filter((word) => word.startsWith(value)).map((word) => ({ label: word, value: word })),
+  }),
+});
+```
+
 Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. A `prompt` such as `":"` shows before the field, outside its value, and makes Backspace on an empty field dismiss the input, as a command line does. Confirmation
 and message use the native platform prompt.
 

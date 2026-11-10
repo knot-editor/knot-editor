@@ -594,6 +594,15 @@ function pickerItem(value) {
   };
 }
 
+function inputCompletion(value) {
+  record(value, "input completion must be an object");
+  return {
+    label: string(value.label, "input completion label must be text"),
+    value: string(value.value, "input completion value must be text"),
+    detail: optionalText(value.detail),
+  };
+}
+
 function transientTarget(options) {
   record(options, "transient options are required");
   return optionalWindowAuthority(options.target);
@@ -640,21 +649,26 @@ export async function showInput(options) {
     throw new TypeError("input onChange must be a function");
   }
   // Values are pulled inside this turn, as picker highlights are, and each
-  // returned message travels back with the next pull.
+  // returned message and completions travel back with the next pull.
   let failure = null;
   let update = await request("beginInput", title, value, prompt, target);
   while (update.kind === "changed") {
     let message = null;
+    let items = [];
     if (failure === null) {
       try {
         const result = await onChange(update.value);
         if (typeof result === "string") message = result;
-        else if (result != null) throw new TypeError("input onChange must return text or nothing");
+        else if (result != null) {
+          record(result, "input onChange must return text, an object, or nothing");
+          message = optionalText(result.message);
+          if (result.items != null) items = arrayItems(result.items, inputCompletion);
+        }
       } catch (error) {
         failure = { error };
       }
     }
-    update = await request("nextInputEvent", update.session, message);
+    update = await request("nextInputEvent", update.session, message, items);
   }
   if (failure !== null) throw failure.error;
   return update.kind === "accepted"
