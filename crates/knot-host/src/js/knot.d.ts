@@ -753,7 +753,10 @@ declare module "knot" {
   /** Reads, lists, and stats stored resources through the registered resource
    * providers. Any URI with a registered provider is readable, independently of
    * workspace roots. These operations see only what is stored: an open
-   * document's unsaved edits are ignored. */
+   * document's unsaved edits are ignored. `list`, `walk`, and `isIgnored`
+   * under an open workspace root answer from an in-memory index that follows
+   * disk changes after the file watch's coalescing delay (about 100 ms); the
+   * answers are otherwise the same as reading the disk. */
   export const files: Readonly<{
     /** Reads the stored file and decodes it as UTF-8, dropping a leading byte
      * order mark. It never reads an open document's buffer, so unsaved edits are

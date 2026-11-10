@@ -113,13 +113,42 @@ workspace roots; project-local overrides wait for D089.
 Reference: [URI providers](../architecture/documents-and-persistence.md#uri-providers),
 [settings](../settings.md).
 
+## Workspace file index
+
+Each workspace root has a native in-memory tree, watched recursively, that
+answers `files.list`, `files.walk`, and `files.isIgnored`; the API is
+unchanged. Go to File walks a root of about 100k files per invocation, and a
+disk walk costs about 0.12 s on a synthetic 100,000-file tree (release build,
+Apple Silicon, warm), against 6 to 8 ms from the index. The first scan costs
+the same as a disk walk, and the tree adds about 40 MB at that size. No kernel
+checkout was available locally.
+
+Rejected:
+
+- An index per window: it scans and watches the same folder twice, so indexes
+  are shared by root URI and leased.
+- `list` from disk with only `walk` from the index: freshness after Knot's own
+  mutations comes from updating the index, not from bypassing it.
+- A disk fallback or partial answers while the first scan runs: a disk walk
+  doubles the I/O, and partial answers break the API's completeness guarantee.
+  Queries wait instead, which is never slower than walking.
+- Scanning ignored directories lazily, as Zed does for its project panel:
+  nothing needs their contents, because walks skip them and listings inside
+  them read the disk.
+- Reusing an ancestor's index for a nested root: nested roots are rare.
+- Snapshots saved between sessions, as JetBrains does: a warm scan of the
+  kernel takes a quarter of a second.
+- Event kinds from the watcher: re-listing the parent directory says what
+  happened, and notify's kinds are unreliable on macOS.
+
+Reference: [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index).
+
 ## File watching
 
-Documents and extensions request watches; nothing watches workspace roots by
-default. VS Code and Zed watch roots because they keep a tree snapshot to
-update, which the workspace file index (D173) adds as one more recursive
-watcher. Until then a root watch would cost OS watches and wake-ups nobody
-reads.
+Documents and extensions request watches. Only the workspace file index
+watches roots, because it keeps a tree to update (see
+[workspace file index](#workspace-file-index)); a root watch would otherwise
+cost OS watches and wake-ups nobody reads.
 
 Change detection compares the provider version, then the content, instead of
 ignoring events for a time window after Knot's own save: a window drops a real

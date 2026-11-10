@@ -156,8 +156,11 @@ touches.
   one native, setting-driven policy for hidden and ignored entries; one
   classifier for walks rather than `rg --files` or a `WalkBuilder` fast path;
   no rule registration.
+- [Workspace file index](decisions/documents-and-persistence.md#workspace-file-index):
+  a native tree per root shared by root URI; queries wait for the first scan;
+  no disk fallback, lazy ignored directories, or saved snapshots.
 - [File watching](decisions/documents-and-persistence.md#file-watching):
-  watches requested by documents and extensions, not roots; version comparison
+  watches requested by documents and extensions, plus the file index's root watch; version comparison
   rather than a save window; a line-diff reload; a prompt on focus.
 - [Unsaved-document recovery store](decisions/documents-and-persistence.md#unsaved-document-recovery-store):
   an application-owned database independent of extension health.

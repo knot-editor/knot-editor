@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoints 1 and 2 ✅ approved; checkpoint 3 in progress. Item of the
+Status: 🚧 checkpoints 1 and 2 ✅ approved; checkpoint 3 ✅ implemented, awaiting its review gate. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -181,7 +181,18 @@ ignore-file, `.git`, and exclude edits and policy flips. Note: with
 nearest directory's ancestry, so the index answers only through directories
 the disk judges visible and falls through otherwise.
 
-### 3. Application wiring, measurements, and docs
+### 3. Application wiring, measurements, and docs ✅ implemented, awaiting its review gate
+
+Implemented: `src/app/file_index.rs` (`ApplicationFileIndex`, `FileIndexLease`),
+leases refreshed in `replace_workspace_roots`, the three handlers routed through
+the index, product tests in `product/tests/files.rs`, docs (architecture,
+decision, `knot.d.ts`), and `Try:` commands in the personal `post-init.js`.
+
+Measurements (release build, Apple Silicon, warm, synthetic tree of 100,000
+files in 2,100 directories; no kernel checkout or monorepo was available
+locally): disk walk 117–136 ms; first scan 115 ms; walk from the index 6–8 ms;
+index resident memory about 42 MB. End-to-end delivery to JavaScript is for the
+user to read with "Try: Walk Roots" on a large folder.
 
 Deliverables:
 

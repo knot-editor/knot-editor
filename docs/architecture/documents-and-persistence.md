@@ -114,7 +114,31 @@ listener.
 
 `files.watch` subscriptions are owned by the calling lifecycle: disposal and
 unload or restart drop them, which releases the provider watch once no other
-subscription uses it. Nothing watches workspace roots by default.
+subscription uses it.
+
+### Workspace file index
+
+Every workspace root has a `knot-model` `FileIndex`: an in-memory tree of its
+visible and ignored entries, built with the same classifier as the disk
+`files::list`, `walk`, and `is_ignored`, which it must agree with. Hidden
+entries are not stored, and the contents of an ignored directory are never
+scanned. An application global holds one index per root URI, shared by every
+window that shows the root. Each product shell leases its roots whenever they
+change, and the last lease to drop releases the index and its recursive watch.
+A root whose provider cannot be watched is left unindexed.
+
+The index scans in the background, and queries wait for that first scan. It
+records the `IgnorePolicy` it was built with; a query with another policy
+scans again, so a settings change needs no hook. Watch batches are applied in
+order after the scan: the indexed parents of changed URIs are listed again and
+diffed against the stored entries, a batch that names the root scans again, and
+a changed `.gitignore`, `.ignore`, `.git`, or `.git/info/exclude` scans the
+affected subtree again. Changes to the global Git excludes file wait for the
+next full scan.
+
+`list`, `walk`, and `is_ignored` return nothing when the index cannot answer,
+for a URI outside every root, below an ignored directory, or through a symlink,
+and the handlers then read the disk. A nested root has its own index.
 
 Product documents use unscoped providers so user-selected resources need not lie
 inside workspace roots. Scoped local providers remain trusted application
