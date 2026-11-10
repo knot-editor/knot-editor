@@ -1,6 +1,6 @@
 # D081 — Workspace ignore rules and file enumeration
 
-Status: 🚧 approved, not started. Item of the [daily-driver plan](daily-driver.md).
+Status: 🚧 checkpoint 1 done; checkpoints 2 and 3 not started. Item of the [daily-driver plan](daily-driver.md).
 
 ## Outcome
 
@@ -67,53 +67,13 @@ Evaluation is native, so watching, walking, and listing never call JavaScript.
 
 ### 1. Ignore policy, settings, and annotated listings ✅
 
-Implemented; awaiting the review gate.
-
-Deliverables:
-
-- ✅ The three settings with definitions and `docs/settings.md` entries.
-- ✅ A native policy built from the settings and evaluated with the `ignore` crate.
-- ✅ `files.list` omits hidden entries and returns `ignored`; `files.isIgnored`.
-- ✅ `knot.d.ts`, the extension guide, and the URI providers architecture section
-  describe the behavior.
-
-Scope decision: the policy lives in `crates/knot-model/src/files/ignore.rs` and
-reads ignore files through the provider's own `read` and `stat` (a `Classifier`
-over `GitignoreBuilder`), so it needs no new `FileSystemProvider` methods and the
-memory and local providers share one implementation. Checkpoint 2 decides
-whether the walk uses the same classifier or `WalkBuilder` for local speed.
-
-Validation: `knot-model` tests over a temporary local tree covering hidden
-names at any depth, nested `.gitignore` files and negation, `.ignore`,
-`.git/info/exclude`, `files.ignored`, and `respectGitignore: false`; a host
-handler test that a setting change is seen by the next listing; extension-level
-test through the fake host or a bundled package test. `just check`.
-
-Review gate: the defaults and `list` shape feel right for the explorer.
-
-**Implementation context**:
-
-- Add the `ignore` crate to `knot-model`.
-- Setting keys and definitions beside `FILES_TRIM_TRAILING_WHITESPACE` in
-  `crates/knot-model/src/settings.rs`.
-- Policy in a new `crates/knot-model/src/files/ignore.rs` (or beside
-  `files.rs`): a plain `IgnorePolicy { hidden, ignored, respect_gitignore }`
-  passed into `files::list`, `files::walk`, and `files::is_ignored`. Handlers
-  resolve the settings on the foreground and pass the policy in, as
-  `list_files` in `src/app/extensions/host/handlers.rs` already resolves
-  providers.
-- Ignore evaluation is path-based, so the local provider
-  (`crates/knot-model/src/filesystem/local.rs`) implements it with
-  `ignore::WalkBuilder` (`hidden(false)`, parents and Git excludes on, hidden
-  and `files.ignored` patterns applied as an override or `filter_entry`). Add
-  the walk to `FileSystemProvider` in `filesystem/mod.rs`; the memory provider
-  implements it with `ignore::gitignore::GitignoreBuilder` over its stored
-  `.gitignore` files so model tests stay fast. Listing classification can reuse
-  a depth-one walk so parent ignore files apply.
-- Protocol: add `ignored` to the file entry type in `crates/knot-protocol`, the
-  new operations beside the existing files operations, `knot.d.ts`
-  (`export const files`), and `docs/schemas/knot.schema.json` if settings are
-  listed there.
+Approved. The policy, the three settings, the annotated `files.list`, and
+`files.isIgnored` are in place; see [settings](../settings.md), the
+[URI providers](../architecture/documents-and-persistence.md#uri-providers)
+section, and `crates/knot-model/src/files/ignore.rs`. The policy reads ignore
+files through each provider's own `read` and `stat` (a classifier over
+`GitignoreBuilder`) rather than new `FileSystemProvider` methods; checkpoint 2
+decides whether the walk reuses it or uses `WalkBuilder` for local speed.
 
 ### 2. `files.walk` enumeration
 
