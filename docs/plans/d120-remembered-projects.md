@@ -82,7 +82,7 @@ the same purpose. `projects.create` stays until checkpoint 3, because it is the
 only way to make a project before creation is automatic; it accepts a blank
 name and moves out with that checkpoint.
 
-### 3. Automatic creation and pruning
+### 3. Automatic creation and pruning 🚧
 
 - Deliverables: tracking creates and binds an unnamed active project for an
   unbound window with an unknown non-empty root set, after launch and for
