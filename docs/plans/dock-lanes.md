@@ -1,6 +1,6 @@
 # Dock lanes
 
-Status: 🚧 checkpoints 1 to 4 done; checkpoint 5 awaits its review gate.
+Status: 🚧 checkpoints 1 to 5 done.
 
 ## Goal
 
@@ -167,31 +167,22 @@ a dock's maximized pane while the dock is hidden, restoring it when the dock is
 shown with that pane focused (`ProductShell::maximized_pane`); see
 [workbench](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
 
-### 5. 🔎 Tool stripes (implemented, awaiting review)
+### 5. ✅ Tool stripes
 
-- **Deliverables:** left and right stripes with buttons per home, highlight
-  for visible tools, bottom-dock group on the left stripe, terminal button,
-  click to toggle, drag between stripes to rehome, `workbench.toolStripes`
-  setting, initial-letter fallback.
-- **Validation:** product tests for stripe contents by home and visibility,
-  click toggling, and rehoming by stripe drag; settings test for the switch.
-- **Review gate:** try the stripes with explorer, contributed tools, and
-  terminals.
-- **Implemented ✅:** `Workbench::stripes` groups buttons by home
-  (`crates/knot-model/src/workbench/stripes.rs`); `product/stripes.rs` renders
-  them, with tooltips, and the `workbench.toolStripes` setting turns them off.
-  Icons are the names `tool.<tool ID>` and `terminal`, with native defaults for
-  the explorer and terminal. Choices: the drag uses gpui's in-window drag and
-  drop rather than the cross-window tab coordinator, since a button never
-  leaves its window; moving the terminal button (drag or menu) moves the dock
-  terminals to that dock and makes it the terminal home; a hidden tool dragged to a stripe stays hidden; replacing applies to
-  `toggle_tool` (stripes, Toggle Tool, Toggle Explorer) only, not to
-  programmatic shows or dock toggles, and not to a tool already showing.
-- **Review:** `try.stripe-tools` in the personal `post-init.js`.
-- **Implementation context:** rendering beside the workbench in
-  `product/render.rs`; drag through `product/tab_drag.rs`'s coordinator;
-  setting registered with the native settings and listed in
-  `docs/settings.md`; icon lookup per the icon pack plan.
+Done and approved. Stripes list a button per tool by home dock plus the
+terminal button, toggle on click, and rehome by drag or the button's right-click
+menu (`Workbench::stripes`, `product/stripes.rs`); see
+[workbench](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure)
+and [icons](../architecture/semantic-ui.md#icons). Choices made along the way:
+
+- Showing a hidden tool from a toggle replaces the other tools in its pane,
+  as in IntelliJ, VS Code, and Zed, whose switchers never stack tabs; the menu's
+  Show Beside splits it into a pane of its own. Terminals, tools already
+  showing, programmatic shows, and dock toggles keep adding tabs.
+- Moving the terminal button moves the dock terminals with it; the terminal
+  home defaults to the bottom dock (`DEFAULT_TERMINAL_HOME`).
+- The drag uses gpui's in-window drag and drop, not the cross-window tab
+  coordinator, since a button never leaves its window.
 
 ### 6. ⏳ Documentation and completion
 
@@ -200,7 +191,7 @@ shown with that pane focused (`ProductShell::maximized_pane`); see
   `docs/architecture.md` ownership sentences describing areas; decisions in
   `docs/decisions/workbench-and-lifecycle.md` replacing "tools are tabs in dock
   groups of the same split tree" and the `ctrl-`` rationale, recording rejected
-  free-form docks, nested terminal panel, floating tools, and the maximize
+  free-form docks, tabbed stripe switching, nested terminal panel, floating tools, and the maximize
   preserve rule, with the index updated; `docs/extension-api.md` placement and
   terminal sections; roadmap: add the overlay mode as deferred (D158 removal
   and the D061 rewording landed with checkpoint 1); remove this plan.
