@@ -11,6 +11,7 @@ directories = { workspace = true }
 jsonc-parser = { workspace = true }
 knot-core = { path = "../knot-core" }
 knot-protocol = { path = "../knot-protocol" }
+nucleo-matcher = { workspace = true }
 percent-encoding = { workspace = true }
 rusqlite = { workspace = true }
 semver = { workspace = true }

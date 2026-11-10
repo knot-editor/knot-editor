@@ -96,7 +96,6 @@ url = { workspace = true }
 uuid = { workspace = true }
 v8 = { workspace = true }
 rusqlite = { workspace = true }
-nucleo-matcher = { workspace = true }
 pollster = { workspace = true, optional = true }
 
 [features]

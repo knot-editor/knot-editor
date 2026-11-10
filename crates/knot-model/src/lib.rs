@@ -6,7 +6,7 @@
 //! - Text: [`buffer`], [`editor`], [`history`], [`indentation`], [`editing`],
 //!   and [`syntax`].
 //! - Resources: [`resource`], [`filesystem`], [`open`], and [`workspace`].
-//! - Input: [`keys`], [`commands`], and [`completion`].
+//! - Input: [`keys`], [`commands`], [`completion`], and [`matching`].
 //! - Presentation values: [`style`] and [`theme`].
 //! - Packages: [`extensions`].
 //! - Layout: [`workbench`].
@@ -26,6 +26,7 @@ pub mod icons;
 pub mod indentation;
 pub mod keys;
 pub mod languages;
+pub mod matching;
 pub mod observation;
 pub mod open;
 pub mod resource;

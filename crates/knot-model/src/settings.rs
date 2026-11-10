@@ -65,6 +65,10 @@ pub const STATUS_BAR_VISIBLE: &str = "statusBar.visible";
 /// IDs of status items the bar skips.
 pub const STATUS_BAR_HIDDEN_ITEMS: &str = "statusBar.hiddenItems";
 
+/// The match styles the picker, input completion, and `completion.match` use,
+/// in order: `prefix`, `substring`, `flex`, or `orderless`.
+pub const COMPLETION_STYLES: &str = "completion.styles";
+
 /// The value type a definition accepts.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SettingType {
@@ -333,6 +337,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Strings,
             default: Value::Array(Vec::new()),
             description: "IDs of status bar items the bar skips; hidden items keep running".into(),
+        },
+        SettingDefinition {
+            key: COMPLETION_STYLES.into(),
+            value_type: SettingType::Strings,
+            default: Value::Array(vec!["flex".into()]),
+            description: "How pickers and completion lists match, in order: prefix, substring, flex, or orderless".into(),
         },
     ]
 }

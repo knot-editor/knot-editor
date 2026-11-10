@@ -68,6 +68,12 @@ and `icons.pack` when the user runs Select Icon Pack.
 | `statusBar.visible` | boolean | `true` | Global | native | Show the status bar below the workbench. |
 | `statusBar.hiddenItems` | strings | `[]` | Global | native | IDs of status bar items the bar skips; hidden items keep running. |
 
+## Completion
+
+| Key | Type | Default | Scope | Owner | Description |
+| --- | --- | --- | --- | --- | --- |
+| `completion.styles` | strings | `["flex"]` | Global; unknown names are ignored, and a list with none selects `flex` | native | How pickers and completion lists match, in order of preference: `"prefix"`, `"substring"`, `"flex"` (fuzzy), or `"orderless"` (space-separated parts in any order). A candidate matches if any style matches it; earlier styles rank first. |
+
 ## Bundled packages
 
 | Key | Type | Default | Scope | Owner | Description |
