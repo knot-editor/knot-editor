@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoints 1 and 2 ✅ approved; checkpoint 3 ✅ implemented, awaiting its review gate; checkpoints 4–6 planned. Item of the
+Status: 🚧 checkpoints 1 and 2 ✅ approved; checkpoints 1–3 ✅ approved; checkpoints 4–6 planned. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -215,76 +215,16 @@ ignore-file, `.git`, and exclude edits and policy flips. Note: with
 nearest directory's ancestry, so the index answers only through directories
 the disk judges visible and falls through otherwise.
 
-### 3. Application wiring, measurements, and docs ✅ implemented, awaiting its review gate
+### 3. Application wiring, measurements, and docs ✅
 
-Implemented: `src/app/file_index.rs` (`ApplicationFileIndex`, `FileIndexLease`),
-leases refreshed in `replace_workspace_roots`, the three handlers routed through
-the index, product tests in `product/tests/files.rs`, docs (architecture,
-decision, `knot.d.ts`), and `Try:` commands in the personal `post-init.js`.
-
-Measurements (release build, Apple Silicon, warm, synthetic tree of 100,000
-files in 2,100 directories; no kernel checkout or monorepo was available
-locally): disk walk 117–136 ms; first scan 115 ms; walk from the index 6–8 ms;
-index resident memory about 42 MB. End-to-end delivery to JavaScript is for the
-user to read with "Try: Walk Roots" on a large folder.
-
-Deliverables:
-
-- `src/app/file_index.rs`: an `ApplicationFileIndex` global over the
-  `knot-model` index registry, with per-root leases.
-- The product shell holds leases for its roots, refreshed whenever the roots
-  change and dropped with the shell.
-- Each index subscribes to its root through `ApplicationFileWatches`.
-- The `listFiles`, `walkFiles`, and `isFileIgnored` handlers route through the
-  index, which falls through to disk outside indexed roots.
-- Measurements on a kernel checkout and, if one is available locally, a
-  larger monorepo. Record them in the plan and keep the essential ones in the
-  decision. These are one-off manual measurements with a release build, never
-  tests:
-  - first scan time;
-  - resident memory of the index;
-  - `walk` time from the index;
-  - end-to-end time for `files.walk` to deliver all entries to JavaScript.
-- Docs:
-  - architecture: the index in the URI providers and watching sections of
-    `docs/architecture/documents-and-persistence.md`, and ownership in
-    `docs/architecture.md`;
-  - decisions: a workspace file index entry in
-    `docs/decisions/documents-and-persistence.md`, an update to "File
-    watching", which says nothing watches roots, and the index line in
-    `docs/decisions.md`;
-  - the `files` documentation in `knot.d.ts`, if any guarantee changes.
-- A personal-config `post-init.js` with `Try:` commands that time a walk of
-  each root, list a directory, and report a file created outside Knot.
-
-Validation:
-
-- Product tests in `src/app/product/tests/files.rs` that exercise `files.list`,
-  `files.walk`, and `files.isIgnored` through an extension:
-  - over an indexed root;
-  - after a change on disk, once the watch delivers it;
-  - after a policy setting change;
-  - outside the roots.
-- A test that removing a root, or closing its last window, releases the index
-  and its provider watch (`WatchRegistry::provider_watch_count`).
-- `just check`.
-
-Review gate: the measurements against the tens-of-milliseconds target, and
-the `Try:` commands in the real app.
-
-Implementation context:
-
-- Root changes go through `replace_workspace_roots` in
-  `src/app/product/tools.rs`, which also covers `install_workspace`. The
-  shell's `workspace: WorkspaceState` field is in `src/app/product.rs`.
-- Follow `src/app/file_watch.rs` (`ApplicationFileWatches`) for the global
-  pattern, and register the module in `src/app/mod.rs`.
-- The handlers are at `listFiles`, `walkFiles`, and `isFileIgnored` in
-  `src/app/extensions/host/handlers.rs`. The policy comes from
-  `settings::files_ignore_policy`, and providers from
-  `ProductShell::filesystems`.
-- Nothing durable is written, so nothing is added to
-  `extensions::host::quit_after_storage`.
+Implemented in `src/app/file_index.rs` (`ApplicationFileIndex`,
+`FileIndexLease`): leases refreshed in `replace_workspace_roots`, the
+`listFiles`, `walkFiles`, and `isFileIgnored` handlers routed through the
+index, and a root whose provider cannot be watched left unindexed. Measured on
+a synthetic 100,000-file tree (no kernel checkout was available): disk walk
+117–136 ms, first scan 115 ms, index walk 6–8 ms, about 42 MB resident. Docs
+are in the [file index architecture](../architecture/documents-and-persistence.md#workspace-file-index)
+and its decision.
 
 ### 4. Compact entries
 
