@@ -328,7 +328,7 @@ to be rebuilt later:
   - Shipped ([architecture](../architecture/documents-and-persistence.md#uri-providers),
     [decisions](../decisions/documents-and-persistence.md#workspace-ignore-policy),
     [settings](../settings.md)).
-  - `files.list` hides and marks entries, `files.walk` enumerates visible
+  - `files.list` hides and marks entries, `files.search` matches visible
     files, and `files.isIgnored` answers one-off checks, all through one native
     policy.
   - Vim's Ex line completes `:e` paths from the base `:e` opens against.
@@ -350,16 +350,12 @@ to be rebuilt later:
   - It is an ordinary tool for tool-layout memory: it has a stable tool ID
     and a default placement.
 
-- 🚧 **D173 — Workspace file index** (depends on D008, D081)
-  - 🚧 [Plan](d173-workspace-file-index.md)
-  - A native in-memory tree of every workspace root, watched recursively, so
-    Go to File, walks, and listings answer instantly; ⌘P must feel immediate.
-  - `files.list` and `files.walk` answer from the index behind the same API,
-    so extensions get it without changes.
-  - Decide how the tree answers while its first scan runs, whether ignored
-    directories are scanned lazily, how ignore-file and `files.*` setting
-    changes reclassify entries, memory on large repositories, and whether
-    watch events gain kinds. Measure on real repositories.
+- ✅ **D173 — Workspace file index** (depends on D008, D081)
+  - Shipped ([architecture](../architecture/documents-and-persistence.md#workspace-file-index),
+    [decisions](../decisions/documents-and-persistence.md#workspace-file-index)).
+  - `files.list` and `files.isIgnored` answer from a native in-memory tree of
+    each root, and `files.search` returns the best ranked matches and whether
+    more matched; `files.walk` is removed.
 
 - **D082 — Go to File** (depends on D071, D081, D173)
   - A bundled extension bound to ⌘P that fuzzy-matches workspace paths.
