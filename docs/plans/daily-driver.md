@@ -127,7 +127,7 @@ to be rebuilt later:
     with its owner and overrides, and menus show the effective keys
     ([commands](../architecture/commands.md#keymaps),
     [decisions](../decisions/commands-and-settings.md#commands-and-keymaps),
-    [extension guide](../extension-api.md#register-a-keymap-preset)).
+    [extension guide](../extension-api.md#bind-keys-and-modal-contexts)).
 
 - ✅ **D072 — Workbench navigation and layout commands**
   - Splits record ratios and every divider drags; grow, shrink, equalize,
