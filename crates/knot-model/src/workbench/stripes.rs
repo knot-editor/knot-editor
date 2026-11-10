@@ -131,8 +131,8 @@ mod tests {
             stripes,
             Stripes {
                 left: vec![StripeButton::Tool(explorer)],
-                right: vec![StripeButton::Tool(outline), StripeButton::Terminal],
-                bottom: vec![StripeButton::Tool(log)],
+                right: vec![StripeButton::Tool(outline)],
+                bottom: vec![StripeButton::Tool(log), StripeButton::Terminal],
             }
         );
         assert!(!workbench.stripe_button_visible(StripeButton::Tool(explorer)));
@@ -149,12 +149,15 @@ mod tests {
             vec![StripeButton::Tool(explorer), StripeButton::Tool(log)]
         );
 
-        workbench.set_terminal_home(DockLocation::Bottom);
-        assert_eq!(workbench.stripes().bottom, vec![StripeButton::Terminal]);
+        workbench.set_terminal_home(DockLocation::Right);
+        assert_eq!(
+            workbench.stripes().right,
+            vec![StripeButton::Tool(outline), StripeButton::Terminal]
+        );
         assert!(!workbench.dock_terminals_visible());
-        workbench.open_terminal_in_dock(DockLocation::Bottom, TerminalSessionId(1));
+        workbench.open_terminal_in_dock(DockLocation::Right, TerminalSessionId(1));
         assert!(workbench.dock_terminals_visible());
-        workbench.set_dock_visible(DockLocation::Bottom, false);
+        workbench.set_dock_visible(DockLocation::Right, false);
         assert!(!workbench.stripe_button_visible(StripeButton::Terminal));
     }
 

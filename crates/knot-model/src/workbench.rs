@@ -457,7 +457,7 @@ impl Workbench {
             next_tab_id: 1,
             next_presentation_id: 1,
             next_tool_id: 1,
-            terminal_home: DockLocation::Right,
+            terminal_home: DEFAULT_TERMINAL_HOME,
             terminal_recent: Vec::new(),
             panes: Vec::new(),
             focused_pane: None,
@@ -1190,7 +1190,7 @@ struct RemovedTab {
 mod stripes;
 pub use stripes::{StripeButton, Stripes};
 mod terminals;
-pub use terminals::TerminalToggle;
+pub use terminals::{DEFAULT_TERMINAL_HOME, TerminalToggle};
 mod tools;
 pub use tools::{
     DockLocation, EXPLORER_TOOL_ID, HiddenTool, StoredDock, StoredNode, StoredPlacement,

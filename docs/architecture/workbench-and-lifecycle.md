@@ -637,7 +637,7 @@ live foreground state.
 
 A terminal tab lives in the center or in any dock, as an ordinary flat tab. The
 terminal home is the dock new terminals open in when none lives in a dock; it
-starts on the right, and moving a terminal tab into a dock makes that dock the
+starts at the bottom, and moving a terminal tab into a dock makes that dock the
 home, which the tool-layout record carries to fresh windows. The workbench
 tracks dock terminals by recent focus. Toggle Terminal (ctrl-`) shows and
 focuses the most recently used dock terminal, hides its dock when it is already

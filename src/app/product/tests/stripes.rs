@@ -33,15 +33,15 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     cx.run_until_parked();
     assert!(explorer_shown(&shell, cx));
 
-    // The explorer's button sits in the left stripe and the terminal's in
-    // the right one, the terminal home.
+    // The explorer's button sits in the left stripe, and the terminal's in
+    // its lower end, the terminal home being the bottom dock.
     let mut visual = VisualTestContext::from_window(window, cx);
     let left = visual.debug_bounds("stripe-left").unwrap();
-    let right = visual.debug_bounds("stripe-right").unwrap();
     let explorer = visual.debug_bounds(EXPLORER_BUTTON).unwrap();
     let terminal = visual.debug_bounds("stripe-button-terminal").unwrap();
     assert!(left.contains(&explorer.center()));
-    assert!(right.contains(&terminal.center()));
+    assert!(left.contains(&terminal.center()));
+    assert!(terminal.top() > explorer.bottom());
     drop(visual);
 
     // A click toggles: the focused explorer hides, then shows again.
@@ -55,7 +55,7 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         assert!(workbench.dock_terminals_visible());
-        assert!(workbench.dock_visible(DockLocation::Right));
+        assert!(workbench.dock_visible(DockLocation::Bottom));
     });
     click(window, "stripe-button-terminal", cx);
     cx.read(|cx| {

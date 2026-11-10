@@ -29,7 +29,7 @@ free-form split tree, where docks are groups among document panes, goes away.
 - **Per-kind placement.** Each tab kind declares the areas it may occupy and,
   for docks, its default dock: documents → center only; tools → docks only,
   default from their definition (`ViewPlacement.location`, explorer left);
-  terminals → center and docks, default dock **right**. Placement, drops,
+  terminals → center and docks, default dock **bottom**. Placement, drops,
   move commands, restore, and pruning all check the kind's declaration rather
   than naming kinds.
 - **Remembered home.** When the user moves a tool or a terminal tab to another

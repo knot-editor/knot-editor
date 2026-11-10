@@ -3,6 +3,9 @@
 
 use super::{Area, DockLocation, PaneId, TabId, TabKind, TerminalSessionId, Workbench};
 
+/// The dock new terminals open in until the user moves them.
+pub const DEFAULT_TERMINAL_HOME: DockLocation = DockLocation::Bottom;
+
 /// What Toggle Terminal did, or needs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalToggle {
@@ -111,7 +114,7 @@ mod tests {
         assert_eq!(workbench.toggle_terminal(), TerminalToggle::NeedsTerminal);
 
         let home = workbench.terminal_home();
-        assert_eq!(home, DockLocation::Right);
+        assert_eq!(home, DEFAULT_TERMINAL_HOME);
         let (dock, first) = workbench.open_terminal_in_dock(home, session(2)).unwrap();
         assert_eq!(workbench.dock_location(dock), Some(home));
         assert_eq!(workbench.focused_pane_id(), Some(dock));
@@ -197,14 +200,14 @@ mod tests {
         workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
         assert_eq!(
             workbench.tool_layout_snapshot().terminal_home,
-            DockLocation::Right
+            DEFAULT_TERMINAL_HOME
         );
-        workbench.set_terminal_home(DockLocation::Bottom);
+        workbench.set_terminal_home(DockLocation::Left);
         let snapshot = workbench.tool_layout_snapshot();
-        assert_eq!(snapshot.terminal_home, DockLocation::Bottom);
+        assert_eq!(snapshot.terminal_home, DockLocation::Left);
         let decoded: ToolLayoutSnapshot =
             serde_json::from_str(&serde_json::to_string(&snapshot).unwrap()).unwrap();
-        assert_eq!(decoded.terminal_home, DockLocation::Bottom);
+        assert_eq!(decoded.terminal_home, DockLocation::Left);
         assert_eq!(
             snapshot.placement(EXPLORER_TOOL_ID),
             Some(StoredPlacement::Hidden {

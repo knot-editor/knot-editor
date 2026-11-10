@@ -1392,7 +1392,7 @@ async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    let right = Area::Dock(DockLocation::Right);
+    let right = Area::Dock(DockLocation::Bottom);
     let toggle = |cx: &mut TestAppContext| {
         dispatch_product_command(&shell, window, TOGGLE_TERMINAL_COMMAND, cx)
     };
@@ -1418,7 +1418,7 @@ async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
                 .read(cx)
                 .workbench
                 .read(cx)
-                .dock_visible(DockLocation::Right)
+                .dock_visible(DockLocation::Bottom)
         );
     });
 
@@ -1444,7 +1444,7 @@ async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
                 .read(cx)
                 .workbench
                 .read(cx)
-                .dock_visible(DockLocation::Right)
+                .dock_visible(DockLocation::Bottom)
         );
     });
 
@@ -1470,7 +1470,7 @@ async fn new_terminal_follows_a_terminal_then_the_recent_dock_terminal_then_the_
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    let right = Area::Dock(DockLocation::Right);
+    let right = Area::Dock(DockLocation::Bottom);
     let new = |name: &'static str, cx: &mut TestAppContext| {
         dispatch_product_command(&shell, window, name, cx)
     };
@@ -1538,30 +1538,29 @@ async fn moving_a_terminal_to_a_dock_rehomes_terminals_for_fresh_windows(cx: &mu
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    let bottom = Area::Dock(DockLocation::Bottom);
+    let right = Area::Dock(DockLocation::Right);
     let home = |shell: &Entity<ProductShell>, cx: &TestAppContext| {
         cx.read(|cx| shell.read(cx).workbench.read(cx).terminal_home())
     };
-    assert_eq!(home(&shell, cx), DockLocation::Right);
+    assert_eq!(home(&shell, cx), DockLocation::Bottom);
 
     let center = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(center.completion.await.unwrap(), CommandOutcome::Completed);
     // Moving within the center or to the center never rehomes.
-    let to_bottom =
-        dispatch_product_command(&shell, window, "workbench.move-tab-to-bottom-dock", cx);
+    let to_right = dispatch_product_command(&shell, window, "workbench.move-tab-to-right-dock", cx);
     assert_eq!(
-        to_bottom.completion.await.unwrap(),
+        to_right.completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(terminal_panes(&shell, cx), [(bottom, 1)]);
-    assert_eq!(home(&shell, cx), DockLocation::Bottom);
+    assert_eq!(terminal_panes(&shell, cx), [(right, 1)]);
+    assert_eq!(home(&shell, cx), DockLocation::Right);
     assert_eq!(
         cx.read(|cx| cx
             .global::<ApplicationToolLayout>()
             .0
             .current()
             .terminal_home),
-        DockLocation::Bottom
+        DockLocation::Right
     );
     let to_center = dispatch_product_command(&shell, window, "workbench.move-tab-to-center", cx);
     assert_eq!(
@@ -1569,17 +1568,17 @@ async fn moving_a_terminal_to_a_dock_rehomes_terminals_for_fresh_windows(cx: &mu
         CommandOutcome::Completed
     );
     assert_eq!(terminal_panes(&shell, cx), [(Area::Center, 1)]);
-    assert_eq!(home(&shell, cx), DockLocation::Bottom);
+    assert_eq!(home(&shell, cx), DockLocation::Right);
 
     // A fresh window inherits the home, and opens its first dock terminal there.
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (fresh, fresh_window) = product_window(document, model, cx);
     fresh.update(cx, |fresh, cx| fresh.restore_fresh_window_layout(cx));
-    assert_eq!(home(&fresh, cx), DockLocation::Bottom);
+    assert_eq!(home(&fresh, cx), DockLocation::Right);
     let toggle = dispatch_product_command(&fresh, fresh_window, TOGGLE_TERMINAL_COMMAND, cx);
     assert_eq!(toggle.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(terminal_panes(&fresh, cx), [(bottom, 1)]);
+    assert_eq!(terminal_panes(&fresh, cx), [(right, 1)]);
 }
 
 #[gpui::test]
@@ -1598,7 +1597,7 @@ async fn window_layouts_restore_dock_terminals_in_their_docks(cx: &mut TestAppCo
         .unwrap();
     let value = serde_json::to_value(&layout).unwrap();
     assert_eq!(
-        value["docks"]["right"]["root"]["tabs"][0]["kind"],
+        value["docks"]["bottom"]["root"]["tabs"][0]["kind"],
         "terminal"
     );
 
@@ -1608,7 +1607,7 @@ async fn window_layouts_restore_dock_terminals_in_their_docks(cx: &mut TestAppCo
     restored.update(cx, |shell, cx| shell.apply_layout(&layout, &[], &[], cx));
     assert_eq!(
         terminal_panes(&restored, cx),
-        [(Area::Dock(DockLocation::Right), 1)]
+        [(Area::Dock(DockLocation::Bottom), 1)]
     );
     // Restored terminals are fresh sessions: one per terminal tab, per window.
     assert_eq!(session_count(cx), 2);
@@ -1644,7 +1643,7 @@ async fn toggle_terminal_restores_a_maximized_dock_terminal(cx: &mut TestAppCont
     assert_eq!(
         focused_area(&shell, cx),
         Some(crate::app::workbench::Area::Dock(
-            crate::app::workbench::DockLocation::Right,
+            crate::app::workbench::DockLocation::Bottom,
         ))
     );
     assert!(both > 1);

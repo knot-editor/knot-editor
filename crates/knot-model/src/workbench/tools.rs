@@ -222,7 +222,7 @@ impl ToolLayoutSnapshot {
                 dock(DockLocation::Bottom, None),
             ],
             hidden: Vec::new(),
-            terminal_home: DockLocation::Right,
+            terminal_home: DEFAULT_TERMINAL_HOME,
             customized: false,
         }
     }
