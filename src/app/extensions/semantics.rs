@@ -628,6 +628,7 @@ mod tests {
                         id: "root".into(),
                         label: "Root".into(),
                         description: None,
+                        detail: None,
                         icon: None,
                         collapsible_state: TreeCollapsibleState::None,
                         command: None,

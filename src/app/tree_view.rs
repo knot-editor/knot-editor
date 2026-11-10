@@ -90,7 +90,7 @@ struct ChildrenState {
 #[derive(Clone)]
 enum VisibleRow {
     Item {
-        item: TreeItem,
+        item: Box<TreeItem>,
         parent_id: Option<String>,
         depth: usize,
     },
@@ -448,7 +448,7 @@ impl TreeView {
                 continue;
             }
             rows.push(VisibleRow::Item {
-                item: item.clone(),
+                item: Box::new(item.clone()),
                 parent_id: key.clone(),
                 depth,
             });
@@ -544,6 +544,11 @@ impl TreeView {
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn description_for_test(&self, id: &str) -> Option<String> {
         self.item(id).and_then(|item| item.description.clone())
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn detail_for_test(&self, id: &str) -> Option<String> {
+        self.item(id).and_then(|item| item.detail.clone())
     }
 
     #[cfg(test)]
@@ -896,6 +901,12 @@ impl Render for TreeView {
             Some(bar)
         };
 
+        // Rows share one height, so a view where any row has a second line
+        // shows all of them at two-line height.
+        let two_lines = rows.iter().any(|row| match row {
+            VisibleRow::Item { item, .. } => item.detail.is_some(),
+            _ => false,
+        });
         let list = uniform_list("extension-tree", rows.len(), move |range, _, cx| {
             let theme = theme(cx);
             range
@@ -920,6 +931,7 @@ impl Render for TreeView {
                             .items_center()
                             .gap_1()
                             .text_sm()
+                            .when(two_lines, |row| row.h(crate::app::zoom::rems(44.)))
                             .when(is_group, |row| {
                                 row.bg(theme.paint_color(color::LIST_GROUP_BACKGROUND))
                                     .text_color(theme.paint_color(color::TEXT_MUTED))
@@ -936,7 +948,23 @@ impl Render for TreeView {
                             })
                             .child(Self::disclosure(item, expanded.contains(&item.id), cx))
                             .children(Self::icon(item, cx))
-                            .child(div().flex_1().truncate().child(item.label.clone()))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .child(div().truncate().child(item.label.clone()))
+                                    .when_some(item.detail.clone(), |column, detail| {
+                                        column.child(
+                                            div()
+                                                .truncate()
+                                                .text_xs()
+                                                .text_color(theme.paint_color(color::TEXT_MUTED))
+                                                .child(detail),
+                                        )
+                                    }),
+                            )
                             .when_some(item.description.clone(), |row, description| {
                                 row.child(
                                     div()

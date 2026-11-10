@@ -249,7 +249,9 @@ changes the fresh-window default. Pass a live `WindowTarget` from
 
 An item is `item` by default. A `group` is a non-activatable header that
 organizes child rows: the native view fetches its children immediately, shows no
-disclosure, and keeps them visible. Items carry optional `statusText` plus a
+disclosure, and keeps them visible. Items carry an optional muted second line, `detail`
+(a view where any row has one shows every row at two-line height), optional
+`statusText`, and a
 `badge` naming a [color key](#register-a-theme-and-define-colors), such as
 `warning` or `text.muted`, and either kind may declare command-backed `actions`. A
 contribution's own `actions` populate the frame toolbar. An item or action may

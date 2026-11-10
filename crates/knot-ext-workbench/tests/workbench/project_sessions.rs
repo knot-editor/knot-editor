@@ -384,14 +384,12 @@ fn root_edits_in_a_bound_window_move_the_project_and_its_other_windows(cx: &mut 
         [a_uri.clone(), c_uri.clone()]
     );
     let tree = projects.window.tree(TREE, cx);
-    let description = project_roots(&projects.list(cx), &a_id)
+    let detail = project_roots(&projects.list(cx), &a_id)
         .iter()
         .map(|root| root.trim_start_matches("file://").trim_end_matches('/'))
         .collect::<Vec<_>>()
         .join(", ");
-    wait_until(cx, |cx| {
-        tree.description(&a_id, cx).as_deref() == Some(&*description)
-    });
+    wait_until(cx, |cx| tree.detail(&a_id, cx).as_deref() == Some(&*detail));
 
     // Membership ignores order: a window with the roots reversed joins.
     let third = projects.product.new_window(cx);

@@ -33,7 +33,8 @@ export function projectItems(state: ProjectsState, window: WindowTarget): TreeIt
     return {
       id: project.id,
       label: displayName(project),
-      description: broken ? "session record unreadable" : rootsPath(project),
+      description: broken ? "session record unreadable" : null,
+      detail: rootsPath(project),
       icon: "folder",
       collapsibleState: "none",
       statusText: broken ? "unreadable" : active ? "active" : null,

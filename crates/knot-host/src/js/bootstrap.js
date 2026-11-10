@@ -166,6 +166,7 @@ function treeItem(value) {
     id: string(value.id, "tree item ID must be text"),
     label: string(value.label, "tree item label must be text"),
     description: optionalText(value.description),
+    detail: optionalText(value.detail),
     icon: optionalText(value.icon),
     collapsibleState,
     command: optionalText(value.command),

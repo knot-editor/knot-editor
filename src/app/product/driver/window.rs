@@ -412,6 +412,11 @@ impl TestTree {
         })
     }
 
+    /// The second line the row `row` shows.
+    pub fn detail(&self, row: &str, cx: &mut TestAppContext) -> Option<String> {
+        cx.read(|cx| self.tree.read(cx).detail_for_test(row))
+    }
+
     /// The description the row `row` shows.
     pub fn description(&self, row: &str, cx: &mut TestAppContext) -> Option<String> {
         cx.read(|cx| self.tree.read(cx).description_for_test(row))

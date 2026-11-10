@@ -981,6 +981,7 @@ pub(super) fn tree_item_from_v8<'s>(
         id: string_property(scope, object, "id")?,
         label: string_property(scope, object, "label")?,
         description: optional_text_property(scope, object, "description")?,
+        detail: optional_text_property(scope, object, "detail")?,
         collapsible_state,
         icon,
         command: optional_text_property(scope, object, "command")?,

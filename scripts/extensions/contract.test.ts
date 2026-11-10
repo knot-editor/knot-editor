@@ -86,7 +86,7 @@ const tree = await workbench.registerView({
           },
           {
             id: "id", label: "item", collapsibleState: "collapsed", icon: "folder",
-            statusText: "M", badge: "warning",
+            statusText: "M", badge: "warning", detail: "src/item",
             command: "check.open",
             actions: [{ label: "Discard", command: "check.discard", arguments: { path: "a" } }],
           },

@@ -383,6 +383,10 @@ pub struct TreeItem {
     pub label: String,
     #[serde(default)]
     pub description: Option<String>,
+    /// A muted second line under the label; a view where any row has one
+    /// shows every row at two-line height.
+    #[serde(default)]
+    pub detail: Option<String>,
     #[serde(default)]
     /// An icon name; an unknown name paints the fallback icon.
     pub icon: Option<String>,

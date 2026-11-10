@@ -1390,6 +1390,9 @@ declare module "knot" {
     readonly id: string;
     readonly label: string;
     readonly description?: string | null;
+    /** A muted second line under the label. When any row of a view has one, the
+     * view shows every row at two-line height. */
+    readonly detail?: string | null;
     /** An icon name such as `file`, `folder`, or `symbol`; an unknown name paints a fallback icon. */
     readonly icon?: string | null;
     /** Required expansion state; never inferred from child results. */
