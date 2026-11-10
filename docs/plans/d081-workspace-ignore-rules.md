@@ -1,6 +1,6 @@
 # D081 — Workspace ignore rules and file enumeration
 
-Status: 🚧 checkpoint 1 done; checkpoints 1 and 2 done; checkpoint 3 not started. Item of the [daily-driver plan](daily-driver.md).
+Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 not started. Item of the [daily-driver plan](daily-driver.md).
 
 ## Outcome
 
