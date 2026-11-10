@@ -16,7 +16,7 @@ use crate::resource::ResourceUri;
 ///
 /// Containment is lexical. Filesystem operations follow symlinks, including
 /// symlinks whose targets are outside the selected folder. Each operation runs
-/// blocking `std::fs` calls on its own short-lived thread.
+/// blocking `std::fs` calls on a small shared pool of worker threads.
 pub struct LocalFileSystemProvider {
     root: Option<ResourceUri>,
     mutation_lock: Arc<Mutex<()>>,
@@ -90,18 +90,55 @@ impl LocalFileSystemProvider {
         work: impl FnOnce() -> Result<T, ResourceError> + Send + 'static,
     ) -> ProviderFuture<'_, T> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        let thread = std::thread::Builder::new()
-            .name("knot-filesystem".into())
-            .spawn(move || {
-                let _ = sender.send(work());
-            });
+        let queued = io_pool().send(Box::new(move || {
+            let _ = sender.send(work());
+        }));
         Box::pin(async move {
-            thread.map_err(|error| ResourceError::io(operation, error))?;
+            queued.map_err(|error| ResourceError::io(operation, error))?;
             receiver
                 .await
                 .map_err(|error| ResourceError::io(operation, error))?
         })
     }
+}
+
+type IoJob = Box<dyn FnOnce() + Send>;
+
+struct IoPool {
+    jobs: std::sync::mpsc::Sender<IoJob>,
+}
+
+impl IoPool {
+    fn send(&self, job: IoJob) -> std::io::Result<()> {
+        self.jobs
+            .send(job)
+            .map_err(|_| std::io::Error::other("file system workers stopped"))
+    }
+}
+
+/// The workers that run blocking file system calls, shared by every local
+/// provider so that bursts of operations, such as a recursive walk, queue
+/// instead of spawning threads.
+fn io_pool() -> &'static IoPool {
+    static POOL: std::sync::OnceLock<IoPool> = std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        let (jobs, queue) = std::sync::mpsc::channel::<IoJob>();
+        let queue = Arc::new(std::sync::Mutex::new(queue));
+        let workers = std::thread::available_parallelism()
+            .map_or(4, |count| count.get())
+            .clamp(4, 16);
+        for _ in 0..workers {
+            let queue = queue.clone();
+            let _ = std::thread::Builder::new()
+                .name("knot-filesystem".into())
+                .spawn(move || {
+                    while let Ok(job) = queue.lock().unwrap().recv() {
+                        job();
+                    }
+                });
+        }
+        IoPool { jobs }
+    })
 }
 
 fn path_to_uri(root: &ResourceUri, path: &Path) -> Result<ResourceUri, ResourceError> {
@@ -166,15 +203,23 @@ impl FileSystemProvider for LocalFileSystemProvider {
                     Some(root) => path_to_uri(root, &entry.path())?,
                     None => path_to_unrestricted_uri(&entry.path())?,
                 };
-                let symlink = entry.file_type().is_ok_and(|kind| kind.is_symlink());
-                let child_metadata = match std::fs::metadata(entry.path()) {
-                    Ok(metadata) => metadata,
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                    Err(error) => return Err(map_io("stat child", &child_uri, error)),
+                let file_type = entry
+                    .file_type()
+                    .map_err(|error| map_io("stat child", &child_uri, error))?;
+                let symlink = file_type.is_symlink();
+                // Only a symlink needs another call, to learn its target's kind.
+                let file_type = if symlink {
+                    match std::fs::metadata(entry.path()) {
+                        Ok(metadata) => metadata.file_type(),
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                        Err(error) => return Err(map_io("stat child", &child_uri, error)),
+                    }
+                } else {
+                    file_type
                 };
-                let kind = if child_metadata.is_dir() {
+                let kind = if file_type.is_dir() {
                     ResourceKind::Directory
-                } else if child_metadata.is_file() {
+                } else if file_type.is_file() {
                     ResourceKind::File
                 } else {
                     continue;

@@ -94,7 +94,7 @@ Review gate: the walk is fast enough for Go to File, or D082 is told it is not.
 Done ✅:
 
 - `knot_model::files::walk` reuses the checkpoint 1 classifier over the
-  provider (`ResourceEntry` gained `symlink`), reads up to 64 directories at once,
+  provider (`ResourceEntry` gained `symlink`), reads up to 16 directories at once,
   and is wired as `walk_files` in `handlers.rs`, the bootstrap, `knot.d.ts`, and
   the fake host. `WalkBuilder` was not needed.
 - Tests: model tests (memory and local tempdir), the product handler test, and
@@ -103,9 +103,10 @@ Done ✅:
 **Measurement** (release build, Linux kernel `--depth 1` checkout: 97,336 files,
 macOS/APFS, warm cache, three runs): about 1.1 s with the default policy, of
 which about 0.4 s is enumeration alone (`bare` policy). Sequential enumeration was
-2.6 s; reading 16 directories at once gave 1.0–1.9 s with high variance, 64 a
-stable 1.1 s. `rg --files` takes 0.15 s on the same tree. The remaining cost is
-per-entry classification on one task plus a thread per directory read. Result for
+2.6 s with a thread per read; a shared pool of at most 16 workers, a `stat` only
+for symlinks, and 16 directories read at once gave a stable 1.1 s (64 at once
+was slower, 1.3 s). `rg --files` takes 0.15 s on the same tree. The remaining cost is
+per-entry classification on one task. Result for
 D082: a kernel-sized repository takes about a second to enumerate once, which is
 acceptable for a one-shot Go to File index; typical repositories are one to two
 orders of magnitude smaller. Streaming or a native local fast path is only worth

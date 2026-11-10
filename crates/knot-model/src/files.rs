@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// How many directories a walk reads at once.
-const WALK_CONCURRENCY: usize = 64;
+const WALK_CONCURRENCY: usize = 16;
 
 fn parse(uri: &str) -> Result<ResourceUri, ResourceError> {
     ResourceUri::parse(uri).map_err(|error| ResourceError::InvalidUri {

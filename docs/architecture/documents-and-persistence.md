@@ -71,8 +71,8 @@ providers implement the same typed results/errors. Local writes flush a temporar
 sibling, install atomically, and sync the parent directory before reporting
 success. Replacement resolves symlinks first, so it rewrites the link's target
 and the link survives; it preserves permissions and rejects version mismatch.
-Local filesystem I/O runs blocking `std::fs` calls on a short-lived thread per
-operation, off the foreground.
+Local filesystem I/O runs blocking `std::fs` calls on a small shared pool of
+worker threads, off the foreground.
 
 Enumeration skips entries a listing cannot represent: broken symlinks, special
 files, and names that are not UTF-8. Other I/O errors reject the directory.
