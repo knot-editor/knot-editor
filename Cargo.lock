@@ -3852,6 +3852,7 @@ dependencies = [
  "jsonc-parser",
  "knot-core",
  "knot-protocol",
+ "notify",
  "nucleo-matcher",
  "percent-encoding",
  "pollster 1.0.1",

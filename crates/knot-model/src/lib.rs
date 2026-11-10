@@ -36,5 +36,6 @@ pub mod style;
 pub mod syntax;
 pub mod theme;
 pub mod themes;
+pub mod watch;
 pub mod workbench;
 pub mod workspace;

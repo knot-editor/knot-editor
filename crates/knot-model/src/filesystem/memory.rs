@@ -1,14 +1,15 @@
 use std::{
     collections::BTreeMap,
     sync::{
-        RwLock,
+        Arc, Mutex, RwLock,
         atomic::{AtomicU64, Ordering},
     },
 };
 
 use super::{
     FileSystemProvider, ProviderFuture, ResourceEntry, ResourceError, ResourceFile, ResourceKind,
-    ResourceStat, ResourceVersion, child_uri, validate_and_normalize_uri,
+    ResourceStat, ResourceVersion, WatchEvent, WatchGuard, WatchSink, child_uri,
+    validate_and_normalize_uri,
 };
 use crate::resource::ResourceUri;
 
@@ -22,10 +23,36 @@ enum MemoryNode {
     Directory(MemoryDirectory),
 }
 
+struct MemoryWatcher {
+    id: u64,
+    uri: ResourceUri,
+    recursive: bool,
+    sink: WatchSink,
+}
+
+type MemoryWatchers = Arc<Mutex<Vec<MemoryWatcher>>>;
+
+struct MemoryWatchGuard {
+    id: u64,
+    watchers: MemoryWatchers,
+}
+
+impl Drop for MemoryWatchGuard {
+    fn drop(&mut self) {
+        self.watchers
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .retain(|watcher| watcher.id != self.id);
+    }
+}
+
+/// An in-memory tree. Its own writes are reported to its watchers.
 pub struct MemoryFileSystemProvider {
     root: ResourceUri,
     hierarchy: RwLock<MemoryDirectory>,
     next_version: AtomicU64,
+    watchers: MemoryWatchers,
+    next_watcher: AtomicU64,
 }
 
 impl MemoryFileSystemProvider {
@@ -41,7 +68,55 @@ impl MemoryFileSystemProvider {
             root,
             hierarchy: RwLock::new(MemoryDirectory::default()),
             next_version: AtomicU64::new(1),
+            watchers: MemoryWatchers::default(),
+            next_watcher: AtomicU64::new(1),
         })
+    }
+
+    /// Reports dropped events to every watcher, as a platform would.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn report_rescan(&self) {
+        for sink in self.sinks(|_| true) {
+            sink(WatchEvent::Rescan);
+        }
+    }
+
+    /// How many watches are live.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn watch_count(&self) -> usize {
+        self.watchers
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .len()
+    }
+
+    fn sinks(&self, wants: impl Fn(&MemoryWatcher) -> bool) -> Vec<WatchSink> {
+        self.watchers
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .iter()
+            .filter(|watcher| wants(watcher))
+            .map(|watcher| watcher.sink.clone())
+            .collect()
+    }
+
+    /// Tells the watchers that cover `uri` that it changed.
+    fn report(&self, uri: &ResourceUri) {
+        let parent = {
+            let mut url = uri.as_url().clone();
+            if let Ok(mut segments) = url.path_segments_mut() {
+                segments.pop();
+            }
+            ResourceUri::from_url(url)
+        };
+        let sinks = self.sinks(|watcher| {
+            watcher.uri == *uri
+                || watcher.uri == parent
+                || (watcher.recursive && uri.is_within(&watcher.uri))
+        });
+        for sink in sinks {
+            sink(WatchEvent::Changed(vec![uri.clone()]));
+        }
     }
 
     pub fn seed_directory(&self, uri: ResourceUri) -> Result<(), ResourceError> {
@@ -66,6 +141,8 @@ impl MemoryFileSystemProvider {
         directory_mut(&mut hierarchy, &path, &uri)?
             .children
             .remove(&name);
+        drop(hierarchy);
+        self.report(&uri);
         Ok(())
     }
 
@@ -101,6 +178,8 @@ impl MemoryFileSystemProvider {
         directory
             .children
             .insert(name, MemoryNode::File(self.file(bytes.into())));
+        drop(hierarchy);
+        self.report(&uri);
         Ok(())
     }
 
@@ -215,6 +294,8 @@ impl FileSystemProvider for MemoryFileSystemProvider {
             let file = self.file(bytes);
             let version = file.version.clone();
             directory.children.insert(name, MemoryNode::File(file));
+            drop(hierarchy);
+            self.report(&uri);
             Ok(version)
         })
     }
@@ -235,7 +316,10 @@ impl FileSystemProvider for MemoryFileSystemProvider {
             match find_node_mut(&mut hierarchy, &path) {
                 Some(MemoryNode::File(file)) if file.version == expected => {
                     *file = self.file(bytes);
-                    Ok(file.version.clone())
+                    let version = file.version.clone();
+                    drop(hierarchy);
+                    self.report(&uri);
+                    Ok(version)
                 }
                 Some(MemoryNode::File(_)) => Err(ResourceError::Conflict { uri }),
                 Some(MemoryNode::Directory(_)) => Err(ResourceError::WrongKind {
@@ -265,6 +349,29 @@ impl FileSystemProvider for MemoryFileSystemProvider {
                 None => ResourceStat::Missing,
             })
         })
+    }
+
+    fn watch(
+        &self,
+        uri: ResourceUri,
+        recursive: bool,
+        sink: WatchSink,
+    ) -> Result<WatchGuard, ResourceError> {
+        let uri = self.normalize_scoped(uri)?;
+        let id = self.next_watcher.fetch_add(1, Ordering::Relaxed);
+        self.watchers
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .push(MemoryWatcher {
+                id,
+                uri,
+                recursive,
+                sink,
+            });
+        Ok(Box::new(MemoryWatchGuard {
+            id,
+            watchers: self.watchers.clone(),
+        }))
     }
 }
 

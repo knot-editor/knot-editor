@@ -79,6 +79,17 @@ pub(super) fn segments(uri: &ResourceUri) -> Vec<String> {
         .collect()
 }
 
+impl IgnorePolicy {
+    /// Whether `files.hidden` names the entry or a directory above it. Only
+    /// the entry's own path is judged, so watch events drop what listings hide.
+    pub fn hides(&self, uri: &ResourceUri) -> bool {
+        let hidden = build(Path::new("/"), &self.hidden);
+        hidden
+            .matched_path_or_any_parents(virtual_path(&segments(uri)), false)
+            .is_ignore()
+    }
+}
+
 fn virtual_path(segments: &[String]) -> PathBuf {
     let mut path = PathBuf::from("/");
     path.extend(segments);
@@ -358,6 +369,19 @@ mod tests {
             &IgnorePolicy::default(),
         ))
         .unwrap()
+    }
+
+    #[test]
+    fn the_policy_hides_entries_below_hidden_directories_but_not_ignored_ones() {
+        let policy = IgnorePolicy {
+            ignored: vec!["target".into()],
+            ..IgnorePolicy::default()
+        };
+        let uri = |path: &str| ResourceUri::parse(&format!("mem://t/{path}")).unwrap();
+        assert!(policy.hides(&uri("repo/.git/objects/ab")));
+        assert!(policy.hides(&uri("repo/.DS_Store")));
+        assert!(!policy.hides(&uri("repo/src/main.rs")));
+        assert!(!policy.hides(&uri("repo/target/debug")));
     }
 
     #[test]

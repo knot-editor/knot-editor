@@ -8,7 +8,7 @@ use url::Url;
 
 use super::{
     FileSystemProvider, ProviderFuture, ResourceEntry, ResourceError, ResourceFile, ResourceKind,
-    ResourceStat, ResourceVersion, validate_and_normalize_uri,
+    ResourceStat, ResourceVersion, WatchEvent, WatchGuard, WatchSink, validate_and_normalize_uri,
 };
 use crate::resource::ResourceUri;
 
@@ -339,6 +339,56 @@ impl FileSystemProvider for LocalFileSystemProvider {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ResourceStat::Missing),
             Err(error) => Err(ResourceError::io("stat", error)),
         })
+    }
+
+    fn watch(
+        &self,
+        uri: ResourceUri,
+        recursive: bool,
+        sink: WatchSink,
+    ) -> Result<WatchGuard, ResourceError> {
+        use notify::{RecursiveMode, Watcher};
+
+        let uri = self.normalize_scoped(uri)?;
+        let path = self.uri_to_path(&uri)?;
+        // The platform reports resolved paths, so events are mapped back onto
+        // the path that was asked for.
+        let resolved =
+            std::fs::canonicalize(&path).map_err(|error| map_io("watch", &uri, error))?;
+        let requested = path.clone();
+        let mut watcher = notify::recommended_watcher(
+            move |result: notify::Result<notify::Event>| match result {
+                Ok(event) if event.need_rescan() => sink(WatchEvent::Rescan),
+                Ok(event) if event.kind.is_access() => {}
+                Ok(event) => {
+                    let uris: Vec<ResourceUri> = event
+                        .paths
+                        .iter()
+                        .filter_map(|path| {
+                            let path = match path.strip_prefix(&resolved) {
+                                Ok(relative) => requested.join(relative),
+                                Err(_) => path.clone(),
+                            };
+                            path_to_unrestricted_uri(&path).ok()
+                        })
+                        .collect();
+                    if !uris.is_empty() {
+                        sink(WatchEvent::Changed(uris));
+                    }
+                }
+                Err(_) => sink(WatchEvent::Rescan),
+            },
+        )
+        .map_err(|error| ResourceError::io("watch", error))?;
+        let mode = if recursive {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        };
+        watcher
+            .watch(&path, mode)
+            .map_err(|error| ResourceError::io("watch", error))?;
+        Ok(Box::new(watcher))
     }
 }
 

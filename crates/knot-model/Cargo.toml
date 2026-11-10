@@ -10,6 +10,7 @@ publish = false
 directories = { workspace = true }
 ignore = { workspace = true }
 jsonc-parser = { workspace = true }
+notify = { workspace = true }
 knot-core = { path = "../knot-core" }
 knot-protocol = { path = "../knot-protocol" }
 nucleo-matcher = { workspace = true }

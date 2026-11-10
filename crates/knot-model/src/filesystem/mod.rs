@@ -140,6 +140,21 @@ impl fmt::Display for ResourceError {
 
 impl std::error::Error for ResourceError {}
 
+/// What a provider reports about a watched location.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WatchEvent {
+    /// Entries that changed, were created, or were removed.
+    Changed(Vec<ResourceUri>),
+    /// The platform dropped events, so anything under the watch may differ.
+    Rescan,
+}
+
+/// Receives a provider's events, possibly from another thread.
+pub type WatchSink = Arc<dyn Fn(WatchEvent) + Send + Sync>;
+
+/// Holds one provider watch; dropping it releases the watch.
+pub type WatchGuard = Box<dyn Send + Sync>;
+
 pub trait FileSystemProvider: Send + Sync {
     fn normalize(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceUri>;
     fn enumerate(&self, uri: ResourceUri) -> ProviderFuture<'_, Vec<ResourceEntry>>;
@@ -152,6 +167,22 @@ pub trait FileSystemProvider: Send + Sync {
         bytes: Vec<u8>,
     ) -> ProviderFuture<'_, ResourceVersion>;
     fn stat(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceStat>;
+
+    /// Reports changes to `uri` to `sink` until the guard is dropped: the
+    /// directory and its direct children, or everything below it when
+    /// `recursive`. A watched file reports itself.
+    fn watch(
+        &self,
+        uri: ResourceUri,
+        recursive: bool,
+        sink: WatchSink,
+    ) -> Result<WatchGuard, ResourceError> {
+        let _ = (recursive, sink);
+        Err(ResourceError::Io {
+            operation: "watch",
+            message: format!("{uri} cannot be watched"),
+        })
+    }
 }
 
 #[derive(Default)]
