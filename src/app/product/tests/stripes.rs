@@ -90,6 +90,35 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     let right = visual.debug_bounds("stripe-right").unwrap();
     let explorer = visual.debug_bounds(EXPLORER_BUTTON).unwrap();
     assert!(right.contains(&explorer.center()));
+
+    // Dragging the terminal button to the left stripe moves the dock
+    // terminals there and makes it their home.
+    let from = visual
+        .debug_bounds("stripe-button-terminal")
+        .unwrap()
+        .center();
+    let to = visual.debug_bounds("stripe-group-0").unwrap().center();
+    visual.simulate_mouse_down(from, MouseButton::Left, Modifiers::default());
+    visual.simulate_mouse_move(
+        from + point(px(0.), px(12.)),
+        MouseButton::Left,
+        Modifiers::default(),
+    );
+    visual.simulate_mouse_move(to, MouseButton::Left, Modifiers::default());
+    visual.simulate_mouse_up(to, MouseButton::Left, Modifiers::default());
+    visual.run_until_parked();
+    drop(visual);
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        assert_eq!(workbench.terminal_home(), DockLocation::Left);
+        assert!(
+            workbench
+                .dock_terminal_tabs_outside(DockLocation::Left)
+                .is_empty()
+        );
+        let (pane, _) = workbench.recent_dock_terminal().unwrap();
+        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Left));
+    });
 }
 
 #[gpui::test]

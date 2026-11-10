@@ -183,8 +183,8 @@ shown with that pane focused (`ProductShell::maximized_pane`); see
   Icons are the names `tool.<tool ID>` and `terminal`, with native defaults for
   the explorer and terminal. Choices: the drag uses gpui's in-window drag and
   drop rather than the cross-window tab coordinator, since a button never
-  leaves its window; dragging the terminal button changes only the terminal
-  home; a hidden tool dragged to a stripe stays hidden; replacing applies to
+  leaves its window; moving the terminal button (drag or menu) moves the dock
+  terminals to that dock and makes it the terminal home; a hidden tool dragged to a stripe stays hidden; replacing applies to
   `toggle_tool` (stripes, Toggle Tool, Toggle Explorer) only, not to
   programmatic shows or dock toggles, and not to a tool already showing.
 - **Review:** `try.stripe-tools` in the personal `post-init.js`.

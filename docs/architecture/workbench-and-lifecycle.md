@@ -343,8 +343,8 @@ a tool already showing only takes focus, so tabs the user grouped stay grouped
 tabs. The button's right-click menu shows the tool in a pane of its own beside
 the dock's last focused pane (`Workbench::show_tool_beside`), hides it, or
 moves it to another dock. Dragging a button to another stripe rehomes it,
-moving a shown tool and leaving a hidden one hidden, and changing only the
-terminal home for the terminal button.
+moving a shown tool and leaving a hidden one hidden; the terminal button moves
+every dock terminal to the target dock and makes it the terminal home.
 Splitting a document creates another view; splitting a terminal creates
 another session, in a dock as in the center. Empty panes collapse, keeping their siblings' ratios. The
 center may be empty; it then paints a blank surface that takes keyboard focus

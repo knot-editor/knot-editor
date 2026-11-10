@@ -1,7 +1,7 @@
 //! The buttons of the tool stripes: one per tool and one for the dock
 //! terminals, grouped by the dock each belongs to.
 
-use super::{Area, DockLocation, TabKind, ToolFrameId, Workbench};
+use super::{Area, DockLocation, PaneId, TabId, TabKind, ToolFrameId, Workbench};
 
 /// What a stripe button stands for.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -76,6 +76,20 @@ impl Workbench {
                     .iter()
                     .any(|tab| tab.surface.kind() == TabKind::Terminal)
         })
+    }
+
+    /// The terminal tabs in docks other than `dock`.
+    pub fn dock_terminal_tabs_outside(&self, dock: DockLocation) -> Vec<(PaneId, TabId)> {
+        self.panes
+            .iter()
+            .filter(|pane| matches!(pane.area, Area::Dock(other) if other != dock))
+            .flat_map(|pane| {
+                pane.tabs
+                    .iter()
+                    .filter(|tab| tab.surface.kind() == TabKind::Terminal)
+                    .map(|tab| (pane.id, tab.id))
+            })
+            .collect()
     }
 
     /// Whether a stripe button's surface is showing.

@@ -190,8 +190,8 @@ impl ProductShell {
     }
 
     /// Make `dock` the home of a stripe button's surface: a shown tool moves
-    /// there, a hidden one stays hidden and returns there, and the terminal
-    /// home changes for the next terminal. Publishes the new home.
+    /// there, a hidden one stays hidden and returns there, and the terminals
+    /// in other docks move there and become the terminal home. Publishes the new home.
     fn rehome_stripe_button(
         &mut self,
         button: StripeButton,
@@ -200,8 +200,12 @@ impl ProductShell {
     ) {
         match button {
             StripeButton::Terminal => {
+                let terminals = self.workbench.read(cx).dock_terminal_tabs_outside(dock);
                 self.workbench
                     .update(cx, |workbench, _| workbench.set_terminal_home(dock));
+                for (pane, tab) in terminals {
+                    let _ = self.move_tab_to_area(pane, tab, Area::Dock(dock), cx);
+                }
             }
             StripeButton::Tool(id) => {
                 let shown = self.workbench.read(cx).tool_tab(id);
