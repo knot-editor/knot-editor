@@ -6,6 +6,11 @@
 // the application's public operations, so this package needs no private host
 // access.
 //
+// Every folder set a window shows is remembered: a window without a project
+// for its roots creates an unnamed one, and the least recently opened
+// unnamed projects beyond `projects.rememberedLimit` are forgotten, except
+// active ones and ones holding unsaved text.
+//
 // A project's session is active or suspended. A window binds to a project when
 // its roots equal the project's roots, in any order, and the session is active,
 // so a manually opened folder never binds a suspended project and its retained
@@ -20,12 +25,14 @@
 // record may reference it.
 import { workbench } from "knot";
 import { registerCommands } from "./commands.js";
+import { defineSettings } from "./prune.js";
 import { describe } from "./report.js";
 import { createState, loadSessions, reload } from "./state.js";
 import { afterLaunch, onApplicationEvent } from "./tracking.js";
 import { registerTree } from "./tree.js";
 
 export async function start() {
+  await defineSettings();
   const state = createState();
   await reload(state);
   try {

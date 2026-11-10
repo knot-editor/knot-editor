@@ -7,43 +7,6 @@ import { ALPHA, BETA, registry, seedProject, seedSession, session, startLaunched
 
 beforeEach(() => host.reset());
 
-test("creating a project records it and switches a blank window to it", async () => {
-  const blank = host.openWindow({ documents: [host.addDocument()] });
-  await startLaunched();
-  host.answer("pickFolder", { kind: "selected", uri: ALPHA });
-  host.answer("showInput", { kind: "accepted", value: "  Alpha " });
-  await host.run("projects.create", { window: blank });
-
-  const [project] = registry().projects;
-  assert.equal(project?.name, "Alpha");
-  assert.deepEqual(project?.roots, [ALPHA]);
-  assert.equal(registry().recentProjectId, project?.id);
-  assert.deepEqual(host.prompts().map((prompt) => prompt.kind), ["pickFolder", "showInput"]);
-  assert.equal((host.prompts()[1]?.options as { value: string }).value, "alpha");
-  const [window] = host.windowTargets();
-  assert.notEqual(window, blank);
-  assert.deepEqual(host.rootsOf(window!), [ALPHA]);
-  assert.equal(session(project!.id)?.state, "active");
-  const [row] = await host.treeItems(VIEW_ID, window!);
-  assert.equal(row?.statusText, "active");
-});
-
-test("creation rejects a used folder, and the folder name or a blank leaves the project unnamed", async () => {
-  seedProject("a", "Alpha", [ALPHA]);
-  host.openWindow();
-  await startLaunched();
-  host.answer("pickFolder", { kind: "selected", uri: ALPHA });
-  await host.run("projects.create");
-  host.answer("pickFolder", { kind: "selected", uri: BETA });
-  host.answer("showInput", { kind: "accepted", value: "beta" });
-  await host.run("projects.create");
-  host.answer("pickFolder", { kind: "selected", uri: "file:///src/gamma/" });
-  host.answer("showInput", { kind: "accepted", value: "  " });
-  await host.run("projects.create");
-  assert.deepEqual(host.messages(), ["Alpha already uses this folder"]);
-  assert.deepEqual(registry().projects.map((project) => project.name), ["Alpha", null, null]);
-});
-
 test("names need not be unique, and renaming to blank restores the inferred name", async () => {
   seedProject("a", "Alpha", [ALPHA]);
   seedProject("b", "Beta", [BETA]);

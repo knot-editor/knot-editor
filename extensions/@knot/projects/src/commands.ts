@@ -43,32 +43,6 @@ export async function registerCommands(state: ProjectsState) {
     if (state.view !== null) await state.view.hide();
   }, { title: "Hide Projects", description: "Hide the Projects tool." });
 
-  await commands.register("projects.create", async ({ target }) => {
-    const picked = await workspaces.pickFolder();
-    if (picked.kind === "dismissed") return;
-    await reload(state);
-    const existing = projectWithRoots(state.registry, [picked.uri]);
-    if (existing !== null) {
-      await report(`${displayName(existing)} already uses this folder`);
-      return;
-    }
-    const named = await workbench.showInput({
-      title: "New project name",
-      value: suggestedName(picked.uri),
-    });
-    if (named.kind === "dismissed") return;
-    const name = explicitName(named.value, suggestedName(picked.uri));
-    const now = Date.now();
-    const project = { id: newProjectId(), name, roots: [picked.uri], createdAt: now, lastOpenedAt: now };
-    try {
-      await commit(state, withProject(state.registry, project));
-    } catch (error) {
-      await report(`cannot save project: ${describe(error)}`);
-      return;
-    }
-    await switchTo(state, project, target.windowTarget);
-  }, { title: "New Project…", description: "Name this window's folders as a project." });
-
   await commands.register("projects.select", async ({ target }) => {
     await reload(state);
     if (state.registry.projects.length === 0) {

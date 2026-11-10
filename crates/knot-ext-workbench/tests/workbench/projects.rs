@@ -42,8 +42,8 @@ impl Projects {
         self.window = self.product.active_window(cx);
     }
 
-    /// Create the project `name` over `directory` from the focused window,
-    /// then follow the window it switched to.
+    /// Remember `directory` as the project `name` from the focused window,
+    /// then follow the window that shows it.
     pub(super) fn create(&mut self, directory: &Path, name: &str, cx: &mut TestAppContext) {
         self.window = create_project(&self.product, &self.window, directory, name, cx);
     }
@@ -79,8 +79,10 @@ pub(super) fn project_id(listed: &Value, name: &str) -> String {
         .to_owned()
 }
 
-/// Create the project `name` over `directory` from `window`; the focused
-/// window afterwards.
+/// Remember `directory` as a project named `name`, as the caller's window
+/// shows it afterwards. A window without roots opens the folder itself;
+/// otherwise a fresh window does, and the caller's window then switches to the
+/// project, suspending the one it showed.
 pub(super) fn create_project(
     product: &TestProduct,
     window: &TestWindow,
@@ -88,20 +90,53 @@ pub(super) fn create_project(
     name: &str,
     cx: &mut TestAppContext,
 ) -> TestWindow {
-    product.choose_in_open_dialog(directory, cx);
-    let create = window.start_command("projects.create", cx);
+    let uri = file_uri(directory);
+    let in_place = window.roots(cx).is_empty();
+    let fresh;
+    let opened = if in_place {
+        window
+    } else {
+        fresh = product.new_window(cx);
+        &fresh
+    };
+    opened.set_roots(&[&uri], cx);
+    let mut id = None;
+    wait_until(cx, |cx| {
+        let listed = list_projects(window, cx);
+        id = listed["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|project| project["roots"][0] == uri.as_str())
+            .map(|project| project["id"].as_str().unwrap().to_owned());
+        id.is_some()
+    });
+    let id = id.unwrap();
+    let tree = window.tree(TREE, cx);
+    wait_until(cx, |cx| tree.has_row(&id, cx));
+    tree.invoke(&id, "projects.rename", cx);
     window.wait_for_input(cx);
     window.press("cmd-a", cx);
     window.type_input(name, cx);
     window.press("enter", cx);
-    // Creating a project switches the window to it; when the command was
-    // captured on a document tab that the switch replaced, its completion
-    // reports the stale capture rather than a failure.
-    assert!(matches!(
-        create.finish(cx),
-        CommandOutcome::Completed | CommandOutcome::InvalidTarget
-    ));
-    product.active_window(cx)
+    wait_until(cx, |cx| shows(tree.labels(cx), name));
+    if !in_place {
+        assert_eq!(
+            opened.run_command("window.close", cx),
+            CommandOutcome::Completed
+        );
+        tree.activate_row(&id, cx);
+        wait_until(cx, |cx| {
+            cx.read(|cx| cx.active_window()).is_some()
+                && product.active_window(cx).roots(cx) == [uri.clone()]
+        });
+    }
+    cx.run_until_parked();
+    if in_place {
+        window.clone()
+    } else {
+        product.active_window(cx)
+    }
 }
 
 fn shows(labels: Vec<String>, label: &str) -> bool {
@@ -169,10 +204,7 @@ fn switching_to_a_project_with_a_missing_root_is_actionable_and_keeps_the_source
     wait_until(cx, |cx| tree.labels(cx).len() == 2);
 
     // Frame actions are exposed beside the rows.
-    assert_eq!(
-        tree.frame_commands(cx),
-        ["projects.create", "projects.new-window"]
-    );
+    assert_eq!(tree.frame_commands(cx), ["projects.new-window"]);
 
     // Arrow navigation follows the rendered rows.
     tree.focus(cx);
@@ -261,4 +293,29 @@ fn command_invoked_project_tool_changes_publish_the_window_default(cx: &mut Test
     cx.run_until_parked();
     assert!(!tree.is_attached(cx));
     assert!(!projects.product.fresh_window_shows(TREE, cx));
+}
+
+#[gpui::test]
+fn opening_a_folder_remembers_it_as_an_unnamed_project(cx: &mut TestAppContext) {
+    let projects = Projects::start(cx);
+    let directory = tempfile::tempdir().unwrap();
+    let uri = file_uri(directory.path());
+    let folder = directory.path().file_name().unwrap().to_str().unwrap();
+
+    projects.window.set_roots(&[&uri], cx);
+    let mut listed = Value::Null;
+    wait_until(cx, |cx| {
+        listed = projects.list(cx);
+        !listed["projects"].as_array().unwrap().is_empty()
+    });
+    let project = &listed["projects"][0];
+    assert_eq!(project["name"], Value::Null);
+    assert_eq!(project["roots"][0], uri);
+    let id = project["id"].as_str().unwrap();
+    assert_eq!(listed["sessions"][id]["state"], "active");
+
+    // The tree names it after its folder and tracks the window as bound.
+    let tree = projects.window.tree(TREE, cx);
+    wait_until(cx, |cx| shows(tree.labels(cx), folder));
+    wait_until(cx, |cx| tree.status(id, cx).as_deref() == Some("active"));
 }

@@ -9,7 +9,6 @@ export const VIEW_ID = "builtin.projects";
 const ACTION_ICONS = {
   "action.rename": "pencil",
   "action.remove": "trash",
-  "action.new-project": "plus",
   "action.new-window": "app-window",
 } as const;
 
@@ -64,7 +63,6 @@ export async function registerTree(state: ProjectsState) {
     },
     placement: { location: "left", visible: false },
     actions: [
-      { label: "New Project", icon: "action.new-project", command: "projects.create" },
       { label: "New Window", icon: "action.new-window", command: "projects.new-window" },
     ],
   });

@@ -5,8 +5,9 @@
 import { documents, recovery, windows } from "knot";
 import type { ApplicationEvent, CaptureId, DocumentId, DocumentInfo, WindowInfo } from "knot";
 import { syncBindings } from "./bindings.js";
-import { describeWindow, documentsById } from "./layout.js";
-import type { Project } from "./registry.js";
+import { describeWindow, documentsById, windowRoots } from "./layout.js";
+import { newProjectId, projectWithRoots, withProject, type Project } from "./registry.js";
+import { prune } from "./prune.js";
 import { describe } from "./report.js";
 import {
   SESSION_SCHEMA,
@@ -17,6 +18,7 @@ import {
 } from "./session.js";
 import {
   boundWindows,
+  commit,
   isActive,
   refreshTree,
   release,
@@ -47,16 +49,35 @@ export async function trackProject(
   if (session === undefined || !sameSession(session, next)) await writeSession(state, project.id, next);
 }
 
+/**
+ * Remembers each root set that unbound windows show and no project has: an
+ * unnamed active project is created and the windows bind to it. Windows
+ * without roots are never remembered.
+ */
+async function rememberUnbound(state: ProjectsState, list: readonly WindowInfo[]) {
+  let created = false;
+  for (const window of list) {
+    const roots = windowRoots(window);
+    if (roots.length === 0 || state.bindings.has(window.target)) continue;
+    if (projectWithRoots(state.registry, roots) !== null) continue;
+    const now = Date.now();
+    const project = { id: newProjectId(), name: null, roots, createdAt: now, lastOpenedAt: now };
+    await writeSession(state, project.id, { schema: SESSION_SCHEMA, state: "active", windows: [] });
+    await commit(state, withProject(state.registry, project));
+    created = true;
+  }
+  if (!created) return;
+  await prune(state);
+  await syncBindings(state, list);
+}
+
 /** Live tracking: rewrite active records that changed. Suspended records are never written. */
 async function track(state: ProjectsState) {
   if (!state.launched) return;
-  if (!state.registry.projects.some((project) => isActive(state, project))) {
-    state.bindings.clear();
-    return;
-  }
   try {
     const [list, docs] = await Promise.all([windows.list(), documents.list()]);
     await syncBindings(state, list);
+    await rememberUnbound(state, list);
     const byId = documentsById(docs);
     for (const project of state.registry.projects.filter((project) => isActive(state, project))) {
       await trackProject(state, project, list, byId);
@@ -97,13 +118,15 @@ async function suspendUnbound(state: ProjectsState) {
 }
 
 /**
- * Once startup windows exist, rebinds restored windows by root set and
- * suspends the remaining active sessions.
+ * Once startup windows exist, rebinds restored windows by root set, suspends
+ * the remaining active sessions, and remembers the other windows' folders.
  */
 export async function afterLaunch(state: ProjectsState) {
   state.launched = true;
   try {
     await suspendUnbound(state);
+    await rememberUnbound(state, await windows.list());
+    await track(state);
     await reconcileCaptures(state);
   } catch (error) {
     state.loadFailure = state.loadFailure ?? describe(error);
