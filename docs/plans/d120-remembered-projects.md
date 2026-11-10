@@ -65,25 +65,13 @@ way to opt in.
 
 ## Checkpoints
 
-### 1. Open Folder opens a new window ✅ built, awaiting its review gate
+### 1. Open Folder opens a new window ✅
 
-- Deliverables: the native Open Folder command opens the chosen folder in a
-  new product window when the target window has any root, and replaces the
-  roots of a window without roots. Launch requests keep their own window.
-- Validation: gpui product tests for both branches, including that the
-  original window keeps its roots and tabs.
-- **Implementation context:** the directory branch of `apply_open_result` in
-  `src/app/product/open.rs`, which today calls `install_workspace` for
-  `OpenResource::Directory` (`start_open_dialog_with_options` only starts the
-  dialog); window creation mirrors `open_product_window_with` in
-  `src/app/product/launch.rs`. `workspaces.openFolder` in
-  `src/app/extensions/host/handlers.rs` is unchanged. Update the Folder Open
-  decision in `docs/decisions/documents-and-persistence.md`, which says it
-  replaces every root,
-  and the workspaces section of
-  `docs/architecture/documents-and-persistence.md`.
-- Review gate: confirm the window choice feels right before the projects
-  package relies on it.
+Open on a folder installs it in a window without roots and opens a new window
+for it otherwise; see
+[documents and persistence](../architecture/documents-and-persistence.md#workspaces-and-resource-trees)
+and the Folder Open decision in
+[its decisions](../decisions/documents-and-persistence.md).
 
 ### 2. Unnamed projects and inferred names
 
