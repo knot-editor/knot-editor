@@ -396,10 +396,10 @@ state, which the session calls whether or not a window shows it (see
 prompt's.
 
 One native `Picker` serves the command palette, native pickers, and extension
-pickers. It fuzzy-matches the supplied item list locally with
-`nucleo-matcher`, ranking label matches above description matches above an
-item's hidden match text, and keeps the caller's order for an empty query and
-equal scores; no provider, scheduler, or event bus is added. An extension
+pickers. It matches the supplied item list locally through the shared
+`knot_model::matching` matcher, ranking label matches above description
+matches above an item's hidden match text, and keeps the caller's order for an
+empty query and equal scores; no provider, scheduler, or event bus is added. An extension
 picker with `onHighlight` reports the highlighted item through a pull loop in
 the caller's own turn, because package roots are serial and a notification
 could not run while the command awaits the picker:
@@ -411,6 +411,15 @@ showPicker({ onHighlight })
   nextPickerEvent(session) ──> highlighted ──┘
                            └─> selected | dismissed
 ```
+
+The matcher serves every list that filters by a typed query. Its styles
+(`prefix`, `substring`, `flex`, `orderless`) are the user's ordered
+`completion.styles` setting: a candidate matches if any listed style matches
+it, ordered by the first style that matches, then that style's score, then the
+caller's order. It is native because the picker filters on every keystroke and
+native painting never calls JavaScript synchronously; extensions reach the same
+matcher through `completion.match`, with UTF-16 ranges, and pass the ranges back
+as an input completion's `matches` for highlighting.
 
 Native code keeps only the latest unread highlight, so a slow callback skips
 intermediate items, and a settled picker wins over an unread highlight.

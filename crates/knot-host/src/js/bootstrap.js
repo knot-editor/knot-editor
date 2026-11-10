@@ -600,7 +600,27 @@ function inputCompletion(value) {
     label: string(value.label, "input completion label must be text"),
     value: string(value.value, "input completion value must be text"),
     detail: optionalText(value.detail),
+    matches: value.matches == null ? null : arrayItems(value.matches, textRange),
   };
+}
+
+function textRange(value) {
+  if (!Array.isArray(value) || value.length !== 2 || !value.every((unit) => Number.isSafeInteger(unit) && unit >= 0)) {
+    throw new TypeError("input completion matches must be pairs of text offsets");
+  }
+  return [value[0], value[1]];
+}
+
+export async function matchCandidates(query, candidates, options) {
+  const text = string(query, "match query must be text");
+  const list = arrayItems(candidates, (candidate) => string(candidate, "match candidate must be text"));
+  const styles = options == null ? null : record(options, "match options must be an object").styles;
+  const named = styles == null ? null : arrayItems(styles, (style) => string(style, "match style must be text"));
+  const found = await request("matchCandidates", text, list, named);
+  return Object.freeze(found.map((match) => Object.freeze({
+    index: match.index,
+    ranges: Object.freeze(match.ranges.map((range) => Object.freeze([range[0], range[1]]))),
+  })));
 }
 
 function transientTarget(options) {

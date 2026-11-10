@@ -23,6 +23,7 @@ import {
   showConfirmation,
   showMessage,
   registerStatusItem,
+  matchCandidates,
   registerCompletionProvider,
   registerView,
   registerLanguage,
@@ -77,6 +78,7 @@ export const workbench = Object.freeze({
   registerStatusItem,
 });
 
+export const completion = Object.freeze({ match: matchCandidates });
 export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, setLanguage: setDocumentLanguage });
 export const languages = Object.freeze({ register: registerLanguage, associate: associateLanguage, get: getLanguage, list: listLanguages, grammars: listGrammars });
 export const settings = Object.freeze({ define: defineSetting, set: setSettings, get: getSetting, reset: resetSetting, observe: observeSetting });

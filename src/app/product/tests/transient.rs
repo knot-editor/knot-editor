@@ -597,7 +597,7 @@ fn field_text(input: &Entity<crate::app::transient::InputView>, cx: &gpui::App) 
 }
 
 const LIVE_INPUT_SOURCE: &str = r#"
-import { commands, workbench } from "knot";
+import { commands, completion, workbench } from "knot";
 await commands.register("transient.live-input", async () => {
   const seen = [];
   const result = await workbench.showInput({
@@ -633,15 +633,23 @@ const WORDS = ["alpha", "alps", "beta"];
 await commands.register("transient.completing-input", async () => {
   const result = await workbench.showInput({
     title: "Word",
-    onChange: (value) => ({
-      items: WORDS.filter((word) => word.startsWith(value)).map((word) => ({
-        label: word,
-        value: word,
-        detail: "word",
-      })),
-    }),
+    onChange: async (value) => {
+      const found = await completion.match(value, WORDS, { styles: ["prefix"] });
+      return {
+        items: found.map(({ index, ranges }) => ({
+          label: WORDS[index],
+          value: WORDS[index],
+          detail: "word",
+          matches: ranges,
+        })),
+      };
+    },
   });
   await workbench.writeClipboardText(JSON.stringify(result));
+});
+await commands.register("transient.match", async () => {
+  const found = await completion.match("set", ["xset", "set", "résetté"]);
+  await workbench.writeClipboardText(JSON.stringify(found));
 });
 await commands.register("transient.malformed-input", async () => {
   try {
@@ -674,6 +682,20 @@ fn start_live_input(
     gpui::AnyWindowHandle,
     crate::app::CommandExecution,
 ) {
+    let (host, key, shell, window) = live_shell(cx);
+    let pending = dispatch_product_command(&shell, window, name, cx);
+    wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
+    (host, key, shell, window, pending)
+}
+
+fn live_shell(
+    cx: &mut TestAppContext,
+) -> (
+    Entity<crate::app::extensions::host::ProductExtensionHost>,
+    knot_protocol::ExtensionKey,
+    Entity<ProductShell>,
+    gpui::AnyWindowHandle,
+) {
     use knot_protocol::ExtensionKey;
 
     let documents = install_globals(cx);
@@ -698,9 +720,7 @@ fn start_live_input(
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
-    let pending = dispatch_product_command(&shell, window, name, cx);
-    wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
-    (host, key, shell, window, pending)
+    (host, key, shell, window)
 }
 
 #[gpui::test]
@@ -800,6 +820,9 @@ fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext
     cx.read(|cx| assert_eq!(input.read(cx).selected(), 0));
     type_into(&input, &["al"], cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["alpha", "alps"]);
+    cx.read(|cx| {
+        assert_eq!(input.read(cx).items()[0].matches, Some(vec![[0, 2]]));
+    });
     type_into(&input, &["zz"], cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx).is_empty());
 }
@@ -902,5 +925,47 @@ fn a_malformed_completion_answer_rejects_the_call(cx: &mut TestAppContext) {
         clipboard(cx)
             .as_deref()
             .is_some_and(|text| text.starts_with("caught "))
+    );
+}
+
+#[gpui::test]
+fn completion_match_follows_the_styles_setting_and_reports_utf16_ranges(cx: &mut TestAppContext) {
+    let (_host, _key, shell, window) = live_shell(cx);
+    let run = |cx: &mut TestAppContext| {
+        let pending = dispatch_product_command(&shell, window, "transient.match", cx);
+        assert_eq!(wait_for_command(pending, cx), CommandOutcome::Completed);
+        clipboard(cx).unwrap()
+    };
+    // The default flex style matches "set" as a subsequence anywhere.
+    let flex = run(cx);
+    assert!(
+        flex.contains(r#""index":0"#) && flex.contains(r#""index":2"#),
+        "{flex}"
+    );
+    cx.update(|cx| {
+        cx.default_global::<crate::app::settings::ApplicationSettings>()
+            .0
+            .set(
+                crate::app::settings::COMPLETION_STYLES,
+                serde_json::json!(["prefix"]),
+                Default::default(),
+            )
+            .unwrap();
+    });
+    assert_eq!(run(cx), r#"[{"index":1,"ranges":[[0,3]]}]"#);
+    cx.update(|cx| {
+        cx.default_global::<crate::app::settings::ApplicationSettings>()
+            .0
+            .set(
+                crate::app::settings::COMPLETION_STYLES,
+                serde_json::json!(["substring"]),
+                Default::default(),
+            )
+            .unwrap();
+    });
+    // "résetté" holds "set" after a two-byte letter: UTF-16 offsets, not bytes.
+    assert_eq!(
+        run(cx),
+        r#"[{"index":1,"ranges":[[0,3]]},{"index":0,"ranges":[[1,4]]},{"index":2,"ranges":[[2,5]]}]"#
     );
 }

@@ -1,7 +1,7 @@
 # D143 — Input completion
 
-Status: 🚧 approved; checkpoint 1 awaits its review gate, and checkpoints 2
-and 3 are not started. Item of the
+Status: 🚧 approved; checkpoints 1 and 2 are implemented and await their
+review gates, and checkpoint 3 is not started. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker).
 
 ## Goal
@@ -106,14 +106,14 @@ shape, `InputView` list and keys, stale-feedback dropping, fake-host
 `Try: Input completion` from `post-init.js`; the list, highlight, Tab, and
 Enter behave as designed.
 
-### 2. Shared matcher and `completion.styles`
+### 2. Shared matcher and `completion.styles` ✅
 
 Deliverables:
 - The matcher module in `crates/knot-model/src/` (`prefix`, `substring`,
   `flex`, `orderless`; merge and order as in the design), with plain unit
   tests.
-- The `completion.styles` setting, documented in `docs/settings.md`, with
-  validation of unknown style names.
+- The `completion.styles` setting, documented in `docs/settings.md`; unknown
+  style names are ignored, and a list with none selects `flex`.
 - The picker filters through the matcher instead of calling nucleo
   directly; its existing behavior is the default `["flex"]`.
 - The `completion.match` host call, typed in `knot.d.ts`, with the contract

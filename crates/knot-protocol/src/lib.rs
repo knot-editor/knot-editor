@@ -449,6 +449,41 @@ pub struct InputCompletion {
     pub value: String,
     #[serde(default)]
     pub detail: Option<String>,
+    /// UTF-16 code unit ranges of the label to highlight as matched.
+    #[serde(default, deserialize_with = "unit_ranges")]
+    pub matches: Option<Vec<[usize; 2]>>,
+}
+
+/// Ranges of whole numbers, which cross the host boundary as floating point.
+fn unit_ranges<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Vec<[usize; 2]>>, D::Error> {
+    use serde::Deserialize as _;
+    let ranges = Option::<Vec<[f64; 2]>>::deserialize(deserializer)?;
+    ranges
+        .map(|ranges| {
+            ranges
+                .into_iter()
+                .map(|range| {
+                    let unit = |value: f64| {
+                        (value >= 0. && value.fract() == 0. && value < 9_007_199_254_740_992.)
+                            .then_some(value as usize)
+                            .ok_or_else(|| serde::de::Error::custom("expected a text offset"))
+                    };
+                    Ok([unit(range[0])?, unit(range[1])?])
+                })
+                .collect()
+        })
+        .transpose()
+}
+
+/// One candidate that matched a query: its index in the candidates passed and
+/// the UTF-16 code unit ranges of the candidate that matched.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchedCandidate {
+    pub index: usize,
+    pub ranges: Vec<[usize; 2]>,
 }
 
 /// The next change of a followed text input, or its outcome.

@@ -344,6 +344,12 @@ declare module "knot" {
     /** IDs of status items the bar skips. Hidden items keep running, so a
      * package that registered one is unaffected. Native default empty. */
     "statusBar.hiddenItems": readonly string[];
+    /** How pickers and completion lists match, in order of preference:
+     * "prefix", "substring", "flex" (fuzzy), or "orderless" (space-separated
+     * parts in any order). A candidate matches if any style matches it, and
+     * earlier styles rank first. Unknown names are ignored. Native default
+     * ["flex"]. */
+    "completion.styles": readonly string[];
   }
   export type SettingKey = keyof Settings & string;
   /** "integer" accepts safe integers; "number" accepts any finite number;
@@ -704,6 +710,25 @@ declare module "knot" {
   export interface FileStat {
     readonly kind: FileKind;
   }
+  export interface CompletionMatch {
+    /** The candidate's index in the array passed to `match`. */
+    readonly index: number;
+    /** UTF-16 ranges of the candidate that matched, sorted and disjoint. */
+    readonly ranges: readonly (readonly [start: number, end: number])[];
+  }
+  /** The editor's shared matcher, which pickers use too. */
+  export const completion: Readonly<{
+    /** Returns the candidates that match `query`, best first, by the styles of
+     * the `completion.styles` setting or by `options.styles`: a candidate
+     * matches if any style matches it, ordered by the first style that matches,
+     * then by that style's score, then by the order given. A query of only
+     * whitespace matches every candidate, in order, with no ranges. */
+    match(
+      query: string,
+      candidates: readonly string[],
+      options?: { readonly styles?: readonly string[] },
+    ): Promise<readonly CompletionMatch[]>;
+  }>;
   /** Reads, lists, and stats stored resources through the registered resource
    * providers. Any URI with a registered provider is readable, independently of
    * workspace roots. These operations see only what is stored: an open
@@ -1496,6 +1521,9 @@ declare module "knot" {
     readonly value: string;
     /** Muted text after the label. */
     readonly detail?: string;
+    /** UTF-16 ranges of `label` to highlight as matched, as `completion.match`
+     * returns them. */
+    readonly matches?: readonly (readonly [start: number, end: number])[];
   }
   /** What an input's `onChange` may answer with besides a plain message. */
   export interface InputFeedback {

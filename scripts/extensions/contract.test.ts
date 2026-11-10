@@ -174,7 +174,7 @@ await workbench.writeClipboardText(null);
 // @ts-expect-error contextual targets cannot be null
 await editor.activeBuffer(null);
 
-import { documents, files, windows, workspaces } from "knot";
+import { completion, documents, files, windows, workspaces } from "knot";
 import type { DocumentId, WindowTarget, PaneTarget, ViewTarget } from "knot";
 for (const document of await documents.list()) {
   const id: DocumentId = document.id;
@@ -296,9 +296,15 @@ await workbench.showInput({
   title: "Word",
   onChange: (value) => ({
     message: value,
-    items: [{ label: "alpha", value: "alpha", detail: "word" }],
+    items: [{ label: "alpha", value: "alpha", detail: "word", matches: [[0, 2]] }],
   }),
 });
+const matched: readonly import("knot").CompletionMatch[] = await completion.match("al", ["alpha"], {
+  styles: ["prefix"],
+});
+void matched[0]?.ranges[0]?.[0];
+// @ts-expect-error a match query is text
+await completion.match(1, []);
 // @ts-expect-error a completion needs the value that replaces the field
 await workbench.showInput({ title: "Bad", onChange: () => ({ items: [{ label: "alpha" }] }) });
 const confirmed: import("knot").ConfirmationResult = await workbench.showConfirmation({

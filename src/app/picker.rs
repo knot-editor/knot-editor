@@ -1,11 +1,12 @@
 //! The native picker shared by the command palette, native pickers, and
 //! extension pickers.
 //!
-//! A picker owns its query field, fuzzy matching, highlighting, selection, and
-//! rows. Items are matched with `nucleo-matcher` in tiers: label matches rank
-//! above description matches, which rank above matches in an item's hidden
-//! match text. Within a tier a higher score ranks first, and ties keep the
-//! caller's order, as does an empty query. Events name items by their index in
+//! A picker owns its query field, matching, highlighting, selection, and
+//! rows. Items are matched with the shared [`knot_model::matching`] matcher
+//! in the styles of the `completion.styles` setting, in tiers: label matches
+//! rank above description matches, which rank above matches in an item's
+//! hidden match text. Within a tier the matcher's order applies, and ties keep
+//! the caller's order, as does an empty query. Events name items by their index in
 //! the list the picker was created with. The picker reports the highlighted
 //! item whenever it changes, so a consumer can preview it.
 
@@ -15,11 +16,7 @@ use std::ops::Range;
 use gpui::{prelude::*, *};
 
 use super::keys::Keystroke;
-use nucleo_matcher::{
-    Config, Matcher, Utf32Str,
-    pattern::{CaseMatching, Normalization, Pattern},
-};
-use unicode_segmentation::UnicodeSegmentation;
+use knot_model::matching::{Matcher, Query, styles_from_names};
 
 use super::{
     text_input::{TextInput, TextInputEvent},
@@ -97,7 +94,7 @@ impl Picker {
             &input,
             |this: &mut Self, _input, _event: &TextInputEvent, cx| {
                 let query = this.input.read(cx).text().to_string();
-                this.refilter(&query);
+                this.refilter(&query, cx);
                 this.report_highlight(cx);
                 cx.notify();
             },
@@ -110,11 +107,11 @@ impl Picker {
             highlighted: None,
             input,
             scroll: UniformListScrollHandle::new(),
-            matcher: Matcher::new(Config::DEFAULT),
+            matcher: Matcher::new(),
             key_context,
             _input_subscription: subscription,
         };
-        this.refilter("");
+        this.refilter("", cx);
         this.highlighted = this.selected_entry();
         this
     }
@@ -142,7 +139,7 @@ impl Picker {
     #[cfg(test)]
     pub(crate) fn set_query(&mut self, query: &str, cx: &mut Context<Self>) {
         self.input.update(cx, |input, cx| input.set_text(query, cx));
-        self.refilter(query);
+        self.refilter(query, cx);
         self.report_highlight(cx);
         cx.notify();
     }
@@ -155,7 +152,7 @@ impl Picker {
         }
     }
 
-    fn refilter(&mut self, query: &str) {
+    fn refilter(&mut self, query: &str, cx: &App) {
         self.selected = 0;
         self.scroll.scroll_to_item(0, ScrollStrategy::Top);
         if query.trim().is_empty() {
@@ -168,43 +165,39 @@ impl Picker {
                 .collect();
             return;
         }
-        let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
+        let styles = styles_from_names(&crate::app::settings::strings(
+            crate::app::settings::COMPLETION_STYLES,
+            cx,
+        ));
+        let query = Query::new(query, &styles);
         let mut scored = Vec::new();
-        let mut buffer = Vec::new();
-        let mut indices = Vec::new();
         for (entry, item) in self.entries.iter().enumerate() {
             let fields = [
                 Some(item.label.as_str()),
                 item.description.as_deref(),
                 item.match_text.as_deref(),
             ];
-            let found = fields.iter().enumerate().find_map(|(tier, text)| {
-                let text = (*text)?;
-                indices.clear();
-                let score = pattern.indices(
-                    Utf32Str::new(text, &mut buffer),
-                    &mut self.matcher,
-                    &mut indices,
-                )?;
-                Some((tier, score, grapheme_ranges(text, &mut indices)))
-            });
-            if let Some((tier, score, ranges)) = found {
-                let mut found = PickerMatch {
+            let found = fields
+                .iter()
+                .enumerate()
+                .find_map(|(tier, text)| Some((tier, self.matcher.find(&query, (*text)?)?)));
+            if let Some((tier, found)) = found {
+                let mut row = PickerMatch {
                     entry,
                     label: Vec::new(),
                     description: Vec::new(),
                 };
                 match tier {
-                    0 => found.label = ranges,
-                    1 => found.description = ranges,
+                    0 => row.label = found.ranges,
+                    1 => row.description = found.ranges,
                     _ => {}
                 }
-                scored.push((tier, std::cmp::Reverse(score), found));
+                scored.push((tier, found.style, std::cmp::Reverse(found.score), row));
             }
         }
         // A stable sort keeps the caller's order among equal scores.
-        scored.sort_by_key(|(tier, score, _)| (*tier, *score));
-        self.matches = scored.into_iter().map(|(_, _, found)| found).collect();
+        scored.sort_by_key(|(tier, style, score, _)| (*tier, *style, *score));
+        self.matches = scored.into_iter().map(|(.., row)| row).collect();
     }
 
     pub(crate) fn move_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
@@ -265,26 +258,6 @@ impl Picker {
     }
 }
 
-/// Convert sorted grapheme indices from the matcher into merged byte ranges.
-fn grapheme_ranges(text: &str, indices: &mut Vec<u32>) -> Vec<Range<usize>> {
-    indices.sort_unstable();
-    indices.dedup();
-    let mut wanted = indices.iter().copied().peekable();
-    let mut ranges: Vec<Range<usize>> = Vec::new();
-    for (index, (start, grapheme)) in text.grapheme_indices(true).enumerate() {
-        if wanted.peek() != Some(&(index as u32)) {
-            continue;
-        }
-        wanted.next();
-        let end = start + grapheme.len();
-        match ranges.last_mut() {
-            Some(last) if last.end == start => last.end = end,
-            _ => ranges.push(start..end),
-        }
-    }
-    ranges
-}
-
 impl EventEmitter<PickerEvent> for Picker {}
 
 impl Focusable for Picker {
@@ -293,7 +266,7 @@ impl Focusable for Picker {
     }
 }
 
-fn highlighted(text: String, ranges: &[Range<usize>], color: Hsla) -> StyledText {
+pub(crate) fn highlighted(text: String, ranges: &[Range<usize>], color: Hsla) -> StyledText {
     let style = HighlightStyle {
         color: Some(color),
         font_weight: Some(FontWeight::BOLD),
@@ -494,6 +467,49 @@ mod tests {
                 assert_eq!(labels(picker).first(), Some(&expected), "query {query:?}");
             });
         }
+    }
+
+    #[gpui::test]
+    fn the_completion_styles_setting_selects_how_rows_match(cx: &mut TestAppContext) {
+        let picker = picker(
+            ["set", "xset", "reset", "toggle word"]
+                .iter()
+                .map(|label| entry(label, None))
+                .collect(),
+            cx,
+        );
+        let query = |query: &str, styles: serde_json::Value, cx: &mut TestAppContext| {
+            cx.update(|cx| {
+                cx.default_global::<crate::app::settings::ApplicationSettings>()
+                    .0
+                    .set(
+                        crate::app::settings::COMPLETION_STYLES,
+                        styles,
+                        Default::default(),
+                    )
+                    .unwrap();
+            });
+            picker.update(cx, |picker, cx| {
+                picker.set_query(query, cx);
+                labels(picker)
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+        };
+        assert_eq!(query("set", serde_json::json!(["prefix"]), cx), ["set"]);
+        assert_eq!(
+            query("set", serde_json::json!(["substring"]), cx),
+            ["set", "xset", "reset"]
+        );
+        assert_eq!(
+            query("word tog", serde_json::json!(["orderless"]), cx),
+            ["toggle word"]
+        );
+        assert_eq!(
+            query("set", serde_json::json!(["prefix", "substring"]), cx),
+            ["set", "xset", "reset"]
+        );
     }
 
     #[gpui::test]

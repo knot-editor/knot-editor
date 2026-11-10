@@ -4,6 +4,7 @@ import { api } from "./host.js";
 
 export const {
   commands,
+  completion,
   documents,
   editor,
   files,

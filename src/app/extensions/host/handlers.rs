@@ -1528,6 +1528,61 @@ fn input_update(pulled: Pulled) -> Result<InputUpdate, TransientError> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MatchArguments {
+    pub query: String,
+    pub candidates: Vec<String>,
+    pub styles: Option<Vec<String>>,
+}
+impl HostArguments for MatchArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let candidates = serde_json::to_value(reader.command_arguments(3)?)
+            .ok()
+            .and_then(|value| serde_json::from_value::<Vec<String>>(value).ok())
+            .ok_or(DecodeError::Type("match candidates must be text"))?;
+        let styles = serde_json::to_value(reader.command_arguments(4)?)
+            .ok()
+            .and_then(|value| serde_json::from_value::<Option<Vec<String>>>(value).ok())
+            .ok_or(DecodeError::Type("match styles must be text"))?;
+        Ok(Self {
+            query: reader.text(2, "match query must be text")?,
+            candidates,
+            styles,
+        })
+    }
+}
+
+/// Match candidates against a query in the user's `completion.styles`, or the
+/// styles the caller names, and return the matches best first.
+#[host_operation("matchCandidates")]
+async fn match_candidates(
+    context: HostContext,
+    arguments: MatchArguments,
+) -> Result<Vec<knot_protocol::MatchedCandidate>, AccessError> {
+    use knot_model::matching::{Matcher, Query, styles_from_names, utf16_ranges};
+
+    let MatchArguments {
+        query,
+        candidates,
+        styles,
+    } = arguments;
+    let names = match styles {
+        Some(names) => names,
+        None => context.foreground(|_, cx| {
+            crate::app::settings::strings(crate::app::settings::COMPLETION_STYLES, cx)
+        })?,
+    };
+    let query = Query::new(&query, &styles_from_names(&names));
+    Ok(Matcher::new()
+        .rank(&query, &candidates)
+        .into_iter()
+        .map(|(index, found)| knot_protocol::MatchedCandidate {
+            index,
+            ranges: utf16_ranges(&candidates[index], &found.ranges),
+        })
+        .collect())
+}
+
 #[host_operation("showConfirmation")]
 pub(crate) async fn show_confirmation(
     context: HostContext,

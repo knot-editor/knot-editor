@@ -724,7 +724,8 @@ if (sure.kind === "confirmed") await remove();
 await workbench.showMessage({ title: "Saved" });
 ```
 
-Picker items are fuzzy-matched locally, label first and then description, so
+Picker items are matched locally, label first and then description, in the
+user's `completion.styles`, so
 the complete list is supplied up front; there is no streaming provider. An item
 may add a `detail` line and a right-aligned `hint`. Pass `onHighlight` to
 preview the highlighted item as the user moves through the list:
@@ -762,12 +763,23 @@ An empty or missing list hides it. Feedback applies only while the field still
 holds the value it answers; otherwise it is dropped, so Tab never accepts a
 completion for older text:
 
+Match with `completion.match` rather than your own filter, so the list follows
+the user's `completion.styles` setting (`prefix`, `substring`, `flex`, or
+`orderless`, in order of preference). It returns the matching candidates best
+first, with the UTF-16 `ranges` that matched; pass them as an item's `matches`
+to highlight them. A call may pass `{ styles }` to override the setting, for a
+list where one style is part of the meaning:
+
 ```js
 const words = ["alpha", "alps", "beta"];
 await workbench.showInput({
   title: "Word",
-  onChange: (value) => ({
-    items: words.filter((word) => word.startsWith(value)).map((word) => ({ label: word, value: word })),
+  onChange: async (value) => ({
+    items: (await completion.match(value, words)).map(({ index, ranges }) => ({
+      label: words[index],
+      value: words[index],
+      matches: ranges,
+    })),
   }),
 });
 ```

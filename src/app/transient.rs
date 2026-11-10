@@ -15,9 +15,10 @@ use super::keys::Keystroke;
 
 use knot_protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId, InputCompletion};
 
-use super::picker::Picker;
+use super::picker::{Picker, highlighted};
 use super::text_input::{TextInput, TextInputEvent};
 use super::theme::{color, theme};
+use knot_model::matching::byte_ranges;
 
 const PANEL_WIDTH: f32 = 560.;
 const ROW_HEIGHT: f32 = 26.;
@@ -236,6 +237,7 @@ impl Render for InputView {
                 let view = entity.read(cx);
                 let theme = theme(cx);
                 let muted = theme.paint_color(color::TEXT_MUTED);
+                let matched = theme.paint_color(color::LIST_MATCH_FOREGROUND);
                 range
                     .map(|index| {
                         let item = &view.items[index];
@@ -253,7 +255,13 @@ impl Render for InputView {
                                 row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
                                     .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
                             })
-                            .child(div().flex_shrink_0().child(item.label.clone()))
+                            .child(div().flex_shrink_0().child(highlighted(
+                                item.label.clone(),
+                                &item.matches.as_deref().map_or_else(Vec::new, |ranges| {
+                                    byte_ranges(&item.label, ranges)
+                                }),
+                                matched,
+                            )))
                             .when_some(item.detail.clone(), |row, detail| {
                                 row.child(
                                     div()

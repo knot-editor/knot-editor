@@ -129,6 +129,7 @@ function emptyState() {
       ["keymap.preset", { key: "keymap.preset", type: "string", default: "knot", description: "The keymap preset that supplies default key bindings" }],
       ["statusBar.visible", { key: "statusBar.visible", type: "boolean", default: true, description: "Show the status bar below the workbench" }],
       ["statusBar.hiddenItems", { key: "statusBar.hiddenItems", type: "strings", default: [], description: "IDs of status bar items the bar skips" }],
+      ["completion.styles", { key: "completion.styles", type: "strings", default: ["flex"], description: "How pickers and completion lists match, in order: prefix, substring, flex, or orderless" }],
     ]),
     settingValues: [] as FakeSettingValue[],
     settingListeners: [] as { key: string; listener: (key: Knot.SettingKey) => void | Promise<void> }[],
@@ -585,6 +586,89 @@ export function type(...values: string[]) {
  * returned nothing. */
 export function inputMessages(): readonly (string | null)[] {
   return state.inputMessages;
+}
+
+type Span = [number, number];
+
+/** The first occurrence of `needle` in `haystack` (at its start if `atStart`). */
+function findText(haystack: string, needle: string, fold: boolean, atStart: boolean): Span | null {
+  const text = fold ? haystack.toLowerCase() : haystack;
+  const wanted = fold ? needle.toLowerCase() : needle;
+  const start = atStart ? (text.startsWith(wanted) ? 0 : -1) : text.indexOf(wanted);
+  return start < 0 ? null : [start, start + wanted.length];
+}
+
+/** The characters of `needle` in order within `haystack`, leftmost. */
+function findSubsequence(haystack: string, needle: string, fold: boolean): Span[] | null {
+  const text = fold ? haystack.toLowerCase() : haystack;
+  const wanted = fold ? needle.toLowerCase() : needle;
+  const spans: Span[] = [];
+  let from = 0;
+  for (const character of wanted) {
+    const at = text.indexOf(character, from);
+    if (at < 0) return null;
+    spans.push([at, at + character.length]);
+    from = at + character.length;
+  }
+  return spans;
+}
+
+function mergeSpans(spans: Span[]): Span[] {
+  const merged: Span[] = [];
+  for (const span of [...spans].sort((a, b) => a[0] - b[0])) {
+    const last = merged.at(-1);
+    if (last !== undefined && span[0] <= last[1]) last[1] = Math.max(last[1], span[1]);
+    else merged.push([span[0], span[1]]);
+  }
+  return merged;
+}
+
+/** The fake's matcher follows the styles' meaning, but ranks `flex` matches
+ * in the order given rather than by the native fuzzy score. */
+function matchWith(style: string, query: string, parts: string[], fold: boolean, text: string): { score: number; ranges: Span[] } | null {
+  switch (style) {
+    case "prefix": {
+      const span = findText(text, query, fold, true);
+      return span && { score: 0, ranges: [span] };
+    }
+    case "substring": {
+      const span = findText(text, query, fold, false);
+      return span && { score: -span[0], ranges: [span] };
+    }
+    case "orderless": {
+      const spans = parts.map((part) => findText(text, part, fold, false));
+      return spans.every((span) => span !== null) ? { score: 0, ranges: mergeSpans(spans as Span[]) } : null;
+    }
+    default: {
+      const spans = parts.map((part) => findSubsequence(text, part, fold));
+      return spans.every((found) => found !== null) ? { score: 0, ranges: mergeSpans(spans.flat() as Span[]) } : null;
+    }
+  }
+}
+
+function matchCandidates(query: string, candidates: readonly string[], options?: { readonly styles?: readonly string[] }): Knot.CompletionMatch[] {
+  const known = ["prefix", "substring", "flex", "orderless"];
+  const configured = options?.styles ?? (resolveSetting("completion.styles", settingScope(undefined)) as string[]);
+  const named = configured.filter((name) => known.includes(name));
+  const styles = named.length > 0 ? named : ["flex"];
+  const parts = query.split(/\s+/).filter((part) => part !== "");
+  const fold = query === query.toLowerCase();
+  const found: { index: number; style: number; score: number; ranges: Span[] }[] = [];
+  candidates.forEach((text, index) => {
+    if (parts.length === 0) {
+      found.push({ index, style: 0, score: 0, ranges: [] });
+      return;
+    }
+    for (const [style, name] of styles.entries()) {
+      const match = matchWith(name, query, parts, fold, text);
+      if (match !== null) {
+        found.push({ index, style, ...match });
+        return;
+      }
+    }
+  });
+  found.sort((a, b) => a.style - b.style || b.score - a.score || a.index - b.index);
+  return found.map(({ index, ranges }) => ({ index, ranges }));
 }
 
 /** The completions each `onChange` call returned, in order; empty when it
@@ -1424,6 +1508,9 @@ export const api: KnotApi = {
       return setRoots(target, roots);
     },
     pickFolder: async (options) => prompt("pickFolder", options),
+  },
+  completion: {
+    match: async (query, candidates, options) => matchCandidates(query, candidates, options),
   },
   files: {
     readText: async (uri) => {
