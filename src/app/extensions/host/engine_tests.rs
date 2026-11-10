@@ -4154,11 +4154,14 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (typeof globalThis.__knotNativeBindings !== "undefined") {
                 throw new Error("private native bindings are exposed");
             }
-            if (Object.keys(knot).sort().join(",") !== "commands,documents,editor,icons,keymaps,languages,platform,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
+            if (Object.keys(knot).sort().join(",") !== "commands,documents,editor,files,icons,keymaps,languages,platform,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
                 throw new Error("unexpected public exports");
             }
             if (!Object.isFrozen(knot.editor) || !Object.isFrozen(knot.commands) || !Object.isFrozen(knot.workbench) || !Object.isFrozen(knot.storage)) {
                 throw new Error("facade objects are mutable");
+            }
+            if (!Object.isFrozen(knot.files) || Object.keys(knot.files).sort().join(",") !== "list,readText,stat") {
+                throw new Error("unexpected files facade");
             }
             if (Object.keys(knot.storage).sort().join(",") !== "delete,list,read,write") {
                 throw new Error("storage facade is incomplete");

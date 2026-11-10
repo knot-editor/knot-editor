@@ -1519,6 +1519,17 @@ export async function pickFolder(options) {
     ? { kind: "selected", uri: value.uri }
     : { kind: "dismissed" });
 }
+export function readFileText(uri) {
+  return request("readFileText", string(uri, "resource URI must be text"));
+}
+export async function listFiles(uri) {
+  const entries = await request("listFiles", string(uri, "resource URI must be text"));
+  return Object.freeze(entries.map(entry => Object.freeze({ uri: entry.uri, name: entry.name, kind: entry.kind })));
+}
+export async function statFile(uri) {
+  const kind = await request("statFile", string(uri, "resource URI must be text"));
+  return kind === null ? null : Object.freeze({ kind });
+}
 export async function openWindow(options) {
   const roots = options === undefined
     ? undefined

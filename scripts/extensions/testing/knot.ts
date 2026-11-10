@@ -6,6 +6,7 @@ export const {
   commands,
   documents,
   editor,
+  files,
   icons,
   keymaps,
   languages,

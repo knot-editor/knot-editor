@@ -1,6 +1,6 @@
 # D122 — Extension file read, list, and stat API
 
-Status: 🚧 in progress (checkpoint 1 done). Item of the
+Status: 🚧 in progress (checkpoint 2 awaits its review gate). Item of the
 [daily-driver plan](daily-driver.md#phase-4--files-and-workspace).
 
 ## Goal
@@ -84,7 +84,7 @@ None.
 - Review gate: none beyond `just check`; continue to checkpoint 2.
 - ✅ Done: the test uses a Unix socket for the special file.
 
-### 2. The `files` namespace end to end
+### 2. 🔍 The `files` namespace end to end
 
 - Model operations in `knot-model` that take the provider registry and a URI
   and return `readText`, `list`, and `stat` results as data with typed
@@ -113,6 +113,9 @@ None.
   sit beside `src/app/product/tests/workspaces.rs` and use `ServedFiles` from
   `src/app/product/driver/product.rs`. Handler declarations are validated at
   startup by `host::declarations`.
+- ✅ Implemented: `knot-model/src/files.rs`, the `readFileText`, `listFiles`, and
+  `statFile` host operations, the `files` export and declarations, the
+  `seedFile` fake, and tests at each level. Remaining: the review gate.
 - Review gate: run the `Try:` commands from personal-config `post-init.js`:
   read a file of the open workspace, list the root, and stat a missing path,
   each reporting its result with `showMessage`; then edit an open file without

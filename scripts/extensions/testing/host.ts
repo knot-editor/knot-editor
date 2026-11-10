@@ -105,6 +105,7 @@ function emptyState() {
     inputMessages: [] as (string | null)[],
     messages: [] as Knot.MessageOptions[],
     clipboard: null as string | null,
+    files: new Map<string, string>(),
     selectedText: null as string | null,
     failures: new Map<string, HostErrorCode[]>(),
     replaced: [] as Knot.ReplaceWindowsOptions[],
@@ -616,6 +617,23 @@ export function statusItems(target: Knot.WindowTarget): (Knot.StatusItemOptions 
     .map((item) => ({ id: item.id, ...(item.windows.get(target) ?? item.value) }))
     .filter((item) => item.text !== "")
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+}
+
+/** Seeds a stored file for `files`; its parent directories exist implicitly. */
+export function seedFile(uri: string, text: string) {
+  state.files.set(uri, text);
+}
+
+function fileKind(uri: string): Knot.FileKind | null {
+  if (state.files.has(uri)) return "file";
+  const directory = uri.endsWith("/") ? uri : `${uri}/`;
+  for (const file of state.files.keys()) if (file.startsWith(directory)) return "directory";
+  return null;
+}
+
+function checkedFileUri(uri: string): string {
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(uri)) throw hostError("InvalidUri");
+  return uri.length > 1 && uri.endsWith("/") ? uri.slice(0, -1) : uri;
 }
 
 export function clipboard() {
@@ -1399,6 +1417,36 @@ export const api: KnotApi = {
       return setRoots(target, roots);
     },
     pickFolder: async (options) => prompt("pickFolder", options),
+  },
+  files: {
+    readText: async (uri) => {
+      maybeFail("files.readText");
+      const checked = checkedFileUri(uri);
+      const kind = fileKind(checked);
+      if (kind === null) throw hostError("ResourceNotFound");
+      if (kind === "directory") throw hostError("ResourceWrongKind");
+      return state.files.get(checked)!.replace(/^\uFEFF/, "");
+    },
+    list: async (uri) => {
+      maybeFail("files.list");
+      const checked = checkedFileUri(uri);
+      const kind = fileKind(checked);
+      if (kind === null) throw hostError("ResourceNotFound");
+      if (kind === "file") throw hostError("ResourceWrongKind");
+      const entries = new Map<string, Knot.FileEntry>();
+      for (const file of state.files.keys()) {
+        if (!file.startsWith(`${checked}/`)) continue;
+        const name = file.slice(checked.length + 1).split("/")[0]!;
+        const child = `${checked}/${name}`;
+        entries.set(name, { uri: child, name, kind: fileKind(child)! });
+      }
+      return [...entries.values()];
+    },
+    stat: async (uri) => {
+      maybeFail("files.stat");
+      const kind = fileKind(checkedFileUri(uri));
+      return kind === null ? null : { kind };
+    },
   },
   terminals: {
     open: notFaked("terminals.open"),

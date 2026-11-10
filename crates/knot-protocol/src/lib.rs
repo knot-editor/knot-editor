@@ -473,6 +473,22 @@ pub enum FolderPickerResult {
     Dismissed,
 }
 
+/// The kind of a file API resource.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FileKind {
+    File,
+    Directory,
+}
+
+/// One entry of a `files.list` result.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct FileEntry {
+    pub uri: String,
+    pub name: String,
+    pub kind: FileKind,
+}
+
 /// One asynchronous child request issued by a native view instance.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TreeChildrenRequest {

@@ -1621,6 +1621,68 @@ pub(crate) async fn pick_folder(
     })
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FileUriArguments {
+    uri: String,
+}
+
+impl HostArguments for FileUriArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            uri: reader.text(2, "resource URI must be text")?,
+        })
+    }
+}
+
+fn file_kind(kind: knot_model::filesystem::ResourceKind) -> knot_protocol::FileKind {
+    match kind {
+        knot_model::filesystem::ResourceKind::File => knot_protocol::FileKind::File,
+        knot_model::filesystem::ResourceKind::Directory => knot_protocol::FileKind::Directory,
+    }
+}
+
+#[host_operation("readFileText")]
+async fn read_file_text(
+    context: HostContext,
+    arguments: FileUriArguments,
+) -> Result<String, OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    knot_model::files::read_text(providers, &arguments.uri)
+        .await
+        .map_err(product::operations::resource_error)
+}
+
+#[host_operation("listFiles")]
+async fn list_files(
+    context: HostContext,
+    arguments: FileUriArguments,
+) -> Result<Vec<knot_protocol::FileEntry>, OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let entries = knot_model::files::list(providers, &arguments.uri)
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    Ok(entries
+        .into_iter()
+        .map(|entry| knot_protocol::FileEntry {
+            uri: entry.uri.to_string(),
+            name: entry.name,
+            kind: file_kind(entry.kind),
+        })
+        .collect())
+}
+
+#[host_operation("statFile")]
+async fn stat_file(
+    context: HostContext,
+    arguments: FileUriArguments,
+) -> Result<Option<knot_protocol::FileKind>, OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    knot_model::files::stat(providers, &arguments.uri)
+        .await
+        .map(|kind| kind.map(file_kind))
+        .map_err(|error| product::operations::resource_error(error.into()))
+}
+
 #[host_operation("registerView")]
 pub(crate) async fn register_tree_provider(
     context: HostContext,

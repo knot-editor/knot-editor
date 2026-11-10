@@ -1691,7 +1691,7 @@ impl ProductShell {
         cx.global::<ApplicationDocuments>().0.clone()
     }
 
-    fn filesystems(cx: &App) -> Arc<FileSystemProviderRegistry> {
+    pub(crate) fn filesystems(cx: &App) -> Arc<FileSystemProviderRegistry> {
         cx.global::<ApplicationFileSystems>().0.clone()
     }
 

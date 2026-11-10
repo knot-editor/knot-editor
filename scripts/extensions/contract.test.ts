@@ -174,7 +174,7 @@ await workbench.writeClipboardText(null);
 // @ts-expect-error contextual targets cannot be null
 await editor.activeBuffer(null);
 
-import { documents, windows, workspaces } from "knot";
+import { documents, files, windows, workspaces } from "knot";
 import type { DocumentId, WindowTarget, PaneTarget, ViewTarget } from "knot";
 for (const document of await documents.list()) {
   const id: DocumentId = document.id;
@@ -298,6 +298,18 @@ const confirmed: import("knot").ConfirmationResult = await workbench.showConfirm
 if (confirmed.kind === "confirmed") {
   // Confirmation carries no payload.
 }
+const fileText: string = await files.readText("file:///tmp/a.txt");
+void fileText;
+const fileEntries: readonly import("knot").FileEntry[] = await files.list("file:///tmp");
+const entryKind: import("knot").FileKind = fileEntries[0].kind;
+void entryKind;
+const fileStat: import("knot").FileStat | null = await files.stat("file:///tmp/a.txt");
+void fileStat;
+// @ts-expect-error file kinds are file or directory only
+const badKind: import("knot").FileKind = "symlink";
+void badKind;
+// @ts-expect-error files are read-only
+void files.writeText;
 const pickedFolder: import("knot").FolderPickerResult = await workspaces.pickFolder();
 if (pickedFolder.kind === "selected") {
   const uri: string = pickedFolder.uri;

@@ -694,6 +694,38 @@ declare module "knot" {
     /** Omission captures the command's window or active product window at admission. */
     readonly target?: WindowTarget;
   }
+  export type FileKind = "file" | "directory";
+  export interface FileEntry {
+    readonly uri: string;
+    /** The entry's name within its directory. */
+    readonly name: string;
+    readonly kind: FileKind;
+  }
+  export interface FileStat {
+    readonly kind: FileKind;
+  }
+  /** Reads, lists, and stats stored resources through the registered resource
+   * providers. Any URI with a registered provider is readable, independently of
+   * workspace roots. These operations see only what is stored: an open
+   * document's unsaved edits are ignored. */
+  export const files: Readonly<{
+    /** Reads the stored file and decodes it as UTF-8, dropping a leading byte
+     * order mark. It never reads an open document's buffer, so unsaved edits are
+     * not visible; use `documents` and `Buffer.snapshot` for live text.
+     * @throws HostError with InvalidUri, ResourceNotFound, ResourceWrongKind for
+     * a directory, InvalidUtf8, or ProviderFailure. */
+    readText(uri: string): Promise<string>;
+    /** Lists exactly one directory, in unspecified order. Callers sort and
+     * filter. Entries a listing cannot represent (broken symlinks, special files,
+     * and names that are not UTF-8) are skipped.
+     * @throws HostError with InvalidUri, ResourceNotFound, ResourceWrongKind for
+     * a file, or ProviderFailure. */
+    list(uri: string): Promise<readonly FileEntry[]>;
+    /** Resolves the kind of the resource, or null when it does not exist.
+     * Symlinks report their target's kind.
+     * @throws HostError with InvalidUri or ProviderFailure. */
+    stat(uri: string): Promise<FileStat | null>;
+  }>;
   export const workspaces: Readonly<{
     get(target: WindowTarget): Promise<WorkspaceInfo | null>;
     /** Validates an existing directory and replaces this window's roots. Missing

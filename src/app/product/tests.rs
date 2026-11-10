@@ -6,6 +6,7 @@ mod editing;
 mod editor_api;
 mod extension_api;
 mod extension_restart;
+mod files;
 mod headless;
 mod icons;
 mod key_hold;
