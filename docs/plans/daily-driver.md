@@ -364,10 +364,11 @@ to be rebuilt later:
     first.
   - Searches with `files.search` on every keystroke, one call for all roots.
 
-- 🚧 **D083 — Recent files** (depends on D071)
-  - 🚧 [Plan](d083-recent-files.md)
-  - A bundled extension that records opened documents in extension storage
-    and offers Open Recent….
+- **D083 — Recent files** (depends on D071)
+  - ✅ Done.
+  - `Open Recent…` (⌘E) and `Clear Recent Files` in `@knot/go-to-file`, over
+    the `recent-files` history of active files; missing files drop out.
+  - `history.forget` removes one recorded ID or the whole list.
   - Reopen closed tab (D072) is unrelated: it is native per-window state.
 
 - **D084 — Project selector modal** (depends on D071)
