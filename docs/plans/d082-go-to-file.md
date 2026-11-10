@@ -1,6 +1,6 @@
 # D082 — Go to File
 
-Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 next. Item of the
+Status: ✅ all checkpoints approved. Item of the
 [daily-driver plan](daily-driver.md#phase-4--files-and-workspace); promotes
 [D118](../roadmap.md) (query-driven picker) in its smallest form.
 
@@ -101,9 +101,10 @@ roots. The ranking rules are in the
 [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index)
 reference.
 
-### 3. Recent files first 🚧
+### 3. Recent files first ✅
 
-Implemented; awaiting the review gate.
+Approved. The package records active files into `history` and puts recent
+files first, as described in [the package](#the-package).
 
 Deliverables:
 

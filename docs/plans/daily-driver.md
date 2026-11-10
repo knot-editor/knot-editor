@@ -358,11 +358,11 @@ to be rebuilt later:
     more matched; `files.walk` is removed.
 
 - **D082 — Go to File** (depends on D071, D081, D173)
-  - 🚧 [Plan](d082-go-to-file.md).
+  - ✅ Done.
   - A bundled extension bound to ⌘P that fuzzy-matches workspace paths.
   - Multi-root paths are labeled by root, and open and recent files rank
     first.
-  - Searches with `files.search` on every keystroke, one call per root.
+  - Searches with `files.search` on every keystroke, one call for all roots.
 
 - **D083 — Recent files** (depends on D071)
   - A bundled extension that records opened documents in extension storage
