@@ -1,9 +1,10 @@
 //! Ranked matching of file paths against a query.
 //!
-//! The index and the disk walk offer every visible file to one [`Ranker`], so
-//! both rank alike. A file whose name matches ranks above one that matches only
-//! through its directories; within a tier the matcher's order applies, then the
-//! path order.
+//! The index and the disk walk offer every visible file to one [`Search`], so
+//! both rank alike, across any number of searched directories. A file whose
+//! name matches ranks above one that matches only through its directories;
+//! within a tier the matcher's order applies, then the order the directories
+//! were begun in, then the path order.
 
 use std::{cmp::Ordering, collections::BinaryHeap, ops::Range};
 
@@ -17,7 +18,9 @@ use crate::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SearchHit {
     pub uri: ResourceUri,
-    /// The path below the searched directory, with `/` separators.
+    /// The searched directory the file was found in.
+    pub directory: ResourceUri,
+    /// The path below `directory`, with `/` separators.
     pub path: String,
     /// The last segment of `path`.
     pub name: String,
@@ -39,15 +42,18 @@ struct Rank {
     tier: u8,
     style: usize,
     score: u32,
+    /// The index of the searched directory, in the order they were begun.
+    directory: usize,
     path: String,
 }
 
 impl Ord for Rank {
     fn cmp(&self, other: &Self) -> Ordering {
-        (self.tier, self.style, other.score, &self.path).cmp(&(
+        (self.tier, self.style, other.score, self.directory, &self.path).cmp(&(
             other.tier,
             other.style,
             self.score,
+            other.directory,
             &other.path,
         ))
     }
@@ -78,8 +84,9 @@ impl PartialOrd for Candidate {
 }
 
 /// Keeps the best `limit` of the files offered to it.
-pub(super) struct Ranker<'a> {
+pub struct Search<'a> {
     query: &'a Query,
+    directories: Vec<ResourceUri>,
     matcher: Matcher,
     limit: usize,
     /// The worst kept candidate is on top.
@@ -87,10 +94,11 @@ pub(super) struct Ranker<'a> {
     matched: usize,
 }
 
-impl<'a> Ranker<'a> {
-    pub(super) fn new(query: &'a Query, limit: usize) -> Self {
+impl<'a> Search<'a> {
+    pub fn new(query: &'a Query, limit: usize) -> Self {
         Self {
             query,
+            directories: Vec::new(),
             matcher: Matcher::new(),
             limit,
             kept: BinaryHeap::new(),
@@ -98,7 +106,13 @@ impl<'a> Ranker<'a> {
         }
     }
 
-    /// Considers the file at `path`, whose name starts at byte `name_start`.
+    /// Starts searching `directory`: the files offered next are below it.
+    pub(super) fn begin(&mut self, directory: ResourceUri) {
+        self.directories.push(directory);
+    }
+
+    /// Considers the file at `path` below the directory last begun, whose name
+    /// starts at byte `name_start`.
     pub(super) fn offer(&mut self, path: &str, name_start: usize) {
         let name = &path[name_start..];
         let (tier, found) = match self.matcher.find(self.query, name) {
@@ -109,13 +123,15 @@ impl<'a> Ranker<'a> {
             },
         };
         self.matched += 1;
+        let directory = self.directories.len() - 1;
         if self.kept.len() == self.limit {
             let worst = self.kept.peek().map(|worst| &worst.rank);
             let beats = |worst: &Rank| {
-                (tier, found.style, worst.score, path).cmp(&(
+                (tier, found.style, worst.score, directory, path).cmp(&(
                     worst.tier,
                     worst.style,
                     found.score,
+                    worst.directory,
                     worst.path.as_str(),
                 )) == Ordering::Less
             };
@@ -139,14 +155,16 @@ impl<'a> Ranker<'a> {
                 tier,
                 style: found.style,
                 score: found.score,
+                directory,
                 path: path.to_string(),
             },
             ranges,
         });
     }
 
-    /// The kept files, best first, with URIs below `directory`.
-    pub(super) fn finish(self, directory: &ResourceUri) -> SearchResults {
+    /// The kept files, best first.
+    pub fn finish(self) -> SearchResults {
+        let directories = self.directories;
         let more = self.matched > self.kept.len();
         let hits = self
             .kept
@@ -155,11 +173,13 @@ impl<'a> Ranker<'a> {
             .map(|candidate| {
                 let path = candidate.rank.path;
                 let name = path.rsplit('/').next().unwrap_or_default().to_string();
+                let directory = &directories[candidate.rank.directory];
                 let uri = path
                     .split('/')
                     .fold(directory.clone(), |uri, name| child_uri(&uri, name));
                 SearchHit {
                     uri,
+                    directory: directory.clone(),
                     path,
                     name,
                     ranges: candidate.ranges,

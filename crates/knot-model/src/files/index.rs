@@ -21,7 +21,7 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use super::{
     ListedEntry, SearchResults, WALK_CONCURRENCY,
     ignore::{Classifier, IgnorePolicy, Scope, Visibility, segments},
-    search::Ranker,
+    search::Search,
 };
 use crate::{
     filesystem::{FileSystemProvider, ResourceEntry, ResourceError, ResourceKind, child_uri},
@@ -115,18 +115,18 @@ impl Dir {
 
     /// Offers the visible files below this directory to `ranker`. `path`
     /// holds the directory's path below the searched one, ending with `/`.
-    fn offer_files(&self, path: &mut String, ranker: &mut Ranker) {
+    fn offer_files(&self, path: &mut String, search: &mut Search) {
         for entry in self.children.iter().filter(|entry| !entry.ignored) {
             let length = path.len();
             match (&entry.dir, entry.kind) {
                 (Some(dir), _) => {
                     path.push_str(&entry.name);
                     path.push('/');
-                    dir.offer_files(path, ranker);
+                    dir.offer_files(path, search);
                 }
                 (None, ResourceKind::File) => {
                     path.push_str(&entry.name);
-                    ranker.offer(path, length);
+                    search.offer(path, length);
                 }
                 (None, ResourceKind::Directory) => {}
             }
@@ -360,7 +360,7 @@ impl FileIndex {
     async fn query<T>(
         &self,
         policy: &IgnorePolicy,
-        query: impl Fn(&Tree, &Dir) -> Option<T>,
+        mut query: impl FnMut(&Tree, &Dir) -> Option<T>,
     ) -> Option<T> {
         loop {
             std::future::poll_fn(|context| {
@@ -431,14 +431,26 @@ impl FileIndex {
         limit: usize,
         policy: &IgnorePolicy,
     ) -> Option<SearchResults> {
-        let path = self.relative(uri)?;
+        let mut search = Search::new(query, limit);
+        self.offer(uri, policy, &mut search).await.then(|| search.finish())
+    }
+
+    /// Begins `uri` in `search` and offers the visible files below it, as
+    /// [`offer`](super::offer) does from the disk. Returns `false`, offering
+    /// nothing, when the directory is not indexed.
+    pub async fn offer(&self, uri: &ResourceUri, policy: &IgnorePolicy, search: &mut Search<'_>) -> bool {
+        let Some(path) = self.relative(uri) else {
+            return false;
+        };
         let uri = self.uri_at(&path);
         self.query(policy, |_, root| {
-            let mut ranker = Ranker::new(query, limit);
-            root.at(&path)?.offer_files(&mut String::new(), &mut ranker);
-            Some(ranker.finish(&uri))
+            let dir = root.at(&path)?;
+            search.begin(uri.clone());
+            dir.offer_files(&mut String::new(), search);
+            Some(())
         })
         .await
+        .is_some()
     }
 
     /// Whether the policy hides or ignores the resource, as

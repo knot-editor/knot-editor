@@ -13,7 +13,7 @@ mod search;
 use ignore::{Classifier, Scope, Visibility, segments};
 pub use ignore::{DEFAULT_HIDDEN, IgnorePolicy};
 pub use index::FileIndex;
-pub use search::{SearchHit, SearchResults};
+pub use search::{Search, SearchHit, SearchResults};
 
 use std::sync::Arc;
 
@@ -203,15 +203,28 @@ pub async fn search(
     limit: usize,
     policy: &IgnorePolicy,
 ) -> Result<SearchResults, ResourceError> {
+    let mut search = Search::new(query, limit);
+    offer(providers, uri, policy, &mut search).await?;
+    Ok(search.finish())
+}
+
+/// Begins the directory in `search` and offers the visible files below it, by
+/// walking the disk.
+pub async fn offer(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: &str,
+    policy: &IgnorePolicy,
+    search: &mut Search<'_>,
+) -> Result<(), ResourceError> {
     let directory = providers.normalize(parse(uri)?).await?;
     let depth = segments(&directory).len();
     let files = walk(providers, uri, policy).await?;
-    let mut ranker = search::Ranker::new(query, limit);
+    search.begin(directory);
     for file in files {
         let path = segments(&file.uri)[depth..].join("/");
-        ranker.offer(&path, path.len() - file.name.len());
+        search.offer(&path, path.len() - file.name.len());
     }
-    Ok(ranker.finish(&directory))
+    Ok(())
 }
 
 /// Whether the policy hides or ignores the resource, or any directory above it

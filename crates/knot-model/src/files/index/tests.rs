@@ -214,6 +214,7 @@ fn brute_force_search(
             .take(limit)
             .map(|((_, _, _, path), ranges, file)| SearchHit {
                 uri: file.uri.clone(),
+                directory: directory.clone(),
                 path,
                 name: file.name.clone(),
                 ranges,
@@ -697,4 +698,64 @@ fn a_repository_appearing_or_its_exclude_file_changing_reclassifies_its_director
         Some(false)
     );
     assert_matches_disk(&fixture, &index, &policy, "repository removed");
+}
+
+#[test]
+fn searching_several_directories_ranks_them_as_one() {
+    let fixture = Fixture::new();
+    for path in [
+        "one/main/readme.md",
+        "one/x/main.rs",
+        "two/main.rs",
+        "two/x/main.rs",
+    ] {
+        fixture.file(path);
+    }
+    let policy = IgnorePolicy::default();
+    let query = Query::new("main", &crate::matching::DEFAULT_STYLES);
+    let directories = [uri("one/"), uri("two/")];
+    let paths = |found: &SearchResults| {
+        found
+            .hits
+            .iter()
+            .map(|hit| {
+                let root = hit.directory.to_string();
+                format!("{}:{}", root.trim_end_matches('/').rsplit('/').next().unwrap(), hit.path)
+            })
+            .collect::<Vec<_>>()
+    };
+    // Name matches in the second directory beat a directory-only match in the
+    // first, and equal matches fall to directory order.
+    let expected = ["one:x/main.rs", "two:main.rs", "two:x/main.rs", "one:main/readme.md"];
+
+    // The first directory is indexed and the second is read from the disk.
+    let index = fixture.scanned("one/");
+    let mut search = Search::new(&query, 10);
+    assert!(run(index.offer(&directories[0], &policy, &mut search)));
+    run(crate::files::offer(
+        fixture.providers.clone(),
+        &directories[1].to_string(),
+        &policy,
+        &mut search,
+    ))
+    .unwrap();
+    let mixed = search.finish();
+    assert_eq!(paths(&mixed), expected);
+    assert!(!mixed.more);
+    assert_eq!(mixed.hits[1].uri, uri("two/main.rs"));
+
+    // Walking both gives the same answer, and the limit keeps the best.
+    let mut search = Search::new(&query, 2);
+    for directory in &directories {
+        run(crate::files::offer(
+            fixture.providers.clone(),
+            &directory.to_string(),
+            &policy,
+            &mut search,
+        ))
+        .unwrap();
+    }
+    let limited = search.finish();
+    assert_eq!(paths(&limited), expected[..2]);
+    assert!(limited.more);
 }
