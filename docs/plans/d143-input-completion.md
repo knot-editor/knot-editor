@@ -1,6 +1,7 @@
 # D143 — Input completion
 
-Status: 🚧 approved; checkpoint 1 awaits its review gate. Item of the
+Status: 🚧 approved; checkpoint 1 awaits its review gate, and checkpoints 2
+and 3 are not started. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker).
 
 ## Goal
@@ -18,13 +19,15 @@ which completes command names and `:set` options.
   `{ label, value, detail? }`, where `value` is the **whole new field text**.
   Accepting an item replaces the field with `value` and puts the caret at the
   end. Native code knows nothing about tokens, replacement ranges, or the
-  caret, and the extension does all filtering and ordering. Native code only
-  displays the list in the order it receives. Every caller of the API is in
+  caret, and the extension chooses the candidates and their order, usually through
+  `completion.match`. Native code only displays the list in the order it
+  receives. Every caller of the API is in
   this repository, so the shape can change freely.
   - Rejected: replacement ranges plus a caret offset. They add protocol only
     to complete in the middle of a line, which a command line does not need.
-  - Rejected: native fuzzy filtering. The extension owns the token rules,
-    such as prefix matching and Vim's `no`/`inv` option prefixes.
+  - Rejected: native filtering of the field text. The extension owns the token
+    rules, such as Vim's `no`/`inv` option prefixes, and passes only the
+    word under completion to the matcher.
 - **Interaction: menu accept (fish/zsh style).**
   - A non-empty list shows under the field, in the input panel, with its
     first row highlighted. An empty or missing list hides it.
@@ -49,14 +52,39 @@ which completes command names and `:set` options.
   returned value, and the handler decodes the items into a `knot-protocol`
   type. A return value of the wrong shape stops further calls and is
   rethrown, as today.
+- **One native matcher, with user-selectable styles.** Matching is a Rust
+  module in `knot-model` that the picker, input completion, and any extension
+  share, so one setting changes how everything matches.
+  - A style is built in: `prefix`, `substring`, `flex` (fuzzy, as the picker
+    matches today), or `orderless` (space-separated components in any order,
+    each a substring). Smart case. The matcher takes a query and candidate
+    strings and returns the matches ordered, with the matched ranges.
+  - The setting `completion.styles` is an ordered list of styles, default
+    `["flex"]`. A candidate matches if any style matches it; results are
+    ordered by the first style that matches, then by that style's own score,
+    then by the caller's order. `["prefix", "flex"]` lists prefix matches
+    first and fuzzy ones after, as ido does.
+  - It is native because the picker filters on every keystroke, and native
+    painting and raw input never call JavaScript synchronously. Extensions
+    reach the same matcher through a host call, `completion.match`.
+  - The picker keeps its tiers (label, then description, then match text) and
+    calls the matcher per field.
+  - Input completion items carry optional `matches` ranges over their label,
+    which the list highlights as the picker does.
+  - Rejected: styles registered as JavaScript functions. They cannot drive
+    the picker, and the built-in set with an ordered list covers what ido and
+    Emacs users customize. A consumer with unusual needs matches in its own
+    `onChange`.
+  - Rejected: a per-category override of the styles, until a consumer needs
+    one. A call may still pass explicit styles.
 - **Vim completion** is a pure function in `ex.ts`,
   `completeEx(line): InputCompletion[]`, with no host calls:
-  - The command name, while the line has no space yet: prefix match on the
-    full names (`write`, `quit`, `wq`, `xit`, `exit`, `edit`, `set`). Line
+  - The command name, while the line has no space yet: `completion.match` on
+    the full names (`write`, `quit`, `wq`, `xit`, `exit`, `edit`, `set`). Line
     numbers and `$` get no items.
-  - `:set` arguments: the word under completion is matched against the full
-    option names and short forms, including after a `no` or `inv` prefix,
-    which is kept. Only option names are completed, not values. Each item's
+  - `:set` arguments: the word under completion is matched, through
+    `completion.match`, against the full option names and short forms,
+    including after a `no` or `inv` prefix, which is kept. Only option names are completed, not values. Each item's
     `value` is the line with its last word replaced.
 
 ## Exclusions and deferred work
@@ -66,81 +94,60 @@ which completes command names and `:set` options.
   supports it.
 - Completing option values, completion in the middle of the line, and
   mouse selection of rows.
-- Picker changes. The picker keeps its own native fuzzy filtering.
+- Per-category style overrides and user-registered JavaScript styles.
 
 ## Checkpoints
 
 ### 1. Completions in the input API ✅
 
+Implemented and committed; the review gate is open. The `onChange` return
+shape, `InputView` list and keys, stale-feedback dropping, fake-host
+`inputFeedback()`, tests, and docs landed. Review gate: run
+`Try: Input completion` from `post-init.js`; the list, highlight, Tab, and
+Enter behave as designed.
+
+### 2. Shared matcher and `completion.styles`
+
 Deliverables:
-- `InputView` holds the items and the highlight, renders the list under the
-  field, and handles Up/Down, Ctrl-N/Ctrl-P, and Tab as described above.
-- The session drops stale feedback.
-- `onChange` may return the object form, typed in `knot.d.ts`.
-- The fake test host supports the object form.
-- Docs: the `showInput` section of the extension guide, and the input flow
-  in the semantic UI reference.
+- The matcher module in `crates/knot-model/src/` (`prefix`, `substring`,
+  `flex`, `orderless`; merge and order as in the design), with plain unit
+  tests.
+- The `completion.styles` setting, documented in `docs/settings.md`, with
+  validation of unknown style names.
+- The picker filters through the matcher instead of calling nucleo
+  directly; its existing behavior is the default `["flex"]`.
+- The `completion.match` host call, typed in `knot.d.ts`, with the contract
+  test; the fake host implements the styles in TypeScript.
+- `InputCompletion.matches` through the protocol, `bootstrap.js`, the typed
+  surface, and the rendered list. Ranges follow the existing range
+  conventions for text crossing the host boundary.
+- Docs: the extension guide (`completion.match`, `matches`) and the
+  matching paragraph of the semantic UI reference.
 
 Validation:
-- Rust product tests in `src/app/product/tests/transient.rs`:
-  - the list shows, and an empty answer hides it
-  - the highlight moves and wraps
-  - Tab replaces the field and the caret goes to the end, and the next
-    answer replaces the list
-  - Enter submits the typed text with a row highlighted
-  - Tab with no list does nothing
-  - stale items are dropped
-  - a malformed return rejects the call
-- The contract test and a fake-host test of the object form.
+- Matcher unit tests: each style, smart case, merge order with several
+  styles, empty query keeps the caller's order, ranges on multibyte text.
+- Picker tests: current picker tests pass unchanged under the default; a
+  `["prefix"]` and a `["substring"]` case.
+- A product test that `completion.match` follows a changed setting.
+- A fake-host test of `completion.match` and of `matches`.
 
-Implementation context:
-- **Native view:** `src/app/transient.rs`. Add an items field and a selected
-  index to `InputView`, plus `set_feedback(message, items)` in place of
-  `set_message`. Handle the new keys in `key_down` after the field has
-  declined them. Render the rows the way `src/app/picker.rs` does: the
-  `LIST_SELECTED_BACKGROUND` theme key, and muted `detail` text. Cap the
-  visible rows, around 8, and scroll the highlight into view. Accept with a
-  non-test `TextInput::set_text` in `src/app/text_input.rs` (the existing one
-  is `#[cfg(test)]`), which already emits `Changed` and moves the caret to
-  the end.
-- **Keys:** check that the transient key context's keymap leaves Up, Down,
-  Tab, Ctrl-N, and Ctrl-P unclaimed (`TRANSIENT_KEY_CONTEXT` in
-  `src/app/mod.rs`, and the keymap registry).
-- **Handler:** `src/app/extensions/host/handlers.rs`.
-  - `InputSessionArguments` decodes an optional items array at argument 4.
-  - `TransientSession` records the last delivered value, set in
-    `input_update` / `next_change`.
-  - `next_input_event` applies the feedback only when
-    `input.read(cx).input().read(cx).text()` still equals that value.
-  - Add `InputCompletion` next to `InputUpdate` in
-    `crates/knot-protocol/src/lib.rs`, if the decoding needs a serde type.
-- **JavaScript:** `showInput` in `crates/knot-host/src/js/bootstrap.js`
-  splits the return value into message and items, and validates items the
-  way `pickerItem` does. Add the types to `InputOptions.onChange` in
-  `crates/knot-host/src/js/knot.d.ts`, and update
-  `docs/schemas/knot.schema.json` if it covers transient options.
-- **Fake host:** the `showInput` fake in `scripts/extensions/testing/host.ts`
-  records returned items next to `inputMessages()`, for example through an
-  `inputFeedback()` accessor. Add a test in
-  `scripts/extensions/testing/transient.test.ts`.
-- **Docs:** `docs/extension-api.md` (the `onChange` example near line 744),
-  and `docs/architecture/semantic-ui.md` (the input paragraph near line 417):
-  feedback carries items, stale feedback is dropped, and Tab accepts.
+Review gate: a `post-init.js` with `Try: Match styles` shows a picker and an
+input completion over the same word list; change `completion.styles` in the
+settings file and check that both follow it, with matched characters
+highlighted.
 
-Review gate: a `post-init.js` `Try: Input completion` command that completes
-from a fixed word list shows the list, highlight, and Tab behavior in the
-real app.
-
-### 2. Vim Ex line completion
+### 3. Vim Ex line completion
 
 Deliverables:
-- `completeEx` in `extensions/@knot/vim/src/ex.ts`.
+- `completeEx` in `extensions/@knot/vim/src/ex.ts`, matching through
+  `completion.match`.
 - `commandLine` in `extensions/@knot/vim/src/command-line.ts` passes
   `onChange: (line) => ({ items: completeEx(line) })`.
 
 Validation:
 - Unit tests in `extensions/@knot/vim/test/ex.test.ts`:
-  - name prefixes, a unique prefix, and no match
+  - name matches, a unique match, and no match
   - line numbers get no items
   - `:set` words, short forms, and `no`/`inv` prefixes
   - an earlier argument is preserved in `value`

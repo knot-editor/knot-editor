@@ -306,6 +306,9 @@ to be rebuilt later:
   - `workbench.showInput` offers completion items as the text changes,
     through the pulled input session `onChange` already uses, with keys to
     move through and accept them.
+  - Matching is one native matcher shared by the picker, input completion,
+    and extensions (`completion.match`), with the user-selectable styles
+    `prefix`, `substring`, `flex`, and `orderless` in `completion.styles`.
   - The first consumer is Vim's Ex line (D058): it completes command names
     and `:set` options. `:e` path completion comes with D081.
 
