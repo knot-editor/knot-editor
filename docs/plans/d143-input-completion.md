@@ -61,9 +61,8 @@ which completes command names and `:set` options.
 
 ## Exclusions and deferred work
 
-- **`:e` path completion** waits until D081 (workspace ignore rules), so
-  listings can skip ignored files from the start. It will use `knot.files`
-  (D122) from the base `:e` opens against, and `completeEx`'s shape already
+- **`:e` path completion** belongs to D081 (workspace ignore rules), so
+  listings skip ignored files from the start; `completeEx`'s shape already
   supports it.
 - Completing option values, completion in the middle of the line, and
   mouse selection of rows.
@@ -165,5 +164,4 @@ behave as designed. Then finish the item:
 - Fold the durable behavior into the architecture references.
 - Add a decision entry for the menu-accept model and the whole-value items
   in `docs/decisions/`, with its index line.
-- Record `:e` path completion against D081 in the daily-driver plan.
 - Mark D143 ✅ and remove this plan.

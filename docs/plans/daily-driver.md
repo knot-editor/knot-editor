@@ -301,14 +301,13 @@ to be rebuilt later:
     ([architecture](../architecture/documents-and-persistence.md#uri-providers),
     [decisions](../decisions/documents-and-persistence.md#extension-file-reads)).
 
-- **D143 — Input completion** (depends on D071, D122)
+- **D143 — Input completion** (depends on D071)
   - 🚧 [Plan](d143-input-completion.md)
   - `workbench.showInput` offers completion items as the text changes,
     through the pulled input session `onChange` already uses, with keys to
     move through and accept them.
-  - The first consumer is Vim's Ex line (D058): it completes command names,
-    `:set` options, and `:e` paths from the same base `:e` opens against,
-    listing directories through D122.
+  - The first consumer is Vim's Ex line (D058): it completes command names
+    and `:set` options. `:e` path completion comes with D081.
 
 - **D089 — Project-local settings** (depends on D070, D122)
   - Settings read from a file in the repository, attached to folders rather
@@ -319,7 +318,8 @@ to be rebuilt later:
     `@knot/projects` record. Workspace trust (D124) stays deferred, so
     project settings must not run code until it exists.
 
-- **D081 — Workspace ignore rules and file enumeration**
+- **D081 — Workspace ignore rules and file enumeration** (depends on D122,
+  D143)
   - Ignore policy is contributed and evaluated natively. Rules come from
     `.gitignore` (and possibly `.ignore`) plus configured patterns, at two
     levels:
@@ -338,6 +338,9 @@ to be rebuilt later:
     API that streams or pages results. Decide whether a native walk is
     still needed once `rg --files` is available through D087, or whether Go
     to File uses ripgrep too.
+  - Vim's Ex line completes `:e` paths through D143's input completion,
+    from the same base `:e` opens against, listing directories through D122
+    without ignored entries.
 
 - **D034 / D053 — Explorer as a bundled extension** (depends on D008, D010, D122,
   D081, D072)
