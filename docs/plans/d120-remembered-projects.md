@@ -78,9 +78,7 @@ and the Folder Open decision in
 A project's name is optional and displays as its first root's folder name
 (plus `+N`) when absent; names are not unique, and the picker shows the roots'
 paths on a second line. Tree rows gained an optional `detail` second line for
-the same purpose. `projects.create` stays until checkpoint 3, because it is the
-only way to make a project before creation is automatic; it accepts a blank
-name and moves out with that checkpoint.
+the same purpose.
 
 ### 3. Automatic creation and pruning ✅
 
@@ -90,25 +88,13 @@ non-empty root set no project has, after launch and for windows present at
 unnamed projects on creation, sparing named, active, unreadable, and
 capture-holding ones. `projects.create` is gone.
 
-### 4. Restoring on a hand-opened folder 🔍 awaiting review
+### 4. Restoring on a hand-opened folder ✅
 
-Implemented; `node:test` and product tests cover replacement, the new-window case, and an unreadable record. Remaining: the manual gate below (`Try:` commands in the personal `post-init.js`).
-
-- Deliverables: an unbound window matching a suspended project switches to
-  it, both during tracking and at `launched` after restored windows rebind.
-- Validation: `node:test` switch and tracking tests for the hand-opened
-  window with matching roots and no content being replaced rather than
-  duplicated, a window with other content opening the project in a
-  new window, retained text coming back, and a project with an unreadable
-  session record staying untouched. A product test opens a suspended
-  project's folder with Open Folder and sees its tabs return.
-- **Implementation context:** call `switchTo` in `switch.ts` from `track` and
-  `afterLaunch` in `tracking.ts`; `isReusable` in `layout.ts` requires an empty root
-  set today, so it must also accept a window whose roots equal the project's
-  (the hand-opened window); `switchTo` passes the project's roots. Commands and listeners are serial roots, so the switch cannot
-  interleave with tracking.
-- Review gate: restoring never loses text and never fires for a window that
-  is already bound.
+Tracking and `launched` switch an unbound window whose roots equal a suspended
+project's to that project with `switchTo`, once per window; the window is
+replaced when it holds nothing beyond one clean, empty untitled document, and
+otherwise the project opens in a new window. Projects with unreadable session
+records are left alone.
 
 ### 5. Documentation
 
