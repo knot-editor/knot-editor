@@ -720,13 +720,22 @@ fn searching_several_directories_ranks_them_as_one() {
             .iter()
             .map(|hit| {
                 let root = hit.directory.to_string();
-                format!("{}:{}", root.trim_end_matches('/').rsplit('/').next().unwrap(), hit.path)
+                format!(
+                    "{}:{}",
+                    root.trim_end_matches('/').rsplit('/').next().unwrap(),
+                    hit.path
+                )
             })
             .collect::<Vec<_>>()
     };
     // Name matches in the second directory beat a directory-only match in the
     // first, and equal matches fall to directory order.
-    let expected = ["one:x/main.rs", "two:main.rs", "two:x/main.rs", "one:main/readme.md"];
+    let expected = [
+        "one:x/main.rs",
+        "two:main.rs",
+        "two:x/main.rs",
+        "one:main/readme.md",
+    ];
 
     // The first directory is indexed and the second is read from the disk.
     let index = fixture.scanned("one/");

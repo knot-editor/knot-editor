@@ -996,10 +996,11 @@ if ((await files.stat(`${root}/.editorconfig`)) !== null) {
 similar) and marks entries that `.gitignore`, `.ignore`, `.git/info/exclude`, or
 the `files.ignored` setting match with `ignored: true`, so an explorer can dim
 them. `files.search(uri, query, { limit })` matches the query against the paths of the
-visible, non-ignored files below a directory, without entering ignored
+visible, non-ignored files below a directory (or a list of directories, ranked as one
+search), without entering ignored
 directories or following symlinked ones, and resolves `{ results, more }`: the
 best `limit` matches (100 by default) with their `uri`, path relative to the
-directory, `name`, and matched `ranges`, and whether others matched. A picker
+directory, the searched `directory` it is in, `name`, and matched `ranges`, and whether others matched. A picker
 searches again on every keystroke rather than holding the list of files.
 `files.isIgnored(uri)` applies the same policy to one path. The fake host
 matches `files.hidden` and `files.ignored` as plain names and reads no ignore

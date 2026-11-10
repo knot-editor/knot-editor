@@ -1,6 +1,6 @@
 # D082 — Go to File
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 next. Item of the
+Status: 🚧 checkpoint 2 awaiting review; checkpoint 3 next. Item of the
 [daily-driver plan](daily-driver.md#phase-4--files-and-workspace); promotes
 [D118](../roadmap.md) (query-driven picker) in its smallest form.
 
@@ -93,15 +93,15 @@ and its rationale is the
 Enter on rows that do not yet answer the field waits for them; replaying keys
 typed meanwhile is deferred as D175 in the [roadmap](../roadmap.md).
 
-### 2. Multi-root `files.search`
+### 2. Multi-root `files.search` ✅ (awaiting review)
 
 Deliverables:
 
-- `files.search` takes one directory or a list, ranks them as one search,
+- ✅ `files.search` takes one directory or a list, ranks them as one search,
   and reports each hit's directory.
-- Go to File makes one call for all roots and labels rows by the hit's root.
+- ✅ Go to File makes one call for all roots and labels rows by the hit's root.
 
-Validation:
+Validation (✅ all in place):
 
 - Model tests for cross-root ranking (a name match in the second root beats
   a directory match in the first; ties fall to root order) for both the
@@ -110,8 +110,8 @@ Validation:
 - Package and integration tests with two roots.
 
 Review gate: in a two-root window, results from both roots interleave by
-quality and show their root. A `post-init.js` `Try: Add Second Root`
-command sets up the window.
+quality and show their root. Run `Try: Add Second Root` (a `post-init.js`
+command: Knot plus kigiri), then ⌘P.
 
 **Implementation context:**
 

@@ -49,13 +49,20 @@ struct Rank {
 
 impl Ord for Rank {
     fn cmp(&self, other: &Self) -> Ordering {
-        (self.tier, self.style, other.score, self.directory, &self.path).cmp(&(
-            other.tier,
-            other.style,
-            self.score,
-            other.directory,
-            &other.path,
-        ))
+        (
+            self.tier,
+            self.style,
+            other.score,
+            self.directory,
+            &self.path,
+        )
+            .cmp(&(
+                other.tier,
+                other.style,
+                self.score,
+                other.directory,
+                &other.path,
+            ))
     }
 }
 

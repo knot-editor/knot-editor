@@ -140,9 +140,11 @@ next full scan.
 `search` offers each visible file's root-relative path to the shared matcher
 (`completion.styles`) and keeps the best `limit` in a bounded heap, so only the
 returned hits get a URI. A file whose name matches ranks above one that matches
-only through its directories; the matcher's style and score then decide, and
-then path order. `more` reports that other files matched. The disk search walks
-and ranks with the same code.
+only through its directories; the matcher's style and score then decide, then
+the order of the searched directories, then path order. Several directories are
+ranked as one search, each hit naming the directory it came from; a directory
+the index cannot answer is walked while the others stay indexed. `more` reports
+that other files matched. The disk search walks and ranks with the same code.
 
 `list`, `search`, and `is_ignored` return nothing when the index cannot answer,
 for a URI outside every root, below an ignored directory, or through a symlink,

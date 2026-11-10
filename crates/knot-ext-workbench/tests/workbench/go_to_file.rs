@@ -51,7 +51,9 @@ fn files_of_every_root_are_ranked_as_one_list(cx: &mut TestAppContext) {
     window.type_input("butt", cx);
     // The name match in the second root outranks the directory match in the
     // first.
-    wait_until(cx, |cx| window.picker_labels(cx) == ["button.rs", "readme.md"]);
+    wait_until(cx, |cx| {
+        window.picker_labels(cx) == ["button.rs", "readme.md"]
+    });
     window.press("enter", cx);
     wait_until(cx, |cx| {
         !window.transient_open(cx) && window.document_texts(cx) == ["struct Button;".to_owned()]

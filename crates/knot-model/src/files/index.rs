@@ -432,13 +432,20 @@ impl FileIndex {
         policy: &IgnorePolicy,
     ) -> Option<SearchResults> {
         let mut search = Search::new(query, limit);
-        self.offer(uri, policy, &mut search).await.then(|| search.finish())
+        self.offer(uri, policy, &mut search)
+            .await
+            .then(|| search.finish())
     }
 
     /// Begins `uri` in `search` and offers the visible files below it, as
     /// [`offer`](super::offer) does from the disk. Returns `false`, offering
     /// nothing, when the directory is not indexed.
-    pub async fn offer(&self, uri: &ResourceUri, policy: &IgnorePolicy, search: &mut Search<'_>) -> bool {
+    pub async fn offer(
+        &self,
+        uri: &ResourceUri,
+        policy: &IgnorePolicy,
+        search: &mut Search<'_>,
+    ) -> bool {
         let Some(path) = self.relative(uri) else {
             return false;
         };
