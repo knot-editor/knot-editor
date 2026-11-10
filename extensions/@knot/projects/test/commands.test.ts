@@ -61,7 +61,7 @@ test("names need not be unique, and renaming to blank restores the inferred name
   assert.deepEqual(host.messages(), ["project not found"]);
 });
 
-test("the picker lists display names with the roots' paths", async () => {
+test("the picker lists display names with the roots' paths below", async () => {
   seedProject("a", "Alpha", [ALPHA]);
   host.setRecord("projects", {
     ...(host.record("projects") as object),
@@ -74,8 +74,8 @@ test("the picker lists display names with the roots' paths", async () => {
   await startLaunched();
   host.answer("showPicker", { kind: "dismissed" });
   await host.run("projects.select");
-  const options = host.prompts()[0]?.options as { items: { label: string; description: string }[] };
-  assert.deepEqual(options.items.map((item) => [item.label, item.description]), [
+  const options = host.prompts()[0]?.options as { items: { label: string; detail: string }[] };
+  assert.deepEqual(options.items.map((item) => [item.label, item.detail]), [
     ["Alpha", "/src/alpha"],
     ["app +1", "/x/app, /y/lib"],
   ]);

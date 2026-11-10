@@ -80,7 +80,7 @@ export async function registerCommands(state: ProjectsState) {
       items: state.registry.projects.map((project) => ({
         id: project.id,
         label: displayName(project),
-        description: rootsPath(project),
+        detail: rootsPath(project),
       })),
     });
     if (picked.kind === "dismissed") return;
