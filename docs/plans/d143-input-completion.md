@@ -1,7 +1,7 @@
 # D143 — Input completion
 
-Status: 🚧 approved; checkpoints 1 to 3 are done and approved, and checkpoint 4 is not
-started. Item of the
+Status: 🚧 approved; checkpoints 1 to 3 are done and approved, and checkpoint 4 is built and
+waits at its review gate. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker).
 
 ## Goal
@@ -123,15 +123,15 @@ is only a tie-break through the caller's order, so it never outranks a better
 match, as in IntelliJ. Guide:
 [extension guide](../extension-api.md#ask-the-user-transiently).
 
-### 4. Vim Ex line completion
+### 4. Vim Ex line completion 🚧
 
 Deliverables:
-- `completeEx` in `extensions/@knot/vim/src/ex.ts`, matching through
-  `completion.match`.
-- `commandLine` in `extensions/@knot/vim/src/command-line.ts` passes
+- ✅ `completeEx` in `extensions/@knot/vim/src/ex.ts`, matching through
+  `completion.match`; it is async, since the matcher is a host call.
+- ✅ `commandLine` in `extensions/@knot/vim/src/command-line.ts` passes
   `onChange: (line) => ({ items: completeEx(line) })`.
 
-Validation:
+Validation: ✅ unit and end-to-end cases pass. The case driver now waits for a watched input's answer (and for held keys) before each key, so `<tab>` never outruns `onChange`.
 - Unit tests in `extensions/@knot/vim/test/ex.test.ts`:
   - name matches, a unique match, and no match
   - line numbers get no items
