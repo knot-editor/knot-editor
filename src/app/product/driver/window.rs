@@ -22,6 +22,7 @@ use crate::app::workbench::{DockLocation, SplitDirection, SplitPlacement, TabSur
 use crate::test_support::wait_until;
 
 /// A product window.
+#[derive(Clone)]
 pub struct TestWindow {
     pub(super) shell: Entity<ProductShell>,
     pub(super) window: AnyWindowHandle,
@@ -542,17 +543,20 @@ fn open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarget {
     let session = shell.downgrade();
     let shell = shell.read(cx);
     let workbench = shell.workbench.read(cx);
-    let pane = workbench.focused_pane().unwrap();
-    let tab = pane.active_tab();
-    OpenTarget {
-        shell: session,
-        workbench: shell.workbench.downgrade(),
-        tab: Some(crate::app::commands::dispatch::TargetTab {
+    // A window whose center has no pane opens into one.
+    let tab = workbench.focused_pane().map(|pane| {
+        let tab = pane.active_tab();
+        crate::app::commands::dispatch::TargetTab {
             pane: pane.id(),
             tab: tab.id(),
             surface: tab.surface_id(),
             presentation: tab.presentation(),
-        }),
+        }
+    });
+    OpenTarget {
+        shell: session,
+        workbench: shell.workbench.downgrade(),
+        tab,
     }
 }
 
