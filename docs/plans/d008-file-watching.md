@@ -211,8 +211,9 @@ open file, and confirm cursor, folds, and Undo behave.
 - Application activation: `cx.observe_window_activation` in
   `src/app/product.rs` (`observe_extension_host`) is the existing hook.
 - Read with `load_resource` from `src/app/product/open.rs`.
-- Define the settings beside the other native `files.*` definitions in
-  `src/app/settings.rs`, observe them like the ignore policy does, and add
+- Define the settings beside the other native `files.*` keys in
+  `crates/knot-model/src/settings.rs` (`FILES_RESPECT_GITIGNORE`), read them
+  in `src/app/settings.rs` as `files_ignore_policy` does, and add
   them to `docs/settings.md` and the `knot.d.ts` setting key map.
 - Update [saving](../architecture/documents-and-persistence.md#saving), which
   says watching is deferred.
