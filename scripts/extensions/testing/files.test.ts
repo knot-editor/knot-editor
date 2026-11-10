@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { files } from "knot";
+import { files, settings } from "knot";
 import * as host from "knot/testing";
 
 beforeEach(() => host.reset());
@@ -13,8 +13,8 @@ test("seeded files can be read, listed, and statted", async () => {
   assert.deepEqual(
     [...(await files.list("file:///p"))].sort((a, b) => a.name.localeCompare(b.name)),
     [
-      { uri: "file:///p/a.txt", name: "a.txt", kind: "file" },
-      { uri: "file:///p/src", name: "src", kind: "directory" },
+      { uri: "file:///p/a.txt", name: "a.txt", kind: "file", ignored: false },
+      { uri: "file:///p/src", name: "src", kind: "directory", ignored: false },
     ],
   );
   assert.deepEqual(await files.stat("file:///p/src"), { kind: "directory" });
@@ -27,4 +27,23 @@ test("wrong kinds and missing resources reject with host error codes", async () 
   await assert.rejects(files.readText("file:///p"), { code: "ResourceWrongKind" });
   await assert.rejects(files.list("file:///p/a.txt"), { code: "ResourceWrongKind" });
   await assert.rejects(files.stat("nonsense"), { code: "InvalidUri" });
+});
+
+test("listing omits hidden entries and marks ignored ones", async () => {
+  host.seedFile("file:///p/.git/HEAD", "ref");
+  host.seedFile("file:///p/a.txt", "alpha");
+  host.seedFile("file:///p/dist/out.js", "");
+  await settings.set("files.ignored", ["dist"]);
+
+  assert.deepEqual(
+    [...(await files.list("file:///p"))].map((entry) => [entry.name, entry.ignored]).sort(),
+    [["a.txt", false], ["dist", true]],
+  );
+  assert.deepEqual(
+    [...(await files.list("file:///p/dist"))].map((entry) => [entry.name, entry.ignored]),
+    [["out.js", true]],
+  );
+  assert.equal(await files.isIgnored("file:///p/dist/out.js"), true);
+  assert.equal(await files.isIgnored("file:///p/a.txt"), false);
+  assert.equal(await files.isIgnored("file:///p/.git"), true);
 });

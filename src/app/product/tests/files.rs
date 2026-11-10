@@ -58,3 +58,60 @@ await commands.register("files.api", async () => {
     );
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }
+
+#[gpui::test]
+fn files_list_applies_the_ignore_settings_to_the_next_listing(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    for directory in ["mem://product/.git", "mem://product/dist"] {
+        provider
+            .seed_directory(ResourceUri::parse(directory).unwrap())
+            .unwrap();
+    }
+    for (path, text) in [
+        ("mem://product/.git/HEAD", "ref"),
+        ("mem://product/.gitignore", "*.log\n"),
+        ("mem://product/.git/config", ""),
+        ("mem://product/build.log", ""),
+        ("mem://product/dist/out.js", ""),
+    ] {
+        provider
+            .seed_file(ResourceUri::parse(path).unwrap(), text)
+            .unwrap();
+    }
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let key = install_operation_fixture(
+        &host,
+        r#"
+import { commands, files, settings } from "knot";
+async function names() {
+  const entries = await files.list("mem://product/");
+  return entries.map(entry => entry.name + (entry.ignored ? "!" : "")).sort().join();
+}
+await commands.register("files.policy", async () => {
+  const base = ".gitignore,build.log!,dist,invalid.txt,notes.txt,src";
+  if (await names() !== base) throw new Error(`default ${await names()}`);
+  if (!await files.isIgnored("mem://product/.git/HEAD")) throw new Error("hidden");
+  if (!await files.isIgnored("mem://product/build.log")) throw new Error("ignored");
+  await settings.set("files.ignored", ["dist"]);
+  if (await names() !== ".gitignore,build.log!,dist!,invalid.txt,notes.txt,src") throw new Error(`ignored ${await names()}`);
+  await settings.set("files.respectGitignore", false);
+  if (await names() !== ".gitignore,build.log,dist!,invalid.txt,notes.txt,src") throw new Error(`respect ${await names()}`);
+  await settings.set("files.hidden", ["notes.txt"]);
+  if ((await names()).includes("notes.txt") || !(await names()).includes(".git")) throw new Error(`hidden ${await names()}`);
+});
+"#,
+        "files.policy",
+        cx,
+    );
+    let (shell, window) = empty_product_window(&documents, cx);
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command(&shell, window, "files.policy", cx),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}

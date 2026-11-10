@@ -44,6 +44,12 @@ pub const EDITOR_SHOW_FOLDING_CONTROLS: &str = "editor.showFoldingControls";
 pub const FILES_TRIM_TRAILING_WHITESPACE: &str = "files.trimTrailingWhitespace";
 /// Whether saving ends a non-empty file with a line terminator.
 pub const FILES_INSERT_FINAL_NEWLINE: &str = "files.insertFinalNewline";
+/// Names and patterns of entries file listings and walks never show.
+pub const FILES_HIDDEN: &str = "files.hidden";
+/// Extra patterns of entries that listings mark ignored and walks skip.
+pub const FILES_IGNORED: &str = "files.ignored";
+/// Whether `.gitignore`, `.ignore`, and the Git excludes files mark entries ignored.
+pub const FILES_RESPECT_GITIGNORE: &str = "files.respectGitignore";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
 pub const THEME_MODE: &str = "theme.mode";
 /// The theme name used in dark mode.
@@ -291,6 +297,29 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: true.into(),
             description: "End a non-empty file with a line terminator when saving".into(),
+        },
+        SettingDefinition {
+            key: FILES_HIDDEN.into(),
+            value_type: SettingType::Strings,
+            default: Value::Array(
+                crate::files::DEFAULT_HIDDEN
+                    .iter()
+                    .map(|name| Value::String((*name).into()))
+                    .collect(),
+            ),
+            description: "Gitignore-style patterns of entries that file listings and walks never show".into(),
+        },
+        SettingDefinition {
+            key: FILES_IGNORED.into(),
+            value_type: SettingType::Strings,
+            default: Value::Array(Vec::new()),
+            description: "Gitignore-style patterns of entries that listings mark ignored and walks skip, in addition to the repository ignore files".into(),
+        },
+        SettingDefinition {
+            key: FILES_RESPECT_GITIGNORE.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Treat entries that .gitignore, .ignore, .git/info/exclude, and the global Git excludes file match as ignored".into(),
         },
         text(
             THEME_MODE,

@@ -4,6 +4,11 @@
 //! Every operation reads the stored resource. Open documents and their unsaved
 //! edits are never consulted.
 
+mod ignore;
+
+use ignore::{Classifier, Visibility, segments};
+pub use ignore::{DEFAULT_HIDDEN, IgnorePolicy};
+
 use std::sync::Arc;
 
 use crate::{
@@ -48,12 +53,66 @@ pub async fn read_text(
     }
 }
 
-/// The entries of exactly one directory, in provider order.
+/// One entry of a listing, with whether the ignore policy ignores it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListedEntry {
+    pub entry: ResourceEntry,
+    pub ignored: bool,
+}
+
+/// The entries of exactly one directory, in provider order, without those the
+/// policy hides. Entries of an ignored directory are ignored.
 pub async fn list(
     providers: Arc<FileSystemProviderRegistry>,
     uri: &str,
-) -> Result<Vec<ResourceEntry>, ResourceError> {
-    enumerate_directory(providers, parse(uri)?).await
+    policy: &IgnorePolicy,
+) -> Result<Vec<ListedEntry>, ResourceError> {
+    let uri = providers.normalize(parse(uri)?).await?;
+    let entries = enumerate_directory(providers.clone(), uri.clone()).await?;
+    let mut classifier = Classifier::new(providers.provider(&uri)?, &uri, policy).await;
+    let depth = segments(&uri).len();
+    let inherited = classifier.directory().await;
+    let mut listed = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let is_dir = entry.kind == ResourceKind::Directory;
+        match classifier.entry(depth, &entry.name, is_dir).await {
+            Visibility::Hidden => {}
+            own => listed.push(ListedEntry {
+                ignored: own == Visibility::Ignored || inherited != Visibility::Visible,
+                entry,
+            }),
+        }
+    }
+    Ok(listed)
+}
+
+/// Whether the policy hides or ignores the resource, or any directory above it
+/// inside its repository. A missing resource is judged as a file.
+pub async fn is_ignored(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: &str,
+    policy: &IgnorePolicy,
+) -> Result<bool, ResourceError> {
+    let uri = providers.normalize(parse(uri)?).await?;
+    let provider = providers.provider(&uri)?;
+    let mut path = segments(&uri);
+    let Some(name) = path.pop() else {
+        return Ok(false);
+    };
+    let is_dir = provider.stat(uri.clone()).await? == ResourceStat::Directory;
+    let mut parent = uri.as_url().clone();
+    parent
+        .path_segments_mut()
+        .map_err(|_| ResourceError::InvalidUri {
+            uri: uri.to_string(),
+            reason: "URI cannot contain hierarchical path segments".into(),
+        })?
+        .pop();
+    let parent = ResourceUri::from_url(parent);
+    let mut classifier = Classifier::new(provider, &parent, policy).await;
+    let inherited = classifier.directory().await;
+    let own = classifier.entry(path.len(), &name, is_dir).await;
+    Ok(own.max(inherited) != Visibility::Visible)
 }
 
 /// The kind of the resource, or `None` when it does not exist.
@@ -144,11 +203,15 @@ mod tests {
     #[test]
     fn list_returns_one_directory_and_rejects_files_and_missing() {
         let providers = fixture();
-        let mut names = run(list(providers.clone(), "mem://f/"))
-            .unwrap()
-            .into_iter()
-            .map(|entry| (entry.name, entry.kind))
-            .collect::<Vec<_>>();
+        let mut names = run(list(
+            providers.clone(),
+            "mem://f/",
+            &IgnorePolicy::default(),
+        ))
+        .unwrap()
+        .into_iter()
+        .map(|listed| (listed.entry.name, listed.entry.kind))
+        .collect::<Vec<_>>();
         names.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(
             names,
@@ -160,15 +223,23 @@ mod tests {
             ]
         );
         assert!(matches!(
-            run(list(providers.clone(), "mem://f/notes.txt")),
+            run(list(
+                providers.clone(),
+                "mem://f/notes.txt",
+                &IgnorePolicy::default()
+            )),
             Err(ResourceError::WrongKind { .. })
         ));
         assert!(matches!(
-            run(list(providers.clone(), "mem://f/missing")),
+            run(list(
+                providers.clone(),
+                "mem://f/missing",
+                &IgnorePolicy::default()
+            )),
             Err(ResourceError::NotFound { .. })
         ));
         assert!(matches!(
-            run(list(providers, "nonsense")),
+            run(list(providers, "nonsense", &IgnorePolicy::default())),
             Err(ResourceError::InvalidUri { .. })
         ));
     }

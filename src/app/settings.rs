@@ -226,6 +226,21 @@ pub(crate) fn set_boolean(key: &str, value: bool, cx: &mut App) {
         .expect("a native boolean setting");
 }
 
+/// The ignore policy the `files.*` settings select.
+pub(crate) fn files_ignore_policy(cx: &App) -> knot_model::files::IgnorePolicy {
+    knot_model::files::IgnorePolicy {
+        hidden: strings(FILES_HIDDEN, cx),
+        ignored: strings(FILES_IGNORED, cx),
+        respect_gitignore: resolve(
+            FILES_RESPECT_GITIGNORE,
+            &SettingsScope::default(),
+            cx,
+            Value::as_bool,
+        )
+        .expect("files.respectGitignore is a native boolean setting"),
+    }
+}
+
 /// The value of a native text-list setting, unscoped.
 pub(crate) fn strings(key: &str, cx: &App) -> Vec<String> {
     resolve(key, &SettingsScope::default(), cx, |value| {

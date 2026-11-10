@@ -8,6 +8,7 @@ publish = false
 # Editor state and policy that need no UI toolkit, scripting runtime, or host.
 [dependencies]
 directories = { workspace = true }
+ignore = { workspace = true }
 jsonc-parser = { workspace = true }
 knot-core = { path = "../knot-core" }
 knot-protocol = { path = "../knot-protocol" }

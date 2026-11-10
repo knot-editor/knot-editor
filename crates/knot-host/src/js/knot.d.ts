@@ -344,6 +344,16 @@ declare module "knot" {
     /** IDs of status items the bar skips. Hidden items keep running, so a
      * package that registered one is unaffected. Native default empty. */
     "statusBar.hiddenItems": readonly string[];
+    /** Gitignore-style patterns of entries that `files.list` never returns.
+     * Native default `.git`, `.hg`, `.svn`, `.jj`, `CVS`,
+     * `.DS_Store`, and `Thumbs.db`. */
+    "files.hidden": readonly string[];
+    /** Gitignore-style patterns of entries that `files.list` marks `ignored`,
+     * in addition to the repository ignore files. Native default empty. */
+    "files.ignored": readonly string[];
+    /** Whether `.gitignore`, `.ignore`, `.git/info/exclude`, and the global
+     * Git excludes file mark entries ignored. Native default true. */
+    "files.respectGitignore": boolean;
     /** How pickers and completion lists match, in order of preference:
      * "prefix", "substring", "flex" (fuzzy), or "orderless" (space-separated
      * parts in any order). A candidate matches if any style matches it, and
@@ -706,6 +716,10 @@ declare module "knot" {
     /** The entry's name within its directory. */
     readonly name: string;
     readonly kind: FileKind;
+    /** Whether the ignore policy ignores the entry: `.gitignore` and friends,
+     * or a `files.ignored` pattern, or a directory above it that is ignored.
+     * Explorers dim ignored entries; walks skip them. */
+    readonly ignored: boolean;
   }
   export interface FileStat {
     readonly kind: FileKind;
@@ -741,8 +755,10 @@ declare module "knot" {
      * a directory, InvalidUtf8, or ProviderFailure. */
     readText(uri: string): Promise<string>;
     /** Lists exactly one directory, in unspecified order. Callers sort and
-     * filter. Entries a listing cannot represent (broken symlinks, special files,
-     * and names that are not UTF-8) are skipped.
+     * filter. Entries the `files.hidden` setting names (`.git`, `.DS_Store`, ...)
+     * are omitted, and entries the repository ignore files or `files.ignored`
+     * match are returned with `ignored` set. Entries a listing cannot represent
+     * (broken symlinks, special files, and names that are not UTF-8) are skipped.
      * @throws HostError with InvalidUri, ResourceNotFound, ResourceWrongKind for
      * a file, or ProviderFailure. */
     list(uri: string): Promise<readonly FileEntry[]>;
@@ -750,6 +766,11 @@ declare module "knot" {
      * Symlinks report their target's kind.
      * @throws HostError with InvalidUri or ProviderFailure. */
     stat(uri: string): Promise<FileStat | null>;
+    /** Whether the resource is hidden or ignored by the same policy `list`
+     * applies, including through an ignored or hidden directory above it. A
+     * missing resource is judged by its name alone.
+     * @throws HostError with InvalidUri or ProviderFailure. */
+    isIgnored(uri: string): Promise<boolean>;
   }>;
   export const workspaces: Readonly<{
     get(target: WindowTarget): Promise<WorkspaceInfo | null>;

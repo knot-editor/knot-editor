@@ -976,6 +976,13 @@ if ((await files.stat(`${root}/.editorconfig`)) !== null) {
 }
 ```
 
+`list` omits hidden entries (the `files.hidden` setting: `.git`, `.DS_Store`, and
+similar) and marks entries that `.gitignore`, `.ignore`, `.git/info/exclude`, or
+the `files.ignored` setting match with `ignored: true`, so an explorer can dim
+them. `files.isIgnored(uri)` applies the same policy to one path. The fake host
+matches `files.hidden` and `files.ignored` as plain names and reads no ignore
+files.
+
 `readText` decodes UTF-8 and drops a leading byte-order mark. It reads what is
 saved, never an open document's buffer, so unsaved edits are invisible; use
 `documents` and `Buffer.snapshot` for live text. `list` returns one directory in

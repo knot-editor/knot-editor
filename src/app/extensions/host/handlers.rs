@@ -1733,18 +1733,40 @@ async fn list_files(
     context: HostContext,
     arguments: FileUriArguments,
 ) -> Result<Vec<knot_protocol::FileEntry>, OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
-    let entries = knot_model::files::list(providers, &arguments.uri)
+    let (providers, policy) = context.foreground(|_, cx| {
+        (
+            ProductShell::filesystems(cx),
+            crate::app::settings::files_ignore_policy(cx),
+        )
+    })?;
+    let entries = knot_model::files::list(providers, &arguments.uri, &policy)
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
     Ok(entries
         .into_iter()
-        .map(|entry| knot_protocol::FileEntry {
-            uri: entry.uri.to_string(),
-            name: entry.name,
-            kind: file_kind(entry.kind),
+        .map(|listed| knot_protocol::FileEntry {
+            uri: listed.entry.uri.to_string(),
+            name: listed.entry.name,
+            kind: file_kind(listed.entry.kind),
+            ignored: listed.ignored,
         })
         .collect())
+}
+
+#[host_operation("isFileIgnored")]
+async fn is_file_ignored(
+    context: HostContext,
+    arguments: FileUriArguments,
+) -> Result<bool, OpenError> {
+    let (providers, policy) = context.foreground(|_, cx| {
+        (
+            ProductShell::filesystems(cx),
+            crate::app::settings::files_ignore_policy(cx),
+        )
+    })?;
+    knot_model::files::is_ignored(providers, &arguments.uri, &policy)
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))
 }
 
 #[host_operation("statFile")]

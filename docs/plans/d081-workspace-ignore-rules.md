@@ -65,15 +65,23 @@ Evaluation is native, so watching, walking, and listing never call JavaScript.
 
 ## Checkpoints
 
-### 1. Ignore policy, settings, and annotated listings
+### 1. Ignore policy, settings, and annotated listings ✅
+
+Implemented; awaiting the review gate.
 
 Deliverables:
 
-- The three settings with definitions and `docs/settings.md` entries.
-- A native policy built from the settings and evaluated with the `ignore` crate.
-- `files.list` omits hidden entries and returns `ignored`; `files.isIgnored`.
-- `knot.d.ts`, the extension guide, and the URI providers architecture section
+- ✅ The three settings with definitions and `docs/settings.md` entries.
+- ✅ A native policy built from the settings and evaluated with the `ignore` crate.
+- ✅ `files.list` omits hidden entries and returns `ignored`; `files.isIgnored`.
+- ✅ `knot.d.ts`, the extension guide, and the URI providers architecture section
   describe the behavior.
+
+Scope decision: the policy lives in `crates/knot-model/src/files/ignore.rs` and
+reads ignore files through the provider's own `read` and `stat` (a `Classifier`
+over `GitignoreBuilder`), so it needs no new `FileSystemProvider` methods and the
+memory and local providers share one implementation. Checkpoint 2 decides
+whether the walk uses the same classifier or `WalkBuilder` for local speed.
 
 Validation: `knot-model` tests over a temporary local tree covering hidden
 names at any depth, nested `.gitignore` files and negation, `.ignore`,

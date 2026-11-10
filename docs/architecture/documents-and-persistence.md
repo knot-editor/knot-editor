@@ -77,10 +77,20 @@ operation, off the foreground.
 Enumeration skips entries a listing cannot represent: broken symlinks, special
 files, and names that are not UTF-8. Other I/O errors reject the directory.
 
-Extensions read through `knot.files` (`readText`, `list`, `stat`), which runs the
-`knot-model` file operations over the same unscoped providers off the
-foreground. Reads see only stored content, never an open document's buffer, and
-no entitlement gates them.
+Extensions read through `knot.files` (`readText`, `list`, `isIgnored`, `stat`),
+which runs the `knot-model` file operations over the same unscoped providers off
+the foreground. Reads see only stored content, never an open document's buffer,
+and no entitlement gates them.
+
+One native ignore policy, built from `files.hidden`, `files.ignored`, and
+`files.respectGitignore` on the foreground and evaluated off it, applies to any
+provider because it reads ignore files through the entry's own provider.
+Hidden entries are omitted from a listing; ignored ones are returned marked.
+Repository files follow ripgrep's semantics: `.ignore` files apply from any
+ancestor directory, `.gitignore` files, `.git/info/exclude`, and (for `file`
+URIs) the global excludes file only inside a Git repository, and a deeper file
+overrides a shallower one. Entries of an ignored or hidden directory are
+ignored.
 
 Product documents use unscoped providers so user-selected resources need not lie
 inside workspace roots. Scoped local providers remain trusted application

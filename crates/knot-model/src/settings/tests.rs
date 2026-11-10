@@ -377,6 +377,29 @@ fn file_cleanup_settings_default_on_and_read_any_other_text_as_all() {
 }
 
 #[test]
+fn file_ignore_settings_default_to_the_shared_policy() {
+    let store = SettingsStore::default();
+    let context = rust_editor();
+    assert_eq!(
+        store.get(FILES_HIDDEN, &context),
+        Some(&json!([
+            ".git",
+            ".hg",
+            ".svn",
+            ".jj",
+            "CVS",
+            ".DS_Store",
+            "Thumbs.db"
+        ]))
+    );
+    assert_eq!(store.get(FILES_IGNORED, &context), Some(&json!([])));
+    assert_eq!(
+        store.get(FILES_RESPECT_GITIGNORE, &context),
+        Some(&json!(true))
+    );
+}
+
+#[test]
 fn doubles_that_hold_integers_become_integers() {
     let restored = restore_integers(json!({"a": [1.0, 2.5, "x"], "b": 9.0e18, "c": null}));
     assert_eq!(restored["a"][0].as_i64(), Some(1));

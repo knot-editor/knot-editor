@@ -537,6 +537,8 @@ pub struct FileEntry {
     pub uri: String,
     pub name: String,
     pub kind: FileKind,
+    /// Whether the ignore policy ignores the entry.
+    pub ignored: bool,
 }
 
 /// One asynchronous child request issued by a native view instance.

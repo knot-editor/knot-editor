@@ -325,6 +325,10 @@ void fileText;
 const fileEntries: readonly import("knot").FileEntry[] = await files.list("file:///tmp");
 const entryKind: import("knot").FileKind = fileEntries[0].kind;
 void entryKind;
+const entryIgnored: boolean = fileEntries[0].ignored;
+void entryIgnored;
+const ignoredByPolicy: boolean = await files.isIgnored("file:///tmp/a.txt");
+void ignoredByPolicy;
 const fileStat: import("knot").FileStat | null = await files.stat("file:///tmp/a.txt");
 void fileStat;
 // @ts-expect-error file kinds are file or directory only

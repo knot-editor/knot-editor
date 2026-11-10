@@ -129,6 +129,9 @@ function emptyState() {
       ["keymap.preset", { key: "keymap.preset", type: "string", default: "knot", description: "The keymap preset that supplies default key bindings" }],
       ["statusBar.visible", { key: "statusBar.visible", type: "boolean", default: true, description: "Show the status bar below the workbench" }],
       ["statusBar.hiddenItems", { key: "statusBar.hiddenItems", type: "strings", default: [], description: "IDs of status bar items the bar skips" }],
+      ["files.hidden", { key: "files.hidden", type: "strings", default: [".git", ".hg", ".svn", ".jj", "CVS", ".DS_Store", "Thumbs.db"], description: "Entries that file listings never show" }],
+      ["files.ignored", { key: "files.ignored", type: "strings", default: [], description: "Entries that listings mark ignored" }],
+      ["files.respectGitignore", { key: "files.respectGitignore", type: "boolean", default: true, description: "Treat repository ignore file matches as ignored" }],
       ["completion.styles", { key: "completion.styles", type: "strings", default: ["prefix", "flex"], description: "How pickers and completion lists match, in order: prefix, substring, flex, or orderless" }],
     ]),
     settingValues: [] as FakeSettingValue[],
@@ -725,6 +728,19 @@ function fileKind(uri: string): Knot.FileKind | null {
   const directory = uri.endsWith("/") ? uri : `${uri}/`;
   for (const file of state.files.keys()) if (file.startsWith(directory)) return "directory";
   return null;
+}
+
+/**
+ * The fake host matches `files.hidden` and `files.ignored` as plain names
+ * against every path segment; it reads no ignore files.
+ */
+function fileNameSetting(key: string): string[] {
+  return (resolveSetting(key, settingScope(undefined)) ?? []) as string[];
+}
+
+function isIgnoredUri(uri: string): boolean {
+  const names = [...fileNameSetting("files.hidden"), ...fileNameSetting("files.ignored")];
+  return uri.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split("/").some((segment) => names.includes(segment));
 }
 
 function checkedFileUri(uri: string): string {
@@ -1537,9 +1553,17 @@ export const api: KnotApi = {
         if (!file.startsWith(`${checked}/`)) continue;
         const name = file.slice(checked.length + 1).split("/")[0]!;
         const child = `${checked}/${name}`;
-        entries.set(name, { uri: child, name, kind: fileKind(child)! });
+        entries.set(name, { uri: child, name, kind: fileKind(child)!, ignored: false });
       }
-      return [...entries.values()];
+      const hidden = fileNameSetting("files.hidden");
+      const ignored = fileNameSetting("files.ignored");
+      return [...entries.values()]
+        .filter((entry) => !hidden.includes(entry.name))
+        .map((entry) => ({ ...entry, ignored: ignored.includes(entry.name) || isIgnoredUri(checked) }));
+    },
+    isIgnored: async (uri) => {
+      maybeFail("files.isIgnored");
+      return isIgnoredUri(checkedFileUri(uri));
     },
     stat: async (uri) => {
       maybeFail("files.stat");
