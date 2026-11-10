@@ -1,6 +1,6 @@
 # D172 — Faster file walks
 
-Status: 🚧 in progress — checkpoint 2 awaiting review. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
+Status: 🚧 in progress — checkpoint 2 done, checkpoint 3 next. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
 Precedes [D173](daily-driver.md) (workspace file index), whose first scan and
 reclassification reuse this classifier.
 
@@ -84,43 +84,19 @@ default policy (`crates/knot-model/examples/walk_bench.rs`), and
   release build) walks in 1.13–1.26 s, about 1.14 s warm.
 - The classifier now applies `.ignore` files of every level before any
   `.gitignore`, as ripgrep does.
-- Open divergence, fixed in checkpoint 2: a walk from above a repository
-  applies none of the repository's `.gitignore` files. The equivalence test
-  does not walk from above a repository yet.
 - Both sides read the machine's global excludes, so the test assumes they
   match none of the fixtures' names.
 
-### 2. Rule-stack classifier with per-directory classification ✅ (awaiting review)
+### 2. Rule-stack classifier with per-directory classification ✅
 
-- Deliverables:
-  - `Classifier` split into shared policy state and per-directory rule
-    stacks.
-  - `walk` classifies inside each concurrent directory task.
-  - `list` and `is_ignored` resolve a directory's stack once (ancestors from
-    the repository root) and classify through the same code.
-  - Repositories are detected per directory (see Design), so a walk from
-    above a repository applies the repository's rules. The equivalence test
-    adds walks from the fixture root and fixtures with sibling and nested
-    repositories.
-- Validation: the existing policy tests, the walk and listing product test
-  (`src/app/product/tests/files.rs`) pass unchanged, and the extended
-  equivalence test passes. Benchmark numbers recorded.
-- Result: the walk takes about 0.62 s warm (1.20 s cold) on the kernel clone,
-  down from 1.14 s, with the same 97,336 files. `Classifier` is now the shared
-  policy state (`Arc`, immutable); a `Scope` holds one directory's rule sets
-  (`.ignore` and `.gitignore` kept apart so every `.ignore` still wins, the
-  nearest repository's exclude file). `resolve` builds the scope of a listed
-  or walked directory through its ancestors, and each walk task derives its
-  own scope from its entries, reading only the ignore files they name.
-  Walks from above repositories, sibling repositories, and nested ones match
-  ripgrep.
-- Review gate: the numbers, and the classifier's shape as D173 will reuse it.
-- **Implementation context:** `crates/knot-model/src/files/ignore.rs`
-  (`Classifier::{new, rules, entry, directory}`, `DirectoryRules`, `verdict`,
-  `virtual_path`) and `files.rs` (`walk`, `list`, `is_ignored`). The walk
-  loop uses `FuturesUnordered` with `WALK_CONCURRENCY`; keep that and have
-  each future return classified files and child directories with their
-  stacks. Ignore-file reads stay through the entry's own provider.
+Approved. `Classifier` holds the shared policy state and a `Scope` holds one
+directory's rules; each walk task builds its scope from its entries and
+classifies them, and repositories are found per directory. `list`,
+`is_ignored`, and the walk root resolve their scope through
+`Classifier::resolve`. The equivalence test covers walks from above
+repositories, sibling repositories, and nested ones.
+
+- Warm walk of the kernel clone: about 0.62 s, down from 1.14 s.
 
 ### 3. Cheaper local enumeration
 
