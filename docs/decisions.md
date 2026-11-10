@@ -147,6 +147,9 @@ touches.
   shared product operations that return committed semantic data.
 - [Folder selection](decisions/documents-and-persistence.md#folder-selection):
   `workspaces.pickFolder` returns a checked directory without committing roots.
+- [Extension file reads](decisions/documents-and-persistence.md#extension-file-reads):
+  ungated, text-only `files` reads over any provider; no bytes, walk, or
+  list options.
 - [Unsaved-document recovery store](decisions/documents-and-persistence.md#unsaved-document-recovery-store):
   an application-owned database independent of extension health.
 - [Unsaved-document restore and hot exit](decisions/documents-and-persistence.md#unsaved-document-restore-and-hot-exit):

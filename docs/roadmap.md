@@ -101,9 +101,9 @@ complete list for that item.
 - **Find:** D031 → D001, with or after D092; D031 → D150.
 - **Package manager:** D087 → D101 → D102 → D103 → D104 → D106;
   D064, D071, D103 → D105 → D106; D106 → D107, D108; D103 → D116.
-- **Settings:** D070 → D089 → D090; D008, D122 → D090; D122 → D089;
+- **Settings:** D070 → D089 → D090; D008 → D090;
   D070 → D091, D045, D059; D089 → D124.
-- **Projects and workspaces:** D070, D084 → D120; D122 → D123; D087 → D125,
+- **Projects and workspaces:** D070, D084 → D120; D087 → D125,
   D126; D089 → D125.
 - **Start surface:** D083, D084 → D061.
 - **Launcher:** D164 → D165; D120 → D165, D166.
@@ -291,6 +291,13 @@ complete list for that item.
   - Reconsider: A concrete file workflow requires non-UTF-8 or binary
     inspection.
 
+- **D171 — Binary file reads for extensions**
+  - Deferred: `files.readText` is text-only, because no consumer needs
+    non-UTF-8 content, and a binary transport would be designed without one.
+  - Reconsider: A consumer needs non-UTF-8 file content. Then add a bytes
+    read beside `readText`.
+  - Order: independent.
+
 - **D011 — Remote filesystem providers**
   - Deferred: The URI boundary is validated with local and memory providers.
   - Reconsider: A specific remote workflow is selected.
@@ -323,15 +330,14 @@ complete list for that item.
   - Reconsider: Multi-process editing or document handoff is introduced.
 
 - **D090 — EditorConfig support**
-  - Deferred: `.editorconfig` files need file watching (D008), reading
-    arbitrary files through the public API (D122), and the `path` scope fact
-    (D089).
+  - Deferred: `.editorconfig` files need file watching (D008) and the `path`
+    scope fact (D089).
   - Reconsider: D008 and D089 are complete, or daily use hits a project that
     relies on `.editorconfig`. Then a bundled package finds the files above
     each opened document, turns each section into a `path`-glob scope, and
     writes them from the root down to the nearest file, so last-write-wins
     reproduces EditorConfig's rule that the nearest file takes precedence.
-  - Order: after D008, D089, and D122.
+  - Order: after D008 and D089.
 
 - **D091 — Settings UI**
   - Deferred: Settings (D070) are set from code. Definitions carry a type,

@@ -65,6 +65,23 @@ revalidate it.
 
 Reference: [workspaces](../architecture/documents-and-persistence.md#workspaces-and-resource-trees).
 
+## Extension file reads
+
+Reads are ungated and text-only. D087's entitlements gate processes and the
+network, the only ways file contents could leave the machine, so reading alone
+exposes nothing a package cannot already leak by being installed; a read gate
+would add consent prompts without a boundary behind them. Workspace trust
+remains deferred. Reading ignores workspace roots because the consumers look
+upward from a document (EditorConfig, project settings) and outside any root.
+
+Bytes are not exposed because no consumer needs non-UTF-8 content, and a binary
+transport would be designed without one. `list` takes no sort or filter options:
+the explorer wants to own its order, and a host-side filter would add a second
+pattern syntax beside project settings' globs. Recursion waits for the
+ignore-aware walk, where filtering saves work.
+
+Reference: [URI providers](../architecture/documents-and-persistence.md#uri-providers).
+
 ## Unsaved-document recovery store
 
 Unsaved text is protected in an application-owned database, independent of

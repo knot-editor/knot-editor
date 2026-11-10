@@ -910,6 +910,28 @@ observe again when a fresh baseline is needed.
 The bundled [project registry](../extensions/@knot/projects/src/) is a
 complete observer: it waits for `launched`, then tracks windows and documents.
 
+## Read files
+
+`files` reads stored resources through the registered resource providers, for
+any URI with a provider, whether or not a workspace root contains it. It reads,
+lists, and stats; it never writes.
+
+```js
+const root = (await workspaces.get(target)).roots[0].uri;
+const entries = await files.list(root);
+const names = entries.filter((entry) => entry.kind === "file").map((entry) => entry.name);
+if ((await files.stat(`${root}/.editorconfig`)) !== null) {
+  const text = await files.readText(`${root}/.editorconfig`);
+}
+```
+
+`readText` decodes UTF-8 and drops a leading byte-order mark. It reads what is
+saved, never an open document's buffer, so unsaved edits are invisible; use
+`documents` and `Buffer.snapshot` for live text. `list` returns one directory in
+no particular order, so sort and filter in JavaScript. `stat` resolves `null`
+for a missing resource instead of rejecting. The fake host seeds files with
+`seedFile` from `knot/testing`.
+
 ## Acknowledge cleanup and handle failures
 
 Await disposal to observe native release. It makes an object locally inactive

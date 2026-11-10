@@ -74,6 +74,14 @@ and the link survives; it preserves permissions and rejects version mismatch.
 Local filesystem I/O runs blocking `std::fs` calls on a short-lived thread per
 operation, off the foreground.
 
+Enumeration skips entries a listing cannot represent: broken symlinks, special
+files, and names that are not UTF-8. Other I/O errors reject the directory.
+
+Extensions read through `knot.files` (`readText`, `list`, `stat`), which runs the
+`knot-model` file operations over the same unscoped providers off the
+foreground. Reads see only stored content, never an open document's buffer, and
+no entitlement gates them.
+
 Product documents use unscoped providers so user-selected resources need not lie
 inside workspace roots. Scoped local providers remain trusted application
 boundaries, not sandboxes; symlinks may lead outside the lexical root.
