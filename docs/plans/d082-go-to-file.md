@@ -1,6 +1,6 @@
 # D082 — Go to File
 
-Status: 🚧 checkpoint 2 awaiting review; checkpoint 3 next. Item of the
+Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 next. Item of the
 [daily-driver plan](daily-driver.md#phase-4--files-and-workspace); promotes
 [D118](../roadmap.md) (query-driven picker) in its smallest form.
 
@@ -93,41 +93,13 @@ and its rationale is the
 Enter on rows that do not yet answer the field waits for them; replaying keys
 typed meanwhile is deferred as D175 in the [roadmap](../roadmap.md).
 
-### 2. Multi-root `files.search` ✅ (awaiting review)
+### 2. Multi-root `files.search` ✅
 
-Deliverables:
-
-- ✅ `files.search` takes one directory or a list, ranks them as one search,
-  and reports each hit's directory.
-- ✅ Go to File makes one call for all roots and labels rows by the hit's root.
-
-Validation (✅ all in place):
-
-- Model tests for cross-root ranking (a name match in the second root beats
-  a directory match in the first; ties fall to root order) for both the
-  index and the disk walk.
-- Product test for the host operation with two roots, one unindexed.
-- Package and integration tests with two roots.
-
-Review gate: in a two-root window, results from both roots interleave by
-quality and show their root. Run `Try: Add Second Root` (a `post-init.js`
-command: Knot plus kigiri), then ⌘P.
-
-**Implementation context:**
-
-- `crates/knot-model/src/files/search.rs`: `Ranker` candidates carry a
-  directory index, and `finish` takes the directories; `SearchHit` gains the
-  directory.
-- `crates/knot-model/src/files/index.rs` (`search`, one `Ranker` offered by
-  each root's index in turn) and the disk fallback `search` in
-  `crates/knot-model/src/files.rs`.
-- `search_files` and its arguments in `src/app/extensions/host/handlers.rs`
-  (an index lookup per directory, falling back to the walk per directory);
-  protocol types in `crates/knot-protocol/src/lib.rs`; tests in
-  `src/app/product/tests/files.rs`.
-- `files.search` and `FileSearchHit` in `knot.d.ts` and `bootstrap.js`; the
-  [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index)
-  reference.
+Approved. `files.search` takes a directory or a list, ranks them as one
+search, and names each hit's directory; Go to File makes one call for all
+roots. The ranking rules are in the
+[workspace file index](../architecture/documents-and-persistence.md#workspace-file-index)
+reference.
 
 ### 3. Recent files first
 
