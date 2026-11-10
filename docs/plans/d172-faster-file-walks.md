@@ -1,6 +1,6 @@
 # D172 — Faster file walks
 
-Status: 🚧 approved, not started. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
+Status: 🚧 in progress — checkpoint 1 awaits review. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
 Precedes [D173](daily-driver.md) (workspace file index), whose first scan and
 reclassification reuse this classifier.
 
@@ -64,23 +64,38 @@ reclassification on ignore-file changes, lazy ignored directories.
 
 ## Checkpoints
 
-### 1. Benchmark and equivalence baseline
+### 1. Benchmark and equivalence baseline ✅
 
 - Deliverables:
-  - A benchmark that walks a given local directory with the default policy
+  - ✅ A benchmark that walks a given local directory with the default policy
     and reports the time and file count, plus a `just` recipe to run it in
-    release mode.
-  - An equivalence test comparing `files::walk` with `ignore::WalkBuilder` on
+    release mode (`just walk-bench <directory> [runs]`).
+  - ✅ An equivalence test comparing `files::walk` with `ignore::WalkBuilder` on
     local fixture trees covering nested `.gitignore` and `.ignore`
     overrides, negations, directory-only patterns, `.git/info/exclude`,
     `.ignore` above the repository, hidden and ignored setting patterns, and
     symlinked directories.
-  - Baseline numbers recorded in this plan.
+  - ✅ Baseline numbers recorded in this plan.
 - Validation: the equivalence test passes against the current walk; any
   difference it exposes is either fixed in the classifier or recorded here as
   an intended divergence (for example, the global excludes file is not
   configured in tests).
 - Review gate: baseline numbers and any divergences.
+- **Result:**
+  - Baseline: `just walk-bench` on a shallow clone of the Linux kernel
+    (97,336 files, Apple Silicon, release build) takes 1.13–1.26 s per walk,
+    about 1.14 s once warm.
+  - Fixed: ripgrep consults the `.ignore` files of every level, deepest first,
+    before any `.gitignore`; the classifier went level by level. It now
+    follows ripgrep, pinned by a policy test.
+  - Intended divergence: walking a directory *above* a repository applies no
+    `.gitignore` inside the repository below it (the classifier only looks for
+    `.git` in the walked directory and its ancestors), while ripgrep does.
+    The equivalence test walks only from inside a repository or outside any.
+    D173 may revisit this when it indexes a workspace root.
+  - The global excludes file is read by both sides (`git_global`), so the
+    test depends on the machine's global excludes only for names the fixtures
+    do not use.
 - **Implementation context:** the walk is `files::walk` in
   `crates/knot-model/src/files.rs`, and the policy tests live in
   `crates/knot-model/src/files/ignore.rs` (their `memory` fixture uses the

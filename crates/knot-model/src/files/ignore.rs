@@ -259,16 +259,21 @@ impl Classifier {
         if !self.respect_gitignore {
             return Visibility::Visible;
         }
+        let mut levels = Vec::with_capacity(depth + 1);
         for level in (0..=depth).rev() {
-            let rules = self.rules(&parent[..level]).await;
-            for source in [&rules.ignore, &rules.gitignore].into_iter().flatten() {
-                if let Some(ignored) = verdict(source, &path, is_dir) {
-                    return if ignored {
-                        Visibility::Ignored
-                    } else {
-                        Visibility::Visible
-                    };
-                }
+            levels.push(self.rules(&parent[..level]).await);
+        }
+        // Like ripgrep, `.ignore` files of every level take precedence over
+        // `.gitignore` files, each searched from the deepest level up.
+        let ignore = levels.iter().filter_map(|rules| rules.ignore.as_ref());
+        let gitignore = levels.iter().filter_map(|rules| rules.gitignore.as_ref());
+        for source in ignore.chain(gitignore) {
+            if let Some(ignored) = verdict(source, &path, is_dir) {
+                return if ignored {
+                    Visibility::Ignored
+                } else {
+                    Visibility::Visible
+                };
             }
         }
         if self.repository.is_some() {
@@ -449,6 +454,21 @@ mod tests {
         assert_eq!(
             listing(&providers, "", &IgnorePolicy::default()),
             [".gitignore", ".ignore", "a.log", "a.tmp!"]
+        );
+    }
+
+    #[test]
+    fn ignore_files_of_any_level_take_precedence_over_gitignore_files() {
+        let providers = memory(&[
+            (".git/config", ""),
+            (".ignore", "!a.tmp\n"),
+            ("src/.gitignore", "*\n"),
+            ("src/a.tmp", ""),
+            ("src/b.tmp", ""),
+        ]);
+        assert_eq!(
+            listing(&providers, "src", &IgnorePolicy::default()),
+            [".gitignore!", "a.tmp", "b.tmp!"]
         );
     }
 

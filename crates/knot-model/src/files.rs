@@ -4,6 +4,8 @@
 //! Every operation reads the stored resource. Open documents and their unsaved
 //! edits are never consulted.
 
+#[cfg(test)]
+mod equivalence;
 mod ignore;
 
 use ignore::{Classifier, Visibility, segments};
