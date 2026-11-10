@@ -1187,6 +1187,8 @@ struct RemovedTab {
     removed_pane: Option<PaneId>,
 }
 
+mod stripes;
+pub use stripes::{StripeButton, Stripes};
 mod terminals;
 pub use terminals::TerminalToggle;
 mod tools;
