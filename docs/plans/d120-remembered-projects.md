@@ -1,6 +1,6 @@
 # D120 — Remembered projects
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 in progress. Item of the
 [daily-driver plan](daily-driver.md); depends on D070 (settings) and D084
 (project selector modal).
 
@@ -82,25 +82,13 @@ the same purpose. `projects.create` stays until checkpoint 3, because it is the
 only way to make a project before creation is automatic; it accepts a blank
 name and moves out with that checkpoint.
 
-### 3. Automatic creation and pruning 🚧
+### 3. Automatic creation and pruning ✅
 
-- Deliverables: tracking creates and binds an unnamed active project for an
-  unbound window with an unknown non-empty root set, after launch and for
-  windows present at `launched`; the `projects.rememberedLimit` setting and
-  pruning on creation with the protections above.
-- Validation: `node:test` tracking tests for creation on Open Folder, on
-  launch, no creation for empty roots, and pruning that skips named, active,
-  and capture-holding projects. A product test covers creation through a
-  real window open.
-- **Implementation context:** `tracking.ts` (`track`, `afterLaunch`,
-  `suspendUnbound`) and `bindings.ts` (`syncBindings`, which binds unbound
-  windows to active projects); `state.ts` for `commit` and `writeSession`;
-  `session.ts` for an initial active session. The setting uses D070's
-  `settings.define` and `settings.get` from the package's `start()` in
-  `extension.ts`. The fake host in
-  `scripts/extensions/testing/host.ts` already implements both.
-- Review gate: the registry stays small in practice and nothing with unsaved
-  text is ever pruned.
+Tracking creates an unnamed active project for an unbound window whose
+non-empty root set no project has, after launch and for windows present at
+`launched`; `projects.rememberedLimit` (see [settings](../settings.md)) prunes
+unnamed projects on creation, sparing named, active, unreadable, and
+capture-holding ones. `projects.create` is gone.
 
 ### 4. Restoring on a hand-opened folder
 
