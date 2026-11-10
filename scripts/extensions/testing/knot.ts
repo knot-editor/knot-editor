@@ -8,6 +8,7 @@ export const {
   documents,
   editor,
   files,
+  history,
   icons,
   keymaps,
   languages,

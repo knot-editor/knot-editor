@@ -588,6 +588,11 @@ export function inputMessages(): readonly (string | null)[] {
   return state.inputMessages;
 }
 
+function recentIds(name: string): string[] {
+  const stored = state.records.get(`history/${name}`);
+  return stored === undefined ? [] : (JSON.parse(stored) as string[]);
+}
+
 type Span = [number, number];
 
 /** The first occurrence of `needle` in `haystack` (at its start if `atStart`). */
@@ -1560,6 +1565,25 @@ export const api: KnotApi = {
       state.records.delete(key);
     },
     list: async () => [...state.records.keys()].sort(),
+  },
+  history: {
+    recent: async (name) => recentIds(name),
+    record: async (name, id) => {
+      state.records.set(`history/${name}`, JSON.stringify([id, ...recentIds(name).filter((other) => other !== id)].slice(0, 50)));
+    },
+    order: async (name: string, items: readonly unknown[], key?: (item: never) => string) => {
+      const places = new Map(recentIds(name).map((id, place) => [id, place]));
+      const lookup = key ?? ((item: { id: string }) => item.id);
+      const recent: [number, unknown][] = [];
+      const rest: unknown[] = [];
+      for (const item of items) {
+        const place = places.get((lookup as (item: unknown) => string)(item));
+        if (place === undefined) rest.push(item);
+        else recent.push([place, item]);
+      }
+      recent.sort((left, right) => left[0] - right[0]);
+      return [...recent.map(([, item]) => item), ...rest];
+    },
   },
   recovery: {
     list: async () => [...state.captures.values()].reverse().map(({ text: _text, ...capture }) => capture),

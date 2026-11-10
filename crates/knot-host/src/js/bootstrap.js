@@ -1681,6 +1681,37 @@ export async function storageList() {
   return Object.freeze(await request("storageList"));
 }
 
+const HISTORY_LIMIT = 50;
+function historyKey(name) {
+  return `history/${string(name, "history name must be text")}`;
+}
+async function readHistory(name) {
+  const stored = await storageRead(historyKey(name));
+  return stored.found && Array.isArray(stored.value) ? stored.value.filter((id) => typeof id === "string") : [];
+}
+export async function historyRecent(name) {
+  return Object.freeze(await readHistory(name));
+}
+export async function historyRecord(name, id) {
+  const recorded = string(id, "history ID must be text");
+  const ids = await readHistory(name);
+  await storageWrite(historyKey(name), [recorded, ...ids.filter((other) => other !== recorded)].slice(0, HISTORY_LIMIT));
+}
+export async function historyOrder(name, items, key = (item) => item.id) {
+  if (!Array.isArray(items)) throw new TypeError("history items must be an array");
+  if (typeof key !== "function") throw new TypeError("history key must be a function");
+  const places = new Map((await readHistory(name)).map((id, place) => [id, place]));
+  const recent = [];
+  const rest = [];
+  for (const item of items) {
+    const place = places.get(key(item));
+    if (place === undefined) rest.push(item);
+    else recent.push([place, item]);
+  }
+  recent.sort((left, right) => left[0] - right[0]);
+  return Object.freeze([...recent.map(([, item]) => item), ...rest]);
+}
+
 function captureFromNative(value) {
   return Object.freeze(value);
 }

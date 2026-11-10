@@ -848,6 +848,25 @@ declare module "knot" {
     readonly list: () => Promise<readonly string[]>;
   };
 
+  /**
+   * Recently chosen items by name, kept in this package's storage so they
+   * survive restarts. A name is any text you choose, private to the package.
+   * Order a picker's items with `order` and record the choice with `record`;
+   * the picker keeps the order it is given for an empty query and for matches
+   * that are otherwise equal.
+   */
+  export const history: Readonly<{
+    /** The recorded IDs, most recent first, at most 50. */
+    recent(name: string): Promise<readonly string[]>;
+    /** Moves the ID to the front of the named list. Read/modify/write is not
+     * atomic, as for `storage`. */
+    record(name: string, id: string): Promise<void>;
+    /** The items with recorded ones first, most recent first, followed by the
+     * rest in their given order. The key defaults to `item.id`. */
+    order<T extends { readonly id: string }>(name: string, items: readonly T[]): Promise<readonly T[]>;
+    order<T>(name: string, items: readonly T[], key: (item: T) => string): Promise<readonly T[]>;
+  }>;
+
   const captureIdentity: unique symbol;
   /** Application-generated retained capture identity. Safe to persist, for
    * example in a session record; it addresses only this package's captures. */

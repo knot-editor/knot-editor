@@ -174,7 +174,7 @@ await workbench.writeClipboardText(null);
 // @ts-expect-error contextual targets cannot be null
 await editor.activeBuffer(null);
 
-import { completion, documents, files, windows, workspaces } from "knot";
+import { completion, documents, history, files, windows, workspaces } from "knot";
 import type { DocumentId, WindowTarget, PaneTarget, ViewTarget } from "knot";
 for (const document of await documents.list()) {
   const id: DocumentId = document.id;
@@ -303,6 +303,13 @@ const matched: readonly import("knot").CompletionMatch[] = await completion.matc
   styles: ["prefix"],
 });
 void matched[0]?.ranges[0]?.[0];
+const ordered: readonly { readonly id: string }[] = await history.order("things", [{ id: "a" }]);
+void ordered;
+const byUri: readonly { readonly uri: string }[] = await history.order("files", [{ uri: "u" }], (file) => file.uri);
+void byUri;
+await history.record("things", "a");
+// @ts-expect-error items without an id need a key function
+await history.order("things", [{ uri: "u" }]);
 // @ts-expect-error a match query is text
 await completion.match(1, []);
 // @ts-expect-error a completion needs the value that replaces the field

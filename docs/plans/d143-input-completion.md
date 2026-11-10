@@ -1,7 +1,7 @@
 # D143 — Input completion
 
-Status: 🚧 approved; checkpoints 1 and 2 are implemented and await their
-review gates, and checkpoint 3 is not started. Item of the
+Status: 🚧 approved; checkpoints 1 to 3 are implemented and await their
+review gates, and checkpoint 4 is not started. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker).
 
 ## Goal
@@ -137,7 +137,18 @@ input completion over the same word list; change `completion.styles` in the
 settings file and check that both follow it, with matched characters
 highlighted.
 
-### 3. Vim Ex line completion
+### 3. Extension history ✅
+
+`history.recent`, `history.record`, and `history.order` keep a named list of
+recently chosen IDs per package in its storage, so extensions order picker
+items and completion candidates by recency without a native picker option. The
+picker and the matcher already keep the caller's order among equal matches,
+which is all recency needs: it never outranks a better match, as in IntelliJ.
+The helper lives in `bootstrap.js` over `storage`; the fake host implements the
+same three calls. The review gate is `Try: Match picker` and
+`Try: Match input`, which now remember picks.
+
+### 4. Vim Ex line completion
 
 Deliverables:
 - `completeEx` in `extensions/@knot/vim/src/ex.ts`, matching through

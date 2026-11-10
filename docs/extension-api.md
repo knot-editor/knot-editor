@@ -784,6 +784,23 @@ await workbench.showInput({
 });
 ```
 
+To list recently chosen items first, keep a history under a name of your
+choice, which is private to the package (see [storage](#durable-storage)).
+`history.order` puts recorded items first, most recent first, and leaves the
+rest in the order given; the picker only keeps the order it receives, so
+recent items lead the empty list and matches that are otherwise equal, and
+never outrank a better match:
+
+```js
+const items = await history.order("projects", allProjects); // by item.id
+const picked = await workbench.showPicker({ title: "Projects", items });
+if (picked.kind === "selected") await history.record("projects", picked.id);
+```
+
+`history.recent(name)` returns the recorded IDs, most recent first, for lists
+that are not pickers, and `order` takes a key function for items whose identity
+is not `id`. A list keeps the 50 most recent IDs.
+
 Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. A `prompt` such as `":"` shows before the field, outside its value, and makes Backspace on an empty field dismiss the input, as a command line does. Confirmation
 and message use the native platform prompt.
 

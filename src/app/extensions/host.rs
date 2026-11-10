@@ -1221,6 +1221,24 @@ impl ProductExtensionHost {
         self.load_package(key, graph, None)
     }
 
+    /// Like [`Self::load_test_source`], with storage owned by `package`.
+    #[cfg(test)]
+    pub(crate) fn load_test_source_with_storage(
+        &mut self,
+        key: ExtensionKey,
+        source: &str,
+        package: &str,
+    ) -> Result<ExtensionExecution, String> {
+        let graph = ModuleGraph::new(
+            "file:///fixtures/view-command/",
+            "main.js",
+            BTreeMap::from([("main.js".into(), Arc::from(source))]),
+        )
+        .map_err(|error| error.to_string())?;
+        let owner = crate::app::extensions::storage::StorageOwner::package(package)?;
+        self.load_package(key, graph, Some(owner))
+    }
+
     fn admit_lifecycle(&mut self, key: ExtensionKey) {
         if self.lifecycles.insert(key) {
             self.buffers.admit_lifecycle(key.extension, key.lifecycle);

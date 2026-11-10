@@ -1,6 +1,7 @@
 import {
   activeBuffer,
   storageRead, storageWrite, storageDelete, storageList,
+  historyRecent, historyRecord, historyOrder,
   recoveryList, recoveryRetain, recoveryRelease, recoveryRestore,
   observeWorkbench, closePresentation, openEditor, replaceWindows, captureLayout,
   openDocument, createUntitled, presentDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, statFile, openTerminal,
@@ -89,5 +90,6 @@ export const windows = Object.freeze({ list: listWindows, get: getWindow, open: 
 export const files = Object.freeze({ readText: readFileText, list: listFiles, stat: statFile });
 export const workspaces = Object.freeze({ get: getWorkspace, openFolder, replaceRoots: replaceWorkspaceRoots, pickFolder });
 
+export const history = Object.freeze({ recent: historyRecent, record: historyRecord, order: historyOrder });
 export const storage = Object.freeze({ read: storageRead, write: storageWrite, delete: storageDelete, list: storageList });
 export const recovery = Object.freeze({ list: recoveryList, retain: recoveryRetain, release: recoveryRelease, restore: recoveryRestore });

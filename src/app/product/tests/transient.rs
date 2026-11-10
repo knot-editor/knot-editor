@@ -597,7 +597,7 @@ fn field_text(input: &Entity<crate::app::transient::InputView>, cx: &gpui::App) 
 }
 
 const LIVE_INPUT_SOURCE: &str = r#"
-import { commands, completion, workbench } from "knot";
+import { commands, completion, history, workbench } from "knot";
 await commands.register("transient.live-input", async () => {
   const seen = [];
   const result = await workbench.showInput({
@@ -651,6 +651,13 @@ await commands.register("transient.match", async () => {
   const found = await completion.match("set", ["xset", "set", "résetté"]);
   await workbench.writeClipboardText(JSON.stringify(found));
 });
+await commands.register("transient.history", async () => {
+  for (const id of ["c", "b", "c"]) await history.record("things", id);
+  const ordered = await history.order("things", ["a", "b", "c", "d"].map((id) => ({ id })));
+  await workbench.writeClipboardText(
+    `${(await history.recent("things")).join(",")}|${ordered.map((item) => item.id).join(",")}`,
+  );
+});
 await commands.register("transient.malformed-input", async () => {
   try {
     await workbench.showInput({ title: "Word", onChange: () => ({ items: "nope" }) });
@@ -688,6 +695,10 @@ fn start_live_input(
     (host, key, shell, window, pending)
 }
 
+thread_local! {
+    static STORAGE: std::cell::RefCell<Vec<tempfile::TempDir>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 fn live_shell(
     cx: &mut TestAppContext,
 ) -> (
@@ -701,8 +712,15 @@ fn live_shell(
     let documents = install_globals(cx);
     let host = cx.update(crate::app::extensions::host::install);
     let key = ExtensionKey::new(ExtensionId::new(714), ExtensionLifecycleId::new(1));
+    let storage = tempfile::tempdir().unwrap();
+    let root = storage.path().to_owned();
+    // The directory lives as long as the test's thread.
+    STORAGE.with(|kept| kept.borrow_mut().push(storage));
+    host.update(cx, |host, cx| host.set_test_storage_root(root, cx));
     host.update(cx, |host, cx| {
-        let execution = host.load_test_source(key, LIVE_INPUT_SOURCE).unwrap();
+        let execution = host
+            .load_test_source_with_storage(key, LIVE_INPUT_SOURCE, "@test/live-input")
+            .unwrap();
         cx.spawn(async move |_, _| {
             execution.await.unwrap();
         })
@@ -968,4 +986,12 @@ fn completion_match_follows_the_styles_setting_and_reports_utf16_ranges(cx: &mut
         run(cx),
         r#"[{"index":1,"ranges":[[0,3]]},{"index":0,"ranges":[[1,4]]},{"index":2,"ranges":[[2,5]]}]"#
     );
+}
+
+#[gpui::test]
+fn history_orders_recent_items_first_and_persists_in_package_storage(cx: &mut TestAppContext) {
+    let (_host, _key, shell, window) = live_shell(cx);
+    let pending = dispatch_product_command(&shell, window, "transient.history", cx);
+    assert_eq!(wait_for_command(pending, cx), CommandOutcome::Completed);
+    assert_eq!(clipboard(cx).as_deref(), Some("c,b|c,b,a,d"));
 }
