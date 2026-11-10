@@ -364,7 +364,8 @@ to be rebuilt later:
     first.
   - Searches with `files.search` on every keystroke, one call for all roots.
 
-- **D083 — Recent files** (depends on D071)
+- 🚧 **D083 — Recent files** (depends on D071)
+  - 🚧 [Plan](d083-recent-files.md)
   - A bundled extension that records opened documents in extension storage
     and offers Open Recent….
   - Reopen closed tab (D072) is unrelated: it is native per-window state.
