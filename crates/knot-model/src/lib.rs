@@ -19,6 +19,7 @@ pub mod documents;
 pub mod editing;
 pub mod editor;
 pub mod extensions;
+pub mod files;
 pub mod filesystem;
 pub mod history;
 pub mod icons;
