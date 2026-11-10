@@ -109,6 +109,10 @@ await commands.register("files.policy", async () => {
         cx,
     );
     let (shell, window) = empty_product_window(&documents, cx);
+    let root = ResourceUri::parse("mem://product/").unwrap();
+    shell.update(cx, |shell, cx| {
+        shell.replace_workspace_roots(vec![root], cx)
+    });
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&shell, window, "files.policy", cx),
@@ -179,4 +183,92 @@ await commands.register("files.unwatch", async () => { await handle.dispose(); }
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     assert_eq!(cx.read(extensions::host::file_watch_count), 0);
     assert_eq!(provider.watch_count(), 0);
+}
+
+#[gpui::test]
+fn indexed_roots_answer_from_memory_follow_the_disk_and_release_with_the_root(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let key = install_operation_fixture(
+        &host,
+        r#"
+import { commands, files, workbench } from "knot";
+await commands.register("files.report", async () => {
+  const walked = (await files.walk("mem://product/src/")).map(entry => entry.name).sort().join();
+  const listed = (await files.list("mem://product/src/")).map(entry => entry.name).sort().join();
+  const outside = (await files.list("mem://product/")).map(entry => entry.name).sort().join();
+  await workbench.writeClipboardText([walked, listed, outside].join("|"));
+});
+"#,
+        "files.report",
+        cx,
+    );
+    provider
+        .seed_file(
+            ResourceUri::parse("mem://product/src/kept.txt").unwrap(),
+            "x",
+        )
+        .unwrap();
+    let (shell, window) = empty_product_window(&documents, cx);
+    let root = ResourceUri::parse("mem://product/src/").unwrap();
+    let report = |cx: &mut TestAppContext| {
+        assert_eq!(
+            wait_for_command(
+                dispatch_product_command(&shell, window, "files.report", cx),
+                cx
+            ),
+            CommandOutcome::Completed
+        );
+        cx.read(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
+            .unwrap()
+    };
+    let indexed = |cx: &mut TestAppContext| {
+        cx.read(|cx| crate::app::file_index::ApplicationFileIndex::covering(cx, &root).is_some())
+    };
+
+    assert!(!indexed(cx));
+    shell.update(cx, |shell, cx| {
+        shell.replace_workspace_roots(vec![root.clone()], cx)
+    });
+    assert!(indexed(cx));
+    assert_eq!(provider.watch_count(), 1);
+    assert_eq!(report(cx), "kept.txt|kept.txt|invalid.txt,notes.txt,src");
+
+    // An external change arrives through the watch.
+    provider
+        .seed_file(
+            ResourceUri::parse("mem://product/src/added.txt").unwrap(),
+            "x",
+        )
+        .unwrap();
+    let mut seen = String::new();
+    for _ in 0..100 {
+        seen = report(cx);
+        if seen.starts_with("added.txt,") {
+            break;
+        }
+        cx.executor()
+            .advance_clock(std::time::Duration::from_millis(100));
+        cx.run_until_parked();
+    }
+    assert_eq!(
+        seen,
+        "added.txt,kept.txt|added.txt,kept.txt|invalid.txt,notes.txt,src"
+    );
+
+    // Keeping the root keeps the index; dropping it releases the watch.
+    shell.update(cx, |shell, cx| {
+        shell.replace_workspace_roots(vec![root.clone()], cx)
+    });
+    assert_eq!(provider.watch_count(), 1);
+    shell.update(cx, |shell, cx| {
+        shell.replace_workspace_roots(Vec::new(), cx)
+    });
+    assert!(!indexed(cx));
+    assert_eq!(provider.watch_count(), 0);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }

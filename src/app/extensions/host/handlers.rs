@@ -1739,9 +1739,16 @@ async fn list_files(
             crate::app::settings::files_ignore_policy(cx),
         )
     })?;
-    let entries = knot_model::files::list(providers, &arguments.uri, &policy)
-        .await
-        .map_err(|error| product::operations::resource_error(error.into()))?;
+    let indexed = match indexed_uri(&context, &providers, &arguments.uri).await {
+        Some((index, uri)) => index.list(&uri, &policy).await,
+        None => None,
+    };
+    let entries = match indexed {
+        Some(entries) => entries,
+        None => knot_model::files::list(providers, &arguments.uri, &policy)
+            .await
+            .map_err(|error| product::operations::resource_error(error.into()))?,
+    };
     Ok(entries
         .into_iter()
         .map(|listed| knot_protocol::FileEntry {
@@ -1764,9 +1771,16 @@ async fn walk_files(
             crate::app::settings::files_ignore_policy(cx),
         )
     })?;
-    let files = knot_model::files::walk(providers, &arguments.uri, &policy)
-        .await
-        .map_err(|error| product::operations::resource_error(error.into()))?;
+    let indexed = match indexed_uri(&context, &providers, &arguments.uri).await {
+        Some((index, uri)) => index.walk(&uri, &policy).await,
+        None => None,
+    };
+    let files = match indexed {
+        Some(files) => files,
+        None => knot_model::files::walk(providers, &arguments.uri, &policy)
+            .await
+            .map_err(|error| product::operations::resource_error(error.into()))?,
+    };
     Ok(files
         .into_iter()
         .map(|entry| knot_protocol::FileEntry {
@@ -1789,9 +1803,33 @@ async fn is_file_ignored(
             crate::app::settings::files_ignore_policy(cx),
         )
     })?;
-    knot_model::files::is_ignored(providers, &arguments.uri, &policy)
-        .await
-        .map_err(|error| product::operations::resource_error(error.into()))
+    let indexed = match indexed_uri(&context, &providers, &arguments.uri).await {
+        Some((index, uri)) => index.is_ignored(&uri, &policy).await,
+        None => None,
+    };
+    match indexed {
+        Some(ignored) => Ok(ignored),
+        None => knot_model::files::is_ignored(providers, &arguments.uri, &policy)
+            .await
+            .map_err(|error| product::operations::resource_error(error.into())),
+    }
+}
+
+/// The index that answers for `uri` and the normalized URI, or `None` when no
+/// leased root contains it and the disk must answer.
+async fn indexed_uri(
+    context: &HostContext,
+    providers: &knot_model::filesystem::FileSystemProviderRegistry,
+    uri: &str,
+) -> Option<(
+    Arc<knot_model::files::FileIndex>,
+    knot_model::resource::ResourceUri,
+)> {
+    let uri = knot_model::files::normalize(providers, uri).await.ok()?;
+    let index = context
+        .foreground(|_, cx| crate::app::file_index::ApplicationFileIndex::covering(cx, &uri))
+        .ok()??;
+    Some((index, uri))
 }
 
 #[derive(Clone, Debug, PartialEq)]

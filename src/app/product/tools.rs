@@ -277,6 +277,20 @@ impl ProductShell {
         cx: &mut Context<Self>,
     ) -> crate::app::workspace::WorkspaceSnapshot {
         let workspace = self.workspace.replace_roots(roots);
+        // The new leases are taken before the old ones drop, so a retained
+        // root keeps its index.
+        let providers = cx
+            .try_global::<super::ApplicationFileSystems>()
+            .map(|filesystems| filesystems.0.clone());
+        let mut leases = Vec::new();
+        if let Some(providers) = &providers {
+            for root in workspace.roots() {
+                leases.extend(crate::app::file_index::ApplicationFileIndex::lease(
+                    cx, providers, &root.uri,
+                ));
+            }
+        }
+        self.file_index_leases = leases;
         if let Some(tree) = &self.workspace_tree {
             tree.update(cx, |tree, cx| tree.set_workspace(workspace.clone(), cx));
         } else if !workspace.roots().is_empty() {

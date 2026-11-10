@@ -557,6 +557,8 @@ pub(crate) struct ProductShell {
     command_palette_subscription: Option<Subscription>,
     transient: Option<ActiveTransient>,
     workspace: WorkspaceState,
+    /// Keeps the file index of each workspace root alive.
+    file_index_leases: Vec<super::file_index::FileIndexLease>,
     /// The document of the last focused document tab, which new terminals
     /// follow while a terminal or tool has focus.
     last_focused_document: Option<DocumentId>,
@@ -702,6 +704,7 @@ impl ProductShell {
             command_palette_subscription: None,
             transient: None,
             workspace: WorkspaceState::default(),
+            file_index_leases: Vec::new(),
             last_focused_document: None,
             last_focused_editor_tab: None,
             application_observer: None,

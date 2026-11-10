@@ -19,6 +19,7 @@ mod entry;
 #[cfg(test)]
 pub(crate) use extensions::host::handlers as declared_host;
 mod extensions;
+mod file_index;
 mod file_watch;
 use knot_model::{filesystem, indentation, keys, open, resource, style, syntax, workspace};
 mod icons;
