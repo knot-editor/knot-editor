@@ -29,6 +29,7 @@ inventory = "0.3"
 jsonc-parser = { version = "0.34", features = ["serde", "serde_json"] }
 libc = "0.2"
 ignore = "0.4"
+imara-diff = "0.2"
 notify = "8.2"
 nucleo-matcher = "0.3.1"
 percent-encoding = "2"

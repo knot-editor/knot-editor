@@ -43,6 +43,7 @@ unicode-segmentation = { workspace = true }
 unicode-width = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
+imara-diff = { workspace = true }
 
 [dev-dependencies]
 knot-core = { path = "../knot-core", features = ["test-support"] }

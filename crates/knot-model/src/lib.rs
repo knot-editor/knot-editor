@@ -29,6 +29,7 @@ pub mod languages;
 pub mod matching;
 pub mod observation;
 pub mod open;
+pub mod reload;
 pub mod resource;
 pub mod settings;
 pub mod state_database;
