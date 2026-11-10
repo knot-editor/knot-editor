@@ -324,6 +324,7 @@ to be rebuilt later:
 
 - **D081 — Workspace ignore rules and file enumeration** (depends on D122,
   D143)
+  - 🚧 [Plan](d081-workspace-ignore-rules.md)
   - Ignore policy is contributed and evaluated natively. Rules come from
     `.gitignore` (and possibly `.ignore`) plus configured patterns, at two
     levels:
