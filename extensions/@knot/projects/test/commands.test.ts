@@ -19,7 +19,7 @@ test("creating a project records it and switches a blank window to it", async ()
   assert.deepEqual(project?.roots, [ALPHA]);
   assert.equal(registry().recentProjectId, project?.id);
   assert.deepEqual(host.prompts().map((prompt) => prompt.kind), ["pickFolder", "showInput"]);
-  assert.equal((host.prompts()[1]?.options as { value: string }).value, "");
+  assert.equal((host.prompts()[1]?.options as { value: string }).value, "alpha");
   const [window] = host.windowTargets();
   assert.notEqual(window, blank);
   assert.deepEqual(host.rootsOf(window!), [ALPHA]);
@@ -28,17 +28,20 @@ test("creating a project records it and switches a blank window to it", async ()
   assert.equal(row?.statusText, "active");
 });
 
-test("creation rejects a used folder, and a blank name leaves the project unnamed", async () => {
+test("creation rejects a used folder, and the folder name or a blank leaves the project unnamed", async () => {
   seedProject("a", "Alpha", [ALPHA]);
   host.openWindow();
   await startLaunched();
   host.answer("pickFolder", { kind: "selected", uri: ALPHA });
   await host.run("projects.create");
   host.answer("pickFolder", { kind: "selected", uri: BETA });
+  host.answer("showInput", { kind: "accepted", value: "beta" });
+  await host.run("projects.create");
+  host.answer("pickFolder", { kind: "selected", uri: "file:///src/gamma/" });
   host.answer("showInput", { kind: "accepted", value: "  " });
   await host.run("projects.create");
   assert.deepEqual(host.messages(), ["Alpha already uses this folder"]);
-  assert.deepEqual(registry().projects.map((project) => project.name), ["Alpha", null]);
+  assert.deepEqual(registry().projects.map((project) => project.name), ["Alpha", null, null]);
 });
 
 test("names need not be unique, and renaming to blank restores the inferred name", async () => {
@@ -49,8 +52,10 @@ test("names need not be unique, and renaming to blank restores the inferred name
   host.answer("showInput", { kind: "accepted", value: "beta" });
   await host.run("projects.rename", { arguments: { id: "a" } });
   assert.deepEqual(registry().projects.map((project) => project.name), ["beta", "Beta"]);
-  host.answer("showInput", { kind: "accepted", value: " " });
+  host.answer("showInput", { kind: "accepted", value: "alpha" });
   await host.run("projects.rename", { arguments: { id: "a" } });
+  assert.equal((host.prompts().at(-1)?.options as { value: string }).value, "beta");
+  assert.equal(registry().projects[0]?.name, null);
   await host.run("projects.rename", { arguments: { id: "missing" } });
   assert.deepEqual(registry().projects.map((project) => project.name), [null, "Beta"]);
   assert.deepEqual(host.messages(), ["project not found"]);

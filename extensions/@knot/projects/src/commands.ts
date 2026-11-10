@@ -8,7 +8,9 @@ import {
   projectById,
   projectWithRoots,
   renamed,
+  rootsLabel,
   rootsPath,
+  suggestedName,
   withProject,
   withoutProject,
 } from "./registry.js";
@@ -21,6 +23,12 @@ import { VIEW_ID } from "./tree.js";
 function idArgument(value: JsonValue): string | null {
   const record = object(value);
   return record !== null && typeof record.id === "string" ? record.id : null;
+}
+
+/** A typed name, or null when it is blank or just the inferred name. */
+function explicitName(typed: string, inferred: string | null) {
+  const name = typed.trim();
+  return name.length === 0 || name === inferred ? null : name;
 }
 
 export async function registerCommands(state: ProjectsState) {
@@ -45,11 +53,11 @@ export async function registerCommands(state: ProjectsState) {
       return;
     }
     const named = await workbench.showInput({
-      title: "New project name (blank to use the folder name)",
-      value: "",
+      title: "New project name",
+      value: suggestedName(picked.uri),
     });
     if (named.kind === "dismissed") return;
-    const name = named.value.trim() || null;
+    const name = explicitName(named.value, suggestedName(picked.uri));
     const now = Date.now();
     const project = { id: newProjectId(), name, roots: [picked.uri], createdAt: now, lastOpenedAt: now };
     try {
@@ -120,9 +128,9 @@ export async function registerCommands(state: ProjectsState) {
       await report("project not found");
       return;
     }
-    const named = await workbench.showInput({ title: "Rename project (blank to use the folder name)", value: project.name ?? "" });
+    const named = await workbench.showInput({ title: "Rename project", value: displayName(project) });
     if (named.kind === "dismissed") return;
-    const name = named.value.trim() || null;
+    const name = explicitName(named.value, rootsLabel(project));
     try {
       await commit(state, renamed(state.registry, project.id, name));
     } catch (error) {
