@@ -1,6 +1,6 @@
 # D082 — Go to File
 
-Status: 🚧 checkpoint 1 awaiting its review gate. Item of the
+Status: 🚧 checkpoint 1 done; checkpoint 2 next. Item of the
 [daily-driver plan](daily-driver.md#phase-4--files-and-workspace); promotes
 [D118](../roadmap.md) (query-driven picker) in its smallest form.
 
@@ -82,57 +82,16 @@ second one, joining the package (and renaming it if needed) when it lands.
 
 ## Checkpoints
 
-### 1. Query-driven picker and a basic Go to File on ⌘P ✅ (review gate pending)
+### 1. Query-driven picker and a basic Go to File on ⌘P ✅
 
-Deliverables:
-
-- `onQuery` in `showPicker`, declared in `knot.d.ts`, and the
-  native picker's supplied-rows mode.
-- The `@knot/go-to-file` package and its ⌘P binding. It searches each root
-  with one `files.search` call and concatenates them in root order, until
-  checkpoint 2 merges them.
-
-Validation:
-
-- Picker unit tests: supplied rows keep their order and ranges, a stale
-  answer is dropped, confirming names the supplied row.
-- Product transient tests: an `onQuery` picker round trip, collapse of
-  superseded queries, rethrow after a throw.
-- Contract tests in `scripts/extensions/contract.test.ts`; package tests
-  under `extensions/@knot/go-to-file/test`.
-- `knot-ext-workbench` integration test: ⌘P in a window over a temporary
-  tree, type, Enter opens the file.
-
-Review gate: press ⌘P in the real app on the Knot checkout and open files.
-
-**Implementation context:**
-
-- JS facade: `showPicker` in `crates/knot-host/src/js/bootstrap.js` (mirror
-  the `showInput` `onChange` loop beside it); types in
-  `crates/knot-host/src/js/knot.d.ts` (`PickerOptions`, `PickerItem`).
-- Host operations: `begin_picker` / `next_picker_event` and
-  `PickerArguments` in `src/app/extensions/host/handlers.rs`, with
-  `TransientSession` carrying query changes as `beginInput` /
-  `nextInputEvent` carry values; UTF-16 to byte range conversion as input
-  completion already does.
-- Native: `src/app/picker.rs` (`Picker::refilter` is skipped in supplied
-  mode; add a setter that applies rows only when the query still matches),
-  `ProductShell::begin_picker` in `src/app/product.rs`,
-  `src/app/transient.rs`; tests in `src/app/product/tests/transient.rs`.
-- Package: copy `extensions/@knot/go-to-line` (`knot.jsonc`, `src/main.ts`,
-  `src/extension.ts`, `test/`, `tsconfig.json`); add it to
-  `crates/knot-ext-workbench/build.rs`, `crates/knot-app/tests/bundled_packages.rs`,
-  and an integration test `crates/knot-ext-workbench/tests/workbench/go_to_file.rs`
-  (mirror `go_to_line.rs`, registered in `main.rs`).
-- Binding: `src/app/commands/keymaps/presets.rs` (command constant beside
-  `GO_TO_LINE_COMMAND`, `BUNDLED_PACKAGE_COMMANDS`, a `secondary-p` row) and
-  its tests in `src/app/commands/keymaps/tests.rs`.
-- Docs: picker section of `docs/extension-api.md`;
-  [extension transient interactions](../architecture/semantic-ui.md#extension-transient-interactions)
-  and its [decision](../decisions/semantic-ui.md#extension-transient-interactions),
-  with the `decisions.md` index line; remove D118 from `docs/roadmap.md` and
-  its mentions in the dependency list; the bundled package list in
-  `README.md`.
+Approved. `showPicker({ onQuery })` and the `@knot/go-to-file` package are in
+place; the package concatenates one `files.search` call per root until
+checkpoint 2 merges them. The picker reference is
+[extension transient interactions](../architecture/semantic-ui.md#extension-transient-interactions),
+and its rationale is the
+[decision](../decisions/semantic-ui.md#extension-transient-interactions).
+Enter on rows that do not yet answer the field waits for them; replaying keys
+typed meanwhile is deferred as D175 in the [roadmap](../roadmap.md).
 
 ### 2. Multi-root `files.search`
 
