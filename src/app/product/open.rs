@@ -389,7 +389,12 @@ impl ProductShell {
             .global::<ApplicationSessions>()
             .in_window(handle)
             .expect("a product window shows a session");
-        shell.update(cx, |shell, cx| shell.install_workspace(root, cx))
+        shell.update(cx, |shell, cx| {
+            let workspace = shell.install_workspace(root, cx);
+            // The window exists now, so the focus can follow.
+            shell.focus_active_surface(cx);
+            workspace
+        })
     }
 
     /// The document for a loaded file or missing destination: the live
