@@ -1,7 +1,7 @@
 # D143 — Input completion
 
-Status: 🚧 approved; checkpoints 1 to 3 are implemented and await their
-review gates, and checkpoint 4 is not started. Item of the
+Status: 🚧 approved; checkpoints 1 to 3 are done and approved, and checkpoint 4 is not
+started. Item of the
 [daily-driver plan](daily-driver.md); depends on D071 (shared picker).
 
 ## Goal
@@ -100,53 +100,28 @@ which completes command names and `:set` options.
 
 ### 1. Completions in the input API ✅
 
-Implemented and committed; the review gate is open. The `onChange` return
-shape, `InputView` list and keys, stale-feedback dropping, fake-host
-`inputFeedback()`, tests, and docs landed. Review gate: run
-`Try: Input completion` from `post-init.js`; the list, highlight, Tab, and
-Enter behave as designed.
+Done and approved. `onChange` may return `{ message?, items? }`; `InputView`
+lists the items, moves the highlight, and Tab replaces the field; feedback for
+older text is dropped. Contract:
+[`knot.d.ts`](../../crates/knot-host/src/js/knot.d.ts), flow:
+[semantic UI](../architecture/semantic-ui.md#extension-transient-interactions),
+tests: `src/app/product/tests/transient.rs`.
 
 ### 2. Shared matcher and `completion.styles` ✅
 
-Deliverables:
-- The matcher module in `crates/knot-model/src/` (`prefix`, `substring`,
-  `flex`, `orderless`; merge and order as in the design), with plain unit
-  tests.
-- The `completion.styles` setting, documented in `docs/settings.md`; unknown
-  style names are ignored, and a list with none selects the default.
-- The picker filters through the matcher instead of calling nucleo
-  directly; its fuzzy matching is the `flex` style.
-- The `completion.match` host call, typed in `knot.d.ts`, with the contract
-  test; the fake host implements the styles in TypeScript.
-- `InputCompletion.matches` through the protocol, `bootstrap.js`, the typed
-  surface, and the rendered list. Ranges follow the existing range
-  conventions for text crossing the host boundary.
-- Docs: the extension guide (`completion.match`, `matches`) and the
-  matching paragraph of the semantic UI reference.
-
-Validation:
-- Matcher unit tests: each style, smart case, merge order with several
-  styles, empty query keeps the caller's order, ranges on multibyte text.
-- Picker tests: current picker tests pass unchanged under the default; a
-  `["prefix"]` and a `["substring"]` case.
-- A product test that `completion.match` follows a changed setting.
-- A fake-host test of `completion.match` and of `matches`.
-
-Review gate: a `post-init.js` with `Try: Match styles` shows a picker and an
-input completion over the same word list; change `completion.styles` in the
-settings file and check that both follow it, with matched characters
-highlighted.
+Done and approved. The matcher is `crates/knot-model/src/matching.rs`; the
+picker and `completion.match` use it, and input completion items carry
+`matches` ranges. The default is `["prefix", "flex"]`; an exact match outranks
+a longer prefix match, and equal matches keep the caller's order. Settings:
+[settings](../settings.md#completion).
 
 ### 3. Extension history ✅
 
-`history.recent`, `history.record`, and `history.order` keep a named list of
-recently chosen IDs per package in its storage, so extensions order picker
-items and completion candidates by recency without a native picker option. The
-picker and the matcher already keep the caller's order among equal matches,
-which is all recency needs: it never outranks a better match, as in IntelliJ.
-The helper lives in `bootstrap.js` over `storage`; the fake host implements the
-same three calls. The review gate is `Try: Match picker` and
-`Try: Match input`, which now remember picks.
+Done and approved. `history.recent`, `history.record`, and `history.order`
+keep a named list of recently chosen IDs per package in its storage. Recency
+is only a tie-break through the caller's order, so it never outranks a better
+match, as in IntelliJ. Guide:
+[extension guide](../extension-api.md#ask-the-user-transiently).
 
 ### 4. Vim Ex line completion
 
