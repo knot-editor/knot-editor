@@ -800,7 +800,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
                 .0
                 .set(
                     BindingOwner::Extension(key.extension, key.lifecycle),
-                    "cmd-j",
+                    "cmd-alt-y",
                     Some("example.outline"),
                     Some(Command {
                         name: super::super::COPY_COMMAND.into(),
@@ -813,7 +813,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into()));
     });
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "cmd-j");
+    cx.simulate_keystrokes(window, "cmd-alt-y");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -929,7 +929,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
             cx.global::<ApplicationKeymaps>()
                 .0
                 .resolve(
-                    &crate::app::keys::Keystroke::parse("cmd-j")
+                    &crate::app::keys::Keystroke::parse("cmd-alt-y")
                         .unwrap()
                         .unparse(),
                     Some("example.outline")
