@@ -67,6 +67,20 @@ pub struct PersistenceCapture {
     state: DocumentState,
 }
 
+/// How a document's file differs from what the document last saved or loaded.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ExternalChange {
+    /// The file holds a newer version, which the user has not yet been asked
+    /// about once `asked` is false.
+    Changed {
+        version: ResourceVersion,
+        asked: bool,
+    },
+    /// The file was deleted; the document keeps its text and is associated
+    /// with the missing file.
+    Deleted,
+}
+
 /// A document: identity, persistence relationship, and its model handle.
 pub struct Document<M> {
     id: DocumentId,
@@ -75,9 +89,14 @@ pub struct Document<M> {
     model: M,
     state: DocumentState,
     persistence_generation: u64,
+    external: Option<ExternalChange>,
 }
 
 impl<M> Document<M> {
+    pub fn external_change(&self) -> Option<&ExternalChange> {
+        self.external.as_ref()
+    }
+
     pub fn id(&self) -> DocumentId {
         self.id
     }
@@ -259,6 +278,55 @@ impl<M: PartialEq> DocumentCollection<M> {
         Some(document)
     }
 
+    /// Record that the file holds `version`, which the document has not
+    /// loaded. Returns whether this is news: a version already recorded, asked
+    /// about or kept, raises nothing again.
+    pub fn mark_changed(&mut self, id: DocumentId, version: ResourceVersion) -> bool {
+        let Some(document) = self.documents.iter_mut().find(|document| document.id == id) else {
+            return false;
+        };
+        if matches!(&document.external, Some(ExternalChange::Changed { version: known, .. }) if *known == version)
+        {
+            return false;
+        }
+        document.external = Some(ExternalChange::Changed {
+            version,
+            asked: false,
+        });
+        true
+    }
+
+    /// Whether the user should now be asked about a marked document, which is
+    /// true once per marked version.
+    pub fn take_prompt(&mut self, id: DocumentId) -> bool {
+        match self
+            .documents
+            .iter_mut()
+            .find(|document| document.id == id)
+            .and_then(|document| document.external.as_mut())
+        {
+            Some(ExternalChange::Changed { asked, .. }) if !*asked => {
+                *asked = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Turn a persisted document whose file is gone into a dirty one
+    /// associated with the missing file. Returns whether it changed.
+    pub fn mark_deleted(&mut self, id: DocumentId) -> bool {
+        let Some(document) = self.documents.iter_mut().find(|document| document.id == id) else {
+            return false;
+        };
+        let DocumentState::Persisted { uri, .. } = &document.state else {
+            return false;
+        };
+        document.state = DocumentState::Destination { uri: uri.clone() };
+        document.external = Some(ExternalChange::Deleted);
+        true
+    }
+
     pub fn begin_persistence(&mut self, id: DocumentId, model: &M) -> Option<PersistenceCapture> {
         let document = self
             .documents
@@ -319,6 +387,7 @@ impl<M: PartialEq> DocumentCollection<M> {
             self.resources.remove(old_uri);
         }
         document.title = title.into();
+        document.external = None;
         document.state = DocumentState::Persisted {
             uri: uri.clone(),
             persisted_revision: revision,
@@ -365,6 +434,7 @@ impl<M: PartialEq> DocumentCollection<M> {
             model,
             state,
             persistence_generation: 0,
+            external: None,
         });
         id
     }
@@ -535,5 +605,69 @@ mod tests {
         assert_eq!(documents.document_for_resource(&new_uri), Some(id));
         assert_eq!(documents.get(id).unwrap().title(), "new.txt");
         assert_eq!(documents.get(id).unwrap().identity(), identity);
+    }
+
+    #[test]
+    fn a_changed_mark_is_raised_and_asked_once_per_version() {
+        let mut documents = DocumentCollection::new();
+        let id = documents
+            .insert_persisted("a.txt", 1u32, uri("mem://w/a.txt"), 0, version(1))
+            .id();
+        assert!(!documents.take_prompt(id));
+
+        assert!(documents.mark_changed(id, version(2)));
+        assert!(!documents.mark_changed(id, version(2)));
+        assert!(documents.take_prompt(id));
+        assert!(!documents.take_prompt(id));
+        assert!(
+            !documents.mark_changed(id, version(2)),
+            "a kept version stays kept"
+        );
+        assert!(documents.mark_changed(id, version(3)));
+        assert!(documents.take_prompt(id));
+    }
+
+    #[test]
+    fn persistence_clears_the_mark() {
+        let mut documents = DocumentCollection::new();
+        let id = documents
+            .insert_persisted("a.txt", 1u32, uri("mem://w/a.txt"), 0, version(1))
+            .id();
+        documents.mark_changed(id, version(2));
+        let capture = documents.begin_persistence(id, &1).unwrap();
+        documents.complete_persistence(
+            id,
+            &1,
+            &capture,
+            ("a.txt", uri("mem://w/a.txt")),
+            (version(2), 0),
+        );
+        assert!(documents.get(id).unwrap().external_change().is_none());
+    }
+
+    #[test]
+    fn a_deleted_file_makes_the_document_a_destination_until_it_is_saved() {
+        let mut documents = DocumentCollection::new();
+        let file = uri("mem://w/a.txt");
+        let id = documents
+            .insert_persisted("a.txt", 1u32, file.clone(), 0, version(1))
+            .id();
+        assert!(documents.mark_deleted(id));
+        let document = documents.get(id).unwrap();
+        assert!(matches!(
+            document.state(),
+            DocumentState::Destination { .. }
+        ));
+        assert_eq!(document.external_change(), Some(&ExternalChange::Deleted));
+        assert_eq!(documents.document_for_resource(&file), Some(id));
+        assert!(!documents.mark_deleted(id));
+
+        assert!(
+            documents.mark_changed(id, version(5)),
+            "a reappeared file is news"
+        );
+        let capture = documents.begin_persistence(id, &1).unwrap();
+        documents.complete_persistence(id, &1, &capture, ("a.txt", file), (version(6), 0));
+        assert!(documents.get(id).unwrap().external_change().is_none());
     }
 }
