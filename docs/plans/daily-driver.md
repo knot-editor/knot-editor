@@ -358,8 +358,7 @@ to be rebuilt later:
   - Decide how the tree answers while its first scan runs, whether ignored
     directories are scanned lazily, how ignore-file and `files.*` setting
     changes reclassify entries, memory on large repositories, and whether
-    watch events gain kinds. Measure on real repositories. The first scan
-    reuses D172's classifier.
+    watch events gain kinds. Measure on real repositories.
 
 - **D082 — Go to File** (depends on D071, D081, D173)
   - A bundled extension bound to ⌘P that fuzzy-matches workspace paths.
