@@ -105,3 +105,87 @@ fn the_tool_stripes_setting_hides_both_stripes(cx: &mut TestAppContext) {
     assert!(visual.debug_bounds("stripe-left").is_none());
     assert!(visual.debug_bounds("stripe-right").is_none());
 }
+
+#[gpui::test]
+fn a_stripe_click_replaces_the_tool_in_its_pane_and_the_menu_shows_one_beside(
+    cx: &mut TestAppContext,
+) {
+    use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
+    let documents = install_globals(cx);
+    cx.set_global(ApplicationFileSystems(memory_filesystems()));
+    let host = cx.update(crate::app::extensions::host::install);
+    let (shell, window) = empty_product_window(&documents, cx);
+    host.update(cx, |host, cx| {
+        let execution = host
+            .load_test_source(
+                ExtensionKey::new(ExtensionId::new(801), ExtensionLifecycleId::new(1)),
+                r#"
+import { workbench } from "knot";
+await workbench.registerView({
+  id: "example.notes",
+  title: "Notes",
+  content: { kind: "tree", provider: { getChildren: () => [] } },
+  placement: { location: "left", visible: false },
+});
+"#,
+            )
+            .unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        shell
+            .read(cx)
+            .workbench
+            .read(cx)
+            .tool_by_stable_id("example.notes")
+            .is_some()
+    });
+    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
+    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    cx.run_until_parked();
+    let shown = |cx: &TestAppContext| {
+        cx.read(|cx| {
+            let workbench = shell.read(cx).workbench.read(cx);
+            ["knot.explorer", "example.notes"].map(|id| {
+                let tool = workbench.tool_by_stable_id(id).unwrap();
+                workbench.tool_visible(tool)
+            })
+        })
+    };
+    assert_eq!(shown(cx), [true, false]);
+
+    // Clicking the other tool's button replaces the explorer in its pane.
+    click(window, "stripe-button-example.notes", cx);
+    assert_eq!(shown(cx), [false, true]);
+    click(window, EXPLORER_BUTTON, cx);
+    assert_eq!(shown(cx), [true, false]);
+
+    // The button's menu opens on a right click; its Show Beside action puts
+    // the tool in a pane of its own next to the explorer's.
+    let mut visual = VisualTestContext::from_window(window, cx);
+    let at = visual
+        .debug_bounds("stripe-button-example.notes")
+        .unwrap()
+        .center();
+    visual.simulate_mouse_down(at, MouseButton::Right, Modifiers::default());
+    visual.run_until_parked();
+    shell.read_with(&visual, |shell, _| assert!(shell.stripe_menu.is_some()));
+    drop(visual);
+    shell.update(cx, |shell, cx| {
+        shell.show_tool_beside("example.notes", cx);
+    });
+    assert_eq!(shown(cx), [true, true]);
+    cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        let [first, second] = ["knot.explorer", "example.notes"].map(|id| {
+            workbench
+                .tool_tab(workbench.tool_by_stable_id(id).unwrap())
+                .unwrap()
+                .0
+        });
+        assert_ne!(first, second);
+    });
+}

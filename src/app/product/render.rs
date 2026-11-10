@@ -517,6 +517,10 @@ impl Render for ProductShell {
             Some((left, right)) => (Some(left), Some(right)),
             None => (None, None),
         };
+        let stripe_menu = self
+            .stripe_menu
+            .as_ref()
+            .map(|open| (open.menu.clone(), open.position));
         let entity = cx.entity();
         let command_palette = self
             .command_palette
@@ -570,6 +574,17 @@ impl Render for ProductShell {
             )
             .children(status_bar)
             .child(self.drag_listener(cx))
+            .when_some(stripe_menu, |root, (menu, position)| {
+                root.child(
+                    deferred(
+                        anchored()
+                            .position(position)
+                            .snap_to_window_with_margin(px(8.))
+                            .child(menu),
+                    )
+                    .with_priority(1),
+                )
+            })
             .when_some(transient, |root, transient| {
                 root.child(
                     div()

@@ -444,8 +444,59 @@ impl Workbench {
             self.focus_center();
             false
         } else {
-            self.show_tool(id).is_some()
+            self.show_tool_replacing(id).is_some()
         }
+    }
+
+    /// Show and focus a tool as the switcher of its pane would: a tool that
+    /// is not showing takes the place of the other tools in the pane it
+    /// returns to, which hide but keep their places. Terminals stay, and a
+    /// tool already showing only takes focus, so tabs the user grouped stay.
+    pub fn show_tool_replacing(&mut self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
+        let showing = self.tool_tab(id).is_some();
+        let (pane, tab) = self.show_tool(id)?;
+        if !showing {
+            let others = self
+                .pane(pane)?
+                .tabs
+                .iter()
+                .filter_map(|item| match item.surface_id() {
+                    TabSurfaceId::Tool(other) if other != id => Some(other),
+                    _ => None,
+                });
+            for other in others.collect::<Vec<_>>() {
+                self.hide_tool(other);
+            }
+            self.set_focus(pane);
+        }
+        Some((pane, tab))
+    }
+
+    /// Show and focus a tool in a pane of its own beside the last focused
+    /// pane of its shown dock, stacked the way the dock lays out its panes.
+    /// A tool already showing, or whose dock is hidden or empty, shows as
+    /// [`show_tool`](Self::show_tool) does.
+    pub fn show_tool_beside(&mut self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
+        if self.tool_tab(id).is_some() {
+            return self.show_tool(id);
+        }
+        let dock = self.tool(id)?.remembered.dock;
+        let area = Area::Dock(dock);
+        let Some(anchor) = self.area_focus(area).filter(|_| self.area_shown(area)) else {
+            return self.show_tool(id);
+        };
+        let direction = match dock {
+            DockLocation::Left | DockLocation::Right => SplitDirection::Vertical,
+            DockLocation::Bottom => SplitDirection::Horizontal,
+        };
+        let pane = self.split_with(
+            anchor,
+            direction,
+            SplitPlacement::After,
+            TabSurfaceId::Tool(id),
+        )?;
+        let tab = self.pane(pane)?.active_tab;
+        Some((pane, tab))
     }
 
     /// Toggle a dock with its arrangement: a hidden dock shows and takes
@@ -738,6 +789,76 @@ mod tests {
     }
 
     #[test]
+    fn showing_a_tool_replaces_the_other_tools_of_its_pane_but_not_terminals() {
+        let workbench = &mut Workbench::empty();
+        workbench.open_document_in_center(DocumentId::new(1));
+        let [first, second] = ["knot.first", "knot.second"]
+            .map(|name| workbench.register_tool(name, name, DockLocation::Left));
+        let (pane, _) = workbench.show_tool(first).unwrap();
+        assert!(workbench.toggle_tool(second));
+        assert!(!workbench.tool_visible(first));
+        assert_eq!(tool_ids(workbench, pane), [TabSurfaceId::Tool(second)]);
+        assert_eq!(workbench.focused_pane_id(), Some(pane));
+
+        // The replaced tool returns to the same pane, replacing in turn.
+        assert!(workbench.toggle_tool(first));
+        assert_eq!(tool_ids(workbench, pane), [TabSurfaceId::Tool(first)]);
+
+        // Tabs grouped on purpose stay: a showing tool only takes focus.
+        workbench.show_tool(second);
+        assert_eq!(tool_ids(workbench, pane).len(), 2);
+        workbench.show_tool_replacing(first);
+        assert_eq!(tool_ids(workbench, pane).len(), 2);
+
+        // A terminal in the pane is not displaced.
+        let third = workbench.register_tool("knot.third", "third", DockLocation::Left);
+        workbench.hide_tool(first);
+        workbench
+            .open_terminal_tab(pane, TerminalSessionId(1))
+            .unwrap();
+        workbench.show_tool(first);
+        workbench.show_tool_replacing(third);
+        assert!(!workbench.tool_visible(first) && !workbench.tool_visible(second));
+        assert_eq!(
+            tool_ids(workbench, pane),
+            [
+                TabSurfaceId::Terminal(TerminalSessionId(1)),
+                TabSurfaceId::Tool(third)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_tool_shows_beside_the_docks_last_pane_in_a_pane_of_its_own() {
+        let workbench = &mut Workbench::empty();
+        workbench.open_document_in_center(DocumentId::new(1));
+        let [first, second, bottom] = [
+            ("knot.first", DockLocation::Left),
+            ("knot.second", DockLocation::Left),
+            ("knot.bottom", DockLocation::Bottom),
+        ]
+        .map(|(name, dock)| workbench.register_tool(name, name, dock));
+
+        // With nothing in the dock it shows as usual.
+        let (pane, _) = workbench.show_tool_beside(first).unwrap();
+        let (beside, _) = workbench.show_tool_beside(second).unwrap();
+        assert_ne!(pane, beside);
+        assert_eq!(workbench.dock_location(beside), Some(DockLocation::Left));
+        assert_eq!(workbench.focused_pane_id(), Some(beside));
+        assert!(workbench.tool_visible(first) && workbench.tool_visible(second));
+        let Some(WorkbenchLayout::Split { direction, .. }) =
+            workbench.area_layout(Area::Dock(DockLocation::Left))
+        else {
+            panic!("the left dock splits");
+        };
+        assert_eq!(*direction, SplitDirection::Vertical);
+
+        // A hidden dock shows with the tool alone.
+        let (alone, _) = workbench.show_tool_beside(bottom).unwrap();
+        assert_eq!(workbench.dock_location(alone), Some(DockLocation::Bottom));
+    }
+
+    #[test]
     fn tools_keep_identity_and_return_to_their_pane_and_position() {
         let workbench = &mut Workbench::empty();
         let document = DocumentId::new(1);
@@ -916,25 +1037,22 @@ mod tests {
         assert!(!workbench.toggle_tool(first));
         assert!(workbench.tool_tab(first).is_none());
         assert_eq!(workbench.focused_pane_id(), Some(center));
-        // Hidden: it returns to its pane and position, focused.
+        // Hidden: it returns to its pane and position, focused, replacing
+        // the tool there.
         assert!(workbench.toggle_tool(first));
-        assert_eq!(
-            tool_ids(workbench, dock),
-            [first, second].map(TabSurfaceId::Tool)
-        );
+        assert_eq!(tool_ids(workbench, dock), [TabSurfaceId::Tool(first)]);
         assert_eq!(workbench.focused_pane_id(), Some(dock));
         // A tool of a hidden dock shows the dock.
         workbench.toggle_dock(DockLocation::Left);
-        assert!(!workbench.tool_visible(second));
+        assert!(!workbench.tool_visible(first));
         assert!(workbench.toggle_tool(second));
-        assert!(workbench.tool_visible(first));
+        assert!(workbench.tool_visible(second) && !workbench.tool_visible(first));
         assert_eq!(workbench.focused_pane_id(), Some(dock));
 
         // With an empty center, hiding a focused tool leaves nothing focused.
         workbench.remove_document_tabs();
         workbench.toggle_tool(second);
         assert_eq!(workbench.focused_pane_id(), None);
-        assert!(workbench.tool_visible(first));
     }
 
     #[test]

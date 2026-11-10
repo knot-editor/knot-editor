@@ -541,6 +541,8 @@ pub(crate) struct ProductShell {
     window: Option<AnyWindowHandle>,
     tab_drag: std::rc::Rc<RefCell<tab_drag::TabDragState>>,
     dock_resize: Option<DockResizeDrag>,
+    /// The open right-click menu of a tool stripe button.
+    stripe_menu: Option<stripes::StripeMenu>,
     split_resize: Option<SplitResizeDrag>,
     recent_walk: Option<knot_model::workbench::RecentWalk>,
     /// The pane rendered over the whole workbench, while it stays focused.
@@ -688,6 +690,7 @@ impl ProductShell {
             window: None,
             tab_drag: Default::default(),
             dock_resize: None,
+            stripe_menu: None,
             split_resize: None,
             recent_walk: None,
             maximized: None,

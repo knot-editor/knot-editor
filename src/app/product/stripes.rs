@@ -6,7 +6,15 @@ use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{color, theme};
 use crate::app::workbench::{StripeButton, Stripes};
 use crate::app::zoom;
+use gpui_component::menu::{PopupMenu, PopupMenuItem};
 use knot_model::icons::IconDefinition;
+
+/// An open stripe button menu, which closes when dismissed or blurred.
+pub(super) struct StripeMenu {
+    pub(super) menu: Entity<PopupMenu>,
+    pub(super) position: Point<Pixels>,
+    _subscriptions: [Subscription; 2],
+}
 
 /// A stripe button being dragged to another stripe.
 #[derive(Clone)]
@@ -165,6 +173,13 @@ impl ProductShell {
             .on_drag(drag, |drag, _, _, cx| {
                 cx.new(|_| StripeDragLabel(drag.clone()))
             })
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                    this.open_stripe_menu(button, event.position, window, cx);
+                    cx.stop_propagation();
+                }),
+            )
             .on_click(cx.listener(move |this, _, _, cx| match button {
                 StripeButton::Tool(_) => this.toggle_tool(&stable_id, cx),
                 StripeButton::Terminal => {
@@ -201,5 +216,124 @@ impl ProductShell {
         }
         self.publish_tool_layout(cx);
         cx.notify();
+    }
+
+    /// Open the menu of a stripe button at `position`: show the tool beside
+    /// the others in its dock or hide it, and move its surface to another
+    /// dock. It takes focus, which returns to the active surface when it
+    /// closes.
+    fn open_stripe_menu(
+        &mut self,
+        button: StripeButton,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let workbench = self.workbench.read(cx);
+        let (stable_id, visible, home) = match button {
+            StripeButton::Tool(id) => (
+                workbench.tool(id).map(|tool| tool.stable_id.clone()),
+                workbench.tool_visible(id),
+                workbench.tool_home(id),
+            ),
+            StripeButton::Terminal => (None, false, Some(workbench.terminal_home())),
+        };
+        let shell = cx.entity().downgrade();
+        let menu = PopupMenu::build(window, cx, move |menu, _, _| {
+            let mut items = Vec::new();
+            if let Some(stable_id) = stable_id {
+                let shell = shell.clone();
+                let label = if visible { "Hide" } else { "Show Beside" };
+                items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
+                    let _ = shell.update(cx, |this, cx| {
+                        if visible {
+                            this.hide_tool_by_stripe(&stable_id, cx);
+                        } else {
+                            this.show_tool_beside(&stable_id, cx);
+                        }
+                    });
+                }));
+            }
+            for dock in DockLocation::ALL
+                .into_iter()
+                .filter(|dock| Some(*dock) != home)
+            {
+                let shell = shell.clone();
+                let label = match (button, dock) {
+                    (StripeButton::Tool(_), _) => format!("Move to {} Dock", dock_name(dock)),
+                    (StripeButton::Terminal, _) => {
+                        format!("Open Terminals in {} Dock", dock_name(dock))
+                    }
+                };
+                items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
+                    let _ =
+                        shell.update(cx, |this, cx| this.rehome_stripe_button(button, dock, cx));
+                }));
+            }
+            items.into_iter().fold(menu, |menu, item| menu.item(item))
+        });
+        let menu_focus = menu.focus_handle(cx);
+        let subscriptions = [
+            cx.subscribe_in(&menu, window, |this, _, _: &DismissEvent, _, cx| {
+                this.close_stripe_menu(cx)
+            }),
+            cx.on_blur(&menu_focus, window, |this, _, cx| {
+                this.close_stripe_menu(cx)
+            }),
+        ];
+        menu_focus.focus(window, cx);
+        crate::app::components::track_popup(&menu_focus, cx);
+        self.stripe_menu = Some(StripeMenu {
+            menu,
+            position,
+            _subscriptions: subscriptions,
+        });
+        cx.notify();
+    }
+
+    fn close_stripe_menu(&mut self, cx: &mut Context<Self>) {
+        if self.stripe_menu.take().is_some() {
+            self.focus_active_surface(cx);
+            cx.notify();
+        }
+    }
+
+    /// Show a tool beside the others in its dock (see
+    /// [`Workbench::show_tool_beside`]).
+    pub(super) fn show_tool_beside(&mut self, stable_id: &str, cx: &mut Context<Self>) {
+        let Some(id) = self.workbench.read(cx).tool_by_stable_id(stable_id) else {
+            return;
+        };
+        self.workbench
+            .update(cx, |workbench, _| workbench.show_tool_beside(id));
+        if let Some(crate::app::workbench::ExtensionView::Tree(tree)) = self
+            .contributed_views
+            .get(stable_id)
+            .map(|instance| instance.content.clone())
+        {
+            tree.update(cx, |tree, cx| tree.refresh_root(cx));
+        }
+        self.publish_tool_layout(cx);
+        self.focus_active_surface(cx);
+        cx.notify();
+    }
+
+    fn hide_tool_by_stripe(&mut self, stable_id: &str, cx: &mut Context<Self>) {
+        let Some(id) = self.workbench.read(cx).tool_by_stable_id(stable_id) else {
+            return;
+        };
+        self.workbench
+            .update(cx, |workbench, _| workbench.hide_tool(id));
+        self.publish_tool_layout(cx);
+        self.focus_active_surface(cx);
+        cx.notify();
+    }
+}
+
+fn dock_name(dock: DockLocation) -> &'static str {
+    match dock {
+        DockLocation::Left => "Left",
+        DockLocation::Right => "Right",
+        DockLocation::Bottom => "Bottom",
     }
 }

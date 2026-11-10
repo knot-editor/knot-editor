@@ -336,9 +336,15 @@ dock. Thin stripes on the left and right window edges
 (`workbench.toolStripes`) show a button for every tool by home dock, bottom-dock
 tools at the left stripe's lower end, plus the terminal button in the terminal
 home's group (`Workbench::stripes`). A click toggles the tool, or the dock
-terminals; dragging a button to another stripe rehomes it, moving a shown tool
-and leaving a hidden one hidden, and changing only the terminal home for the
-terminal button.
+terminals. Like a stripe elsewhere, a click shows a hidden tool in place of the
+other tools in its pane, which hide and keep their places; terminals stay, and
+a tool already showing only takes focus, so tabs the user grouped stay grouped
+(`Workbench::show_tool_replacing`). Programmatic shows and dock toggles add
+tabs. The button's right-click menu shows the tool in a pane of its own beside
+the dock's last focused pane (`Workbench::show_tool_beside`), hides it, or
+moves it to another dock. Dragging a button to another stripe rehomes it,
+moving a shown tool and leaving a hidden one hidden, and changing only the
+terminal home for the terminal button.
 Splitting a document creates another view; splitting a terminal creates
 another session, in a dock as in the center. Empty panes collapse, keeping their siblings' ratios. The
 center may be empty; it then paints a blank surface that takes keyboard focus

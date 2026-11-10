@@ -42,7 +42,10 @@ free-form split tree, where docks are groups among document panes, goes away.
   - *Toggle Tool* (Toggle Explorer, a Toggle Tool… picker, stripe clicks)
     hides just that tool; its pane collapses as any empty pane does, and the
     dock hides when no visible tab remains. Showing it returns it to its last
-    pane and position, else its home dock.
+    pane and position, else its home dock, replacing the other tools in that
+    pane (terminals stay); a stripe button's right-click menu offers Show
+    Beside, which splits it into a pane of its own, as IntelliJ's split slots
+    and VS Code's stacked views do.
   - *Toggle Left / Right / Bottom Dock* hides or shows the whole dock with its
     arrangement.
   - Toggle commands follow one pattern: not visible → show and focus; visible
@@ -181,7 +184,9 @@ shown with that pane focused (`ProductShell::maximized_pane`); see
   the explorer and terminal. Choices: the drag uses gpui's in-window drag and
   drop rather than the cross-window tab coordinator, since a button never
   leaves its window; dragging the terminal button changes only the terminal
-  home; a hidden tool dragged to a stripe stays hidden.
+  home; a hidden tool dragged to a stripe stays hidden; replacing applies to
+  `toggle_tool` (stripes, Toggle Tool, Toggle Explorer) only, not to
+  programmatic shows or dock toggles, and not to a tool already showing.
 - **Review:** `try.stripe-tools` in the personal `post-init.js`.
 - **Implementation context:** rendering beside the workbench in
   `product/render.rs`; drag through `product/tab_drag.rs`'s coordinator;
