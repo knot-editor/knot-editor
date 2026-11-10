@@ -90,7 +90,9 @@ non-empty root set no project has, after launch and for windows present at
 unnamed projects on creation, sparing named, active, unreadable, and
 capture-holding ones. `projects.create` is gone.
 
-### 4. Restoring on a hand-opened folder
+### 4. Restoring on a hand-opened folder 🔍 awaiting review
+
+Implemented; `node:test` and product tests cover replacement, the new-window case, and an unreadable record. Remaining: the manual gate below (`Try:` commands in the personal `post-init.js`).
 
 - Deliverables: an unbound window matching a suspended project switches to
   it, both during tracking and at `launched` after restored windows rebind.

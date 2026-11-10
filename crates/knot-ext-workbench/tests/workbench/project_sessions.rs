@@ -192,32 +192,6 @@ fn a_switch_racing_an_edit_retries_with_fresh_captures(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
-fn a_suspended_root_opened_manually_is_never_bound_or_overwritten(cx: &mut TestAppContext) {
-    let mut projects = Projects::start(cx);
-    let a = project_dir("one.txt", "one");
-    let b = project_dir("b.txt", "bee");
-    projects.create(a.path(), "A", cx);
-    projects.window.open_path(&a.path().join("one.txt"), cx);
-    projects.window.append(" kept", cx);
-    projects.create(b.path(), "B", cx);
-    let listed = projects.list(cx);
-    let a_id = project_id(&listed, "A");
-    let suspended = listed["sessions"][&a_id].clone();
-
-    // Opening the suspended root by hand does not bind the window, and edits
-    // there never reach A's record.
-    let manual = projects.product.new_window(cx);
-    manual.set_roots(&[&file_uri(a.path())], cx);
-    manual.open_path(&a.path().join("one.txt"), cx);
-    manual.append(" elsewhere", cx);
-    manual.new_document(cx);
-    let listed = projects.list(cx);
-    assert_eq!(listed["sessions"][&a_id], suspended);
-    assert_eq!(captures(&suspended).len(), 1);
-    assert_eq!(projects.product.retained(OWNER, cx).len(), 1);
-}
-
-#[gpui::test]
 fn closing_the_last_window_suspends_without_captures(cx: &mut TestAppContext) {
     let mut projects = Projects::start(cx);
     let a = project_dir("one.txt", "one");
@@ -611,4 +585,28 @@ fn restored_windows_rebind_after_launch_and_unrestored_sessions_suspend(cx: &mut
     wait_until(cx, |cx| tree.status(&a_id, cx).as_deref() == Some("active"));
     assert_eq!(projects.product.windows(cx).len(), 1);
     assert_eq!(projects.product.document_count(cx), 1);
+}
+
+#[gpui::test]
+fn opening_a_suspended_projects_folder_restores_it(cx: &mut TestAppContext) {
+    let mut projects = Projects::start(cx);
+    let a = project_dir("one.txt", "one");
+    let b = project_dir("b.txt", "bee");
+    projects.create(a.path(), "A", cx);
+    projects.window.open_path(&a.path().join("one.txt"), cx);
+    projects.window.append(" edited", cx);
+    projects.create(b.path(), "B", cx);
+    let a_id = projects.id("A", cx);
+    assert_eq!(projects.list(cx)["sessions"][&a_id]["state"], "suspended");
+
+    // A new window on A's folder is replaced by A's restored windows.
+    let hand_opened = projects.product.new_window(cx);
+    hand_opened.set_roots(&[&file_uri(a.path())], cx);
+    wait_until(cx, |cx| !hand_opened.is_open(cx));
+    let restored = projects.product.active_window(cx);
+    assert_eq!(restored.roots(cx), [file_uri(a.path())]);
+    assert_eq!(restored.document_texts(cx), ["one edited"]);
+    let listed = projects.list(cx);
+    assert_eq!(listed["sessions"][&a_id]["state"], "active");
+    assert_eq!(listed["projects"].as_array().unwrap().len(), 2);
 }
