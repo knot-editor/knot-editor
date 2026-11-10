@@ -179,7 +179,18 @@ version. Otherwise a clean document reloads: a line diff
 buffer and the file is applied as one commit, one undo step, and the new
 version and revision become the saved state. Only the changed lines are edited,
 so carets, folds, and anchored ranges elsewhere stay put. A document edited
-while the read was pending is left alone, and a dirty document is not reloaded.
+while the read was pending is left alone.
+
+A document with unsaved changes, or a clean one while `files.autoReload` is off,
+is marked changed on disk with the new version instead, and the tab says so.
+When the marked document is the focused tab, and when it next becomes one, a
+native prompt offers Reload or Keep, once per marked version. Reload loads the
+file through the same diff, which Undo takes back; Keep leaves the text and the
+recorded version, so the next save reaches the conflict prompt. A file that
+disappears turns its document into a dirty one associated with the missing file,
+shown as deleted, whose save recreates it; documents associated with a file that
+does not exist are watched too, so a file that reappears is marked like any
+other change.
 
 ## Durable unsaved-document recovery
 

@@ -168,14 +168,19 @@ fn recheck(id: DocumentId, cx: &mut App) {
     let Some(snapshot) = snapshot(id, cx) else {
         return;
     };
-    let Some(providers) = cx.try_global::<ApplicationFileSystems>().map(|g| g.0.clone()) else {
+    let Some(providers) = cx
+        .try_global::<ApplicationFileSystems>()
+        .map(|g| g.0.clone())
+    else {
         return;
     };
     let uri = snapshot.uri.clone();
     cx.spawn(async move |cx| {
         let loaded = load_resource_kind(providers, uri, Some(ResourceKind::File)).await;
         cx.update(|cx| match loaded {
-            Ok(OpenResource::File { text, version, .. }) => apply(id, &snapshot, &text, version, cx),
+            Ok(OpenResource::File { text, version, .. }) => {
+                apply(id, &snapshot, &text, version, cx)
+            }
             Ok(OpenResource::Missing(_)) => deleted(id, &snapshot, cx),
             _ => {}
         });
@@ -286,7 +291,10 @@ pub(super) fn reload(id: DocumentId, cx: &mut App) {
     let Some(snapshot) = snapshot(id, cx) else {
         return;
     };
-    let Some(providers) = cx.try_global::<ApplicationFileSystems>().map(|g| g.0.clone()) else {
+    let Some(providers) = cx
+        .try_global::<ApplicationFileSystems>()
+        .map(|g| g.0.clone())
+    else {
         return;
     };
     let uri = snapshot.uri.clone();

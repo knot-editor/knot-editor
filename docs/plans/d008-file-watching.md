@@ -229,7 +229,13 @@ open file, and confirm cursor, folds, and Undo behave.
 - Update [saving](../architecture/documents-and-persistence.md#saving), which
   says watching is deferred.
 
-## Checkpoint 3 — Dirty and deleted documents
+## Checkpoint 3 — Dirty and deleted documents ✅
+
+Implemented; awaiting the review gate. `try.*` commands cannot write files
+(extensions have no file-write API), so they dirty the document and log the
+shell command to run in a terminal they open. Deleted dirty or clean documents
+both become destination-associated; there is no separate mark for a dirty
+document whose file is deleted.
 
 Deliverables:
 

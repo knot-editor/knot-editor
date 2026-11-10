@@ -287,7 +287,10 @@ async fn a_dirty_document_is_marked_and_asks_once_and_keep_leaves_the_text(
     let execution = dispatch_product_command(&f.shell, f.window, SAVE_COMMAND, cx);
     wait_for_prompt(cx);
     cx.simulate_prompt_answer("Cancel");
-    assert_eq!(execution.completion.await.unwrap(), CommandOutcome::Cancelled);
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Cancelled
+    );
 }
 
 #[gpui::test]
@@ -339,18 +342,24 @@ async fn the_prompt_waits_for_the_document_to_be_focused(cx: &mut TestAppContext
 }
 
 #[gpui::test]
-async fn a_deleted_file_keeps_the_document_dirty_and_saving_recreates_it(
-    cx: &mut TestAppContext,
-) {
+async fn a_deleted_file_keeps_the_document_dirty_and_saving_recreates_it(cx: &mut TestAppContext) {
     let f = fixture(cx).await;
     f.provider.remove(f.uri.clone()).unwrap();
-    wait_until(cx, |cx| external_change(&f, cx) == Some(ExternalChange::Deleted));
+    wait_until(cx, |cx| {
+        external_change(&f, cx) == Some(ExternalChange::Deleted)
+    });
 
     assert_eq!(f.text(cx), TEXT);
     assert!(f.dirty(cx));
     let execution = dispatch_product_command(&f.shell, f.window, SAVE_COMMAND, cx);
-    assert_eq!(execution.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(f.provider.read(f.uri.clone()).await.unwrap().bytes, TEXT.as_bytes());
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert_eq!(
+        f.provider.read(f.uri.clone()).await.unwrap().bytes,
+        TEXT.as_bytes()
+    );
     assert!(!f.dirty(cx));
     assert_eq!(external_change(&f, cx), None);
 }
