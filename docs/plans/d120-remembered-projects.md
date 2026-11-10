@@ -22,8 +22,8 @@ way to opt in.
 - **Names are not unique.** The uniqueness check and lookup by name go away.
   The D084 picker identifies projects by ID and shows the roots as the
   description, so two folders called `app` are distinguishable by path. The
-  Projects tree, whose row activation resolves projects by label, is already
-  gone with D084.
+  Projects tree, whose row activation resolves projects by label, is
+  removed by D084, which this item depends on.
 - **Automatic creation.** After launch, a window whose non-empty root set
   matches no project creates an unnamed project with an active session and
   binds to it. Windows with no roots never create one. `projects.create`
@@ -42,8 +42,11 @@ way to opt in.
   replace semantics for extensions.
 - **Opening a suspended project's folder restores it.** When an unbound
   window's roots equal a suspended project's roots, tracking switches that
-  window to the project with the existing `switchTo`: a reusable window is
-  replaced, otherwise the project opens in a new window. This also applies at
+  window to the project with the existing `switchTo`. The window just opened
+  on those roots is replaced when it holds nothing beyond one clean, empty
+  untitled document, so the folder never appears twice; otherwise the
+  project opens in a new window and the unbound window binds to it once
+  active. This also applies at
   `launched` to launch-request windows, after restored windows have rebound.
   Membership still requires an active session, so tracking never overwrites a
   suspended record; restoring goes through the switch, which owns captures.
@@ -69,12 +72,14 @@ way to opt in.
   roots of a window without roots. Launch requests keep their own window.
 - Validation: gpui product tests for both branches, including that the
   original window keeps its roots and tabs.
-- **Implementation context:** the folder branch of the open dialog in
-  `src/app/product/open.rs` (`start_open_dialog_with_options` and the
-  directory result path); window creation mirrors the launch path in
+- **Implementation context:** the directory branch of `apply_open_result` in
+  `src/app/product/open.rs`, which today calls `install_workspace` for
+  `OpenResource::Directory` (`start_open_dialog_with_options` only starts the
+  dialog); window creation mirrors `open_product_window_with` in
   `src/app/product/launch.rs`. `workspaces.openFolder` in
-  `src/app/extensions/host/handlers.rs` is unchanged. Update the multi-root
-  decision in `docs/decisions.md`, which says Folder Open replaces every root,
+  `src/app/extensions/host/handlers.rs` is unchanged. Update the Folder Open
+  decision in `docs/decisions/documents-and-persistence.md`, which says it
+  replaces every root,
   and the workspaces section of
   `docs/architecture/documents-and-persistence.md`.
 - Review gate: confirm the window choice feels right before the projects
@@ -104,14 +109,14 @@ way to opt in.
 - Validation: `node:test` tracking tests for creation on Open Folder, on
   launch, no creation for empty roots, and pruning that skips named, active,
   and capture-holding projects. A product test covers creation through a
-  real window open, if the fake host cannot express the settings definition.
+  real window open.
 - **Implementation context:** `tracking.ts` (`track`, `afterLaunch`,
   `suspendUnbound`) and `bindings.ts` (`syncBindings`, which binds unbound
   windows to active projects); `state.ts` for `commit` and `writeSession`;
   `session.ts` for an initial active session. The setting uses D070's
   `settings.define` and `settings.get` from the package's `start()` in
-  `extension.ts`. Extend the fake host in `scripts/extensions/` only as far
-  as these calls need.
+  `extension.ts`. The fake host in
+  `scripts/extensions/testing/host.ts` already implements both.
 - Review gate: the registry stays small in practice and nothing with unsaved
   text is ever pruned.
 
@@ -119,14 +124,16 @@ way to opt in.
 
 - Deliverables: an unbound window matching a suspended project switches to
   it, both during tracking and at `launched` after restored windows rebind.
-- Validation: `node:test` switch and tracking tests for a clean reusable
-  window being replaced, a window with other content opening the project in a
+- Validation: `node:test` switch and tracking tests for the hand-opened
+  window with matching roots and no content being replaced rather than
+  duplicated, a window with other content opening the project in a
   new window, retained text coming back, and a project with an unreadable
   session record staying untouched. A product test opens a suspended
   project's folder with Open Folder and sees its tabs return.
 - **Implementation context:** call `switchTo` in `switch.ts` from `track` and
-  `afterLaunch` in `tracking.ts`; `isReusable` in `layout.ts` already decides
-  window reuse. Commands and listeners are serial roots, so the switch cannot
+  `afterLaunch` in `tracking.ts`; `isReusable` in `layout.ts` requires an empty root
+  set today, so it must also accept a window whose roots equal the project's
+  (the hand-opened window); `switchTo` passes the project's roots. Commands and listeners are serial roots, so the switch cannot
   interleave with tracking.
 - Review gate: restoring never loses text and never fires for a window that
   is already bound.
