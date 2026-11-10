@@ -73,23 +73,14 @@ for it otherwise; see
 and the Folder Open decision in
 [its decisions](../decisions/documents-and-persistence.md).
 
-### 2. Unnamed projects and inferred names ✅ (awaiting review)
+### 2. Unnamed projects and inferred names ✅
 
-- Deliverables: registry schema 2 with nullable names (no migration; an older
-  record is reset like any unsupported schema), a display-name function used
-  by the picker and every report message, rename-to-empty restoring the
-  inferred name, and no uniqueness rule. `projects.create` is removed.
-  ✅ Done except the removal: with no automatic creation yet, New Project…
-  is the only way to make a project, so it stays, accepts a blank name
-  (stored as `null`), and goes in checkpoint 3.
-- Validation: `node:test` registry and command tests for inferred names,
-  multi-root labels, renaming in both directions, and duplicate names.
-- **Implementation context:** `extensions/@knot/projects/src/registry.ts`
-  (`Project`, `registryFromJson`, `rootsLabel`, `nameTaken`, `projectByName`),
-  `commands.ts` (rename, remove, the D084 picker), `switch.ts` and
-  `report.ts` messages that interpolate `project.name`. Tests in
-  `extensions/@knot/projects/test/`.
-- Review gate: names read well in the picker for one and several roots.
+A project's name is optional and displays as its first root's folder name
+(plus `+N`) when absent; names are not unique, and the picker shows the roots'
+paths on a second line. Tree rows gained an optional `detail` second line for
+the same purpose. `projects.create` stays until checkpoint 3, because it is the
+only way to make a project before creation is automatic; it accepts a blank
+name and moves out with that checkpoint.
 
 ### 3. Automatic creation and pruning
 
