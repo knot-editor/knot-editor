@@ -105,7 +105,13 @@ fn assert_matches_disk(fixture: &Fixture, index: &FileIndex, policy: &IgnorePoli
     );
     for directory in &directories {
         let target = uri(directory);
-        let covered = directory.is_empty() || !disk_is_ignored(directory);
+        // The index covers a directory when no directory on its way is
+        // ignored.
+        let covered = directory
+            .match_indices('/')
+            .map(|(end, _)| &directory[..end])
+            .chain((!directory.is_empty()).then_some(directory.as_str()))
+            .all(|prefix| !disk_is_ignored(prefix));
         let listed = run(index.list(&target, policy));
         let walked = run(index.walk(&target, policy));
         assert_eq!(
@@ -229,12 +235,6 @@ fn generate(random: &mut Random, fixture: &Fixture, directory: &str, depth: usiz
     }
 }
 
-/// An entry the mutations may touch: not an ignore file or a repository.
-fn mutable(path: &str) -> bool {
-    let name = path.rsplit('/').next().unwrap_or(path);
-    !matches!(name, ".gitignore" | ".ignore" | ".git")
-}
-
 fn join(parent: &str, name: &str) -> String {
     if parent.is_empty() {
         name.to_owned()
@@ -254,14 +254,11 @@ fn mutate(random: &mut Random, fixture: &Fixture) -> Vec<ResourceUri> {
             .map(|(path, _)| path.clone()),
     );
     let exists = |path: &str| entries.iter().any(|(existing, _)| existing == path);
-    let existing = entries
-        .iter()
-        .filter(|(path, _)| mutable(path))
-        .collect::<Vec<_>>();
+    let existing = entries.iter().collect::<Vec<_>>();
     let parent = directories[random.below(directories.len())].clone();
     let created = join(&parent, random.pick(&NAMES));
     let chosen = (!existing.is_empty()).then(|| existing[random.below(existing.len())]);
-    match (random.below(5), chosen) {
+    match (random.below(9), chosen) {
         (0, _) if !exists(&created) => {
             fixture.memory.seed_file(uri(&created), b"").unwrap();
             vec![uri(&created)]
@@ -280,7 +277,7 @@ fn mutate(random: &mut Random, fixture: &Fixture) -> Vec<ResourceUri> {
             fixture.memory.seed_file(uri(&created), b"").unwrap();
             vec![uri(path), uri(&created)]
         }
-        (4, Some((path, kind))) => {
+        (4, Some((path, kind))) if !path.ends_with(".git") && !path.contains("ignore") => {
             fixture.memory.remove(uri(path)).unwrap();
             if *kind == ResourceKind::File {
                 fixture.memory.seed_directory(uri(path)).unwrap();
@@ -290,12 +287,46 @@ fn mutate(random: &mut Random, fixture: &Fixture) -> Vec<ResourceUri> {
             }
             vec![uri(path)]
         }
+        // Ignore files, repositories, and exclude files change what the
+        // other entries are.
+        (5, _) => {
+            let path = join(&parent, random.pick(&[".gitignore", ".ignore"]));
+            let lines = (0..1 + random.below(3))
+                .map(|_| random.pick(&PATTERNS))
+                .collect::<Vec<_>>();
+            fixture
+                .memory
+                .seed_file(uri(&path), lines.join("\n"))
+                .unwrap();
+            vec![uri(&path)]
+        }
+        (6, _) => {
+            let path = join(&parent, ".git");
+            if exists(&path) {
+                fixture.memory.remove(uri(&path)).unwrap();
+            } else {
+                fixture.memory.seed_directory(uri(&path)).unwrap();
+            }
+            vec![uri(&path)]
+        }
+        (7, _) => {
+            let path = join(&parent, ".git/info/exclude");
+            fixture.file(&path);
+            let lines = (0..1 + random.below(3))
+                .map(|_| random.pick(&PATTERNS))
+                .collect::<Vec<_>>();
+            fixture
+                .memory
+                .seed_file(uri(&path), lines.join("\n"))
+                .unwrap();
+            vec![uri(&path)]
+        }
         _ => Vec::new(),
     }
 }
 
 #[test]
-fn the_index_matches_the_disk_through_random_changes() {
+fn the_index_matches_the_disk_through_random_changes_and_reclassification() {
     for seed in 0..40 {
         let fixture = Fixture::new();
         let mut random = Random(seed);
@@ -312,7 +343,19 @@ fn the_index_matches_the_disk_through_random_changes() {
         let index = fixture.index("");
         run(index.scan(policy.clone()));
         assert_matches_disk(&fixture, &index, &policy, &format!("seed {seed} scan"));
-        for step in 0..25 {
+        let mut policy = policy;
+        for step in 0..40 {
+            // A query with another policy scans the tree again.
+            if random.below(8) == 0 {
+                policy.respect_gitignore = !policy.respect_gitignore;
+            }
+            if random.below(8) == 0 {
+                policy.ignored = if policy.ignored.is_empty() {
+                    vec!["src".into()]
+                } else {
+                    Vec::new()
+                };
+            }
             let changed = mutate(&mut random, &fixture);
             run(index.apply(&changed));
             assert_matches_disk(
@@ -433,4 +476,83 @@ fn a_different_policy_scans_again_before_answering() {
         .map(|listed| listed.entry.name)
         .collect::<Vec<_>>();
     assert_eq!(names, ["b.txt"]);
+}
+
+#[test]
+fn an_ignore_file_change_scans_a_newly_visible_directory_and_empties_a_newly_ignored_one() {
+    let fixture = Fixture::new();
+    fixture.file(".git/HEAD");
+    fixture
+        .memory
+        .seed_file(uri(".gitignore"), b"build/\n")
+        .unwrap();
+    fixture.file("build/out.o");
+    fixture.file("src/main.rs");
+    let index = fixture.scanned("");
+    let policy = IgnorePolicy::default();
+    assert!(run(index.list(&uri("build"), &policy)).is_none());
+
+    fixture
+        .memory
+        .seed_file(uri(".gitignore"), b"src/\n")
+        .unwrap();
+    run(index.apply(&[uri(".gitignore")]));
+    assert_eq!(run(index.list(&uri("build"), &policy)).unwrap().len(), 1);
+    assert!(run(index.list(&uri("src"), &policy)).is_none());
+    assert_matches_disk(&fixture, &index, &policy, "after editing .gitignore");
+
+    fixture.file("sub/.gitignore");
+    fixture.file("sub/a.txt");
+    fixture.file("sub/b.txt");
+    run(index.apply(&[uri("sub")]));
+    fixture
+        .memory
+        .seed_file(uri("sub/.gitignore"), b"a.txt\n")
+        .unwrap();
+    run(index.apply(&[uri("sub/.gitignore")]));
+    assert_matches_disk(&fixture, &index, &policy, "after a nested .gitignore");
+}
+
+#[test]
+fn a_repository_appearing_or_its_exclude_file_changing_reclassifies_its_directory() {
+    let fixture = Fixture::new();
+    fixture.file("repo/.gitignore");
+    fixture
+        .memory
+        .seed_file(uri("repo/.gitignore"), b"*.log\n")
+        .unwrap();
+    fixture.file("repo/a.log");
+    fixture.file("repo/b.txt");
+    let index = fixture.scanned("");
+    let policy = IgnorePolicy::default();
+    // Without `.git`, `.gitignore` does not apply.
+    assert_matches_disk(&fixture, &index, &policy, "no repository");
+
+    fixture.memory.seed_directory(uri("repo/.git")).unwrap();
+    run(index.apply(&[uri("repo/.git")]));
+    assert_eq!(
+        run(index.is_ignored(&uri("repo/a.log"), &policy)),
+        Some(true)
+    );
+    assert_matches_disk(&fixture, &index, &policy, "repository appeared");
+
+    fixture.file("repo/.git/info/exclude");
+    fixture
+        .memory
+        .seed_file(uri("repo/.git/info/exclude"), b"b.txt\n")
+        .unwrap();
+    run(index.apply(&[uri("repo/.git/info/exclude")]));
+    assert_eq!(
+        run(index.is_ignored(&uri("repo/b.txt"), &policy)),
+        Some(true)
+    );
+    assert_matches_disk(&fixture, &index, &policy, "exclude edited");
+
+    fixture.memory.remove(uri("repo/.git")).unwrap();
+    run(index.apply(&[uri("repo/.git")]));
+    assert_eq!(
+        run(index.is_ignored(&uri("repo/a.log"), &policy)),
+        Some(false)
+    );
+    assert_matches_disk(&fixture, &index, &policy, "repository removed");
 }

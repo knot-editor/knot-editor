@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoint 1 ✅ implemented, awaiting its review gate. Item of the
+Status: 🚧 checkpoint 1 ✅ approved; checkpoint 2 ✅ implemented, awaiting its review gate. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -170,7 +170,16 @@ Implementation context:
   `files::list`, `files::walk`, and `files::is_ignored` over the memory
   provider.
 
-### 2. Reclassification and policy changes
+### 2. Reclassification and policy changes ✅
+
+Implemented in `FileIndex::apply`: a changed `.gitignore`, `.ignore`, or
+`.git` rescans its parent directory's subtree, and a `.git/info/exclude` path
+rescans the repository root's subtree; the root itself is a full scan. The
+policy-mismatch rescan landed with checkpoint 1. The equivalence test now
+includes ignore-file, `.git`, and exclude edits and policy flips. Note: with
+`respect_gitignore` off the disk `is_ignored` and `list` judge only the
+nearest directory's ancestry, so the index answers only through directories
+the disk judges visible and falls through otherwise.
 
 Deliverables:
 
