@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoint 1 ✅ approved; checkpoint 2 ✅ implemented, awaiting its review gate. Item of the
+Status: 🚧 checkpoints 1 and 2 ✅ approved; checkpoint 3 in progress. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -175,37 +175,11 @@ Implementation context:
 Implemented in `FileIndex::apply`: a changed `.gitignore`, `.ignore`, or
 `.git` rescans its parent directory's subtree, and a `.git/info/exclude` path
 rescans the repository root's subtree; the root itself is a full scan. The
-policy-mismatch rescan landed with checkpoint 1. The equivalence test now
-includes ignore-file, `.git`, and exclude edits and policy flips. Note: with
+policy-mismatch rescan landed with checkpoint 1. The equivalence test includes
+ignore-file, `.git`, and exclude edits and policy flips. Note: with
 `respect_gitignore` off the disk `is_ignored` and `list` judge only the
 nearest directory's ancestry, so the index answers only through directories
 the disk judges visible and falls through otherwise.
-
-Deliverables:
-
-- Changes to `.gitignore` and `.ignore` rescan the subtree of the directory
-  that holds them. A change to `.git/info/exclude` rescans the repository
-  root. A `.git` that appears or disappears rescans its parent directory's
-  subtree.
-- A query carrying a different `IgnorePolicy` triggers a full rescan and
-  waits for it.
-
-Validation:
-
-- The equivalence test extended with ignore-file edits, `.git` creation and
-  removal, `.git/info/exclude` edits, and policy changes.
-- Focused tests for a directory becoming visible, which gets scanned, and
-  becoming ignored, which loses its contents.
-
-Review gate: reclassification behavior and the policy-mismatch rescan.
-
-Implementation context:
-
-- Hidden entries are not stored, so detect `.git/info/exclude` by the path of
-  the changed URI (a `.git` segment followed by `info/exclude`) before
-  dropping events under hidden directories.
-- The repository root and the `.git` check live in `Classifier::descend` and
-  `IgnoreFiles::of` in `files/ignore.rs`.
 
 ### 3. Application wiring, measurements, and docs
 
