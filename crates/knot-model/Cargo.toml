@@ -22,6 +22,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+trash = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-html = { workspace = true }
 tree-sitter-css = { workspace = true }

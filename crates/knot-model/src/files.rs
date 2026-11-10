@@ -268,6 +268,98 @@ pub async fn stat(
     })
 }
 
+/// Creates an empty file, and any missing parent directories. Returns the
+/// normalized URI.
+pub async fn create_file(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: &str,
+) -> Result<ResourceUri, ResourceError> {
+    let uri = providers.normalize(parse(uri)?).await?;
+    let provider = providers.provider(&uri)?;
+    ensure_parent(provider.as_ref(), &uri).await?;
+    provider.create(uri.clone(), Vec::new()).await?;
+    Ok(uri)
+}
+
+/// Creates a directory, and any missing parents. Returns the normalized URI.
+pub async fn create_directory(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: &str,
+) -> Result<ResourceUri, ResourceError> {
+    let uri = providers.normalize(parse(uri)?).await?;
+    providers
+        .provider(&uri)?
+        .create_directory(uri.clone())
+        .await?;
+    Ok(uri)
+}
+
+/// Moves a file or directory tree to a destination that does not exist,
+/// creating its missing parents. Returns the normalized URIs.
+pub async fn rename(
+    providers: Arc<FileSystemProviderRegistry>,
+    from: &str,
+    to: &str,
+) -> Result<(ResourceUri, ResourceUri), ResourceError> {
+    let from = providers.normalize(parse(from)?).await?;
+    let to = providers.normalize(parse(to)?).await?;
+    if from.scheme() != to.scheme() {
+        return Err(ResourceError::InvalidUri {
+            uri: to.to_string(),
+            reason: "a resource cannot move to another scheme".into(),
+        });
+    }
+    if to.is_within(&from) && to != from {
+        return Err(ResourceError::InvalidUri {
+            uri: to.to_string(),
+            reason: "a resource cannot move into itself".into(),
+        });
+    }
+    let provider = providers.provider(&from)?;
+    if provider.stat(to.clone()).await? != ResourceStat::Missing {
+        return Err(ResourceError::AlreadyExists { uri: to });
+    }
+    ensure_parent(provider.as_ref(), &to).await?;
+    provider.rename(from.clone(), to.clone()).await?;
+    Ok((from, to))
+}
+
+/// Deletes a file or directory tree, to the trash unless `permanent`. Returns
+/// the normalized URI.
+pub async fn delete(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: &str,
+    permanent: bool,
+) -> Result<ResourceUri, ResourceError> {
+    let uri = providers.normalize(parse(uri)?).await?;
+    providers
+        .provider(&uri)?
+        .delete(uri.clone(), permanent)
+        .await?;
+    Ok(uri)
+}
+
+async fn ensure_parent(
+    provider: &dyn FileSystemProvider,
+    uri: &ResourceUri,
+) -> Result<(), ResourceError> {
+    let Some(parent) = uri.parent() else {
+        return Ok(());
+    };
+    match provider.stat(parent.clone()).await? {
+        ResourceStat::Directory => Ok(()),
+        ResourceStat::File => Err(ResourceError::WrongKind {
+            uri: parent,
+            expected: ResourceKind::Directory,
+            actual: ResourceKind::File,
+        }),
+        ResourceStat::Missing => match provider.create_directory(parent).await {
+            Err(ResourceError::AlreadyExists { .. }) => Ok(()),
+            result => result,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -416,6 +508,79 @@ mod tests {
         assert!(matches!(
             run(stat(providers, "nonsense")),
             Err(ResourceError::InvalidUri { .. })
+        ));
+    }
+
+    #[test]
+    fn create_file_and_directory_make_missing_parents() {
+        let providers = fixture();
+        let created = run(create_file(providers.clone(), "mem://f/a/b/new.txt")).unwrap();
+        assert_eq!(created.to_string(), "mem://f/a/b/new.txt");
+        assert_eq!(
+            run(read_text(providers.clone(), "mem://f/a/b/new.txt")).unwrap(),
+            ""
+        );
+        assert!(matches!(
+            run(create_file(providers.clone(), "mem://f/a/b/new.txt")),
+            Err(ResourceError::AlreadyExists { .. })
+        ));
+        assert!(matches!(
+            run(create_file(providers.clone(), "mem://f/notes.txt/inside")),
+            Err(ResourceError::WrongKind { .. })
+        ));
+        run(create_directory(providers.clone(), "mem://f/c/d")).unwrap();
+        assert_eq!(
+            run(stat(providers.clone(), "mem://f/c/d")).unwrap(),
+            Some(ResourceKind::Directory)
+        );
+        assert!(matches!(
+            run(create_directory(providers, "mem://f/c/d")),
+            Err(ResourceError::AlreadyExists { .. })
+        ));
+    }
+
+    #[test]
+    fn rename_creates_parents_and_refuses_clobbering_and_cycles() {
+        let providers = fixture();
+        let (from, to) = run(rename(
+            providers.clone(),
+            "mem://f/notes.txt",
+            "mem://f/x/y/moved.txt",
+        ))
+        .unwrap();
+        assert_eq!(from.to_string(), "mem://f/notes.txt");
+        assert_eq!(to.to_string(), "mem://f/x/y/moved.txt");
+        assert_eq!(
+            run(stat(providers.clone(), "mem://f/notes.txt")).unwrap(),
+            None
+        );
+        assert!(matches!(
+            run(rename(
+                providers.clone(),
+                "mem://f/bom.txt",
+                "mem://f/x/y/moved.txt"
+            )),
+            Err(ResourceError::AlreadyExists { .. })
+        ));
+        assert!(matches!(
+            run(rename(providers.clone(), "mem://f/x", "mem://f/x/y/inside")),
+            Err(ResourceError::InvalidUri { .. })
+        ));
+        assert!(matches!(
+            run(rename(providers, "mem://f/missing", "mem://f/elsewhere")),
+            Err(ResourceError::NotFound { .. })
+        ));
+    }
+
+    #[test]
+    fn delete_removes_a_file_or_a_tree() {
+        let providers = fixture();
+        run(delete(providers.clone(), "mem://f/notes.txt", false)).unwrap();
+        run(delete(providers.clone(), "mem://f/src", true)).unwrap();
+        assert_eq!(run(stat(providers.clone(), "mem://f/src")).unwrap(), None);
+        assert!(matches!(
+            run(delete(providers, "mem://f/src", true)),
+            Err(ResourceError::NotFound { .. })
         ));
     }
 }

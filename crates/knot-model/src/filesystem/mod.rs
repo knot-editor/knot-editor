@@ -168,6 +168,19 @@ pub trait FileSystemProvider: Send + Sync {
     ) -> ProviderFuture<'_, ResourceVersion>;
     fn stat(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceStat>;
 
+    /// Creates the directory and any missing parents, rejecting `AlreadyExists`
+    /// when `uri` itself exists.
+    fn create_directory(&self, uri: ResourceUri) -> ProviderFuture<'_, ()>;
+
+    /// Moves a file or a directory tree. The destination must not exist and
+    /// its parent must; a symlink moves itself, not its target.
+    fn rename(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()>;
+
+    /// Removes a file or a directory tree. Unless `permanent`, a provider with
+    /// a trash moves the entry there and one without rejects; a provider
+    /// without a trash always removes.
+    fn delete(&self, uri: ResourceUri, permanent: bool) -> ProviderFuture<'_, ()>;
+
     /// Reports changes to `uri` to `sink` until the guard is dropped: the
     /// directory and its direct children, or everything below it when
     /// `recursive`. A watched file reports itself.
@@ -357,6 +370,15 @@ mod tests {
         fn stat(&self, _: ResourceUri) -> ProviderFuture<'_, ResourceStat> {
             Box::pin(async { Ok(ResourceStat::Missing) })
         }
+        fn create_directory(&self, _: ResourceUri) -> ProviderFuture<'_, ()> {
+            Box::pin(async { Ok(()) })
+        }
+        fn rename(&self, _: ResourceUri, _: ResourceUri) -> ProviderFuture<'_, ()> {
+            Box::pin(async { Ok(()) })
+        }
+        fn delete(&self, _: ResourceUri, _: bool) -> ProviderFuture<'_, ()> {
+            Box::pin(async { Ok(()) })
+        }
     }
 
     #[test]
@@ -457,7 +479,7 @@ mod tests {
             Err(ResourceError::NotFound { uri }) if uri == missing
         ));
         assert!(matches!(
-            run(provider.read(directory)),
+            run(provider.read(directory.clone())),
             Err(ResourceError::WrongKind {
                 expected: ResourceKind::File,
                 actual: ResourceKind::Directory,
@@ -470,6 +492,58 @@ mod tests {
         ));
         assert!(matches!(
             run(provider.replace(missing.clone(), ResourceVersion::new([]), b"new".to_vec())),
+            Err(ResourceError::NotFound { uri }) if uri == missing
+        ));
+
+        // Mutation: directories, rename, and permanent delete.
+        let nested = child_uri(&child_uri(&root, "made"), "deep");
+        run(provider.create_directory(nested.clone())).unwrap();
+        assert_eq!(
+            run(provider.stat(nested.clone())).unwrap(),
+            ResourceStat::Directory
+        );
+        assert!(matches!(
+            run(provider.create_directory(nested.clone())),
+            Err(ResourceError::AlreadyExists { uri }) if uri == nested
+        ));
+        let inside = child_uri(&nested, "inner.txt");
+        run(provider.create(inside.clone(), b"inner".to_vec())).unwrap();
+
+        let moved = child_uri(&root, "moved");
+        run(provider.rename(child_uri(&root, "made"), moved.clone())).unwrap();
+        assert_eq!(
+            run(provider.stat(child_uri(&root, "made"))).unwrap(),
+            ResourceStat::Missing
+        );
+        assert_eq!(
+            run(provider.read(child_uri(&child_uri(&moved, "deep"), "inner.txt")))
+                .unwrap()
+                .bytes,
+            b"inner"
+        );
+        assert!(matches!(
+            run(provider.rename(moved.clone(), directory.clone())),
+            Err(ResourceError::AlreadyExists { uri }) if uri == directory
+        ));
+        assert!(matches!(
+            run(provider.rename(missing.clone(), child_uri(&root, "elsewhere"))),
+            Err(ResourceError::NotFound { uri }) if uri == missing
+        ));
+        let parentless = child_uri(&child_uri(&root, "absent"), "x");
+        assert!(matches!(
+            run(provider.rename(moved.clone(), parentless)),
+            Err(ResourceError::NotFound { .. })
+        ));
+
+        run(provider.delete(created.clone(), true)).unwrap();
+        assert_eq!(
+            run(provider.stat(created.clone())).unwrap(),
+            ResourceStat::Missing
+        );
+        run(provider.delete(moved.clone(), true)).unwrap();
+        assert_eq!(run(provider.stat(moved)).unwrap(), ResourceStat::Missing);
+        assert!(matches!(
+            run(provider.delete(missing.clone(), true)),
             Err(ResourceError::NotFound { uri }) if uri == missing
         ));
     }

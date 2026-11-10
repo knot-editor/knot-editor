@@ -80,6 +80,12 @@ impl LocalFileSystemProvider {
             })
     }
 
+    fn scoped_path(&self, uri: ResourceUri) -> Result<(ResourceUri, PathBuf), ResourceError> {
+        let uri = self.normalize_scoped(uri)?;
+        let path = self.uri_to_path(&uri)?;
+        Ok((uri, path))
+    }
+
     #[cfg(test)]
     fn path_to_uri(&self, path: &Path) -> Result<ResourceUri, ResourceError> {
         self.normalize_scoped(path_to_unrestricted_uri(path)?)
@@ -327,6 +333,77 @@ impl FileSystemProvider for LocalFileSystemProvider {
             }),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ResourceStat::Missing),
             Err(error) => Err(ResourceError::io("stat", error)),
+        })
+    }
+
+    fn create_directory(&self, uri: ResourceUri) -> ProviderFuture<'_, ()> {
+        let (uri, path) = match self.scoped_path(uri) {
+            Ok(resolved) => resolved,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+        let mutation_lock = self.mutation_lock.clone();
+        self.spawn("create directory task", move || {
+            let _guard = mutation_lock
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            if path.symlink_metadata().is_ok() {
+                return Err(ResourceError::AlreadyExists { uri });
+            }
+            std::fs::create_dir_all(&path).map_err(|error| map_io("create directory", &uri, error))
+        })
+    }
+
+    fn rename(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()> {
+        let ((from, from_path), (to, to_path)) = match self
+            .scoped_path(from)
+            .and_then(|f| Ok((f, self.scoped_path(to)?)))
+        {
+            Ok(resolved) => resolved,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+        let mutation_lock = self.mutation_lock.clone();
+        self.spawn("rename task", move || {
+            let _guard = mutation_lock
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            if from_path.symlink_metadata().is_err() {
+                return Err(ResourceError::NotFound { uri: from });
+            }
+            if to_path.symlink_metadata().is_ok() {
+                return Err(ResourceError::AlreadyExists { uri: to });
+            }
+            if to_path.parent().is_some_and(|parent| !parent.is_dir()) {
+                return Err(ResourceError::NotFound { uri: to });
+            }
+            std::fs::rename(&from_path, &to_path)
+                .map_err(|error| map_io("rename", &from, error))?;
+            sync_parent(&from_path, &from)?;
+            sync_parent(&to_path, &to)
+        })
+    }
+
+    fn delete(&self, uri: ResourceUri, permanent: bool) -> ProviderFuture<'_, ()> {
+        let (uri, path) = match self.scoped_path(uri) {
+            Ok(resolved) => resolved,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+        let mutation_lock = self.mutation_lock.clone();
+        self.spawn("delete task", move || {
+            let _guard = mutation_lock
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            let metadata = path
+                .symlink_metadata()
+                .map_err(|error| map_io("stat", &uri, error))?;
+            if !permanent {
+                return trash::delete(&path).map_err(|error| ResourceError::io("trash", error));
+            }
+            let removed = if metadata.is_dir() {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
+            };
+            removed.map_err(|error| map_io("delete", &uri, error))
         })
     }
 
@@ -706,5 +783,40 @@ mod tests {
                     .starts_with(".knot-save-")
             }));
         }
+    }
+
+    #[test]
+    fn trash_removes_the_entry_from_its_place() {
+        let temporary = tempfile::tempdir().unwrap();
+        let provider = LocalFileSystemProvider::new(temporary.path()).unwrap();
+        fs::write(temporary.path().join("gone.txt"), b"x").unwrap();
+        fs::create_dir_all(temporary.path().join("tree/inner")).unwrap();
+        fs::write(temporary.path().join("tree/inner/f"), b"x").unwrap();
+
+        run(provider.delete(child_uri(provider.root(), "gone.txt"), false)).unwrap();
+        run(provider.delete(child_uri(provider.root(), "tree"), false)).unwrap();
+        assert!(!temporary.path().join("gone.txt").exists());
+        assert!(!temporary.path().join("tree").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rename_and_delete_act_on_the_link_not_its_target() {
+        let temporary = tempfile::tempdir().unwrap();
+        let provider = LocalFileSystemProvider::new(temporary.path()).unwrap();
+        fs::create_dir(temporary.path().join("target")).unwrap();
+        fs::write(temporary.path().join("target/f"), b"x").unwrap();
+        std::os::unix::fs::symlink(
+            temporary.path().join("target"),
+            temporary.path().join("link"),
+        )
+        .unwrap();
+
+        let root = provider.root().clone();
+        run(provider.rename(child_uri(&root, "link"), child_uri(&root, "renamed"))).unwrap();
+        assert!(temporary.path().join("renamed").is_symlink());
+        assert!(!temporary.path().join("link").exists());
+        run(provider.delete(child_uri(&root, "renamed"), true)).unwrap();
+        assert!(temporary.path().join("target/f").exists());
     }
 }

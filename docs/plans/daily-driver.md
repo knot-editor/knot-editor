@@ -273,6 +273,7 @@ to be rebuilt later:
     where the platform supports it), through providers and a public API.
   - Open documents follow renames, and deletion of their file is reported to
     them.
+  - 🚧 [Plan](d010-filesystem-mutation.md)
 
 - **D087 — Extension entitlements**
   - Packages declare entitlements in `knot.jsonc`. Start with process

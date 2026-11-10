@@ -106,6 +106,18 @@ impl FileSystemProvider for GatedStatProvider {
             self.inner.stat(uri).await
         })
     }
+
+    fn create_directory(&self, uri: ResourceUri) -> ProviderFuture<'_, ()> {
+        self.inner.create_directory(uri)
+    }
+
+    fn rename(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()> {
+        self.inner.rename(from, to)
+    }
+
+    fn delete(&self, uri: ResourceUri, permanent: bool) -> ProviderFuture<'_, ()> {
+        self.inner.delete(uri, permanent)
+    }
 }
 
 #[gpui::test]

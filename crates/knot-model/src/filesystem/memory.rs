@@ -351,6 +351,99 @@ impl FileSystemProvider for MemoryFileSystemProvider {
         })
     }
 
+    fn create_directory(&self, uri: ResourceUri) -> ProviderFuture<'_, ()> {
+        Box::pin(async move {
+            let uri = self.normalize_scoped(uri)?;
+            let path = relative_segments(&self.root, &uri);
+            let mut hierarchy = self
+                .hierarchy
+                .write()
+                .map_err(|error| ResourceError::io("lock memory provider", error))?;
+            if path.is_empty() || find_node(&hierarchy, &path).is_some() {
+                return Err(ResourceError::AlreadyExists { uri });
+            }
+            ensure_directory(&mut hierarchy, &path, &uri)?;
+            drop(hierarchy);
+            self.report(&uri);
+            Ok(())
+        })
+    }
+
+    fn rename(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()> {
+        Box::pin(async move {
+            let from = self.normalize_scoped(from)?;
+            let to = self.normalize_scoped(to)?;
+            let mut from_path = relative_segments(&self.root, &from);
+            let mut to_path = relative_segments(&self.root, &to);
+            let (Some(from_name), Some(to_name)) = (from_path.pop(), to_path.pop()) else {
+                return Err(ResourceError::InvalidUri {
+                    uri: from.to_string(),
+                    reason: "the provider root cannot be renamed".into(),
+                });
+            };
+            if to.is_within(&from) {
+                return Err(ResourceError::InvalidUri {
+                    uri: to.to_string(),
+                    reason: "a resource cannot move into itself".into(),
+                });
+            }
+            let mut hierarchy = self
+                .hierarchy
+                .write()
+                .map_err(|error| ResourceError::io("lock memory provider", error))?;
+            if !directory_mut(&mut hierarchy, &from_path, &from)?
+                .children
+                .contains_key(&from_name)
+            {
+                return Err(ResourceError::NotFound { uri: from });
+            }
+            if directory_mut(&mut hierarchy, &to_path, &to)?
+                .children
+                .contains_key(&to_name)
+            {
+                return Err(ResourceError::AlreadyExists { uri: to });
+            }
+            let node = directory_mut(&mut hierarchy, &from_path, &from)?
+                .children
+                .remove(&from_name)
+                .expect("the source was found under the same lock");
+            directory_mut(&mut hierarchy, &to_path, &to)?
+                .children
+                .insert(to_name, node);
+            drop(hierarchy);
+            self.report(&from);
+            self.report(&to);
+            Ok(())
+        })
+    }
+
+    fn delete(&self, uri: ResourceUri, _permanent: bool) -> ProviderFuture<'_, ()> {
+        Box::pin(async move {
+            let uri = self.normalize_scoped(uri)?;
+            let mut path = relative_segments(&self.root, &uri);
+            let Some(name) = path.pop() else {
+                return Err(ResourceError::InvalidUri {
+                    uri: uri.to_string(),
+                    reason: "the provider root cannot be deleted".into(),
+                });
+            };
+            let mut hierarchy = self
+                .hierarchy
+                .write()
+                .map_err(|error| ResourceError::io("lock memory provider", error))?;
+            if directory_mut(&mut hierarchy, &path, &uri)?
+                .children
+                .remove(&name)
+                .is_none()
+            {
+                return Err(ResourceError::NotFound { uri });
+            }
+            drop(hierarchy);
+            self.report(&uri);
+            Ok(())
+        })
+    }
+
     fn watch(
         &self,
         uri: ResourceUri,

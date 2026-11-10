@@ -122,6 +122,18 @@ impl FileSystemProvider for GatedFileSystemProvider {
     fn stat(&self, uri: ResourceUri) -> ProviderFuture<'_, ResourceStat> {
         self.inner.stat(uri)
     }
+
+    fn create_directory(&self, uri: ResourceUri) -> ProviderFuture<'_, ()> {
+        self.inner.create_directory(uri)
+    }
+
+    fn rename(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()> {
+        self.inner.rename(from, to)
+    }
+
+    fn delete(&self, uri: ResourceUri, permanent: bool) -> ProviderFuture<'_, ()> {
+        self.inner.delete(uri, permanent)
+    }
 }
 
 /// Focus the surface owning `handle` in the window's session, as a click
