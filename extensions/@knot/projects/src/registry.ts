@@ -101,18 +101,23 @@ export function displayName(project: Project): string {
   return project.name ?? rootsLabel(project) ?? "Empty project";
 }
 
-/** The roots as readable paths, which tell apart folders with one name. */
+/**
+ * The roots as readable paths, which tell apart folders with one name. A home
+ * directory under /Users or /home shows as `~`.
+ */
 export function rootsPath(project: Project): string {
   return project.roots.map(readablePath).join(", ");
 }
 
 function readablePath(uri: string) {
   const path = uri.replace(/^file:\/\//, "").replace(/(.)\/$/, "$1");
+  let decoded = path;
   try {
-    return decodeURIComponent(path);
+    decoded = decodeURIComponent(path);
   } catch {
-    return path;
+    // A malformed escape keeps the raw text.
   }
+  return decoded.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "~");
 }
 
 function updated(registry: Registry, id: string, change: (project: Project) => Project): Registry {

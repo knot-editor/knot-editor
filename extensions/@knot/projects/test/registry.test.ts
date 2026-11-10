@@ -64,6 +64,10 @@ test("root paths tell apart folders with one name", () => {
   assert.equal(rootsPath(project("u", null, ["file:///src/my%20app/", "file:///lib/"])), "/src/my app, /lib");
 });
 
+test("a home directory shows as a tilde", () => {
+  assert.equal(rootsPath(project("u", null, ["file:///Users/me/src/app/", "file:///home/me/"])), "~/src/app, ~");
+});
+
 test("renaming sets an explicit name and null restores the inferred one", () => {
   const named = renamed(registry, "a", "Mine");
   assert.equal(displayName(named.projects[0]!), "Mine");
