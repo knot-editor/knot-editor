@@ -407,15 +407,16 @@ impl FileIndex {
     /// Scans the contents of the indexed directory at `path` again, with the
     /// tree's policy. The whole tree is scanned for the root.
     async fn scan_again(&self, path: &[String]) {
-        let (classifier, parent, uri, generation, name) = {
+        let Some((name, parents)) = path.split_last() else {
+            let policy = self.state().tree.as_ref().map(|tree| tree.policy.clone());
+            if let Some(policy) = policy {
+                self.scan(policy).await;
+            }
+            return;
+        };
+        let (classifier, parent, uri, generation) = {
             let state = self.state();
             let Some(tree) = &state.tree else { return };
-            let Some((name, parents)) = path.split_last() else {
-                let policy = tree.policy.clone();
-                drop(state);
-                self.scan(policy).await;
-                return;
-            };
             let Some(parent) = tree.root.as_ref().and_then(|root| root.at(parents)) else {
                 return;
             };
@@ -431,15 +432,13 @@ impl FileIndex {
                 parent.scope.clone(),
                 entry.entry.uri.clone(),
                 state.generation,
-                name.clone(),
             )
         };
-        let dir = scan(&self.provider, &classifier, &uri, parent, Some(&name))
+        let dir = scan(&self.provider, &classifier, &uri, parent, Some(name))
             .await
             .ok();
         let mut state = self.state();
         if state.generation == generation
-            && let Some((name, parents)) = path.split_last()
             && let Some(entry) = state
                 .tree
                 .as_mut()
