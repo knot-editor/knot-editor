@@ -190,6 +190,56 @@ await commands.register("files.unwatch", async () => { await handle.dispose(); }
 }
 
 #[gpui::test]
+fn files_search_ranks_several_directories_as_one_whether_or_not_they_are_indexed(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let key = install_operation_fixture(
+        &host,
+        r#"
+import { commands, files, workbench } from "knot";
+await commands.register("files.report", async () => {
+  const found = await files.search(["mem://product/src/", "mem://product/"], "notes");
+  const empty = await files.search([], "notes");
+  await workbench.writeClipboardText([
+    ...found.results.map(hit => `${hit.directory}:${hit.path}`),
+    empty.results.length,
+  ].join("|"));
+});
+"#,
+        "files.report",
+        cx,
+    );
+    provider
+        .seed_file(
+            ResourceUri::parse("mem://product/src/notes.md").unwrap(),
+            "x",
+        )
+        .unwrap();
+    let (shell, window) = empty_product_window(&documents, cx);
+    // Only the first directory is an indexed root; the second is walked.
+    shell.update(cx, |shell, cx| {
+        shell.replace_workspace_roots(vec![ResourceUri::parse("mem://product/src/").unwrap()], cx)
+    });
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command(&shell, window, "files.report", cx),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
+            .unwrap(),
+        "mem://product/src/:notes.md|mem://product/:notes.txt|mem://product/:src/notes.md|0"
+    );
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
+
+#[gpui::test]
 fn indexed_roots_answer_from_memory_follow_the_disk_and_release_with_the_root(
     cx: &mut TestAppContext,
 ) {

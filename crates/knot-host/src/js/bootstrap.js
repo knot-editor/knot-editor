@@ -1585,10 +1585,12 @@ export async function listFiles(uri) {
 export async function searchFiles(uri, query, options) {
   const limit = options == null ? null : record(options, "search options must be an object").limit ?? null;
   if (limit !== null && (!Number.isInteger(limit) || limit < 1)) throw new TypeError("search limit must be a positive integer");
-  const found = await request("searchFiles", string(uri, "resource URI must be text"), string(query, "search query must be text"), limit);
+  const directories = typeof uri === "string" ? [uri] : arrayItems(uri, item => string(item, "resource URI must be text"));
+  const found = await request("searchFiles", directories, string(query, "search query must be text"), limit);
   return Object.freeze({
     results: Object.freeze(found.results.map(hit => Object.freeze({
       uri: hit.uri,
+      directory: hit.directory,
       path: hit.path,
       name: hit.name,
       ranges: Object.freeze(hit.ranges.map(range => Object.freeze([range[0], range[1]]))),

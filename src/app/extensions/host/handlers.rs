@@ -1891,7 +1891,7 @@ const MAXIMUM_SEARCH_LIMIT: u64 = 1000;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SearchFilesArguments {
-    uri: String,
+    directories: Vec<String>,
     query: String,
     limit: Option<u64>,
 }
@@ -1899,7 +1899,7 @@ pub(crate) struct SearchFilesArguments {
 impl HostArguments for SearchFilesArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         Ok(Self {
-            uri: reader.text(2, "resource URI must be text")?,
+            directories: reader.text_list(2)?,
             query: reader.text(3, "search query must be text")?,
             limit: reader.optional_integer(4)?,
         })
@@ -1925,16 +1925,19 @@ async fn search_files(
         .limit
         .unwrap_or(DEFAULT_SEARCH_LIMIT)
         .clamp(1, MAXIMUM_SEARCH_LIMIT) as usize;
-    let indexed = match indexed_uri(&context, &providers, &arguments.uri).await {
-        Some((index, uri)) => index.search(&uri, &query, limit, &policy).await,
-        None => None,
-    };
-    let found = match indexed {
-        Some(found) => found,
-        None => knot_model::files::search(providers, &arguments.uri, &query, limit, &policy)
-            .await
-            .map_err(|error| product::operations::resource_error(error.into()))?,
-    };
+    let mut search = knot_model::files::Search::new(&query, limit);
+    for directory in &arguments.directories {
+        let indexed = match indexed_uri(&context, &providers, directory).await {
+            Some((index, uri)) => index.offer(&uri, &policy, &mut search).await,
+            None => false,
+        };
+        if !indexed {
+            knot_model::files::offer(providers.clone(), directory, &policy, &mut search)
+                .await
+                .map_err(|error| product::operations::resource_error(error.into()))?;
+        }
+    }
+    let found = search.finish();
     Ok(knot_protocol::FileSearchResult {
         results: found
             .hits
@@ -1942,6 +1945,7 @@ async fn search_files(
             .map(|hit| knot_protocol::FileSearchHit {
                 ranges: utf16_ranges(&hit.path, &hit.ranges),
                 uri: hit.uri.to_string(),
+                directory: hit.directory.to_string(),
                 path: hit.path,
                 name: hit.name,
             })

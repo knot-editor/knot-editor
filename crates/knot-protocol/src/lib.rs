@@ -560,7 +560,9 @@ pub struct FileEntry {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct FileSearchHit {
     pub uri: String,
-    /// The path below the searched directory, with `/` separators.
+    /// The searched directory the file was found in.
+    pub directory: String,
+    /// The path below `directory`, with `/` separators.
     pub path: String,
     pub name: String,
     /// The UTF-16 ranges of `path` that matched.

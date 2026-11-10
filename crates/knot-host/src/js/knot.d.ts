@@ -731,7 +731,9 @@ declare module "knot" {
   /** A file `files.search` matched. */
   export interface FileSearchHit {
     readonly uri: string;
-    /** The path below the searched directory, with `/` separators. */
+    /** The searched directory the file was found in, as normalized. */
+    readonly directory: string;
+    /** The path below `directory`, with `/` separators. */
     readonly path: string;
     /** The last segment of `path`. */
     readonly name: string;
@@ -788,12 +790,15 @@ declare module "knot" {
      * @throws HostError with InvalidUri, ResourceNotFound, ResourceWrongKind for
      * a file, or ProviderFailure. */
     list(uri: string): Promise<readonly FileEntry[]>;
-    /** Matches `query` against the paths of the files below a directory, at
-     * any depth, and resolves the best `options.limit` (default 100, at most
-     * 1000) with whether others matched too. Matching uses the editor's shared
+    /** Matches `query` against the paths of the files below a directory, or
+     * below each of a list of directories, at any depth, and resolves the best
+     * `options.limit` (default 100, at most 1000) with whether others matched
+     * too. Several directories are ranked as one search, so a strong match in a
+     * later one outranks a weak match in an earlier one. Matching uses the editor's shared
      * matcher and the `completion.styles` setting. A file whose name matches
      * ranks above one that matches only through its directories; within each
-     * group the matcher's order applies, then path order. A query of only
+     * group the matcher's order applies, then the order of the directories,
+     * then path order. A query of only
      * whitespace matches every file, so the first files in path order come
      * back. Hidden and ignored files are left out, symlinked directories are
      * not followed, and directories that cannot be read are skipped. Searching
@@ -802,7 +807,7 @@ declare module "knot" {
      * with InvalidUri, ResourceNotFound, ResourceWrongKind for a file, or
      * ProviderFailure. */
     search(
-      uri: string,
+      uri: string | readonly string[],
       query: string,
       options?: { readonly limit?: number },
     ): Promise<FileSearchResult>;
