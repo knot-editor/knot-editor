@@ -301,6 +301,7 @@ to be rebuilt later:
     `workspace.fs` does. The explorer, project-local settings (D089),
     EditorConfig (D090), and project inference (D123) need it, and D010 and
     D081 cover only mutation and enumeration.
+  - 🚧 [Plan](d122-file-read-api.md)
 
 - **D143 — Input completion** (depends on D071, D122)
   - `workbench.showInput` offers completion items as the text changes,
