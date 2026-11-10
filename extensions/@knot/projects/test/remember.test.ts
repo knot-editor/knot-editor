@@ -65,9 +65,10 @@ test("launch remembers the folders of its windows once restored ones rebound", a
   assert.deepEqual(created?.roots, [GAMMA]);
   assert.equal(session(created!.id)?.state, "active");
   assert.equal(session(created!.id)?.windows.length, 2);
-  // Alpha's window rebound; Beta's suspended record is left to the switch.
+  // Alpha's window rebound; Beta's folder restored its suspended project.
   assert.equal(session("a")?.state, "active");
-  assert.equal(session("b")?.state, "suspended");
+  assert.equal(session("b")?.state, "active");
+  assert.equal(registry().projects.length, 3);
 });
 
 test("pruning forgets the oldest unnamed projects beyond the limit, sparing protected ones", async () => {
@@ -118,4 +119,56 @@ test("pruning forgets the oldest unnamed projects beyond the limit, sparing prot
 test("the remembered limit defaults to thirty", async () => {
   await startLaunched();
   assert.equal(await settings.get("projects.rememberedLimit"), 30);
+});
+
+function suspendedBeta() {
+  host.setRecord("projects", {
+    schema: 2,
+    projects: [{ id: "b", name: null, roots: [BETA], createdAt: 1, lastOpenedAt: 1 }],
+    recentProjectId: null,
+  });
+  seedSession("b", "suspended", [{ entries: [{ uri: `${BETA}notes.md` }], selected: 0 }]);
+}
+
+test("a hand-opened folder with nothing in it is replaced by its suspended project", async () => {
+  suspendedBeta();
+  await startLaunched();
+  const window = host.openWindow({ documents: [host.addDocument()] });
+  const workspace = host.setRoots(window, [BETA]);
+  await host.emit({ type: "workspaceChanged", workspace });
+
+  const [opened, ...others] = host.windowTargets();
+  assert.equal(others.length, 0);
+  assert.deepEqual(host.replaced()[0]?.release, [window]);
+  assert.deepEqual(host.rootsOf(opened!), [BETA]);
+  assert.equal(session("b")?.state, "active");
+  assert.equal(session("b")?.windows[0]?.entries[0]?.uri, `${BETA}notes.md`);
+  assert.equal(registry().projects.length, 1);
+});
+
+test("a hand-opened folder holding other content opens its project in a new window", async () => {
+  suspendedBeta();
+  await startLaunched();
+  const draft = host.addDocument({ text: "mine" });
+  const window = host.openWindow({ documents: [draft] });
+  const workspace = host.setRoots(window, [BETA]);
+  await host.emit({ type: "workspaceChanged", workspace });
+
+  assert.equal(host.windowTargets().length, 2);
+  assert.deepEqual(host.replaced()[0]?.release, []);
+  assert.equal(host.document(draft).text, "mine");
+  assert.equal(session("b")?.state, "active");
+  assert.equal(registry().projects.length, 1);
+});
+
+test("a window already bound, or a project with an unreadable session, is not restored", async () => {
+  suspendedBeta();
+  host.setRecord("session:b", { schema: 99 });
+  const window = host.openWindow();
+  await startLaunched();
+  const workspace = host.setRoots(window, [BETA]);
+  await host.emit({ type: "workspaceChanged", workspace });
+  assert.deepEqual(host.replaced(), []);
+  assert.equal(registry().projects.length, 1);
+  assert.deepEqual(session("b"), { schema: 99 });
 });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { documents, windows } from "knot";
 import * as host from "knot/testing";
+import { ALPHA } from "./support.js";
 import {
   describeWindow,
   documentsById,
@@ -55,12 +56,13 @@ test("a rootless window with at most one clean, empty untitled document is reusa
   const empty = host.openWindow({ documents: [host.addDocument()] });
   const blank = host.openWindow();
   const draft = host.openWindow({ documents: [host.addDocument({ text: "x" })] });
-  const rooted = host.openWindow({ roots: ["file:///r/"] });
+  const rooted = host.openWindow({ roots: [ALPHA] });
   const byId = documentsById(await documents.list());
   const reusable = async (target: typeof empty) =>
-    isReusable((await windows.get(target))!, byId);
+    isReusable((await windows.get(target))!, byId, []);
   assert.equal(await reusable(empty), true);
   assert.equal(await reusable(blank), true);
   assert.equal(await reusable(draft), false);
   assert.equal(await reusable(rooted), false);
+  assert.equal(await isReusable((await windows.get(rooted))!, byId, [ALPHA]), true);
 });

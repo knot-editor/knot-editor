@@ -78,7 +78,8 @@ test("root edits in a bound window move the project and its other windows", asyn
   seedProject("b", "Beta", [BETA]);
   seedSession("a", "active");
   const edited = host.openWindow({ roots: [ALPHA] });
-  const follower = host.openWindow({ roots: [ALPHA] });
+  // Its draft keeps it from being replaced when it later shows Beta's folder.
+  const follower = host.openWindow({ roots: [ALPHA], documents: [host.addDocument({ text: "draft" })] });
   await startLaunched();
 
   const extra = "file:///src/extra/";

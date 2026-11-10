@@ -27,6 +27,8 @@ export type ProjectsState = {
   unreadable: Set<string>;
   /** Project ID per bound window. */
   bindings: Map<WindowTarget, string>;
+  /** Unbound windows already offered a restore, so a failed one is not retried. */
+  restoreTried: Set<WindowTarget>;
   /** Whether startup windows are committed; tracking waits for them. */
   launched: boolean;
   /** Membership-relevant metadata per document; revision-only changes are ignored. */
@@ -41,6 +43,7 @@ export function createState(): ProjectsState {
     sessions: new Map(),
     unreadable: new Set(),
     bindings: new Map(),
+    restoreTried: new Set(),
     launched: false,
     tracked: new Map(),
   };

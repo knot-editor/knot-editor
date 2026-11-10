@@ -7,6 +7,7 @@ import type { ApplicationEvent, CaptureId, DocumentId, DocumentInfo, WindowInfo 
 import { syncBindings } from "./bindings.js";
 import { describeWindow, documentsById, windowRoots } from "./layout.js";
 import { newProjectId, projectWithRoots, withProject, type Project } from "./registry.js";
+import { switchTo } from "./switch.js";
 import { prune } from "./prune.js";
 import { describe } from "./report.js";
 import {
@@ -71,13 +72,30 @@ async function rememberUnbound(state: ProjectsState, list: readonly WindowInfo[]
   await syncBindings(state, list);
 }
 
+/**
+ * Restores a suspended project in each unbound window showing exactly its
+ * roots. The switch replaces the window when it holds nothing beyond an empty
+ * document and otherwise opens the project in a new window.
+ */
+async function restoreUnbound(state: ProjectsState, list: readonly WindowInfo[]) {
+  for (const window of list) {
+    if (state.bindings.has(window.target) || state.restoreTried.has(window.target)) continue;
+    const project = projectWithRoots(state.registry, windowRoots(window));
+    if (project === null || isActive(state, project) || state.unreadable.has(project.id)) continue;
+    state.restoreTried.add(window.target);
+    await switchTo(state, project, window.target);
+  }
+}
+
 /** Live tracking: rewrite active records that changed. Suspended records are never written. */
 async function track(state: ProjectsState) {
   if (!state.launched) return;
   try {
+    await syncBindings(state, await windows.list());
+    await restoreUnbound(state, await windows.list());
+    await rememberUnbound(state, await windows.list());
     const [list, docs] = await Promise.all([windows.list(), documents.list()]);
     await syncBindings(state, list);
-    await rememberUnbound(state, list);
     const byId = documentsById(docs);
     for (const project of state.registry.projects.filter((project) => isActive(state, project))) {
       await trackProject(state, project, list, byId);
@@ -125,6 +143,7 @@ export async function afterLaunch(state: ProjectsState) {
   state.launched = true;
   try {
     await suspendUnbound(state);
+    await restoreUnbound(state, await windows.list());
     await rememberUnbound(state, await windows.list());
     await track(state);
     await reconcileCaptures(state);

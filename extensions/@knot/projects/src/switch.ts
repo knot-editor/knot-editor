@@ -67,7 +67,7 @@ export async function switchTo(state: ProjectsState, project: Project, origin: W
     let sources: WindowInfo[] = [];
     if (source !== null && originWindow !== null && sameRoots(windowRoots(originWindow), source.roots)) {
       sources = [originWindow, ...boundWindows(state, source, list).filter((window) => window !== originWindow)];
-    } else if (originWindow !== null && (await isReusable(originWindow, byId))) {
+    } else if (originWindow !== null && (await isReusable(originWindow, byId, project.roots))) {
       sources = [originWindow];
     }
     const presented = presentedDocuments(sources);

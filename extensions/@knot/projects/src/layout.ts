@@ -2,6 +2,7 @@
 // references only; dirty and untitled documents also record their identity.
 import { workbench } from "knot";
 import type { CaptureId, DocumentId, DocumentInfo, WindowInfo } from "knot";
+import { sameRoots } from "./registry.js";
 import type { Entry, SessionWindow } from "./session.js";
 
 export function windowRoots(window: WindowInfo): string[] {
@@ -104,11 +105,16 @@ export async function describeWindow(
 }
 
 /**
- * A window that can host another project: no root and no documents beyond
- * one clean, empty untitled document.
+ * A window that can host a project: no root, or exactly the project's roots,
+ * and no documents beyond one clean, empty untitled document.
  */
-export async function isReusable(window: WindowInfo, byId: Map<DocumentId, DocumentInfo>) {
-  if (window.workspace.roots.length > 0) return false;
+export async function isReusable(
+  window: WindowInfo,
+  byId: Map<DocumentId, DocumentInfo>,
+  roots: readonly string[],
+) {
+  const own = windowRoots(window);
+  if (own.length > 0 && !sameRoots(own, roots)) return false;
   const [first, ...rest] = presentedDocuments([window]);
   if (first === undefined) return true;
   const document = rest.length === 0 ? byId.get(first) : undefined;
