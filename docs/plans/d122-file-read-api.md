@@ -1,6 +1,6 @@
 # D122 — Extension file read, list, and stat API
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 in progress (checkpoint 1 done). Item of the
 [daily-driver plan](daily-driver.md#phase-4--files-and-workspace).
 
 ## Goal
@@ -67,7 +67,7 @@ None.
 
 ## Checkpoints
 
-### 1. Listings skip entries they cannot represent
+### 1. ✅ Listings skip entries they cannot represent
 
 - `LocalFileSystemProvider::enumerate` skips broken symlinks, special files,
   and non-UTF-8 names instead of rejecting the directory; other I/O errors
@@ -82,6 +82,7 @@ None.
   workspace tree reaches the same path through `enumerate_directory` in
   `crates/knot-model/src/open.rs`.
 - Review gate: none beyond `just check`; continue to checkpoint 2.
+- ✅ Done: the test uses a Unix socket for the special file.
 
 ### 2. The `files` namespace end to end
 

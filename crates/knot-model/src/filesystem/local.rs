@@ -157,28 +157,26 @@ impl FileSystemProvider for LocalFileSystemProvider {
             for entry in directory {
                 let entry =
                     entry.map_err(|error| ResourceError::io("enumerate directory", error))?;
-                let name =
-                    entry
-                        .file_name()
-                        .into_string()
-                        .map_err(|name| ResourceError::InvalidUri {
-                            uri: entry.path().display().to_string(),
-                            reason: format!("resource name is not UTF-8: {name:?}"),
-                        })?;
+                // A listing skips what it cannot represent: names that are not
+                // UTF-8, broken symlinks, and special files.
+                let Ok(name) = entry.file_name().into_string() else {
+                    continue;
+                };
                 let child_uri = match &root {
                     Some(root) => path_to_uri(root, &entry.path())?,
                     None => path_to_unrestricted_uri(&entry.path())?,
                 };
-                let child_metadata = metadata(&entry.path(), &child_uri, "stat child")?;
+                let child_metadata = match std::fs::metadata(entry.path()) {
+                    Ok(metadata) => metadata,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(error) => return Err(map_io("stat child", &child_uri, error)),
+                };
                 let kind = if child_metadata.is_dir() {
                     ResourceKind::Directory
                 } else if child_metadata.is_file() {
                     ResourceKind::File
                 } else {
-                    return Err(ResourceError::Io {
-                        operation: "stat child",
-                        message: format!("unsupported resource kind at {child_uri}"),
-                    });
+                    continue;
                 };
                 entries.push(ResourceEntry {
                     uri: child_uri,
@@ -542,6 +540,34 @@ mod tests {
             run(provider.stat(ResourceUri::parse("file:///definitely/outside").unwrap())),
             Err(ResourceError::OutsideWorkspace { .. })
         ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn enumerate_skips_entries_a_listing_cannot_represent() {
+        use std::os::unix::{ffi::OsStrExt, fs::symlink, net::UnixListener};
+
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path();
+        fs::write(root.join("kept.txt"), b"kept").unwrap();
+        fs::create_dir(root.join("folder")).unwrap();
+        symlink(root.join("missing"), root.join("dangling")).unwrap();
+        let _socket = UnixListener::bind(root.join("socket")).unwrap();
+        // Some file systems (APFS) reject non-UTF-8 names.
+        let _ = fs::write(
+            root.join(std::ffi::OsStr::from_bytes(b"bad-\xff-name")),
+            b"x",
+        );
+        let provider = LocalFileSystemProvider::new(root).unwrap();
+
+        let mut names = run(provider.enumerate(provider.root().clone()))
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        names.sort();
+
+        assert_eq!(names, ["folder", "kept.txt"]);
     }
 
     #[cfg(unix)]
