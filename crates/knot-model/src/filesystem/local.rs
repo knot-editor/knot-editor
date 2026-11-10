@@ -8,7 +8,8 @@ use url::Url;
 
 use super::{
     FileSystemProvider, ProviderFuture, ResourceEntry, ResourceError, ResourceFile, ResourceKind,
-    ResourceStat, ResourceVersion, WatchEvent, WatchGuard, WatchSink, validate_and_normalize_uri,
+    ResourceStat, ResourceVersion, WatchEvent, WatchGuard, WatchSink, child_uri,
+    validate_and_normalize_uri,
 };
 use crate::resource::ResourceUri;
 
@@ -81,7 +82,7 @@ impl LocalFileSystemProvider {
 
     #[cfg(test)]
     fn path_to_uri(&self, path: &Path) -> Result<ResourceUri, ResourceError> {
-        path_to_uri(self.root(), path)
+        self.normalize_scoped(path_to_unrestricted_uri(path)?)
     }
 
     fn spawn<T: Send + 'static>(
@@ -141,21 +142,6 @@ fn io_pool() -> &'static IoPool {
     })
 }
 
-fn path_to_uri(root: &ResourceUri, path: &Path) -> Result<ResourceUri, ResourceError> {
-    let url = Url::from_file_path(path).map_err(|_| ResourceError::InvalidUri {
-        uri: path.display().to_string(),
-        reason: "platform path cannot be represented as a file URI".into(),
-    })?;
-    let uri = normalize_file_uri(ResourceUri::from_url(url))?;
-    if !uri.is_within(root) {
-        return Err(ResourceError::OutsideWorkspace {
-            uri,
-            root: Box::new(root.clone()),
-        });
-    }
-    Ok(uri)
-}
-
 fn path_to_unrestricted_uri(path: &Path) -> Result<ResourceUri, ResourceError> {
     let url = Url::from_file_path(path).map_err(|_| ResourceError::InvalidUri {
         uri: path.display().to_string(),
@@ -178,31 +164,34 @@ impl FileSystemProvider for LocalFileSystemProvider {
             Ok(path) => path,
             Err(error) => return Box::pin(async move { Err(error) }),
         };
-        let root = self.root.clone();
         self.spawn("enumerate task", move || {
-            let directory_metadata = metadata(&path, &uri, "stat directory")?;
-            if !directory_metadata.is_dir() {
-                return Err(ResourceError::WrongKind {
-                    uri,
-                    expected: ResourceKind::Directory,
-                    actual: ResourceKind::File,
-                });
-            }
-            let directory = std::fs::read_dir(&path)
-                .map_err(|error| map_io("enumerate directory", &uri, error))?;
+            let directory = std::fs::read_dir(&path).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotADirectory {
+                    ResourceError::WrongKind {
+                        uri: uri.clone(),
+                        expected: ResourceKind::Directory,
+                        actual: ResourceKind::File,
+                    }
+                } else {
+                    map_io("enumerate directory", &uri, error)
+                }
+            })?;
             let mut entries = Vec::new();
             for entry in directory {
                 let entry =
                     entry.map_err(|error| ResourceError::io("enumerate directory", error))?;
                 // A listing skips what it cannot represent: names that are not
-                // UTF-8, broken symlinks, and special files.
+                // UTF-8 or that a URI path segment cannot hold, broken
+                // symlinks, and special files.
                 let Ok(name) = entry.file_name().into_string() else {
                     continue;
                 };
-                let child_uri = match &root {
-                    Some(root) => path_to_uri(root, &entry.path())?,
-                    None => path_to_unrestricted_uri(&entry.path())?,
-                };
+                if name.contains('\\') {
+                    continue;
+                }
+                // A child of a normalized, in-scope directory is normalized
+                // and in scope.
+                let child_uri = child_uri(&uri, &name);
                 let file_type = entry
                     .file_type()
                     .map_err(|error| map_io("stat child", &child_uri, error))?;

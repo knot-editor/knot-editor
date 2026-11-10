@@ -1,6 +1,6 @@
 # D172 — Faster file walks
 
-Status: 🚧 in progress — checkpoint 2 done, checkpoint 3 next. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
+Status: 🚧 in progress — checkpoint 3 awaiting review. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
 Precedes [D173](daily-driver.md) (workspace file index), whose first scan and
 reclassification reuse this classifier.
 
@@ -98,24 +98,29 @@ repositories, sibling repositories, and nested ones.
 
 - Warm walk of the kernel clone: about 0.62 s, down from 1.14 s.
 
-### 3. Cheaper local enumeration
+### 3. Cheaper local enumeration ✅ (awaiting review)
 
 - Deliverables:
-  - Child URIs are derived from the normalized parent URI in
-    `LocalFileSystemProvider::enumerate`.
-  - The walk enumerates subdirectories without the extra
-    `enumerate_directory` stat (the first directory is still checked so a
-    file or missing root reports its error).
-- Validation: local provider tests (including
-  `enumerate_skips_entries_a_listing_cannot_represent` and the scoped-root
-  tests), the equivalence test, and the benchmark meeting the ≤ 0.4 s
-  target. If it doesn't, profile and record findings here before going on.
+  - ✅ `LocalFileSystemProvider::enumerate` appends each name to the
+    normalized parent URI through the shared `filesystem::child_uri`, which
+    the memory provider and the classifier also use. A listing now skips
+    names containing `\`, which a URI path segment cannot hold. Before, such
+    a name failed the whole listing.
+  - ✅ `enumerate` reads the directory without a prior stat, and reports a
+    file as `WrongKind` from the `read_dir` error.
+  - ✅ The walk calls the provider's `enumerate` for every directory, without
+    `enumerate_directory`'s normalize and stat. `enumerate` reports a file
+    or missing root itself, and the walk returns the first directory's
+    error. That replaces the separate root check the plan called for.
+- Validation: ✅ knot-model tests, including the equivalence test and the
+  shared provider contract, which now also checks `enumerate` on a missing
+  directory. A new test checks that a walk from a file or missing root
+  reports its error.
 - Review gate: final numbers against the target.
-- **Implementation context:** `crates/knot-model/src/filesystem/local.rs`
-  (`enumerate`, `path_to_uri`, `path_to_unrestricted_uri`,
-  `normalize_file_uri`) and `crates/knot-model/src/open.rs`
-  (`enumerate_directory`). A child of a normalized, in-scope directory is in
-  scope, so the per-child scope check can go.
+  - Fresh shallow kernel clone (97,336 files, same machine, release build,
+    8 runs): warm walk about 0.26 s (first run 0.36 s), against about 0.63 s
+    at checkpoint 2 measured in the same session. This meets the ≤ 0.4 s
+    target.
 
 ### 4. Documentation
 

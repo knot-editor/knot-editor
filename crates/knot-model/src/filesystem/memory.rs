@@ -237,7 +237,7 @@ impl FileSystemProvider for MemoryFileSystemProvider {
                 .iter()
                 .map(|(name, node)| {
                     Ok(ResourceEntry {
-                        uri: child_uri(&uri, name)?,
+                        uri: child_uri(&uri, name),
                         name: name.clone(),
                         kind: node.kind(),
                         symlink: false,

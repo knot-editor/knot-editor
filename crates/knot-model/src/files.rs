@@ -17,7 +17,8 @@ use futures::{StreamExt, stream::FuturesUnordered};
 
 use crate::{
     filesystem::{
-        FileSystemProviderRegistry, ResourceEntry, ResourceError, ResourceKind, ResourceStat,
+        FileSystemProvider, FileSystemProviderRegistry, ResourceEntry, ResourceError, ResourceKind,
+        ResourceStat,
     },
     open::{OpenResourceError, enumerate_directory},
     resource::ResourceUri,
@@ -111,13 +112,13 @@ struct Visited {
 /// parent's scope and the directory's name, or `None` when the scope is
 /// already the directory's own.
 async fn visit(
-    providers: Arc<FileSystemProviderRegistry>,
+    provider: Arc<dyn FileSystemProvider>,
     classifier: Arc<Classifier>,
     uri: ResourceUri,
     scope: Arc<Scope>,
     name: Option<String>,
 ) -> Result<Visited, ResourceError> {
-    let entries = enumerate_directory(providers, uri.clone()).await?;
+    let entries = provider.enumerate(uri.clone()).await?;
     let scope = match name {
         Some(name) => Arc::new(classifier.descend(&scope, &name, &uri, &entries).await),
         None => scope,
@@ -152,7 +153,8 @@ pub async fn walk(
     policy: &IgnorePolicy,
 ) -> Result<Vec<ResourceEntry>, ResourceError> {
     let uri = providers.normalize(parse(uri)?).await?;
-    let classifier = Arc::new(Classifier::new(providers.provider(&uri)?, &uri, policy));
+    let provider = providers.provider(&uri)?;
+    let classifier = Arc::new(Classifier::new(provider.clone(), &uri, policy));
     let (scope, visibility) = classifier.resolve(&uri).await;
     if visibility != Visibility::Visible {
         return Ok(Vec::new());
@@ -160,13 +162,7 @@ pub async fn walk(
     // Directories are read and classified concurrently, because each read is a
     // provider round trip.
     let visit = |directory: ResourceUri, scope: Arc<Scope>, name: Option<String>| {
-        visit(
-            providers.clone(),
-            classifier.clone(),
-            directory,
-            scope,
-            name,
-        )
+        visit(provider.clone(), classifier.clone(), directory, scope, name)
     };
     let mut files = Vec::new();
     let mut pending = FuturesUnordered::new();
@@ -347,6 +343,20 @@ mod tests {
         assert!(matches!(
             run(list(providers, "nonsense", &IgnorePolicy::default())),
             Err(ResourceError::InvalidUri { .. })
+        ));
+    }
+
+    #[test]
+    fn walk_reports_a_root_that_is_not_a_directory() {
+        let providers = fixture();
+        let policy = IgnorePolicy::default();
+        assert!(matches!(
+            run(walk(providers.clone(), "mem://f/notes.txt", &policy)),
+            Err(ResourceError::WrongKind { .. })
+        ));
+        assert!(matches!(
+            run(walk(providers, "mem://f/missing", &policy)),
+            Err(ResourceError::NotFound { .. })
         ));
     }
 

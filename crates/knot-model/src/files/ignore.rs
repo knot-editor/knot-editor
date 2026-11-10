@@ -15,7 +15,7 @@ use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use url::Url;
 
 use crate::{
-    filesystem::{FileSystemProvider, ResourceEntry, ResourceStat},
+    filesystem::{FileSystemProvider, ResourceEntry, ResourceStat, child_uri},
     resource::ResourceUri,
 };
 
@@ -163,15 +163,6 @@ pub(super) struct Scope {
     repository: bool,
 }
 
-/// `uri` with the path segment `name` appended.
-fn child(uri: &ResourceUri, name: &str) -> ResourceUri {
-    let mut url = uri.as_url().clone();
-    if let Ok(mut path) = url.path_segments_mut() {
-        path.pop_if_empty().push(name);
-    }
-    ResourceUri::from_url(url)
-}
-
 /// Classifies entries against a policy. The policy-wide state is shared by
 /// every directory; a [`Scope`] holds the rules of one.
 pub(super) struct Classifier {
@@ -245,19 +236,21 @@ impl Classifier {
         }
         let rules = |text: String| Some(Arc::new(build(&scope.directory, text.lines())));
         if files.git {
-            let exclude = child(&child(&child(uri, ".git"), "info"), "exclude");
+            let exclude = child_uri(&child_uri(&child_uri(uri, ".git"), "info"), "exclude");
             let exclude = self.read(exclude).await.and_then(rules);
             scope.repository = true;
             scope.gitignores.clear();
             scope.exclude = exclude.filter(|rules| !rules.is_empty());
         }
         let ignore = if files.ignore {
-            self.read(child(uri, ".ignore")).await.and_then(rules)
+            self.read(child_uri(uri, ".ignore")).await.and_then(rules)
         } else {
             None
         };
         let gitignore = if files.gitignore && scope.repository {
-            self.read(child(uri, ".gitignore")).await.and_then(rules)
+            self.read(child_uri(uri, ".gitignore"))
+                .await
+                .and_then(rules)
         } else {
             None
         };
@@ -319,7 +312,7 @@ impl Classifier {
                     visibility = visibility.max(self.entry(&scope, &names[depth], true));
                 }
                 path.push(&names[depth]);
-                uri = child(&uri, &names[depth]);
+                uri = child_uri(&uri, &names[depth]);
             }
         }
         (scope, visibility)

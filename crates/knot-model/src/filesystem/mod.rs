@@ -310,20 +310,14 @@ fn validate_and_normalize_uri(
     Ok(ResourceUri::from_url(normalized))
 }
 
-#[cfg(any(test, feature = "test-support"))]
-fn child_uri(parent: &ResourceUri, name: &str) -> Result<ResourceUri, ResourceError> {
+/// `parent` with the path segment `name` appended.
+pub(crate) fn child_uri(parent: &ResourceUri, name: &str) -> ResourceUri {
     let mut url = parent.as_url().clone();
-    {
-        let mut segments = url
-            .path_segments_mut()
-            .map_err(|_| ResourceError::InvalidUri {
-                uri: parent.to_string(),
-                reason: "URI cannot contain hierarchical path segments".into(),
-            })?;
-        segments.pop_if_empty();
-        segments.push(name);
-    }
-    Ok(ResourceUri::from_url(url))
+    url.path_segments_mut()
+        .expect("ResourceUri rejects non-hierarchical URIs")
+        .pop_if_empty()
+        .push(name);
+    ResourceUri::from_url(url)
 }
 
 #[cfg(test)]
@@ -440,7 +434,7 @@ mod tests {
                 symlink: false,
             }]
         );
-        let created = child_uri(&directory, "created.txt").unwrap();
+        let created = child_uri(&directory, "created.txt");
         run(provider.create(created.clone(), b"created".to_vec())).unwrap();
         assert_eq!(
             run(provider.read(created.clone())).unwrap().bytes,
@@ -457,6 +451,10 @@ mod tests {
                 actual: ResourceKind::File,
                 ..
             })
+        ));
+        assert!(matches!(
+            run(provider.enumerate(missing.clone())),
+            Err(ResourceError::NotFound { uri }) if uri == missing
         ));
         assert!(matches!(
             run(provider.read(directory)),
@@ -498,9 +496,9 @@ mod tests {
         fs::write(temporary.path().join("directory/file.txt"), b"before").unwrap();
         let provider = LocalFileSystemProvider::new(temporary.path()).unwrap();
         let root = provider.root().clone();
-        let directory = child_uri(&root, "directory").unwrap();
-        let file = child_uri(&directory, "file.txt").unwrap();
-        let missing = child_uri(&directory, "missing.txt").unwrap();
+        let directory = child_uri(&root, "directory");
+        let file = child_uri(&directory, "file.txt");
+        let missing = child_uri(&directory, "missing.txt");
 
         assert_provider_contract(&provider, root, directory, file, missing);
     }
@@ -542,7 +540,7 @@ mod tests {
             ResourceUri::parse(&format!("{}/%64irectory/%66ile%2Etxt", local.root())).unwrap();
         assert_eq!(
             run(local.normalize(encoded)).unwrap(),
-            child_uri(&child_uri(local.root(), "directory").unwrap(), "file.txt").unwrap()
+            child_uri(&child_uri(local.root(), "directory"), "file.txt")
         );
     }
 }
