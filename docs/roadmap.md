@@ -298,6 +298,19 @@ complete list for that item.
     read beside `readText`.
   - Order: independent.
 
+- **D172 — Faster file walks**
+  - Deferred: `files.walk` classifies every entry on one task through the
+    provider abstraction. A Linux kernel checkout (97,336 files) takes about
+    1.1 s, of which about 0.4 s is enumeration, against 0.15 s for
+    `rg --files`. That is acceptable for a one-shot Go to File index.
+  - Reconsider: Go to File (D082) or search feels slow on real repositories, or
+    the walk is needed incrementally. Then make classification cheaper (no
+    per-entry segment and path allocations, one match per directory's rules)
+    and consider a local-only fast path over `ignore::WalkBuilder::build_parallel`
+    built from the same `IgnorePolicy`, tested against the classifier on the
+    same trees, with streaming results if the first results are needed sooner.
+  - Order: after D081; informs D082.
+
 - **D011 — Remote filesystem providers**
   - Deferred: The URI boundary is validated with local and memory providers.
   - Reconsider: A specific remote workflow is selected.

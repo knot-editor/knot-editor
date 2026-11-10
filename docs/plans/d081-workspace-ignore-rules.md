@@ -109,8 +109,8 @@ was slower, 1.3 s). `rg --files` takes 0.15 s on the same tree. The remaining co
 per-entry classification on one task. Result for
 D082: a kernel-sized repository takes about a second to enumerate once, which is
 acceptable for a one-shot Go to File index; typical repositories are one to two
-orders of magnitude smaller. Streaming or a native local fast path is only worth
-it if D082 needs the first results sooner.
+orders of magnitude smaller. Cheaper classification, a native local fast path, and
+streaming are deferred as D172 in the [roadmap](../roadmap.md).
 
 ### 3. Vim `:e` path completion
 
