@@ -114,9 +114,11 @@ touches.
 - [Bundled Vim mode](decisions/bundled-packages.md#bundled-vim-mode): public
   APIs only, a JavaScript state machine over typed text.
 - [Bundled project registry](decisions/bundled-packages.md#bundled-project-registry):
-  `@knot/projects` owns records; native code owns workspaces and roots.
+  `@knot/projects` owns records; native code owns workspaces and roots; every
+  opened folder set is remembered.
 - [Project sessions](decisions/bundled-packages.md#project-sessions): active or
-  suspended; durable suspension before switching.
+  suspended; durable suspension before switching; hand-opened folders restore
+  through the switch.
 
 ## [Workbench and lifecycle](decisions/workbench-and-lifecycle.md)
 

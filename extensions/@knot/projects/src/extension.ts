@@ -9,12 +9,13 @@
 // Every folder set a window shows is remembered: a window without a project
 // for its roots creates an unnamed one, and the least recently opened
 // unnamed projects beyond `projects.rememberedLimit` are forgotten, except
-// active ones and ones holding unsaved text.
+// active ones and ones holding unsaved text. An unbound window showing a
+// suspended project's roots switches to that project.
 //
 // A project's session is active or suspended. A window binds to a project when
 // its roots equal the project's roots, in any order, and the session is active,
-// so a manually opened folder never binds a suspended project and its retained
-// captures stay safe. Root edits in a bound window move the project and its
+// so tracking never overwrites a suspended record and its retained captures
+// stay safe. Root edits in a bound window move the project and its
 // other windows to the new roots, while clearing the roots or choosing another
 // project's roots unbinds the window. Each session window stores its captured
 // layout, so switching back and restarting restore splits, docks, and view

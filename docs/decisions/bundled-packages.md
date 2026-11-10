@@ -53,6 +53,14 @@ rather than a stored binding, which is rederived at activation, so a restart can
 never resurrect a stale association. No two projects share a root set, so the
 match is unambiguous, while one folder may belong to several projects.
 
+Every folder set a window shows is remembered automatically as an unnamed
+project, as in VS Code and Zed, because asking for a name made remembering opt-in
+and most folders were never remembered. Names are therefore optional labels that
+are not unique; the root set is the identity users can tell apart, so pickers
+show roots beside the name. Unnamed projects are bounded by count, oldest first,
+sparing named and active ones and ones holding retained text; an age limit was
+deferred until daily use asks for it.
+
 Projects follow root edits, so a project stays one root set across its windows
 without a separate Add Folder to Project command. Clearing the roots, or choosing
 another project's set, unbinds the window rather than merging projects.
@@ -64,8 +72,10 @@ References: [extension guide](../extension-api.md#project-sessions) and
 
 Each project's session is its own record, separate from the registry, so live
 tracking writes stay small. Requiring an active session for membership protects
-suspended text: opening a suspended project's folder by hand never binds the
-window, so tracking can never overwrite the record holding its captures. Losing
+suspended text: tracking never binds a window to a suspended project, so it can
+never overwrite the record holding its captures. Opening a suspended project's
+folder by hand instead restores the project through the switch, which already
+owns captures, rather than through a second restore path. Losing
 the last window by closure suspends without captures because closure already
 decided about dirty documents. A record with an unknown schema is preserved and
 blocks orphan reconciliation, because a newer version's record may reference any

@@ -381,11 +381,10 @@ to be rebuilt later:
     companion commands.
   - Remove the Projects tool registration and its tree code.
 
-- **D120 — Remembered projects** (depends on D070, D084)
+- ✅ **D120 — Remembered projects** (depends on D070, D084)
   - Every opened root set is remembered as a project with an inferred name,
     opening a suspended project's folder restores it, and Open Folder opens
     a new window unless the current one has no roots.
-  - 🚧 [Plan](d120-remembered-projects.md)
 
 - **D123 — Project inference extension** (depends on D122)
   - A bundled extension that finds the version-control root above an opened

@@ -1101,8 +1101,13 @@ captures you restored from can be released once your new record is durable.
 `@knot/projects` keeps one `session:<projectId>` record per project, separate
 from its registry record, with each window's entries and layout. A session is
 `active` while the project has windows; a window belongs to it when its roots
-equal the project's roots, in any order, and the session is active, so opening a
-suspended project's folders by hand never binds it. Adding or removing a folder
+equal the project's roots, in any order, and the session is active. A window
+showing a folder set no project has creates an unnamed project, named after its
+first root's folder until renamed; the `projects.rememberedLimit` setting bounds
+how many unnamed projects are kept, sparing named and active ones and ones
+holding unsaved text. Opening a suspended project's folder restores the
+project: an otherwise empty window is replaced by its windows, and a window
+with other content stays while the project opens in a new one. Adding or removing a folder
 in a bound window updates the project and its other windows; clearing the
 folders, or choosing another project's folders, takes the window out of the
 project. The Projects tool's New Window action (`projects.new-window`) opens
