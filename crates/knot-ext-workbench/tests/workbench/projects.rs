@@ -171,7 +171,7 @@ fn switching_to_a_project_with_a_missing_root_is_actionable_and_keeps_the_source
     // Frame actions are exposed beside the rows.
     assert_eq!(
         tree.frame_commands(cx),
-        ["projects.create", "projects.new-window", "projects.refresh"]
+        ["projects.create", "projects.new-window"]
     );
 
     // Arrow navigation follows the rendered rows.

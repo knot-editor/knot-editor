@@ -11,7 +11,6 @@ const ACTION_ICONS = {
   "action.remove": "trash",
   "action.new-project": "plus",
   "action.new-window": "app-window",
-  "action.refresh": "refresh-cw",
 } as const;
 
 /** The tree rows for one window: every project, marking the window's own. */
@@ -67,7 +66,6 @@ export async function registerTree(state: ProjectsState) {
     actions: [
       { label: "New Project", icon: "action.new-project", command: "projects.create" },
       { label: "New Window", icon: "action.new-window", command: "projects.new-window" },
-      { label: "Refresh", icon: "action.refresh", command: "projects.refresh" },
     ],
   });
 }
