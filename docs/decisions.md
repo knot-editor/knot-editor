@@ -153,8 +153,9 @@ touches.
 - [Extension file reads](decisions/documents-and-persistence.md#extension-file-reads):
   ungated, text-only `files` reads over any provider; no bytes or list options.
 - [Workspace ignore policy](decisions/documents-and-persistence.md#workspace-ignore-policy):
-  one native, setting-driven policy for hidden and ignored entries; a native
-  walk rather than `rg --files`; no rule registration.
+  one native, setting-driven policy for hidden and ignored entries; one
+  classifier for walks rather than `rg --files` or a `WalkBuilder` fast path;
+  no rule registration.
 - [File watching](decisions/documents-and-persistence.md#file-watching):
   watches requested by documents and extensions, not roots; version comparison
   rather than a save window; a line-diff reload; a prompt on focus.

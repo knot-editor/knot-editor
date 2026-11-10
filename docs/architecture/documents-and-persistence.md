@@ -75,7 +75,8 @@ Local filesystem I/O runs blocking `std::fs` calls on a small shared pool of
 worker threads, off the foreground.
 
 Enumeration skips entries a listing cannot represent: broken symlinks, special
-files, and names that are not UTF-8. Other I/O errors reject the directory.
+files, and names that are not UTF-8 or contain `\`. Other I/O errors reject the
+directory.
 
 Extensions read through `knot.files` (`readText`, `list`, `walk`, `isIgnored`, `stat`),
 which runs the `knot-model` file operations over the same unscoped providers off
@@ -90,9 +91,13 @@ Repository files follow ripgrep's semantics: `.ignore` files apply from any
 ancestor directory, `.gitignore` files, `.git/info/exclude`, and (for `file`
 URIs) the global excludes file only inside a Git repository, and a deeper file
 overrides a shallower one. Entries of an ignored or hidden directory are
-ignored. `walk` returns every file that is neither hidden nor ignored: it does
-not enter ignored or hidden directories or follow symlinked directories, skips
-unreadable subdirectories, and reads several directories at once.
+ignored. A directory whose entries include `.git` is a repository root, so a
+walk from above several repositories applies each one's ignore files and
+exclude file. `walk` returns every file that is neither hidden nor ignored: it
+does not enter ignored or hidden directories or follow symlinked directories,
+and skips unreadable subdirectories. It reads several directories at once, and
+each directory task builds that directory's rules from its parent's and its
+own ignore files, then classifies its entries.
 
 ### Watching
 

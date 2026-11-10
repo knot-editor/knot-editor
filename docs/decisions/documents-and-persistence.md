@@ -97,8 +97,14 @@ D085 gets by running `rg` with only `files.ignored` as globs.
 Evaluation is native so that watching, walking, and listing never call
 JavaScript. The walk is native rather than `rg --files` because the policy must
 also serve listings and watching, and one classifier keeps all three
-consistent; on a 97,336-file kernel checkout it takes about 1.1 s against
-0.15 s for `rg --files`, acceptable for a one-shot Go to File index. Settings
+consistent. A local fast path over `ignore::WalkBuilder::build_parallel` was
+rejected for the same reason: it cannot return ignored entries marked, so it
+could serve neither listings nor the workspace file index (D173), and it would
+be a second implementation to keep in agreement with the classifier.
+Classifying each directory where it is read, against its resolved rule stack,
+closes most of the gap: on a 97,336-file kernel checkout (release build, Apple
+Silicon, warm) the walk takes about 0.26 s against 0.11 s for `rg --files`,
+where one task classifying every entry took 1.14 s. Settings
 replace an extension-contributed rule registration, which waits for a real
 consumer, and no API exposes the effective rules, since `rg` reads repository
 ignore files itself. The policy is global and tied to the filesystem, not to
