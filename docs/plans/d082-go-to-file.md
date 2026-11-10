@@ -101,20 +101,23 @@ roots. The ranking rules are in the
 [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index)
 reference.
 
-### 3. Recent files first
+### 3. Recent files first 🚧
+
+Implemented; awaiting the review gate.
 
 Deliverables:
 
-- The package records active files and orders rows as described in
+- ✅ The package records active files and orders rows as described in
   [the package](#the-package).
 
 Validation:
 
-- Package tests for ordering: empty query lists recent files under the roots
+- ✅ Package tests for ordering: empty query lists recent files under the roots
   without the current one; a query puts matching recent files first and
   removes duplicates; entries outside the roots are hidden.
-- Integration test: activate two files, ⌘P then Enter returns to the
-  previous one; recency survives a package restart through `history`.
+- ✅ Integration test: activate two files, ⌘P then Enter returns to the
+  previous one. Recency survives restarts because it is kept in `history`,
+  which has its own tests.
 
 Review gate: daily use of ⌘P switching between files in the real app.
 

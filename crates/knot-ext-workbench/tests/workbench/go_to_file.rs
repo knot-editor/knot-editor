@@ -59,3 +59,31 @@ fn files_of_every_root_are_ranked_as_one_list(cx: &mut TestAppContext) {
         !window.transient_open(cx) && window.document_texts(cx) == ["struct Button;".to_owned()]
     });
 }
+
+#[gpui::test]
+fn the_key_then_enter_returns_to_the_previous_file(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("first.rs"), "first").unwrap();
+    std::fs::write(directory.path().join("second.rs"), "second").unwrap();
+
+    let product = TestProduct::launch(PACKAGES, cx);
+    let window = product.active_window(cx);
+    window.set_roots(&[&file_uri(directory.path())], cx);
+    window.open_path(&directory.path().join("first.rs"), cx);
+    window.open_path(&directory.path().join("second.rs"), cx);
+
+    window.press(KEY, cx);
+    wait_until(cx, |cx| window.transient_open(cx));
+    // The current file is left out, so the first row is the previous one.
+    wait_until(cx, |cx| {
+        window.picker_labels(cx).first().map(String::as_str) == Some("first.rs")
+    });
+    window.press("enter", cx);
+    wait_until(cx, |cx| !window.transient_open(cx));
+
+    // First is now current, so the list leads with second.
+    window.press(KEY, cx);
+    wait_until(cx, |cx| {
+        window.picker_labels(cx).first().map(String::as_str) == Some("second.rs")
+    });
+}
