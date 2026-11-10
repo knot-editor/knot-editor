@@ -907,3 +907,10 @@ Kakoune mode could use it too. The
   - Reconsider: Accessibility becomes a product priority, or a user needs a
     screen reader; then give each native surface its roles and the editor
     its text and caret, starting from the semantic tree state.
+
+- **D175 — Type-ahead after a held Enter**
+  - Deferred: Enter on a query-driven picker whose rows are not yet current
+    waits for them, and keys typed meanwhile are swallowed.
+  - Reconsider: Dropped keys are noticed in daily use, or another command
+    opens something after a picker. Then hold those keys and replay them
+    through key routing once the opened view has focus.

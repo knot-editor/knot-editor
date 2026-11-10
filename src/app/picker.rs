@@ -90,6 +90,11 @@ pub(crate) struct Picker {
     /// Whether the owner supplies the rows for each query, shown as given,
     /// instead of the picker matching its entries.
     supplied: bool,
+    /// The query the supplied rows answer; `None` before the first answer.
+    answered: Option<String>,
+    /// Enter was pressed on rows that did not answer the field. The field is
+    /// frozen and the highlighted row is confirmed once they do.
+    confirm_pending: bool,
     _input_subscription: Subscription,
 }
 
@@ -144,6 +149,8 @@ impl Picker {
             matcher: Matcher::new(),
             key_context,
             supplied,
+            answered: None,
+            confirm_pending: false,
             _input_subscription: subscription,
         };
         this.refilter("", cx);
@@ -222,11 +229,15 @@ impl Picker {
             })
             .collect();
         self.entries = entries;
+        self.answered = Some(query.to_owned());
         self.selected = 0;
         self.scroll.scroll_to_item(0, ScrollStrategy::Top);
         self.highlighted = self.selected_entry();
         cx.emit(PickerEvent::Highlighted(self.highlighted));
         cx.notify();
+        if std::mem::take(&mut self.confirm_pending) {
+            self.confirm(cx);
+        }
     }
 
     fn refilter(&mut self, query: &str, cx: &App) {
@@ -296,6 +307,10 @@ impl Picker {
     }
 
     pub(crate) fn confirm(&mut self, cx: &mut Context<Self>) {
+        if self.supplied && self.answered.as_deref() != Some(self.query(cx).as_str()) {
+            self.confirm_pending = true;
+            return;
+        }
         if let Some(entry) = self.selected_entry() {
             cx.emit(PickerEvent::Confirmed(entry));
         }
@@ -304,6 +319,12 @@ impl Picker {
     /// Handle a key the keymap left unclaimed, the query field first; false
     /// when the picker ignores it.
     pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        if self.confirm_pending {
+            if keystroke.key.eq_ignore_ascii_case("escape") {
+                cx.emit(PickerEvent::Dismissed);
+            }
+            return true;
+        }
         if self
             .input
             .update(cx, |input, cx| input.key_down(keystroke, cx))
@@ -324,6 +345,9 @@ impl Picker {
 
     /// Type `text` into the query.
     pub(crate) fn insert_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        if self.confirm_pending {
+            return;
+        }
         self.input
             .update(cx, |input, cx| input.insert_text(None, text, cx));
     }
@@ -719,6 +743,41 @@ mod tests {
             picker.read_with(cx, |picker, _| picker.entry(1).id.clone()),
             Some("omega".into())
         );
+    }
+
+    #[gpui::test]
+    fn enter_on_rows_for_older_text_waits_for_the_answer(cx: &mut TestAppContext) {
+        let picker = cx.new(|cx| Picker::supplied(Some("Pick".into()), "picker", cx));
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let observed = events.clone();
+        let _subscription = cx.update(|cx| {
+            cx.subscribe(&picker, move |_, event, _| {
+                observed.borrow_mut().push(event.clone())
+            })
+        });
+        let row = |label: &str| PickerEntry {
+            id: Some(label.to_owned()),
+            ..PickerEntry::new(label)
+        };
+        picker.update(cx, |picker, cx| {
+            picker.supply("", vec![row("old")], cx);
+            picker.insert_text("ab", cx);
+            picker.confirm(cx);
+            // Typing after the held Enter does not reach the field.
+            picker.insert_text("zz", cx);
+            assert_eq!(picker.query(cx), "ab");
+        });
+        picker.update(cx, |picker, cx| {
+            // An answer to an older query does not release it.
+            picker.supply("", vec![row("stale")], cx);
+            picker.supply("ab", vec![row("new")], cx);
+        });
+        assert!(events.borrow().contains(&PickerEvent::Confirmed(0)));
+        assert_eq!(labels_of(&picker, cx), ["new"]);
+    }
+
+    fn labels_of(picker: &Entity<Picker>, cx: &mut TestAppContext) -> Vec<String> {
+        picker.read_with(cx, |picker, _| picker.visible_labels())
     }
 
     #[gpui::test]

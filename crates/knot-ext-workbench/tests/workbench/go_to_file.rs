@@ -27,8 +27,7 @@ fn the_key_lists_matching_files_and_enter_opens_the_highlighted_one(cx: &mut Tes
     window.press(KEY, cx);
     wait_until(cx, |cx| window.transient_open(cx));
     window.type_input("butt", cx);
-    // The rows answering the query arrive asynchronously.
-    wait_until(cx, |cx| window.picker_labels(cx) == ["button.rs"]);
+    // Enter right after typing waits for the rows answering the query.
     window.press("enter", cx);
     wait_until(cx, |cx| {
         !window.transient_open(cx) && window.document_texts(cx) == ["struct Button;".to_owned()]

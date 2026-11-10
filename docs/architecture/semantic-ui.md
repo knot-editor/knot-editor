@@ -417,7 +417,9 @@ With `onQuery` the picker is created without rows and does no matching: each
 pull of a query is answered by the rows the next pull carries, which the
 picker shows in the order given with the supplied ranges, and a query is
 answered before the highlight it replaces. Rows apply only while the field
-still holds the query last delivered; otherwise they are dropped.
+still holds the query last delivered; otherwise they are dropped. Enter on
+rows that do not answer the field waits for the rows that do, freezing the
+field meanwhile, and then confirms the highlighted row.
 
 The matcher serves every list that filters by a typed query. Its styles
 (`prefix`, `substring`, `flex`, `orderless`) are the user's ordered
