@@ -309,7 +309,8 @@ complete list for that item.
     and consider a local-only fast path over `ignore::WalkBuilder::build_parallel`
     built from the same `IgnorePolicy`, tested against the classifier on the
     same trees, with streaming results if the first results are needed sooner.
-  - Order: after D081; decided in D173, before D082.
+  - Order: after D081, before D173.
+  - 🚧 [Plan](plans/d172-faster-file-walks.md).
 
 - **D174 — Show Difference for files changed on disk**
   - Deferred: The Reload or Keep prompt for a document changed on disk (D008)
