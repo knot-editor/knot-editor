@@ -66,36 +66,12 @@ builds its new, rename, and delete actions on this API.
 
 ## ✅ Checkpoint 1 — Providers
 
-Implemented: the trait methods, both providers, and the `knot_model::files`
-helpers (`create_file`, `create_directory`, `rename`, `delete`). Local trash
-tests move real entries to the OS trash. Awaiting review of the semantics and
-the `trash` dependency.
-
-Deliverables:
-
-- `create_directory`, `rename`, and `delete` (with a permanent flag) on the
-  trait, the memory provider, and the local provider, with the `trash`
-  dependency, missing-parent creation, and the error cases above.
-- Model-level helpers in `knot_model::files` beside `stat`, taking the
-  provider registry, so the shell calls them like `stat`.
-
-Validation: the shared provider contract test for both providers; local tests
-for trash and permanent delete (trash behind the platform where available),
-parents created, destination exists, rename into itself, symlinks (the link
-moves, not its target), and the directory `rename` of a tree.
-
-Review gate: provider semantics and the `trash` dependency are accepted before
-the API depends on them.
-
-**Implementation context.** Trait and errors in
-`crates/knot-model/src/filesystem/mod.rs` (add `ResourceError` variants only if
-the existing ones do not fit); local provider in
-`crates/knot-model/src/filesystem/local.rs` (mirror `create`/`atomic_create`,
-run on the shared `spawn` I/O pool, map errors with `map_io`); memory provider
-in `crates/knot-model/src/filesystem/memory.rs`; model helpers in
-`crates/knot-model/src/files.rs` next to `stat`; add the `trash` crate to
-`crates/knot-model/Cargo.toml`. The test provider in `mod.rs` tests implements
-the trait and must be updated.
+Approved. `FileSystemProvider` has `create_directory`, `rename`, and
+`delete(uri, permanent)`, implemented by the local and memory providers.
+`knot_model::files::{create_file, create_directory, rename, delete}` create
+missing parents, refuse to overwrite, reject moves into the source or across
+schemes, and return the normalized URIs. The local trash tests move real
+temporary files to the OS trash.
 
 ## Checkpoint 2 — Extension API
 
