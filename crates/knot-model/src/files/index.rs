@@ -29,9 +29,24 @@ use crate::{
 
 /// One indexed entry. `dir` is set for directories whose contents are indexed.
 struct Entry {
-    entry: ResourceEntry,
+    name: String,
+    kind: ResourceKind,
+    /// Whether the entry is a symbolic link; `kind` is then the target's.
+    symlink: bool,
     ignored: bool,
     dir: Option<Dir>,
+}
+
+impl Entry {
+    /// The entry as the provider reports it, inside the directory `parent`.
+    fn resource(&self, parent: &ResourceUri) -> ResourceEntry {
+        ResourceEntry {
+            uri: child_uri(parent, &self.name),
+            name: self.name.clone(),
+            kind: self.kind,
+            symlink: self.symlink,
+        }
+    }
 }
 
 /// An indexed directory: the rules of its entries and the entries.
@@ -48,7 +63,7 @@ struct Children(Vec<Entry>);
 impl Children {
     fn find(&self, name: &str) -> Result<usize, usize> {
         self.0
-            .binary_search_by(|entry| entry.entry.name.as_str().cmp(name))
+            .binary_search_by(|entry| entry.name.as_str().cmp(name))
     }
 
     fn get(&self, name: &str) -> Option<&Entry> {
@@ -61,7 +76,7 @@ impl Children {
 
     /// Adds `entry`, replacing the entry of the same name.
     fn insert(&mut self, entry: Entry) {
-        match self.find(&entry.entry.name) {
+        match self.find(&entry.name) {
             Ok(index) => self.0[index] = entry,
             Err(index) => self.0.insert(index, entry),
         }
@@ -96,11 +111,12 @@ impl Dir {
         Some(dir)
     }
 
-    fn collect_files(&self, files: &mut Vec<ResourceEntry>) {
+    /// The visible files below this directory, whose URI is `uri`.
+    fn collect_files(&self, uri: &ResourceUri, files: &mut Vec<ResourceEntry>) {
         for entry in self.children.iter().filter(|entry| !entry.ignored) {
-            match (&entry.dir, entry.entry.kind) {
-                (Some(dir), _) => dir.collect_files(files),
-                (None, ResourceKind::File) => files.push(entry.entry.clone()),
+            match (&entry.dir, entry.kind) {
+                (Some(dir), _) => dir.collect_files(&child_uri(uri, &entry.name), files),
+                (None, ResourceKind::File) => files.push(entry.resource(uri)),
                 (None, ResourceKind::Directory) => {}
             }
         }
@@ -154,11 +170,13 @@ fn classify(
         }
         children.push(Entry {
             ignored: visibility == Visibility::Ignored,
-            entry,
+            name: entry.name,
+            kind: entry.kind,
+            symlink: entry.symlink,
             dir: None,
         });
     }
-    children.sort_by(|a, b| a.entry.name.cmp(&b.entry.name));
+    children.sort_by(|a, b| a.name.cmp(&b.name));
     (Children(children), enter)
 }
 
@@ -180,8 +198,11 @@ async fn scan(
     let mut pending = FuturesUnordered::new();
     let read = |path: Vec<String>, root: &Dir| {
         let parent = root.at(&path[..path.len() - 1])?;
-        let entry = parent.children.get(path.last()?)?;
-        let (uri, scope) = (entry.entry.uri.clone(), parent.scope.clone());
+        parent.children.get(path.last()?)?;
+        let scope = parent.scope.clone();
+        let uri = path
+            .iter()
+            .fold(uri.clone(), |uri, name| child_uri(&uri, name));
         Some(async move {
             let name = path.last().cloned().unwrap_or_default();
             let listing = read_directory(provider, classifier, &uri, scope, Some(&name)).await;
@@ -344,13 +365,14 @@ impl FileIndex {
     /// them, or `None` when the directory is not indexed.
     pub async fn list(&self, uri: &ResourceUri, policy: &IgnorePolicy) -> Option<Vec<ListedEntry>> {
         let path = self.relative(uri)?;
+        let uri = self.uri_at(&path);
         self.query(policy, |_, root| {
             let dir = root.at(&path)?;
             Some(
                 dir.children
                     .iter()
                     .map(|entry| ListedEntry {
-                        entry: entry.entry.clone(),
+                        entry: entry.resource(&uri),
                         ignored: entry.ignored,
                     })
                     .collect(),
@@ -367,9 +389,10 @@ impl FileIndex {
         policy: &IgnorePolicy,
     ) -> Option<Vec<ResourceEntry>> {
         let path = self.relative(uri)?;
+        let uri = self.uri_at(&path);
         self.query(policy, |_, root| {
             let mut files = Vec::new();
-            root.at(&path)?.collect_files(&mut files);
+            root.at(&path)?.collect_files(&uri, &mut files);
             Some(files)
         })
         .await
@@ -456,17 +479,17 @@ impl FileIndex {
             let Some(parent) = tree.root.as_ref().and_then(|root| root.at(parents)) else {
                 return;
             };
-            let Some(entry) = parent
+            if !parent
                 .children
                 .get(name)
-                .filter(|entry| entry.dir.is_some())
-            else {
+                .is_some_and(|entry| entry.dir.is_some())
+            {
                 return;
-            };
+            }
             (
                 tree.classifier.clone(),
                 parent.scope.clone(),
-                entry.entry.uri.clone(),
+                self.uri_at(path),
                 state.generation,
             )
         };
@@ -498,7 +521,7 @@ impl FileIndex {
             let existing = dir
                 .children
                 .iter()
-                .map(|entry| (entry.entry.name.clone(), Summary::of(entry)))
+                .map(|entry| (entry.name.clone(), Summary::of(entry)))
                 .collect::<HashMap<_, _>>();
             (
                 tree.classifier.clone(),
@@ -508,7 +531,7 @@ impl FileIndex {
             )
         };
         let uri = self.uri_at(path);
-        let Ok(entries) = self.provider.enumerate(uri).await else {
+        let Ok(entries) = self.provider.enumerate(uri.clone()).await else {
             return false;
         };
         let (mut children, enter) = classify(&classifier, &scope, entries);
@@ -518,7 +541,7 @@ impl FileIndex {
             changes.push((name.clone(), None));
         }
         for mut entry in std::mem::take(&mut children.0) {
-            let name = entry.entry.name.clone();
+            let name = entry.name.clone();
             if existing.get(&name) == Some(&Summary::of(&entry)) {
                 continue;
             }
@@ -526,7 +549,7 @@ impl FileIndex {
                 entry.dir = scan(
                     &self.provider,
                     &classifier,
-                    &entry.entry.uri,
+                    &child_uri(&uri, &name),
                     scope.clone(),
                     Some(&name),
                 )
@@ -565,8 +588,8 @@ struct Summary {
 impl Summary {
     fn of(entry: &Entry) -> Self {
         Self {
-            kind: entry.entry.kind,
-            symlink: entry.entry.symlink,
+            kind: entry.kind,
+            symlink: entry.symlink,
             ignored: entry.ignored,
         }
     }

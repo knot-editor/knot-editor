@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoints 1 and 2 ✅ approved; checkpoints 1–3 ✅ approved; checkpoints 4–6 planned. Item of the
+Status: 🚧 checkpoints 1–3 ✅ approved; checkpoint 4 ✅ implemented, awaiting its review gate; checkpoints 5–6 planned. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -226,7 +226,16 @@ a synthetic 100,000-file tree (no kernel checkout was available): disk walk
 are in the [file index architecture](../architecture/documents-and-persistence.md#workspace-file-index)
 and its decision.
 
-### 4. Compact entries
+### 4. Compact entries ✅ implemented, awaiting its review gate
+
+Implemented in `files/index.rs`: `Entry` holds a name, kind, symlink flag,
+ignored flag, and scanned directory, and `list` and `walk` build each URI from
+the directory's. The provider's URIs are dropped after classifying. Measured on
+the synthetic 100,000-file tree (release build, warm): resident memory 42 MB →
+11 MB, index walk 6–8 ms → 14–16 ms, first scan unchanged (131–137 ms). The
+equivalence and focused tests pass unchanged.
+
+Details:
 
 Deliverables:
 
