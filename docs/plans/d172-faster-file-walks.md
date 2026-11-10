@@ -1,6 +1,6 @@
 # D172 — Faster file walks
 
-Status: 🚧 in progress — checkpoint 3 awaiting review. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
+Status: 🚧 in progress — checkpoint 3 done, checkpoint 4 next. Source: [roadmap D172](../roadmap.md#documents-storage-and-history).
 Precedes [D173](daily-driver.md) (workspace file index), whose first scan and
 reclassification reuse this classifier.
 
@@ -98,29 +98,17 @@ repositories, sibling repositories, and nested ones.
 
 - Warm walk of the kernel clone: about 0.62 s, down from 1.14 s.
 
-### 3. Cheaper local enumeration ✅ (awaiting review)
+### 3. Cheaper local enumeration ✅
 
-- Deliverables:
-  - ✅ `LocalFileSystemProvider::enumerate` appends each name to the
-    normalized parent URI through the shared `filesystem::child_uri`, which
-    the memory provider and the classifier also use. A listing now skips
-    names containing `\`, which a URI path segment cannot hold. Before, such
-    a name failed the whole listing.
-  - ✅ `enumerate` reads the directory without a prior stat, and reports a
-    file as `WrongKind` from the `read_dir` error.
-  - ✅ The walk calls the provider's `enumerate` for every directory, without
-    `enumerate_directory`'s normalize and stat. `enumerate` reports a file
-    or missing root itself, and the walk returns the first directory's
-    error. That replaces the separate root check the plan called for.
-- Validation: ✅ knot-model tests, including the equivalence test and the
-  shared provider contract, which now also checks `enumerate` on a missing
-  directory. A new test checks that a walk from a file or missing root
-  reports its error.
-- Review gate: final numbers against the target.
-  - Fresh shallow kernel clone (97,336 files, same machine, release build,
-    8 runs): warm walk about 0.26 s (first run 0.36 s), against about 0.63 s
-    at checkpoint 2 measured in the same session. This meets the ≤ 0.4 s
-    target.
+Approved. `LocalFileSystemProvider::enumerate` appends each name to the
+normalized parent URI through the shared `filesystem::child_uri`, and reads
+the directory without a prior stat. The walk calls the provider's `enumerate`
+for every directory; the root's `WrongKind` or `NotFound` comes from that
+first call. A listing skips names containing `\`, which a URI path segment
+cannot hold.
+
+- Warm walk of a fresh kernel clone (97,336 files): about 0.26 s, against
+  about 0.63 s at checkpoint 2 in the same session. Target met.
 
 ### 4. Documentation
 
