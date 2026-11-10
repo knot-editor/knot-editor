@@ -1,0 +1,436 @@
+use std::{
+    future::Future,
+    pin::pin,
+    task::{Context, Poll},
+};
+
+use super::*;
+use crate::{
+    files::{equivalence::Random, is_ignored, list, walk},
+    filesystem::{FileSystemProviderRegistry, MemoryFileSystemProvider},
+};
+
+fn run<T>(future: impl Future<Output = T>) -> T {
+    pollster::block_on(future)
+}
+
+fn uri(path: &str) -> ResourceUri {
+    ResourceUri::parse(&format!("mem://t/{path}")).unwrap()
+}
+
+struct Fixture {
+    memory: Arc<MemoryFileSystemProvider>,
+    providers: Arc<FileSystemProviderRegistry>,
+}
+
+impl Fixture {
+    fn new() -> Self {
+        let memory = Arc::new(MemoryFileSystemProvider::new(uri("")).unwrap());
+        let mut providers = FileSystemProviderRegistry::default();
+        providers.register("mem", memory.clone()).unwrap();
+        Self {
+            memory,
+            providers: Arc::new(providers),
+        }
+    }
+
+    fn file(&self, path: &str) {
+        let parent = path.rsplit_once('/').map_or("", |(parent, _)| parent);
+        self.memory.seed_directory(uri(parent)).unwrap();
+        self.memory.seed_file(uri(path), b"").unwrap();
+    }
+
+    fn index(&self, root: &str) -> FileIndex {
+        FileIndex::new(self.memory.clone(), uri(root))
+    }
+
+    fn scanned(&self, root: &str) -> FileIndex {
+        let index = self.index(root);
+        run(index.scan(IgnorePolicy::default()));
+        index
+    }
+
+    /// Every entry below the root, directories first reported before their
+    /// contents: its path relative to the root and its kind.
+    fn entries(&self) -> Vec<(String, ResourceKind)> {
+        let mut found = Vec::new();
+        let mut pending = vec![String::new()];
+        while let Some(directory) = pending.pop() {
+            for entry in run(self.memory.enumerate(uri(&directory))).unwrap() {
+                let path = if directory.is_empty() {
+                    entry.name.clone()
+                } else {
+                    format!("{directory}/{}", entry.name)
+                };
+                if entry.kind == ResourceKind::Directory {
+                    pending.push(path.clone());
+                }
+                found.push((path, entry.kind));
+            }
+        }
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        found
+    }
+}
+
+fn sorted_listing(mut listed: Vec<ListedEntry>) -> Vec<ListedEntry> {
+    listed.sort_by(|a, b| a.entry.name.cmp(&b.entry.name));
+    listed
+}
+
+fn sorted_files(mut files: Vec<ResourceEntry>) -> Vec<ResourceEntry> {
+    files.sort_by_key(|file| file.uri.to_string());
+    files
+}
+
+/// Asserts that the index answers like the disk for every directory and
+/// entry, and that it answers for every directory the policy does not ignore.
+fn assert_matches_disk(fixture: &Fixture, index: &FileIndex, policy: &IgnorePolicy, context: &str) {
+    let providers = &fixture.providers;
+    let disk_is_ignored = |path: &str| {
+        run(is_ignored(
+            providers.clone(),
+            &uri(path).to_string(),
+            policy,
+        ))
+        .unwrap()
+    };
+    let entries = fixture.entries();
+    let mut directories = vec![String::new()];
+    directories.extend(
+        entries
+            .iter()
+            .filter(|(_, kind)| *kind == ResourceKind::Directory)
+            .map(|(path, _)| path.clone()),
+    );
+    for directory in &directories {
+        let target = uri(directory);
+        let covered = directory.is_empty() || !disk_is_ignored(directory);
+        let listed = run(index.list(&target, policy));
+        let walked = run(index.walk(&target, policy));
+        assert_eq!(
+            listed.is_some(),
+            covered,
+            "{context}: list {directory:?} coverage"
+        );
+        assert_eq!(
+            walked.is_some(),
+            covered,
+            "{context}: walk {directory:?} coverage"
+        );
+        if let Some(listed) = listed {
+            let disk = run(list(providers.clone(), &target.to_string(), policy)).unwrap();
+            assert_eq!(
+                sorted_listing(listed),
+                sorted_listing(disk),
+                "{context}: list {directory:?}"
+            );
+        }
+        if let Some(walked) = walked {
+            let disk = run(walk(providers.clone(), &target.to_string(), policy)).unwrap();
+            assert_eq!(
+                sorted_files(walked),
+                sorted_files(disk),
+                "{context}: walk {directory:?}"
+            );
+        }
+        for name in ["zz", ".DS_Store", "keep.log", "build"] {
+            let path = if directory.is_empty() {
+                name.to_owned()
+            } else {
+                format!("{directory}/{name}")
+            };
+            if entries.iter().any(|(existing, _)| *existing == path) {
+                continue;
+            }
+            if let Some(indexed) = run(index.is_ignored(&uri(&path), policy)) {
+                assert_eq!(
+                    indexed,
+                    disk_is_ignored(&path),
+                    "{context}: missing {path:?}"
+                );
+            }
+        }
+    }
+    for (path, _) in &entries {
+        if let Some(indexed) = run(index.is_ignored(&uri(path), policy)) {
+            assert_eq!(
+                indexed,
+                disk_is_ignored(path),
+                "{context}: is_ignored {path:?}"
+            );
+        }
+    }
+}
+
+const NAMES: [&str; 10] = [
+    "a",
+    "b",
+    "src",
+    "build",
+    "c.log",
+    "d.tmp",
+    "e.txt",
+    "x.rs",
+    ".DS_Store",
+    "keep.log",
+];
+const PATTERNS: [&str; 10] = [
+    "*.log",
+    "!keep.log",
+    "build/",
+    "/a",
+    "src",
+    "*.tmp",
+    "b/",
+    "/e.txt",
+    "**/x.rs",
+    "d*",
+];
+
+fn generate(random: &mut Random, fixture: &Fixture, directory: &str, depth: usize) {
+    for file in [".gitignore", ".ignore"] {
+        if random.below(3) == 0 {
+            let lines = (0..1 + random.below(3))
+                .map(|_| random.pick(&PATTERNS))
+                .collect::<Vec<_>>();
+            let path = if directory.is_empty() {
+                file.to_owned()
+            } else {
+                format!("{directory}/{file}")
+            };
+            fixture.memory.seed_directory(uri(directory)).unwrap();
+            fixture
+                .memory
+                .seed_file(uri(&path), lines.join("\n"))
+                .unwrap();
+        }
+    }
+    for _ in 0..2 + random.below(4) {
+        let name = random.pick(&NAMES);
+        let path = if directory.is_empty() {
+            name.to_owned()
+        } else {
+            format!("{directory}/{name}")
+        };
+        if fixture
+            .entries()
+            .iter()
+            .any(|(existing, _)| *existing == path)
+        {
+            continue;
+        }
+        if depth < 3 && random.below(2) == 0 {
+            fixture.memory.seed_directory(uri(&path)).unwrap();
+            generate(random, fixture, &path, depth + 1);
+        } else {
+            fixture.file(&path);
+        }
+    }
+}
+
+/// An entry the mutations may touch: not an ignore file or a repository.
+fn mutable(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    !matches!(name, ".gitignore" | ".ignore" | ".git")
+}
+
+fn join(parent: &str, name: &str) -> String {
+    if parent.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{parent}/{name}")
+    }
+}
+
+/// Applies one random change and returns the URIs a watch would report.
+fn mutate(random: &mut Random, fixture: &Fixture) -> Vec<ResourceUri> {
+    let entries = fixture.entries();
+    let mut directories = vec![String::new()];
+    directories.extend(
+        entries
+            .iter()
+            .filter(|(_, kind)| *kind == ResourceKind::Directory)
+            .map(|(path, _)| path.clone()),
+    );
+    let exists = |path: &str| entries.iter().any(|(existing, _)| existing == path);
+    let existing = entries
+        .iter()
+        .filter(|(path, _)| mutable(path))
+        .collect::<Vec<_>>();
+    let parent = directories[random.below(directories.len())].clone();
+    let created = join(&parent, random.pick(&NAMES));
+    let chosen = (!existing.is_empty()).then(|| existing[random.below(existing.len())]);
+    match (random.below(5), chosen) {
+        (0, _) if !exists(&created) => {
+            fixture.memory.seed_file(uri(&created), b"").unwrap();
+            vec![uri(&created)]
+        }
+        (1, _) if !exists(&created) => {
+            fixture.memory.seed_directory(uri(&created)).unwrap();
+            fixture.file(&join(&created, "inner.txt"));
+            vec![uri(&created)]
+        }
+        (2, Some((path, _))) => {
+            fixture.memory.remove(uri(path)).unwrap();
+            vec![uri(path)]
+        }
+        (3, Some((path, ResourceKind::File))) if !exists(&created) => {
+            fixture.memory.remove(uri(path)).unwrap();
+            fixture.memory.seed_file(uri(&created), b"").unwrap();
+            vec![uri(path), uri(&created)]
+        }
+        (4, Some((path, kind))) => {
+            fixture.memory.remove(uri(path)).unwrap();
+            if *kind == ResourceKind::File {
+                fixture.memory.seed_directory(uri(path)).unwrap();
+                fixture.file(&join(path, "inner.txt"));
+            } else {
+                fixture.memory.seed_file(uri(path), b"").unwrap();
+            }
+            vec![uri(path)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+#[test]
+fn the_index_matches_the_disk_through_random_changes() {
+    for seed in 0..40 {
+        let fixture = Fixture::new();
+        let mut random = Random(seed);
+        fixture.memory.seed_directory(uri(".git")).unwrap();
+        generate(&mut random, &fixture, "", 0);
+        let policy = IgnorePolicy {
+            ignored: if seed % 5 == 0 {
+                vec!["src".into()]
+            } else {
+                Vec::new()
+            },
+            ..IgnorePolicy::default()
+        };
+        let index = fixture.index("");
+        run(index.scan(policy.clone()));
+        assert_matches_disk(&fixture, &index, &policy, &format!("seed {seed} scan"));
+        for step in 0..25 {
+            let changed = mutate(&mut random, &fixture);
+            run(index.apply(&changed));
+            assert_matches_disk(
+                &fixture,
+                &index,
+                &policy,
+                &format!("seed {seed} step {step} {changed:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn queries_wait_for_the_first_scan() {
+    let fixture = Fixture::new();
+    fixture.file("a.txt");
+    let index = fixture.index("");
+    let policy = IgnorePolicy::default();
+    let root = uri("");
+    let mut query = pin!(index.walk(&root, &policy));
+    let mut context = Context::from_waker(futures::task::noop_waker_ref());
+    assert!(query.as_mut().poll(&mut context).is_pending());
+    run(index.scan(policy.clone()));
+    let Poll::Ready(Some(files)) = query.as_mut().poll(&mut context) else {
+        panic!("the query did not finish after the scan");
+    };
+    assert_eq!(files.len(), 1);
+}
+
+#[test]
+fn a_batch_naming_the_root_scans_the_tree_again() {
+    let fixture = Fixture::new();
+    fixture.file("a.txt");
+    let index = fixture.scanned("");
+    fixture.file("b.txt");
+    let policy = IgnorePolicy::default();
+    assert_eq!(run(index.list(&uri(""), &policy)).unwrap().len(), 1);
+    run(index.apply(&[uri("")]));
+    assert_eq!(run(index.list(&uri(""), &policy)).unwrap().len(), 2);
+}
+
+#[test]
+fn a_batch_for_a_new_directory_indexes_its_contents() {
+    let fixture = Fixture::new();
+    fixture.file("a.txt");
+    let index = fixture.scanned("");
+    fixture.file("new/deep/lib.rs");
+    run(index.apply(&[uri("new")]));
+    let policy = IgnorePolicy::default();
+    let files = run(index.walk(&uri(""), &policy)).unwrap();
+    assert_eq!(files.len(), 2);
+    assert_eq!(run(index.list(&uri("new/deep"), &policy)).unwrap().len(), 1);
+}
+
+#[test]
+fn events_below_ignored_and_hidden_directories_change_nothing() {
+    let fixture = Fixture::new();
+    fixture.file(".git/HEAD");
+    fixture.file(".gitignore");
+    fixture
+        .memory
+        .seed_file(uri(".gitignore"), b"target/\n")
+        .unwrap();
+    fixture.file("target/out.o");
+    fixture.file("a.txt");
+    let index = fixture.scanned("");
+    let policy = IgnorePolicy::default();
+    fixture.file("target/more.o");
+    fixture.file(".git/index");
+    run(index.apply(&[uri("target/more.o"), uri(".git/index")]));
+    assert!(run(index.list(&uri("target"), &policy)).is_none());
+    assert!(run(index.list(&uri(".git"), &policy)).is_none());
+    assert_eq!(run(index.is_ignored(&uri("target/out.o"), &policy)), None);
+    assert_eq!(run(index.is_ignored(&uri("target"), &policy)), Some(true));
+    assert_eq!(run(index.is_ignored(&uri(".git"), &policy)), Some(true));
+    let names = run(index.list(&uri(""), &policy))
+        .unwrap()
+        .into_iter()
+        .map(|listed| (listed.entry.name, listed.ignored))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        [
+            (".gitignore".to_owned(), false),
+            ("a.txt".to_owned(), false),
+            ("target".to_owned(), true),
+        ]
+    );
+}
+
+#[test]
+fn uris_outside_the_root_fall_through_without_waiting() {
+    let fixture = Fixture::new();
+    fixture.file("sub/a.txt");
+    fixture.file("other/b.txt");
+    let index = fixture.index("sub");
+    let policy = IgnorePolicy::default();
+    assert!(!index.covers(&uri("other")));
+    assert!(run(index.list(&uri("other"), &policy)).is_none());
+    assert!(run(index.walk(&uri("other"), &policy)).is_none());
+    assert!(run(index.is_ignored(&uri("other/b.txt"), &policy)).is_none());
+    assert!(run(index.is_ignored(&uri("sub"), &policy)).is_none());
+}
+
+#[test]
+fn a_different_policy_scans_again_before_answering() {
+    let fixture = Fixture::new();
+    fixture.file("a.txt");
+    fixture.file("b.txt");
+    let index = fixture.scanned("");
+    let policy = IgnorePolicy {
+        hidden: vec!["a.txt".into()],
+        ..IgnorePolicy::default()
+    };
+    let names = run(index.list(&uri(""), &policy))
+        .unwrap()
+        .into_iter()
+        .map(|listed| listed.entry.name)
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["b.txt"]);
+}

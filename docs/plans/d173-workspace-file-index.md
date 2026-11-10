@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 checkpoint 1 ✅ implemented, awaiting its review gate. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -116,7 +116,16 @@ These are recorded as decisions in checkpoint 3.
 
 ## Checkpoints
 
-### 1. Model index: scan, queries, and event updates
+### 1. Model index: scan, queries, and event updates ✅
+
+Implemented in `files/index.rs`: `FileIndex` takes a provider and a normalized
+root; `scan(policy)` builds or swaps the tree, `list`/`walk`/`is_ignored`
+return `None` to fall through, and `apply(batch)` re-lists parents. Scope
+decisions: a path through a symlinked or unreadable directory falls through
+like an ignored one; `is_ignored` of an entry that is not stored answers only
+when it is judged alike as a file and as a directory; a batch that arrives
+before the first scan is dropped, and one that arrives during a rescan may be
+lost by the swap. Tests: `files/index/tests.rs`.
 
 Deliverables:
 

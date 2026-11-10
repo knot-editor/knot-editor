@@ -7,9 +7,11 @@
 #[cfg(test)]
 mod equivalence;
 mod ignore;
+mod index;
 
 use ignore::{Classifier, Scope, Visibility, segments};
 pub use ignore::{DEFAULT_HIDDEN, IgnorePolicy};
+pub use index::FileIndex;
 
 use std::sync::Arc;
 

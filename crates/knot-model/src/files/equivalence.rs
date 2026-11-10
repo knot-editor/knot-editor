@@ -255,10 +255,10 @@ fn symlinks_are_not_followed_and_symlinked_files_are_listed_like_ripgrep() {
 }
 
 /// A deterministic generator, so a failing tree reproduces from its seed.
-struct Random(u64);
+pub(super) struct Random(pub(super) u64);
 
 impl Random {
-    fn below(&mut self, bound: usize) -> usize {
+    pub(super) fn below(&mut self, bound: usize) -> usize {
         self.0 = self
             .0
             .wrapping_mul(6364136223846793005)
@@ -266,7 +266,7 @@ impl Random {
         ((self.0 >> 33) as usize) % bound
     }
 
-    fn pick<'a>(&mut self, items: &[&'a str]) -> &'a str {
+    pub(super) fn pick<'a>(&mut self, items: &[&'a str]) -> &'a str {
         items[self.below(items.len())]
     }
 }
