@@ -30,7 +30,7 @@ pub enum MatchStyle {
 }
 
 /// The styles used when a list names none that exist.
-pub const DEFAULT_STYLES: [MatchStyle; 1] = [MatchStyle::Flex];
+pub const DEFAULT_STYLES: [MatchStyle; 2] = [MatchStyle::Prefix, MatchStyle::Flex];
 
 impl MatchStyle {
     pub fn parse(name: &str) -> Option<Self> {
@@ -146,7 +146,8 @@ impl Matcher {
         match style {
             MatchStyle::Prefix => {
                 let range = find_text(text, &query.text, query.fold, true)?;
-                Some((0, vec![range]))
+                // An exact match outranks a longer candidate with the prefix.
+                Some((u32::from(range.end == text.len()), vec![range]))
             }
             MatchStyle::Substring => {
                 let range = find_text(text, &query.text, query.fold, false)?;
@@ -291,6 +292,12 @@ mod tests {
         let words = ["write", "rewrite", "wq"];
         assert_eq!(matches("w", &["prefix"], &words), [0, 2]);
         assert_eq!(matches("rite", &["prefix"], &words), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn an_exact_match_outranks_a_longer_prefix_match() {
+        let words = ["setup", "set", "settings"];
+        assert_eq!(matches("set", &["prefix"], &words), [1, 0, 2]);
     }
 
     #[test]

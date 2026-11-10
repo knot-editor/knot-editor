@@ -60,10 +60,10 @@ which completes command names and `:set` options.
     each a substring). Smart case. The matcher takes a query and candidate
     strings and returns the matches ordered, with the matched ranges.
   - The setting `completion.styles` is an ordered list of styles, default
-    `["flex"]`. A candidate matches if any style matches it; results are
+    `["prefix", "flex"]`. A candidate matches if any style matches it; results are
     ordered by the first style that matches, then by that style's own score,
-    then by the caller's order. `["prefix", "flex"]` lists prefix matches
-    first and fuzzy ones after, as ido does.
+    then by the caller's order, so a picker's recent items lead among equal
+    matches. Prefix matches list first and fuzzy ones after, as ido does.
   - It is native because the picker filters on every keystroke, and native
     painting and raw input never call JavaScript synchronously. Extensions
     reach the same matcher through a host call, `completion.match`.
@@ -113,9 +113,9 @@ Deliverables:
   `flex`, `orderless`; merge and order as in the design), with plain unit
   tests.
 - The `completion.styles` setting, documented in `docs/settings.md`; unknown
-  style names are ignored, and a list with none selects `flex`.
+  style names are ignored, and a list with none selects the default.
 - The picker filters through the matcher instead of calling nucleo
-  directly; its existing behavior is the default `["flex"]`.
+  directly; its fuzzy matching is the `flex` style.
 - The `completion.match` host call, typed in `knot.d.ts`, with the contract
   test; the fake host implements the styles in TypeScript.
 - `InputCompletion.matches` through the protocol, `bootstrap.js`, the typed

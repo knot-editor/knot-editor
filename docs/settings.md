@@ -72,7 +72,7 @@ and `icons.pack` when the user runs Select Icon Pack.
 
 | Key | Type | Default | Scope | Owner | Description |
 | --- | --- | --- | --- | --- | --- |
-| `completion.styles` | strings | `["flex"]` | Global; unknown names are ignored, and a list with none selects `flex` | native | How pickers and completion lists match, in order of preference: `"prefix"`, `"substring"`, `"flex"` (fuzzy), or `"orderless"` (space-separated parts in any order). A candidate matches if any style matches it; earlier styles rank first. |
+| `completion.styles` | strings | `["prefix", "flex"]` | Global; unknown names are ignored, and a list with none selects the default | native | How pickers and completion lists match, in order of preference: `"prefix"`, `"substring"`, `"flex"` (fuzzy), or `"orderless"` (space-separated parts in any order). A candidate matches if any style matches it; earlier styles rank first, and items that match equally well keep their usual order, such as most recently used first. |
 
 ## Bundled packages
 

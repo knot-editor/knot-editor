@@ -8,7 +8,7 @@ beforeEach(() => host.reset());
 const words = ["xset", "set", "reset", "toggle word"];
 
 test("match follows the completion.styles setting and options.styles", async () => {
-  assert.deepEqual((await completion.match("set", words)).map((found) => found.index), [0, 1, 2]);
+  assert.deepEqual((await completion.match("set", words)).map((found) => found.index), [1, 0, 2]);
   assert.deepEqual((await completion.match("set", words, { styles: ["prefix"] })).map((found) => found.index), [1]);
   await settings.set({ "completion.styles": ["prefix", "substring"] });
   assert.deepEqual(await completion.match("set", words), [

@@ -348,7 +348,7 @@ declare module "knot" {
      * "prefix", "substring", "flex" (fuzzy), or "orderless" (space-separated
      * parts in any order). A candidate matches if any style matches it, and
      * earlier styles rank first. Unknown names are ignored. Native default
-     * ["flex"]. */
+     * ["prefix", "flex"]. */
     "completion.styles": readonly string[];
   }
   export type SettingKey = keyof Settings & string;

@@ -564,9 +564,9 @@ mod tests {
         );
         picker.update(cx, |picker, cx| {
             picker.set_query("recent", cx);
-            // Equal label scores keep the caller's order, above the
-            // description match.
-            assert_eq!(labels(picker), ["Open Recent", "Recent Files", "Projects"]);
+            // Label matches rank above the description match, and the prefix
+            // match leads the other label match.
+            assert_eq!(labels(picker), ["Recent Files", "Open Recent", "Projects"]);
             picker.set_query("files.rec", cx);
             assert_eq!(labels(picker), ["Open Recent"]);
             assert_eq!(picker.highlights(0), (Vec::new(), Vec::new()));

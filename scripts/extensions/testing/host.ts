@@ -129,7 +129,7 @@ function emptyState() {
       ["keymap.preset", { key: "keymap.preset", type: "string", default: "knot", description: "The keymap preset that supplies default key bindings" }],
       ["statusBar.visible", { key: "statusBar.visible", type: "boolean", default: true, description: "Show the status bar below the workbench" }],
       ["statusBar.hiddenItems", { key: "statusBar.hiddenItems", type: "strings", default: [], description: "IDs of status bar items the bar skips" }],
-      ["completion.styles", { key: "completion.styles", type: "strings", default: ["flex"], description: "How pickers and completion lists match, in order: prefix, substring, flex, or orderless" }],
+      ["completion.styles", { key: "completion.styles", type: "strings", default: ["prefix", "flex"], description: "How pickers and completion lists match, in order: prefix, substring, flex, or orderless" }],
     ]),
     settingValues: [] as FakeSettingValue[],
     settingListeners: [] as { key: string; listener: (key: Knot.SettingKey) => void | Promise<void> }[],
@@ -650,7 +650,7 @@ function matchCandidates(query: string, candidates: readonly string[], options?:
   const known = ["prefix", "substring", "flex", "orderless"];
   const configured = options?.styles ?? (resolveSetting("completion.styles", settingScope(undefined)) as string[]);
   const named = configured.filter((name) => known.includes(name));
-  const styles = named.length > 0 ? named : ["flex"];
+  const styles = named.length > 0 ? named : ["prefix", "flex"];
   const parts = query.split(/\s+/).filter((part) => part !== "");
   const fold = query === query.toLowerCase();
   const found: { index: number; style: number; score: number; ranges: Span[] }[] = [];

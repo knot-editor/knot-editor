@@ -341,7 +341,7 @@ fn native_definitions() -> Vec<SettingDefinition> {
         SettingDefinition {
             key: COMPLETION_STYLES.into(),
             value_type: SettingType::Strings,
-            default: Value::Array(vec!["flex".into()]),
+            default: Value::Array(vec!["prefix".into(), "flex".into()]),
             description: "How pickers and completion lists match, in order: prefix, substring, flex, or orderless".into(),
         },
     ]
