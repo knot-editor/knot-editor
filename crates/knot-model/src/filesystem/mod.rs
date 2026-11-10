@@ -27,6 +27,8 @@ pub struct ResourceEntry {
     pub uri: ResourceUri,
     pub name: String,
     pub kind: ResourceKind,
+    /// Whether the entry is a symbolic link; `kind` is then the target's.
+    pub symlink: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -404,6 +406,7 @@ mod tests {
                 uri: file.clone(),
                 name: "file.txt".into(),
                 kind: ResourceKind::File,
+                symlink: false,
             }]
         );
         let created = child_uri(&directory, "created.txt").unwrap();

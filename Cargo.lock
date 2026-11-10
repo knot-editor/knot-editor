@@ -3847,6 +3847,7 @@ name = "knot-model"
 version = "0.1.0"
 dependencies = [
  "directories",
+ "futures",
  "ignore",
  "jsonc-parser",
  "knot-core",

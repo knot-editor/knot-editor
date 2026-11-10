@@ -47,3 +47,18 @@ test("listing omits hidden entries and marks ignored ones", async () => {
   assert.equal(await files.isIgnored("file:///p/a.txt"), false);
   assert.equal(await files.isIgnored("file:///p/.git"), true);
 });
+
+test("walking resolves visible files at any depth and skips ignored directories", async () => {
+  host.seedFile("file:///p/.git/HEAD", "ref");
+  host.seedFile("file:///p/a.txt", "alpha");
+  host.seedFile("file:///p/src/deep/lib.rs", "");
+  host.seedFile("file:///p/dist/out.js", "");
+  await settings.set("files.ignored", ["dist"]);
+
+  assert.deepEqual(
+    (await files.walk("file:///p")).map((entry) => entry.uri).sort(),
+    ["file:///p/a.txt", "file:///p/src/deep/lib.rs"],
+  );
+  assert.deepEqual(await files.walk("file:///p/dist"), []);
+  await assert.rejects(files.walk("file:///p/a.txt"), { code: "ResourceWrongKind" });
+});

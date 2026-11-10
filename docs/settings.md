@@ -42,9 +42,9 @@ values take effect.
 | --- | --- | --- | --- | --- | --- |
 | `files.trimTrailingWhitespace` | string: `off`, `all` | `"all"` | Any; other text means `all` | native | Trim trailing spaces and tabs from every line except the cursor's when saving. |
 | `files.insertFinalNewline` | boolean | `true` | Any | native | End a non-empty file with a line terminator when saving. |
-| `files.hidden` | strings | `[".git", ".hg", ".svn", ".jj", "CVS", ".DS_Store", "Thumbs.db"]` | Global | native | Gitignore-style patterns of entries `files.list` never returns; a bare name matches at any depth. |
-| `files.ignored` | strings | `[]` | Global | native | Gitignore-style patterns of entries `files.list` marks `ignored`, in addition to the repository ignore files. |
-| `files.respectGitignore` | boolean | `true` | Global | native | Mark entries that `.gitignore`, `.ignore`, `.git/info/exclude`, and the global Git excludes file match as ignored. `.gitignore` files and the Git excludes apply only inside a Git repository. |
+| `files.hidden` | strings | `[".git", ".hg", ".svn", ".jj", "CVS", ".DS_Store", "Thumbs.db"]` | Global | native | Gitignore-style patterns of entries `files.list` and `files.walk` never return; a bare name matches at any depth. |
+| `files.ignored` | strings | `[]` | Global | native | Gitignore-style patterns of entries `files.list` marks `ignored` and `files.walk` skips, in addition to the repository ignore files. |
+| `files.respectGitignore` | boolean | `true` | Global | native | Mark entries (and skip them in `files.walk`) that `.gitignore`, `.ignore`, `.git/info/exclude`, and the global Git excludes file match as ignored. `.gitignore` files and the Git excludes apply only inside a Git repository. |
 
 ## Appearance
 

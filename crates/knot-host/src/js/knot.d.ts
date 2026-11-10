@@ -762,6 +762,14 @@ declare module "knot" {
      * @throws HostError with InvalidUri, ResourceNotFound, ResourceWrongKind for
      * a file, or ProviderFailure. */
     list(uri: string): Promise<readonly FileEntry[]>;
+    /** Resolves every file below a directory, at any depth, in unspecified
+     * order, as one array. Hidden and ignored entries are left out and their
+     * directories are not entered, symlinked directories are not followed, and
+     * directories that cannot be read are skipped. Walking an ignored or hidden
+     * directory resolves empty. Entries are files and never `ignored`.
+     * @throws HostError with InvalidUri, ResourceNotFound, ResourceWrongKind for
+     * a file, or ProviderFailure. */
+    walk(uri: string): Promise<readonly FileEntry[]>;
     /** Resolves the kind of the resource, or null when it does not exist.
      * Symlinks report their target's kind.
      * @throws HostError with InvalidUri or ProviderFailure. */

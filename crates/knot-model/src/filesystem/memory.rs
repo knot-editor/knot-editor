@@ -161,6 +161,7 @@ impl FileSystemProvider for MemoryFileSystemProvider {
                         uri: child_uri(&uri, name)?,
                         name: name.clone(),
                         kind: node.kind(),
+                        symlink: false,
                     })
                 })
                 .collect()
@@ -403,7 +404,8 @@ mod tests {
             vec![ResourceEntry {
                 uri: ResourceUri::parse("mem://workspace/src/lib.rs").unwrap(),
                 name: "lib.rs".into(),
-                kind: ResourceKind::File
+                kind: ResourceKind::File,
+                symlink: false
             }]
         );
     }

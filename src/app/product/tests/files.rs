@@ -94,7 +94,10 @@ await commands.register("files.policy", async () => {
   if (await names() !== base) throw new Error(`default ${await names()}`);
   if (!await files.isIgnored("mem://product/.git/HEAD")) throw new Error("hidden");
   if (!await files.isIgnored("mem://product/build.log")) throw new Error("ignored");
+  const walked = async () => (await files.walk("mem://product/")).map(entry => entry.name).sort().join();
+  if (await walked() !== ".gitignore,invalid.txt,notes.txt,out.js") throw new Error(`walk ${await walked()}`);
   await settings.set("files.ignored", ["dist"]);
+  if (await walked() !== ".gitignore,invalid.txt,notes.txt") throw new Error(`walk ignored ${await walked()}`);
   if (await names() !== ".gitignore,build.log!,dist!,invalid.txt,notes.txt,src") throw new Error(`ignored ${await names()}`);
   await settings.set("files.respectGitignore", false);
   if (await names() !== ".gitignore,build.log,dist!,invalid.txt,notes.txt,src") throw new Error(`respect ${await names()}`);

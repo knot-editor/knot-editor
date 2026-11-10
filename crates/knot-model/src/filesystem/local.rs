@@ -166,6 +166,7 @@ impl FileSystemProvider for LocalFileSystemProvider {
                     Some(root) => path_to_uri(root, &entry.path())?,
                     None => path_to_unrestricted_uri(&entry.path())?,
                 };
+                let symlink = entry.file_type().is_ok_and(|kind| kind.is_symlink());
                 let child_metadata = match std::fs::metadata(entry.path()) {
                     Ok(metadata) => metadata,
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
@@ -182,6 +183,7 @@ impl FileSystemProvider for LocalFileSystemProvider {
                     uri: child_uri,
                     name,
                     kind,
+                    symlink,
                 });
             }
             Ok(entries)
@@ -453,7 +455,8 @@ mod tests {
             vec![ResourceEntry {
                 uri: file,
                 name: "lib.rs".into(),
-                kind: ResourceKind::File
+                kind: ResourceKind::File,
+                symlink: false
             }]
         );
     }

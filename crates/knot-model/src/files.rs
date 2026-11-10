@@ -11,6 +11,8 @@ pub use ignore::{DEFAULT_HIDDEN, IgnorePolicy};
 
 use std::sync::Arc;
 
+use futures::{StreamExt, stream::FuturesUnordered};
+
 use crate::{
     filesystem::{
         FileSystemProviderRegistry, ResourceEntry, ResourceError, ResourceKind, ResourceStat,
@@ -18,6 +20,9 @@ use crate::{
     open::{OpenResourceError, enumerate_directory},
     resource::ResourceUri,
 };
+
+/// How many directories a walk reads at once.
+const WALK_CONCURRENCY: usize = 64;
 
 fn parse(uri: &str) -> Result<ResourceUri, ResourceError> {
     ResourceUri::parse(uri).map_err(|error| ResourceError::InvalidUri {
@@ -70,12 +75,12 @@ pub async fn list(
     let uri = providers.normalize(parse(uri)?).await?;
     let entries = enumerate_directory(providers.clone(), uri.clone()).await?;
     let mut classifier = Classifier::new(providers.provider(&uri)?, &uri, policy).await;
-    let depth = segments(&uri).len();
+    let parent = segments(&uri);
     let inherited = classifier.directory().await;
     let mut listed = Vec::with_capacity(entries.len());
     for entry in entries {
         let is_dir = entry.kind == ResourceKind::Directory;
-        match classifier.entry(depth, &entry.name, is_dir).await {
+        match classifier.entry(&parent, &entry.name, is_dir).await {
             Visibility::Hidden => {}
             own => listed.push(ListedEntry {
                 ignored: own == Visibility::Ignored || inherited != Visibility::Visible,
@@ -84,6 +89,61 @@ pub async fn list(
         }
     }
     Ok(listed)
+}
+
+/// Every file below the directory, at any depth, that the policy neither hides
+/// nor ignores. Ignored and hidden directories are not entered, symlinked
+/// directories are not followed, and directories that cannot be read are
+/// skipped. The order is unspecified.
+pub async fn walk(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: &str,
+    policy: &IgnorePolicy,
+) -> Result<Vec<ResourceEntry>, ResourceError> {
+    let uri = providers.normalize(parse(uri)?).await?;
+    let mut classifier = Classifier::new(providers.provider(&uri)?, &uri, policy).await;
+    if classifier.directory().await != Visibility::Visible {
+        return Ok(Vec::new());
+    }
+    // Directories are read concurrently, because each read is a provider round
+    // trip; classifying their entries stays sequential.
+    let enumerate = |directory: ResourceUri, parent: Vec<String>| {
+        let providers = providers.clone();
+        async move { (parent, enumerate_directory(providers, directory).await) }
+    };
+    let mut files = Vec::new();
+    let mut pending = FuturesUnordered::new();
+    pending.push(enumerate(uri.clone(), segments(&uri)));
+    let mut first = true;
+    let mut waiting = Vec::new();
+    while let Some((parent, entries)) = pending.next().await {
+        let entries = match entries {
+            Ok(entries) => entries,
+            Err(error) if first => return Err(error),
+            Err(_) => Vec::new(),
+        };
+        first = false;
+        for entry in entries {
+            let is_dir = entry.kind == ResourceKind::Directory;
+            if classifier.entry(&parent, &entry.name, is_dir).await != Visibility::Visible {
+                continue;
+            }
+            if !is_dir {
+                files.push(entry);
+            } else if !entry.symlink {
+                let mut child = parent.clone();
+                child.push(entry.name.clone());
+                waiting.push((entry.uri, child));
+            }
+        }
+        while pending.len() < WALK_CONCURRENCY {
+            let Some((directory, child)) = waiting.pop() else {
+                break;
+            };
+            pending.push(enumerate(directory, child));
+        }
+    }
+    Ok(files)
 }
 
 /// Whether the policy hides or ignores the resource, or any directory above it
@@ -111,7 +171,7 @@ pub async fn is_ignored(
     let parent = ResourceUri::from_url(parent);
     let mut classifier = Classifier::new(provider, &parent, policy).await;
     let inherited = classifier.directory().await;
-    let own = classifier.entry(path.len(), &name, is_dir).await;
+    let own = classifier.entry(&path, &name, is_dir).await;
     Ok(own.max(inherited) != Visibility::Visible)
 }
 

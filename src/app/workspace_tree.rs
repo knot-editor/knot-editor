@@ -657,6 +657,7 @@ mod tests {
             uri: uri(value),
             name: name.into(),
             kind,
+            symlink: false,
         }
     }
 

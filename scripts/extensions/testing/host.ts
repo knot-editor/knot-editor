@@ -1561,6 +1561,17 @@ export const api: KnotApi = {
         .filter((entry) => !hidden.includes(entry.name))
         .map((entry) => ({ ...entry, ignored: ignored.includes(entry.name) || isIgnoredUri(checked) }));
     },
+    walk: async (uri) => {
+      maybeFail("files.walk");
+      const checked = checkedFileUri(uri);
+      const kind = fileKind(checked);
+      if (kind === null) throw hostError("ResourceNotFound");
+      if (kind === "file") throw hostError("ResourceWrongKind");
+      if (isIgnoredUri(checked)) return [];
+      return [...state.files.keys()]
+        .filter((file) => file.startsWith(`${checked}/`) && !isIgnoredUri(file.slice(checked.length)))
+        .map((file) => ({ uri: file, name: file.slice(file.lastIndexOf("/") + 1), kind: "file" as const, ignored: false }));
+    },
     isIgnored: async (uri) => {
       maybeFail("files.isIgnored");
       return isIgnoredUri(checkedFileUri(uri));

@@ -1561,6 +1561,10 @@ export async function listFiles(uri) {
   const entries = await request("listFiles", string(uri, "resource URI must be text"));
   return Object.freeze(entries.map(entry => Object.freeze({ uri: entry.uri, name: entry.name, kind: entry.kind, ignored: entry.ignored })));
 }
+export async function walkFiles(uri) {
+  const entries = await request("walkFiles", string(uri, "resource URI must be text"));
+  return Object.freeze(entries.map(entry => Object.freeze({ uri: entry.uri, name: entry.name, kind: entry.kind, ignored: entry.ignored })));
+}
 export function isFileIgnored(uri) {
   return request("isFileIgnored", string(uri, "resource URI must be text"));
 }

@@ -126,7 +126,7 @@ pub(super) struct Classifier {
     /// The segment count of the repository root above the directory.
     repository: Option<usize>,
     exclude: Option<Gitignore>,
-    directories: HashMap<usize, Arc<DirectoryRules>>,
+    directories: HashMap<Vec<String>, Arc<DirectoryRules>>,
     directory: Vec<String>,
 }
 
@@ -187,12 +187,14 @@ impl Classifier {
         }
     }
 
-    /// The rules of an ancestor of the directory, or the directory itself.
-    async fn rules(&mut self, depth: usize) -> Arc<DirectoryRules> {
-        if let Some(rules) = self.directories.get(&depth) {
+    /// The rules of `directory`, a directory at or below the classifier's
+    /// repository or the classifier's own ancestors.
+    async fn rules(&mut self, directory: &[String]) -> Arc<DirectoryRules> {
+        if let Some(rules) = self.directories.get(directory) {
             return rules.clone();
         }
-        let directory = self.directory[..depth].to_vec();
+        let depth = directory.len();
+        let directory = directory.to_vec();
         let root = virtual_path(&directory);
         let file = |name: &str| {
             let mut path = directory.clone();
@@ -212,15 +214,29 @@ impl Classifier {
             ignore: ignore.map(|text| build(&root, text.lines())),
             gitignore: gitignore.map(|text| build(&root, text.lines())),
         });
-        self.directories.insert(depth, rules.clone());
+        self.directories.insert(directory, rules.clone());
         rules
     }
 
-    /// How the policy treats the entry `name` of the ancestor of the
-    /// classifier's directory that has `depth` segments, judging the entry
-    /// alone.
-    pub(super) async fn entry(&mut self, depth: usize, name: &str, is_dir: bool) -> Visibility {
-        let mut segments = self.directory[..depth].to_vec();
+    /// How the policy treats the ancestor of the classifier's directory that
+    /// has `depth` segments, judging it alone.
+    async fn ancestor(&mut self, depth: usize) -> Visibility {
+        let parent = self.directory[..depth].to_vec();
+        let name = self.directory[depth].clone();
+        self.entry(&parent, &name, true).await
+    }
+
+    /// How the policy treats the entry `name` of `parent`, a directory at or
+    /// below the classifier's directory or one of its ancestors, judging the
+    /// entry alone.
+    pub(super) async fn entry(
+        &mut self,
+        parent: &[String],
+        name: &str,
+        is_dir: bool,
+    ) -> Visibility {
+        let depth = parent.len();
+        let mut segments = parent.to_vec();
         segments.push(name.to_owned());
         let path = virtual_path(&segments);
         if self.hidden.matched(&path, is_dir).is_ignore() {
@@ -233,7 +249,7 @@ impl Classifier {
             return Visibility::Visible;
         }
         for level in (0..=depth).rev() {
-            let rules = self.rules(level).await;
+            let rules = self.rules(&parent[..level]).await;
             for source in [&rules.ignore, &rules.gitignore].into_iter().flatten() {
                 if let Some(ignored) = verdict(source, &path, is_dir) {
                     return if ignored {
@@ -266,8 +282,7 @@ impl Classifier {
         let first = self.repository.unwrap_or(length.saturating_sub(1));
         let mut visibility = Visibility::Visible;
         for depth in first..length {
-            let name = self.directory[depth].clone();
-            visibility = visibility.max(self.entry(depth, &name, true).await);
+            visibility = visibility.max(self.ancestor(depth).await);
         }
         visibility
     }
@@ -279,7 +294,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        files::{is_ignored, list},
+        files::{is_ignored, list, walk},
         filesystem::{
             FileSystemProviderRegistry, LocalFileSystemProvider, MemoryFileSystemProvider,
         },
@@ -480,5 +495,98 @@ mod tests {
             .unwrap()
         );
         assert!(!run(is_ignored(providers, &uri("repo/main.rs"), &policy)).unwrap());
+    }
+
+    fn walked(
+        providers: &Arc<FileSystemProviderRegistry>,
+        directory: &str,
+        policy: &IgnorePolicy,
+    ) -> Vec<String> {
+        let mut names = run(walk(providers.clone(), directory, policy))
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.uri.to_string())
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn walk_lists_visible_files_at_any_depth_without_entering_ignored_directories() {
+        let providers = memory(&[
+            (".git/config", ""),
+            (".gitignore", "*.log\ntarget/\n"),
+            ("a.txt", ""),
+            ("x.log", ""),
+            ("target/out.o", ""),
+            ("src/.gitignore", "/local.txt\n"),
+            ("src/main.rs", ""),
+            ("src/local.txt", ""),
+            ("src/deep/er/lib.rs", ""),
+            ("src/deep/local.txt", ""),
+            ("src/.DS_Store", ""),
+        ]);
+        assert_eq!(
+            walked(&providers, "mem://t/", &IgnorePolicy::default()),
+            [
+                "mem://t/.gitignore",
+                "mem://t/a.txt",
+                "mem://t/src/.gitignore",
+                "mem://t/src/deep/er/lib.rs",
+                "mem://t/src/deep/local.txt",
+                "mem://t/src/main.rs",
+            ]
+        );
+        assert_eq!(
+            walked(&providers, "mem://t/src/deep", &IgnorePolicy::default()),
+            ["mem://t/src/deep/er/lib.rs", "mem://t/src/deep/local.txt"]
+        );
+        let all = IgnorePolicy {
+            respect_gitignore: false,
+            ..IgnorePolicy::default()
+        };
+        assert_eq!(walked(&providers, "mem://t/", &all).len(), 9);
+    }
+
+    #[test]
+    fn walking_an_ignored_directory_yields_nothing() {
+        let providers = memory(&[
+            (".git/config", ""),
+            (".gitignore", "target/\n"),
+            ("target/out.o", ""),
+        ]);
+        assert!(walked(&providers, "mem://t/target", &IgnorePolicy::default()).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_walk_does_not_follow_symlinked_directories_and_skips_unreadable_ones() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("secret.txt"), "").unwrap();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::create_dir_all(root.join("locked")).unwrap();
+        fs::write(root.join("src/main.rs"), "").unwrap();
+        fs::write(root.join("locked/hidden.rs"), "").unwrap();
+        symlink(outside.path(), root.join("linked")).unwrap();
+        symlink(root.join("src/main.rs"), root.join("alias.rs")).unwrap();
+        fs::set_permissions(root.join("locked"), fs::Permissions::from_mode(0o000)).unwrap();
+        let mut providers = FileSystemProviderRegistry::default();
+        providers
+            .register("file", Arc::new(LocalFileSystemProvider::unrestricted()))
+            .unwrap();
+        let providers = Arc::new(providers);
+        let base = url::Url::from_file_path(root).unwrap().to_string();
+        let mut names = run(walk(providers, &base, &IgnorePolicy::default()))
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        names.sort();
+        fs::set_permissions(root.join("locked"), fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(names, ["alias.rs", "main.rs"]);
     }
 }

@@ -1753,6 +1753,31 @@ async fn list_files(
         .collect())
 }
 
+#[host_operation("walkFiles")]
+async fn walk_files(
+    context: HostContext,
+    arguments: FileUriArguments,
+) -> Result<Vec<knot_protocol::FileEntry>, OpenError> {
+    let (providers, policy) = context.foreground(|_, cx| {
+        (
+            ProductShell::filesystems(cx),
+            crate::app::settings::files_ignore_policy(cx),
+        )
+    })?;
+    let files = knot_model::files::walk(providers, &arguments.uri, &policy)
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    Ok(files
+        .into_iter()
+        .map(|entry| knot_protocol::FileEntry {
+            uri: entry.uri.to_string(),
+            name: entry.name,
+            kind: knot_protocol::FileKind::File,
+            ignored: false,
+        })
+        .collect())
+}
+
 #[host_operation("isFileIgnored")]
 async fn is_file_ignored(
     context: HostContext,
