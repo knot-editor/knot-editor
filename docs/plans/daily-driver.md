@@ -350,7 +350,8 @@ to be rebuilt later:
   - It is an ordinary tool for tool-layout memory: it has a stable tool ID
     and a default placement.
 
-- **D173 — Workspace file index** (depends on D008, D081)
+- 🚧 **D173 — Workspace file index** (depends on D008, D081)
+  - 🚧 [Plan](d173-workspace-file-index.md)
   - A native in-memory tree of every workspace root, watched recursively, so
     Go to File, walks, and listings answer instantly; ⌘P must feel immediate.
   - `files.list` and `files.walk` answer from the index behind the same API,
