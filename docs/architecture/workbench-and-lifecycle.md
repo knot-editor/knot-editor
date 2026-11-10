@@ -332,7 +332,14 @@ are unavailable when the tab is already there. Each tab kind declares the areas 
 may occupy (`TabKind::allows`): documents the center, tools the docks, and
 terminals either. Placement, relocation, directional moves, and restore check the
 declaration, so a tool never joins the center and a document never enters a
-dock. Splitting a document creates another view; splitting a terminal creates
+dock. Thin stripes on the left and right window edges
+(`workbench.toolStripes`) show a button for every tool by home dock, bottom-dock
+tools at the left stripe's lower end, plus the terminal button in the terminal
+home's group (`Workbench::stripes`). A click toggles the tool, or the dock
+terminals; dragging a button to another stripe rehomes it, moving a shown tool
+and leaving a hidden one hidden, and changing only the terminal home for the
+terminal button.
+Splitting a document creates another view; splitting a terminal creates
 another session, in a dock as in the center. Empty panes collapse, keeping their siblings' ratios. The
 center may be empty; it then paints a blank surface that takes keyboard focus
 while no pane has it, opens new documents and terminals, and accepts dropped

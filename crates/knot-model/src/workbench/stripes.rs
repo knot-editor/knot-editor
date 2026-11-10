@@ -55,7 +55,9 @@ impl Workbench {
     pub fn stripes(&self) -> Stripes {
         let mut stripes = Stripes::default();
         for tool in &self.tools {
-            let home = self.tool_home(tool.id).expect("registered tools have homes");
+            let home = self
+                .tool_home(tool.id)
+                .expect("registered tools have homes");
             stripes.group_mut(home).push(StripeButton::Tool(tool.id));
         }
         stripes

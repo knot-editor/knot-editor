@@ -125,6 +125,8 @@ pub const NATIVE_ICONS: &[(&str, &str)] = &[
     ("folder", "folder"),
     ("folder.open", "folder-open"),
     ("symbol", "box"),
+    ("terminal", "square-terminal"),
+    ("tool.knot.explorer", "folder-tree"),
     ("tree.collapsed", "chevron-right"),
     ("tree.expanded", "chevron-down"),
     (FALLBACK, "circle-question-mark"),

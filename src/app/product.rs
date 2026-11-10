@@ -34,6 +34,7 @@ mod roots;
 mod save;
 pub(super) mod sessions;
 mod show_keybindings;
+mod stripes;
 mod tab_drag;
 mod tool_picker;
 mod tools;

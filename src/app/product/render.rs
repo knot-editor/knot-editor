@@ -513,6 +513,10 @@ impl Render for ProductShell {
         tab_drag::coordinator(cx);
         self.tab_drag.borrow_mut().begin_frame();
         let workbench = self.render_workbench(cx);
+        let (left_stripe, right_stripe) = match self.render_stripes(cx) {
+            Some((left, right)) => (Some(left), Some(right)),
+            None => (None, None),
+        };
         let entity = cx.entity();
         let command_palette = self
             .command_palette
@@ -546,15 +550,23 @@ impl Render for ProductShell {
             .bg(theme(cx).paint_color(color::BACKGROUND))
             .text_color(theme(cx).paint_color(color::TEXT))
             .child(
-                div().flex_1().flex().flex_row().min_h_0().min_w_0().child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .min_h_0()
-                        .relative()
-                        .child(workbench)
-                        .child(self.workbench_drag_geometry()),
-                ),
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_row()
+                    .min_h_0()
+                    .min_w_0()
+                    .children(left_stripe)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .relative()
+                            .child(workbench)
+                            .child(self.workbench_drag_geometry()),
+                    )
+                    .children(right_stripe),
             )
             .children(status_bar)
             .child(self.drag_listener(cx))

@@ -71,6 +71,14 @@ pub(crate) fn icon_definition(name: &str, cx: &App) -> IconDefinition {
     with_registry(cx, |registry| registry.icon(name))
 }
 
+/// The definition of the icon `name`, or none when nothing defines it.
+pub(crate) fn defined_icon(name: &str, cx: &App) -> Option<IconDefinition> {
+    match cx.try_global::<ApplicationIcons>() {
+        Some(icons) => icons.0.lookup(name),
+        None => IconRegistry::default().lookup(name),
+    }
+}
+
 /// The definition for a file called `file_name` of `language`.
 pub(crate) fn file_definition(
     file_name: Option<&str>,

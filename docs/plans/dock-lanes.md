@@ -1,7 +1,6 @@
 # Dock lanes
 
-Status: 🚧 checkpoints 1 to 4 done. Checkpoint 5's icons come from the
-completed icon packs (D055).
+Status: 🚧 checkpoints 1 to 4 done; checkpoint 5 awaits its review gate.
 
 ## Goal
 
@@ -165,7 +164,7 @@ a dock's maximized pane while the dock is hidden, restoring it when the dock is
 shown with that pane focused (`ProductShell::maximized_pane`); see
 [workbench](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
 
-### 5. ⏳ Tool stripes (blocked on the icon pack plan)
+### 5. 🔎 Tool stripes (implemented, awaiting review)
 
 - **Deliverables:** left and right stripes with buttons per home, highlight
   for visible tools, bottom-dock group on the left stripe, terminal button,
@@ -175,6 +174,15 @@ shown with that pane focused (`ProductShell::maximized_pane`); see
   click toggling, and rehoming by stripe drag; settings test for the switch.
 - **Review gate:** try the stripes with explorer, contributed tools, and
   terminals.
+- **Implemented ✅:** `Workbench::stripes` groups buttons by home
+  (`crates/knot-model/src/workbench/stripes.rs`); `product/stripes.rs` renders
+  them, with tooltips, and the `workbench.toolStripes` setting turns them off.
+  Icons are the names `tool.<tool ID>` and `terminal`, with native defaults for
+  the explorer and terminal. Choices: the drag uses gpui's in-window drag and
+  drop rather than the cross-window tab coordinator, since a button never
+  leaves its window; dragging the terminal button changes only the terminal
+  home; a hidden tool dragged to a stripe stays hidden.
+- **Review:** `try.stripe-tools` in the personal `post-init.js`.
 - **Implementation context:** rendering beside the workbench in
   `product/render.rs`; drag through `product/tab_drag.rs`'s coordinator;
   setting registered with the native settings and listed in

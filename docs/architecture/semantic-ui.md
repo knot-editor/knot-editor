@@ -268,8 +268,8 @@ names extensions `define`; defining a name that already has a default is a
 failing. A pack (`icons.registerPack`) maps names to definitions and falls back
 per name to the defaults, so it can restyle any package's icons.
 
-The native table (`file`, `folder`, `folder.open`, `symbol`, `tree.collapsed`,
-`tree.expanded`, `fallback`) lives in Rust, as native color-key defaults do,
+The native table (`file`, `folder`, `folder.open`, `symbol`, `terminal`,
+`tool.knot.explorer`, `tree.collapsed`, `tree.expanded`, `fallback`) lives in Rust, as native color-key defaults do,
 because native surfaces paint before packages start and when they fail. Lucide
 glyphs come from `gpui-kit-assets`, a dependency of gpui-component under the
 ISC licence; Knot reads the SVG bytes and registers no asset source, and the
@@ -277,6 +277,10 @@ host rejects an unknown Lucide name when a definition registers. Registrations,
 selection, and lifecycle teardown repaint every window, and icons register
 during activation, before startup restores windows, so load order does not
 change the first frame.
+
+A tool's stripe button paints the icon named `tool.` plus the tool's ID, and
+shows the title's initial when nothing defines it; the terminal button paints
+`terminal`.
 
 File icons resolve apart from the definitions. A file tries the name
 `icons.associate` claims for its file name, then for its extension (longest

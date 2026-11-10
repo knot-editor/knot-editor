@@ -58,6 +58,8 @@ pub const KEYMAP_PRESET: &str = "keymap.preset";
 pub const WORKBENCH_PREVIEW_TABS: &str = "workbench.previewTabs";
 /// Where the bottom dock sits: `contained` between the side docks or `full` width.
 pub const WORKBENCH_BOTTOM_DOCK_LAYOUT: &str = "workbench.bottomDockLayout";
+/// Whether product windows show the tool stripes on the left and right edges.
+pub const WORKBENCH_TOOL_STRIPES: &str = "workbench.toolStripes";
 /// Whether product windows show the status bar.
 pub const STATUS_BAR_VISIBLE: &str = "statusBar.visible";
 /// IDs of status items the bar skips.
@@ -314,6 +316,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             "contained",
             "Where the bottom dock sits: \"contained\" under the center between the side docks, or \"full\" across the window width under them",
         ),
+        SettingDefinition {
+            key: WORKBENCH_TOOL_STRIPES.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Show a stripe of tool buttons on the left and right window edges".into(),
+        },
         SettingDefinition {
             key: STATUS_BAR_VISIBLE.into(),
             value_type: SettingType::Boolean,
