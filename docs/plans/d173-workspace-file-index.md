@@ -254,9 +254,11 @@ Implemented: `files.search(uri, query, { limit })` resolving `{ results, more }`
 `files.walk` removed, the fake host and its test, product tests, docs (API
 guide, settings, architecture, decision, D082 bullet), and `Try:` commands in
 the personal `post-init.js` ("Try: Search Roots", "Try: List Root", and the
-outside-file pair). The end-to-end time from JavaScript is for the user to read
-with "Try: Search Roots" on a large folder; the native search takes 1–22 ms on
-the synthetic 100,000-file tree.
+outside-file pair). Measured from a JavaScript extension through the real host on the synthetic
+100,000-file tree (release build, warm, limit 100, mean of 20 calls, best of
+five): 1.6 ms for the empty query, 3.4 ms for one letter, 6–8 ms for typical
+queries and for no match, 22 ms for a three-part query that matches everything,
+which is the native time plus under a millisecond.
 
 Details:
 

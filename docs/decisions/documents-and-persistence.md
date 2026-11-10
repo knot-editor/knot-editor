@@ -121,8 +121,9 @@ answers `files.list` and `files.isIgnored`, and ranks paths for
 matched. Go to File searches on every keystroke, so it must not receive a
 URI per file. On a synthetic 100,000-file tree (release build, Apple Silicon,
 warm) a disk walk costs about 0.12 s; the first index scan costs the same, the
-tree takes about 11 MB, and a search takes 1 to 7 ms for typical queries and
-22 ms at worst. Entries store a name, kind, and flags, and build URIs when a
+tree takes about 11 MB, and `files.search` takes 2 to 7 ms for typical queries
+and 22 ms at worst, measured from JavaScript, where the call adds under a
+millisecond to the native time. Entries store a name, kind, and flags, and build URIs when a
 query returns them, which cut memory from 42 MB to 11 MB and doubled the time
 to enumerate every file. Ranking puts a file whose name matches before one
 that matches only through its directories. No kernel checkout was available
