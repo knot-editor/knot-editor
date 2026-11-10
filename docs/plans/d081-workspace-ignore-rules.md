@@ -1,6 +1,6 @@
 # D081 — Workspace ignore rules and file enumeration
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 in review; checkpoint 3 not started. Item of the [daily-driver plan](daily-driver.md).
+Status: 🚧 checkpoint 1 done; checkpoints 1 and 2 done; checkpoint 3 not started. Item of the [daily-driver plan](daily-driver.md).
 
 ## Outcome
 
@@ -72,45 +72,24 @@ Approved. The policy, the three settings, the annotated `files.list`, and
 [URI providers](../architecture/documents-and-persistence.md#uri-providers)
 section, and `crates/knot-model/src/files/ignore.rs`. The policy reads ignore
 files through each provider's own `read` and `stat` (a classifier over
-`GitignoreBuilder`) rather than new `FileSystemProvider` methods; checkpoint 2
-decides whether the walk reuses it or uses `WalkBuilder` for local speed.
+`GitignoreBuilder`) rather than new `FileSystemProvider` methods; the walk reuses it.
 
-### 2. `files.walk` enumeration 🔍
+### 2. `files.walk` enumeration ✅
 
-Implemented, awaiting review.
-
-Deliverables:
-
-- `files.walk(uri)` through the same policy, off the foreground.
-- A measurement on a large checkout (for example a Linux kernel tree) recorded
-  in this plan, to inform D082's picker decision.
-
-Validation: model tests for recursion, symlinks not followed, ignored
-directories not descended into, unreadable entries skipped; a handler-level
-test; `just check`.
-
-Review gate: the walk is fast enough for Go to File, or D082 is told it is not.
-
-Done ✅:
-
-- `knot_model::files::walk` reuses the checkpoint 1 classifier over the
-  provider (`ResourceEntry` gained `symlink`), reads up to 16 directories at once,
-  and is wired as `walk_files` in `handlers.rs`, the bootstrap, `knot.d.ts`, and
-  the fake host. `WalkBuilder` was not needed.
-- Tests: model tests (memory and local tempdir), the product handler test, and
-  the fake-host test.
+Approved. `files.walk` is `knot_model::files::walk` over the checkpoint 1
+classifier, reading up to 16 directories at once on the local provider's shared
+worker pool; see the
+[URI providers](../architecture/documents-and-persistence.md#uri-providers)
+section. `WalkBuilder` was not needed.
 
 **Measurement** (release build, Linux kernel `--depth 1` checkout: 97,336 files,
-macOS/APFS, warm cache, three runs): about 1.1 s with the default policy, of
-which about 0.4 s is enumeration alone (`bare` policy). Sequential enumeration was
-2.6 s with a thread per read; a shared pool of at most 16 workers, a `stat` only
-for symlinks, and 16 directories read at once gave a stable 1.1 s (64 at once
-was slower, 1.3 s). `rg --files` takes 0.15 s on the same tree. The remaining cost is
-per-entry classification on one task. Result for
-D082: a kernel-sized repository takes about a second to enumerate once, which is
-acceptable for a one-shot Go to File index; typical repositories are one to two
-orders of magnitude smaller. Cheaper classification, a native local fast path, and
-streaming are deferred as D172 in the [roadmap](../roadmap.md).
+macOS/APFS, warm cache): about 1.1 s, of which about 0.4 s is enumeration alone;
+`rg --files` takes 0.15 s on the same tree. The remaining cost is per-entry
+classification on one task. For D082, a kernel-sized repository takes about a
+second to index once, which suits a one-shot Go to File; typical repositories
+are one to two orders of magnitude smaller. Cheaper classification, a native
+local fast path, and streaming are deferred as D172 in the
+[roadmap](../roadmap.md).
 
 ### 3. Vim `:e` path completion
 
