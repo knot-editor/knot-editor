@@ -6,10 +6,11 @@ import { run, type State } from "./normal.js";
 
 /** Asks for a command line and runs it; returns a message to show, or null. */
 export async function commandLine(state: State): Promise<string | null> {
+  const directory = await baseDirectory(state);
   const input = await workbench.showInput({
     title: "Ex Command",
     prompt: ":",
-    onChange: async (line) => ({ items: await completeEx(line) }),
+    onChange: async (line) => ({ items: await completeEx(line, directory) }),
   });
   if (input.kind === "dismissed") return null;
   const command = parseEx(input.value);
@@ -50,12 +51,17 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
   }
 }
 
-/** `:e`: opens `path`, relative to the document's directory, or for an
- * untitled document to the window's first root. */
-async function edit(state: State, path: string): Promise<string | null> {
+/** The directory `:e` resolves relative paths in: the document's, or for an
+ * untitled document the window's first root. */
+async function baseDirectory(state: State): Promise<string | null> {
   const uri = (await documents.get(state.document))?.resourceUri ?? null;
-  const root = uri === null ? (await workspaces.get(state.target.window))?.roots[0]?.uri ?? null : null;
-  const resolved = resolvePath(path, uri === null ? root : directoryOf(uri));
+  if (uri !== null) return directoryOf(uri);
+  return (await workspaces.get(state.target.window))?.roots[0]?.uri ?? null;
+}
+
+/** `:e`: opens `path` in the base directory. */
+async function edit(state: State, path: string): Promise<string | null> {
+  const resolved = resolvePath(path, await baseDirectory(state));
   if (resolved === null) return `No directory to open ${path} in`;
   try {
     await documents.open(resolved);

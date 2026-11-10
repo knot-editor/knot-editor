@@ -590,6 +590,15 @@ fn ex_writes_and_opens_files_beside_the_document(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn ex_edit_completes_paths_beside_the_document(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let files = serve_files(&product, cx);
+    let session = product.open_file(&files, "mem://product/dir/a.txt", cx);
+    session.press(":e b<tab><cr>", cx);
+    assert_eq!(session.active_text(cx), "two");
+}
+
+#[gpui::test]
 fn ex_edit_from_an_untitled_document_opens_in_the_first_root(cx: &mut TestAppContext) {
     let product = start(cx);
     serve_files(&product, cx);

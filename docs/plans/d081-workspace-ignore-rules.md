@@ -1,6 +1,6 @@
 # D081 — Workspace ignore rules and file enumeration
 
-Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 not started. Item of the [daily-driver plan](daily-driver.md).
+Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 awaiting review. Item of the [daily-driver plan](daily-driver.md).
 
 ## Outcome
 
@@ -91,13 +91,13 @@ are one to two orders of magnitude smaller. Cheaper classification, a native
 local fast path, and streaming are deferred as D172 in the
 [roadmap](../roadmap.md).
 
-### 3. Vim `:e` path completion
+### 3. Vim `:e` path completion ✅ (awaiting review)
 
 Deliverables: `:e` completes paths from the same base `:e` opens against
 (`edit` in `command-line.ts`), listing the typed directory with `files.list`
 and dropping ignored entries; directories complete with a trailing `/`.
 
-Validation: `extensions/@knot/vim/test/ex.test.ts` and `cases/ex.jsonc` cases,
+Implemented in `ex.ts` (`completePath`) and `command-line.ts` (`baseDirectory`). Validation: `extensions/@knot/vim/test/ex.test.ts` and `cases/ex.jsonc` cases,
 run through the real editor per the package test runner; a `post-init.js`
 `Try:` command for manual review. `just check`.
 

@@ -1,6 +1,6 @@
 // Parses Ex command lines: the commands the package runs, `:set` arguments,
 // and the paths `:e` opens; and completes them through the shared matcher.
-import { completion, type InputCompletion } from "knot";
+import { completion, files, type InputCompletion } from "knot";
 
 export type BooleanOption = "number" | "relativenumber" | "wrap" | "expandtab";
 export type NumberOption = "tabstop" | "shiftwidth";
@@ -123,8 +123,10 @@ const OPTIONS: readonly (readonly [string, string])[] = [
 
 /** Completions for the Ex line `text`, best first: command names while the
  * line has no space, then `:set` option names for the last word, keeping its
- * `no` or `inv` prefix. Each item's value is the whole new line. */
-export async function completeEx(text: string): Promise<InputCompletion[]> {
+ * `no` or `inv` prefix, and for `:e` the entries of the typed directory,
+ * resolved against `directory` as `:e` opens them. Each item's value is the
+ * whole new line. */
+export async function completeEx(text: string, directory: string | null): Promise<InputCompletion[]> {
   const name = /^(\s*:?\s*)([a-zA-Z]*)$/.exec(text);
   if (name !== null) {
     const names = NAMES.map(([full]) => full);
@@ -135,6 +137,8 @@ export async function completeEx(text: string): Promise<InputCompletion[]> {
       matches: ranges,
     }));
   }
+  const edit = /^(\s*:?\s*e(?:d(?:i(?:t)?)?)?!?\s+)(.*)$/.exec(text);
+  if (edit !== null) return completePath(edit[1]!, edit[2]!, directory);
   // No option begins with `no` or `inv`, so they are prefixes to keep.
   const set = /^(\s*:?\s*se(?:t)?\s+(?:.*\s)?(?:no|inv)?)([a-z]*)$/.exec(text);
   if (set === null) return [];
@@ -156,6 +160,29 @@ export async function completeEx(text: string): Promise<InputCompletion[]> {
     });
   }
   return items;
+}
+
+/** The entries of the directory `typed` names up to its last `/`, whose names
+ * match the rest, ignored ones left out; directories end in `/`. */
+async function completePath(head: string, typed: string, directory: string | null): Promise<InputCompletion[]> {
+  const slash = typed.lastIndexOf("/") + 1;
+  const prefix = typed.slice(0, slash);
+  const uri = resolvePath(prefix, directory);
+  if (uri === null) return [];
+  let entries;
+  try {
+    entries = (await files.list(uri)).filter((entry) => !entry.ignored);
+  } catch {
+    return [];
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  const names = entries.map((entry) => entry.name);
+  const matches = await completion.match(typed.slice(slash), names);
+  return matches.map(({ index, ranges }) => {
+    const entry = entries[index]!;
+    const label = entry.kind === "directory" ? `${entry.name}/` : entry.name;
+    return { label, value: `${head}${prefix}${label}`, matches: ranges };
+  });
 }
 
 /** The URI `:e` opens for `path`: a URI as it is, an absolute path as a

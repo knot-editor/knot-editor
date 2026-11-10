@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { beforeEach, test } from "node:test";
+import { settings } from "knot";
+import * as host from "knot/testing";
 import { completeEx, directoryOf, parseEx, resolvePath } from "../src/ex.js";
 
 test("commands take Vim's abbreviations and a bang", () => {
@@ -69,7 +71,9 @@ test("paths resolve against a directory, as file URIs, or as given", () => {
   assert.equal(directoryOf("file:///home/me/a.txt"), "file:///home/me");
 });
 
-const values = async (line: string) => (await completeEx(line)).map((item) => item.value);
+beforeEach(() => host.reset());
+
+const values = async (line: string) => (await completeEx(line, "file:///p/src")).map((item) => item.value);
 
 test("command names complete, in the order of the matcher", async () => {
   assert.deepEqual(await values("w"), ["write", "wq"]);
@@ -83,11 +87,10 @@ test("line numbers and other arguments get no items", async () => {
   assert.deepEqual(await values("12"), []);
   assert.deepEqual(await values("$"), []);
   assert.deepEqual(await values("w "), []);
-  assert.deepEqual(await values("e src/"), []);
 });
 
 test(":set completes option names with their short forms", async () => {
-  const items = await completeEx("set nu");
+  const items = await completeEx("set nu", null);
   assert.deepEqual(items.map((item) => [item.value, item.detail]), [
     ["set number", "nu"],
     ["set relativenumber", "rnu"],
@@ -101,4 +104,25 @@ test(":set keeps no and inv prefixes and earlier arguments", async () => {
   assert.deepEqual(await values("set invwr"), ["set invwrap"]);
   assert.deepEqual(await values("set ts=2 sw"), ["set ts=2 shiftwidth"]);
   assert.ok((await values("set no")).every((value) => value.startsWith("set no")));
+});
+
+test(":e completes the entries of the typed directory", async () => {
+  host.seedFile("file:///p/src/main.ts", "");
+  host.seedFile("file:///p/src/lib/a.ts", "");
+  host.seedFile("file:///p/src/.git/HEAD", "");
+  host.seedFile("file:///p/README.md", "");
+  assert.deepEqual(await values("e "), ["e lib/", "e main.ts"]);
+  assert.deepEqual(await values("edit! m"), ["edit! main.ts"]);
+  assert.deepEqual(await values(":e lib/"), [":e lib/a.ts"]);
+  assert.deepEqual(await values("e ../R"), ["e ../README.md"]);
+  assert.deepEqual(await values("e /p/"), ["e /p/README.md", "e /p/src/"]);
+  assert.deepEqual(await values("e missing/"), []);
+});
+
+test(":e completion leaves out ignored entries and needs a directory", async () => {
+  host.seedFile("file:///p/src/a.ts", "");
+  host.seedFile("file:///p/src/out.js", "");
+  await settings.set("files.ignored", ["out.js"]);
+  assert.deepEqual(await values("e "), ["e a.ts"]);
+  assert.deepEqual(await completeEx("e ", null), []);
 });
