@@ -60,7 +60,7 @@ pub(super) fn install(cx: &mut App) {
     sync(cx);
 }
 
-/// A persisted document's resource, for the documents that should be watched.
+/// The resource of each document associated with one, to be watched.
 fn persisted_documents(cx: &App) -> Vec<(DocumentId, ResourceUri)> {
     let Some(documents) = cx.try_global::<ApplicationDocuments>() else {
         return Vec::new();
@@ -70,8 +70,10 @@ fn persisted_documents(cx: &App) -> Vec<(DocumentId, ResourceUri)> {
         .read(cx)
         .documents()
         .filter_map(|document| match document.state() {
-            DocumentState::Persisted { uri, .. } => Some((document.id(), uri.clone())),
-            _ => None,
+            DocumentState::Persisted { uri, .. } | DocumentState::Destination { uri } => {
+                Some((document.id(), uri.clone()))
+            }
+            DocumentState::Untitled { .. } => None,
         })
         .collect()
 }
@@ -155,27 +157,28 @@ pub(super) fn recheck_all(cx: &mut App) {
 struct Snapshot {
     model: Entity<Buffer>,
     uri: ResourceUri,
-    recorded: ResourceVersion,
+    /// The recorded version; `None` for a document with no file yet.
+    recorded: Option<ResourceVersion>,
     revision: u64,
+    dirty: bool,
 }
 
-/// Read a clean document's file and reload the document if it changed.
+/// Read a document's file and reload, mark, or record what changed.
 fn recheck(id: DocumentId, cx: &mut App) {
     let Some(snapshot) = snapshot(id, cx) else {
         return;
     };
-    let Some(providers) = cx
-        .try_global::<ApplicationFileSystems>()
-        .map(|g| g.0.clone())
-    else {
+    let Some(providers) = cx.try_global::<ApplicationFileSystems>().map(|g| g.0.clone()) else {
         return;
     };
     let uri = snapshot.uri.clone();
     cx.spawn(async move |cx| {
         let loaded = load_resource_kind(providers, uri, Some(ResourceKind::File)).await;
-        if let Ok(OpenResource::File { text, version, .. }) = loaded {
-            cx.update(|cx| apply(id, &snapshot, &text, version, cx));
-        }
+        cx.update(|cx| match loaded {
+            Ok(OpenResource::File { text, version, .. }) => apply(id, &snapshot, &text, version, cx),
+            Ok(OpenResource::Missing(_)) => deleted(id, &snapshot, cx),
+            _ => {}
+        });
     })
     .detach();
 }
@@ -183,44 +186,80 @@ fn recheck(id: DocumentId, cx: &mut App) {
 fn snapshot(id: DocumentId, cx: &App) -> Option<Snapshot> {
     let documents = cx.try_global::<ApplicationDocuments>()?.0.read(cx);
     let document = documents.get(id)?;
-    let DocumentState::Persisted { uri, version, .. } = document.state() else {
-        return None;
+    let (uri, recorded) = match document.state() {
+        DocumentState::Persisted { uri, version, .. } => (uri, Some(version.clone())),
+        DocumentState::Destination { uri } => (uri, None),
+        DocumentState::Untitled { .. } => return None,
     };
-    // A dirty document is not reloaded.
-    if document.is_dirty(cx) {
-        return None;
-    }
     Some(Snapshot {
         model: document.model().clone(),
         uri: uri.clone(),
-        recorded: version.clone(),
+        recorded,
         revision: document.model().read(cx).revision(),
+        dirty: document.is_dirty(cx),
     })
 }
 
-/// Record or load what the read found, unless the document moved on while it
-/// was read: edits that race the read win.
-fn apply(id: DocumentId, snapshot: &Snapshot, text: &str, version: ResourceVersion, cx: &mut App) {
-    let documents = cx.global::<ApplicationDocuments>().0.clone();
-    let model = &snapshot.model;
-    let current = documents.read(cx).get(id).map(|document| {
-        (
-            document.model() == model
-                && document.state().persisted_version() == Some(&snapshot.recorded),
-            document.title().to_owned(),
-        )
-    });
-    let Some((true, title)) = current else {
-        return;
-    };
-    if model.read(cx).revision() != snapshot.revision {
+/// Whether the document is still the one the snapshot read about.
+fn unchanged_since(id: DocumentId, snapshot: &Snapshot, cx: &App) -> bool {
+    cx.global::<ApplicationDocuments>()
+        .0
+        .read(cx)
+        .get(id)
+        .is_some_and(|document| {
+            document.model() == &snapshot.model
+                && document.state().persisted_version() == snapshot.recorded.as_ref()
+        })
+}
+
+/// The file is gone: the document keeps its text and becomes dirty.
+fn deleted(id: DocumentId, snapshot: &Snapshot, cx: &mut App) {
+    if snapshot.recorded.is_none() || !unchanged_since(id, snapshot, cx) {
         return;
     }
-    let saved = model.read(cx).text();
-    let check = check_file(&snapshot.recorded, &version, text, &saved);
+    let documents = cx.global::<ApplicationDocuments>().0.clone();
+    if documents.update(cx, |documents, _| documents.mark_deleted(id)) {
+        application_observation::changed(cx);
+    }
+}
+
+/// Record, reload, or mark what the read found, unless the document moved on
+/// while it was read: edits that race the read win.
+fn apply(id: DocumentId, snapshot: &Snapshot, text: &str, version: ResourceVersion, cx: &mut App) {
+    if !unchanged_since(id, snapshot, cx) {
+        return;
+    }
+    let documents = cx.global::<ApplicationDocuments>().0.clone();
+    let model = &snapshot.model;
+    let racing = model.read(cx).revision() != snapshot.revision;
+    // A document with unsaved changes, or no file yet, is never reloaded
+    // unasked; the user decides once the document is focused.
+    let check = match &snapshot.recorded {
+        Some(recorded) if !snapshot.dirty => {
+            if racing {
+                return;
+            }
+            check_file(recorded, &version, text, &model.read(cx).text())
+        }
+        Some(recorded) if *recorded == version => return,
+        _ => FileCheck::Changed,
+    };
     if check == FileCheck::Unchanged {
         return;
     }
+    let reload_now = !snapshot.dirty && settings::boolean(settings::FILES_AUTO_RELOAD, cx);
+    if check == FileCheck::Changed && !reload_now {
+        if documents.update(cx, |documents, _| documents.mark_changed(id, version)) {
+            application_observation::changed(cx);
+            prompt_sessions(cx);
+        }
+        return;
+    }
+    let title = documents
+        .read(cx)
+        .get(id)
+        .map(|document| document.title().to_owned())
+        .unwrap_or_default();
     documents.update(cx, |documents, cx| {
         let Some(capture) = documents.begin_persistence(id, model) else {
             return;
@@ -239,4 +278,109 @@ fn apply(id: DocumentId, snapshot: &Snapshot, text: &str, version: ResourceVersi
             documents.finish_reload(id, model, &capture, text, resource, version, cx);
         }
     });
+}
+
+/// Replace the document's text with its file's, as a line diff that Undo
+/// takes back. Edits made while the file is read win.
+pub(super) fn reload(id: DocumentId, cx: &mut App) {
+    let Some(snapshot) = snapshot(id, cx) else {
+        return;
+    };
+    let Some(providers) = cx.try_global::<ApplicationFileSystems>().map(|g| g.0.clone()) else {
+        return;
+    };
+    let uri = snapshot.uri.clone();
+    cx.spawn(async move |cx| {
+        let loaded = load_resource_kind(providers, uri, Some(ResourceKind::File)).await;
+        let Ok(OpenResource::File { text, version, .. }) = loaded else {
+            return;
+        };
+        cx.update(|cx| {
+            if !unchanged_since(id, &snapshot, cx)
+                || snapshot.model.read(cx).revision() != snapshot.revision
+            {
+                return;
+            }
+            let documents = cx.global::<ApplicationDocuments>().0.clone();
+            let title = documents
+                .read(cx)
+                .get(id)
+                .map(|document| document.title().to_owned())
+                .unwrap_or_default();
+            documents.update(cx, |documents, cx| {
+                if let Some(capture) = documents.begin_persistence(id, &snapshot.model) {
+                    documents.finish_reload(
+                        id,
+                        &snapshot.model,
+                        &capture,
+                        &text,
+                        (title, snapshot.uri.clone()),
+                        version,
+                        cx,
+                    );
+                }
+            });
+        });
+    })
+    .detach();
+}
+
+/// Ask each session whose focused document was marked changed on disk.
+pub(super) fn prompt_sessions(cx: &mut App) {
+    let sessions: Vec<_> = cx
+        .global::<super::ApplicationSessions>()
+        .0
+        .borrow()
+        .iter()
+        .map(|open| open.shell.clone())
+        .collect();
+    for shell in sessions {
+        shell
+            .update(cx, |shell, cx| shell.prompt_external_change(cx))
+            .ok();
+    }
+}
+
+impl super::ProductShell {
+    /// Offer Reload or Keep for the focused document when its file changed
+    /// outside Knot and it has not been asked about that version.
+    pub(super) fn prompt_external_change(&mut self, cx: &mut gpui::Context<Self>) {
+        use gpui::{AppContext as _, PromptLevel};
+
+        let Some(window) = self.window else {
+            return;
+        };
+        if !cx
+            .update_window(window, |_, window, _| window.is_window_active())
+            .unwrap_or(false)
+        {
+            return;
+        }
+        let Some(pane) = self.workbench.read(cx).focused_pane() else {
+            return;
+        };
+        let crate::app::workbench::TabSurfaceId::Document(id) = pane.active_tab().surface_id()
+        else {
+            return;
+        };
+        if !Self::documents(cx).update(cx, |documents, _| documents.take_prompt(id)) {
+            return;
+        }
+        let answer = self.prompt(
+            PromptLevel::Warning,
+            "The file changed outside Knot",
+            Some("Reload it, replacing the text in Knot, or keep the text in Knot.".into()),
+            vec![
+                gpui::PromptButton::new("Reload"),
+                gpui::PromptButton::cancel("Keep"),
+            ],
+            cx,
+        );
+        let task = cx.spawn(async move |_, cx| {
+            if answer.await.unwrap_or(1) == 0 {
+                cx.update(|cx| reload(id, cx));
+            }
+        });
+        self.tasks.push(task);
+    }
 }

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::app::convert::ThemePaint as _;
-use crate::app::documents::DocumentDirty;
+use crate::app::documents::{DocumentDirty, ExternalChange};
 use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Theme, color, theme};
 use crate::app::workbench::BottomDockLayout;
@@ -260,9 +260,14 @@ impl ProductShell {
                     TabSurfaceId::Document(document_id) => {
                         let document = documents.get(document_id).unwrap();
                         format!(
-                            "{}{}",
+                            "{}{}{}",
                             document.title(),
-                            if document.is_dirty(cx) { " •" } else { "" }
+                            if document.is_dirty(cx) { " •" } else { "" },
+                            match document.external_change() {
+                                Some(ExternalChange::Deleted) => " (deleted)",
+                                Some(ExternalChange::Changed { .. }) => " (changed on disk)",
+                                None => "",
+                            }
                         )
                     }
                     TabSurfaceId::Terminal(_) => "Terminal".to_owned(),

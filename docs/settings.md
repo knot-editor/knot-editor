@@ -46,6 +46,7 @@ values take effect.
 | `files.ignored` | strings | `[]` | Global | native | Gitignore-style patterns of entries `files.list` marks `ignored` and `files.walk` skips, in addition to the repository ignore files. |
 | `files.respectGitignore` | boolean | `true` | Global | native | Mark entries (and skip them in `files.walk`) that `.gitignore`, `.ignore`, `.git/info/exclude`, and the global Git excludes file match as ignored. `.gitignore` files and the Git excludes apply only inside a Git repository. |
 | `files.watchDocuments` | boolean | `true` | Global | native | Watch open documents for changes made outside Knot and recheck them when the application becomes active. A clean document whose file changed reloads in place, editing only the changed lines, and Undo restores the previous text. Turning it off releases the watches and stops rechecking; Save still reports a conflict. |
+| `files.autoReload` | boolean | `true` | Global | native | Reload a clean document whose file changed outside Knot. When off, the document is marked changed on disk and asks Reload or Keep once focused, like a document with unsaved changes. |
 
 ## Appearance
 

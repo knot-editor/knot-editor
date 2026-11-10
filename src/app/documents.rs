@@ -9,7 +9,7 @@ use gpui::{App, Entity, Global};
 use super::model::Buffer;
 use super::resource::ResourceUri;
 
-pub(crate) use knot_model::documents::{DocumentState, PersistenceCapture};
+pub(crate) use knot_model::documents::{DocumentState, ExternalChange, PersistenceCapture};
 pub(crate) use knot_model::workbench::DocumentId;
 
 use super::filesystem::ResourceVersion;

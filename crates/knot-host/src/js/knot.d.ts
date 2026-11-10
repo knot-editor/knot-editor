@@ -357,6 +357,10 @@ declare module "knot" {
     /** Whether Knot watches open documents for changes made outside it, and
      * rechecks them when the application becomes active. Native default true. */
     "files.watchDocuments": boolean;
+    /** Whether a clean document whose file changed outside Knot reloads at
+     * once. When false it is marked and, once focused, asks Reload or Keep
+     * like a document with unsaved changes. Native default true. */
+    "files.autoReload": boolean;
     /** How pickers and completion lists match, in order of preference:
      * "prefix", "substring", "flex" (fuzzy), or "orderless" (space-separated
      * parts in any order). A candidate matches if any style matches it, and

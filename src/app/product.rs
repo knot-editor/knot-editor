@@ -857,6 +857,7 @@ impl ProductShell {
         self.application_observer = Some(cx.observe(&cx.entity(), |this, _, cx| {
             super::extensions::host::application_changed(cx);
             this.schedule_view_state(cx);
+            this.prompt_external_change(cx);
         }));
         super::extensions::host::application_changed(cx);
         if let Some(host) = super::extensions::host::entity(cx) {

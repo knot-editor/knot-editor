@@ -1,7 +1,7 @@
 //! Watching persisted documents and reloading clean ones from changed files.
 use super::editor_api::active_editor;
 use super::*;
-use crate::app::documents::DocumentDirty;
+use crate::app::documents::{DocumentDirty, ExternalChange};
 use crate::app::product::document_watch;
 use crate::app::settings::{FILES_WATCH_DOCUMENTS, set_boolean};
 
@@ -37,6 +37,8 @@ async fn fixture(cx: &mut TestAppContext) -> Fixture {
         )
     });
     let (shell, window) = product_window(document, model.clone(), cx);
+    cx.update_window(window, |_, window, _| window.activate_window())
+        .unwrap();
     cx.run_until_parked();
     Fixture {
         provider,
@@ -225,4 +227,145 @@ async fn turning_watch_documents_off_releases_watches_and_on_rechecks(cx: &mut T
     cx.run_until_parked();
     assert_eq!(f.provider.watch_count(), 1);
     assert_eq!(f.text(cx), "changed\n");
+}
+
+fn edit_locally(f: &Fixture, cx: &mut TestAppContext) {
+    f.model
+        .update(cx, |model, _| model.replace(0..0, "local ").unwrap());
+}
+
+fn external_change(f: &Fixture, cx: &mut TestAppContext) -> Option<ExternalChange> {
+    cx.read(|cx| {
+        f.documents
+            .read(cx)
+            .get(f.document)
+            .unwrap()
+            .external_change()
+            .cloned()
+    })
+}
+
+/// Run the foreground until `ready` holds, giving other threads time.
+fn wait_until(cx: &mut TestAppContext, mut ready: impl FnMut(&mut TestAppContext) -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        cx.run_until_parked();
+        if ready(cx) {
+            return;
+        }
+        assert!(std::time::Instant::now() < deadline, "did not settle");
+        std::thread::yield_now();
+    }
+}
+
+fn wait_for_prompt(cx: &mut TestAppContext) {
+    wait_until(cx, |cx| cx.has_pending_prompt());
+}
+
+#[gpui::test]
+async fn a_dirty_document_is_marked_and_asks_once_and_keep_leaves_the_text(
+    cx: &mut TestAppContext,
+) {
+    let f = fixture(cx).await;
+    edit_locally(&f, cx);
+
+    f.provider.seed_file(f.uri.clone(), "external\n").unwrap();
+    wait_for_prompt(cx);
+    assert!(matches!(
+        external_change(&f, cx),
+        Some(ExternalChange::Changed { .. })
+    ));
+    cx.simulate_prompt_answer("Keep");
+    cx.run_until_parked();
+    assert_eq!(f.text(cx), format!("local {TEXT}"));
+
+    // The kept version is not asked about again, and the next save reaches
+    // the conflict prompt.
+    cx.update(document_watch::recheck_all);
+    f.settle(cx);
+    assert!(!cx.has_pending_prompt());
+    let execution = dispatch_product_command(&f.shell, f.window, SAVE_COMMAND, cx);
+    wait_for_prompt(cx);
+    cx.simulate_prompt_answer("Cancel");
+    assert_eq!(execution.completion.await.unwrap(), CommandOutcome::Cancelled);
+}
+
+#[gpui::test]
+async fn reload_from_the_prompt_discards_changes_and_undo_restores_them(cx: &mut TestAppContext) {
+    let f = fixture(cx).await;
+    edit_locally(&f, cx);
+
+    f.provider.seed_file(f.uri.clone(), "external\n").unwrap();
+    wait_for_prompt(cx);
+    cx.simulate_prompt_answer("Reload");
+    wait_for_api_condition(cx, |cx| f.model.read(cx).text() == "external\n");
+
+    assert!(!f.dirty(cx));
+    assert_eq!(external_change(&f, cx), None);
+    f.model.update(cx, |model, _| model.undo().unwrap());
+    assert_eq!(f.text(cx), format!("local {TEXT}"));
+}
+
+#[gpui::test]
+async fn the_prompt_waits_for_the_document_to_be_focused(cx: &mut TestAppContext) {
+    let f = fixture(cx).await;
+    edit_locally(&f, cx);
+    let other_model = cx.new(|_| Buffer::new(BufferModel::from_text("other")));
+    let other = f.documents.update(cx, |documents, cx| {
+        documents.create_untitled("Other", other_model.clone(), cx)
+    });
+    let pane = f.shell.read_with(cx, |shell, cx| {
+        shell.workbench.read(cx).focused_pane_id().unwrap()
+    });
+    let show = |document, model: &Entity<Buffer>, cx: &mut TestAppContext| {
+        f.shell.update(cx, |shell, cx| {
+            shell.workbench.update(cx, |workbench, cx| {
+                workbench
+                    .open_tab_for_document(pane, document, model.clone(), cx)
+                    .unwrap();
+            });
+            cx.notify();
+        });
+        cx.run_until_parked();
+    };
+    show(other, &other_model, cx);
+
+    f.provider.seed_file(f.uri.clone(), "external\n").unwrap();
+    wait_until(cx, |cx| external_change(&f, cx).is_some());
+    assert!(!cx.has_pending_prompt());
+
+    show(f.document, &f.model, cx);
+    assert!(cx.has_pending_prompt());
+}
+
+#[gpui::test]
+async fn a_deleted_file_keeps_the_document_dirty_and_saving_recreates_it(
+    cx: &mut TestAppContext,
+) {
+    let f = fixture(cx).await;
+    f.provider.remove(f.uri.clone()).unwrap();
+    wait_until(cx, |cx| external_change(&f, cx) == Some(ExternalChange::Deleted));
+
+    assert_eq!(f.text(cx), TEXT);
+    assert!(f.dirty(cx));
+    let execution = dispatch_product_command(&f.shell, f.window, SAVE_COMMAND, cx);
+    assert_eq!(execution.completion.await.unwrap(), CommandOutcome::Completed);
+    assert_eq!(f.provider.read(f.uri.clone()).await.unwrap().bytes, TEXT.as_bytes());
+    assert!(!f.dirty(cx));
+    assert_eq!(external_change(&f, cx), None);
+}
+
+#[gpui::test]
+async fn with_auto_reload_off_a_clean_document_is_marked_and_asks(cx: &mut TestAppContext) {
+    let f = fixture(cx).await;
+    cx.update(|cx| set_boolean(crate::app::settings::FILES_AUTO_RELOAD, false, cx));
+
+    f.provider.seed_file(f.uri.clone(), "external\n").unwrap();
+    wait_for_prompt(cx);
+
+    assert_eq!(f.text(cx), TEXT);
+    assert!(matches!(
+        external_change(&f, cx),
+        Some(ExternalChange::Changed { .. })
+    ));
 }

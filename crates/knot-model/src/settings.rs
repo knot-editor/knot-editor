@@ -52,6 +52,8 @@ pub const FILES_IGNORED: &str = "files.ignored";
 pub const FILES_RESPECT_GITIGNORE: &str = "files.respectGitignore";
 /// Whether open documents are watched for changes made outside Knot.
 pub const FILES_WATCH_DOCUMENTS: &str = "files.watchDocuments";
+/// Whether a clean document reloads when its file changes, rather than asking.
+pub const FILES_AUTO_RELOAD: &str = "files.autoReload";
 /// Which appearance's theme applies: `dark`, `light`, or `system`.
 pub const THEME_MODE: &str = "theme.mode";
 /// The theme name used in dark mode.
@@ -328,6 +330,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: true.into(),
             description: "Watch open documents for changes made outside Knot and reload clean ones".into(),
+        },
+        SettingDefinition {
+            key: FILES_AUTO_RELOAD.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Reload a clean document whose file changed outside Knot instead of asking".into(),
         },
         text(
             THEME_MODE,
