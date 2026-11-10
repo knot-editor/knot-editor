@@ -295,13 +295,11 @@ to be rebuilt later:
   - Decide how bundled consumers locate tools: bundle `rg` with Knot, or
     require it on PATH.
 
-- **D122 — Extension file read, list, and stat API**
-  - A public API to read a file's bytes or text, list a directory, and stat
-    a URI through the registered resource providers, as VS Code's
-    `workspace.fs` does. The explorer, project-local settings (D089),
-    EditorConfig (D090), and project inference (D123) need it, and D010 and
-    D081 cover only mutation and enumeration.
-  - 🚧 [Plan](d122-file-read-api.md)
+- ✅ **D122 — Extension file read, list, and stat API**
+  - `knot.files` reads text, lists one directory, and stats a URI through the
+    registered providers; reads are ungated and see stored content only
+    ([architecture](../architecture/documents-and-persistence.md#uri-providers),
+    [decisions](../decisions/documents-and-persistence.md#extension-file-reads)).
 
 - **D143 — Input completion** (depends on D071, D122)
   - `workbench.showInput` offers completion items as the text changes,
