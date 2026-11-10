@@ -80,6 +80,49 @@ fn semantic_open_returns_the_actual_created_or_reused_presentation(cx: &mut Test
 }
 
 #[gpui::test]
+fn opening_a_folder_in_a_window_with_roots_uses_a_new_window(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (filesystems, _) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
+    let (shell, _) = product_window(placeholder, model, cx);
+    let windows = cx.update(|cx| cx.windows().len());
+
+    // A window without roots takes the folder.
+    let mut first = begin_open(&shell, "mem://product/src", cx);
+    cx.run_until_parked();
+    assert!(first.try_recv().unwrap().is_ok());
+    assert_eq!(cx.update(|cx| cx.windows().len()), windows);
+
+    // A window with roots keeps them and its tabs; the folder opens elsewhere.
+    let tabs = cx.read(|cx| shell.read(cx).workbench.read(cx).tabs().count());
+    let mut second = begin_open(&shell, "mem://product/", cx);
+    cx.run_until_parked();
+    let OpenCommit::Workspace(workspace) = second.try_recv().unwrap().unwrap() else {
+        panic!("folder Open returned a document");
+    };
+    assert_eq!(cx.update(|cx| cx.windows().len()), windows + 1);
+    assert_eq!(
+        workspace.first_root().unwrap().to_string(),
+        "mem://product/"
+    );
+    cx.read(|cx| {
+        let original = shell.read(cx);
+        assert_eq!(
+            original
+                .workspace
+                .snapshot()
+                .first_root()
+                .unwrap()
+                .to_string(),
+            "mem://product/src"
+        );
+        assert_eq!(original.workbench.read(cx).tabs().count(), tabs);
+    });
+}
+
+#[gpui::test]
 fn semantic_open_returns_committed_roots_and_preserves_resource_errors(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (filesystems, _) = memory_filesystems_with_provider();

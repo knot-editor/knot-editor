@@ -65,7 +65,7 @@ way to opt in.
 
 ## Checkpoints
 
-### 1. Open Folder opens a new window
+### 1. Open Folder opens a new window ✅ built, awaiting its review gate
 
 - Deliverables: the native Open Folder command opens the chosen folder in a
   new product window when the target window has any root, and replaces the

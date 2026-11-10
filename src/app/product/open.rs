@@ -356,7 +356,7 @@ impl ProductShell {
     ) -> Result<OpenCommit, crate::app::open::OpenResourceError> {
         let committed = match result {
             Ok(OpenResource::Directory(root)) => {
-                OpenCommit::Workspace(self.install_workspace(root, cx))
+                OpenCommit::Workspace(self.open_workspace(root, cx))
             }
             Ok(resource) => {
                 let document = Self::resource_document(resource, cx)
@@ -372,6 +372,24 @@ impl ProductShell {
         }
         cx.notify();
         Ok(committed)
+    }
+
+    /// Open a folder: a window without roots takes it, and any other window
+    /// keeps its roots and tabs while the folder opens in a new window.
+    fn open_workspace(
+        &mut self,
+        root: crate::app::resource::ResourceUri,
+        cx: &mut Context<Self>,
+    ) -> crate::app::workspace::WorkspaceSnapshot {
+        if self.workspace.snapshot().roots().is_empty() {
+            return self.install_workspace(root, cx);
+        }
+        let handle = super::launch::open_product_window_with(None, None, cx);
+        let shell = cx
+            .global::<ApplicationSessions>()
+            .in_window(handle)
+            .expect("a product window shows a session");
+        shell.update(cx, |shell, cx| shell.install_workspace(root, cx))
     }
 
     /// The document for a loaded file or missing destination: the live

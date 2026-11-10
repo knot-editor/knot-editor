@@ -359,11 +359,13 @@ fn native_root_commands_add_reorder_and_remove_roots_without_closing_documents(
         open_documents
     );
 
-    // Open replaces every root with the chosen folder.
+    // Open leaves a window that has roots alone and opens the folder in a new
+    // window.
     shell.update(cx, |shell, cx| {
         shell.add_workspace_root(second.clone(), cx);
     });
     assert_eq!(roots(cx).len(), 2);
+    let windows = cx.update(|cx| cx.windows().len());
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx),
@@ -371,10 +373,8 @@ fn native_root_commands_add_reorder_and_remove_roots_without_closing_documents(
         ),
         CommandOutcome::Completed
     );
-    wait_for_api_condition(cx, |cx| {
-        shell.read(cx).workspace.snapshot().roots().len() == 1
-    });
-    assert_eq!(roots(cx)[0].1, second);
+    wait_for_api_condition(cx, |cx| cx.windows().len() == windows + 1);
+    assert_eq!(roots(cx).len(), 2);
 }
 
 #[gpui::test]

@@ -97,7 +97,9 @@ ID without resetting generation. Invalid replacement preserves existing state.
 Removing a root never closes documents.
 
 Folder Open and root replacement address the native window independently of any
-selected document. They normalize/stat every proposed directory before one shared
+selected document. Folder Open installs the folder in a window without roots and
+opens a new window for it otherwise; root replacement always edits the target
+window. They normalize/stat every proposed directory before one shared
 root/tree commit, revalidating caller lifetime, window, Open generation, and root
 set generation. Unrelated documents stay open. Results use the committed snapshot.
 

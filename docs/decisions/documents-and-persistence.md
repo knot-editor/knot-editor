@@ -29,7 +29,9 @@ Nested and overlapping roots are allowed, because a monorepo and one of its
 packages are both reasonable roots, and each is browsed independently. Every
 root is a top-level row, even when there is only one, so root actions always
 have an obvious target and there is one layout and keyboard model. Folder Open
-keeps replacing every root, matching its single-root meaning. Removing a root
+opens a window without roots in place and any other window in a new one, as
+Zed does, so root edits inside a window come only from adding and removing
+folders and a window never changes which remembered folder it shows. Removing a root
 never closes documents, since documents are independent of workspace
 containment.
 
