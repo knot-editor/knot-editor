@@ -96,9 +96,6 @@ free-form split tree, where docks are groups among document panes, goes away.
 
 - Whether an empty dock pane survives as an empty drop target. Empty panes
   collapse, as today, until use says otherwise.
-- Default keys for the dock toggles and New Terminal in Center, beyond
-  `ctrl-`` for Toggle Terminal; chosen at checkpoint 3 review against the
-  existing presets.
 
 ## Checkpoints
 
