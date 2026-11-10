@@ -400,17 +400,24 @@ pickers. It matches the supplied item list locally through the shared
 `knot_model::matching` matcher, ranking label matches above description
 matches above an item's hidden match text, and keeps the caller's order for an
 empty query and equal scores; no provider, scheduler, or event bus is added. An extension
-picker with `onHighlight` reports the highlighted item through a pull loop in
-the caller's own turn, because package roots are serial and a notification
-could not run while the command awaits the picker:
+picker with `onHighlight` or `onQuery` reports the highlighted item and the
+typed query through a pull loop in the caller's own turn, because package
+roots are serial and a notification could not run while the command awaits the
+picker:
 
 ```text
-showPicker({ onHighlight })
-  beginPicker ──> highlighted(session, id) ─┐
-  onHighlight(id) awaited                    │ repeat
-  nextPickerEvent(session) ──> highlighted ──┘
-                           └─> selected | dismissed
+showPicker({ onHighlight, onQuery })
+  beginPicker ──> highlighted(session, id) | queried(session, query) ─┐
+  callback awaited                                                    │ repeat
+  nextPickerEvent(session, rows?) ──> highlighted | queried ──────────┘
+                                  └─> selected | dismissed
 ```
+
+With `onQuery` the picker is created without rows and does no matching: each
+pull of a query is answered by the rows the next pull carries, which the
+picker shows in the order given with the supplied ranges, and a query is
+answered before the highlight it replaces. Rows apply only while the field
+still holds the query last delivered; otherwise they are dropped.
 
 The matcher serves every list that filters by a typed query. Its styles
 (`prefix`, `substring`, `flex`, `orderless`) are the user's ordered

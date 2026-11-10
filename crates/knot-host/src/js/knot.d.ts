@@ -1606,9 +1606,29 @@ declare module "knot" {
   /** An explicit target or the admitted command's window is required; a
    * context-free call without either rejects ContextUnavailable. */
   export interface TransientTargetOptions { readonly target?: WindowTarget; }
+  /** A row a picker's `onQuery` answers with. */
+  export interface PickerRow extends PickerItem {
+    /** UTF-16 ranges of `label` to highlight as matched, as `completion.match`
+     * returns them. */
+    readonly labelMatches?: readonly (readonly [start: number, end: number])[] | null;
+    /** UTF-16 ranges of `description` to highlight as matched. */
+    readonly descriptionMatches?: readonly (readonly [start: number, end: number])[] | null;
+  }
   export interface PickerOptions extends TransientTargetOptions {
     readonly title: string;
-    readonly items: readonly PickerItem[];
+    /** The rows to match locally; exclusive with `onQuery`. */
+    readonly items?: readonly PickerItem[];
+    /**
+     * Supplies the rows in place of `items`. Called with the query, first
+     * with the empty one and then whenever it changes; the picker does no
+     * matching of its own and shows the rows in the order returned, with the
+     * ranges they carry highlighted. Calls are serial; while one runs, later
+     * queries collapse into the latest. An answer applies only while the
+     * field still holds the query it answers. A throw stops further calls
+     * and is rethrown once the picker settles. `onHighlight` works as it does
+     * with `items`.
+     */
+    readonly onQuery?: (query: string) => readonly PickerRow[] | Promise<readonly PickerRow[]>;
     /**
      * Called with the highlighted item's ID, or null when nothing matches,
      * first for the initial highlight and then whenever it changes. Calls are

@@ -285,6 +285,13 @@ if (picked.kind === "selected") {
   const id: string = picked.id;
   void id;
 }
+await workbench.showPicker({
+  title: "Query",
+  onQuery: async (query: string) => [
+    { id: query, label: "A", description: "dir", labelMatches: [[0, 1]], descriptionMatches: null },
+  ],
+  onHighlight: (id) => void id,
+});
 const typed: import("knot").InputResult = await workbench.showInput({
   title: "Name", value: "seed", target: opened.presentation.target.window,
 });
@@ -348,6 +355,10 @@ await workspaces.pickFolder({ target: "window" });
 await workbench.showMessage({ title: "Notice", message: "body" });
 // @ts-expect-error picker items require an id
 await workbench.showPicker({ title: "Bad", items: [{ label: "missing" }] });
+// @ts-expect-error onQuery receives the query text
+await workbench.showPicker({ title: "Bad", onQuery: (query: number) => [{ id: String(query), label: "A" }] });
+// @ts-expect-error onQuery rows need an ID
+await workbench.showPicker({ title: "Bad", onQuery: () => [{ label: "A" }] });
 // @ts-expect-error onHighlight receives an item ID
 await workbench.showPicker({ title: "Bad", items: [], onHighlight: (id: number) => void id });
 // @ts-expect-error input title is required

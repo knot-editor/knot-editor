@@ -667,6 +667,49 @@ await commands.register("transient.malformed-input", async () => {
   }
   await workbench.writeClipboardText("not rethrown");
 });
+await commands.register("transient.query", async () => {
+  const seen = [];
+  const result = await workbench.showPicker({
+    title: "Query",
+    onQuery: async (query) => {
+      seen.push(query);
+      await workbench.writeClipboardText(seen.join(","));
+      return [
+        { id: `${query}-1`, label: `one ${query}`, description: "dir", labelMatches: [[0, 3]] },
+        { id: `${query}-2`, label: `two ${query}`, descriptionMatches: [[0, 1]] },
+      ];
+    },
+  });
+  await workbench.writeClipboardText(`${seen.join(",")}|${JSON.stringify(result)}`);
+});
+await commands.register("transient.failing-query", async () => {
+  const seen = [];
+  try {
+    await workbench.showPicker({
+      title: "Query",
+      onQuery: async (query) => {
+        seen.push(query);
+        await workbench.writeClipboardText(seen.join(","));
+        if (query === "x") throw new Error("boom");
+        return [{ id: query, label: `row ${query}` }];
+      },
+    });
+  } catch (error) {
+    await workbench.writeClipboardText(`caught ${error.message}|${seen.join(",")}`);
+    return;
+  }
+  await workbench.writeClipboardText("not rethrown");
+});
+await commands.register("transient.stale-query", async () => {
+  await workbench.showPicker({
+    title: "Query",
+    onQuery: async (query) => {
+      await workbench.writeClipboardText(`waiting ${query}`);
+      while ((await workbench.readClipboardText()) !== `go ${query}`) {}
+      return [{ id: query, label: `row ${query}` }];
+    },
+  });
+});
 await commands.register("transient.stale-input", async () => {
   await workbench.showInput({
     title: "Word",
@@ -921,6 +964,90 @@ fn feedback_for_older_text_is_dropped(cx: &mut TestAppContext) {
     cx.write_to_clipboard(gpui::ClipboardItem::new_string("go al".into()));
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["al"]);
     cx.read(|cx| assert_eq!(input.read(cx).message(), Some("for al")));
+}
+
+fn picker_labels(picker: &Entity<crate::app::picker::Picker>, cx: &gpui::App) -> Vec<String> {
+    let picker = picker.read(cx);
+    picker
+        .visible_entries()
+        .into_iter()
+        .map(|entry| picker.entry(entry).label.clone())
+        .collect()
+}
+
+fn clipboard_has_outcome(cx: &gpui::App) -> bool {
+    cx.read_from_clipboard()
+        .and_then(|item| item.text())
+        .is_some_and(|text| text.contains('|'))
+}
+
+#[gpui::test]
+fn a_queried_picker_shows_the_rows_answering_each_query(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, completion) = start_live_input("transient.query", cx);
+    let picker = transient_picker(&shell, cx);
+    // The empty query is answered first, and the rows keep their ranges.
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["one ", "two "]);
+    picker.read_with(cx, |picker, _| {
+        #[allow(clippy::single_range_in_vec_init)]
+        let expected = vec![0..3];
+        assert_eq!(picker.entry(0).label_matches, expected);
+        assert_eq!(
+            picker.entry(1).description_matches,
+            Vec::<std::ops::Range<usize>>::new()
+        );
+    });
+    // Queries typed before the extension asks again collapse into the latest.
+    picker.update(cx, |picker, cx| {
+        picker.set_query("a", cx);
+        picker.set_query("ab", cx);
+    });
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["one ab", "two ab"]);
+    // Confirming names the supplied row.
+    picker.update(cx, |picker, cx| {
+        picker.move_selection(1, cx);
+        picker.confirm(cx);
+    });
+    wait_for_api_condition(cx, clipboard_has_outcome);
+    let text = clipboard(cx).unwrap();
+    assert!(
+        text.ends_with(r#"|{"kind":"selected","id":"ab-2"}"#),
+        "{text}"
+    );
+    assert!(text.starts_with(',') && text.contains("ab|"), "{text}");
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn a_throwing_query_callback_stops_and_rethrows_once_the_picker_settles(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, completion) = start_live_input("transient.failing-query", cx);
+    let picker = transient_picker(&shell, cx);
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row "]);
+    picker.update(cx, |picker, cx| picker.set_query("x", cx));
+    wait_for_api_condition(cx, |cx| clipboard_is(cx, ",x"));
+    // The picker stays open and later queries reach no callback.
+    cx.read(|cx| assert!(shell.read(cx).transient.is_some()));
+    picker.update(cx, |picker, cx| picker.set_query("y", cx));
+    cx.run_until_parked();
+    picker.update(cx, |_, cx| {
+        cx.emit(crate::app::picker::PickerEvent::Dismissed)
+    });
+    wait_for_api_condition(cx, clipboard_has_outcome);
+    assert_eq!(clipboard(cx).as_deref(), Some("caught boom|,x"));
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn rows_for_an_older_query_are_dropped(cx: &mut TestAppContext) {
+    let (_host, _key, shell, _window, _completion) = start_live_input("transient.stale-query", cx);
+    let picker = transient_picker(&shell, cx);
+    wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting "));
+    picker.update(cx, |picker, cx| picker.set_query("al", cx));
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("go ".into()));
+    // The answer for the empty query is delivered while the field says "al".
+    wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting al"));
+    assert!(cx.read(|cx| picker_labels(&picker, cx)).is_empty());
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("go al".into()));
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row al"]);
 }
 
 fn clipboard_is(cx: &gpui::App, expected: &str) -> bool {

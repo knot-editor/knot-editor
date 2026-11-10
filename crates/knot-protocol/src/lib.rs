@@ -426,6 +426,19 @@ pub struct PickerItem {
     pub hint: Option<String>,
 }
 
+/// One row a query-driven picker is given for a query: an item with the
+/// UTF-16 code unit ranges of its label and description to highlight.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PickerRow {
+    #[serde(flatten)]
+    pub item: PickerItem,
+    #[serde(default, deserialize_with = "unit_ranges")]
+    pub label_matches: Option<Vec<[usize; 2]>>,
+    #[serde(default, deserialize_with = "unit_ranges")]
+    pub description_matches: Option<Vec<[usize; 2]>>,
+}
+
 /// Settled outcome of a picker interaction.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -434,12 +447,14 @@ pub enum PickerResult {
     Dismissed,
 }
 
-/// One step of a picker whose caller previews the highlighted item: the
-/// highlight with the session to ask again, or the settled outcome.
+/// One step of a picker whose caller previews the highlighted item or answers
+/// its query: the highlight or query with the session to ask again, or the
+/// settled outcome.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PickerUpdate {
     Highlighted { session: u64, id: Option<String> },
+    Queried { session: u64, query: String },
     Selected { id: String },
     Dismissed,
 }

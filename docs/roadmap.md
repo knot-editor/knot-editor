@@ -96,7 +96,7 @@ complete list for that item.
   - D145 before D021, which is reconsidered only if D145 falls short.
   - D114 → D027
   - D077 → D117 → D067
-  - D071 → D118 → D067, D082
+  - D071 → D067, D082
   - D053 → D119
 - **Find:** D031 → D001, with or after D092; D031 → D150.
 - **Package manager:** D087 → D101 → D102 → D103 → D104 → D106;
@@ -577,17 +577,6 @@ complete list for that item.
     a title, optional percentage, and cancellation, shown through the D077
     status bar rather than a new surface.
   - Order: after D077; before D067.
-
-- **D118 — Query-driven picker**
-  - Deferred: `workbench.showPicker` takes a complete item list and filters
-    it locally, which deliberately avoids streaming providers.
-  - Reconsider: A picker's items depend on the query or are too many to
-    send up front, such as workspace symbols, live grep, or Go to File on a
-    large tree. Then add a provider that receives each query with
-    cancellation and returns items, keeping the static list as the common
-    case. A preview of the selected item waits for D109's reveal.
-  - Order: after D071, which settles the shared picker; before D067's
-    workspace symbols and D082 on large trees.
 
 - **D140 — Placeholder text in input fields**
   - Deferred: The shared `TextInput` behind `workbench.showInput` and the

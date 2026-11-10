@@ -998,8 +998,8 @@ pub(crate) async fn dispose_editor_contributions(
 use crate::app::extensions::semantics::{SemanticError, ViewPresentation};
 use knot_protocol::{
     CompletionProviderRegistrationId, ConfirmationResult, FolderPickerResult, InputCompletion,
-    InputResult, InputUpdate, PickerItem, PickerResult, PickerUpdate, ProviderIdentity, TreeAction,
-    TreeProviderRegistrationId, ViewContentKind,
+    InputResult, InputUpdate, PickerItem, PickerResult, PickerRow, PickerUpdate, ProviderIdentity,
+    TreeAction, TreeProviderRegistrationId, ViewContentKind,
 };
 
 use crate::app::transient::{PromptText, TransientOutcome, TransientOwner};
@@ -1263,6 +1263,17 @@ pub(crate) struct TransientSession {
     /// The value the caller last pulled; feedback applies only while the
     /// field still holds it.
     delivered: Option<String>,
+    /// The picker whose rows the caller supplies, with the queries it asks
+    /// for.
+    queried: Option<QueriedPicker>,
+}
+
+struct QueriedPicker {
+    picker: WeakEntity<crate::app::picker::Picker>,
+    queries: tokio::sync::watch::Receiver<Option<String>>,
+    /// The query the caller last pulled; rows apply only while the field
+    /// still holds it.
+    delivered: Option<String>,
 }
 
 impl TransientSession {
@@ -1274,28 +1285,66 @@ impl TransientSession {
 /// The next thing a caller pulls from a session.
 enum Pulled {
     Changed { session: u64, value: Option<String> },
+    Queried { session: u64, query: String },
     Settled(TransientOutcome),
 }
 
-/// Open a picker and settle with its first highlight or its outcome.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct BeginPickerArguments {
+    picker: PickerArguments,
+    /// Whether the caller supplies the rows for each query.
+    queried: bool,
+}
+impl HostArguments for BeginPickerArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            picker: PickerArguments::decode(reader)?,
+            queried: reader.integer(5)? != 0,
+        })
+    }
+}
+
+/// Open a picker and settle with its first highlight or query, or its
+/// outcome.
 #[host_operation("beginPicker")]
 pub(crate) async fn begin_picker(
     context: HostContext,
-    arguments: PickerArguments,
+    arguments: BeginPickerArguments,
 ) -> Result<PickerUpdate, TransientError> {
     let request = context.request;
     let owner = transient_owner(&request);
-    let PickerArguments {
-        title,
-        items,
-        target,
+    let BeginPickerArguments {
+        picker:
+            PickerArguments {
+                title,
+                items,
+                target,
+            },
+        queried,
     } = arguments;
     let (sender, changes) = tokio::sync::watch::channel(None);
-    let completion = context.foreground(|host, cx| {
+    let (query_sender, queries) = tokio::sync::watch::channel(None);
+    let (completion, queried) = context.foreground(|host, cx| {
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, cx| shell.begin_picker(owner, title, items, Some(sender), cx),
+            move |shell, cx| {
+                if queried {
+                    let (completion, picker) =
+                        shell.begin_queried_picker(owner, title, sender, query_sender, cx)?;
+                    Ok((
+                        completion,
+                        Some(QueriedPicker {
+                            picker,
+                            queries,
+                            delivered: None,
+                        }),
+                    ))
+                } else {
+                    let completion = shell.begin_picker(owner, title, items, Some(sender), cx)?;
+                    Ok((completion, None))
+                }
+            },
             cx,
         )
     })??;
@@ -1305,6 +1354,7 @@ pub(crate) async fn begin_picker(
         changes,
         input: None,
         delivered: None,
+        queried,
     };
     picker_update(next_change(&context, session).await?)
 }
@@ -1312,25 +1362,70 @@ pub(crate) async fn begin_picker(
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PickerSessionArguments {
     pub session: u64,
+    /// The rows answering the last pulled query, if that is what was pulled.
+    pub rows: Option<Vec<PickerRow>>,
 }
 impl HostArguments for PickerSessionArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let rows = serde_json::to_value(reader.command_arguments(3)?)
+            .ok()
+            .and_then(|value| serde_json::from_value::<Option<Vec<PickerRow>>>(value).ok())
+            .ok_or(DecodeError::Type("invalid picker rows"))?;
         Ok(Self {
             session: reader.integer(2)?,
+            rows,
         })
     }
 }
 
-/// Settle with the picker's next highlight, or with its outcome once it
-/// settles. Only the latest unread highlight is kept.
+fn picker_entry(row: PickerRow) -> crate::app::picker::PickerEntry {
+    let PickerRow {
+        item,
+        label_matches,
+        description_matches,
+    } = row;
+    let ranges = |text: &str, matches: Option<Vec<[usize; 2]>>| {
+        matches.map_or_else(Vec::new, |matches| {
+            knot_model::matching::byte_ranges(text, &matches)
+        })
+    };
+    crate::app::picker::PickerEntry {
+        id: Some(item.id),
+        label_matches: ranges(&item.label, label_matches),
+        description_matches: item
+            .description
+            .as_deref()
+            .map_or_else(Vec::new, |text| ranges(text, description_matches)),
+        description: item.description,
+        detail: item.detail,
+        hint: item.hint,
+        ..crate::app::picker::PickerEntry::new(item.label)
+    }
+}
+
+/// Show the rows the caller derived from the last pulled query, unless the
+/// field has changed since, then settle with the picker's next query or
+/// highlight, or with its outcome once it settles. Only the latest unread
+/// change of each is kept.
 #[host_operation("nextPickerEvent")]
 pub(crate) async fn next_picker_event(
     context: HostContext,
     arguments: PickerSessionArguments,
 ) -> Result<PickerUpdate, TransientError> {
     let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    let PickerSessionArguments { session, rows } = arguments;
     let session = context
-        .foreground(|host, _| host.take_transient_session(owner, arguments.session))?
+        .foreground(|host, cx| {
+            let session = host.take_transient_session(owner, session)?;
+            if let (Some(rows), Some(queried)) = (rows, session.queried.as_ref())
+                && let (Some(picker), Some(query)) =
+                    (queried.picker.upgrade(), queried.delivered.as_deref())
+            {
+                let entries = rows.into_iter().map(picker_entry).collect();
+                picker.update(cx, |picker, cx| picker.supply(query, entries, cx));
+            }
+            Some(session)
+        })?
         .ok_or(TransientError::Cancelled)?;
     picker_update(next_change(&context, session).await?)
 }
@@ -1338,6 +1433,7 @@ pub(crate) async fn next_picker_event(
 fn picker_update(pulled: Pulled) -> Result<PickerUpdate, TransientError> {
     match pulled {
         Pulled::Changed { session, value } => Ok(PickerUpdate::Highlighted { session, id: value }),
+        Pulled::Queried { session, query } => Ok(PickerUpdate::Queried { session, query }),
         Pulled::Settled(TransientOutcome::Picker(id)) => Ok(PickerUpdate::Selected { id }),
         Pulled::Settled(TransientOutcome::Dismissed) => Ok(PickerUpdate::Dismissed),
         Pulled::Settled(_) => Err(TransientError::Cancelled),
@@ -1351,6 +1447,7 @@ async fn next_change(
 ) -> Result<Pulled, TransientError> {
     enum Next {
         Settled(Result<TransientOutcome, tokio::sync::oneshot::error::RecvError>),
+        Queried,
         Changed,
         Closed,
     }
@@ -1362,12 +1459,26 @@ async fn next_change(
         }
         Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
             let completion = &mut session.completion;
+            let queries = session.queried.as_mut().map(|queried| &mut queried.queries);
+            let mut queried = std::pin::pin!(async {
+                match queries {
+                    Some(queries) => queries.changed().await,
+                    None => std::future::pending().await,
+                }
+            });
             let mut changed = std::pin::pin!(session.changes.changed());
             std::future::poll_fn(|task| {
                 if let std::task::Poll::Ready(outcome) =
                     std::pin::Pin::new(&mut *completion).poll(task)
                 {
                     return std::task::Poll::Ready(Next::Settled(outcome));
+                }
+                // A query is answered before the highlight it will replace.
+                if let std::task::Poll::Ready(queried) = queried.as_mut().poll(task) {
+                    return std::task::Poll::Ready(match queried {
+                        Ok(()) => Next::Queried,
+                        Err(_) => Next::Closed,
+                    });
                 }
                 changed.as_mut().poll(task).map(|changed| match changed {
                     Ok(()) => Next::Changed,
@@ -1384,6 +1495,17 @@ async fn next_change(
     match next {
         Next::Settled(Ok(outcome)) => Ok(Pulled::Settled(outcome)),
         Next::Settled(Err(_)) => Err(TransientError::Cancelled),
+        Next::Queried => {
+            let queried = session.queried.as_mut().expect("queried picker");
+            let query = queried
+                .queries
+                .borrow_and_update()
+                .clone()
+                .unwrap_or_default();
+            queried.delivered = Some(query.clone());
+            let session = context.foreground(|host, _| host.keep_transient_session(session))?;
+            Ok(Pulled::Queried { session, query })
+        }
         Next::Changed | Next::Closed => {
             let value = session.changes.borrow_and_update().clone();
             session.delivered.clone_from(&value);
@@ -1461,6 +1583,7 @@ pub(crate) async fn begin_input(
         changes,
         input: Some(input),
         delivered: None,
+        queried: None,
     };
     input_update(next_change(&context, session).await?)
 }
@@ -1522,6 +1645,7 @@ fn input_update(pulled: Pulled) -> Result<InputUpdate, TransientError> {
             session,
             value: value.unwrap_or_default(),
         }),
+        Pulled::Queried { .. } => Err(TransientError::Cancelled),
         Pulled::Settled(TransientOutcome::Input(value)) => Ok(InputUpdate::Accepted { value }),
         Pulled::Settled(TransientOutcome::Dismissed) => Ok(InputUpdate::Dismissed),
         Pulled::Settled(_) => Err(TransientError::Cancelled),

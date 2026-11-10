@@ -41,6 +41,11 @@ pub(crate) struct PickerEntry {
     pub(crate) hint: Option<String>,
     /// Matched after the label and description but never displayed.
     pub(crate) match_text: Option<String>,
+    /// Names the row to an owner that supplies the rows.
+    pub(crate) id: Option<String>,
+    /// Byte ranges of the label and description a supplied row highlights.
+    pub(crate) label_matches: Vec<Range<usize>>,
+    pub(crate) description_matches: Vec<Range<usize>>,
 }
 
 impl PickerEntry {
@@ -58,6 +63,9 @@ pub(crate) enum PickerEvent {
     Highlighted(Option<usize>),
     Confirmed(usize),
     Dismissed,
+    /// A picker whose rows are supplied: the query changed and the owner
+    /// should answer with [`Picker::supply`].
+    Queried(String),
 }
 
 /// One visible row: the entry index and its highlighted byte ranges.
@@ -79,6 +87,9 @@ pub(crate) struct Picker {
     scroll: UniformListScrollHandle,
     matcher: Matcher,
     key_context: &'static str,
+    /// Whether the owner supplies the rows for each query, shown as given,
+    /// instead of the picker matching its entries.
+    supplied: bool,
     _input_subscription: Subscription,
 }
 
@@ -89,11 +100,34 @@ impl Picker {
         key_context: &'static str,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::build(title, entries, key_context, false, cx)
+    }
+
+    /// A picker with no rows until its owner answers the query it reports.
+    pub(crate) fn supplied(
+        title: Option<String>,
+        key_context: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        Self::build(title, Vec::new(), key_context, true, cx)
+    }
+
+    fn build(
+        title: Option<String>,
+        entries: Vec<PickerEntry>,
+        key_context: &'static str,
+        supplied: bool,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let input = cx.new(|cx| TextInput::new("", cx));
         let subscription = cx.subscribe(
             &input,
             |this: &mut Self, _input, _event: &TextInputEvent, cx| {
                 let query = this.input.read(cx).text().to_string();
+                if this.supplied {
+                    cx.emit(PickerEvent::Queried(query));
+                    return;
+                }
                 this.refilter(&query, cx);
                 this.report_highlight(cx);
                 cx.notify();
@@ -109,6 +143,7 @@ impl Picker {
             scroll: UniformListScrollHandle::new(),
             matcher: Matcher::new(),
             key_context,
+            supplied,
             _input_subscription: subscription,
         };
         this.refilter("", cx);
@@ -131,7 +166,15 @@ impl Picker {
         self.matches.iter().map(|found| found.entry).collect()
     }
 
-    #[cfg(test)]
+    /// Labels of the visible rows, best first.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn visible_labels(&self) -> Vec<String> {
+        self.matches
+            .iter()
+            .map(|found| self.entries[found.entry].label.clone())
+            .collect()
+    }
+
     pub(crate) fn entry(&self, index: usize) -> &PickerEntry {
         &self.entries[index]
     }
@@ -152,9 +195,46 @@ impl Picker {
         }
     }
 
+    /// The current query.
+    pub(crate) fn query(&self, cx: &App) -> String {
+        self.input.read(cx).text().to_string()
+    }
+
+    /// Show `entries` in the given order as the rows for `query`, unless the
+    /// field has changed since. The highlight is reported even when it keeps
+    /// its index, because it may now name another row.
+    pub(crate) fn supply(
+        &mut self,
+        query: &str,
+        entries: Vec<PickerEntry>,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.supplied || self.query(cx) != query {
+            return;
+        }
+        self.matches = entries
+            .iter()
+            .enumerate()
+            .map(|(entry, item)| PickerMatch {
+                entry,
+                label: item.label_matches.clone(),
+                description: item.description_matches.clone(),
+            })
+            .collect();
+        self.entries = entries;
+        self.selected = 0;
+        self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+        self.highlighted = self.selected_entry();
+        cx.emit(PickerEvent::Highlighted(self.highlighted));
+        cx.notify();
+    }
+
     fn refilter(&mut self, query: &str, cx: &App) {
         self.selected = 0;
         self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+        if self.supplied {
+            return;
+        }
         if query.trim().is_empty() {
             self.matches = (0..self.entries.len())
                 .map(|entry| PickerMatch {
@@ -587,6 +667,58 @@ mod tests {
             assert!(label.is_empty());
             assert_eq!(description, [7..13]);
         });
+    }
+
+    #[gpui::test]
+    #[allow(clippy::single_range_in_vec_init)]
+    fn supplied_rows_keep_their_order_and_ranges_and_stale_answers_drop(cx: &mut TestAppContext) {
+        let picker = cx.new(|cx| Picker::supplied(Some("Pick".into()), "picker", cx));
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let observed = events.clone();
+        let _subscription = cx.update(|cx| {
+            cx.subscribe(&picker, move |_, event, _| {
+                observed.borrow_mut().push(event.clone())
+            })
+        });
+        let row = |label: &str, matches: Vec<std::ops::Range<usize>>| PickerEntry {
+            id: Some(label.to_owned()),
+            label_matches: matches,
+            ..PickerEntry::new(label)
+        };
+        picker.update(cx, |picker, cx| {
+            picker.supply("", vec![row("zed", vec![]), row("alpha", vec![0..2])], cx);
+            assert_eq!(labels(picker), ["zed", "alpha"]);
+            assert_eq!(picker.highlights(1).0, [0..2]);
+        });
+        // Typing reports the query and keeps the rows until it is answered.
+        picker.update(cx, |picker, cx| {
+            picker.set_query("a", cx);
+            assert_eq!(labels(picker), ["zed", "alpha"]);
+        });
+        picker.update(cx, |picker, cx| {
+            // An answer to an earlier query is dropped.
+            picker.supply("", vec![row("stale", vec![])], cx);
+            assert_eq!(labels(picker), ["zed", "alpha"]);
+            // The matcher plays no part: a row the query cannot match shows.
+            picker.supply("a", vec![row("beta", vec![]), row("omega", vec![])], cx);
+            assert_eq!(labels(picker), ["beta", "omega"]);
+            picker.move_selection(1, cx);
+            picker.confirm(cx);
+        });
+        assert_eq!(
+            *events.borrow(),
+            [
+                PickerEvent::Highlighted(Some(0)),
+                PickerEvent::Queried("a".into()),
+                PickerEvent::Highlighted(Some(0)),
+                PickerEvent::Highlighted(Some(1)),
+                PickerEvent::Confirmed(1),
+            ]
+        );
+        assert_eq!(
+            picker.read_with(cx, |picker, _| picker.entry(1).id.clone()),
+            Some("omega".into())
+        );
     }
 
     #[gpui::test]

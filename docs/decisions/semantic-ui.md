@@ -158,8 +158,14 @@ ordinary result and operational failure stays a host error. Resolving the
 window from the command capture keeps an awaited picker in the window that
 invoked it.
 
-Pickers receive a complete item list and filter natively, avoiding streaming
-providers and a second scheduler (D118). One native picker serves the palette,
+Pickers receive a complete item list and filter natively, which suits the
+common case. A picker whose rows depend on the query, such as Go to File over
+a large tree, supplies them through `onQuery` instead, answered per query
+over the same pull session as highlights, and shows them unmatched: the
+extension ranks, because it holds the index and the recency, and re-matching
+its rows natively would reorder them. A streaming provider and a second
+scheduler were rejected as more machinery than one pulled answer per query.
+One native picker serves the palette,
 native pickers, and extensions, so every picker inherits the same matching.
 Matching uses `nucleo-matcher` rather than a hand-written scorer, because fzf's
 ranking quality, with its boundary, camelCase, and path bonuses, is the part not

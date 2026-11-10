@@ -66,8 +66,8 @@ touches.
 - [Extension tree content and actions](decisions/semantic-ui.md#extension-tree-content-and-actions):
   one frame registration; text frames reuse the editor surface.
 - [Extension transient interactions](decisions/semantic-ui.md#extension-transient-interactions):
-  typed results, complete lists filtered natively, pulled rather than pushed
-  updates; whole-value completion items with menu accept; one native matcher
+  typed results, complete lists filtered natively or rows supplied per query,
+  pulled rather than pushed updates; whole-value completion items with menu accept; one native matcher
   with user-ordered styles; recency owned by extensions.
 - [Status bar](decisions/semantic-ui.md#status-bar): native bar, extension
   items with per-window values.

@@ -1461,39 +1461,101 @@ impl ProductShell {
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
+        let entries = items
+            .into_iter()
+            .map(|item| PickerEntry {
+                id: Some(item.id),
+                description: item.description,
+                detail: item.detail,
+                hint: item.hint,
+                ..PickerEntry::new(item.label)
+            })
+            .collect();
+        self.present_picker(owner, title, Some(entries), highlights, None, cx)
+            .map(|(receiver, _)| receiver)
+    }
+
+    /// Present a lifecycle-authorized picker whose rows the owner supplies:
+    /// each query, starting with the empty one, is published on `queries`
+    /// and answered through the returned view.
+    pub(crate) fn begin_queried_picker(
+        &mut self,
+        owner: TransientOwner,
+        title: String,
+        highlights: tokio::sync::watch::Sender<Option<String>>,
+        queries: tokio::sync::watch::Sender<Option<String>>,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        (
+            tokio::sync::oneshot::Receiver<TransientOutcome>,
+            WeakEntity<Picker>,
+        ),
+        TransientError,
+    > {
+        self.present_picker(
+            Some(owner),
+            title,
+            None,
+            Some(highlights),
+            Some(queries),
+            cx,
+        )
+    }
+
+    /// Present a picker over `entries`, or with supplied rows when there are
+    /// none. Entries carry the IDs that outcomes and highlights name.
+    fn present_picker(
+        &mut self,
+        owner: Option<TransientOwner>,
+        title: String,
+        entries: Option<Vec<PickerEntry>>,
+        highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
+        queries: Option<tokio::sync::watch::Sender<Option<String>>>,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        (
+            tokio::sync::oneshot::Receiver<TransientOutcome>,
+            WeakEntity<Picker>,
+        ),
+        TransientError,
+    > {
         self.transient_slot_free()?;
         let restore_focus = self.focus;
-        let (ids, entries): (Vec<_>, Vec<_>) = items
-            .into_iter()
-            .map(|item| {
-                let entry = PickerEntry {
-                    description: item.description,
-                    detail: item.detail,
-                    hint: item.hint,
-                    ..PickerEntry::new(item.label)
-                };
-                (item.id, entry)
-            })
-            .unzip();
-        let view = cx.new(|cx| Picker::new(Some(title), entries, super::TRANSIENT_KEY_CONTEXT, cx));
+        let view = cx.new(|cx| match entries {
+            Some(entries) => Picker::new(Some(title), entries, super::TRANSIENT_KEY_CONTEXT, cx),
+            None => Picker::supplied(Some(title), super::TRANSIENT_KEY_CONTEXT, cx),
+        });
+        let weak = view.downgrade();
         let focus = view.read(cx).focus_handle(cx);
-        let id_of = move |entry: Option<usize>| entry.map(|entry| ids[entry].clone());
+        let id_of = |picker: &Picker, entry: Option<usize>| {
+            entry.and_then(|entry| picker.entry(entry).id.clone())
+        };
         if let Some(highlights) = &highlights {
-            highlights.send_replace(id_of(view.read(cx).selected_entry()));
+            let picker = view.read(cx);
+            highlights.send_replace(id_of(picker, picker.selected_entry()));
+        }
+        if let Some(queries) = &queries {
+            queries.send_replace(Some(view.read(cx).query(cx)));
         }
         let subscription = cx.subscribe(
             &view,
-            move |this: &mut Self, _view, event: &PickerEvent, cx| {
+            move |this: &mut Self, view, event: &PickerEvent, cx| {
                 let outcome = match event {
                     PickerEvent::Highlighted(entry) => {
                         if let Some(highlights) = &highlights {
-                            highlights.send_replace(id_of(*entry));
+                            highlights.send_replace(id_of(view.read(cx), *entry));
                         }
                         return;
                     }
-                    PickerEvent::Confirmed(entry) => {
-                        TransientOutcome::Picker(id_of(Some(*entry)).expect("confirmed entry"))
+                    PickerEvent::Queried(query) => {
+                        if let Some(queries) = &queries {
+                            queries.send_replace(Some(query.clone()));
+                        }
+                        return;
                     }
+                    PickerEvent::Confirmed(entry) => TransientOutcome::Picker(
+                        id_of(view.read(cx), Some(*entry)).expect("confirmed entry"),
+                    ),
                     PickerEvent::Dismissed => TransientOutcome::Dismissed,
                 };
                 this.finish_transient(outcome, cx);
@@ -1510,7 +1572,7 @@ impl ProductShell {
         });
         self.set_focus(Focus::Transient, cx);
         cx.notify();
-        Ok(receiver)
+        Ok((receiver, weak))
     }
 
     /// Present a lifecycle-authorized single-line input, or reject when another

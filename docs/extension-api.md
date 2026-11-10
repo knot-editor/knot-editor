@@ -727,9 +727,23 @@ await workbench.showMessage({ title: "Saved" });
 ```
 
 Picker items are matched locally, label first and then description, in the
-user's `completion.styles`, so
-the complete list is supplied up front; there is no streaming provider. An item
-may add a `detail` line and a right-aligned `hint`. Pass `onHighlight` to
+user's `completion.styles`, so the complete list is supplied up front. An item
+may add a `detail` line and a right-aligned `hint`. When the rows depend on the
+query or are too many to send, pass `onQuery(query)` instead of `items`: it
+returns the rows for each query, starting with the empty one, and the picker
+shows them in that order with the `labelMatches` and `descriptionMatches` they
+carry highlighted (UTF-16 ranges, as `completion.match` returns them):
+
+```js
+const picked = await workbench.showPicker({
+  title: "Go to File",
+  onQuery: async (query) => (await search(query)).map((hit) => ({
+    id: hit.uri, label: hit.name, description: hit.directory, labelMatches: hit.ranges,
+  })),
+});
+```
+
+Pass `onHighlight` to
 preview the highlighted item as the user moves through the list:
 
 ```js
@@ -743,7 +757,9 @@ if (picked.kind === "dismissed") await settings.set("theme.dark", before);
 ```
 
 The callback runs inside the awaiting command, one call at a time; changes
-made while it runs collapse into the latest highlight. Undoing a preview after
+made while it runs collapse into the latest highlight. `onQuery` follows the
+same rules, and its rows apply only while the field still holds the query they
+answer. Undoing a preview after
 dismissal is the caller's job. An input's `onChange` works the same way for
 its text, starting with the initial value; return a string to show it as a
 muted line under the field, or nothing to clear it:

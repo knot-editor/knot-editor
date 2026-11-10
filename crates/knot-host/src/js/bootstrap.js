@@ -629,29 +629,49 @@ function transientTarget(options) {
   return optionalWindowAuthority(options.target);
 }
 
+function pickerRow(value) {
+  const item = pickerItem(value);
+  item.labelMatches = value.labelMatches == null ? null : arrayItems(value.labelMatches, textRange);
+  item.descriptionMatches = value.descriptionMatches == null
+    ? null : arrayItems(value.descriptionMatches, textRange);
+  return item;
+}
+
 export async function showPicker(options) {
   const target = transientTarget(options);
   const title = string(options.title, "picker title must be text");
-  const items = arrayItems(options.items, pickerItem);
+  const onQuery = options.onQuery;
+  if (onQuery != null && (typeof onQuery !== "function" || options.items != null)) {
+    throw new TypeError("picker onQuery must be a function and excludes items");
+  }
+  const items = onQuery == null ? arrayItems(options.items, pickerItem) : [];
   const onHighlight = options.onHighlight;
-  if (onHighlight == null) return request("showPicker", title, items, target);
-  if (typeof onHighlight !== "function") {
+  if (onHighlight == null && onQuery == null) return request("showPicker", title, items, target);
+  if (onHighlight != null && typeof onHighlight !== "function") {
     throw new TypeError("picker onHighlight must be a function");
   }
-  // Highlights are pulled inside this turn: a separate notification could not
-  // run while the caller awaits the picker. A failing callback stops previews
-  // and rethrows once the picker settles, so it never stays open unowned.
+  // Highlights and queries are pulled inside this turn: a separate
+  // notification could not run while the caller awaits the picker. A failing
+  // callback stops further calls and rethrows once the picker settles, so it
+  // never stays open unowned. The rows answering a query travel back with
+  // the next pull.
   let failure = null;
-  let update = await request("beginPicker", title, items, target);
-  while (update.kind === "highlighted") {
+  let update = await request("beginPicker", title, items, target, onQuery == null ? 0 : 1);
+  while (update.kind === "highlighted" || update.kind === "queried") {
+    let rows = null;
     if (failure === null) {
       try {
-        await onHighlight(update.id);
+        if (update.kind === "queried") {
+          rows = arrayItems(await onQuery(update.query), pickerRow);
+        } else if (onHighlight != null) {
+          await onHighlight(update.id);
+        }
       } catch (error) {
         failure = { error };
+        rows = null;
       }
     }
-    update = await request("nextPickerEvent", update.session);
+    update = await request("nextPickerEvent", update.session, rows);
   }
   if (failure !== null) throw failure.error;
   return update.kind === "selected"
