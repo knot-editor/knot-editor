@@ -351,14 +351,14 @@ complete list for that item.
   - Reconsider: Multi-process editing or document handoff is introduced.
 
 - **D090 — EditorConfig support**
-  - Deferred: `.editorconfig` files need file watching (D008) and the `path`
-    scope fact (D089).
-  - Reconsider: D008 and D089 are complete, or daily use hits a project that
+  - Deferred: `.editorconfig` files need the `path` scope fact (D089); file
+    watching exists (`files.watch`).
+  - Reconsider: D089 is complete, or daily use hits a project that
     relies on `.editorconfig`. Then a bundled package finds the files above
     each opened document, turns each section into a `path`-glob scope, and
     writes them from the root down to the nearest file, so last-write-wins
     reproduces EditorConfig's rule that the nearest file takes precedence.
-  - Order: after D008 and D089.
+  - Order: after D089.
 
 - **D091 — Settings UI**
   - Deferred: Settings (D070) are set from code. Definitions carry a type,

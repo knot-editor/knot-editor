@@ -258,15 +258,15 @@ to be rebuilt later:
 
 ## Phase 4 — Files and workspace
 
-- **D008 — File watching and automatic reload**
-  - Native watching per workspace root and per open document, in the resource
-    provider layer.
-  - A clean document reloads in place and keeps its view state. A dirty
-    document is marked as changed on disk and offers Reload or Keep. Save
-    already reaches the conflict prompt.
-  - A public event lets extensions refresh trees. Events are coalesced, and
-    Knot's own saves are ignored.
-  - 🚧 [Plan](d008-file-watching.md)
+- ✅ **D008 — File watching and automatic reload**
+  - Documents hold native watches, and extensions watch any URI through
+    `files.watch`. A clean document reloads in place as a line diff and keeps
+    its view state; a dirty one is marked changed on disk and offers Reload or
+    Keep on focus; a deleted file leaves a dirty document. Activation rechecks
+    every document
+    ([architecture](../architecture/documents-and-persistence.md#detecting-external-changes),
+    [decisions](../decisions/documents-and-persistence.md#file-watching),
+    [settings](../settings.md)).
 
 - **D010 — Filesystem mutation API**
   - Create file, create directory, rename or move, and delete (to the trash
@@ -330,7 +330,7 @@ to be rebuilt later:
     [settings](../settings.md)).
   - `files.list` hides and marks entries, `files.walk` enumerates visible
     files, and `files.isIgnored` answers one-off checks, all through one native
-    policy. Watching joins it in D008.
+    policy.
   - Vim's Ex line completes `:e` paths from the base `:e` opens against.
 
 - **D034 / D053 — Explorer as a bundled extension** (depends on D008, D010, D122,

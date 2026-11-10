@@ -155,6 +155,9 @@ touches.
 - [Workspace ignore policy](decisions/documents-and-persistence.md#workspace-ignore-policy):
   one native, setting-driven policy for hidden and ignored entries; a native
   walk rather than `rg --files`; no rule registration.
+- [File watching](decisions/documents-and-persistence.md#file-watching):
+  watches requested by documents and extensions, not roots; version comparison
+  rather than a save window; a line-diff reload; a prompt on focus.
 - [Unsaved-document recovery store](decisions/documents-and-persistence.md#unsaved-document-recovery-store):
   an application-owned database independent of extension health.
 - [Unsaved-document restore and hot exit](decisions/documents-and-persistence.md#unsaved-document-restore-and-hot-exit):

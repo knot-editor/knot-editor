@@ -107,6 +107,33 @@ workspace roots; project-local overrides wait for D089.
 Reference: [URI providers](../architecture/documents-and-persistence.md#uri-providers),
 [settings](../settings.md).
 
+## File watching
+
+Documents and extensions request watches; nothing watches workspace roots by
+default. VS Code and Zed watch roots because they keep a tree snapshot to
+update, which the workspace file index (D173) adds as one more recursive
+watcher. Until then a root watch would cost OS watches and wake-ups nobody
+reads.
+
+Change detection compares the provider version, then the content, instead of
+ignoring events for a time window after Knot's own save: a window drops a real
+external write that lands inside it, while an equal version identifies Knot's
+own write exactly.
+
+A reload applies a full line diff rather than replacing the text, or replacing
+the span between a common prefix and suffix as VS Code and Emacs do. Replacing
+the text loses carets, folds, and anchored ranges everywhere; the span still
+loses them between two distant hunks, as after `git checkout`. The diff costs
+one dependency (`imara-diff`).
+
+A document changed on disk while dirty prompts when it is, or next becomes, the
+focused tab, rather than staying silent until save (VS Code) or prompting at
+once whichever tab is showing. Silence hides the conflict until it costs a
+rejected save; an immediate prompt interrupts work in another tab.
+
+Reference: [detecting external changes](../architecture/documents-and-persistence.md#detecting-external-changes),
+[watching](../architecture/documents-and-persistence.md#watching).
+
 ## Unsaved-document recovery store
 
 Unsaved text is protected in an application-owned database, independent of
