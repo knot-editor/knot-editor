@@ -172,7 +172,13 @@ batches arrive coalesced without `.git` noise.
   Update [URI providers](../architecture/documents-and-persistence.md#uri-providers)
   and the extension guide's files section.
 
-## Checkpoint 2 — Clean reload and recheck on activation
+## Checkpoint 2 — Clean reload and recheck on activation ✅
+
+Implemented; awaiting the review gate. `files.watchDocuments` is defined
+natively. The Rust code is `src/app/product/document_watch.rs`; Save's conflict
+Reload and watch reloads share `DocumentCollection::finish_reload`. `try.reload`
+opens a terminal and logs a `sed` to run in it, because extensions have no
+file-write API. A dirty document is left alone until Checkpoint 3.
 
 Deliverables:
 

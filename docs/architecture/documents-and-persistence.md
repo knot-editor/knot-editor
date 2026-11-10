@@ -163,7 +163,23 @@ snapshots never run it.
 Save As uses the native panel, checks application-wide URI ownership, and changes
 resource association only after successful I/O. Overwrite consent does not bypass
 provider-version checks. Conflicts offer Reload, Save As, and Cancel; Reload also
-rejects edits racing its read. Watching and automatic reload remain deferred.
+rejects edits racing its read; it loads the file as a line diff, like the
+reload below.
+
+### Detecting external changes
+
+While `files.watchDocuments` is on, every persisted document holds a
+[watch](#watching) on its parent directory, moved when Save As changes its
+resource and released when the setting turns off. An event naming the document's
+file or directory, and the application becoming active, read the file and
+compare its provider version with the recorded one. Equal versions are Knot's
+own save or no change; a new version with the saved content only records the
+version. Otherwise a clean document reloads: a line diff
+([`knot_model::reload`](../../crates/knot-model/src/reload.rs)) between the
+buffer and the file is applied as one commit, one undo step, and the new
+version and revision become the saved state. Only the changed lines are edited,
+so carets, folds, and anchored ranges elsewhere stay put. A document edited
+while the read was pending is left alone, and a dirty document is not reloaded.
 
 ## Durable unsaved-document recovery
 
