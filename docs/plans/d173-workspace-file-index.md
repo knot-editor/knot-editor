@@ -1,6 +1,6 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoints 1–3 ✅ approved; checkpoint 4 ✅ implemented, awaiting its review gate; checkpoints 5–6 planned. Item of the
+Status: 🚧 checkpoints 1–4 ✅ approved; checkpoints 5–6 planned. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
@@ -226,45 +226,13 @@ a synthetic 100,000-file tree (no kernel checkout was available): disk walk
 are in the [file index architecture](../architecture/documents-and-persistence.md#workspace-file-index)
 and its decision.
 
-### 4. Compact entries ✅ implemented, awaiting its review gate
+### 4. Compact entries ✅
 
 Implemented in `files/index.rs`: `Entry` holds a name, kind, symlink flag,
 ignored flag, and scanned directory, and `list` and `walk` build each URI from
-the directory's. The provider's URIs are dropped after classifying. Measured on
-the synthetic 100,000-file tree (release build, warm): resident memory 42 MB →
-11 MB, index walk 6–8 ms → 14–16 ms, first scan unchanged (131–137 ms). The
-equivalence and focused tests pass unchanged.
-
-Details:
-
-Deliverables:
-
-- `crates/knot-model/src/files/index.rs`: entries hold their name, kind,
-  symlink flag, ignored flag, and scanned directory, not a `ResourceEntry`.
-  A query builds each returned URI from the URI of its directory and the name.
-  `scan` and `refresh` build the URIs they need to read subdirectories the
-  same way, and drop the provider's URI after classifying.
-- The directory URI is not stored either. A directory's URI is built when
-  something reads it.
-- `list` and the index's internal `walk` return the same values as before.
-
-Validation:
-
-- The equivalence test and the focused tests pass unchanged.
-- A one-off release measurement of resident memory and the index walk on the
-  100,000-file tree, recorded here against the checkpoint 3 numbers (about
-  42 MB and 6–8 ms).
-
-Review gate: memory against the earlier numbers, and the walk time.
-
-Implementation context:
-
-- `Entry` and `Dir` in `files/index.rs`. `ResourceEntry` and `child_uri` come
-  from `crates/knot-model/src/filesystem/`. `Children` already stores the name
-  once.
-- `read_directory`, `classify`, `scan`, `refresh`, and `scan_again` use
-  `entry.entry.uri`; replace them with a URI built from the directory being
-  read.
+the directory's. Measured on the synthetic 100,000-file tree (release build,
+warm): resident memory 42 MB → 11 MB, index walk 6–8 ms → 14–16 ms, first scan
+unchanged.
 
 ### 5. Native search
 
