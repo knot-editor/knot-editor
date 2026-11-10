@@ -544,6 +544,9 @@ pub(crate) struct ProductShell {
     recent_walk: Option<knot_model::workbench::RecentWalk>,
     /// The pane rendered over the whole workbench, while it stays focused.
     maximized: Option<PaneId>,
+    /// Per dock, the pane that was maximized when the dock was hidden;
+    /// showing the dock again maximizes it.
+    hidden_maximized: [Option<PaneId>; 3],
     /// Closed tabs Reopen Closed Tab recreates, most recent last.
     closed_tabs: knot_model::workbench::RecentlyClosed<reopen::ClosedTab>,
     command_palette: Option<CommandPalette<ProductCommandTarget>>,
@@ -687,6 +690,7 @@ impl ProductShell {
             split_resize: None,
             recent_walk: None,
             maximized: None,
+            hidden_maximized: [None; 3],
             closed_tabs: knot_model::workbench::RecentlyClosed::new(reopen::CLOSED_TAB_LIMIT),
             command_palette: None,
             command_palette_subscription: None,

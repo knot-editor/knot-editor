@@ -362,7 +362,9 @@ and with none splits the pane on that side. Focus commands given
 commands walk the focused pane's area in layout order, and the workbench
 remembers the previously focused pane. Resizing can be limited to the width or
 the height, which changes the nearest split along that axis, or, along a
-dock's axis, its size. Maximize is shell render state that lasts while its pane stays focused.
+dock's axis, its size. Maximize is shell render state that lasts while its pane stays focused, in a
+dock as in the center; hiding a dock keeps its maximized pane, and showing the
+dock with that pane focused maximizes it again.
 
 One application-level coordinator protects tab, pane, window, and quit
 closure. The product session collects its open views and the documents' state

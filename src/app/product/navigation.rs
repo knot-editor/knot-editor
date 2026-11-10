@@ -7,7 +7,8 @@
 //! Directional commands find a neighbor from pane rectangles laid out by
 //! split ratios and dock sizes over the painted workbench, so they work while
 //! a pane is maximized. Maximize is window-local render state that lasts only
-//! while its pane stays focused.
+//! while its pane stays focused, except that a dock remembers its maximized
+//! pane while hidden.
 
 use super::relocate::TabRelocationDestination;
 use super::*;
@@ -250,8 +251,26 @@ impl ProductShell {
     }
 
     /// The maximized pane while it is still focused; anything else ends it.
+    /// Hiding a dock remembers its maximized pane, and showing the dock with
+    /// that pane focused maximizes it again.
     pub(super) fn maximized_pane(&mut self, cx: &App) -> Option<PaneId> {
-        let focused = self.workbench.read(cx).focused_pane_id();
+        let workbench = self.workbench.read(cx);
+        if let Some(pane) = self.maximized
+            && let Some(Area::Dock(dock)) = workbench.pane_area(pane)
+            && !workbench.area_shown(Area::Dock(dock))
+        {
+            self.hidden_maximized[dock.index()] = Some(pane);
+            self.maximized = None;
+        }
+        let focused = workbench.focused_pane_id();
+        for dock in DockLocation::ALL {
+            if workbench.area_shown(Area::Dock(dock))
+                && let Some(pane) = self.hidden_maximized[dock.index()].take()
+                && focused == Some(pane)
+            {
+                self.maximized = Some(pane);
+            }
+        }
         self.maximized = self.maximized.filter(|pane| focused == Some(*pane));
         self.maximized
     }

@@ -419,3 +419,32 @@ fn a_full_width_bottom_dock_runs_under_the_side_docks(cx: &mut TestAppContext) {
     );
     assert_eq!(focused(&shell, cx), bottom);
 }
+
+#[gpui::test]
+fn hiding_a_dock_keeps_its_maximized_pane_for_the_next_show(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::{TOGGLE_LEFT_DOCK_COMMAND, TOGGLE_MAXIMIZE_PANE_COMMAND};
+    let (shell, window) = docked_window(cx);
+    let (dock, main) = dock_and_main(&shell, cx);
+    focus(&shell, window, dock, cx);
+    run(&shell, window, TOGGLE_MAXIMIZE_PANE_COMMAND, cx);
+    assert!(painted(&shell, dock, cx));
+    assert!(!painted(&shell, main, cx));
+
+    // Hiding the focused dock returns focus to the center.
+    run(&shell, window, TOGGLE_LEFT_DOCK_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), main);
+    assert!(painted(&shell, main, cx));
+
+    // Showing it focuses the dock pane and maximizes it again.
+    run(&shell, window, TOGGLE_LEFT_DOCK_COMMAND, cx);
+    assert_eq!(focused(&shell, cx), dock);
+    assert!(painted(&shell, dock, cx));
+    assert!(!painted(&shell, main, cx));
+
+    // The memory is spent: hide, show, and a plain focus change restore nothing.
+    run(&shell, window, TOGGLE_MAXIMIZE_PANE_COMMAND, cx);
+    run(&shell, window, TOGGLE_LEFT_DOCK_COMMAND, cx);
+    run(&shell, window, TOGGLE_LEFT_DOCK_COMMAND, cx);
+    assert!(painted(&shell, main, cx));
+    assert!(painted(&shell, dock, cx));
+}

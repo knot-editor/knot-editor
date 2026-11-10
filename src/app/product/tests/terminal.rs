@@ -1613,3 +1613,39 @@ async fn window_layouts_restore_dock_terminals_in_their_docks(cx: &mut TestAppCo
     // Restored terminals are fresh sessions: one per terminal tab, per window.
     assert_eq!(session_count(cx), 2);
 }
+
+#[gpui::test]
+async fn toggle_terminal_restores_a_maximized_dock_terminal(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::TOGGLE_MAXIMIZE_PANE_COMMAND;
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let run =
+        |command, cx: &mut TestAppContext| dispatch_product_command(&shell, window, command, cx);
+    let painted_panes = |cx: &mut TestAppContext| {
+        cx.run_until_parked();
+        cx.read(|cx| shell.read(cx).tab_drag.borrow().painted_panes().len())
+    };
+
+    run(TOGGLE_TERMINAL_COMMAND, cx).completion.await.unwrap();
+    let both = painted_panes(cx);
+    run(TOGGLE_MAXIMIZE_PANE_COMMAND, cx)
+        .completion
+        .await
+        .unwrap();
+    assert_eq!(painted_panes(cx), 1);
+
+    // Hiding the dock restores the layout; showing it maximizes the terminal.
+    run(TOGGLE_TERMINAL_COMMAND, cx).completion.await.unwrap();
+    assert!(painted_panes(cx) >= 1);
+    run(TOGGLE_TERMINAL_COMMAND, cx).completion.await.unwrap();
+    assert_eq!(painted_panes(cx), 1);
+    assert_eq!(
+        focused_area(&shell, cx),
+        Some(crate::app::workbench::Area::Dock(
+            crate::app::workbench::DockLocation::Right,
+        ))
+    );
+    assert!(both > 1);
+}
