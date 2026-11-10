@@ -310,8 +310,8 @@ to be rebuilt later:
   - Matching is one native matcher shared by the picker, input completion,
     and extensions (`completion.match`), with the user-selectable styles
     `prefix`, `substring`, `flex`, and `orderless` in `completion.styles`.
-  - The first consumer is Vim's Ex line (D058): it completes command names
-    and `:set` options. `:e` path completion comes with D081.
+  - The first consumer is Vim's Ex line (D058): it completes command names,
+    `:set` options, and `:e` paths.
 
 - **D089 — Project-local settings** (depends on D070, D122)
   - Settings read from a file in the repository, attached to folders rather
@@ -324,28 +324,13 @@ to be rebuilt later:
 
 - **D081 — Workspace ignore rules and file enumeration** (depends on D122,
   D143)
-  - 🚧 [Plan](d081-workspace-ignore-rules.md)
-  - Ignore policy is contributed and evaluated natively. Rules come from
-    `.gitignore` (and possibly `.ignore`) plus configured patterns, at two
-    levels:
-    - *hidden*: never shown (`.git`, `.DS_Store`)
-    - *ignored*: dimmed in the explorer, and skipped by Go to File, search,
-      and watching
-  - Native code evaluates the rules with the `ignore` crate, which gives the
-    same semantics as ripgrep. Hot native paths (watching, enumeration,
-    listings) therefore never call into JavaScript.
-  - Extensions contribute extra rules through a lifecycle-owned
-    registration, like languages. They can query whether a path is ignored,
-    and read the effective rules to pass to external tools (`rg --glob`).
-    Decide whether the defaults live in a tiny bundled package or in D070
-    settings.
-  - Enumeration is an ignore-aware walk of every root, exposed as a public
-    API that streams or pages results. Decide whether a native walk is
-    still needed once `rg --files` is available through D087, or whether Go
-    to File uses ripgrep too.
-  - Vim's Ex line completes `:e` paths through D143's input completion,
-    from the same base `:e` opens against, listing directories through D122
-    without ignored entries.
+  - Shipped ([architecture](../architecture/documents-and-persistence.md#uri-providers),
+    [decisions](../decisions/documents-and-persistence.md#workspace-ignore-policy),
+    [settings](../settings.md)).
+  - `files.list` hides and marks entries, `files.walk` enumerates visible
+    files, and `files.isIgnored` answers one-off checks, all through one native
+    policy. Watching joins it in D008.
+  - Vim's Ex line completes `:e` paths from the base `:e` opens against.
 
 - **D034 / D053 — Explorer as a bundled extension** (depends on D008, D010, D122,
   D081, D072)

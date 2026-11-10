@@ -78,11 +78,34 @@ upward from a document (EditorConfig, project settings) and outside any root.
 
 Bytes are not exposed because no consumer needs non-UTF-8 content, and a binary
 transport would be designed without one. `list` takes no sort or filter options:
-the explorer wants to own its order, and a host-side filter would add a second
-pattern syntax beside project settings' globs. Recursion waits for the
-ignore-aware walk, where filtering saves work.
+the explorer wants to own its order, and a caller-supplied filter would add a
+second pattern syntax beside project settings' globs.
 
 Reference: [URI providers](../architecture/documents-and-persistence.md#uri-providers).
+
+## Workspace ignore policy
+
+One native policy, set by three global settings, decides what `files.list`,
+`files.walk`, and `files.isIgnored` show. Hidden entries (`.git`,
+`.DS_Store`) never appear, so hiding is policy rather than a filter syntax a
+caller passes; ignored entries still appear in listings, marked, so the
+explorer can dim them, and walks skip them. Defaults match VS Code and Zed.
+Both pattern lists use gitignore syntax, so there is no second pattern
+language, and repository ignore files follow ripgrep's semantics, which is what
+D085 gets by running `rg` with only `files.ignored` as globs.
+
+Evaluation is native so that watching, walking, and listing never call
+JavaScript. The walk is native rather than `rg --files` because the policy must
+also serve listings and watching, and one classifier keeps all three
+consistent; on a 97,336-file kernel checkout it takes about 1.1 s against
+0.15 s for `rg --files`, acceptable for a one-shot Go to File index. Settings
+replace an extension-contributed rule registration, which waits for a real
+consumer, and no API exposes the effective rules, since `rg` reads repository
+ignore files itself. The policy is global and tied to the filesystem, not to
+workspace roots; project-local overrides wait for D089.
+
+Reference: [URI providers](../architecture/documents-and-persistence.md#uri-providers),
+[settings](../settings.md).
 
 ## Unsaved-document recovery store
 

@@ -151,8 +151,10 @@ touches.
 - [Folder selection](decisions/documents-and-persistence.md#folder-selection):
   `workspaces.pickFolder` returns a checked directory without committing roots.
 - [Extension file reads](decisions/documents-and-persistence.md#extension-file-reads):
-  ungated, text-only `files` reads over any provider; no bytes, walk, or
-  list options.
+  ungated, text-only `files` reads over any provider; no bytes or list options.
+- [Workspace ignore policy](decisions/documents-and-persistence.md#workspace-ignore-policy):
+  one native, setting-driven policy for hidden and ignored entries; a native
+  walk rather than `rg --files`; no rule registration.
 - [Unsaved-document recovery store](decisions/documents-and-persistence.md#unsaved-document-recovery-store):
   an application-owned database independent of extension health.
 - [Unsaved-document restore and hot exit](decisions/documents-and-persistence.md#unsaved-document-restore-and-hot-exit):
