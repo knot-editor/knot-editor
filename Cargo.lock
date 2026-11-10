@@ -3736,6 +3736,7 @@ dependencies = [
  "alacritty_terminal",
  "anyhow",
  "directories",
+ "futures",
  "gpui-component",
  "gpui-kit-assets",
  "gpui-pre",

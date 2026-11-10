@@ -219,6 +219,11 @@ impl HostSuccess for crate::SettingsSubscriptionId {
         encode_json(self)
     }
 }
+impl HostSuccess for crate::WatchSubscriptionId {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
 impl HostSuccess for crate::TextSnapshot {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         Ok(EncodedValue::Snapshot(self))

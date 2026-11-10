@@ -779,6 +779,23 @@ declare module "knot" {
      * missing resource is judged by its name alone.
      * @throws HostError with InvalidUri or ProviderFailure. */
     isIgnored(uri: string): Promise<boolean>;
+    /** Calls `listener` with the URIs that changed under `uri`, in batches that
+     * gather about 100 ms of changes and name each URI once. A batch does not
+     * say whether an entry was created, changed, or removed: stat or list what
+     * you care about. Without `recursive` a directory reports itself and its
+     * direct children, and a file reports itself; with it, everything below.
+     * When the platform drops events, the batch names `uri` itself, so rescan.
+     * Entries the `files.hidden` setting names are never reported; ignored
+     * entries are. Watching sees every change on disk, including Knot's own
+     * saves, and independently of open documents. Listeners run serially with
+     * other listeners and stop with their lifecycle or `dispose()`.
+     * @throws HostError with InvalidUri, ResourceNotFound when `uri` does not
+     * exist, or ProviderFailure when the provider cannot watch. */
+    watch(
+      uri: string,
+      listener: (uris: readonly string[]) => void | Promise<void>,
+      options?: { readonly recursive?: boolean },
+    ): Promise<Disposable>;
   }>;
   export const workspaces: Readonly<{
     get(target: WindowTarget): Promise<WorkspaceInfo | null>;

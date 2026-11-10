@@ -4,7 +4,7 @@ import {
   historyRecent, historyRecord, historyOrder,
   recoveryList, recoveryRetain, recoveryRelease, recoveryRestore,
   observeWorkbench, closePresentation, openEditor, replaceWindows, captureLayout,
-  openDocument, createUntitled, presentDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, walkFiles, isFileIgnored, statFile, openTerminal,
+  openDocument, createUntitled, presentDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, walkFiles, isFileIgnored, statFile, watchFiles, openTerminal,
   invalidCommandArguments,
   unavailableCommand,
   keybinding,
@@ -87,7 +87,7 @@ export const terminals = Object.freeze({ open: openTerminal });
 export const themes = Object.freeze({ register: registerTheme, get: getTheme, list: listThemes, defineColor });
 export const icons = Object.freeze({ define: defineIcon, override: overrideIcon, associate: associateIcons, registerPack: registerIconPack, listPacks: listIconPacks });
 export const windows = Object.freeze({ list: listWindows, get: getWindow, open: openWindow, focus: focusWindow });
-export const files = Object.freeze({ readText: readFileText, list: listFiles, walk: walkFiles, isIgnored: isFileIgnored, stat: statFile });
+export const files = Object.freeze({ readText: readFileText, list: listFiles, walk: walkFiles, isIgnored: isFileIgnored, stat: statFile, watch: watchFiles });
 export const workspaces = Object.freeze({ get: getWorkspace, openFolder, replaceRoots: replaceWorkspaceRoots, pickFolder });
 
 export const history = Object.freeze({ recent: historyRecent, record: historyRecord, order: historyOrder });

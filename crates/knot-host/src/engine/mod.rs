@@ -42,7 +42,7 @@ use knot_protocol::{
     ExtensionId, HostRequest, HostResponse, KeybindingMutation, ProviderIdentity, RequestId,
     SettingsSubscriptionId, SnapshotText, TextEdit, TextSnapshot, TreeAction, TreeChildrenRequest,
     TreeChildrenResponse, TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderError,
-    WorkbenchSubscriptionId,
+    WatchSubscriptionId, WorkbenchSubscriptionId,
 };
 
 static V8_INITIALIZATION: Once = Once::new();
@@ -257,6 +257,7 @@ enum RuntimeCallback {
     ApplicationChange,
     BufferChange,
     SettingChange,
+    WatchChange,
     EditorEvent,
     Command,
     CancelCommand,

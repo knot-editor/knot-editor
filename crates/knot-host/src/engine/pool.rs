@@ -601,6 +601,23 @@ impl RuntimePool {
         Ok(())
     }
 
+    pub fn dispatch_watch_change(
+        &self,
+        key: ExtensionKey,
+        subscription: WatchSubscriptionId,
+        uris: Vec<String>,
+    ) -> Result<(), RuntimePoolError> {
+        let capsule = self.capsule(key)?;
+        self.scheduler_handle.enqueue_root(
+            key,
+            EngineTurn {
+                capsule,
+                work: EngineWork::WatchChange { subscription, uris },
+            },
+        )?;
+        Ok(())
+    }
+
     pub fn dispatch_editor_event(
         &self,
         key: ExtensionKey,
@@ -824,6 +841,7 @@ pub(super) fn initialize_extension_context(
             RuntimeCallback::SettingChange,
             "__knotDispatchSettingChange",
         ),
+        (RuntimeCallback::WatchChange, "__knotDispatchWatchChange"),
         (RuntimeCallback::EditorEvent, "__knotDispatchEditorEvent"),
         (RuntimeCallback::Command, "__knotInvokeCommand"),
         (RuntimeCallback::CancelCommand, "__knotCancelCommand"),

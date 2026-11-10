@@ -216,6 +216,15 @@ impl ExtensionPool {
             .dispatch_setting_change(key, subscription, setting)
     }
 
+    pub fn dispatch_watch_change(
+        &self,
+        key: ExtensionKey,
+        subscription: knot_protocol::WatchSubscriptionId,
+        uris: Vec<String>,
+    ) -> Result<(), ExtensionPoolError> {
+        self.engine.dispatch_watch_change(key, subscription, uris)
+    }
+
     pub fn dispatch_editor_event(
         &self,
         key: ExtensionKey,

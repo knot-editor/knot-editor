@@ -788,6 +788,18 @@ impl SettingsSubscriptionId {
     }
 }
 
+/// One lifecycle-owned file watch.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize)]
+pub struct WatchSubscriptionId(u64);
+impl WatchSubscriptionId {
+    pub fn new(value: u64) -> Self {
+        Self(value)
+    }
+    pub fn value(self) -> u64 {
+        self.0
+    }
+}
+
 /// A payload-free notification about a long-lived editor handle.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EditorEvent {

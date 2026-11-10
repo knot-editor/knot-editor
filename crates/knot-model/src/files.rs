@@ -31,6 +31,14 @@ fn parse(uri: &str) -> Result<ResourceUri, ResourceError> {
     })
 }
 
+/// The normalized form of `uri` according to its provider.
+pub async fn normalize(
+    providers: &FileSystemProviderRegistry,
+    uri: &str,
+) -> Result<ResourceUri, ResourceError> {
+    providers.normalize(parse(uri)?).await
+}
+
 /// The file's text, decoded as UTF-8 without a leading byte-order mark.
 pub async fn read_text(
     providers: Arc<FileSystemProviderRegistry>,

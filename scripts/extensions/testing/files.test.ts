@@ -62,3 +62,24 @@ test("walking resolves visible files at any depth and skips ignored directories"
   assert.deepEqual(await files.walk("file:///p/dist"), []);
   await assert.rejects(files.walk("file:///p/a.txt"), { code: "ResourceWrongKind" });
 });
+
+test("watching reports changes under the directory until disposed", async () => {
+  host.seedFile("file:///p/src/a.txt", "a");
+  const direct: string[][] = [];
+  const deep: string[][] = [];
+  const directWatch = await files.watch("file:///p/src", (uris) => void direct.push([...uris]));
+  await files.watch("file:///p", (uris) => void deep.push([...uris]), { recursive: true });
+
+  host.seedFile("file:///p/src/b.txt", "b");
+  host.seedFile("file:///p/src/inner/c.txt", "c");
+  host.seedFile("file:///p/.git/HEAD", "ref");
+  await Promise.resolve();
+  assert.deepEqual(direct, [["file:///p/src/b.txt"]]);
+  assert.deepEqual(deep, [["file:///p/src/b.txt"], ["file:///p/src/inner/c.txt"]]);
+
+  await directWatch.dispose();
+  host.removeFile("file:///p/src/b.txt");
+  await Promise.resolve();
+  assert.equal(direct.length, 1);
+  await assert.rejects(files.watch("file:///p/missing", () => {}), { code: "ResourceNotFound" });
+});

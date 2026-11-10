@@ -985,6 +985,16 @@ one array, without entering ignored directories or following symlinked ones.
 matches `files.hidden` and `files.ignored` as plain names and reads no ignore
 files.
 
+`files.watch(uri, listener, { recursive })` calls the listener with batches of
+changed URIs, gathered over about 100 ms and naming each URI once. A batch does
+not say whether an entry was created, changed, or removed, so stat or list what
+you need. A directory reports itself and its direct children unless `recursive`;
+entries `files.hidden` names are never reported. When the platform drops
+events the batch names the watched URI itself, so rescan it. The returned
+`Disposable` and the lifecycle end the watch. The fake host calls the listener
+as soon as `seedFile` or `removeFile` from `knot/testing` changes a file under
+the watch, without coalescing.
+
 `readText` decodes UTF-8 and drops a leading byte-order mark. It reads what is
 saved, never an open document's buffer, so unsaved edits are invisible; use
 `documents` and `Buffer.snapshot` for live text. `list` returns one directory in

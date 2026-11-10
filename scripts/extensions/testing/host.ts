@@ -107,6 +107,7 @@ function emptyState() {
     messages: [] as Knot.MessageOptions[],
     clipboard: null as string | null,
     files: new Map<string, string>(),
+    fileWatches: [] as { uri: string; recursive: boolean; listener: (uris: readonly string[]) => void | Promise<void> }[],
     selectedText: null as string | null,
     failures: new Map<string, HostErrorCode[]>(),
     replaced: [] as Knot.ReplaceWindowsOptions[],
@@ -718,9 +719,31 @@ export function statusItems(target: Knot.WindowTarget): (Knot.StatusItemOptions 
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 }
 
-/** Seeds a stored file for `files`; its parent directories exist implicitly. */
+/**
+ * Seeds a stored file for `files`; its parent directories exist implicitly.
+ * Watchers whose scope contains it hear of it at once, as a batch of one;
+ * the fake does not coalesce.
+ */
 export function seedFile(uri: string, text: string) {
   state.files.set(uri, text);
+  notifyFileWatchers(uri);
+}
+
+/** Removes a stored file and tells the watchers like `seedFile` does. */
+export function removeFile(uri: string) {
+  state.files.delete(uri);
+  notifyFileWatchers(uri);
+}
+
+function notifyFileWatchers(uri: string) {
+  const hidden = fileNameSetting("files.hidden");
+  if (uri.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split("/").some((segment) => hidden.includes(segment))) return;
+  const parent = uri.slice(0, uri.lastIndexOf("/"));
+  for (const watch of [...state.fileWatches]) {
+    if (uri === watch.uri || parent === watch.uri || (watch.recursive && uri.startsWith(`${watch.uri}/`))) {
+      void Promise.resolve(watch.listener([uri])).catch(() => {});
+    }
+  }
 }
 
 function fileKind(uri: string): Knot.FileKind | null {
@@ -1575,6 +1598,18 @@ export const api: KnotApi = {
     isIgnored: async (uri) => {
       maybeFail("files.isIgnored");
       return isIgnoredUri(checkedFileUri(uri));
+    },
+    watch: async (uri, listener, options) => {
+      maybeFail("files.watch");
+      const checked = checkedFileUri(uri);
+      if (fileKind(checked) === null) throw hostError("ResourceNotFound");
+      const entry = { uri: checked, recursive: options?.recursive ?? false, listener };
+      state.fileWatches.push(entry);
+      return {
+        dispose: async () => {
+          state.fileWatches = state.fileWatches.filter((candidate) => candidate !== entry);
+        },
+      };
     },
     stat: async (uri) => {
       maybeFail("files.stat");

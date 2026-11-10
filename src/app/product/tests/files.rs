@@ -118,3 +118,65 @@ await commands.register("files.policy", async () => {
     );
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }
+
+#[gpui::test]
+fn files_watch_delivers_visible_batches_until_disposed_or_unloaded(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    provider
+        .seed_directory(ResourceUri::parse("mem://product/src/.git").unwrap())
+        .unwrap();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let key = install_operation_fixture(
+        &host,
+        r#"
+import { commands, files, workbench } from "knot";
+async function rejects(action, code) {
+  try { await action(); } catch (error) { if (error.code === code) return; throw error; }
+  throw new Error(`expected ${code}`);
+}
+let handle;
+await commands.register("files.watch", async () => {
+  await rejects(() => files.watch("mem://product/missing", () => {}), "ResourceNotFound");
+  await rejects(() => files.watch("not a URI", () => {}), "InvalidUri");
+  handle = await files.watch("mem://product/src", async (uris) => {
+    await workbench.writeClipboardText(uris.join());
+  });
+});
+await commands.register("files.unwatch", async () => { await handle.dispose(); });
+"#,
+        "files.watch",
+        cx,
+    );
+    let (shell, window) = empty_product_window(&documents, cx);
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        assert_eq!(
+            wait_for_command(dispatch_product_command(&shell, window, name, cx), cx),
+            CommandOutcome::Completed
+        );
+    };
+    let clipboard = |cx: &gpui::App| cx.read_from_clipboard().and_then(|item| item.text());
+    run("files.watch", cx);
+    assert_eq!(cx.read(extensions::host::file_watch_count), 1);
+
+    // Hidden entries are dropped, and the rest arrive as one batch.
+    for path in ["mem://product/src/.git/HEAD", "mem://product/src/a.txt"] {
+        provider
+            .seed_file(ResourceUri::parse(path).unwrap(), "x")
+            .unwrap();
+    }
+    wait_for_api_condition(cx, |cx| {
+        clipboard(cx).as_deref() == Some("mem://product/src/a.txt")
+    });
+
+    run("files.unwatch", cx);
+    assert_eq!(cx.read(extensions::host::file_watch_count), 0);
+    assert_eq!(provider.watch_count(), 0);
+
+    run("files.watch", cx);
+    assert_eq!(provider.watch_count(), 1);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    assert_eq!(cx.read(extensions::host::file_watch_count), 0);
+    assert_eq!(provider.watch_count(), 0);
+}

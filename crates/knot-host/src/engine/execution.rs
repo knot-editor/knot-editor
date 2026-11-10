@@ -62,6 +62,8 @@ pub(super) enum ListenerNotification {
     Application(Box<ApplicationEvent>),
     /// The key of a setting written or reset in any scope.
     Setting(String),
+    /// The URIs one file watch reports.
+    Watch(Vec<String>),
     Editor(EditorEvent),
 }
 
@@ -73,6 +75,10 @@ pub(super) enum EngineWork {
     SettingChange {
         subscription: SettingsSubscriptionId,
         key: String,
+    },
+    WatchChange {
+        subscription: WatchSubscriptionId,
+        uris: Vec<String>,
     },
     EditorEvent {
         handle: u64,

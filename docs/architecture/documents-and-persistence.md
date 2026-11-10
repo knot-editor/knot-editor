@@ -94,6 +94,23 @@ ignored. `walk` returns every file that is neither hidden nor ignored: it does
 not enter ignored or hidden directories or follow symlinked directories, skips
 unreadable subdirectories, and reads several directories at once.
 
+### Watching
+
+Providers also watch: `FileSystemProvider::watch` reports changed URIs, or a
+rescan when the platform dropped events, until its guard is dropped. The local
+provider uses `notify`; the memory provider reports its own writes. A
+`knot-model` watch registry, held as an application global, reference-counts
+provider watches and reuses one that covers a request: a recursive watch of an
+ancestor or the same URI watched alike. It routes each event only to the
+subscriptions whose scope contains it, and coalesces over about 100 ms into
+batches that name each URI once. A rescan batch names the watched URI itself.
+The foreground drops entries `files.hidden` names before a batch reaches its
+listener.
+
+`files.watch` subscriptions are owned by the calling lifecycle: disposal and
+unload or restart drop them, which releases the provider watch once no other
+subscription uses it. Nothing watches workspace roots by default.
+
 Product documents use unscoped providers so user-selected resources need not lie
 inside workspace roots. Scoped local providers remain trusted application
 boundaries, not sandboxes; symlinks may lead outside the lexical root.

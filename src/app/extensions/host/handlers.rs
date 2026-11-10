@@ -1794,6 +1794,66 @@ async fn is_file_ignored(
         .map_err(|error| product::operations::resource_error(error.into()))
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WatchFilesArguments {
+    uri: String,
+    recursive: bool,
+}
+
+impl HostArguments for WatchFilesArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            uri: reader.text(2, "resource URI must be text")?,
+            recursive: reader
+                .optional_boolean(3, "watch recursive must be a boolean")?
+                .unwrap_or(false),
+        })
+    }
+}
+
+#[host_operation("watchFiles")]
+async fn watch_files(
+    context: HostContext,
+    arguments: WatchFilesArguments,
+) -> Result<knot_protocol::WatchSubscriptionId, OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let uri = knot_model::files::normalize(&providers, &arguments.uri)
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context
+        .foreground(|host, cx| host.watch_files(uri, arguments.recursive, key, &providers, cx))?
+        .map_err(|error| product::operations::resource_error(error.into()))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WatchSubscription {
+    subscription: knot_protocol::WatchSubscriptionId,
+}
+
+impl HostArguments for WatchSubscription {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            subscription: knot_protocol::WatchSubscriptionId::new(reader.integer(2)?),
+        })
+    }
+}
+
+#[host_operation("unwatchFiles")]
+async fn unwatch_files(
+    context: HostContext,
+    arguments: WatchSubscription,
+) -> Result<(), AccessError> {
+    let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, _| {
+        if host.unwatch_files(arguments.subscription, key) {
+            Ok(())
+        } else {
+            Err(AccessError::OwnershipDisposed)
+        }
+    })?
+}
+
 #[host_operation("statFile")]
 async fn stat_file(
     context: HostContext,

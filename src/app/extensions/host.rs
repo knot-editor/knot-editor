@@ -177,6 +177,18 @@ pub(crate) fn reset_launched_for_test(cx: &mut App) {
     }
 }
 
+/// One lifecycle-owned file watch; dropping it releases the watch.
+struct FileWatch {
+    owner: ExtensionKey,
+    _subscription: knot_model::watch::WatchSubscription,
+    _task: Task<()>,
+}
+
+#[cfg(test)]
+pub(crate) fn file_watch_count(cx: &App) -> usize {
+    entity(cx).map_or(0, |host| host.read(cx).file_watches.len())
+}
+
 #[cfg(test)]
 pub(crate) fn setting_observer_count(cx: &App) -> usize {
     entity(cx).map_or(0, |host| host.read(cx).setting_observers.len())
@@ -579,6 +591,9 @@ pub(crate) struct ProductExtensionHost {
     /// Lifecycle-owned observers of one setting key each.
     setting_observers: HashMap<knot_protocol::SettingsSubscriptionId, (String, ExtensionKey)>,
     next_setting_observer: u64,
+    /// Lifecycle-owned file watches.
+    file_watches: HashMap<knot_protocol::WatchSubscriptionId, FileWatch>,
+    next_file_watch: u64,
     /// Pickers whose callers preview highlights, between pulls.
     transient_sessions: HashMap<u64, handlers::TransientSession>,
     next_transient_session: u64,
@@ -666,6 +681,8 @@ impl ProductExtensionHost {
             buffers: ExtensionBufferBridge::new(),
             application_observation: Default::default(),
             setting_observers: HashMap::new(),
+            file_watches: HashMap::new(),
+            next_file_watch: 0,
             next_setting_observer: 0,
             transient_sessions: HashMap::new(),
             next_transient_session: 0,
@@ -2276,6 +2293,91 @@ impl ProductExtensionHost {
         true
     }
 
+    /// Starts reporting batches under `uri` to the caller's listener.
+    pub(crate) fn watch_files(
+        &mut self,
+        uri: knot_model::resource::ResourceUri,
+        recursive: bool,
+        key: ExtensionKey,
+        providers: &knot_model::filesystem::FileSystemProviderRegistry,
+        cx: &mut Context<Self>,
+    ) -> Result<knot_protocol::WatchSubscriptionId, knot_model::filesystem::ResourceError> {
+        use futures::StreamExt as _;
+
+        let registry = cx
+            .default_global::<crate::app::file_watch::ApplicationFileWatches>()
+            .0
+            .clone();
+        let (sender, mut batches) = futures::channel::mpsc::unbounded();
+        let subscription = registry.watch(
+            providers,
+            uri,
+            recursive,
+            std::sync::Arc::new(move |batch| {
+                let _ = sender.unbounded_send(batch);
+            }),
+        )?;
+        self.next_file_watch += 1;
+        let id = knot_protocol::WatchSubscriptionId::new(self.next_file_watch);
+        let task = cx.spawn(async move |this, cx| {
+            while let Some(batch) = batches.next().await {
+                if this
+                    .update(cx, |host, cx| host.file_watch_batch(id, batch, cx))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+        self.file_watches.insert(
+            id,
+            FileWatch {
+                owner: key,
+                _subscription: subscription,
+                _task: task,
+            },
+        );
+        Ok(id)
+    }
+
+    pub(crate) fn unwatch_files(
+        &mut self,
+        id: knot_protocol::WatchSubscriptionId,
+        key: ExtensionKey,
+    ) -> bool {
+        if self
+            .file_watches
+            .get(&id)
+            .is_none_or(|watch| watch.owner != key)
+        {
+            return false;
+        }
+        self.file_watches.remove(&id);
+        true
+    }
+
+    /// Delivers a batch to its listener, without the entries `files.hidden`
+    /// names.
+    fn file_watch_batch(
+        &mut self,
+        id: knot_protocol::WatchSubscriptionId,
+        batch: Vec<knot_model::resource::ResourceUri>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(owner) = self.file_watches.get(&id).map(|watch| watch.owner) else {
+            return;
+        };
+        let policy = crate::app::settings::files_ignore_policy(cx);
+        let uris: Vec<String> = batch
+            .iter()
+            .filter(|uri| !policy.hides(uri))
+            .map(ToString::to_string)
+            .collect();
+        if !uris.is_empty() {
+            let _ = self.pool.dispatch_watch_change(owner, id, uris);
+        }
+    }
+
     /// Queue every observer of `setting` after a committed write or reset.
     pub(crate) fn setting_changed(&self, setting: &str) {
         for (subscription, (observed, key)) in &self.setting_observers {
@@ -2584,6 +2686,7 @@ impl ProductExtensionHost {
         self.storage_owners.remove(&key);
         self.application_observation.remove_lifecycle(key);
         self.setting_observers.retain(|_, (_, owner)| *owner != key);
+        self.file_watches.retain(|_, watch| watch.owner != key);
         self.transient_sessions
             .retain(|_, session| session.owner() != key);
         if cx.has_global::<crate::app::commands::keymaps::ApplicationKeymaps>() {

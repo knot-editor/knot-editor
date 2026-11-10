@@ -358,6 +358,17 @@ impl FileSystemProvider for MemoryFileSystemProvider {
         sink: WatchSink,
     ) -> Result<WatchGuard, ResourceError> {
         let uri = self.normalize_scoped(uri)?;
+        let path = relative_segments(&self.root, &uri);
+        let exists = {
+            let hierarchy = self
+                .hierarchy
+                .read()
+                .map_err(|error| ResourceError::io("lock memory provider", error))?;
+            path.is_empty() || find_node(&hierarchy, &path).is_some()
+        };
+        if !exists {
+            return Err(ResourceError::NotFound { uri });
+        }
         let id = self.next_watcher.fetch_add(1, Ordering::Relaxed);
         self.watchers
             .lock()

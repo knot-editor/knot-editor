@@ -120,7 +120,12 @@ line diff rather than whole-text replacement or common prefix and suffix
 (VS Code and Emacs), and a prompt on focus rather than silence until save
 (VS Code) or an immediate prompt.
 
-## Checkpoint 1 — Watch registry and `files.watch`
+## Checkpoint 1 — Watch registry and `files.watch` ✅
+
+Implemented; awaiting the review gate. The listener is the second argument,
+`files.watch(uri, listener, { recursive })`, as in `settings.observe`. Recursive
+watching does not skip hidden directories on inotify; the foreground drops their
+events instead.
 
 Deliverables:
 

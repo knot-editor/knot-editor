@@ -332,6 +332,11 @@ impl RuntimeCapsule {
                 "knot:setting-change",
                 "setting-change listener",
             ),
+            ListenerNotification::Watch(_) => (
+                RuntimeCallback::WatchChange,
+                "knot:watch-change",
+                "watch-change listener",
+            ),
             ListenerNotification::Editor(_) => (
                 RuntimeCallback::EditorEvent,
                 "knot:editor-event",
@@ -370,6 +375,15 @@ impl RuntimeCapsule {
                 ListenerNotification::Setting(key) => v8::String::new(try_catch, &key)
                     .map(Into::into)
                     .ok_or("UnsupportedOperation"),
+                ListenerNotification::Watch(uris) => {
+                    let elements: Option<Vec<v8::Local<v8::Value>>> = uris
+                        .iter()
+                        .map(|uri| v8::String::new(try_catch, uri).map(Into::into))
+                        .collect();
+                    elements
+                        .map(|elements| v8::Array::new_with_elements(try_catch, &elements).into())
+                        .ok_or("UnsupportedOperation")
+                }
                 ListenerNotification::Editor(event) => v8::String::new(try_catch, event.name())
                     .map(Into::into)
                     .ok_or("UnsupportedOperation"),
@@ -1629,6 +1643,12 @@ pub(super) fn execute_engine_turn(
             root,
             subscription.value(),
             ListenerNotification::Setting(key),
+            Instant::now(),
+        ),
+        EngineWork::WatchChange { subscription, uris } => capsule.start_notification_turn(
+            root,
+            subscription.value(),
+            ListenerNotification::Watch(uris),
             Instant::now(),
         ),
         EngineWork::CommandInvocation {

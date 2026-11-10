@@ -1287,6 +1287,7 @@ const settingTypes = {
   strings: (value) => Array.isArray(value) && value.every((item) => typeof item === "string"),
 };
 const settingListeners = new Map();
+const watchListeners = new Map();
 function settingKey(value) {
   if (typeof value !== "string" || value.length === 0) throw new TypeError("setting key must be nonempty text");
   return value;
@@ -1568,6 +1569,23 @@ export async function walkFiles(uri) {
 export function isFileIgnored(uri) {
   return request("isFileIgnored", string(uri, "resource URI must be text"));
 }
+export async function watchFiles(uri, listener, options) {
+  string(uri, "resource URI must be text");
+  if (typeof listener !== "function") throw new TypeError("files.watch requires a listener");
+  const recursive = options === undefined
+    ? false
+    : record(options, "watch options must be an object").recursive ?? false;
+  if (typeof recursive !== "boolean") throw new TypeError("watch recursive must be a boolean");
+  const subscription = await request("watchFiles", uri, recursive);
+  watchListeners.set(subscription, listener);
+  const owned = ownership(() => watchListeners.delete(subscription),
+    () => request("unwatchFiles", subscription));
+  return Object.freeze({ dispose: () => owned.dispose() });
+}
+globalThis.__knotDispatchWatchChange = async (subscription, uris) => {
+  const listener = watchListeners.get(subscription);
+  if (listener) await listener(Object.freeze([...uris]));
+};
 export async function statFile(uri) {
   const kind = await request("statFile", string(uri, "resource URI must be text"));
   return kind === null ? null : Object.freeze({ kind });
