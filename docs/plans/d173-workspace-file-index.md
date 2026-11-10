@@ -1,16 +1,19 @@
 # D173 — Workspace file index
 
-Status: 🚧 checkpoints 1 and 2 ✅ approved; checkpoint 3 ✅ implemented, awaiting its review gate. Item of the
+Status: 🚧 checkpoints 1 and 2 ✅ approved; checkpoint 3 ✅ implemented, awaiting its review gate; checkpoints 4–6 planned. Item of the
 [daily-driver plan](daily-driver.md); depends on D008 (watching) and
 D081 (ignore policy and enumeration).
 
 ## Outcome
 
 Every workspace root has a native in-memory tree of its entries, watched
-recursively, so `files.list`, `files.walk`, and `files.isIgnored` answer from
-memory for anything inside a root. Go to File (D082) can then walk a root of
-about 100k files in tens of milliseconds, end to end to JavaScript. The
-extension API does not change.
+recursively, so `files.list` and `files.isIgnored` answer from memory for
+anything inside a root, and a new `files.search` matches a query against the
+root's paths natively and returns the best hundred or so. Go to File (D082)
+then never receives, or makes Knot build, a URI per file: it asks for the top
+results on every keystroke. `files.walk` is removed, because nothing needs the
+complete list. The tree stores only a name, kind, and flags per entry, so a
+100k-file root stays small.
 
 ## Design
 
@@ -32,7 +35,9 @@ extension API does not change.
 
 ### What the tree holds
 
-- Visible entries, files and directories, with their kinds.
+- Visible entries, files and directories, with their kinds. An entry holds
+  its name, kind, symlink flag, and ignored flag; its URI is built from its
+  parent's when a query returns it, and never stored.
 - Ignored entries, marked as ignored. An ignored directory is recorded but its
   contents are never scanned (`target/`, `node_modules/`).
 - Hidden entries (`.git`, `.DS_Store`) are not stored.
@@ -44,7 +49,7 @@ extension API does not change.
 
 - Inside an indexed root, outside unscanned ignored directories:
   - `list` returns the indexed children, with ignored ones marked;
-  - `walk` collects the visible files of the subtree;
+  - `search` matches the visible files of the subtree (see below);
   - `isIgnored` reads the entry's classification, or its nearest indexed
     ancestor's.
 - Everything else, meaning URIs outside every root and the contents of an
@@ -58,6 +63,27 @@ extension API does not change.
   a different policy, because `files.hidden`, `files.ignored`, or
   `files.respectGitignore` changed, starts a full rescan and waits for it. That
   way no settings-change hook is needed.
+
+### Search
+
+`files.search(uri, query, { limit })` matches `query` against the visible
+files below the directory `uri` and resolves `{ results, more }`:
+
+- Each result is `{ uri, path, name, ranges }`: `path` is relative to `uri`,
+  `name` is the last segment, and `ranges` are the UTF-16 ranges of `path`
+  that matched. `more` is true when more files matched than `limit`, which
+  defaults to 100.
+- Matching uses the shared matcher and the user's `completion.styles`. A file
+  whose name matches ranks above one that matches only through its directories;
+  within each tier the matcher's order applies, then path order. An empty query
+  matches everything, so the first files in path order come back with `more`.
+- The index scores every visible file and keeps the best `limit` in a bounded
+  heap, so no URI is built for any other file.
+- A directory outside every indexed root, or below an ignored one, is searched
+  by walking the disk with the same matching, so results do not depend on the
+  index.
+- A call covers one directory. Multi-root labels and ranking open and recent
+  files first belong to D082, which merges the per-root results.
 
 ### Updates
 
@@ -96,6 +122,16 @@ These are recorded as decisions in checkpoint 3.
   mutations comes from updating the index, not from bypassing it.
 - A disk fallback or partial answers while the first scan runs: a disk walk
   doubles the I/O, and partial answers break the API's completeness guarantee.
+- Returning every file from the index to JavaScript, as `files.walk` did, or
+  returning root-relative paths for it to match: both ship 100k strings per
+  keystroke, and a URI string per file costs memory and time before
+  JavaScript reads one.
+- Incremental delivery of the full list: bounded results make it
+  unnecessary.
+- A numeric bonus for matches in the last path segment: it needs matcher
+  internals and a tuned constant, where ranking by tier does not.
+- Storing each entry's URI, or caching it on first use: a search or walk
+  touches every file, so the cache fills and the memory returns.
 - Lazy scanning of ignored directories, which Zed uses for its project panel:
   nothing needs their contents, because walks skip them and listings inside
   them read the disk.
@@ -104,10 +140,8 @@ These are recorded as decisions in checkpoint 3.
 
 ## Exclusions and deferred decisions
 
-- No API changes: no streaming or incremental walk, and no root labels. D082
-  decides whether the picker needs incremental items. It does so from this
-  plan's measurement of how long `files.walk` takes to deliver 100k entries
-  to JavaScript.
+- No streaming or incremental delivery, and no root labels: a call returns
+  at most `limit` results, and D082 merges roots.
 - No snapshots saved between sessions.
 - No reuse of an ancestor index for nested roots.
 - No native explorer integration: the native `WorkspaceTree` is replaced by
@@ -251,3 +285,122 @@ Implementation context:
   `ProductShell::filesystems`.
 - Nothing durable is written, so nothing is added to
   `extensions::host::quit_after_storage`.
+
+### 4. Compact entries
+
+Deliverables:
+
+- `crates/knot-model/src/files/index.rs`: entries hold their name, kind,
+  symlink flag, ignored flag, and scanned directory, not a `ResourceEntry`.
+  A query builds each returned URI from the URI of its directory and the name.
+  `scan` and `refresh` build the URIs they need to read subdirectories the
+  same way, and drop the provider's URI after classifying.
+- The directory URI is not stored either. A directory's URI is built when
+  something reads it.
+- `list` and the index's internal `walk` return the same values as before.
+
+Validation:
+
+- The equivalence test and the focused tests pass unchanged.
+- A one-off release measurement of resident memory and the index walk on the
+  100,000-file tree, recorded here against the checkpoint 3 numbers (about
+  42 MB and 6–8 ms).
+
+Review gate: memory against the earlier numbers, and the walk time.
+
+Implementation context:
+
+- `Entry` and `Dir` in `files/index.rs`. `ResourceEntry` and `child_uri` come
+  from `crates/knot-model/src/filesystem/`. `Children` already stores the name
+  once.
+- `read_directory`, `classify`, `scan`, `refresh`, and `scan_again` use
+  `entry.entry.uri`; replace them with a URI built from the directory being
+  read.
+
+### 5. Native search
+
+Deliverables:
+
+- `FileIndex::search(uri, query, limit, policy)` in `files/index.rs` returns
+  the hits and the `more` flag, or `None` to fall through, as the other
+  queries do. A hit carries the relative path, name, ranges, and kind, and the
+  URI is built for the returned hits only.
+- Ranking by tier, then the matcher's order, then path order; a bounded heap
+  of `limit` hits and a count of the rest.
+- `files::search` over the disk, which walks and matches the same way, for
+  directories the index does not cover. Both go through one ranking function.
+
+Validation:
+
+- A property test on generated trees: for random queries and limits, the
+  index's results equal the ranking of a brute-force match over every
+  visible file from `walk`, including `more` and the empty query, and the disk
+  search equals the index.
+- Focused tests for the tiers (a name match beats a directory match), a limit
+  smaller and larger than the number of matches, and results that follow a
+  batch of changes.
+- A one-off release measurement of `search` on the 100,000-file tree for
+  short, long, and non-matching queries, recorded here.
+
+Automated tests use small trees only.
+
+Review gate: the ranking and the search time against a keystroke budget.
+
+Implementation context:
+
+- `crates/knot-model/src/matching.rs` (`Query`, `Matcher::find`, `Found`) is
+  the matcher; the caller passes the styles from `completion.styles`. Look at
+  `Matcher::rank` for how the style order and score combine.
+- `files/equivalence.rs` and `files/index/tests.rs` are the models for the
+  property test.
+- Byte ranges convert with `matching::utf16_ranges`.
+
+### 6. Extension API, removal of `files.walk`, and docs
+
+Deliverables:
+
+- `files.search(uri, query, options?)` in `crates/knot-host/src/js/knot.d.ts`,
+  `bootstrap.js`, and `knot.js`, with a `searchFiles` handler in
+  `src/app/extensions/host/handlers.rs` that takes the leased index covering
+  the URI and the policy and styles from the settings, and a protocol type in
+  `crates/knot-protocol/src/lib.rs`. `limit` defaults to 100.
+- `files.walk` and the `walkFiles` handler are removed from the host, the
+  declarations, the docs, and the fake host; `files::walk` and
+  `FileIndex::walk` stay as internal pieces (the disk search and the
+  equivalence oracle).
+- The fake host in `scripts/extensions/testing/host.ts` implements
+  `files.search` with its plain-name matching, with a test in
+  `files.test.ts`.
+- Product tests in `src/app/product/tests/files.rs` for `files.search` over an
+  indexed root, after a change on disk, after a policy change, and outside the
+  roots; the walk tests become search tests.
+- Measurement: the end-to-end time of `files.search` from JavaScript on the
+  100,000-file tree, recorded here and in the decision.
+- Docs:
+  - `docs/extension-api.md` and `docs/settings.md` replace `files.walk`;
+  - the architecture's workspace file index section describes search and
+    compact entries;
+  - the workspace file index decision records the choice of native bounded
+    search, the rejected alternatives above, tiered ranking, and the numbers;
+  - the D082 bullet in `docs/plans/daily-driver.md` drops the question about
+    incremental items.
+- `Try:` commands in the personal `post-init.js`: time a search of each root
+  for a typed query, and report `more`.
+
+Validation:
+
+- `just check`, including the extension toolchain tests.
+
+Review gate: the API shape and the search timings, and the `Try:` commands in
+the real app.
+
+Implementation context:
+
+- The operation declarations: `#[host_operation("listFiles")]` and the
+  `FileUriArguments` decoder in `src/app/extensions/host/handlers.rs`;
+  `indexed_uri` there finds the covering index.
+- Settings: `settings::files_ignore_policy` and the `completion.styles` reader
+  the completion handler uses.
+- Everything that mentions `walkFiles` or `files.walk`: `knot.js`,
+  `bootstrap.js`, `knot.d.ts`, `scripts/extensions/testing/host.ts` and its
+  test, the docs listed above, and `src/app/product/tests/files.rs`.
