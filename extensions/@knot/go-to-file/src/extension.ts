@@ -12,13 +12,9 @@ async function goToFile({ target }: CommandContext) {
   const labelled = roots.length > 1;
 
   const search = async (query: string): Promise<PickerRow[]> => {
-    const rows: PickerRow[] = [];
-    for (const root of roots) {
-      const { results } = await files.search(root.uri, query);
-      const name = labelled ? rootName(root.uri) : null;
-      for (const hit of results) rows.push(rowFor(hit, name));
-    }
-    return rows;
+    if (roots.length === 0) return [];
+    const { results } = await files.search(roots.map((root) => root.uri), query);
+    return results.map((hit) => rowFor(hit, labelled ? rootName(hit.directory) : null));
   };
 
   const result = await workbench.showPicker({ title: "Go to File", onQuery: search });

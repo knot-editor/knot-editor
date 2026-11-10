@@ -71,6 +71,19 @@ test("searching ranks name matches first, limits results, and skips ignored dire
   await assert.rejects(files.search("file:///p", "x", { limit: 0 }), TypeError);
 });
 
+test("searching several directories ranks them as one and reports each hit's directory", async () => {
+  host.seedFile("file:///a/main/readme.md", "");
+  host.seedFile("file:///a/x/main.rs", "");
+  host.seedFile("file:///b/main.rs", "");
+
+  const found = await files.search(["file:///a", "file:///b"], "main");
+  assert.deepEqual(
+    found.results.map((hit) => `${hit.directory}:${hit.path}`),
+    ["file:///a:x/main.rs", "file:///b:main.rs", "file:///a:main/readme.md"],
+  );
+  assert.deepEqual((await files.search([], "main")).results, []);
+});
+
 test("watching reports changes under the directory until disposed", async () => {
   host.seedFile("file:///p/src/a.txt", "a");
   const direct: string[][] = [];

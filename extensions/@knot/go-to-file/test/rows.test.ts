@@ -4,6 +4,7 @@ import { rootName, rowFor } from "../src/rows.js";
 
 const hit = {
   uri: "file:///work/app/src/ui/button.ts",
+  directory: "file:///work/app",
   path: "src/ui/button.ts",
   name: "button.ts",
   ranges: [[3, 6], [7, 12]] as [number, number][],
@@ -24,7 +25,7 @@ test("path ranges split between the directory and the name", () => {
 });
 
 test("a file at the root has no description", () => {
-  const row = rowFor({ uri: "file:///work/app/Cargo.toml", path: "Cargo.toml", name: "Cargo.toml", ranges: [[0, 5]] }, null);
+  const row = rowFor({ uri: "file:///work/app/Cargo.toml", directory: "file:///work/app", path: "Cargo.toml", name: "Cargo.toml", ranges: [[0, 5]] }, null);
   assert.equal(row.description, null);
   assert.deepEqual(row.labelMatches, [[0, 5]]);
 });
@@ -33,7 +34,7 @@ test("a root name starts the description and shifts its ranges", () => {
   const row = rowFor({ ...hit, ranges: [[0, 3]] }, "app");
   assert.equal(row.description, "app/src/ui");
   assert.deepEqual(row.descriptionMatches, [[4, 7]]);
-  const top = rowFor({ uri: "file:///work/app/a.ts", path: "a.ts", name: "a.ts", ranges: [] }, "app");
+  const top = rowFor({ uri: "file:///work/app/a.ts", directory: "file:///work/app", path: "a.ts", name: "a.ts", ranges: [] }, "app");
   assert.equal(top.description, "app");
 });
 

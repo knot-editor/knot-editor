@@ -54,12 +54,18 @@ test("a window without roots lists nothing", async () => {
   assert.deepEqual(host.pickerRows(), [[]]);
 });
 
-test("several roots are searched in order, their names starting the description", async () => {
+test("several roots are ranked as one, each hit's root name starting its description", async () => {
   host.seedFile("file:///work/lib/util.ts", "util");
+  host.seedFile("file:///work/lib/button.ts", "button");
   host.setRoots(host.windowTargets()[0]!, [ROOT, "file:///work/lib"]);
+  host.query("butt");
   host.answer("showPicker", { kind: "dismissed" });
   await host.run(COMMAND);
 
-  const [rows] = host.pickerRows();
-  assert.deepEqual(rows?.map((row) => row.description), ["app", "app/src", "app/src/ui", "lib"]);
+  const [all, matched] = host.pickerRows();
+  assert.deepEqual(all?.map((row) => row.description), ["app", "app/src", "app/src/ui", "lib", "lib"]);
+  assert.deepEqual(matched?.map((row) => [row.label, row.description]), [
+    ["button.ts", "app/src/ui"],
+    ["button.ts", "lib"],
+  ]);
 });

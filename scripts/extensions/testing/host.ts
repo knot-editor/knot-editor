@@ -1620,15 +1620,20 @@ export const api: KnotApi = {
       if (options?.limit !== undefined && (!Number.isInteger(options.limit) || options.limit < 1)) {
         throw new TypeError("search limit must be a positive integer");
       }
-      const checked = checkedFileUri(uri);
-      const kind = fileKind(checked);
-      if (kind === null) throw hostError("ResourceNotFound");
-      if (kind === "file") throw hostError("ResourceWrongKind");
-      if (isIgnoredUri(checked)) return { results: [], more: false };
-      const paths = [...state.files.keys()]
-        .filter((file) => file.startsWith(`${checked}/`) && !isIgnoredUri(file.slice(checked.length)))
-        .map((file) => ({ uri: file, path: file.slice(checked.length + 1) }))
-        .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      const paths: { uri: string; directory: string; path: string }[] = [];
+      for (const searched of typeof uri === "string" ? [uri] : uri) {
+        const checked = checkedFileUri(searched);
+        const kind = fileKind(checked);
+        if (kind === null) throw hostError("ResourceNotFound");
+        if (kind === "file") throw hostError("ResourceWrongKind");
+        if (isIgnoredUri(checked)) continue;
+        paths.push(
+          ...[...state.files.keys()]
+            .filter((file) => file.startsWith(`${checked}/`) && !isIgnoredUri(file.slice(checked.length)))
+            .map((file) => ({ uri: file, directory: checked, path: file.slice(checked.length + 1) }))
+            .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
+        );
+      }
       const named = matchCandidates(query, paths.map((file) => file.path.slice(file.path.lastIndexOf("/") + 1)));
       const nameMatched = new Set(named.map((match) => match.index));
       const byName = named.map((match) => ({ file: paths[match.index]!, ranges: match.ranges, offset: paths[match.index]!.path.lastIndexOf("/") + 1 }));
@@ -1640,6 +1645,7 @@ export const api: KnotApi = {
       return {
         results: ranked.slice(0, limit).map(({ file, ranges, offset }) => ({
           uri: file.uri,
+          directory: file.directory,
           path: file.path,
           name: file.path.slice(file.path.lastIndexOf("/") + 1),
           ranges: ranges.map(([start, end]) => [start + offset, end + offset] as const),
