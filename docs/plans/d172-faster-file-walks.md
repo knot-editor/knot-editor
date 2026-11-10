@@ -29,6 +29,14 @@ exactly as they do now and share the faster classifier.
   `HashMap` lookups and no segment-vector clones per entry. A directory's
   stack is its parent's stack plus its own `.ignore` and `.gitignore`, read
   once.
+- **Repositories found per directory.** A directory whose entries include
+  `.git` is a repository root for itself and everything below it: its stack
+  starts applying `.gitignore` files from there and carries that repository's
+  `.git/info/exclude`. Walking from a workspace root above several
+  repositories therefore applies each repository's rules, as ripgrep does,
+  and a repository nested in another uses its own exclude file. Walks that
+  start inside a repository seed this state by looking up from the walked
+  directory; `list` and `is_ignored` always do.
 - **Classification runs where the directory is read.** Each concurrent
   directory task enumerates the directory, reads its ignore files, and
   classifies its entries. The policy-wide state (compiled `hidden` and
@@ -53,7 +61,8 @@ exactly as they do now and share the faster classifier.
 
 - Streaming or incremental walk results: D173 answers walks from its index,
   and D082 decides how the picker loads items.
-- Changing walk semantics, the public API, or the settings.
+- Changing the public API or the settings. Walk semantics change only to
+  follow ripgrep (repositories found per directory).
 - Faster providers other than the local one, beyond what the shared
   classifier gives them.
 
@@ -88,11 +97,10 @@ reclassification on ignore-file changes, lazy ignored directories.
   - Fixed: ripgrep consults the `.ignore` files of every level, deepest first,
     before any `.gitignore`; the classifier went level by level. It now
     follows ripgrep, pinned by a policy test.
-  - Intended divergence: walking a directory *above* a repository applies no
-    `.gitignore` inside the repository below it (the classifier only looks for
-    `.git` in the walked directory and its ancestors), while ripgrep does.
-    The equivalence test walks only from inside a repository or outside any.
-    D173 may revisit this when it indexes a workspace root.
+  - Divergence, to fix in checkpoint 2: walking a directory *above* a
+    repository applies no `.gitignore` inside the repository below it, while
+    ripgrep does. The equivalence test does not walk from above a repository
+    yet.
   - The global excludes file is read by both sides (`git_global`), so the
     test depends on the machine's global excludes only for names the fixtures
     do not use.
@@ -112,9 +120,13 @@ reclassification on ignore-file changes, lazy ignored directories.
   - `walk` classifies inside each concurrent directory task.
   - `list` and `is_ignored` resolve a directory's stack once (ancestors from
     the repository root) and classify through the same code.
+  - Repositories are detected per directory (see Design), so a walk from
+    above a repository applies the repository's rules. The equivalence test
+    adds walks from the fixture root and fixtures with sibling and nested
+    repositories.
 - Validation: the existing policy tests, the walk and listing product test
-  (`src/app/product/tests/files.rs`), and the equivalence test pass
-  unchanged. Benchmark numbers recorded.
+  (`src/app/product/tests/files.rs`) pass unchanged, and the extended
+  equivalence test passes. Benchmark numbers recorded.
 - Review gate: the numbers, and the classifier's shape as D173 will reuse it.
 - **Implementation context:** `crates/knot-model/src/files/ignore.rs`
   (`Classifier::{new, rules, entry, directory}`, `DirectoryRules`, `verdict`,
