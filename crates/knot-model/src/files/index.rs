@@ -11,7 +11,7 @@
 //! contents are never scanned.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex, MutexGuard},
     task::{Poll, Waker},
 };
@@ -37,7 +37,45 @@ struct Entry {
 /// An indexed directory: the rules of its entries and the entries.
 struct Dir {
     scope: Arc<Scope>,
-    children: BTreeMap<String, Entry>,
+    children: Children,
+}
+
+/// The entries of a directory, sorted by name. The name is stored only in the
+/// entry.
+#[derive(Default)]
+struct Children(Vec<Entry>);
+
+impl Children {
+    fn find(&self, name: &str) -> Result<usize, usize> {
+        self.0
+            .binary_search_by(|entry| entry.entry.name.as_str().cmp(name))
+    }
+
+    fn get(&self, name: &str) -> Option<&Entry> {
+        self.find(name).ok().map(|index| &self.0[index])
+    }
+
+    fn get_mut(&mut self, name: &str) -> Option<&mut Entry> {
+        self.find(name).ok().map(|index| &mut self.0[index])
+    }
+
+    /// Adds `entry`, replacing the entry of the same name.
+    fn insert(&mut self, entry: Entry) {
+        match self.find(&entry.entry.name) {
+            Ok(index) => self.0[index] = entry,
+            Err(index) => self.0.insert(index, entry),
+        }
+    }
+
+    fn remove(&mut self, name: &str) {
+        if let Ok(index) = self.find(name) {
+            self.0.remove(index);
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &Entry> {
+        self.0.iter()
+    }
 }
 
 impl Dir {
@@ -59,7 +97,7 @@ impl Dir {
     }
 
     fn collect_files(&self, files: &mut Vec<ResourceEntry>) {
-        for entry in self.children.values().filter(|entry| !entry.ignored) {
+        for entry in self.children.iter().filter(|entry| !entry.ignored) {
             match (&entry.dir, entry.entry.kind) {
                 (Some(dir), _) => dir.collect_files(files),
                 (None, ResourceKind::File) => files.push(entry.entry.clone()),
@@ -102,8 +140,8 @@ fn classify(
     classifier: &Classifier,
     scope: &Scope,
     entries: Vec<ResourceEntry>,
-) -> (BTreeMap<String, Entry>, Vec<String>) {
-    let mut children = BTreeMap::new();
+) -> (Children, Vec<String>) {
+    let mut children = Vec::new();
     let mut enter = Vec::new();
     for entry in entries {
         let is_dir = entry.kind == ResourceKind::Directory;
@@ -114,16 +152,14 @@ fn classify(
         if visibility == Visibility::Visible && is_dir && !entry.symlink {
             enter.push(entry.name.clone());
         }
-        children.insert(
-            entry.name.clone(),
-            Entry {
-                ignored: visibility == Visibility::Ignored,
-                entry,
-                dir: None,
-            },
-        );
+        children.push(Entry {
+            ignored: visibility == Visibility::Ignored,
+            entry,
+            dir: None,
+        });
     }
-    (children, enter)
+    children.sort_by(|a, b| a.entry.name.cmp(&b.entry.name));
+    (Children(children), enter)
 }
 
 /// Scans the directory at `uri` and everything indexed below it. Only a
@@ -312,7 +348,7 @@ impl FileIndex {
             let dir = root.at(&path)?;
             Some(
                 dir.children
-                    .values()
+                    .iter()
                     .map(|entry| ListedEntry {
                         entry: entry.entry.clone(),
                         ignored: entry.ignored,
@@ -462,7 +498,7 @@ impl FileIndex {
             let existing = dir
                 .children
                 .iter()
-                .map(|(name, entry)| (name.clone(), Summary::of(entry)))
+                .map(|entry| (entry.entry.name.clone(), Summary::of(entry)))
                 .collect::<HashMap<_, _>>();
             (
                 tree.classifier.clone(),
@@ -478,10 +514,11 @@ impl FileIndex {
         let (mut children, enter) = classify(&classifier, &scope, entries);
         let enter = enter.into_iter().collect::<BTreeSet<_>>();
         let mut changes = Vec::new();
-        for name in existing.keys().filter(|name| !children.contains_key(*name)) {
+        for name in existing.keys().filter(|name| children.get(name).is_none()) {
             changes.push((name.clone(), None));
         }
-        for (name, mut entry) in std::mem::take(&mut children) {
+        for mut entry in std::mem::take(&mut children.0) {
+            let name = entry.entry.name.clone();
             if existing.get(&name) == Some(&Summary::of(&entry)) {
                 continue;
             }
@@ -508,9 +545,9 @@ impl FileIndex {
         {
             for (name, entry) in changes {
                 match entry {
-                    Some(entry) => dir.children.insert(name, entry),
+                    Some(entry) => dir.children.insert(entry),
                     None => dir.children.remove(&name),
-                };
+                }
             }
         }
         true
