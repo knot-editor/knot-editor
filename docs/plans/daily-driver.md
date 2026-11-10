@@ -2,7 +2,7 @@
 
 Status: 🚧 approved, not started. Promotes D007, D008, D010, D031, D034, D053,
 D060, D064, D068, and D089 from the [roadmap](../roadmap.md) and adds
-D069–D088, D120–D123, D127, D134, and D143.
+D069–D088, D120–D123, D127, D134, D143, and D173.
 
 ## Goal
 
@@ -266,6 +266,7 @@ to be rebuilt later:
     already reaches the conflict prompt.
   - A public event lets extensions refresh trees. Events are coalesced, and
     Knot's own saves are ignored.
+  - 🚧 [Plan](d008-file-watching.md)
 
 - **D010 — Filesystem mutation API**
   - Create file, create directory, rename or move, and delete (to the trash
@@ -349,7 +350,17 @@ to be rebuilt later:
   - It is an ordinary tool for tool-layout memory: it has a stable tool ID
     and a default placement.
 
-- **D082 — Go to File** (depends on D071, D081)
+- **D173 — Workspace file index** (depends on D008, D081)
+  - A native in-memory tree of every workspace root, watched recursively, so
+    Go to File, walks, and listings answer instantly; ⌘P must feel immediate.
+  - `files.list` and `files.walk` answer from the index behind the same API,
+    so extensions get it without changes.
+  - Decide how the tree answers while its first scan runs, whether ignored
+    directories are scanned lazily, how ignore-file and `files.*` setting
+    changes reclassify entries, memory on large repositories, and whether
+    watch events gain kinds. Measure on real repositories and settle D172 here.
+
+- **D082 — Go to File** (depends on D071, D081, D173)
   - A bundled extension bound to ⌘P that fuzzy-matches workspace paths.
   - Multi-root paths are labeled by root, and open and recent files rank
     first.

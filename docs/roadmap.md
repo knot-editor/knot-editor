@@ -51,7 +51,7 @@ removes demo surfaces and adds workbench and editing commands, a richer
 palette, themes, Find, navigation, file watching, and bundled explorer,
 project-selector, and search extensions, keymap presets, and extension
 entitlements. It promotes D007, D008, D010, D031, D034, D053, D060, D064, D068,
-and D089 and adds D069–D088, D120–D123, D127, D134, and D143.
+and D089 and adds D069–D088, D120–D123, D127, D134, D143, and D173.
 
 The editor API and Vim mode initiative is complete: key contexts, long-lived
 editor handles with selection observation, the status bar, undo groups, view
@@ -309,7 +309,7 @@ complete list for that item.
     and consider a local-only fast path over `ignore::WalkBuilder::build_parallel`
     built from the same `IgnorePolicy`, tested against the classifier on the
     same trees, with streaming results if the first results are needed sooner.
-  - Order: after D081; informs D082.
+  - Order: after D081; decided in D173, before D082.
 
 - **D011 — Remote filesystem providers**
   - Deferred: The URI boundary is validated with local and memory providers.
