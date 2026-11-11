@@ -83,7 +83,8 @@ pub enum WordClass {
     Word,
 }
 
-fn word_class(character: char) -> WordClass {
+/// The class of one character for word movement, selection, and whole-word search.
+pub fn word_class(character: char) -> WordClass {
     if character.is_whitespace() {
         WordClass::Whitespace
     } else if WORD_SEPARATORS.contains(character) {

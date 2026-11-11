@@ -346,6 +346,25 @@ function bufferFor(handle) {
       return Object.freeze({ startByteOffset: range.startByteOffset, endByteOffset: range.endByteOffset });
     },
     lineAt: (offset) => request("lineAt", handle, safeInteger(offset)),
+    async find(query, options) {
+      if (typeof query !== "string") throw new TypeError("find query must be a string");
+      const limit = options?.limit ?? 1000;
+      if (!Number.isSafeInteger(limit) || limit < 0) throw new TypeError("limit must be a non-negative safe integer");
+      const result = await request(
+        "find",
+        handle,
+        query,
+        options?.caseSensitive === true,
+        options?.wholeWord === true,
+        options?.range == null ? null : byteRange(options.range),
+        limit,
+      );
+      return Object.freeze({
+        revision: result.revision,
+        matches: Object.freeze(result.matches.map((match) => Object.freeze(match))),
+        more: result.more,
+      });
+    },
     async createMark(offset) {
       const id = await request("createMark", handle, safeInteger(offset));
       const owned = ownership(() => {}, () => request("disposeMark", handle, id));

@@ -1373,7 +1373,10 @@ pub enum BufferAccessError {
     RevisionConflict,
 }
 
+mod find;
 mod folds;
+
+pub use find::{FindMatches, FindOptions, MAX_FIND_MATCHES};
 
 /// Foreground-authoritative buffer-change subscriptions.
 pub struct BufferSubscriptionRegistry {

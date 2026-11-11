@@ -1155,3 +1155,171 @@ fn subscriptions_belong_to_their_lifecycle_and_buffer() {
     registry.remove_lifecycle(other, lifecycle);
     assert!(!registry.unsubscribe(b, other, lifecycle));
 }
+
+fn found(model: &BufferModel, query: &str, options: FindOptions) -> Vec<Range<usize>> {
+    model.find(query, options, None, 1000).unwrap().ranges
+}
+
+fn insensitive() -> FindOptions {
+    FindOptions::default()
+}
+
+fn sensitive() -> FindOptions {
+    FindOptions {
+        case_sensitive: true,
+        ..FindOptions::default()
+    }
+}
+
+fn whole_word() -> FindOptions {
+    FindOptions {
+        whole_word: true,
+        ..FindOptions::default()
+    }
+}
+
+#[test]
+fn find_is_literal_and_does_not_overlap() {
+    let model = BufferModel::from_text("a.b a.b aaa");
+    assert_eq!(found(&model, "a.b", sensitive()), vec![0..3, 4..7]);
+    assert_eq!(found(&model, "aa", sensitive()), vec![8..10]);
+    assert_eq!(
+        found(&model, "a\nb", sensitive()),
+        Vec::<Range<usize>>::new()
+    );
+    let lines = BufferModel::from_text("one\ntwo\nthree");
+    assert_eq!(found(&lines, "e\nt", sensitive()), vec![2..5]);
+}
+
+#[test]
+fn find_folds_case_unless_sensitive() {
+    let model = BufferModel::from_text("Foo foo FOO");
+    assert_eq!(found(&model, "foo", insensitive()), vec![0..3, 4..7, 8..11]);
+    assert_eq!(found(&model, "FOO", insensitive()), vec![0..3, 4..7, 8..11]);
+    assert_eq!(found(&model, "foo", sensitive()), vec![4..7]);
+}
+
+#[test]
+fn find_reports_byte_offsets_in_multibyte_text() {
+    let model = BufferModel::from_text("é ÉCOLE 😀 école");
+    // "é" is two bytes, "😀" four.
+    assert_eq!(found(&model, "é", insensitive()), vec![0..2, 3..5, 15..17]);
+    assert_eq!(found(&model, "é", sensitive()), vec![0..2, 15..17]);
+    assert_eq!(found(&model, "😀", sensitive()), vec![10..14]);
+    assert_eq!(found(&model, "école", insensitive()), vec![3..9, 15..21]);
+}
+
+#[test]
+fn find_whole_word_uses_the_editor_word_classes() {
+    let model = BufferModel::from_text("cat concat cat.cat cat_ (cat) cats");
+    assert_eq!(
+        found(&model, "cat", whole_word()),
+        vec![0..3, 11..14, 15..18, 25..28]
+    );
+    // A query that ends in a separator needs no boundary after it.
+    let calls = BufferModel::from_text("foo(a) foo(b) xfoo(c)");
+    assert_eq!(found(&calls, "foo(", whole_word()), vec![0..4, 7..11]);
+}
+
+#[test]
+fn find_whole_word_looks_beyond_a_range_edge() {
+    let model = BufferModel::from_text("foo foo");
+    let tail = ByteRange {
+        start_byte_offset: 1,
+        end_byte_offset: 7,
+    };
+    // The "oo" at 1..3 is the tail of a word, not a word.
+    let matches = model.find("oo", whole_word(), Some(tail), 10).unwrap();
+    assert!(matches.ranges.is_empty());
+    let cut = ByteRange {
+        start_byte_offset: 0,
+        end_byte_offset: 2,
+    };
+    assert!(
+        model
+            .find("fo", whole_word(), Some(cut), 10)
+            .unwrap()
+            .ranges
+            .is_empty()
+    );
+}
+
+#[test]
+fn find_empty_query_matches_nothing() {
+    let model = BufferModel::from_text("abc");
+    assert_eq!(found(&model, "", insensitive()), Vec::<Range<usize>>::new());
+    assert_eq!(
+        BufferModel::from_text("").find("a", insensitive(), None, 5),
+        Ok(FindMatches {
+            ranges: vec![],
+            more: false,
+        })
+    );
+}
+
+#[test]
+fn find_limit_reports_more() {
+    let model = BufferModel::from_text("a a a");
+    let two = model.find("a", insensitive(), None, 2).unwrap();
+    assert_eq!(two.ranges, vec![0..1, 2..3]);
+    assert!(two.more);
+    let exact = model.find("a", insensitive(), None, 3).unwrap();
+    assert_eq!(exact.ranges.len(), 3);
+    assert!(!exact.more);
+    assert!(
+        model
+            .find("a", insensitive(), None, 0)
+            .unwrap()
+            .ranges
+            .is_empty()
+    );
+}
+
+#[test]
+fn find_range_limits_matches_and_is_checked() {
+    let model = BufferModel::from_text("ab ab ab é");
+    let range = |start, end| {
+        Some(ByteRange {
+            start_byte_offset: start,
+            end_byte_offset: end,
+        })
+    };
+    assert_eq!(
+        model
+            .find("ab", insensitive(), range(3, 8), 10)
+            .unwrap()
+            .ranges,
+        vec![3..5, 6..8]
+    );
+    // A match cut by the range edge is not a match.
+    assert!(
+        model
+            .find("ab", insensitive(), range(3, 4), 10)
+            .unwrap()
+            .ranges
+            .is_empty()
+    );
+    assert_eq!(
+        model.find("ab", insensitive(), range(9, 20), 10),
+        Err(BufferAccessError::InvalidRange)
+    );
+    assert_eq!(
+        model.find("ab", insensitive(), range(0, 10), 10),
+        Err(BufferAccessError::InvalidRange),
+        "10 splits the two-byte é"
+    );
+    assert_eq!(
+        model.find("ab", insensitive(), range(5, 3), 10),
+        Err(BufferAccessError::InvalidRange)
+    );
+}
+
+#[test]
+fn find_on_a_closed_buffer_fails() {
+    let mut model = BufferModel::from_text("ab");
+    model.close();
+    assert_eq!(
+        model.find("a", insensitive(), None, 1),
+        Err(BufferAccessError::Closed)
+    );
+}

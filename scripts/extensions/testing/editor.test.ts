@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { commands, workbench } from "knot";
-import type { CommandContext } from "knot";
+import type { CommandContext, FindOptions } from "knot";
 import * as host from "knot/testing";
 
 beforeEach(() => host.reset());
@@ -33,6 +33,27 @@ test("line lookups split at newlines and leave terminators out", async () => {
   const line = await buffer.snapshot(await buffer.lineRange(3));
   assert.equal(line.text, "😀");
   assert.equal(line.byteOffsetAtUtf16(2), 4);
+});
+
+test("find matches literally in byte offsets with case, word, range, and limit options", async () => {
+  // Bytes: é 0..2, É 3..5, 😀 6..10, é 11..13, "cat" at 19, 26 (inside "concat"), and 30.
+  const document = host.addDocument({ text: "é É 😀 é xxxx cat concat cat" });
+  host.openWindow({ documents: [document] });
+  const buffer = (await capture()).buffer!;
+  const ranges = async (query: string, options?: FindOptions) =>
+    (await buffer.find(query, options)).matches.map((m) => [m.startByteOffset, m.endByteOffset]);
+  const folded = await buffer.find("é");
+  assert.equal(folded.revision, 0);
+  assert.equal(folded.more, false);
+  assert.deepEqual(await ranges("é"), [[0, 2], [3, 5], [11, 13]]);
+  assert.deepEqual(await ranges("é", { caseSensitive: true }), [[0, 2], [11, 13]]);
+  assert.deepEqual(await ranges("cat", { wholeWord: true }), [[19, 22], [30, 33]]);
+  assert.deepEqual(await ranges("é", { range: { startByteOffset: 3, endByteOffset: 13 } }), [[3, 5], [11, 13]]);
+  assert.deepEqual(await ranges(""), []);
+  const limited = await buffer.find("é", { limit: 2 });
+  assert.equal(limited.matches.length, 2);
+  assert.equal(limited.more, true);
+  await assert.rejects(buffer.find("é", { range: { startByteOffset: 1, endByteOffset: 5 } }), { code: "InvalidRange" });
 });
 
 test("the editor reads and moves the selection and restores view states", async () => {

@@ -24,6 +24,28 @@ await commands.register("api.lines", async ({ buffer }) => {
   const snapshot = await buffer.snapshot(await buffer.lineRange(1));
   check(snapshot.text === "é😀" && snapshot.byteOffsetAtUtf16(1) === 2, "line snapshot");
 });
+await commands.register("api.find", async ({ buffer }) => {
+  // "é" is two bytes and "😀" four: offsets are UTF-8 bytes.
+  const ranges = (result) => result.matches.map((m) => [m.startByteOffset, m.endByteOffset]);
+  const { revision } = await buffer.snapshot();
+  const all = await buffer.find("é");
+  check(all.revision === revision && !all.more, "revision searched");
+  check(JSON.stringify(ranges(all)) === "[[0,2],[3,5],[11,13]]", "case-folded matches");
+  const exact = await buffer.find("é", { caseSensitive: true });
+  check(JSON.stringify(ranges(exact)) === "[[0,2],[11,13]]", "case-sensitive matches");
+  const words = await buffer.find("cat", { wholeWord: true });
+  check(JSON.stringify(ranges(words)) === "[[19,22],[30,33]]", "whole words");
+  const limited = await buffer.find("é", { limit: 2 });
+  check(limited.matches.length === 2 && limited.more, "limit and more");
+  const within = await buffer.find("é", { range: { startByteOffset: 3, endByteOffset: 13 } });
+  check(JSON.stringify(ranges(within)) === "[[3,5],[11,13]]", "range");
+  check((await buffer.find("")).matches.length === 0, "empty query");
+  await expectCode(() => buffer.find("é", { range: { startByteOffset: 1, endByteOffset: 5 } }), "InvalidRange");
+  await expectCode(() => buffer.find("é", { range: { startByteOffset: 0, endByteOffset: 1000 } }), "InvalidRange");
+  let rejected = false;
+  try { await buffer.find(7); } catch (error) { rejected = error instanceof TypeError; }
+  check(rejected, "query type");
+});
 await commands.register("api.marks", async ({ buffer }) => {
   // "a\r\n" then "é😀": offset 3 is the start of "é".
   const { revision } = await buffer.snapshot();
@@ -125,6 +147,21 @@ fn buffer_line_lookups_handle_crlf_and_multibyte_text(cx: &mut TestAppContext) {
     });
     let (shell, window) = product_window(document, model, cx);
     let execution = dispatch_product_command(&shell, window, "api.lines", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn buffer_find_returns_byte_ranges_options_and_revision(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    load(cx);
+    // Bytes: é 0..2, É 3..5, 😀 6..10, é 11..13, then "cat" at 19, 26 (inside
+    // "concat"), and 30.
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("é É 😀 é xxxx cat concat cat")));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Find", model.clone(), cx)
+    });
+    let (shell, window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&shell, window, "api.find", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 

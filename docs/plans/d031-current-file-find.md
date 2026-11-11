@@ -91,14 +91,22 @@ avoiding existing bindings.
 
 ## Checkpoints
 
-### 1. Native `buffer.find`
+### 1. Native `buffer.find` ✅
 
-- Matching in `knot-model` with case and whole-word options, range, and
+- ✅ Matching in `knot-model` with case and whole-word options, range, and
   limit, with plain unit tests: multibyte text, case folding, word
   boundaries, empty query, the limit and `more`, and ranges.
-- `buffer.find` host operation, its `knot.d.ts` contract, and the fake host
+- ✅ `buffer.find` host operation, its `knot.d.ts` contract, and the fake host
   used by package tests.
-- An extension-level test through the real host.
+- ✅ An extension-level test through the real host.
+
+**Shape:** `buffer.find(query, { caseSensitive, wholeWord, range, limit })`
+resolves `{ revision, matches, more }`. The limit defaults to 1,000 and is
+capped natively at 100,000. Matches are non-overlapping and lie inside the
+range; whole-word checks look at the text around the range. Case folding is
+per character, by its single-character lowercase. There is no reverse
+search: stepping back past a cap reads the matches before the caret with a
+large `limit`.
 
 **Implementation context:** add the search beside `BufferModel` in
 `crates/knot-model/src/buffer.rs` (or a `buffer/find.rs` module), reusing

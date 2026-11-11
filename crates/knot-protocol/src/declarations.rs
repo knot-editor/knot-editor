@@ -174,6 +174,12 @@ impl HostSuccess for crate::ByteRange {
     }
 }
 
+impl HostSuccess for crate::FindResult {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
 impl HostSuccess for crate::LanguageInfo {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)

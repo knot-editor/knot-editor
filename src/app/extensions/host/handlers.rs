@@ -671,7 +671,8 @@ pub(crate) async fn close_presentation(
 
 pub(crate) use crate::app::extensions::buffers::BufferError;
 use knot_protocol::{
-    BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, TextEdit, TextSnapshot,
+    BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, FindResult, TextEdit,
+    TextSnapshot,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -835,6 +836,72 @@ pub(crate) async fn line_at(
                     .line_at_offset(arguments.value)
                     .ok_or(BufferError::InvalidRange)?;
                 Ok(line as u64)
+            },
+        )
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FindArguments {
+    pub buffer: BufferHandle,
+    pub query: String,
+    pub case_sensitive: bool,
+    pub whole_word: bool,
+    pub range: Option<ByteRange>,
+    pub limit: u64,
+}
+impl HostArguments for FindArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            buffer: BufferHandle::new(reader.integer(2)?),
+            query: reader.text(3, "find query must be a string")?,
+            case_sensitive: reader
+                .optional_boolean(4, "caseSensitive must be a boolean")?
+                .unwrap_or(false),
+            whole_word: reader
+                .optional_boolean(5, "wholeWord must be a boolean")?
+                .unwrap_or(false),
+            range: reader.range(6)?,
+            limit: reader.integer(7)?,
+        })
+    }
+}
+
+/// The literal matches of a query, in order, with the revision searched.
+#[host_operation("find")]
+pub(crate) async fn find(
+    context: HostContext,
+    arguments: FindArguments,
+) -> Result<FindResult, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        host.buffers.read_model(
+            &request,
+            arguments.buffer,
+            || commands.is_cancelled(request.invocation),
+            cx,
+            |model| {
+                let options = knot_model::buffer::FindOptions {
+                    case_sensitive: arguments.case_sensitive,
+                    whole_word: arguments.whole_word,
+                };
+                let limit = usize::try_from(arguments.limit).unwrap_or(usize::MAX);
+                let found = model
+                    .find(&arguments.query, options, arguments.range, limit)
+                    .map_err(|_| BufferError::InvalidRange)?;
+                Ok(FindResult {
+                    revision: model.revision(),
+                    matches: found
+                        .ranges
+                        .into_iter()
+                        .map(|range| ByteRange {
+                            start_byte_offset: range.start,
+                            end_byte_offset: range.end,
+                        })
+                        .collect(),
+                    more: found.more,
+                })
             },
         )
     })?

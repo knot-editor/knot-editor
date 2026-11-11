@@ -28,6 +28,11 @@ const registration: Promise<Disposable> = commands.register("check", async (cont
   const line: import("knot").ByteRange = await buffer.lineRange(lines - 1);
   const lineIndex: number = await buffer.lineAt(line.startByteOffset);
   void lineIndex;
+  const found: import("knot").FindResult = await buffer.find("text", { caseSensitive: true, wholeWord: false, range: line, limit: 5 });
+  const matched: readonly import("knot").ByteRange[] = found.matches;
+  const foundRevision: number = found.revision;
+  const hasMore: boolean = found.more;
+  void [matched, foundRevision, hasMore];
   const editorHandle: import("knot").Editor | null = context.editor;
   if (editorHandle !== null) {
     const state = await editorHandle.viewState();

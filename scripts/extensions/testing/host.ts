@@ -253,6 +253,57 @@ function utf16AtByte(text: string, offset: number): number | undefined {
 }
 
 /** Byte ranges of each line without its `\n` or `\r\n` terminator. */
+const MAX_FIND_MATCHES = 100_000;
+const WORD_SEPARATORS = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
+
+function isWordCharacter(character: string | undefined): boolean {
+  return character !== undefined && !/\s/u.test(character) && !WORD_SEPARATORS.includes(character);
+}
+
+function foldCharacter(character: string, caseSensitive: boolean): string {
+  if (caseSensitive) return character;
+  const lower = character.toLowerCase();
+  return [...lower].length === 1 ? lower : character;
+}
+
+/** The native search's matches as UTF-16 `[start, end)` pairs, over a UTF-16 range of `text`. */
+function findMatches(
+  text: string,
+  query: string,
+  options: Knot.FindOptions,
+  rangeStart: number,
+  rangeEnd: number,
+): [number, number][] {
+  const fold = (character: string) => foldCharacter(character, options.caseSensitive === true);
+  const wanted = [...query].map(fold);
+  const matches: [number, number][] = [];
+  if (wanted.length === 0) return matches;
+  const characterBefore = (index: number) => (index > 0 ? [...text.slice(Math.max(0, index - 2), index)].at(-1) : undefined);
+  let index = rangeStart;
+  while (index < rangeEnd) {
+    const found = [...text.slice(index, rangeEnd)].slice(0, wanted.length);
+    const length = found.join("").length;
+    if (found.length === wanted.length && found.every((character, at) => fold(character) === wanted[at])) {
+      const end = index + length;
+      const first = found[0];
+      const last = found[found.length - 1];
+      const previous = characterBefore(index);
+      const next = text.codePointAt(end) === undefined ? undefined : String.fromCodePoint(text.codePointAt(end)!);
+      const bounded =
+        options.wholeWord !== true ||
+        ((!isWordCharacter(first) || !isWordCharacter(previous)) &&
+          (!isWordCharacter(last) || !isWordCharacter(next)));
+      if (bounded) {
+        matches.push([index, end]);
+        index = end;
+        continue;
+      }
+    }
+    index += text.codePointAt(index)! > 0xffff ? 2 : 1;
+  }
+  return matches;
+}
+
 function lineRanges(text: string): Knot.ByteRange[] {
   const ranges: Knot.ByteRange[] = [];
   let start = 0;
@@ -364,6 +415,22 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       const index = utf16AtByte(document.text, offset);
       if (index === undefined) throw hostError("InvalidRange");
       return document.text.slice(0, index).split("\n").length - 1;
+    },
+    find: async (query, options) => {
+      const range = options?.range ?? { startByteOffset: 0, endByteOffset: byteLength(document.text) };
+      const start = utf16AtByte(document.text, range.startByteOffset);
+      const end = utf16AtByte(document.text, range.endByteOffset);
+      if (start === undefined || end === undefined || start > end) throw hostError("InvalidRange");
+      const matches = findMatches(document.text, query, options ?? {}, start, end);
+      const limit = Math.min(options?.limit ?? 1000, MAX_FIND_MATCHES);
+      return {
+        revision: document.revision,
+        matches: matches.slice(0, limit).map(([from, to]) => ({
+          startByteOffset: byteLength(document.text.slice(0, from)),
+          endByteOffset: byteLength(document.text.slice(0, to)),
+        })),
+        more: matches.length > limit,
+      };
     },
     createMark: async (offset) => {
       if (document.text === "" || utf16AtByte(document.text, offset) === undefined) {

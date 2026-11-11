@@ -1188,6 +1188,27 @@ declare module "knot" {
     readonly gutter?: ColorKey | null;
     readonly command?: string | null;
   }
+  export interface FindOptions {
+    /** Compare characters exactly; the default folds case by lowercase. */
+    readonly caseSensitive?: boolean;
+    /**
+     * Accept a match only at word boundaries, by the word classes that double
+     * click and word movement use: a match edge that is not a word character
+     * needs no boundary, and the text around a `range` counts.
+     */
+    readonly wholeWord?: boolean;
+    /** Search only here; a match must lie wholly inside. Defaults to the whole buffer. */
+    readonly range?: ByteRange;
+    /** Most matches to return, 1000 by default and at most 100000 whatever is asked. */
+    readonly limit?: number;
+  }
+  export type FindResult = Readonly<{
+    /** The revision of the text searched. */
+    revision: number;
+    matches: readonly ByteRange[];
+    /** Whether a match followed the last returned, cut off by the limit. */
+    more: boolean;
+  }>;
   /** One replaceable set per buffer and extension lifecycle. */
   export interface EditorContributions extends Disposable {
     /**
@@ -1260,6 +1281,17 @@ declare module "knot" {
      * end or splitting a UTF-8 scalar, or Cancelled on teardown.
      */
     lineAt(offset: number): Promise<number>;
+    /**
+     * Find the occurrences of a literal query, in order and without overlap,
+     * in the whole buffer or `options.range`. Matching is native, so the text
+     * never crosses the boundary. The result carries the revision it searched,
+     * for the revision-checked calls that use it; `more` is true when a match
+     * followed the last one returned. An empty query matches nothing.
+     * @throws TypeError for a non-string query or an invalid limit; HostError
+     * with BufferClosed, InvalidRange for a range past the end, reversed, or
+     * splitting a UTF-8 scalar, or Cancelled on teardown.
+     */
+    find(query: string, options?: FindOptions): Promise<FindResult>;
     /**
      * Mark a byte offset. The mark stays with the character after it as edits
      * move that character, so text inserted before or at the mark moves it, and

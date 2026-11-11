@@ -1033,6 +1033,15 @@ pub struct TextSnapshot {
     pub revision: u64,
 }
 
+/// The matches of a buffer search and the revision it searched.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindResult {
+    pub revision: u64,
+    pub matches: Vec<ByteRange>,
+    pub more: bool,
+}
+
 /// One committed editor-visible buffer change in pre-commit coordinates.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BufferChange {
