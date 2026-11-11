@@ -1,6 +1,6 @@
 # D034 — Explorer as a bundled extension
 
-Status: 🚧 in progress; checkpoint 1 awaiting review. Item of the
+Status: 🚧 in progress; checkpoint 1 done. Item of the
 [daily-driver plan](daily-driver.md); absorbs D053. Depends on D008, D010,
 D072, D081, and D122, all done.
 
@@ -113,29 +113,12 @@ explorer's behavior is not a constraint.
 
 ## Checkpoints
 
-### 1. Icon references 🔎 awaiting review
+### 1. Icon references ✅ done
 
-- ✅ `IconRef` in the protocol and `knot.d.ts`, resolved natively wherever an
-  icon is painted; the `open` variant rule for expanded tree rows; `icon` on
-  picker items and input completions.
-- ✅ Go to File shows file icons; Vim's `:e` completion shows file and folder
-  icons.
-- ✅ Validation: model tests for the variant fallback order and `{ file }` /
-  `{ folder }` resolution; tree, picker, and completion rendering tests; Go to
-  File and Vim package tests that observe the icons.
-- Review gate: icons in a personal-config `Try:` tree, Go to File, and `:e`.
-
-**Implementation context:** `crates/knot-model/src/icons.rs` (`file_icon`,
-`folder_icon`, `first_defined`), `src/app/icons.rs` (`icon_definition`,
-`file_definition`, `folder_definition`), icon-bearing types in
-`crates/knot-protocol/src/lib.rs`, painting in `src/app/tree_view.rs`
-(`icon`), `src/app/picker.rs`, `src/app/transient.rs` (completion list), and
-`src/app/status_bar.rs`; contract in `crates/knot-host/src/js/knot.d.ts`;
-`extensions/@knot/go-to-file/src/rows.ts`,
-`extensions/@knot/vim/src/ex.ts` (`completePath`); tests beside
-`src/app/icons/tests.rs`, `src/app/product/tests/icons.rs`,
-`crates/knot-ext-workbench/tests/workbench/go_to_file.rs`, and
-`crates/knot-ext-vim/tests/vim.rs`.
+`IconRef` (`crates/knot-protocol`, `knot.d.ts`) resolves at paint time through
+`IconRegistry::first_defined` and `src/app/icons.rs` (`ref_definition`); tree
+rows apply the `.open` variant when expanded; picker items and input
+completions carry an icon, used by Go to File and Vim's `:e`.
 
 ### 2. Tree API
 
