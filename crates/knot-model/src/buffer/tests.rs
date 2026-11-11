@@ -1323,3 +1323,25 @@ fn find_on_a_closed_buffer_fails() {
         Err(BufferAccessError::Closed)
     );
 }
+
+#[test]
+fn find_folds_case_by_simple_unicode_folding() {
+    let model = BufferModel::from_text("Σ σ ς ſ s \u{212A} k ß ss SS İ i ı I");
+    // Greek sigmas agree, including the final form.
+    assert_eq!(found(&model, "σ", insensitive()).len(), 3);
+    assert_eq!(found(&model, "ς", insensitive()).len(), 3);
+    assert_eq!(found(&model, "σ", sensitive()).len(), 1);
+    // The long s and the Kelvin sign fold to their ASCII letters.
+    assert_eq!(found(&model, "s", insensitive()).len(), 6);
+    assert_eq!(found(&model, "k", insensitive()).len(), 2);
+    // Folding never changes length: ß is not ss, and the Turkish letters
+    // keep to themselves.
+    let sharp_s = model.text().find('ß').unwrap();
+    assert_eq!(
+        found(&model, "ß", insensitive()),
+        vec![sharp_s..sharp_s + 2]
+    );
+    assert_eq!(found(&model, "İ", insensitive()).len(), 1);
+    assert_eq!(found(&model, "ı", insensitive()).len(), 1);
+    assert_eq!(found(&model, "i", insensitive()).len(), 2);
+}

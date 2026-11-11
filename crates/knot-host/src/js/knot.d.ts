@@ -1189,7 +1189,11 @@ declare module "knot" {
     readonly command?: string | null;
   }
   export interface FindOptions {
-    /** Compare characters exactly; the default folds case by lowercase. */
+    /**
+     * Compare characters exactly. The default folds case one character at a
+     * time (Unicode simple case folding), so `ς`, `σ` and `Σ` agree but `ß`
+     * does not match `ss` and `İ` and `ı` match only themselves.
+     */
     readonly caseSensitive?: boolean;
     /**
      * Accept a match only at word boundaries, by the word classes that double

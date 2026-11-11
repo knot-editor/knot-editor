@@ -56,6 +56,19 @@ test("find matches literally in byte offsets with case, word, range, and limit o
   await assert.rejects(buffer.find("é", { range: { startByteOffset: 1, endByteOffset: 5 } }), { code: "InvalidRange" });
 });
 
+test("find folds case one character at a time", async () => {
+  const document = host.addDocument({ text: "Σ σ ς ß ss SS İ ı i" });
+  host.openWindow({ documents: [document] });
+  const buffer = (await capture()).buffer!;
+  const count = async (query: string) => (await buffer.find(query)).matches.length;
+  assert.equal(await count("σ"), 3);
+  assert.equal(await count("ß"), 1);
+  assert.equal(await count("ss"), 2);
+  assert.equal(await count("İ"), 1);
+  assert.equal(await count("ı"), 1);
+  assert.equal(await count("i"), 1);
+});
+
 test("the editor reads and moves the selection and restores view states", async () => {
   const document = host.addDocument({ text: "one\ntwo\n" });
   host.openWindow({ documents: [document] });

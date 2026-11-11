@@ -104,7 +104,8 @@ avoiding existing bindings.
 resolves `{ revision, matches, more }`. The limit defaults to 1,000 and is
 capped natively at 100,000. Matches are non-overlapping and lie inside the
 range; whole-word checks look at the text around the range. Case folding is
-per character, by its single-character lowercase. There is no reverse
+simple per-character Unicode folding (`ς`/`σ`/`Σ` agree; `ß`, `İ`, `ı` stay
+themselves). There is no reverse
 search: stepping back past a cap reads the matches before the caret with a
 large `limit`.
 

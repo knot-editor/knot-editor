@@ -261,9 +261,10 @@ function isWordCharacter(character: string | undefined): boolean {
 }
 
 function foldCharacter(character: string, caseSensitive: boolean): string {
-  if (caseSensitive) return character;
-  const lower = character.toLowerCase();
-  return [...lower].length === 1 ? lower : character;
+  if (caseSensitive || character === "ı") return character;
+  const single = (text: string) => ([...text].length === 1 ? text : undefined);
+  const upper = single(character.toUpperCase()) ?? character;
+  return single(upper.toLowerCase()) ?? character;
 }
 
 /** The native search's matches as UTF-16 `[start, end)` pairs, over a UTF-16 range of `text`. */

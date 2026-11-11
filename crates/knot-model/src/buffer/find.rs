@@ -13,7 +13,7 @@ pub const MAX_FIND_MATCHES: usize = 100_000;
 /// How a search compares text with its query.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct FindOptions {
-    /// Compare characters exactly; otherwise by their lowercase.
+    /// Compare characters exactly; otherwise by their simple case fold.
     pub case_sensitive: bool,
     /// Accept a match only at word boundaries, by the editor's word classes.
     pub whole_word: bool,
@@ -27,15 +27,21 @@ pub struct FindMatches {
 }
 
 impl FindOptions {
+    /// The character's simple case fold, which keeps matches one character
+    /// long: its lowercase of its uppercase, so `ς`, `σ` and `Σ` agree and
+    /// `ſ` meets `s`. A character that case-maps to several (`ß`, `İ`) and
+    /// the Turkish dotless `ı` stay themselves.
     fn fold(self, character: char) -> char {
-        if self.case_sensitive {
+        if self.case_sensitive || character == 'ı' {
             return character;
         }
-        let mut lower = character.to_lowercase();
-        match (lower.next(), lower.next()) {
-            (Some(single), None) => single,
-            _ => character,
-        }
+        let single =
+            |mut mapped: Box<dyn Iterator<Item = char>>| match (mapped.next(), mapped.next()) {
+                (Some(only), None) => Some(only),
+                _ => None,
+            };
+        let upper = single(Box::new(character.to_uppercase())).unwrap_or(character);
+        single(Box::new(upper.to_lowercase())).unwrap_or(character)
     }
 }
 
