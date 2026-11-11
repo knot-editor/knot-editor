@@ -134,7 +134,7 @@ between fields natively. Specified in
 - `Try:` commands for manual review: `Try: Find Sample` and `Try: Find Many`
   (personal `post-init.js`) open tabs to search; then ⌘F, ⌘G, ⌘⇧G, Enter,
   ⇧Enter, Esc. On Windows and Linux next and previous are F3 and ⇧F3, since
-  Ctrl+G is Go to Line. Match colors are provisional for the review.
+  Ctrl+G is Go to Line. Match colors are provisional for the review; the current match is a background only, and every bundled theme's selection is translucent so it shows through.
 
 **Implementation context:** mirror `extensions/@knot/go-to-line` (package
 layout, `test/`, `knot.jsonc`) and its Rust test

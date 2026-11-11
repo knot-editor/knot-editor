@@ -230,8 +230,8 @@ native_colors! {
     EDITOR_BAR_BACKGROUND = "editor.bar.background", "Bars extensions open above an editor's text, such as Find.", Key(TAB_BAR_BACKGROUND), Key(TAB_BAR_BACKGROUND);
     EDITOR_BAR_BORDER = "editor.bar.border", "The line below each editor bar.", Key(BORDER), Key(BORDER);
     EDITOR_CURSOR = "editor.cursor", "Text cursor.", Rgb(0xe6e6e6), Rgb(0x1f1f1f);
-    EDITOR_FIND_MATCH = "editor.findMatch", "Background of each text match of an open Find bar.", Rgba(0xea5c0055), Rgba(0xf2c94c99);
-    EDITOR_FIND_MATCH_CURRENT = "editor.findMatchCurrent", "Background of the match Find has selected.", Rgba(0xf5a623aa), Rgba(0xf29d38cc);
+    EDITOR_FIND_MATCH = "editor.findMatch", "Background of each text match of an open Find bar.", Rgba(0xe5c07b33), Rgba(0xc1840170);
+    EDITOR_FIND_MATCH_CURRENT = "editor.findMatchCurrent", "Background of the match Find has selected.", Rgba(0xd19a6666), Rgba(0x98680180);
     EDITOR_FOLD_PLACEHOLDER ="editor.foldPlaceholder", "The placeholder after the first line of a collapsed fold.", Rgb(0x858585), Rgb(0x8c8c8c);
     EDITOR_FOREGROUND = "editor.foreground", "Unhighlighted editor text.", Rgb(0xd4d4d4), Rgb(0x1f1f1f);
     EDITOR_GUTTER_BACKGROUND = "editor.gutter.background", "The editor gutter beside the text.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);

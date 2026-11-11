@@ -92,19 +92,13 @@ async function refresh(session: Session, selection: { anchor: number; caret: num
   const current = found.matches.find((match) => sameRange(match, selected)) ?? null;
   try {
     await session.buffer.contributions.replace(
-      [
-        ...found.matches.map((range) => ({
-          range,
-          decoration: {
-            color: current !== null && sameRange(range, current) ? CURRENT_COLOR : MATCH_COLOR,
-            style: "background" as const,
-          },
-        })),
-        // The selection paints above backgrounds, so the current match is also underlined.
-        ...(current === null
-          ? []
-          : [{ range: current, decoration: { color: CURRENT_COLOR, style: "underline" as const } }]),
-      ],
+      found.matches.map((range) => ({
+        range,
+        decoration: {
+          color: current !== null && sameRange(range, current) ? CURRENT_COLOR : MATCH_COLOR,
+          style: "background" as const,
+        },
+      })),
       { ifRevision: found.revision },
     );
   } catch (error) {

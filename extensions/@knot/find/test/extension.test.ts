@@ -31,7 +31,7 @@ function message(window: WindowTarget) {
 
 /** Highlights as [start, current] pairs of byte offsets. */
 function highlights(document: DocumentId) {
-  return host.contributions(document).filter((item) => item.decoration?.style === "background").map((item) => [
+  return host.contributions(document).map((item) => [
     item.range.startByteOffset,
     item.decoration?.color === CURRENT_COLOR,
   ]);
@@ -68,11 +68,6 @@ test("typing highlights every match and selects the first from the caret", async
     [offset("foo bar\nFoo baz foo\nfoo"), false],
   ]);
   assert.equal(host.contributions(document)[1]!.decoration?.color, MATCH_COLOR);
-  // The current match is also underlined, which shows above the selection.
-  assert.deepEqual(
-    host.contributions(document).filter((item) => item.decoration?.style === "underline").map((item) => item.range.startByteOffset),
-    [0],
-  );
   assert.deepEqual(host.editorBars(window).focus, { bar: "find", field: "query" });
 
   await host.typeInBar("find", "query", "baz", window);
@@ -123,7 +118,7 @@ test("more than 1000 matches highlight the first 1000 and stepping still reaches
   const { window, editor, document } = await setup(text);
   await search(window, "x");
   assert.equal(message(window), "1000+");
-  assert.equal(host.contributions(document).length, 1001);
+  assert.equal(host.contributions(document).length, 1000);
 
   await editor.setSelection({ anchor: offset("x\n".repeat(1200)), caret: offset("x\n".repeat(1200)) });
   await host.run(NEXT, { window });
