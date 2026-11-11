@@ -21,6 +21,34 @@ use crate::resource::ResourceUri;
 pub struct LocalFileSystemProvider {
     root: Option<ResourceUri>,
     mutation_lock: Arc<Mutex<()>>,
+    trash: Trash,
+}
+
+/// Where a delete that is not permanent puts the entry.
+#[derive(Clone)]
+enum Trash {
+    /// The operating system's trash.
+    System,
+    /// A scratch directory owned by the provider, so tests never touch the
+    /// user's trash.
+    #[cfg(any(test, feature = "test-support"))]
+    Scratch(Arc<tempfile::TempDir>),
+}
+
+impl Trash {
+    fn put(&self, path: &Path) -> Result<(), ResourceError> {
+        match self {
+            Self::System => trash::delete(path).map_err(|error| ResourceError::io("trash", error)),
+            #[cfg(any(test, feature = "test-support"))]
+            Self::Scratch(directory) => {
+                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                std::fs::rename(path, directory.path().join(format!("{n}-{name}")))
+                    .map_err(|error| ResourceError::io("trash", error))
+            }
+        }
+    }
 }
 
 impl LocalFileSystemProvider {
@@ -41,6 +69,7 @@ impl LocalFileSystemProvider {
         Ok(Self {
             root: Some(root),
             mutation_lock: Arc::default(),
+            trash: Self::scratch_trash()?,
         })
     }
 
@@ -50,7 +79,26 @@ impl LocalFileSystemProvider {
         Self {
             root: None,
             mutation_lock: Arc::default(),
+            trash: Trash::System,
         }
+    }
+
+    /// Like [`unrestricted`](Self::unrestricted), but a delete that is not
+    /// permanent moves the entry to a scratch directory that lives as long as
+    /// the provider.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn unrestricted_with_scratch_trash() -> Self {
+        Self {
+            trash: Self::scratch_trash().expect("a scratch trash directory"),
+            ..Self::unrestricted()
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn scratch_trash() -> Result<Trash, ResourceError> {
+        tempfile::tempdir()
+            .map(|directory| Trash::Scratch(Arc::new(directory)))
+            .map_err(|error| ResourceError::io("trash", error))
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -388,6 +436,7 @@ impl FileSystemProvider for LocalFileSystemProvider {
             Err(error) => return Box::pin(async move { Err(error) }),
         };
         let mutation_lock = self.mutation_lock.clone();
+        let trash = self.trash.clone();
         self.spawn("delete task", move || {
             let _guard = mutation_lock
                 .lock()
@@ -396,7 +445,7 @@ impl FileSystemProvider for LocalFileSystemProvider {
                 .symlink_metadata()
                 .map_err(|error| map_io("stat", &uri, error))?;
             if !permanent {
-                return trash::delete(&path).map_err(|error| ResourceError::io("trash", error));
+                return trash.put(&path);
             }
             let removed = if metadata.is_dir() {
                 std::fs::remove_dir_all(&path)
@@ -797,6 +846,19 @@ mod tests {
         run(provider.delete(child_uri(provider.root(), "tree"), false)).unwrap();
         assert!(!temporary.path().join("gone.txt").exists());
         assert!(!temporary.path().join("tree").exists());
+    }
+
+    /// Moves entries to the real trash of the machine running the test.
+    #[test]
+    #[ignore = "uses the operating system's trash"]
+    fn system_trash_removes_the_entry_from_its_place() {
+        let temporary = tempfile::tempdir().unwrap();
+        let provider = LocalFileSystemProvider::unrestricted();
+        let file = temporary.path().join("gone.txt");
+        fs::write(&file, b"x").unwrap();
+        let uri = ResourceUri::from_url(Url::from_file_path(&file).unwrap());
+        run(provider.delete(uri, false)).unwrap();
+        assert!(!file.exists());
     }
 
     #[cfg(unix)]

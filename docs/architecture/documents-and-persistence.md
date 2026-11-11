@@ -88,6 +88,8 @@ and no entitlement gates them.
 the same operations, which create missing parents and never overwrite. The
 local provider deletes to the operating system's trash through the `trash`
 crate unless asked to remove permanently; the memory provider always removes.
+Test products give the local provider a scratch directory as its trash, so
+tests never touch the user's trash.
 After a provider rename succeeds, the foreground moves the open documents at or
 under the old URI to the matching new ones
 ([`DocumentCollection::relocate`](../../crates/knot-model/src/documents.rs)),

@@ -49,6 +49,7 @@ pub(super) use launch::bind_product_keys;
 pub(super) use launch::finish_product_startup;
 use launch::open_tab_tear_out_window;
 #[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 use launch::product_filesystems;
 #[cfg(test)]
 use launch::{dispatch_launch_request, open_tab_transfer_window};

@@ -1,7 +1,9 @@
 //! The application globals and windows tests start from, shared by the
 //! driver and the library's own tests.
 
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::Arc};
+
+use knot_model::filesystem::{FileSystemProviderRegistry, LocalFileSystemProvider};
 
 use gpui::{AppContext, Entity, TestAppContext};
 
@@ -10,7 +12,7 @@ use super::super::{
     ApplicationProductCommands, ApplicationProtectedClosure, ApplicationSessions,
     ApplicationTerminalSessions, Buffer, DocumentCollection, DocumentId, LaunchGate,
     ProductCommandDispatcher, ProductShell, TerminalSessions, Workbench,
-    install_protected_window_close, product_filesystems,
+    install_protected_window_close,
 };
 
 /// Install the globals a product session needs, each test with its own
@@ -31,7 +33,14 @@ pub(crate) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollect
         TerminalSessions::default(),
     )));
     cx.update(|cx| crate::app::allow_thread_wakeups(cx));
-    cx.set_global(ApplicationFileSystems(product_filesystems()));
+    let mut filesystems = FileSystemProviderRegistry::default();
+    filesystems
+        .register(
+            "file",
+            Arc::new(LocalFileSystemProvider::unrestricted_with_scratch_trash()),
+        )
+        .expect("the test file provider is unique");
+    cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let commands = cx.new(ProductCommandDispatcher::new);
     cx.set_global(ApplicationProductCommands(commands));
     cx.set_global(crate::app::tool_layout::ApplicationToolLayout(
