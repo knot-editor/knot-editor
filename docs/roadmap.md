@@ -98,7 +98,7 @@ complete list for that item.
   - D077 → D117 → D067
   - D071 → D067, D082
   - D034 → D119
-- **Find:** D031 → D001, with or after D092; D031 → D150.
+- **Find:** D031 → D001, with or after D092; D031 → D150; D031 → D179.
 - **Package manager:** D087 → D101 → D102 → D103 → D104 → D106;
   D064, D071, D103 → D105 → D106; D106 → D107, D108; D103 → D116.
 - **Settings:** D070 → D089 → D090; D008 → D090;
@@ -751,6 +751,17 @@ Kakoune mode could use it too. The
     command, with a bounded wait so a slow hook cannot block saving.
   - Order: after D079, which defines the save pipeline; before format on
     save in D067.
+
+- **D179 — View-scoped decorations**
+  - Deferred: Editor contributions belong to the buffer, so every view of
+    it paints them. Current-file Find (D031) highlights its matches in
+    other splits of the buffer too, and two find bars over one buffer share
+    one highlight set; word occurrence highlighting (D080) has the same limit.
+  - Reconsider: Soon after D031; it is important for Find and D080. Then
+    let a contribution set target one editor view, painted only there and
+    released with the view, beside the existing buffer-wide sets, and move
+    `@knot/find` and D080 onto it.
+  - Order: after D031.
 
 - **D147 — Key contexts on non-editor views**
   - Deferred: D110 lets extensions set key contexts on editor views only.

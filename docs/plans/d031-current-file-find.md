@@ -1,0 +1,215 @@
+# D031 — Current-file Find
+
+Status: 🚧 planned. Item D031 of the [daily-driver plan](daily-driver.md).
+
+## Outcome
+
+⌘F opens a find bar docked at the top of the focused editor, as in IntelliJ,
+VS Code, and Zed. Typing highlights every match live and selects the current
+one. Enter and ⇧Enter, or ⌘G and ⌘⇧G, move between matches. ⌘G and ⌘⇧G also
+work from the editor with the bar open or closed. The bar shows "3 of 17",
+"No results", or "1000+". Toggles and buttons switch case sensitivity and whole
+word, and step or close. The editor stays editable while the bar is open:
+matches are searched again after edits, and the current match follows them.
+Esc in the bar closes it and clears the highlights.
+
+## Design
+
+Three pieces, each generic except the last:
+
+- **Native matching: `buffer.find`.** Literal matching in `knot-model` over
+  the buffer text, with `caseSensitive` and `wholeWord` options, an optional
+  byte range, and a match limit. It returns the revision it searched, byte
+  ranges, and whether more matches exist. It is native because extensions
+  address text in UTF-8 byte offsets and should not copy the whole buffer on
+  every keystroke. Whole word uses the editor's word classes. Regex stays
+  deferred (D001), and D150 decides how Vim's syntax maps onto it.
+- **Editor bar API.** An extension attaches a non-modal strip to the top of
+  an editor view and describes it as data: text fields with a placeholder,
+  toggles (icon, tooltip, state), buttons (icon, tooltip, command), and a
+  message line. A bar is identified by its owner lifecycle and an
+  extension-chosen ID per view. Opening the same ID again updates that bar,
+  and several bars from different extensions stack in the order they were opened.
+  Bars are lifecycle-owned presentation state, never recorded in layouts, and
+  close with their view or their lifecycle. Field edits reach the extension
+  through a coalescing subscription that never blocks input or painting.
+  Clicking the editor focuses its text and leaves the bar open.
+- **`@knot/find` package.** A small bundled JS package owns the workflow:
+  commands, bar description, re-search on edits, navigation, and highlights.
+  Highlights are the package's buffer contributions in two new theme keys,
+  `editor.findMatch` and `editor.findMatchCurrent`, capped at 1,000 matches.
+  D080 reuses the same contribution path with its own key. Navigation past the
+  cap uses range-limited `buffer.find`, so it reaches every match.
+
+### Key routing in a bar
+
+While a bar field has Knot-side focus, the router resolves keys against a
+native view kind `bar` whose live key context is the bar's ID. Editor-kind
+bindings, such as the Emacs and movement keys of the Knot preset, therefore do
+not reach the field. Keys the keymap leaves go to the field's `TextInput`,
+which handles its own editing, as transient fields do. Global bindings still
+apply. The command context still captures the editor tab the bar belongs to,
+so `editor` and `buffer` are the bar's editor. `@knot/find` binds Enter,
+⇧Enter, and Esc in view `bar`, context `find`. The Knot preset binds ⌘F, ⌘G, and
+⌘⇧G (with `secondary-` equivalents) for both the `editor` and `bar` view kinds,
+avoiding existing bindings.
+
+### Behavior
+
+- ⌘F opens or focuses the bar and fills the field from a single-line
+  selection, otherwise from the last query, all selected.
+- The current match is the first at or after where the search started. It is
+  selected and revealed, and as the selection follows edits natively, so does
+  the current match.
+- Esc closes the bar, clears the highlights, and leaves the current match
+  selected, as the cited editors do.
+- With the bar closed, ⌘G and ⌘⇧G use the last query and options from the
+  caret and select the match without highlights.
+- The last query and options live in the package's memory, shared by all
+  editors, and are not persisted.
+- Case-insensitive and substring matching by default.
+
+## Exclusions
+
+- Replace and regular expressions remain D001.
+- No separate "use selection for find" command. ⌘E stays Open Recent, and
+  ⌘F's pre-fill covers the case.
+- Highlights are buffer contributions, so a second view of the buffer also
+  shows them, and two find bars over one buffer share one highlight set, the
+  latest search winning. View-scoped decorations are D179.
+- No find history, persisted options, or search within the selection.
+
+## Deferred decisions
+
+- Exact JS shapes of the bar API (`editor.openBar` or similar, field value
+  updates versus user typing) are settled in checkpoint 2 against the
+  existing status item and editor-handle patterns.
+- Theme defaults for the match colors and the bar's appearance are reviewed
+  in the running app at checkpoint 4. The current match is selected, so
+  selection paints above its background, and the review decides whether
+  `editor.findMatchCurrent` needs a different style.
+
+## Checkpoints
+
+### 1. Native `buffer.find`
+
+- Matching in `knot-model` with case and whole-word options, range, and
+  limit, with plain unit tests: multibyte text, case folding, word
+  boundaries, empty query, the limit and `more`, and ranges.
+- `buffer.find` host operation, its `knot.d.ts` contract, and the fake host
+  used by package tests.
+- An extension-level test through the real host.
+
+**Implementation context:** add the search beside `BufferModel` in
+`crates/knot-model/src/buffer.rs` (or a `buffer/find.rs` module), reusing
+`word_class` from `crates/knot-model/src/editor/text.rs`. Mirror the
+`lineRange`/`lineAt` operations in `src/app/extensions/host/handlers.rs`
+(`host.buffers.read_model`) and the JS binding next to them. Contract in
+`crates/knot-host/src/js/knot.d.ts` on `Buffer`. Fake host in
+`scripts/extensions/`.
+
+**Review gate:** API shape and matching semantics.
+
+### 2. Editor bar core
+
+- Bars per editor view: open, update, and close by ID, stacked in opening order
+  above the text area. Each has fields with placeholders and a message
+  line.
+- Field focus as Knot-side focus inside the editor tab. Clicking the field
+  or the text moves focus. Typing goes to the shared `TextInput`, which
+  gains placeholder rendering.
+- A coalescing field-change subscription, lifecycle cleanup, and closure with
+  the view.
+- Theme keys the bar paints with, reusing existing keys where they fit.
+- Tests through the real editor with a test package: stacking two bars from
+  two lifecycles, updates, typing into a field reaching the listener,
+  focus moves, and teardown removing a lifecycle's bars.
+
+**Implementation context:** per-editor bar state where editor key contexts
+live (`Editor::set_key_context` in `crates/knot-model/src/editor.rs`), so
+sessions without windows route to it. Rendering in `src/app/editor/paint.rs` /
+`view.rs` above the element, with the text area shrinking to fit. Field
+widget `src/app/text_input.rs`. Lifecycle-owned registration and cleanup
+mirror the status bar (`src/app/status_bar.rs` and the status item handlers
+in `src/app/extensions/host/handlers.rs`). Event delivery mirrors
+`onDidChangeSelection`. Contract in `knot.d.ts` on `Editor`.
+D140 then needs only the `showInput` option.
+
+**Review gate:** look and focus behavior of a bar in the real app via `Try:`
+commands.
+
+### 3. Bar keys
+
+- The `bar` view kind with the bar's ID as its key context while a field has
+  focus. Editor-kind bindings stop applying there, global ones still do, and
+  unbound keys reach the field.
+- Commands invoked from a bar capture the bar's editor tab.
+- Escape and Tab without bindings leave the field's own handling.
+- Router unit tests and real-editor tests: a context-bound Enter runs a
+  command, editor movement bindings do not fire in the field, and a global
+  binding does.
+
+**Implementation context:** `crates/knot-model/src/commands/key_router.rs`
+reports the focused kind and contexts. View-kind declaration in
+`src/app/commands/declarations.rs`. Capture in `src/app/commands/dispatch.rs`
+and `src/app/product/commands.rs`. Update
+[commands](../architecture/commands.md#keymaps).
+
+**Review gate:** binding scope rules.
+
+### 4. `@knot/find`
+
+- Package `extensions/@knot/find`, added to `crates/knot-ext-workbench`.
+- Commands: find, next, previous, and close. ⌘F, ⌘G, and ⌘⇧G in the Knot preset.
+  Enter, ⇧Enter, and Esc bound by the package in `bar`/`find`.
+- Live highlights, capped at 1,000, current match selected and revealed, the
+  message line, and re-search after edits, debounced.
+- Theme keys `editor.findMatch` and `editor.findMatchCurrent`.
+- `node:test` package tests and end-to-end tests in
+  `crates/knot-ext-workbench/tests/workbench/find.rs`: typing highlights,
+  stepping and wrapping, the cap, edits while open, Esc, ⌘G with the bar
+  closed, and ⌘F pre-fill.
+- `Try:` commands for manual review.
+
+**Implementation context:** mirror `extensions/@knot/go-to-line` (package
+layout, `test/`, `knot.jsonc`) and its Rust test
+`crates/knot-ext-workbench/tests/workbench/go_to_line.rs`. Register in
+`crates/knot-ext-workbench/build.rs`. Preset bindings in
+`src/app/commands/keymaps/presets.rs`. Theme keys in
+`crates/knot-model/src/theme.rs`. Highlights through
+`buffer.contributions.replace` at the revision `buffer.find` returns.
+
+**Review gate:** daily use in the real app, including match and current-match
+colors.
+
+### 5. Toggles and buttons
+
+- Bar toggles and buttons: data, painting, tooltips, click handling,
+  toggle-state updates, and command invocation from a button with the bar's
+  editor captured.
+- `@knot/find` gains case-sensitive and whole-word toggles (⌥⌘C / ⌥⌘W
+  in the bar), previous, next, and close buttons, and the options in the
+  message.
+- Real-editor tests for clicking a toggle and a button and for the toggle
+  keys.
+
+**Implementation context:** extend the checkpoint 2 bar data and rendering.
+Icons through `IconRef` as status items and tree rows use them. Buttons
+invoke commands like status items' `command`.
+
+**Review gate:** bar controls in the real app.
+
+### 6. Documentation
+
+- [Semantic UI](../architecture/semantic-ui.md) or
+  [editor views](../architecture/workbench-and-lifecycle.md#editor-views):
+  editor bars and their ownership.
+- [Commands](../architecture/commands.md): the `bar` view kind. Remove "Find
+  commands currently report unavailable".
+- A decision entry: a non-modal editor bar instead of the modal transient input,
+  and native matching instead of JS matching over snapshots.
+- [Extension guide](../extension-api.md) and [settings](../settings.md) where
+  affected. Roadmap: narrow D001 to replace and regex, and update D140.
+- Mark D031 ✅ in the daily-driver plan and remove this plan.
+
+**Review gate:** documentation review.

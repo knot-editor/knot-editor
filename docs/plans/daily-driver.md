@@ -86,6 +86,7 @@ to be rebuilt later:
 - ✅ **D079 — Save hygiene**
 
 - **D031 — Current-file Find** (depends on D064)
+  - 🚧 [Plan](d031-current-file-find.md).
   - Bound to ⌘F. The query field takes focus. Matching is live and highlights
     every match. Enter and ⇧Enter (and ⌘G / ⌘⇧G) move between matches, and the
     current match follows edits. Esc closes the bar.
