@@ -87,7 +87,7 @@ export const SOLARIZED_DARK: ThemeDefinition = {
     "editor.lineNumber": base01,
     "editor.lineNumber.active": base1,
     "editor.markedText": "#83949699",
-    "editor.selection": "#274642",
+    "editor.selection": "#2aa19859",
     "input.background": base03,
     "input.border": base02,
     "input.focused.border": blue,

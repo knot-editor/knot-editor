@@ -56,7 +56,9 @@ fn typing_highlights_matches_and_the_keys_step_between_them(cx: &mut TestAppCont
         [
             (0, CURRENT.to_owned()),
             (8, MATCH.to_owned()),
-            (16, MATCH.to_owned())
+            (16, MATCH.to_owned()),
+            // The current match is also underlined.
+            (0, CURRENT.to_owned())
         ]
     );
 
@@ -122,7 +124,8 @@ fn more_than_a_thousand_matches_highlight_a_thousand(cx: &mut TestAppContext) {
 
     open_with(&editor, "x", cx);
     wait_for_message(&editor, "1000+", cx);
-    assert_eq!(editor.decorations(cx).len(), 1000);
+    // A thousand matches, and the current one underlined.
+    assert_eq!(editor.decorations(cx).len(), 1001);
     // Stepping past the highlighted matches still finds the rest.
     editor.select(2 * 1100, 2 * 1100, cx);
     editor.press_unsettled(NEXT, cx);
