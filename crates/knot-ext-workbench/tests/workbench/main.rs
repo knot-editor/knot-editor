@@ -1,5 +1,6 @@
 //! The bundled workbench packages (projects, status bar, Go to Line, Go to File, themes), run in the real editor.
 
+mod explorer;
 mod go_to_file;
 mod go_to_line;
 mod project_sessions;

@@ -1,0 +1,11 @@
+{
+  // Bundled file explorer: the roots of a window as a tree.
+  "name": "@knot/explorer",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "displayName": "Explorer",
+  "description": "Browse, open, and follow the files of the window's roots.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}
