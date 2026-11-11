@@ -2274,6 +2274,37 @@ async fn rename_file(
     Ok(to.to_string())
 }
 
+#[host_operation("copyFile")]
+async fn copy_file(
+    context: HostContext,
+    arguments: RenameFileArguments,
+) -> Result<String, OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let to = knot_model::files::copy(providers, &arguments.from, &arguments.to)
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    refresh_file_index(&context, std::slice::from_ref(&to)).await;
+    Ok(to.to_string())
+}
+
+#[host_operation("revealFile")]
+async fn reveal_file(context: HostContext, arguments: FileUriArguments) -> Result<(), OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let uri = providers
+        .normalize(
+            crate::app::resource::ResourceUri::parse(&arguments.uri)
+                .map_err(|_| OpenError::InvalidUri)?,
+        )
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    let path = uri
+        .as_url()
+        .to_file_path()
+        .map_err(|_| OpenError::ProviderFailure)?;
+    context.foreground(|_, cx| cx.reveal_path(&path))?;
+    Ok(())
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct DeleteFileArguments {
     uri: String,

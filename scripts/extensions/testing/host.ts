@@ -114,6 +114,7 @@ function emptyState() {
     inputFeedback: [] as (readonly Knot.InputCompletion[])[],
     messages: [] as Knot.MessageOptions[],
     clipboard: null as string | null,
+    revealed: [] as string[],
     files: new Map<string, string>(),
     directories: new Set<string>(),
     fileWatches: [] as { uri: string; recursive: boolean; listener: (uris: readonly string[]) => void | Promise<void> }[],
@@ -836,6 +837,11 @@ function makeParents(uri: string) {
 function checkedFileUri(uri: string): string {
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(uri)) throw hostError("InvalidUri");
   return uri.length > 1 && uri.endsWith("/") ? uri.slice(0, -1) : uri;
+}
+
+/** The URIs `files.reveal` showed in the file manager, oldest first. */
+export function revealed(): readonly string[] {
+  return state.revealed;
 }
 
 export function clipboard() {
@@ -1782,6 +1788,26 @@ export const api: KnotApi = {
         document.title = document.resourceUri.split("/").pop()!;
       }
       return target;
+    },
+    copy: async (from, to) => {
+      maybeFail("files.copy");
+      const source = checkedFileUri(from);
+      const target = checkedFileUri(to);
+      if (target === source || target.startsWith(`${source}/`)) throw hostError("InvalidUri");
+      if (fileKind(source) === null) throw hostError("ResourceNotFound");
+      if (fileKind(target) !== null) throw hostError("ResourceAlreadyExists");
+      makeParents(target);
+      for (const stored of storedUnder(source)) {
+        const copied = target + stored.slice(source.length);
+        if (state.files.has(stored)) state.files.set(copied, state.files.get(stored)!);
+        else state.directories.add(copied);
+        notifyFileWatchers(copied);
+      }
+      return target;
+    },
+    reveal: async (uri) => {
+      maybeFail("files.reveal");
+      state.revealed.push(checkedFileUri(uri));
     },
     delete: async (uri) => {
       maybeFail("files.delete");

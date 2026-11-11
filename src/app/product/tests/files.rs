@@ -374,6 +374,14 @@ await commands.register("files.mutate", async () => {
   if (await files.rename("mem://product/notes.txt", "mem://product/made/sub/notes.txt") !== "mem://product/made/sub/notes.txt") throw new Error("rename");
   if (await files.stat("mem://product/notes.txt") !== null) throw new Error("source remains");
   if (await files.readText("mem://product/made/sub/notes.txt") !== "loaded text") throw new Error("moved text");
+  if (await files.copy("mem://product/made", "mem://product/dup/made") !== "mem://product/dup/made") throw new Error("copy");
+  if (await files.readText("mem://product/dup/made/sub/notes.txt") !== "loaded text") throw new Error("copied text");
+  if (await files.readText("mem://product/made/sub/notes.txt") !== "loaded text") throw new Error("source kept");
+  await rejects(() => files.copy("mem://product/made", "mem://product/dup/made"), "ResourceAlreadyExists");
+  await rejects(() => files.copy("mem://product/made", "mem://product/made/in"), "InvalidUri");
+  await rejects(() => files.copy("mem://product/gone", "mem://product/x"), "ResourceNotFound");
+  await rejects(() => files.reveal("mem://product/made"), "ProviderFailure");
+  await rejects(() => files.reveal("not a URI"), "InvalidUri");
   await files.delete("mem://product/made");
   if (await files.stat("mem://product/made") !== null) throw new Error("delete");
   await rejects(() => files.delete("mem://product/made"), "ResourceNotFound");

@@ -5,9 +5,20 @@ export const VIEW_ID = "builtin.explorer";
 export const ACTIVATE = "explorer.activate";
 export const OPEN_FOLDER = "explorer.open-folder";
 export const OPEN_FOLDER_ROW = "explorer.open-folder-row";
+export const NEW_FILE = "explorer.new-file";
+export const NEW_FOLDER = "explorer.new-folder";
+export const RENAME = "explorer.rename";
+export const DELETE = "explorer.delete";
+export const CUT = "explorer.cut";
+export const COPY = "explorer.copy";
+export const PASTE = "explorer.paste";
+export const COPY_PATH = "explorer.copy-path";
+export const COPY_RELATIVE_PATH = "explorer.copy-relative-path";
+export const COPY_NAME = "explorer.copy-file-name";
+export const REVEAL = "explorer.reveal-in-finder";
 
-/** What a row's context menu offers: new items in a folder, and renaming or
- * deleting anything but a root. */
+/** What a row's context menu offers: new items in a folder, clipboard and
+ * rename and delete for anything but a root, and copied paths. */
 function menuActions(id: string, folder: boolean, root: boolean): TreeAction[] {
   const action = (label: string, command: string): TreeAction => ({
     label,
@@ -16,8 +27,14 @@ function menuActions(id: string, folder: boolean, root: boolean): TreeAction[] {
     menuOnly: true,
   });
   return [
-    ...(folder ? [action("New File…", "explorer.new-file"), action("New Folder…", "explorer.new-folder")] : []),
-    ...(root ? [] : [action("Rename…", "explorer.rename"), action("Delete…", "explorer.delete")]),
+    ...(folder ? [action("New File…", NEW_FILE), action("New Folder…", NEW_FOLDER)] : []),
+    ...(root ? [] : [action("Cut", CUT), action("Copy", COPY)]),
+    action("Paste", PASTE),
+    action("Copy Path", COPY_PATH),
+    action("Copy Relative Path", COPY_RELATIVE_PATH),
+    action("Copy File Name", COPY_NAME),
+    ...(root ? [] : [action("Rename…", RENAME), action("Delete…", DELETE)]),
+    action("Reveal in Finder", REVEAL),
   ];
 }
 
@@ -102,7 +119,7 @@ export function openFolderItem(): TreeItem {
 }
 
 /** The path of a file URI, else the URI. */
-function displayPath(uri: string): string {
+export function displayPath(uri: string): string {
   const match = /^file:\/\/[^/]*(\/.*)$/.exec(trimmed(uri));
   if (match === null) return uri;
   try {

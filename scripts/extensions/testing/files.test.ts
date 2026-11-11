@@ -133,6 +133,25 @@ test("renaming moves a tree, creates parents, and refuses to overwrite or nest",
   await assert.rejects(files.rename("file:///p/out", "file:///p/out/dst/in"), { code: "InvalidUri" });
 });
 
+test("copying duplicates a tree, creates parents, and refuses to overwrite or nest", async () => {
+  host.seedFile("file:///p/src/a.txt", "a");
+  host.seedFile("file:///p/src/sub/b.txt", "b");
+  host.seedFile("file:///p/taken.txt", "t");
+
+  assert.equal(await files.copy("file:///p/src", "file:///p/out/dst"), "file:///p/out/dst");
+  assert.equal(await files.readText("file:///p/out/dst/sub/b.txt"), "b");
+  assert.equal(await files.readText("file:///p/src/sub/b.txt"), "b");
+
+  await assert.rejects(files.copy("file:///p/missing", "file:///p/x"), { code: "ResourceNotFound" });
+  await assert.rejects(files.copy("file:///p/src", "file:///p/taken.txt"), { code: "ResourceAlreadyExists" });
+  await assert.rejects(files.copy("file:///p/src", "file:///p/src/in"), { code: "InvalidUri" });
+});
+
+test("revealing records the resource shown in the file manager", async () => {
+  await files.reveal("file:///p/src/a.txt");
+  assert.deepEqual(host.revealed(), ["file:///p/src/a.txt"]);
+});
+
 test("open documents follow a rename and become deleted with their file", async () => {
   host.seedFile("file:///p/src/a.txt", "a");
   host.seedFile("file:///p/src/b.txt", "b");

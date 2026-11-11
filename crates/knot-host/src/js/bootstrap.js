@@ -1703,6 +1703,13 @@ export function renameFile(from, to) {
   return request("renameFile",
     string(from, "resource URI must be text"), string(to, "resource URI must be text"));
 }
+export function copyFile(from, to) {
+  return request("copyFile",
+    string(from, "resource URI must be text"), string(to, "resource URI must be text"));
+}
+export async function revealFile(uri) {
+  await request("revealFile", string(uri, "resource URI must be text"));
+}
 export async function deleteFile(uri, options) {
   const permanent = options === undefined
     ? false

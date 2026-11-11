@@ -156,14 +156,22 @@ delay. The tree's context menu and edit field render inside its focus subtree,
 and the session follows focus entering a view, so a menu action works when
 another view had focus before the right click.
 
-### 5. Clipboard and paths
+### 5. Clipboard and paths 🔎 awaiting review
 
-- `files.copy` through providers and the public API; Copy, Cut, Paste, Copy
-  Path, Copy Relative Path, Copy File Name, and Reveal in Finder (a small
-  native operation in the public API).
-- Validation: model tests for `files.copy` (directories, clobbering, cycles);
-  package tests for paste after copy and cut and for the copied texts.
-- Review gate: `Try:` walk through the clipboard actions.
+- ✅ `files.copy` through providers (`FileSystemProvider::copy`; the local
+  provider keeps permissions and copies symlinks as links) and the public API;
+  `files.reveal` (Finder) as a small native operation.
+- ✅ Copy, Cut, Paste, Copy Path, Copy Relative Path, Copy File Name, and
+  Reveal in Finder in the explorer (`src/clipboard.ts`), as menu entries, palette
+  commands, and ⌘C/⌘X/⌘V in the view's scope.
+- ✅ Validation: model tests for `files.copy` (directories, clobbering, cycles,
+  permissions, links); a host test; package tests for paste after copy and cut,
+  naming, and the copied texts.
+- Review gate: `Try: Explorer Clipboard` walks through the actions.
+
+Scope decisions: the taken item lives in the extension, not the system
+clipboard. Cut moves on the first Paste and refuses a taken name; Copy picks
+`name copy`, `name copy 2` before the extension.
 
 **Implementation context:** `crates/knot-model/src/files.rs` beside `rename`,
 the provider in `crates/knot-model/src/resource.rs`, a handler beside

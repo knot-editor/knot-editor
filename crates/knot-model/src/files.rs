@@ -618,7 +618,12 @@ mod tests {
             run(read_text(providers.clone(), "mem://f/src/lib.rs")).unwrap(),
             "fn main() {}"
         );
-        run(copy(providers.clone(), "mem://f/notes.txt", "mem://f/n2.txt")).unwrap();
+        run(copy(
+            providers.clone(),
+            "mem://f/notes.txt",
+            "mem://f/n2.txt",
+        ))
+        .unwrap();
         assert!(matches!(
             run(copy(providers.clone(), "mem://f/bom.txt", "mem://f/n2.txt")),
             Err(ResourceError::AlreadyExists { .. })

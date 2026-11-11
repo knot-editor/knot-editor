@@ -6,10 +6,12 @@ export interface ExplorerState {
   readonly loaded: Map<WindowTarget, Set<string>>;
   /** The recursive watch of each root URI that some window shows. */
   readonly watches: Map<string, Disposable>;
+  /** What Copy or Cut last took, which Paste duplicates or moves. */
+  taken: { readonly uri: string; readonly cut: boolean } | null;
 }
 
 export function createState(): ExplorerState {
-  return { view: null, loaded: new Map(), watches: new Map() };
+  return { view: null, loaded: new Map(), watches: new Map(), taken: null };
 }
 
 export function loadedIn(state: ExplorerState, window: WindowTarget): Set<string> {

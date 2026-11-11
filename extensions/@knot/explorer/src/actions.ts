@@ -4,18 +4,15 @@ import { commands, documents, files, keymaps, workbench, workspaces } from "knot
 import type { CommandContext, JsonValue, WindowTarget } from "knot";
 import { childUri, pathSegments, renameSelection } from "./names.js";
 import { activeFile, revealFile } from "./reveal.js";
-import { idPath, nameOf, parentOf, parseRowId, rootOf, rowId, trimmed, VIEW_ID } from "./rows.js";
+import {
+  DELETE, idPath, NEW_FILE, NEW_FOLDER, nameOf, parentOf, parseRowId, RENAME, rootOf, rowId, trimmed, VIEW_ID,
+} from "./rows.js";
 import type { ExplorerState } from "./state.js";
-
-export const NEW_FILE = "explorer.new-file";
-export const NEW_FOLDER = "explorer.new-folder";
-export const RENAME = "explorer.rename";
-export const DELETE = "explorer.delete";
 
 /** How often an edit waits for its row to load before giving up. */
 const ATTEMPTS = 20;
 
-function object(value: JsonValue): Record<string, JsonValue> | null {
+export function object(value: JsonValue): Record<string, JsonValue> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, JsonValue>)
     : null;
@@ -26,23 +23,23 @@ function idArgument(value: JsonValue): string | null {
   return typeof id === "string" ? id : null;
 }
 
-async function report(message: string) {
+export async function report(message: string) {
   await workbench.showMessage({ title: "Explorer", message });
 }
 
-function describe(error: unknown): string {
+export function describe(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === "string" ? code : String(error);
 }
 
 /** The roots of `window`. */
-async function rootsOf(window: WindowTarget) {
+export async function rootsOf(window: WindowTarget) {
   return (await workspaces.get(window))?.roots ?? [];
 }
 
 /** The row a command acts on: the one it names, else the selected one, else
  * the row of the active file. */
-async function rowFor(ctx: CommandContext, selected: boolean): Promise<string | null> {
+export async function rowFor(ctx: CommandContext, selected: boolean): Promise<string | null> {
   const named = idArgument(ctx.arguments);
   if (named !== null) return named;
   if (selected) {
@@ -82,7 +79,7 @@ async function whenLoaded<T>(
 }
 
 /** Reload `parent` and select `uri` in it. */
-async function showCreated(state: ExplorerState, window: WindowTarget, parent: string, uri: string) {
+export async function showCreated(state: ExplorerState, window: WindowTarget, parent: string, uri: string) {
   await state.view?.invalidate(parent, window).catch(() => {});
   await revealFile(state, window, uri);
 }

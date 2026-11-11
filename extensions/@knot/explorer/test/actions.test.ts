@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import type { WindowTarget } from "knot";
 import * as host from "knot/testing";
-import { DELETE, NEW_FILE, NEW_FOLDER, RENAME } from "../src/actions.js";
 import { start } from "../src/extension.js";
-import { VIEW_ID, parseRowId, rowId } from "../src/rows.js";
-import { childUri, pathSegments, renameSelection } from "../src/names.js";
+import {
+  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, DELETE, NEW_FILE, NEW_FOLDER, PASTE, RENAME, REVEAL, VIEW_ID, parseRowId, rowId,
+} from "../src/rows.js";
+import { childUri, copyName, pathSegments, renameSelection } from "../src/names.js";
 
 const ROOT = "file:///work/app";
 
@@ -39,9 +40,9 @@ test("names split into path segments and refuse empty, absolute, and relative on
 test("rows offer new items in folders and rename and delete below the roots", async () => {
   const [src, readme] = await rows(rootRow);
   const commands = (item: typeof src) => item?.actions?.map((action) => action.command);
-  assert.deepEqual(commands((await rows())[0]), [NEW_FILE, NEW_FOLDER]);
-  assert.deepEqual(commands(src), [NEW_FILE, NEW_FOLDER, RENAME, DELETE]);
-  assert.deepEqual(commands(readme), [RENAME, DELETE]);
+  assert.deepEqual(commands((await rows())[0]), [NEW_FILE, NEW_FOLDER, PASTE, COPY_PATH, COPY_RELATIVE_PATH, COPY_NAME, REVEAL]);
+  assert.deepEqual(commands(src), [NEW_FILE, NEW_FOLDER, CUT, COPY, PASTE, COPY_PATH, COPY_RELATIVE_PATH, COPY_NAME, RENAME, DELETE, REVEAL]);
+  assert.deepEqual(commands(readme), [CUT, COPY, PASTE, COPY_PATH, COPY_RELATIVE_PATH, COPY_NAME, RENAME, DELETE, REVEAL]);
   assert.ok(src?.actions?.every((action) => action.menuOnly === true));
   assert.deepEqual(src?.actions?.[0]?.arguments, { id: src?.id });
 });
@@ -99,9 +100,75 @@ test("a root is neither renamed nor deleted, and F2 and Delete are bound in the 
   assert.equal(await host.run(RENAME, { arguments: { id: rootRow } }), "unavailable");
   assert.equal(await host.run(DELETE, { arguments: { id: rootRow } }), "unavailable");
   const bound = host.bindings().filter((binding) => binding.view === VIEW_ID).map((binding) => [binding.key, binding.command]);
-  assert.deepEqual(bound.sort(), [
-    ["cmd-backspace", DELETE],
-    ["delete", DELETE],
-    ["f2", RENAME],
-  ]);
+  assert.ok(bound.some(([key, command]) => key === "f2" && command === RENAME));
+  assert.ok(bound.some(([key, command]) => key === "delete" && command === DELETE));
+  assert.ok(bound.some(([key, command]) => key === "cmd-backspace" && command === DELETE));
+});
+
+test("Copy then Paste duplicates a file, picking name copy when the name is taken", async () => {
+  const api = await import("knot");
+  const readme = (await rows(rootRow)).find((item) => item.label === "README.md")!;
+  const src = (await rows(rootRow)).find((item) => item.label === "src")!;
+  assert.equal(await host.run(PASTE, { arguments: { id: rootRow } }), "unavailable");
+
+  await host.run(COPY, { arguments: { id: readme.id } });
+  await host.run(PASTE, { arguments: { id: src.id } });
+  assert.equal(await api.files.readText(`${ROOT}/src/README.md`), "readme");
+  await host.run(PASTE, { arguments: { id: rootRow } });
+  await host.run(PASTE, { arguments: { id: readme.id } });
+  assert.equal(await api.files.readText(`${ROOT}/README%20copy.md`), "readme");
+  assert.equal(await api.files.readText(`${ROOT}/README%20copy%202.md`), "readme");
+  assert.equal(await api.files.readText(`${ROOT}/README.md`), "readme");
+  assert.ok(host.view(VIEW_ID).invalidated.some((call) => call.parent === rootRow));
+});
+
+test("Copy duplicates a folder, and Cut moves an entry once", async () => {
+  const api = await import("knot");
+  const src = (await rows(rootRow)).find((item) => item.label === "src")!;
+  await host.run(COPY, { arguments: { id: src.id } });
+  await host.run(PASTE, { arguments: { id: rootRow } });
+  assert.equal(await api.files.readText(`${ROOT}/src%20copy/main.ts`), "main");
+
+  const readme = (await rows(rootRow)).find((item) => item.label === "README.md")!;
+  await host.run(CUT, { arguments: { id: readme.id } });
+  await host.run(PASTE, { arguments: { id: src.id } });
+  assert.equal(await api.files.stat(`${ROOT}/README.md`), null);
+  assert.equal(await api.files.readText(`${ROOT}/src/README.md`), "readme");
+  assert.equal(await host.run(PASTE, { arguments: { id: src.id } }), "unavailable");
+});
+
+test("Cut refuses a taken name, and a root can be neither cut nor copied", async () => {
+  const api = await import("knot");
+  host.seedFile(`${ROOT}/src/README.md`, "other");
+  const readme = (await rows(rootRow)).find((item) => item.label === "README.md")!;
+  const src = (await rows(rootRow)).find((item) => item.label === "src")!;
+  await host.run(CUT, { arguments: { id: readme.id } });
+  await host.run(PASTE, { arguments: { id: src.id } });
+  assert.equal(await api.files.readText(`${ROOT}/README.md`), "readme");
+  assert.equal(await api.files.readText(`${ROOT}/src/README.md`), "other");
+  assert.equal(await host.run(CUT, { arguments: { id: rootRow } }), "unavailable");
+  assert.equal(await host.run(COPY, { arguments: { id: rootRow } }), "unavailable");
+});
+
+test("path commands copy the path, the path below the root, and the name", async () => {
+  const main = (await rows((await rows(rootRow)).find((item) => item.label === "src")!.id))[0]!;
+  await host.run(COPY_PATH, { arguments: { id: main.id } });
+  assert.equal(host.clipboard(), "/work/app/src/main.ts");
+  await host.run(COPY_RELATIVE_PATH, { arguments: { id: main.id } });
+  assert.equal(host.clipboard(), "src/main.ts");
+  await host.run(COPY_RELATIVE_PATH, { arguments: { id: rootRow } });
+  assert.equal(host.clipboard(), ".");
+  await host.run(COPY_NAME, { arguments: { id: main.id } });
+  assert.equal(host.clipboard(), "main.ts");
+  await host.run(REVEAL, { arguments: { id: main.id } });
+  assert.deepEqual(host.revealed(), [`${ROOT}/src/main.ts`]);
+});
+
+test("copies are named before the extension, and the clipboard keys are bound in the view", () => {
+  assert.equal(copyName("a.test.ts", false, 1), "a.test copy.ts");
+  assert.equal(copyName("a.ts", false, 3), "a copy 3.ts");
+  assert.equal(copyName(".env", false, 1), ".env copy");
+  assert.equal(copyName("v1.2", true, 2), "v1.2 copy 2");
+  const bound = host.bindings().filter((binding) => binding.view === VIEW_ID).map((binding) => binding.key);
+  for (const key of ["cmd-c", "cmd-x", "cmd-v"]) assert.ok(bound.includes(key), key);
 });

@@ -842,6 +842,19 @@ declare module "knot" {
      * exists at `to`, ResourceWrongKind when a parent of `to` is a file, or
      * ProviderFailure. */
     rename(from: string, to: string): Promise<string>;
+    /** Copies a file or a directory tree to `to`, creating its missing
+     * parents, and resolves the normalized destination. Nothing is
+     * overwritten, and the copy of a file keeps its permissions.
+     * @throws HostError with InvalidUri for a destination inside `from` or in
+     * another scheme, ResourceNotFound, ResourceAlreadyExists when anything
+     * exists at `to`, ResourceWrongKind when a parent of `to` is a file, or
+     * ProviderFailure. */
+    copy(from: string, to: string): Promise<string>;
+    /** Shows the file or folder in the operating system's file manager (Finder
+     * on macOS), selecting it.
+     * @throws HostError with InvalidUri, or ProviderFailure for a resource that
+     * is not a local file. */
+    reveal(uri: string): Promise<void>;
     /** Deletes a file or a directory tree. By default the entry moves to the
      * operating system's trash; with `permanent` it is removed outright. A
      * provider without a trash, such as the in-memory one, always removes.

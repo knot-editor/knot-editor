@@ -341,6 +341,8 @@ void fileStat;
 const createdFile: string = await files.createFile("file:///tmp/new/a.txt");
 const createdDirectory: string = await files.createDirectory("file:///tmp/new/dir");
 const renamedTo: string = await files.rename(createdFile, "file:///tmp/b.txt");
+const copiedTo: string = await files.copy(renamedTo, "file:///tmp/c.txt");
+await files.reveal(copiedTo);
 await files.delete(renamedTo);
 await files.delete(createdDirectory, { permanent: true });
 void createdFile;
