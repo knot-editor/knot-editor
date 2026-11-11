@@ -120,6 +120,9 @@ declare module "knot" {
      * opened again without `preview`. With the `workbench.previewTabs`
      * setting off, a preview request opens a regular tab. */
     readonly preview?: boolean;
+    /** Move focus to the opened tab. Defaults to true; false opens the tab
+     * and leaves the focus where it was. */
+    readonly focus?: boolean;
   }
   export interface DocumentPresentation {
     readonly document: DocumentInfo;
@@ -1550,6 +1553,8 @@ declare module "knot" {
     readonly arguments?: JsonValue;
     /** Row kind; defaults to "item". */
     readonly kind?: "item" | "group";
+    /** Paint the row dimmed, as for an ignored file. */
+    readonly muted?: boolean;
     /** Right-aligned short status text, e.g. a Git change letter. */
     readonly statusText?: string | null;
     /** A badge dot in this key's color; put any short label in statusText. */
@@ -1624,6 +1629,9 @@ declare module "knot" {
     hide(window?: WindowTarget): Promise<void>;
     /** Show if hidden, then focus this view in every window or one window. */
     focus(window?: WindowTarget): Promise<void>;
+    /** Show and focus this view where it is hidden or not focused, and hide it
+     * where it is focused, returning focus to the center. */
+    toggle(window?: WindowTarget): Promise<void>;
     /**
      * Invalidate root children when parentId is omitted/null, otherwise that
      * parent's children. Omitting window invalidates every live instance; an

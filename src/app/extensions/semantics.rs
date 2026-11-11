@@ -63,6 +63,8 @@ pub(crate) enum ViewPresentation {
     Show,
     Hide,
     Focus,
+    /// Show and focus a hidden or unfocused view; hide a focused one.
+    Toggle,
 }
 
 /// One lifecycle-owned contributed view definition visible to the product shell.
@@ -665,6 +667,7 @@ mod tests {
                         command: None,
                         arguments: knot_protocol::CommandArgumentValue::Null,
                         kind: knot_protocol::TreeItemKind::Item,
+                        muted: false,
                         status_text: None,
                         badge: None,
                         actions: Vec::new(),

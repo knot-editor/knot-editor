@@ -987,6 +987,7 @@ pub(super) fn tree_item_from_v8<'s>(
         command: optional_text_property(scope, object, "command")?,
         arguments: optional_argument_property(scope, object, "arguments")?,
         kind,
+        muted: optional_flag_property(scope, object, "muted")?,
         status_text: optional_text_property(scope, object, "statusText")?,
         badge: optional_text_property(scope, object, "badge")?,
         actions: tree_actions_from_v8(scope, object, "actions")?,
@@ -1026,6 +1027,21 @@ fn icon_name_property<'s>(
     match optional_text_property(scope, reference, "folder")? {
         Some(folder) => Ok(Some(knot_protocol::IconRef::Folder { folder })),
         None => Err(BoundaryError::Type("an icon needs a name, file, or folder")),
+    }
+}
+
+fn optional_flag_property<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    object: v8::Local<'s, v8::Object>,
+    name: &str,
+) -> Result<bool, BoundaryError> {
+    let value = property(scope, object, name, "invalid tree item flag")?;
+    if value.is_null_or_undefined() {
+        Ok(false)
+    } else if value.is_boolean() {
+        Ok(value.is_true())
+    } else {
+        Err(BoundaryError::Type("tree item flag must be a boolean"))
     }
 }
 

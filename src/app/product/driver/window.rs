@@ -269,6 +269,36 @@ impl TestWindow {
         })
     }
 
+    /// The document tabs of the center pane as titles with whether each is a
+    /// preview.
+    pub fn document_tabs(&self, cx: &mut TestAppContext) -> Vec<(String, bool)> {
+        cx.read(|cx| {
+            let documents = cx.global::<ApplicationDocuments>().0.read(cx);
+            let workbench = self.shell.read(cx).workbench.read(cx);
+            let Some(pane) = workbench
+                .center_pane()
+                .and_then(|pane| workbench.pane(pane))
+            else {
+                return Vec::new();
+            };
+            pane.tabs()
+                .iter()
+                .filter_map(|tab| {
+                    let document = documents.get(tab.document_id()?)?;
+                    Some((document.title().to_owned(), tab.is_preview()))
+                })
+                .collect()
+        })
+    }
+
+    /// Whether the center pane's active tab is the focused one.
+    pub fn editor_focused(&self, cx: &mut TestAppContext) -> bool {
+        cx.read(|cx| {
+            let workbench = self.shell.read(cx).workbench.read(cx);
+            workbench.focused_pane_id() == workbench.center_pane()
+        })
+    }
+
     /// Whether the window's center holds a pane.
     pub fn has_center_pane(&self, cx: &mut TestAppContext) -> bool {
         cx.read(|cx| {
@@ -506,6 +536,37 @@ impl TestTree {
         cx.update_window(self.window, |_, _, cx| {
             self.tree
                 .update(cx, |tree, cx| tree.activate_row_for_test(row, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+    }
+
+    /// The ID of the first visible row labelled `label`.
+    pub fn row_id(&self, label: &str, cx: &mut TestAppContext) -> Option<String> {
+        cx.read(|cx| self.tree.read(cx).row_id_for_test(label))
+    }
+
+    /// Whether the row `row` is painted dimmed.
+    pub fn is_muted(&self, row: &str, cx: &mut TestAppContext) -> bool {
+        cx.read(|cx| self.tree.read(cx).muted_for_test(row))
+    }
+
+    /// The selected row's ID.
+    pub fn selected_id(&self, cx: &mut TestAppContext) -> Option<String> {
+        cx.read(|cx| self.tree.read(cx).selected_id_for_test())
+    }
+
+    /// Activate the row labelled `label` with a gesture (`click`,
+    /// `doubleClick`, `middleClick`, `rightClick`, or `enter`).
+    pub fn gesture(&self, label: &str, gesture: &str, cx: &mut TestAppContext) {
+        let row = self
+            .row_id(label, cx)
+            .unwrap_or_else(|| panic!("no visible row labelled {label}"));
+        self.activate_tab(cx);
+        cx.update_window(self.window, |_, _, cx| {
+            self.tree.update(cx, |tree, cx| {
+                tree.activate_row_as_for_test(&row, gesture, cx)
+            });
         })
         .unwrap();
         cx.run_until_parked();

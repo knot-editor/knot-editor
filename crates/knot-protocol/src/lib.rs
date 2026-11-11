@@ -419,6 +419,9 @@ pub struct TreeItem {
     pub arguments: CommandArgumentValue,
     #[serde(default)]
     pub kind: TreeItemKind,
+    /// Paint the row dimmed, as for an ignored file.
+    #[serde(default)]
+    pub muted: bool,
     #[serde(default)]
     pub status_text: Option<String>,
     /// The theme color key of the row's badge.

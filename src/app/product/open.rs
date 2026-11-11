@@ -331,6 +331,7 @@ impl ProductShell {
                             &target,
                             options.replace_target,
                             options.preview,
+                            !options.keep_focus,
                             cx,
                         )
                         .map_err(OpenFailure::Resource)
@@ -352,8 +353,10 @@ impl ProductShell {
         target: &OpenTarget,
         replace_target: bool,
         preview: bool,
+        focus: bool,
         cx: &mut Context<Self>,
     ) -> Result<OpenCommit, crate::app::open::OpenResourceError> {
+        let previous_focus = self.workbench.read(cx).focused_pane_id();
         let committed = match result {
             Ok(OpenResource::Directory(root)) => {
                 OpenCommit::Workspace(self.open_workspace(root, cx))
@@ -367,7 +370,14 @@ impl ProductShell {
             }
             Err(error) => return Err(error),
         };
-        if matches!(committed, OpenCommit::Document { .. }) {
+        if !focus
+            && let Some(pane) = previous_focus
+            && matches!(committed, OpenCommit::Document { .. })
+        {
+            self.workbench
+                .update(cx, |workbench, _| workbench.focus_pane(pane));
+        }
+        if focus && matches!(committed, OpenCommit::Document { .. }) {
             self.focus_active_surface(cx);
         }
         cx.notify();

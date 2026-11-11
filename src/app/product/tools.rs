@@ -231,7 +231,7 @@ impl ProductShell {
     /// Toggle a tool by stable ID: show and focus it, focus it, or hide it
     /// and return to the center (see [`Workbench::toggle_tool`]). Toggling
     /// the explorer registers it first.
-    pub(super) fn toggle_tool(&mut self, stable_id: &str, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_tool(&mut self, stable_id: &str, cx: &mut Context<Self>) {
         if stable_id == crate::app::tool_layout::EXPLORER_TOOL_ID {
             self.ensure_explorer(false, cx);
         }

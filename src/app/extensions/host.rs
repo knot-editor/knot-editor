@@ -2672,6 +2672,9 @@ impl ProductExtensionHost {
                 crate::app::extensions::semantics::ViewPresentation::Focus => {
                     shell.focus_contributed_view(&id, cx);
                 }
+                crate::app::extensions::semantics::ViewPresentation::Toggle => {
+                    shell.toggle_tool(&id, cx);
+                }
             });
         }
         // A command-invoked presentation change is an explicit user arrangement,

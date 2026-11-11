@@ -29,6 +29,8 @@ pub(super) struct OpenOptions {
     pub(super) replace_target: bool,
     /// Present a newly shown document as the pane's preview tab.
     pub(super) preview: bool,
+    /// Leave the focus where it is instead of moving it to the opened tab.
+    pub(super) keep_focus: bool,
     pub(super) kind: Option<ResourceKind>,
     pub(super) caller: Option<OperationCaller>,
 }
@@ -322,6 +324,7 @@ pub(crate) fn open_document(
     uri: String,
     destination: DocumentDestination,
     preview: bool,
+    focus: bool,
     caller: OperationCaller,
     completion: impl FnOnce(Result<(DocumentId, PresentationTarget), OpenError>, &mut App) + 'static,
     cx: &mut App,
@@ -336,6 +339,7 @@ pub(crate) fn open_document(
             OpenOptions {
                 kind: Some(ResourceKind::File),
                 preview,
+                keep_focus: !focus,
                 caller: Some(caller),
                 ..Default::default()
             },

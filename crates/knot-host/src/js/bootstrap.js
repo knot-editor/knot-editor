@@ -88,6 +88,10 @@ function string(value, message) {
   if (typeof value !== "string") throw new TypeError(message);
   return value;
 }
+function flag(value, message) {
+  if (typeof value !== "boolean") throw new TypeError(message);
+  return value;
+}
 function safeInteger(value) {
   if (typeof value !== "number") throw new TypeError("expected a number");
   if (!Number.isSafeInteger(value) || value < 0) throw new RangeError("expected a nonnegative safe integer");
@@ -178,6 +182,7 @@ function treeItem(value) {
     command: optionalText(value.command),
     arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
     kind: kind === null ? "item" : kind,
+    muted: value.muted == null ? false : flag(value.muted, "tree item muted must be a boolean"),
     statusText: optionalText(value.statusText),
     badge: optionalText(value.badge),
     actions: treeActions(value.actions),
@@ -1011,6 +1016,10 @@ export async function registerView(contribution) {
       owned.assertActive();
       await owned.track(request("focusView", registration, optionalWindowAuthority(window)));
     },
+    async toggle(window) {
+      owned.assertActive();
+      await owned.track(request("toggleView", registration, optionalWindowAuthority(window)));
+    },
     async invalidate(parentId, window) {
       owned.assertActive();
       const parent = optionalText(parentId);
@@ -1197,8 +1206,10 @@ export async function presentDocument(id, options) {
 export async function openDocument(uri, options) {
   const preview = options === undefined ? undefined : record(options, "destination options must be an object").preview;
   if (preview !== undefined && typeof preview !== "boolean") throw new TypeError("preview must be a boolean");
+  const focus = options === undefined ? undefined : options.focus;
+  if (focus !== undefined && typeof focus !== "boolean") throw new TypeError("focus must be a boolean");
   const value = await request("openDocument", string(uri, "resource URI must be text"), destinationAuthority(options),
-    preview ?? null);
+    preview ?? null, focus ?? null);
   return documentPresentationFromNative(value);
 }
 

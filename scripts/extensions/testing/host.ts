@@ -69,6 +69,8 @@ type FakeView = {
   visible: boolean;
   text: string;
   invalidations: number;
+  /** The invalidated parents (null for the root), oldest first. */
+  invalidated: { parent: string | null; window: Knot.WindowTarget | undefined }[];
   /** The ID paths passed to `reveal`, oldest first. */
   reveals: (readonly string[])[];
 };
@@ -113,6 +115,8 @@ function emptyState() {
     files: new Map<string, string>(),
     directories: new Set<string>(),
     fileWatches: [] as { uri: string; recursive: boolean; listener: (uris: readonly string[]) => void | Promise<void> }[],
+    /** The `documents.open` calls, oldest first. */
+    opens: [] as { uri: string; options: Knot.OpenDocumentOptions }[],
     selectedText: null as string | null,
     selectedTreeItem: null as string | null,
     failures: new Map<string, HostErrorCode[]>(),
@@ -746,6 +750,19 @@ export function seedFile(uri: string, text: string) {
   notifyFileWatchers(uri);
 }
 
+/** The URIs with a live file watch. */
+export function watchedUris(): string[] {
+  return state.fileWatches.map((watch) => watch.uri);
+}
+
+/** Delivers a batch of changed URIs to the watches of `watched`, as when the
+ * platform drops events and names the watched URI itself. */
+export function notifyWatchers(watched: string, uris: readonly string[]) {
+  for (const watch of [...state.fileWatches]) {
+    if (watch.uri === watched) void watch.listener([...uris]);
+  }
+}
+
 /** Removes a stored file and tells the watchers like `seedFile` does. */
 export function removeFile(uri: string) {
   state.files.delete(uri);
@@ -809,6 +826,11 @@ function checkedFileUri(uri: string): string {
 
 export function clipboard() {
   return state.clipboard;
+}
+
+/** The `documents.open` calls so far. */
+export function opens(): readonly { uri: string; options: Knot.OpenDocumentOptions }[] {
+  return state.opens;
 }
 
 export function setSelectedText(text: string | null) {
@@ -1409,6 +1431,7 @@ export const api: KnotApi = {
     },
     open: async (uri, options = {}) => {
       maybeFail("documents.open");
+      state.opens.push({ uri, options });
       const target = (options.target as { window?: Knot.WindowTarget } | undefined)?.window
         ?? state.windows[0]?.target;
       if (target === undefined) throw hostError("ContextUnavailable");
@@ -1865,6 +1888,7 @@ export const api: KnotApi = {
         visible: contribution.placement?.visible ?? true,
         text: "",
         invalidations: 0,
+        invalidated: [],
         reveals: [],
       };
       state.views.set(contribution.id, registered);
@@ -1879,8 +1903,12 @@ export const api: KnotApi = {
         focus: async () => {
           registered.visible = true;
         },
-        invalidate: async () => {
+        toggle: async () => {
+          registered.visible = !registered.visible;
+        },
+        invalidate: async (parent, window) => {
           registered.invalidations += 1;
+          registered.invalidated.push({ parent: parent ?? null, window });
         },
         reveal: async (idPath) => {
           registered.reveals.push([...idPath]);

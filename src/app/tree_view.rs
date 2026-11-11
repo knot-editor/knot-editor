@@ -291,6 +291,47 @@ impl TreeView {
         self.activate(id, TreeGesture::Click, cx);
     }
 
+    /// Activate row `id` with the gesture named as the API names it.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn activate_row_as_for_test(
+        &mut self,
+        id: &str,
+        gesture: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let gesture = [
+            TreeGesture::Click,
+            TreeGesture::DoubleClick,
+            TreeGesture::MiddleClick,
+            TreeGesture::RightClick,
+            TreeGesture::Enter,
+        ]
+        .into_iter()
+        .find(|candidate| candidate.name() == gesture)
+        .expect("a known gesture");
+        self.activate(id, gesture, cx);
+    }
+
+    /// The ID of the first visible row labelled `label`.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn row_id_for_test(&self, label: &str) -> Option<String> {
+        self.visible_rows().into_iter().find_map(|row| match row {
+            VisibleRow::Item { item, .. } if item.label == label => Some(item.id),
+            _ => None,
+        })
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn muted_for_test(&self, id: &str) -> bool {
+        self.item(id).is_some_and(|item| item.muted)
+    }
+
+    /// The ID of the selected row.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn selected_id_for_test(&self) -> Option<String> {
+        self.selected.clone()
+    }
+
     #[cfg(test)]
     pub(crate) fn owns_provider(
         &self,
@@ -1249,6 +1290,9 @@ impl Render for TreeView {
                             .when(is_group, |row| {
                                 row.bg(theme.paint_color(color::LIST_GROUP_BACKGROUND))
                                     .text_color(theme.paint_color(color::TEXT_MUTED))
+                            })
+                            .when(item.muted && !is_selected, |row| {
+                                row.text_color(theme.paint_color(color::TEXT_MUTED))
                             })
                             .when(is_selected, |row| {
                                 row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))

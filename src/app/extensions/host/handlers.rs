@@ -194,6 +194,7 @@ pub(crate) struct OpenArguments {
     uri: String,
     target: Option<knot_protocol::DocumentDestination>,
     preview: bool,
+    focus: bool,
 }
 
 impl HostArguments for OpenArguments {
@@ -204,6 +205,9 @@ impl HostArguments for OpenArguments {
             preview: reader
                 .optional_boolean(4, "preview must be a boolean")?
                 .unwrap_or(false),
+            focus: reader
+                .optional_boolean(5, "focus must be a boolean")?
+                .unwrap_or(true),
         })
     }
 }
@@ -222,6 +226,7 @@ async fn open_document(
             arguments.uri,
             destination,
             arguments.preview,
+            arguments.focus,
             product::operations::OperationCaller {
                 host,
                 key: ExtensionKey::new(request.extension, request.lifecycle),
@@ -2263,6 +2268,23 @@ pub(crate) async fn focus_view(
             arguments.registration,
             arguments.window.as_deref(),
             ViewPresentation::Focus,
+            cx,
+        )
+    })?
+}
+
+#[host_operation("toggleView")]
+pub(crate) async fn toggle_view(
+    context: HostContext,
+    arguments: ViewOperationArguments,
+) -> Result<(), SemanticError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        host.present_view(
+            &request,
+            arguments.registration,
+            arguments.window.as_deref(),
+            ViewPresentation::Toggle,
             cx,
         )
     })?
