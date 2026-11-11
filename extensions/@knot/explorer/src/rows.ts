@@ -1,10 +1,25 @@
 // The explorer's rows: identities, ordering, and the tree items of a folder.
-import type { FileEntry, TreeItem, WorkspaceRoot } from "knot";
+import type { FileEntry, TreeAction, TreeItem, WorkspaceRoot } from "knot";
 
 export const VIEW_ID = "builtin.explorer";
 export const ACTIVATE = "explorer.activate";
 export const OPEN_FOLDER = "explorer.open-folder";
 export const OPEN_FOLDER_ROW = "explorer.open-folder-row";
+
+/** What a row's context menu offers: new items in a folder, and renaming or
+ * deleting anything but a root. */
+function menuActions(id: string, folder: boolean, root: boolean): TreeAction[] {
+  const action = (label: string, command: string): TreeAction => ({
+    label,
+    command,
+    arguments: { id },
+    menuOnly: true,
+  });
+  return [
+    ...(folder ? [action("New File…", "explorer.new-file"), action("New Folder…", "explorer.new-folder")] : []),
+    ...(root ? [] : [action("Rename…", "explorer.rename"), action("Delete…", "explorer.delete")]),
+  ];
+}
 
 /**
  * A row is identified by the root it is shown under and its URI, so a folder
@@ -49,8 +64,10 @@ export function compareEntries(left: FileEntry, right: FileEntry): number {
 
 export function entryItem(root: string, entry: FileEntry): TreeItem {
   const directory = entry.kind === "directory";
+  const id = rowId(root, entry.uri);
   return {
-    id: rowId(root, entry.uri),
+    id,
+    actions: menuActions(id, directory, false),
     label: entry.name,
     icon: directory ? { folder: entry.name } : { file: entry.name },
     collapsibleState: directory ? "collapsed" : "none",
@@ -62,8 +79,10 @@ export function entryItem(root: string, entry: FileEntry): TreeItem {
 /** A root's row, expanded, labelled by its folder name and described by its path. */
 export function rootItem(root: WorkspaceRoot): TreeItem {
   const name = nameOf(root.uri);
+  const id = rowId(root.id, root.uri);
   return {
-    id: rowId(root.id, root.uri),
+    id,
+    actions: menuActions(id, true, true),
     label: name === "" ? root.uri : name,
     description: displayPath(root.uri),
     icon: { folder: name },

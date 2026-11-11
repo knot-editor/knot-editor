@@ -554,6 +554,26 @@ fn a_batch_for_a_new_directory_indexes_its_contents() {
 }
 
 #[test]
+fn changes_made_by_the_application_index_the_directories_created_on_the_way() {
+    let fixture = Fixture::new();
+    fixture.file("docs/a.md");
+    let index = fixture.scanned("");
+    fixture.file("docs/deep/er/new.txt");
+    // Naming only the file leaves the new directories unknown.
+    run(index.apply(&[uri("docs/deep/er/new.txt")]));
+    let policy = IgnorePolicy::default();
+    assert_eq!(run(index.list(&uri("docs"), &policy)).unwrap().len(), 1);
+    run(index.apply_changes(&[uri("docs/deep/er/new.txt")]));
+    assert_eq!(run(index.list(&uri("docs"), &policy)).unwrap().len(), 2);
+    assert_eq!(
+        run(index.list(&uri("docs/deep/er"), &policy))
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn events_below_ignored_and_hidden_directories_change_nothing() {
     let fixture = Fixture::new();
     fixture.file(".git/HEAD");

@@ -2,6 +2,7 @@
 // load when expanded and reload when a recursive watch of their root reports a
 // change, so the tree needs no private access to the application.
 import { icons, settings, workbench } from "knot";
+import { registerActions } from "./actions.js";
 import { registerCommands } from "./commands.js";
 import { followActive } from "./reveal.js";
 import { defineSettings, SHOW_IGNORED } from "./settings.js";
@@ -15,6 +16,7 @@ export async function start() {
   const state = createState();
   await registerTree(state);
   await registerCommands(state);
+  await registerActions(state);
   await settings.observe(SHOW_IGNORED, () => refreshAll(state));
   await workbench.observe(async (event) => {
     switch (event.type) {

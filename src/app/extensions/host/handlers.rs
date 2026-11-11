@@ -1283,14 +1283,20 @@ pub(crate) struct TransientSession {
     owner: ExtensionKey,
     completion: tokio::sync::oneshot::Receiver<TransientOutcome>,
     changes: tokio::sync::watch::Receiver<Option<String>>,
-    /// The input that shows the caller's messages.
-    input: Option<WeakEntity<crate::app::transient::InputView>>,
+    /// Where the caller's messages are shown.
+    input: Option<FeedbackTarget>,
     /// The value the caller last pulled; feedback applies only while the
     /// field still holds it.
     delivered: Option<String>,
     /// The picker whose rows the caller supplies, with the queries it asks
     /// for.
     queried: Option<QueriedPicker>,
+}
+
+/// A text field that shows the messages a caller derives from its value.
+enum FeedbackTarget {
+    Input(WeakEntity<crate::app::transient::InputView>),
+    TreeEdit(WeakEntity<crate::app::tree_view::TreeView>),
 }
 
 struct QueriedPicker {
@@ -1607,7 +1613,7 @@ pub(crate) async fn begin_input(
         owner: ExtensionKey::new(request.extension, request.lifecycle),
         completion,
         changes,
-        input: Some(input),
+        input: Some(FeedbackTarget::Input(input)),
         delivered: None,
         queried: None,
     };
@@ -1652,17 +1658,122 @@ pub(crate) async fn next_input_event(
     let session = context
         .foreground(|host, cx| {
             let session = host.take_transient_session(owner, session)?;
-            if let Some(input) = session.input.as_ref().and_then(WeakEntity::upgrade) {
-                input.update(cx, |input, cx| {
-                    if session.delivered.as_deref() == Some(input.text(cx).as_str()) {
-                        input.set_feedback(message, items, cx);
+            match &session.input {
+                Some(FeedbackTarget::Input(input)) => {
+                    if let Some(input) = input.upgrade() {
+                        input.update(cx, |input, cx| {
+                            if session.delivered.as_deref() == Some(input.text(cx).as_str()) {
+                                input.set_feedback(message, items, cx);
+                            }
+                        });
                     }
-                });
+                }
+                Some(FeedbackTarget::TreeEdit(tree)) => {
+                    if let Some(tree) = tree.upgrade() {
+                        tree.update(cx, |tree, cx| {
+                            tree.set_edit_feedback(session.delivered.as_deref(), message, cx);
+                        });
+                    }
+                }
+                None => {}
             }
             Some(session)
         })?
         .ok_or(TransientError::Cancelled)?;
     input_update(next_change(&context, session).await?)
+}
+
+/// Failures of an inline edit of a tree row.
+#[derive(Debug, HostError)]
+pub(crate) enum TreeEditError {
+    #[error(transparent)]
+    Semantic(SemanticError),
+    #[error(transparent)]
+    Transient(TransientError),
+    #[error(code = "TreeItemNotFound", message = "TreeItemNotFound")]
+    ItemNotFound,
+}
+
+impl From<SemanticError> for TreeEditError {
+    fn from(error: SemanticError) -> Self {
+        Self::Semantic(error)
+    }
+}
+
+impl From<TransientError> for TreeEditError {
+    fn from(error: TransientError) -> Self {
+        Self::Transient(error)
+    }
+}
+
+impl From<AccessError> for TreeEditError {
+    fn from(error: AccessError) -> Self {
+        Self::Semantic(error.into())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TreeEditArguments {
+    pub registration: TreeProviderRegistrationId,
+    /// Whether the edit makes a new row rather than renaming one.
+    pub new_row: bool,
+    /// The row to rename, or the parent of the new row.
+    pub id: String,
+    pub value: String,
+    /// UTF-16 code unit range of `value` to select; all when omitted.
+    pub selection: Option<[usize; 2]>,
+    pub icon: Option<knot_protocol::IconRef>,
+    /// Whether the caller validates each value.
+    pub watching: bool,
+    pub window: Option<String>,
+}
+
+impl HostArguments for TreeEditArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let selection = serde_json::to_value(reader.command_arguments(6)?)
+            .ok()
+            .and_then(|value| serde_json::from_value::<Option<[f64; 2]>>(value).ok())
+            .ok_or(DecodeError::Type("edit selection must be two offsets"))?
+            .map(|[start, end]| [start as usize, end as usize]);
+        let icon = serde_json::to_value(reader.command_arguments(7)?)
+            .ok()
+            .and_then(|value| serde_json::from_value::<Option<knot_protocol::IconRef>>(value).ok())
+            .ok_or(DecodeError::Type("invalid edit icon"))?;
+        Ok(Self {
+            registration: TreeProviderRegistrationId::new(reader.integer(2)?),
+            new_row: reader.integer(3)? != 0,
+            id: reader.text(4, "tree item ID must be text")?,
+            value: reader
+                .optional_text(5, "edit value must be text or null")?
+                .unwrap_or_default(),
+            selection,
+            icon,
+            watching: reader.integer(8)? != 0,
+            window: reader.optional_text(9, "window target must be text")?,
+        })
+    }
+}
+
+/// Start editing a row's label or a new row inline, and settle with the
+/// field's first value to validate, or with the edit's outcome.
+#[host_operation("beginTreeEdit")]
+pub(crate) async fn begin_tree_edit(
+    context: HostContext,
+    arguments: TreeEditArguments,
+) -> Result<InputUpdate, TreeEditError> {
+    let request = context.request;
+    let owner = ExtensionKey::new(request.extension, request.lifecycle);
+    let (session, tree) =
+        context.foreground(|host, cx| host.begin_tree_edit(&request, arguments, cx))??;
+    let session = TransientSession {
+        owner,
+        completion: session.completion,
+        changes: session.changes,
+        input: Some(FeedbackTarget::TreeEdit(tree)),
+        delivered: None,
+        queried: None,
+    };
+    Ok(input_update(next_change(&context, session).await?)?)
 }
 
 fn input_update(pulled: Pulled) -> Result<InputUpdate, TransientError> {
@@ -2098,10 +2209,27 @@ async fn create_file(
     arguments: FileUriArguments,
 ) -> Result<String, OpenError> {
     let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
-    knot_model::files::create_file(providers, &arguments.uri)
+    let uri = knot_model::files::create_file(providers, &arguments.uri)
         .await
-        .map(|uri| uri.to_string())
-        .map_err(|error| product::operations::resource_error(error.into()))
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    refresh_file_index(&context, std::slice::from_ref(&uri)).await;
+    Ok(uri.to_string())
+}
+
+/// Bring the workspace file indexes up to date with a change the application
+/// made, so a listing right afterwards sees it without waiting for the watch.
+async fn refresh_file_index(context: &HostContext, changed: &[crate::app::resource::ResourceUri]) {
+    let indexes = context
+        .foreground(|_, cx| {
+            changed
+                .iter()
+                .filter_map(|uri| crate::app::file_index::ApplicationFileIndex::covering(cx, uri))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    for index in indexes {
+        index.apply_changes(changed).await;
+    }
 }
 
 #[host_operation("createDirectory")]
@@ -2110,10 +2238,11 @@ async fn create_directory(
     arguments: FileUriArguments,
 ) -> Result<String, OpenError> {
     let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
-    knot_model::files::create_directory(providers, &arguments.uri)
+    let uri = knot_model::files::create_directory(providers, &arguments.uri)
         .await
-        .map(|uri| uri.to_string())
-        .map_err(|error| product::operations::resource_error(error.into()))
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    refresh_file_index(&context, std::slice::from_ref(&uri)).await;
+    Ok(uri.to_string())
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2141,6 +2270,7 @@ async fn rename_file(
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
     context.foreground(|_, cx| product::operations::follow_rename(&from, &to, cx))?;
+    refresh_file_index(&context, &[from.clone(), to.clone()]).await;
     Ok(to.to_string())
 }
 
@@ -2171,6 +2301,7 @@ async fn delete_file(
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
     context.foreground(|_, cx| product::operations::follow_delete(&uri, cx))?;
+    refresh_file_index(&context, &[uri]).await;
     Ok(())
 }
 

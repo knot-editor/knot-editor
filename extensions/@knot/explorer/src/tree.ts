@@ -1,10 +1,13 @@
-import { files, settings, workbench, workspaces } from "knot";
+import { files, icons, settings, workbench, workspaces } from "knot";
+import { NEW_FILE, NEW_FOLDER } from "./actions.js";
 import { entryItem, compareEntries, openFolderItem, parseRowId, rootItem, VIEW_ID } from "./rows.js";
 import { SHOW_IGNORED } from "./settings.js";
 import { loadedIn, type ExplorerState } from "./state.js";
 
 /** Registers the explorer tree, shown in the left dock. */
 export async function registerTree(state: ExplorerState) {
+  await icons.define("explorer.new-file", { lucide: "file-plus" });
+  await icons.define("explorer.new-folder", { lucide: "folder-plus" });
   state.view = await workbench.registerView({
     id: VIEW_ID,
     title: "Explorer",
@@ -25,5 +28,9 @@ export async function registerTree(state: ExplorerState) {
       },
     },
     placement: { location: "left", order: 0 },
+    actions: [
+      { label: "New File", icon: "explorer.new-file", command: NEW_FILE },
+      { label: "New Folder", icon: "explorer.new-folder", command: NEW_FOLDER },
+    ],
   });
 }

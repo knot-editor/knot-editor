@@ -525,6 +525,28 @@ impl FileIndex {
         }
     }
 
+    /// Brings the index up to date with changes the application made itself,
+    /// as the watch would report them. A change below a directory the index
+    /// does not know yet also names that directory and each one above it, so
+    /// the directories created on the way are indexed; the root is left out,
+    /// since naming it scans everything.
+    pub async fn apply_changes(&self, changed: &[ResourceUri]) {
+        let mut batch = Vec::new();
+        for uri in changed {
+            let mut next = Some(uri.clone());
+            while let Some(current) = next {
+                if !self.covers(&current) || current == self.root {
+                    break;
+                }
+                next = current.parent();
+                if !batch.contains(&current) {
+                    batch.push(current);
+                }
+            }
+        }
+        self.apply(&batch).await;
+    }
+
     /// Scans the contents of the indexed directory at `path` again, with the
     /// tree's policy. The whole tree is scanned for the root.
     async fn scan_again(&self, path: &[String]) {

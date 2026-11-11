@@ -303,3 +303,146 @@ fn the_explorer_is_an_ordinary_tool_for_layout_memory(cx: &mut TestAppContext) {
         tool_in(&window.layout(cx), "left").as_deref() == Some(VIEW)
     });
 }
+
+/// Start `command` with the explorer focused and wait for its inline edit.
+fn start_edit(
+    explorer: &Explorer,
+    command: &str,
+    cx: &mut TestAppContext,
+) -> knot::test_support::TestCommand {
+    explorer.tree.focus(cx);
+    let started = explorer.window.start_command(command, cx);
+    wait_until(cx, |cx| explorer.tree.is_editing(cx));
+    started
+}
+
+#[gpui::test]
+fn new_file_creates_missing_folders_opens_a_tab_and_validates_the_name(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let (window, tree) = (&explorer.window, &explorer.tree);
+    tree.gesture("docs", "click", cx);
+    explorer.wait_for_labels(&["app", "docs", "guide.md", "src", "README.md"], cx);
+
+    // The new row is typed in place, first among the folder's children, and a
+    // name that exists is refused.
+    let command = start_edit(&explorer, "explorer.new-file", cx);
+    assert_eq!(tree.edit_text(cx).as_deref(), Some(""));
+    window.type_input("guide.md", cx);
+    wait_until(cx, |cx| {
+        tree.edit_message(cx).as_deref() == Some("guide.md already exists here")
+    });
+    window.press("enter", cx);
+    assert!(tree.is_editing(cx), "the message blocks the commit");
+    window.press("escape", cx);
+    assert_eq!(command.finish(cx), CommandOutcome::Completed);
+    assert!(!directory.path().join("app/docs/guide.md/x").exists());
+
+    let command = start_edit(&explorer, "explorer.new-file", cx);
+    window.type_input("deep/er/new.txt", cx);
+    wait_until(cx, |cx| tree.edit_message(cx).is_none());
+    window.press("enter", cx);
+    assert_eq!(command.finish(cx), CommandOutcome::Completed);
+    assert!(directory.path().join("app/docs/deep/er/new.txt").is_file());
+    wait_until(cx, |cx| {
+        window.document_tabs(cx) == [("new.txt".to_owned(), false)]
+    });
+    wait_until(cx, |cx| tree.selected(cx).as_deref() == Some("new.txt"));
+    assert!(tree.labels(cx).contains(&"deep".to_owned()));
+}
+
+#[gpui::test]
+fn new_folder_in_a_root_selects_the_folder(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    explorer.tree.gesture("app", "click", cx);
+    let command = start_edit(&explorer, "explorer.new-folder", cx);
+    explorer.window.type_input("assets", cx);
+    explorer.window.press("enter", cx);
+    assert_eq!(command.finish(cx), CommandOutcome::Completed);
+    assert!(directory.path().join("app/assets").is_dir());
+    wait_until(cx, |cx| {
+        explorer.tree.selected(cx).as_deref() == Some("assets")
+    });
+    assert!(explorer.window.document_tabs(cx).is_empty());
+}
+
+#[gpui::test]
+fn rename_selects_the_stem_and_open_documents_follow(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let (window, tree) = (&explorer.window, &explorer.tree);
+    window.open_path(&directory.path().join("app/README.md"), cx);
+    wait_until(cx, |cx| tree.selected(cx).as_deref() == Some("README.md"));
+
+    // F2 renames the selected row; typing replaces the stem only.
+    tree.focus(cx);
+    window.press("f2", cx);
+    wait_until(cx, |cx| tree.is_editing(cx));
+    assert_eq!(tree.edit_text(cx).as_deref(), Some("README.md"));
+    window.type_input("NOTES", cx);
+    assert_eq!(tree.edit_text(cx).as_deref(), Some("NOTES.md"));
+    window.press("enter", cx);
+    wait_until(cx, |_| directory.path().join("app/NOTES.md").is_file());
+    assert!(!directory.path().join("app/README.md").exists());
+    wait_until(cx, |cx| {
+        window.document_tabs(cx) == [("NOTES.md".to_owned(), false)]
+    });
+    wait_until(cx, |cx| tree.selected(cx).as_deref() == Some("NOTES.md"));
+
+    // A folder is selected whole, and an existing name is refused.
+    tree.focus(cx);
+    tree.gesture("src", "click", cx);
+    tree.gesture("src", "rightClick", cx);
+    window.press("f2", cx);
+    wait_until(cx, |cx| tree.is_editing(cx));
+    window.type_input("docs", cx);
+    wait_until(cx, |cx| {
+        tree.edit_message(cx).as_deref() == Some("docs already exists here")
+    });
+    window.press("escape", cx);
+    wait_until(cx, |cx| !tree.is_editing(cx));
+    assert!(directory.path().join("app/src").is_dir());
+}
+
+#[gpui::test]
+fn delete_asks_first_then_moves_the_entry_to_the_trash(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let (window, tree) = (&explorer.window, &explorer.tree);
+    tree.gesture("README.md", "rightClick", cx);
+    tree.focus(cx);
+
+    window.press("delete", cx);
+    wait_until(cx, |cx| cx.has_pending_prompt());
+    cx.simulate_prompt_answer("Cancel");
+    cx.run_until_parked();
+    assert!(directory.path().join("app/README.md").exists());
+
+    window.press("delete", cx);
+    wait_until(cx, |cx| cx.has_pending_prompt());
+    cx.simulate_prompt_answer("Move to Trash");
+    wait_until(cx, |_| !directory.path().join("app/README.md").exists());
+    explorer.wait_for_labels(&["app", "docs", "src"], cx);
+}
+
+#[gpui::test]
+fn roots_cannot_be_renamed_or_deleted(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    explorer.tree.gesture("app", "rightClick", cx);
+    explorer.tree.focus(cx);
+    for command in ["explorer.rename", "explorer.delete"] {
+        assert_eq!(
+            explorer.window.run_command(command, cx),
+            CommandOutcome::Unavailable,
+            "{command}"
+        );
+    }
+    assert!(!cx.has_pending_prompt());
+}
