@@ -1,6 +1,6 @@
 # D034 — Explorer as a bundled extension
 
-Status: 🚧 in progress; checkpoint 2 awaiting review. Item of the
+Status: 🚧 in progress; checkpoints 1 and 2 done. Item of the
 [daily-driver plan](daily-driver.md); absorbs D053. Depends on D008, D010,
 D072, D081, and D122, all done.
 
@@ -120,32 +120,14 @@ explorer's behavior is not a constraint.
 rows apply the `.open` variant when expanded; picker items and input
 completions carry an icon, used by Go to File and Vim's `:e`.
 
-### 2. Tree API 🔎 awaiting review
+### 2. Tree API ✅ done
 
-- ✅ Activation gestures, `TreeItem.arguments`, `selectedTreeItem()` (removing
-  `selectedText()`'s tree path and moving `@knot/projects` to it), `reveal`,
-  and speed search.
-- ✅ Validation: `TreeView` tests for each gesture, reveal through unloaded
-  ancestors and stale generations, and speed search matching, navigation, and
-  dismissal; product tests for the activation event's arguments and
-  `selectedTreeItem()`; the projects package tests.
-- Review gate: a `Try:` tree exercising gestures, reveal, and speed search.
-
-Scope decisions: a double click delivers `click` then `doubleClick`; an
-expandable row toggles on click and Enter and runs no command; `rightClick` is
-delivered only for rows without actions, because actions move focus to the
-context menu. The speed-search field is drawn by the tree itself, not
-`TextInput`, since it takes only typed characters. Its matches ignore case.
-
-**Implementation context:** `src/app/tree_view.rs` (`TreeViewEvent::InvokeCommand`,
-click handling, `key_down`, `expanded`, `apply_response`) and its tests in
-`src/app/tree_view/tests.rs`; the foreground bridge in
-`src/app/extensions/semantics.rs`; `contextual_selected_text` and the view
-handlers in `src/app/extensions/host/handlers.rs`; `TreeItem` in
-`crates/knot-protocol/src/lib.rs`; the speed-search field reuses
-`src/app/text_input.rs`; context-menu tests in
-`src/app/product/tests/tree_context_menu.rs`;
-`extensions/@knot/projects/src/commands.ts` and `tree.ts`.
+Gestures (`TreeGesture` in `src/app/tree_view.rs`; a double click delivers
+`click` then `doubleClick`, expandable rows toggle on click and Enter and run
+no command, `rightClick` reaches only rows without actions because actions move
+focus to the context menu), `TreeItem.arguments`, `selectedTreeItem()`,
+`ViewRegistration.reveal`, and speed search drawn by the tree itself (not
+`TextInput`; matching ignores case).
 
 ### 3. Explorer browsing, native explorer removed
 
