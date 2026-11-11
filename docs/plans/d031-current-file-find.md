@@ -111,31 +111,13 @@ focus following, and painting in `src/app/editor/bars.rs`. Theme keys
 Tab included, still act on the text while a field has focus. D140 then needs
 only the `showInput` option.
 
-### 3. Bar keys 🔎
+### 3. Bar keys ✅
 
-Implemented; awaiting the review gate. Tests: `src/app/product/tests/editor_bars.rs`
-(`bar_fields_resolve_keys_against_the_bar_kind_and_cycle_with_tab`) and
-`bar_is_a_native_view_kind_whose_keys_skip_editor_bindings` in the keymap tests.
-
-- The `bar` view kind with the bar's ID as its key context while a field has
-  focus. Editor-kind bindings stop applying there, global ones still do, and
-  unbound keys reach the field.
-- Commands invoked from a bar capture the bar's editor tab.
-- Tab and ⇧Tab move focus to the next or previous field across the
-  editor's bars, wrapping; with one field they do nothing. Native handling,
-  not commands. Escape without a binding is left to the field, which
-  ignores it.
-- Router unit tests and real-editor tests: a context-bound Enter runs a
-  command, editor movement bindings do not fire in the field, a global
-  binding does, and Tab and ⇧Tab cycle fields across two bars.
-
-**Implementation context:** `crates/knot-model/src/commands/key_router.rs`
-reports the focused kind and contexts. View-kind declaration in
-`src/app/commands/declarations.rs`. Capture in `src/app/commands/dispatch.rs`
-and `src/app/product/commands.rs`. Update
-[commands](../architecture/commands.md#keymaps).
-
-**Review gate:** binding scope rules.
+Approved. While a bar field has focus, keys resolve against the native view
+kind `bar` with the bar's ID as its only key context; Tab and Shift+Tab move
+between fields natively. Specified in
+[commands](../architecture/commands.md#editor-bars); routing in
+`src/app/product/key_routing.rs`.
 
 ### 4. `@knot/find`
 
