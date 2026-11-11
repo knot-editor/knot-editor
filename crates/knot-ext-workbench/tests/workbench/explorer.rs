@@ -47,6 +47,7 @@ impl Explorer {
         }
     }
 
+    #[track_caller]
     fn wait_for_labels(&self, labels: &[&str], cx: &mut TestAppContext) {
         wait_until(cx, |cx| self.tree.labels(cx) == labels);
     }

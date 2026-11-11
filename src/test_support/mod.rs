@@ -27,6 +27,7 @@ pub mod editing {
 }
 
 /// Run until `ready` holds, failing after ten seconds.
+#[track_caller]
 pub fn wait_until(cx: &mut TestAppContext, mut ready: impl FnMut(&mut TestAppContext) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
