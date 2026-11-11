@@ -1276,3 +1276,99 @@ await commands.registerForView("example.outline", "copy", async () => {
         assert!(!second_tree.read(cx).lifecycle_state().0);
     });
 }
+
+#[gpui::test]
+fn tree_rows_report_gestures_and_reveal_selects_through_unloaded_folders(cx: &mut TestAppContext) {
+    use knot_protocol::ExtensionKey;
+
+    const SOURCE: &str = r#"
+import * as knot from "knot"; const { commands, workbench } = knot;
+const rows = {
+  null: [
+    { id: "dir", label: "dir", collapsibleState: "collapsed" },
+    { id: "file", label: "file", collapsibleState: "none", command: "test.row", arguments: { n: 1 } },
+  ],
+  dir: [{ id: "dir/inner", label: "inner", collapsibleState: "collapsed" }],
+  "dir/inner": [{ id: "dir/inner/leaf", label: "leaf", collapsibleState: "none", command: "test.row" }],
+};
+const view = await workbench.registerView({
+  id: "example.reveal",
+  title: "Reveal",
+  content: { kind: "tree", provider: { getChildren: (parentId) => rows[parentId] ?? [] } },
+});
+await commands.register("test.row", () => { throw new Error("global handler ran"); });
+await commands.registerForView("example.reveal", "test.row", async (context) => {
+  await workbench.writeClipboardText(
+    `${JSON.stringify(context.arguments)}|${await workbench.selectedTreeItem(context.target)}`,
+  );
+});
+await commands.register("test.reveal", async () => { await view.reveal(["dir", "dir/inner", "dir/inner/leaf"]); });
+"#;
+
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(88), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    let tree = wait_for_contributed_view(&shell, "example.reveal", cx);
+    wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["dir", "file"]);
+    cx.update_window(window, |_, window, cx| {
+        focus_view(&tree.focus_handle(cx), window, cx)
+    })
+    .unwrap();
+
+    let click = |count: usize, cx: &mut TestAppContext| {
+        let mut visual = VisualTestContext::from_window(window, cx);
+        let row = visual
+            .debug_bounds("extension-tree-row-1")
+            .expect("file row is laid out")
+            .center();
+        visual.simulate_event(gpui::MouseDownEvent {
+            position: row,
+            modifiers: Modifiers::default(),
+            button: MouseButton::Left,
+            click_count: count,
+            first_mouse: false,
+        });
+        visual.simulate_event(gpui::MouseUpEvent {
+            position: row,
+            modifiers: Modifiers::default(),
+            button: MouseButton::Left,
+            click_count: count,
+        });
+    };
+    click(1, cx);
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .as_deref()
+            == Some(r#"{"arguments":{"n":1},"gesture":"click"}|file"#)
+    });
+    click(2, cx);
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .as_deref()
+            == Some(r#"{"arguments":{"n":1},"gesture":"doubleClick"}|file"#)
+    });
+
+    let reveal = dispatch_product_command(&shell, window, "test.reveal", cx);
+    assert_eq!(wait_for_command(reveal, cx), CommandOutcome::Completed);
+    wait_for_api_condition(cx, |cx| {
+        tree.read(cx).selected_item_id().as_deref() == Some("dir/inner/leaf")
+    });
+    cx.read(|cx| {
+        assert_eq!(
+            tree.read(cx).visible_labels(),
+            ["dir", "inner", "leaf", "file"]
+        );
+    });
+}

@@ -69,6 +69,8 @@ type FakeView = {
   visible: boolean;
   text: string;
   invalidations: number;
+  /** The ID paths passed to `reveal`, oldest first. */
+  reveals: (readonly string[])[];
 };
 
 type Answers = {
@@ -1863,6 +1865,7 @@ export const api: KnotApi = {
         visible: contribution.placement?.visible ?? true,
         text: "",
         invalidations: 0,
+        reveals: [],
       };
       state.views.set(contribution.id, registered);
       return {
@@ -1878,6 +1881,9 @@ export const api: KnotApi = {
         },
         invalidate: async () => {
           registered.invalidations += 1;
+        },
+        reveal: async (idPath) => {
+          registered.reveals.push([...idPath]);
         },
         setText: async (text) => {
           registered.text = text;

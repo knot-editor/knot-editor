@@ -1093,6 +1093,24 @@ impl HostArguments for TreeInvalidationArguments {
     }
 }
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TreeRevealArguments {
+    pub registration: TreeProviderRegistrationId,
+    pub id_path: Vec<String>,
+    pub window: Option<String>,
+}
+impl HostArguments for TreeRevealArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            registration: TreeProviderRegistrationId::new(reader.integer(2)?),
+            id_path: reader.text_list(3)?,
+            window: reader.optional_text(4, "window target must be text")?,
+        })
+    }
+    fn provider_mutation(&self) -> Option<ProviderIdentity> {
+        Some(ProviderIdentity::Tree(self.registration))
+    }
+}
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CompletionRegistrationArguments {
     pub registration: CompletionProviderRegistrationId,
 }
@@ -2179,6 +2197,15 @@ pub(crate) async fn invalidate_tree_provider(
         host.semantics
             .invalidate_tree_provider(&request, arguments, cx)
     })?
+}
+
+#[host_operation("revealViewItem")]
+pub(crate) async fn reveal_tree_item(
+    context: HostContext,
+    arguments: TreeRevealArguments,
+) -> Result<(), SemanticError> {
+    let request = context.request;
+    context.foreground(|host, cx| host.semantics.reveal_tree_item(&request, arguments, cx))?
 }
 
 #[host_operation("unregisterView")]

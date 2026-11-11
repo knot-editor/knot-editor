@@ -1021,6 +1021,11 @@ export async function registerView(contribution) {
         optionalWindowAuthority(window),
       ));
     },
+    async reveal(idPath, window) {
+      owned.assertActive();
+      const path = arrayItems(idPath, (id) => string(id, "reveal IDs must be text"));
+      await owned.track(request("revealViewItem", registration, path, optionalWindowAuthority(window)));
+    },
     async setText(text, window) {
       owned.assertActive();
       await owned.track(request(

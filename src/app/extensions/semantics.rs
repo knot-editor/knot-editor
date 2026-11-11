@@ -16,7 +16,7 @@ use knot_protocol::{
 
 use crate::app::extensions::host::handlers::{
     AccessError, CompletionArguments, CompletionRegistrationArguments, ReplaceViewTextArguments,
-    TreeArguments, TreeInvalidationArguments, TreeRegistrationArguments,
+    TreeArguments, TreeInvalidationArguments, TreeRegistrationArguments, TreeRevealArguments,
 };
 use crate::app::workbench::DockLocation;
 use knot_protocol::declarations::HostError;
@@ -345,6 +345,37 @@ impl ExtensionSemanticBridge {
                 tree.invalidate(*registration, parent_id.clone(), cx)
             })
             .map_err(map_tree_error)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn reveal_tree_item(
+        &mut self,
+        request: &RequestContext,
+        arguments: TreeRevealArguments,
+        cx: &mut App,
+    ) -> Result<(), SemanticError> {
+        self.validate(request)?;
+        let TreeRevealArguments {
+            registration,
+            id_path,
+            window,
+        } = arguments;
+
+        let kind = self.owned_tree_kind(registration, request)?;
+        if self
+            .tree_registrations
+            .get(&registration)
+            .is_some_and(|entry| entry.definition.content != ViewContentKind::Tree)
+        {
+            return Err(SemanticError::ContentKindMismatch);
+        }
+        let views = self.live_tree_views(&kind, window.as_deref());
+        if window.is_some() && views.is_empty() {
+            return Err(SemanticError::ViewNotFound);
+        }
+        for view in views {
+            view.update(cx, |tree, cx| tree.reveal(id_path.clone(), cx));
         }
         Ok(())
     }

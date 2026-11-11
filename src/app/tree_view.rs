@@ -157,6 +157,8 @@ pub(crate) struct TreeView {
     children: HashMap<Option<String>, ChildrenState>,
     expanded: HashSet<String>,
     selected: Option<String>,
+    /// The ID path of a reveal waiting for rows to load.
+    pending_reveal: Option<Vec<String>>,
     action_focus: Option<ActionFocus>,
     context_menu: Option<ContextMenu>,
     /// The selected row and its bounds when last painted.
@@ -184,6 +186,7 @@ impl TreeView {
             children: HashMap::new(),
             expanded: HashSet::new(),
             selected: None,
+            pending_reveal: None,
             action_focus: None,
             context_menu: None,
             selected_bounds: Rc::default(),
@@ -397,8 +400,64 @@ impl TreeView {
         self.children.clear();
         self.expanded.clear();
         self.selected = None;
+        self.pending_reveal = None;
         self.action_focus = None;
         cx.notify();
+    }
+
+    /// Expand each ancestor named by `path`, wait for its children, then
+    /// select and scroll to the last ID. A path that names a missing row
+    /// stops where it breaks.
+    pub(crate) fn reveal(&mut self, path: Vec<String>, cx: &mut Context<Self>) {
+        self.pending_reveal = (!path.is_empty()).then_some(path);
+        self.advance_reveal(cx);
+    }
+
+    /// Continue the pending reveal as far as the loaded rows allow.
+    fn advance_reveal(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = self.pending_reveal.clone() else {
+            return;
+        };
+        let Some(provider) = self.provider else {
+            self.pending_reveal = None;
+            return;
+        };
+        let mut parent: Option<String> = None;
+        for (index, id) in path.iter().enumerate() {
+            let Some(state) = self.children.get(&parent) else {
+                // An ancestor that was never loaded: load it and resume when
+                // its children arrive.
+                if parent.is_some() {
+                    let _ = self.invalidate(provider.registration, parent, cx);
+                } else {
+                    self.pending_reveal = None;
+                }
+                return;
+            };
+            if state.loading {
+                return;
+            }
+            if state.error.is_some() || !state.items.iter().any(|item| &item.id == id) {
+                self.pending_reveal = None;
+                return;
+            }
+            if index + 1 == path.len() {
+                self.pending_reveal = None;
+                self.selected = Some(id.clone());
+                self.action_focus = None;
+                let position = self
+                    .visible_rows()
+                    .iter()
+                    .position(|row| matches!(row, VisibleRow::Item { item, .. } if &item.id == id));
+                if let Some(flat) = position {
+                    self.scroll.scroll_to_item(flat, ScrollStrategy::Center);
+                }
+                cx.notify();
+                return;
+            }
+            self.expanded.insert(id.clone());
+            parent = Some(id.clone());
+        }
     }
 
     pub(crate) fn apply_response(
@@ -454,6 +513,7 @@ impl TreeView {
         for id in children_to_load {
             let _ = self.invalidate(provider.registration, Some(id), cx);
         }
+        self.advance_reveal(cx);
         cx.notify();
         true
     }

@@ -617,3 +617,135 @@ fn row_icons_follow_the_item_name_and_fall_back_when_unknown(cx: &mut TestAppCon
         );
     });
 }
+
+/// A tree with a root folder `a` holding a folder `b` that holds a file `c`,
+/// answering only the requests the test allows through.
+struct RevealFixture {
+    tree: gpui::Entity<TreeView>,
+    registration: TreeProviderRegistrationId,
+    view: knot_protocol::ViewId,
+}
+
+impl RevealFixture {
+    fn new(cx: &mut TestAppContext) -> Self {
+        let registration = TreeProviderRegistrationId::new(11);
+        let tree = tree(cx);
+        tree.update(cx, |tree, cx| {
+            tree.register_provider("example.git", owner(registration), Vec::new(), cx)
+                .unwrap();
+        });
+        let view = cx.read(|cx| tree.read(cx).instance_id());
+        Self {
+            tree,
+            registration,
+            view,
+        }
+    }
+
+    fn generation(&self, cx: &mut TestAppContext, parent: Option<&str>) -> u64 {
+        cx.read(|cx| self.tree.read(cx).children[&parent.map(str::to_owned)].generation)
+    }
+
+    fn answer(&self, cx: &mut TestAppContext, parent: Option<&str>, ids: &[&str]) -> bool {
+        let generation = self.generation(cx, parent);
+        self.answer_generation(cx, parent, generation, ids)
+    }
+
+    fn answer_generation(
+        &self,
+        cx: &mut TestAppContext,
+        parent: Option<&str>,
+        generation: u64,
+        ids: &[&str],
+    ) -> bool {
+        let items = ids
+            .iter()
+            .map(|id| {
+                let mut row = item(id, id, TreeItemKind::Item, Vec::new());
+                if !id.starts_with('f') {
+                    row.collapsible_state = TreeCollapsibleState::Collapsed;
+                }
+                row
+            })
+            .collect();
+        self.tree.update(cx, |tree, cx| {
+            tree.apply_response(
+                response(
+                    self.registration,
+                    self.view,
+                    parent.map(str::to_owned),
+                    generation,
+                    items,
+                ),
+                cx,
+            )
+        })
+    }
+
+    fn labels(&self, cx: &mut TestAppContext) -> Vec<String> {
+        cx.read(|cx| self.tree.read(cx).visible_labels())
+    }
+
+    fn selected(&self, cx: &mut TestAppContext) -> Option<String> {
+        cx.read(|cx| self.tree.read(cx).selected_item_id())
+    }
+
+    fn reveal(&self, cx: &mut TestAppContext, path: &[&str]) {
+        let path = path.iter().map(|id| (*id).to_owned()).collect();
+        self.tree.update(cx, |tree, cx| tree.reveal(path, cx));
+    }
+}
+
+#[gpui::test]
+fn reveal_expands_unloaded_ancestors_in_turn_then_selects(cx: &mut TestAppContext) {
+    let fixture = RevealFixture::new(cx);
+    fixture.answer(cx, None, &["a", "z"]);
+    fixture.reveal(cx, &["a", "b", "f-c"]);
+    // Waiting for the children of a.
+    assert_eq!(fixture.labels(cx), ["a", "z"]);
+    assert_eq!(fixture.selected(cx), None);
+    fixture.answer(cx, Some("a"), &["b"]);
+    assert_eq!(fixture.selected(cx), None, "b is still loading");
+    fixture.answer(cx, Some("b"), &["f-c"]);
+    assert_eq!(fixture.labels(cx), ["a", "b", "f-c", "z"]);
+    assert_eq!(fixture.selected(cx).as_deref(), Some("f-c"));
+}
+
+#[gpui::test]
+fn reveal_waits_for_a_refresh_and_drops_stale_answers(cx: &mut TestAppContext) {
+    let fixture = RevealFixture::new(cx);
+    // The root is still loading when the reveal starts.
+    fixture.reveal(cx, &["a", "f-c"]);
+    let stale = fixture.generation(cx, None);
+    cx.read(|cx| assert!(fixture.tree.read(cx).is_loading()));
+    fixture.tree.update(cx, |tree, cx| tree.refresh_root(cx));
+    // The first answer is for a superseded generation and changes nothing.
+    assert!(!fixture.answer_generation(cx, None, stale, &["a"]));
+    assert_eq!(fixture.selected(cx), None);
+    fixture.answer(cx, None, &["a"]);
+    fixture.answer(cx, Some("a"), &["f-c"]);
+    assert_eq!(fixture.selected(cx).as_deref(), Some("f-c"));
+}
+
+#[gpui::test]
+fn reveal_stops_at_a_missing_row_and_never_resumes(cx: &mut TestAppContext) {
+    let fixture = RevealFixture::new(cx);
+    fixture.answer(cx, None, &["a"]);
+    fixture.reveal(cx, &["a", "missing", "f-c"]);
+    fixture.answer(cx, Some("a"), &["b"]);
+    assert_eq!(fixture.selected(cx), None);
+    // A later load does not select the abandoned target.
+    fixture.tree.update(cx, |tree, cx| {
+        tree.refresh_root(cx);
+    });
+    fixture.answer(cx, None, &["a"]);
+    assert_eq!(fixture.selected(cx), None);
+}
+
+#[gpui::test]
+fn reveal_of_a_loaded_row_selects_it_at_once(cx: &mut TestAppContext) {
+    let fixture = RevealFixture::new(cx);
+    fixture.answer(cx, None, &["a", "z"]);
+    fixture.reveal(cx, &["z"]);
+    assert_eq!(fixture.selected(cx).as_deref(), Some("z"));
+}

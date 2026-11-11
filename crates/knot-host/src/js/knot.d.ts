@@ -1637,6 +1637,18 @@ declare module "knot" {
      */
     invalidate(parentId?: string | null, window?: WindowTarget): Promise<void>;
     /**
+     * Expand each ancestor named by `idPath`, waiting for its children, then
+     * select and scroll to the last ID, in every live window or one explicit
+     * window. The path is the IDs from a root row down to the target; the
+     * reveal stops where a row is missing. Resolution acknowledges the request,
+     * not the expansion. Tree frames only.
+     * @throws HostError with OwnershipDisposed after disposal starts,
+     * ViewRegistrationNotFound for stale native ownership, ViewNotFound for a
+     * window without a live instance, ContentKindMismatch for a text frame, or
+     * Cancelled on teardown.
+     */
+    reveal(idPath: readonly string[], window?: WindowTarget): Promise<void>;
+    /**
      * Replace the complete text of a text frame in every live window, or in
      * one explicit window. Tree frames reject with ContentKindMismatch.
      * The last text is retained for windows created later; this is not an
