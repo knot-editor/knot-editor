@@ -1,6 +1,6 @@
 # D010 — Filesystem mutation API
 
-Status: 🚧 approved, not started. Item D010 of the
+Status: 🚧 checkpoint 2 awaiting review. Item D010 of the
 [daily-driver plan](daily-driver.md), which names it as a dependency of the
 explorer extension (D034 / D053).
 
@@ -73,7 +73,7 @@ missing parents, refuse to overwrite, reject moves into the source or across
 schemes, and return the normalized URIs. The local trash tests move real
 temporary files to the OS trash.
 
-## Checkpoint 2 — Extension API
+## 🚧 Checkpoint 2 — Extension API (implemented, awaiting the review gate)
 
 Deliverables:
 
@@ -99,7 +99,7 @@ and a dirty document, and a document watch that moves with the rename;
 extension tests through the real editor in `scripts/extensions/testing/` per
 the fake host contract, plus `scripts/extensions/contract.test.ts`.
 
-Review gate: a try-command review in the real app. Per the repository rules,
+Review gate (commands `Try: Files Create + Open`, then `Try: Files Rename Folder`, then `Try: Files Delete To Trash`, scratch directory `/tmp/knot-d010-try`): a try-command review in the real app. Per the repository rules,
 write `try.*` commands in the personal-config `post-init.js` that create a
 file and folder under a chosen directory, rename the active file, and delete
 a file to the trash, and check that the tab follows and the file watch
