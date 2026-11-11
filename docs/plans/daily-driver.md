@@ -1,6 +1,6 @@
 # Daily-driver editor
 
-Status: 🚧 approved, not started. Promotes D007, D008, D010, D031, D034,
+Status: 🚧 approved, in progress. Promotes D007, D008, D010, D031, D034,
 D060, D064, D068, and D089 from the [roadmap](../roadmap.md) and adds
 D069–D088, D120–D123, D127, D134, D143, and D173.
 
@@ -62,178 +62,28 @@ to be rebuilt later:
 ## Phase 1 — Clean slate
 
 - ✅ **D069 — Remove demo and test-only commands**
-  - Move Terminal to New Window and the explorer placement commands are gone;
-    tab drag moves terminals, and the Move Tab to Dock commands move tools.
-    Developer tooling carries a `Developer:` title
-    prefix. The window toolbar and status string are gone: failures use a
-    warning prompt, and a failed package startup opens the extension report
-    ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#product-application-launch)).
 
 ## Phase 2 — Foundations
 
 - ✅ **D070 — Application settings**
-  - One in-memory `settings` store shared by personal config and packages:
-    the latest write wins, scoped values (`language`, `view`) beat unscoped
-    ones, and definitions give keys a type, default, and description. Editors
-    resolve `editor.tabSize` per language and view and repaint on change.
-    `languages.associate` claims file patterns for a language, so detection
-    overrides compose instead of living in one map setting
-    ([extension host](../architecture/extension-host.md#settings),
-    [decisions](../decisions/commands-and-settings.md#application-settings)).
-
 - ✅ **D121 — Terminals start in the workspace root**
-  - A new terminal starts in the root of the window's most recently focused
-    document, else the first root, else home. Restored terminals fall back to
-    the same rule (D127), and `terminals.open` takes an explicit directory
-    ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views),
-    [decisions](../decisions/workbench-and-lifecycle.md#terminal)).
-
 - ✅ **D127 — Restored terminals keep their working directory**
-  - A terminal restored in place starts in the directory its shell was last
-    in, read from the shell process and recorded in the window layout; a
-    missing directory falls back to D121's rule. New terminals opened from a
-    focused terminal start in its directory. D128 moves the query to
-    libghostty
-    ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views),
-    [decisions](../decisions/workbench-and-lifecycle.md#terminal)).
-
 - ✅ **D064 — Theming system**
-  - Themes are extension contributions registered like languages, and every
-    native surface paints from color keys whose native defaults are also the
-    fallback. Extensions define their own keys and name them in decorations,
-    gutter markers, and badges. `theme.mode`, `theme.dark`, and `theme.light`
-    select the theme, and the bundled `@knot/themes` package ships One Dark,
-    One Light, Catppuccin, Tokyo Night, and Solarized with a remembered Select
-    Theme command
-    ([semantic UI](../architecture/semantic-ui.md#themes-and-color-keys),
-    [decisions](../decisions/semantic-ui.md#themes)).
-
 - ✅ **D071 — Command palette and shared picker**
-  - One native fuzzy-matching picker (`nucleo-matcher`) serves the palette,
-    native pickers, and `workbench.showPicker`, with highlighted matches,
-    item detail and hints, and pulled highlight previews that Select Theme
-    uses. Palette rows show titles, descriptions, and bindings, hide input
-    commands, and rank recently used commands first across restarts, kept in
-    the application state database
-    ([semantic UI](../architecture/semantic-ui.md#extension-transient-interactions),
-    [commands](../architecture/commands.md#dispatch),
-    [decisions](../decisions/semantic-ui.md#extension-transient-interactions)).
-
-- ✅ **D086 — Keymap presets** (promotes D060)
-  - Default bindings are a preset in one slot beneath every extension and
-    personal binding. The native Knot preset is correct on macOS, Windows, and
-    Linux; packages register further presets, and `keymap.preset` selects
-    one. Extensions read `knot.platform`. Show Keybindings lists every binding
-    with its owner and overrides, and menus show the effective keys
-    ([commands](../architecture/commands.md#keymaps),
-    [decisions](../decisions/commands-and-settings.md#commands-and-keymaps),
-    [extension guide](../extension-api.md#bind-keys-and-modal-contexts)).
-
+- ✅ **D086 — Keymap presets**
 - ✅ **D072 — Workbench navigation and layout commands**
-  - Splits record ratios and every divider drags; grow, shrink, equalize,
-    split left and up, directional focus and tab moves, and maximize work
-    from the keyboard. Tabs switch in order, by position, and by recent use on
-    ctrl-tab without an overlay. Pinned tabs, Close Other Tabs, Close Pane,
-    Reopen Closed Tab, preview tabs from the explorer and `documents.open`,
-    and the Move Tab to Dock commands complete the set; New Terminal moved to ctrl-`
-    ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure),
-    [commands](../architecture/commands.md#keymaps),
-    [decisions](../decisions/workbench-and-lifecycle.md#workbench-navigation)).
 
 ## Phase 3 — Editing
 
 - ✅ **D073 — Language editing configuration**
-  - Language registrations carry comment tokens, bracket pairs with
-    auto-closing flags, and `autoCloseBefore`; `languages.get` returns the
-    full definition to derive from. The registry resolves the data for
-    native code beside a pure comment toggle, and the Rust, ECMAScript,
-    Python, TOML, and Markdown packages supply it with per-package toggling
-    cases. Indentation is left to D134's `indents` queries. D074 and D075
-    consume it
-    ([semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
-    [decisions](../decisions/editing.md#language-editing-configuration),
-    [extension guide](../extension-api.md#register-a-language)).
-
 - ✅ **D074 — Editing commands**
-  - Enter keeps the indentation before the caret; Tab, Shift-Tab, and
-    indent and outdent lines follow the document's detected tabs or spaces,
-    else `editor.insertSpaces`. Line and block comments toggle with the
-    language at the cursor, including inside injections. Lines copy, move,
-    delete, and join; Home is smart; words split at VS Code's separators,
-    and drags after a double- or triple-click extend by words or lines. Each
-    command is one undo step that restores its selection
-    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
-    [decisions](../decisions/editing.md#editing-commands)).
-
 - ✅ **D134 — Tree-sitter indentation**
-  - Language registrations take an optional `indents` query with
-    nvim-treesitter's captures, evaluated natively. Enter indents the new
-    line from it once the tree covers the edit, within Enter's undo step;
-    Enter between a bracket pair opens an indented middle line; typing a
-    closer such as `}` or Python's `else:` outdents its line; Reindent Lines
-    recomputes a selection. Unclosed brackets inside a parse error indent the
-    lines after them. Rust, ECMAScript, Python, and TOML ship queries with
-    `test/cases/indents.jsonc` cases
-    ([semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
-    [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [decisions](../decisions/editing.md#indentation),
-    [extension guide](../extension-api.md#register-a-language)).
-
 - ✅ **D075 — Bracket matching and auto-closing**
-  - The bracket next to the caret and its partner are highlighted from the
-    syntax tree, and Jump to Matching Bracket (⌘⇧\) moves between them or to
-    the enclosing closer. Typing an opener closes it by VS Code's rules,
-    including `notIn` strings and comments from highlight captures; closers
-    Knot inserted are stepped over and deleted in pairs, and openers wrap a
-    selection. `editor.autoClosingBrackets` and `editor.autoSurround` turn
-    them off, and packages keep `test/cases/brackets.jsonc` cases
-    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages),
-    [decisions](../decisions/editing.md#brackets)).
-
 - ✅ **D068 — Editor gutter and line numbers**
-  - The gutter is a marker lane, always reserved, then line numbers sized to
-    the line count. `editor.lineNumbers` takes `"on"`, `"off"`, or
-    `"relative"`; the cursor line's number and, as in VS Code, its background
-    are highlighted. Number clicks and drags select lines, and a line shows
-    its most severe marker, whose command a click runs. Text frames opt in
-    with `gutter: true`
-    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [decisions](../decisions/editing.md#editor-gutter),
-    [extension guide](../extension-api.md#read-only-text-frames)).
-
-- ✅ **D076 — Go to Line** (depends on D071)
-  - The bundled `@knot/go-to-line` package, bound to ctrl-G in editors.
-    Typing `N`, `N:C`, or `N,C` moves the caret there, centered when off
-    screen, Enter keeps it, and dismissing restores the view. It added
-    `context.editor` (a first slice of D109), buffer line lookups, and an
-    input `onChange` with a message line
-    ([editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions),
-    [extension guide](../extension-api.md#register-a-command)).
-
-- **D077 — Status bar**
-  - ✅ Complete in the editor API initiative.
-
-- ✅ **D078 — Zoom, font size, and soft wrap** (depends on D070)
-  - ⌘= / ⌘- / ⌘0 zoom the whole application, remembered across restarts;
-    `font.size` sets the text size per view scope; `editor.softWrap`, on for
-    Markdown and toggled per document by Toggle Soft Wrap, wraps at the
-    viewport width, and movement goes by wrapped row with `-logical` twins
-    ([zoom](../architecture/workbench-and-lifecycle.md#zoom),
-    [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
-    [decisions](../decisions/editing.md#zoom-text-size-and-soft-wrap)).
-
-- ✅ **D079 — Save hygiene** (depends on D070)
-  - Save and Save As trim trailing whitespace (except on the cursor's line)
-    and ensure a final newline, per `files.trimTrailingWhitespace` and
-    `files.insertFinalNewline`. The cleanup is one undoable edit applied before
-    the content snapshot is captured; Trim Trailing Whitespace trims on demand
-    ([documents and persistence](../architecture/documents-and-persistence.md#saving),
-    [settings](../settings.md#files)).
-  - Whether a formatter hook belongs here is decided in its session; language
-    servers (D067) remain out of scope.
+- ✅ **D076 — Go to Line**
+- ✅ **D077 — Status bar**
+- ✅ **D078 — Zoom, font size, and soft wrap**
+- ✅ **D079 — Save hygiene**
 
 - **D031 — Current-file Find** (depends on D064)
   - Bound to ⌘F. The query field takes focus. Matching is live and highlights
@@ -259,23 +109,7 @@ to be rebuilt later:
 ## Phase 4 — Files and workspace
 
 - ✅ **D008 — File watching and automatic reload**
-  - Documents hold native watches, and extensions watch any URI through
-    `files.watch`. A clean document reloads in place as a line diff and keeps
-    its view state; a dirty one is marked changed on disk and offers Reload or
-    Keep on focus; a deleted file leaves a dirty document. Activation rechecks
-    every document
-    ([architecture](../architecture/documents-and-persistence.md#detecting-external-changes),
-    [decisions](../decisions/documents-and-persistence.md#file-watching),
-    [settings](../settings.md)).
-
 - ✅ **D010 — Filesystem mutation API**
-  - Create file, create directory, rename or move, and delete (to the trash
-    where the platform supports it), through providers and a public API.
-  - Open documents follow renames, and deletion of their file is reported to
-    them.
-    ([architecture](../architecture/documents-and-persistence.md#uri-providers),
-    [decisions](../decisions/documents-and-persistence.md#extension-file-mutation),
-    [guide](../extension-api.md#change-files)).
 
 - **D087 — Extension entitlements**
   - Packages declare entitlements in `knot.jsonc`. Start with process
@@ -300,22 +134,7 @@ to be rebuilt later:
     require it on PATH.
 
 - ✅ **D122 — Extension file read, list, and stat API**
-  - `knot.files` reads text, lists one directory, and stats a URI through the
-    registered providers; reads are ungated and see stored content only
-    ([architecture](../architecture/documents-and-persistence.md#uri-providers),
-    [decisions](../decisions/documents-and-persistence.md#extension-file-reads)).
-
-- ✅ **D143 — Input completion** (depends on D071)
-  - Shipped ([architecture](../architecture/semantic-ui.md#extension-transient-interactions),
-    [decisions](../decisions/semantic-ui.md#extension-transient-interactions)).
-  - `workbench.showInput` offers completion items as the text changes,
-    through the pulled input session `onChange` already uses, with keys to
-    move through and accept them.
-  - Matching is one native matcher shared by the picker, input completion,
-    and extensions (`completion.match`), with the user-selectable styles
-    `prefix`, `substring`, `flex`, and `orderless` in `completion.styles`.
-  - The first consumer is Vim's Ex line (D058): it completes command names,
-    `:set` options, and `:e` paths.
+- ✅ **D143 — Input completion**
 
 - **D089 — Project-local settings** (depends on D070, D122)
   - Settings read from a file in the repository, attached to folders rather
@@ -326,50 +145,11 @@ to be rebuilt later:
     `@knot/projects` record. Workspace trust (D124) stays deferred, so
     project settings must not run code until it exists.
 
-- ✅ **D081 — Workspace ignore rules and file enumeration** (depends on D122,
-  D143)
-  - Shipped ([architecture](../architecture/documents-and-persistence.md#uri-providers),
-    [decisions](../decisions/documents-and-persistence.md#workspace-ignore-policy),
-    [settings](../settings.md)).
-  - `files.list` hides and marks entries, `files.search` matches visible
-    files, and `files.isIgnored` answers one-off checks, all through one native
-    policy.
-  - Vim's Ex line completes `:e` paths from the base `:e` opens against.
-
-- ✅ **D034 — Explorer as a bundled extension** (depends on D008, D010, D122,
-  D081, D072; absorbs D053)
-  - Shipped ([architecture](../architecture/semantic-ui.md#extension-trees),
-    [decisions](../decisions/bundled-packages.md#bundled-explorer),
-    [guide](../extension-api.md#activation-selection-and-editing-in-trees),
-    [settings](../settings.md)).
-  - `@knot/explorer` replaces the native explorer and its private
-    workspace-tree path. It browses every root, opens previews and regular
-    tabs, follows the active file, refreshes from file watching, and creates,
-    renames, deletes, copies, and moves files inline.
-  - The tree API gained icon references, gestures, row arguments, reveal,
-    speed search, and inline editing; `files.copy` and `files.reveal` joined
-    the file API.
-
-- ✅ **D173 — Workspace file index** (depends on D008, D081)
-  - Shipped ([architecture](../architecture/documents-and-persistence.md#workspace-file-index),
-    [decisions](../decisions/documents-and-persistence.md#workspace-file-index)).
-  - `files.list` and `files.isIgnored` answer from a native in-memory tree of
-    each root, and `files.search` returns the best ranked matches and whether
-    more matched; `files.walk` is removed.
-
-- **D082 — Go to File** (depends on D071, D081, D173)
-  - ✅ Done.
-  - A bundled extension bound to ⌘P that fuzzy-matches workspace paths.
-  - Multi-root paths are labeled by root, and open and recent files rank
-    first.
-  - Searches with `files.search` on every keystroke, one call for all roots.
-
-- **D083 — Recent files** (depends on D071)
-  - ✅ Done.
-  - `Open Recent…` (⌘E) and `Clear Recent Files` in `@knot/go-to-file`, over
-    the `recent-files` history of active files; missing files drop out.
-  - `history.forget` removes one recorded ID or the whole list.
-  - Reopen closed tab (D072) is unrelated: it is native per-window state.
+- ✅ **D081 — Workspace ignore rules and file enumeration**
+- ✅ **D034 — Explorer as a bundled extension**
+- ✅ **D173 — Workspace file index**
+- ✅ **D082 — Go to File**
+- ✅ **D083 — Recent files**
 
 - **D084 — Project selector modal** (depends on D071)
   - `@knot/projects` replaces its Projects tool with a picker modal: recent
@@ -377,10 +157,7 @@ to be rebuilt later:
     companion commands.
   - Remove the Projects tool registration and its tree code.
 
-- ✅ **D120 — Remembered projects** (depends on D070, D084)
-  - Every opened root set is remembered as a project with an inferred name,
-    opening a suspended project's folder restores it, and Open Folder opens
-    a new window unless the current one has no roots.
+- ✅ **D120 — Remembered projects**
 
 - **D123 — Project inference extension** (depends on D122)
   - A bundled extension that finds the version-control root above an opened
