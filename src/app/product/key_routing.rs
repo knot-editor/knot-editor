@@ -105,7 +105,12 @@ impl ProductShell {
             Focus::Workbench => match self.focused_command_view(cx) {
                 Some(CommandView::Editor(view)) => {
                     let editor = view.read(cx).editor().clone();
-                    self.type_into_editor(&editor, text, cx);
+                    match editor.read(cx).focused_bar_input().cloned() {
+                        Some(input) => {
+                            input.update(cx, |input, cx| input.insert_text(None, text, cx))
+                        }
+                        None => self.type_into_editor(&editor, text, cx),
+                    }
                 }
                 Some(CommandView::Terminal(view)) => {
                     view.update(cx, |view, cx| view.insert_text(text, cx));
@@ -152,8 +157,13 @@ impl ProductShell {
                 Some(CommandView::Extension(ExtensionView::Tree(tree))) => {
                     tree.update(cx, |tree, cx| tree.key_down(keystroke, cx))
                 }
-                Some(CommandView::Editor(_) | CommandView::Extension(ExtensionView::Text(_)))
-                | None => false,
+                Some(CommandView::Editor(view)) => {
+                    let input = view.read(cx).editor().read(cx).focused_bar_input().cloned();
+                    input.is_some_and(|input| {
+                        input.update(cx, |input, cx| input.key_down(keystroke, cx))
+                    })
+                }
+                Some(CommandView::Extension(ExtensionView::Text(_))) | None => false,
             },
             Focus::Palette => {
                 let Some(picker) = self

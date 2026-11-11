@@ -3025,6 +3025,231 @@ pub(crate) async fn editor_set_cursor_style(
     })?
 }
 
+/// Failures of an editor bar operation.
+#[derive(Debug, HostError)]
+pub(crate) enum BarError {
+    #[error(transparent)]
+    Access(AccessError),
+    #[error(code = "BarNotFound", message = "BarNotFound")]
+    NotFound,
+}
+impl From<AccessError> for BarError {
+    fn from(error: AccessError) -> Self {
+        Self::Access(error)
+    }
+}
+
+/// What a bar shows, as `openBar` receives it.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BarSpecValue {
+    #[serde(default)]
+    fields: Vec<BarFieldValue>,
+    #[serde(default)]
+    message: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BarFieldValue {
+    id: String,
+    #[serde(default)]
+    placeholder: String,
+}
+
+fn bar_id(reader: &mut dyn ArgumentReader, index: usize) -> Result<String, DecodeError> {
+    let id = reader.text(index, "bar id must be text")?;
+    if id.is_empty() {
+        return Err(DecodeError::Range("bar id must not be empty"));
+    }
+    Ok(id)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct OpenBarArguments {
+    pub authority: EditorAuthority,
+    pub id: String,
+    pub spec: knot_model::editor::bars::BarSpec,
+}
+impl HostArguments for OpenBarArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        use knot_model::editor::bars::{BarField, BarSpec};
+        let authority = EditorAuthority::decode(reader, 2)?;
+        let id = bar_id(reader, 3)?;
+        let value: BarSpecValue =
+            serde_json::from_value(setting_value(reader.command_arguments(4)?))
+                .map_err(|_| DecodeError::Type("invalid bar"))?;
+        let spec = BarSpec {
+            fields: value
+                .fields
+                .into_iter()
+                .map(|field| BarField {
+                    id: field.id,
+                    placeholder: field.placeholder,
+                })
+                .collect(),
+            message: value.message,
+        };
+        if let Some(problem) = spec.problem() {
+            return Err(DecodeError::Range(problem));
+        }
+        Ok(Self {
+            authority,
+            id,
+            spec,
+        })
+    }
+}
+
+/// Open the caller's bar on the captured editor, or update it in place. The
+/// bar lasts until closed, the view closes, or the caller's lifecycle ends.
+#[host_operation("editorOpenBar")]
+pub(crate) async fn editor_open_bar(
+    context: HostContext,
+    arguments: OpenBarArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        host.open_editor_bar(owner, editor, &arguments.id, arguments.spec, cx);
+        Ok(())
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct BarArguments {
+    pub authority: EditorAuthority,
+    pub id: String,
+}
+impl HostArguments for BarArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            id: bar_id(reader, 3)?,
+        })
+    }
+}
+
+/// Close the caller's bar on the captured editor; closing a bar that is not
+/// open does nothing.
+#[host_operation("editorCloseBar")]
+pub(crate) async fn editor_close_bar(
+    context: HostContext,
+    arguments: BarArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        editor.update(cx, |editor, cx| editor.close_bar(owner, &arguments.id, cx));
+        Ok(())
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FocusBarFieldArguments {
+    pub authority: EditorAuthority,
+    pub id: String,
+    pub field: String,
+    pub text: Option<String>,
+}
+impl HostArguments for FocusBarFieldArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            id: bar_id(reader, 3)?,
+            field: reader.text(4, "bar field id must be text")?,
+            text: reader.optional_text(5, "bar field text must be text")?,
+        })
+    }
+}
+
+/// Give a field of the caller's bar the captured editor's focus, first
+/// replacing its text when one is given.
+#[host_operation("editorFocusBarField")]
+pub(crate) async fn editor_focus_bar_field(
+    context: HostContext,
+    arguments: FocusBarFieldArguments,
+) -> Result<(), BarError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        let field =
+            knot_model::editor::bars::BarFieldRef::new(owner, arguments.id, arguments.field);
+        let text = arguments.text.map(|text| text.replace(['\r', '\n'], ""));
+        editor
+            .update(cx, |editor, cx| editor.focus_bar_field(field, text, cx))
+            .then_some(())
+            .ok_or(BarError::NotFound)
+    })?
+}
+
+/// Each field's text of one bar, by field ID.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct BarFieldTexts(pub std::collections::BTreeMap<String, String>);
+impl HostSuccess for BarFieldTexts {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+/// The text of each field of the caller's bar on the captured editor.
+#[host_operation("editorBarFields")]
+pub(crate) async fn editor_bar_fields(
+    context: HostContext,
+    arguments: BarArguments,
+) -> Result<BarFieldTexts, BarError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        editor
+            .read(cx)
+            .bar_field_texts(owner, &arguments.id, cx)
+            .map(|texts| BarFieldTexts(texts.into_iter().collect()))
+            .ok_or(BarError::NotFound)
+    })?
+}
+
+/// Start field edit notifications for a handle's bars.
+#[host_operation("watchEditorBars")]
+pub(crate) async fn watch_editor_bars(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| host.watch_editor_bars(&request, arguments.authority, cx))?
+}
+
+/// The bars edited since the last acknowledgment, with their field texts.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct EditedBar {
+    pub id: String,
+    pub fields: std::collections::BTreeMap<String, String>,
+}
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct EditedBars(pub Vec<EditedBar>);
+impl HostSuccess for EditedBars {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+/// A bar notification's listener turn began: returns what was edited since
+/// the last one; see `BarWatch`.
+#[host_operation("acknowledgeEditorBars")]
+pub(crate) async fn acknowledge_editor_bars(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<EditedBars, AccessError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, cx| {
+        EditedBars(host.acknowledge_editor_bars(owner, arguments.authority, cx))
+    })
+}
+
 /// The first row wholly inside an editor's viewport and the rows that are.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
 pub(crate) struct Viewport {

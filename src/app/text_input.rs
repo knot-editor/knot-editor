@@ -32,6 +32,8 @@ pub(crate) struct TextInput {
     caret: usize,
     /// IME preedit range in UTF-16 offsets into `text`.
     marked: Option<Range<usize>>,
+    /// Shown, muted, while the text is empty.
+    placeholder: SharedString,
     focus: FocusHandle,
     /// Last painted text bounds, used for pointer hit testing.
     bounds: Option<Bounds<Pixels>>,
@@ -46,6 +48,7 @@ impl TextInput {
             anchor: caret,
             caret,
             marked: None,
+            placeholder: SharedString::default(),
             focus: cx.focus_handle(),
             bounds: None,
         }
@@ -53,6 +56,12 @@ impl TextInput {
 
     pub(crate) fn text(&self) -> &str {
         &self.text
+    }
+
+    /// The text's bounds as last painted.
+    #[cfg(test)]
+    pub(crate) fn painted_bounds(&self) -> Option<Bounds<Pixels>> {
+        self.bounds
     }
 
     pub(crate) fn focus_handle(&self) -> FocusHandle {
@@ -66,6 +75,18 @@ impl TextInput {
         self.marked = None;
         cx.notify();
         cx.emit(TextInputEvent::Changed);
+    }
+
+    pub(crate) fn set_placeholder(
+        &mut self,
+        placeholder: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        let placeholder = placeholder.into();
+        if self.placeholder != placeholder {
+            self.placeholder = placeholder;
+            cx.notify();
+        }
     }
 
     /// Select the bytes `range` of the text, clamped to it and to character
@@ -504,6 +525,12 @@ impl Render for TextInput {
         let marked = self.marked.clone();
         let font = text_font(false, false);
         let foreground = theme(cx).paint_color(color::TEXT);
+        let placeholder = (text.is_empty() && !self.placeholder.is_empty()).then(|| {
+            (
+                self.placeholder.clone(),
+                theme(cx).paint_color(color::TEXT_MUTED),
+            )
+        });
         let selection_color = theme(cx).paint_color(color::EDITOR_SELECTION);
         let marked_color = theme(cx).paint_color(color::EDITOR_MARKED_TEXT);
         let caret_color = theme(cx).paint_color(color::EDITOR_CURSOR);
@@ -527,18 +554,36 @@ impl Render for TextInput {
                     |_, _, _| (),
                     move |bounds, _, window, cx| {
                         entity.update(cx, |input, _| input.bounds = Some(bounds));
-                        let runs = [TextRun {
-                            len: text.len(),
+                        let run = |len, color| TextRun {
+                            len,
                             font: font.clone(),
-                            color: foreground,
+                            color,
                             background_color: None,
                             underline: None,
                             strikethrough: None,
-                        }];
+                        };
+                        if let Some((placeholder, muted)) = &placeholder {
+                            let shaped = window.text_system().shape_line(
+                                placeholder.clone(),
+                                font_size,
+                                &[run(placeholder.len(), *muted)],
+                                None,
+                            );
+                            shaped
+                                .paint(
+                                    bounds.origin,
+                                    line_height,
+                                    TextAlign::Left,
+                                    None,
+                                    window,
+                                    cx,
+                                )
+                                .ok();
+                        }
                         let shaped = window.text_system().shape_line(
                             SharedString::from(text.clone()),
                             font_size,
-                            &runs,
+                            &[run(text.len(), foreground)],
                             None,
                         );
                         if selection.start != selection.end {

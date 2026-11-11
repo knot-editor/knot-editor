@@ -38,6 +38,8 @@ pub struct EditorView {
     pub(super) suppress_drag_selection: bool,
     pub(super) caret_blink: CaretBlink,
     pub(super) focus: FocusHandle,
+    /// The bar field this view had the window focus as of the last render.
+    pub(super) focused_field: Option<FocusHandle>,
     pub(super) history_was_focused: bool,
     #[cfg(test)]
     pub(super) paint_count: u64,
@@ -131,6 +133,7 @@ impl EditorView {
             suppress_drag_selection: false,
             caret_blink: CaretBlink::default(),
             focus: cx.focus_handle(),
+            focused_field: None,
             history_was_focused: false,
             #[cfg(test)]
             paint_count: 0,

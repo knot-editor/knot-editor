@@ -227,6 +227,8 @@ native_colors! {
     DROP_TARGET_BACKGROUND = "dropTarget.background", "Where a dragged tab would land.", Rgba(0x7fb5ff55), Rgba(0x3b82d640);
     EDITOR_BRACKET_MATCH = "editor.bracketMatch", "Background of the bracket at the cursor and its partner.", Rgba(0x8c8c8c40), Rgba(0x8c8c8c33);
     EDITOR_BACKGROUND = "editor.background", "Text editor background.", Key(BACKGROUND), Key(BACKGROUND);
+    EDITOR_BAR_BACKGROUND = "editor.bar.background", "Bars extensions open above an editor's text, such as Find.", Key(TAB_BAR_BACKGROUND), Key(TAB_BAR_BACKGROUND);
+    EDITOR_BAR_BORDER = "editor.bar.border", "The line below each editor bar.", Key(BORDER), Key(BORDER);
     EDITOR_CURSOR = "editor.cursor", "Text cursor.", Rgb(0xe6e6e6), Rgb(0x1f1f1f);
     EDITOR_FOLD_PLACEHOLDER = "editor.foldPlaceholder", "The placeholder after the first line of a collapsed fold.", Rgb(0x858585), Rgb(0x8c8c8c);
     EDITOR_FOREGROUND = "editor.foreground", "Unhighlighted editor text.", Rgb(0xd4d4d4), Rgb(0x1f1f1f);
@@ -239,6 +241,9 @@ native_colors! {
     ERROR = "error", "Errors and failures.", Rgb(0xf48771), Rgb(0xc4314b);
     ICON = "icon", "Icons that choose no color.", Key(TEXT), Key(TEXT);
     INFO = "info", "Informational markers.", Rgb(0x6cb6ff), Rgb(0x1a73c7);
+    INPUT_BACKGROUND = "input.background", "Text fields in editor bars.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);
+    INPUT_BORDER = "input.border", "Border of a text field.", Key(BORDER), Key(BORDER);
+    INPUT_FOCUSED_BORDER = "input.focused.border", "Border of the text field with focus.", Key(BORDER_HOVER), Key(BORDER_HOVER);
     LIST_GROUP_BACKGROUND = "list.group.background", "Group headers in trees.", Rgb(0x262626), Rgb(0xf0f0f0);
     LIST_MATCH_FOREGROUND = "list.match.foreground", "Characters a filter query matched in a list row.", Key(TEXT_ACCENT), Key(TEXT_ACCENT);
     LIST_HOVER_BACKGROUND = "list.hover.background", "A list or tree row under the pointer.", Rgb(0x2a2a2a), Rgb(0xebebeb);

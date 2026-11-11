@@ -137,6 +137,31 @@ test("an editor handle sets and clears its cursor style", async () => {
   await assert.rejects(editor.setCursorStyle("block"), { code: "InvalidTarget" });
 });
 
+test("an editor handle opens bars, focuses fields, and hears typing", async () => {
+  const document = host.addDocument({ text: "x" });
+  const window = host.openWindow({ documents: [document] });
+  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const edits: unknown[] = [];
+  await editor.onDidEditBar((edit) => {
+    edits.push(edit);
+  });
+  await editor.openBar("find", { fields: [{ id: "query", placeholder: "Find" }] });
+  await editor.openBar("other", { message: "below" });
+  await editor.focusBarField("find", "query", { text: "seed" });
+  assert.deepEqual(host.editorBars(window).focus, { bar: "find", field: "query" });
+  assert.deepEqual(edits, []);
+  await host.typeInBar("find", "query", "typed");
+  assert.deepEqual(edits, [{ bar: "find", fields: { query: "typed" } }]);
+  await editor.openBar("find", { fields: [{ id: "query" }], message: "1 of 2" });
+  assert.deepEqual(await editor.barFields("find"), { query: "typed" });
+  assert.deepEqual(host.editorBars(window).bars.map((bar) => [bar.id, bar.message]), [["find", "1 of 2"], ["other", "below"]]);
+  await assert.rejects(editor.openBar("x", { fields: [{ id: "a" }, { id: "a" }] }), RangeError);
+  await assert.rejects(editor.focusBarField("other", "query"), { code: "BarNotFound" });
+  await editor.closeBar("find");
+  assert.equal(host.editorBars(window).focus, null);
+  await assert.rejects(editor.barFields("find"), { code: "BarNotFound" });
+});
+
 test("an editor handle reports the viewport, maps rows, and scrolls without moving the caret", async () => {
   const text = Array.from({ length: 30 }, (_, line) => `line ${line}\n`).join("");
   const document = host.addDocument({ text });

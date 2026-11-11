@@ -876,12 +876,16 @@ pub enum EditorEvent {
     Closed,
     /// The editor's selection changed since the last acknowledged notification.
     SelectionChanged,
+    /// The user edited a field of one of the owner's bars since the last
+    /// acknowledged notification.
+    BarsEdited,
 }
 impl EditorEvent {
     pub fn name(self) -> &'static str {
         match self {
             Self::Closed => "closed",
             Self::SelectionChanged => "selection",
+            Self::BarsEdited => "bars",
         }
     }
 }

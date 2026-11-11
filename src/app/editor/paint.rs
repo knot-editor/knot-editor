@@ -12,6 +12,8 @@ impl Render for EditorView {
             self.history_was_focused = focused;
         }
         self.update_caret_blink(focused, cx);
+        self.follow_bar_focus(window, cx);
+        let bars = self.render_bars(cx);
         let entity = cx.entity();
         let editor = self.editor.read(cx);
         let mut key_context = KeyContext::default();
@@ -26,6 +28,8 @@ impl Render for EditorView {
         div()
             .id(("editor", self.element_id))
             .size_full()
+            .flex()
+            .flex_col()
             .bg(theme(cx).paint_color(color::EDITOR_BACKGROUND))
             // Track focus so clicking the pane focuses this view (gpui
             // auto-focuses a tracked element on mouse-down) and so on_key_down
@@ -66,8 +70,15 @@ impl Render for EditorView {
                     editor.scroll_by(rows, -dx, max_x, cx)
                 });
             }))
-            .child(EditorElement { entity })
-            .children(completion)
+            .children(bars)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .relative()
+                    .child(EditorElement { entity })
+                    .children(completion),
+            )
     }
 }
 /// The custom `Element`. Owns no state itself; reads everything from the

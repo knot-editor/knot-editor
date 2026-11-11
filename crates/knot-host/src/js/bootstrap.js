@@ -97,6 +97,28 @@ function safeInteger(value) {
   if (!Number.isSafeInteger(value) || value < 0) throw new RangeError("expected a nonnegative safe integer");
   return value;
 }
+function barId(value) {
+  if (typeof value !== "string" || value === "") throw new TypeError("bar id must be a non-empty string");
+  return value;
+}
+function barValue(value) {
+  record(value, "bar must be an object");
+  const fields = value.fields ?? [];
+  if (!Array.isArray(fields)) throw new TypeError("bar fields must be an array");
+  const message = value.message ?? null;
+  if (message !== null && typeof message !== "string") throw new TypeError("bar message must be a string or null");
+  return {
+    fields: fields.map((field) => {
+      record(field, "bar field must be an object");
+      const placeholder = field.placeholder ?? "";
+      return {
+        id: string(field.id, "bar field id must be a string"),
+        placeholder: string(placeholder, "bar field placeholder must be a string"),
+      };
+    }),
+    message,
+  };
+}
 function foldRange(value) {
   record(value, "fold range must be an object");
   const { start, end } = value;
@@ -462,6 +484,20 @@ function editorFor(authority) {
       }
       await request("editorSetCursorStyle", authority, style);
     },
+    async openBar(id, bar) {
+      await request("editorOpenBar", authority, barId(id), barValue(bar));
+    },
+    async closeBar(id) {
+      await request("editorCloseBar", authority, barId(id));
+    },
+    async focusBarField(id, field, options) {
+      const text = options?.text ?? null;
+      if (text !== null && typeof text !== "string") throw new TypeError("bar field text must be a string");
+      await request("editorFocusBarField", authority, barId(id), string(field, "bar field id must be a string"), text);
+    },
+    async barFields(id) {
+      return Object.freeze(await request("editorBarFields", authority, barId(id)));
+    },
     async beginUndoGroup() {
       const group = await request("editorBeginUndoGroup", authority);
       const owned = ownership(() => {}, () => request("editorEndUndoGroup", group));
@@ -488,12 +524,16 @@ const editorHandles = new Map();
 export async function openEditor(target) {
   if (!livePresentations.has(target)) hostError("InvalidTarget");
   const authority = await request("openEditor", destinationAuthority({ target }));
-  const entry = { closed: false, listeners: new Set(), selectionListeners: new Set(), watching: null };
+  const entry = {
+    closed: false, listeners: new Set(), selectionListeners: new Set(), watching: null,
+    barListeners: new Set(), watchingBars: null,
+  };
   editorHandles.set(authority, entry);
   const owned = ownership(() => {
     editorHandles.delete(authority);
     entry.listeners.clear();
     entry.selectionListeners.clear();
+    entry.barListeners.clear();
   }, () => request("releaseEditor", authority));
   return Object.freeze({
     ...editorFor(authority),
@@ -513,6 +553,14 @@ export async function openEditor(target) {
       try { await entry.watching; } catch (error) { entry.watching = null; throw error; }
       entry.selectionListeners.add(listener);
       return Object.freeze({ dispose: async () => { entry.selectionListeners.delete(listener); } });
+    },
+    async onDidEditBar(listener) {
+      if (typeof listener !== "function") throw new TypeError("onDidEditBar requires a listener");
+      owned.assertActive();
+      entry.watchingBars ??= request("watchEditorBars", authority);
+      try { await entry.watchingBars; } catch (error) { entry.watchingBars = null; throw error; }
+      entry.barListeners.add(listener);
+      return Object.freeze({ dispose: async () => { entry.barListeners.delete(listener); } });
     },
     dispose: () => owned.dispose(),
   });
@@ -534,6 +582,17 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
     await request("acknowledgeEditorSelection", authority);
     const listeners = [...entry.selectionListeners];
     const results = await Promise.allSettled(listeners.map((listener) => listener()));
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+  } else if (kind === "bars") {
+    // Acknowledge first, so edits during the listeners queue one more turn.
+    const edited = await request("acknowledgeEditorBars", authority);
+    const calls = [];
+    for (const { id, fields } of edited) {
+      const event = Object.freeze({ bar: id, fields: Object.freeze(fields) });
+      for (const listener of [...entry.barListeners]) calls.push(Promise.resolve().then(() => listener(event)));
+    }
+    const results = await Promise.allSettled(calls);
     const failure = results.find((result) => result.status === "rejected");
     if (failure) throw failure.reason;
   }

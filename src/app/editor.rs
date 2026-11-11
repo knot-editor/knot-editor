@@ -6,6 +6,7 @@
 //! [`EditorView`] renders it and handles pointer and platform text input;
 //! pointer hit testing uses shaped coordinates.
 
+mod bars;
 mod completion;
 mod gutter;
 mod input;
@@ -14,6 +15,7 @@ pub(super) mod native_commands;
 mod paint;
 mod view;
 
+pub(crate) use bars::BarFieldEdited;
 pub use view::EditorView;
 
 use std::{
@@ -110,6 +112,8 @@ pub struct Editor {
     /// The in-flight provider requests of the open completion, by its
     /// generation; dropped when the completion closes or moves on.
     completion_tasks: Vec<(u64, CompletionProviderRegistrationId, Task<()>)>,
+    /// The text field behind each field of the open bars.
+    bar_inputs: Vec<bars::BarInput>,
     _model_subscription: Subscription,
     _release_subscription: Subscription,
 }
@@ -149,6 +153,7 @@ impl Editor {
             state,
             model,
             completion_tasks: Vec::new(),
+            bar_inputs: Vec::new(),
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
         }
@@ -281,14 +286,14 @@ impl Editor {
             .resolve_text(self.state.view_kind(), &self.state.key_contexts())
     }
 
-    /// Clear every key context and caret shape `owner` set.
+    /// Clear every key context, caret shape, and bar `owner` set.
     pub(crate) fn remove_owner_state(
         &mut self,
         owner: knot_protocol::ExtensionKey,
         cx: &mut Context<Self>,
     ) {
         self.state.remove_owner_state(owner);
-        cx.notify();
+        self.sync_bar_inputs(cx);
     }
 
     /// Move the selection to byte offsets on character boundaries within the

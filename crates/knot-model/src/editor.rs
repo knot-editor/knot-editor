@@ -9,6 +9,7 @@
 //! queues what it cannot do itself, such as clipboard and settings writes, as
 //! [`EditorEffect`]s for its owner to run.
 
+pub mod bars;
 mod brackets;
 pub mod commands;
 mod comments;
@@ -280,6 +281,9 @@ pub struct EditorState {
     /// Caret shapes lifecycles have set; the latest one wins and each belongs
     /// to its lifecycle. Presentation state, never recorded.
     caret_shapes: Vec<(knot_protocol::ExtensionKey, CaretShape)>,
+    /// Bars lifecycles have opened above the text, and the field among them
+    /// that has the editor's focus. Presentation state, never recorded.
+    bars: bars::EditorBars,
 }
 
 impl EditorState {
@@ -331,6 +335,7 @@ impl EditorState {
             auto_closed: Vec::new(),
             key_contexts: Vec::new(),
             caret_shapes: Vec::new(),
+            bars: bars::EditorBars::default(),
         }
     }
 
@@ -614,10 +619,20 @@ impl EditorState {
         self.marked_range_utf16.is_some()
     }
 
-    /// Clear every key context and caret shape `owner` set.
+    /// Clear every key context, caret shape, and bar `owner` set.
     pub fn remove_owner_state(&mut self, owner: knot_protocol::ExtensionKey) {
         self.key_contexts.retain(|(key, _)| *key != owner);
         self.caret_shapes.retain(|(key, _)| *key != owner);
+        self.bars.remove_owner(owner);
+    }
+
+    /// The bars above the text and the field with the editor's focus.
+    pub fn bars(&self) -> &bars::EditorBars {
+        &self.bars
+    }
+
+    pub fn bars_mut(&mut self) -> &mut bars::EditorBars {
+        &mut self.bars
     }
 
     /// Move the selection to offsets an extension named, or return `false`

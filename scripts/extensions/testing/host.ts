@@ -45,6 +45,19 @@ type FakeTab = {
    * fake runs each one per change; the host's coalescing is covered by
    * product tests. */
   selectionListeners: Set<() => void | Promise<void>>;
+  /** The open bars, top to bottom, and the field with the editor's focus. */
+  bars: FakeBar[];
+  barFocus: { bar: string; field: string } | null;
+  /** Bar edit listeners of the long-lived handles bound to this tab, run
+   * once per `typeInBar`. */
+  barListeners: Set<(edit: Knot.EditorBarEdit) => void | Promise<void>>;
+};
+
+/** An open bar as the fake keeps it, with each field's text. */
+export type FakeBar = {
+  id: string;
+  fields: { id: string; placeholder: string; text: string }[];
+  message: string | null;
 };
 
 /** A `bind` or `bindText` call; text bindings have a null key. */
@@ -550,6 +563,9 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     viewportLines: 10,
     closeListeners: new Set(),
     selectionListeners: new Set(),
+    bars: [],
+    barFocus: null,
+    barListeners: new Set(),
     reveal: null,
   });
   window.selected = window.tabs.length - 1;
@@ -974,6 +990,36 @@ export function keyContexts(window: Knot.WindowTarget = state.windows[0]!.target
   return [...selectedTab(window).keyContexts].sort();
 }
 
+/** The bars of the window's selected document editor, top to bottom, with the
+ * field that has its focus. */
+export function editorBars(window: Knot.WindowTarget = state.windows[0]!.target): {
+  bars: readonly FakeBar[];
+  focus: { bar: string; field: string } | null;
+} {
+  const tab = selectedTab(window);
+  return { bars: structuredClone(tab.bars), focus: tab.barFocus && { ...tab.barFocus } };
+}
+
+/** Types into a field of a bar of the window's selected editor as the user
+ * would: replaces the field's text and runs the bar edit listeners. */
+export async function typeInBar(
+  bar: string,
+  field: string,
+  text: string,
+  window: Knot.WindowTarget = state.windows[0]!.target,
+) {
+  const tab = selectedTab(window);
+  const target = tab.bars.find((candidate) => candidate.id === bar)?.fields.find((f) => f.id === field);
+  if (target === undefined) throw new Error(`no bar field ${bar}/${field}`);
+  target.text = text;
+  const edit = { bar, fields: barTexts(tab.bars.find((candidate) => candidate.id === bar)!) };
+  for (const listener of [...tab.barListeners]) await listener(edit);
+}
+
+function barTexts(bar: FakeBar): Record<string, string> {
+  return Object.fromEntries(bar.fields.map((field) => [field.id, field.text]));
+}
+
 /** Sets how many lines the window's selected document editor shows. */
 export function setViewportLines(lines: number, window: Knot.WindowTarget = state.windows[0]!.target) {
   selectedTab(window).viewportLines = lines;
@@ -1120,6 +1166,44 @@ function editor(tab: FakeTab): Knot.Editor {
       }
       live().cursorStyle = style;
     },
+    openBar: async (id, bar) => {
+      const tab = live();
+      if (typeof id !== "string" || id === "") throw new TypeError("bar id must be a non-empty string");
+      const fields = bar.fields ?? [];
+      const ids = fields.map((field) => field.id);
+      if (ids.some((field) => field === "")) throw new RangeError("bar field id must not be empty");
+      if (new Set(ids).size !== ids.length) throw new RangeError("bar field ids must be unique");
+      const existing = tab.bars.find((candidate) => candidate.id === id);
+      const next: FakeBar = {
+        id,
+        fields: fields.map((field) => ({
+          id: field.id,
+          placeholder: field.placeholder ?? "",
+          text: existing?.fields.find((kept) => kept.id === field.id)?.text ?? "",
+        })),
+        message: bar.message ?? null,
+      };
+      if (existing) tab.bars[tab.bars.indexOf(existing)] = next;
+      else tab.bars.push(next);
+      if (tab.barFocus?.bar === id && !ids.includes(tab.barFocus.field)) tab.barFocus = null;
+    },
+    closeBar: async (id) => {
+      const tab = live();
+      tab.bars = tab.bars.filter((bar) => bar.id !== id);
+      if (tab.barFocus?.bar === id) tab.barFocus = null;
+    },
+    focusBarField: async (id, field, options) => {
+      const tab = live();
+      const target = tab.bars.find((bar) => bar.id === id)?.fields.find((f) => f.id === field);
+      if (target === undefined) throw hostError("BarNotFound");
+      if (options?.text !== undefined) target.text = options.text.replace(/[\r\n]/g, "");
+      tab.barFocus = { bar: id, field };
+    },
+    barFields: async (id) => {
+      const bar = live().bars.find((candidate) => candidate.id === id);
+      if (bar === undefined) throw hostError("BarNotFound");
+      return barTexts(bar);
+    },
     beginUndoGroup: async () => {
       const { document } = live();
       if (undoGroups.has(document)) throw hostError("OperationInProgress");
@@ -1143,6 +1227,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
   if (tab === undefined) throw hostError("InvalidTarget");
   const listeners = new Set<() => void | Promise<void>>();
   const selectionListeners = new Set<() => void | Promise<void>>();
+  const barListeners = new Set<(edit: Knot.EditorBarEdit) => void | Promise<void>>();
   let disposed = false;
   const live = editor(tab);
   const guard =
@@ -1167,6 +1252,10 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     columnAtCells: guard(live.columnAtCells),
     setCursorStyle: guard(live.setCursorStyle),
     beginUndoGroup: guard(live.beginUndoGroup),
+    openBar: guard(live.openBar),
+    closeBar: guard(live.closeBar),
+    focusBarField: guard(live.focusBarField),
+    barFields: guard(live.barFields),
     viewState: guard(live.viewState),
     restoreViewState: guard(live.restoreViewState),
     onDidClose(listener) {
@@ -1190,12 +1279,25 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
         },
       };
     },
+    async onDidEditBar(listener) {
+      if (disposed) throw hostError("InvalidTarget");
+      tab.barListeners.add(listener);
+      barListeners.add(listener);
+      return {
+        dispose: async () => {
+          tab.barListeners.delete(listener);
+          barListeners.delete(listener);
+        },
+      };
+    },
     async dispose() {
       disposed = true;
       for (const listener of listeners) tab.closeListeners.delete(listener);
       for (const listener of selectionListeners) tab.selectionListeners.delete(listener);
+      for (const listener of barListeners) tab.barListeners.delete(listener);
       listeners.clear();
       selectionListeners.clear();
+      barListeners.clear();
     },
   };
 }
@@ -1356,9 +1458,9 @@ export const CAPTURE_NAMES: readonly string[] = [
 /** The color keys native code defines, as the native table lists them. */
 export const NATIVE_COLOR_KEYS: readonly string[] = [
   "background", "border", "border.hover", "button.background", "button.hover.background",
-  "dropTarget.background", "editor.background", "editor.bracketMatch", "editor.cursor", "editor.foldPlaceholder", "editor.foreground",
+  "dropTarget.background", "editor.background", "editor.bar.background", "editor.bar.border", "editor.bracketMatch", "editor.cursor", "editor.foldPlaceholder", "editor.foreground",
   "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
-  "editor.markedText", "editor.selection", "error", "icon", "info", "list.group.background",
+  "editor.markedText", "editor.selection", "error", "icon", "info", "input.background", "input.border", "input.focused.border", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",
   "popover.background", "popover.border", "scrim", "scrollbar.thumb",
   "statusBar.background", "statusBar.border", "statusBar.foreground", "statusBar.item.hover.background", "success",

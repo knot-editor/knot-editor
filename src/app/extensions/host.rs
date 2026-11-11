@@ -552,6 +552,7 @@ struct EditorHandle {
     owner: ExtensionKey,
     tab: crate::app::product::operations::EditorTab,
     selection: Option<SelectionWatch>,
+    bars: Option<BarWatch>,
 }
 
 /// An undo group a lifecycle holds open on one buffer. `handle` is the
@@ -571,6 +572,16 @@ struct SelectionWatch {
     last: (usize, usize),
     pending: bool,
     _observation: Subscription,
+}
+
+/// Follows field edits in the bars of a handle's owner on its editor, as
+/// `SelectionWatch` follows the selection: `edited` collects the bars edited
+/// since the listener turn last acknowledged, and at most one notification
+/// is outstanding.
+struct BarWatch {
+    edited: Vec<String>,
+    pending: bool,
+    _subscription: Subscription,
 }
 
 /// Owns the one process-wide extension pool and all foreground protocol state.
@@ -599,8 +610,8 @@ pub(crate) struct ProductExtensionHost {
     next_transient_session: u64,
     /// Values dropped because a later definition gave their key another type.
     setting_warnings: Vec<String>,
-    /// Editors each lifecycle set a key context or caret shape on, cleared at
-    /// teardown.
+    /// Editors each lifecycle set a key context or caret shape on or opened a
+    /// bar on, cleared at teardown.
     owned_editors: HashMap<ExtensionKey, Vec<gpui::WeakEntity<crate::app::editor::Editor>>>,
     /// Long-lived editor handles, each bound to one exact tab presentation.
     editor_handles: HashMap<u64, EditorHandle>,
@@ -1469,6 +1480,7 @@ impl ProductExtensionHost {
                 owner,
                 tab,
                 selection: None,
+                bars: None,
             },
         );
         Ok(handlers::EditorAuthority::handle_wire(id))
@@ -1542,6 +1554,98 @@ impl ProductExtensionHost {
         {
             watch.pending = false;
         }
+    }
+
+    /// Start notifying the handle's owner when the user edits a field of one
+    /// of its bars on the handle's editor. Idempotent.
+    pub(super) fn watch_editor_bars(
+        &mut self,
+        request: &knot_protocol::RequestContext,
+        authority: handlers::EditorAuthority,
+        cx: &mut Context<Self>,
+    ) -> Result<(), handlers::AccessError> {
+        let editor = self.contextual_editor(request, authority, cx)?;
+        let handlers::EditorAuthority::Handle(id) = authority else {
+            return Err(handlers::AccessError::InvalidTarget);
+        };
+        let handle = self.editor_handles.get_mut(&id).expect("resolved handle");
+        if handle.bars.is_none() {
+            let subscription = cx.subscribe(
+                &editor,
+                move |host, _, event: &crate::app::editor::BarFieldEdited, _| {
+                    host.editor_bar_edited(id, event)
+                },
+            );
+            handle.bars = Some(BarWatch {
+                edited: Vec::new(),
+                pending: false,
+                _subscription: subscription,
+            });
+        }
+        Ok(())
+    }
+
+    fn editor_bar_edited(&mut self, id: u64, event: &crate::app::editor::BarFieldEdited) {
+        let Some(handle) = self.editor_handles.get_mut(&id) else {
+            return;
+        };
+        let Some(watch) = handle.bars.as_mut() else {
+            return;
+        };
+        if event.owner != handle.owner {
+            return;
+        }
+        if !watch.edited.contains(&event.bar) {
+            watch.edited.push(event.bar.clone());
+        }
+        if !watch.pending {
+            watch.pending = true;
+            let _ = self.pool.dispatch_editor_event(
+                handle.owner,
+                handlers::EditorAuthority::handle_wire(id),
+                knot_protocol::EditorEvent::BarsEdited,
+            );
+        }
+    }
+
+    /// A bar notification's listener turn has started: returns the bars
+    /// edited since the last one that are still open, with their field
+    /// texts, and later edits queue the next notification.
+    pub(super) fn acknowledge_editor_bars(
+        &mut self,
+        owner: ExtensionKey,
+        authority: handlers::EditorAuthority,
+        cx: &App,
+    ) -> Vec<handlers::EditedBar> {
+        let handlers::EditorAuthority::Handle(id) = authority else {
+            return Vec::new();
+        };
+        let Some(handle) = self
+            .editor_handles
+            .get_mut(&id)
+            .filter(|handle| handle.owner == owner)
+        else {
+            return Vec::new();
+        };
+        let Some(watch) = handle.bars.as_mut() else {
+            return Vec::new();
+        };
+        watch.pending = false;
+        let edited = std::mem::take(&mut watch.edited);
+        let Some(editor) = handle.tab.editor(cx) else {
+            return Vec::new();
+        };
+        let editor = editor.read(cx);
+        edited
+            .into_iter()
+            .filter_map(|bar| {
+                let fields = editor.bar_field_texts(owner, &bar, cx)?;
+                Some(handlers::EditedBar {
+                    id: bar,
+                    fields: fields.into_iter().collect(),
+                })
+            })
+            .collect()
     }
 
     pub(super) fn release_editor(&mut self, owner: ExtensionKey, id: u64, cx: &mut App) {
@@ -1664,6 +1768,20 @@ impl ProductExtensionHost {
         cx: &mut App,
     ) {
         editor.update(cx, |editor, _| editor.set_key_context(owner, name, active));
+        self.track_owned_editor(owner, &editor);
+    }
+
+    /// Open or update the calling lifecycle's bar on an editor, remembering
+    /// the editor so teardown closes it.
+    pub(super) fn open_editor_bar(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::Editor>,
+        id: &str,
+        spec: knot_model::editor::bars::BarSpec,
+        cx: &mut App,
+    ) {
+        editor.update(cx, |editor, cx| editor.open_bar(owner, id, spec, cx));
         self.track_owned_editor(owner, &editor);
     }
 

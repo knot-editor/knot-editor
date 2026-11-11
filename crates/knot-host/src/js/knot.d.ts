@@ -465,6 +465,10 @@ declare module "knot" {
     readonly "dropTarget.background"?: string;
     /** Text editor background. */
     readonly "editor.background"?: string;
+    /** Bars extensions open above an editor's text, such as Find. */
+    readonly "editor.bar.background"?: string;
+    /** The line below each editor bar. */
+    readonly "editor.bar.border"?: string;
     /** Background of the bracket at the cursor and its partner. */
     readonly "editor.bracketMatch"?: string;
     /** Text cursor. */
@@ -491,6 +495,12 @@ declare module "knot" {
     readonly "icon"?: string;
     /** Informational markers. */
     readonly "info"?: string;
+    /** Text fields in editor bars. */
+    readonly "input.background"?: string;
+    /** Border of a text field. */
+    readonly "input.border"?: string;
+    /** Border of the text field with focus. */
+    readonly "input.focused.border"?: string;
     /** Group headers in trees. */
     readonly "list.group.background"?: string;
     /** A list or tree row under the pointer. */
@@ -1076,6 +1086,7 @@ declare module "knot" {
     | "UnknownCapture" | "DuplicateColor" | "ThemeRegistrationNotFound"
     | "DuplicateIcon" | "IconRegistrationNotFound"
     | "StatusItemRegistrationNotFound"
+    | "BarNotFound"
     | "KeymapPresetRegistrationNotFound";
   /**
    * Native operation failure. Narrow a caught Error by name === "KnotHostError"
@@ -1339,6 +1350,21 @@ declare module "knot" {
      */
     readonly reveal?: "nearest" | "center" | "always-center" | "top" | "bottom";
   }
+  /** A single-line text field of an editor bar. */
+  export interface EditorBarField {
+    /** Names the field within its bar; unique and non-empty. */
+    readonly id: string;
+    /** Shown while the field is empty. */
+    readonly placeholder?: string;
+  }
+  /** What an editor bar shows: its fields, then a line of text. */
+  export interface EditorBar {
+    readonly fields?: readonly EditorBarField[];
+    readonly message?: string | null;
+  }
+  /** The user edited a field of the bar `bar`; `fields` holds every field's
+   * text by ID. */
+  export type EditorBarEdit = Readonly<{ bar: string; fields: Readonly<Record<string, string>> }>;
   /**
    * The document editor a command captured. It is usable within that
    * command's invocation tree, as CommandTarget is; every call rejects with
@@ -1457,6 +1483,34 @@ declare module "knot" {
      * unknown style.
      */
     setCursorStyle(style: CursorStyle | null): Promise<void>;
+    /**
+     * Open a bar above this editor's text, or update the caller's bar `id` in
+     * place. Bars stack in the order they were opened. An update keeps the
+     * text of fields whose IDs it keeps; new fields start empty. The bar
+     * belongs to the caller's lifecycle, as key contexts do: other lifecycles'
+     * bars of the same ID are independent, and teardown closes it. It is
+     * presentation state, never recorded, and lasts until closed or the view
+     * closes. The editor stays editable while bars are open.
+     * @throws HostError with InvalidTarget or Cancelled; TypeError for an
+     * empty ID or a malformed bar; RangeError for empty or repeated field IDs.
+     */
+    openBar(id: string, bar: EditorBar): Promise<void>;
+    /** Close the caller's bar `id`; closing a bar that is not open does
+     * nothing. A field of it with focus returns focus to the text.
+     * @throws HostError with InvalidTarget or Cancelled. */
+    closeBar(id: string): Promise<void>;
+    /**
+     * Give a field of the caller's bar `id` the editor's focus in place of its
+     * text, first replacing the field's text with `text`, all selected, when
+     * given; line breaks are dropped. Clicking the text or a field moves focus
+     * too. Replacing the text this way is not an edit `onDidEditBar` reports.
+     * @throws HostError with BarNotFound when the caller has no such bar or
+     * field, InvalidTarget, or Cancelled.
+     */
+    focusBarField(id: string, field: string, options?: { readonly text?: string }): Promise<void>;
+    /** The text of each field of the caller's bar `id`, by field ID.
+     * @throws HostError with BarNotFound, InvalidTarget, or Cancelled. */
+    barFields(id: string): Promise<Readonly<Record<string, string>>>;
     /**
      * Make everything committed to this editor's buffer until the returned
      * group is disposed one undo step: this caller's edit batches, native
@@ -2121,6 +2175,15 @@ declare module "knot" {
      * reported. @throws HostError with InvalidTarget or Cancelled.
      */
     onDidChangeSelection(listener: () => void | Promise<void>): Promise<Disposable>;
+    /**
+     * Runs after the user edits a field of one of the caller's bars on this
+     * editor, by typing, deleting, or pasting, with the bar's field texts at
+     * the time the listener turn starts. Notifications coalesce as
+     * `onDidChangeSelection`'s do: edits to one bar while a notification is
+     * queued join it, and a bar is reported once per turn.
+     * @throws HostError with InvalidTarget or Cancelled.
+     */
+    onDidEditBar(listener: (edit: EditorBarEdit) => void | Promise<void>): Promise<Disposable>;
   }
   /** Contributed view registration, captured selection, and clipboard access. */
   export const workbench: Readonly<{

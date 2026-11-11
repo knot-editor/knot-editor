@@ -18,6 +18,7 @@ impl EditorView {
         self.drag_anchor = None;
         self.model
             .update(cx, |model, _| model.break_history_group());
+        self.editor.update(cx, |editor, cx| editor.focus_text(cx));
         let editor = self.editor.read(cx);
         if let Some(&(_, line)) = self
             .fold_placeholders
