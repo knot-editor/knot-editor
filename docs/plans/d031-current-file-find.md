@@ -47,8 +47,10 @@ While a bar field has Knot-side focus, the router resolves keys against a
 native view kind `bar` whose live key context is the bar's ID. Editor-kind
 bindings, such as the Emacs and movement keys of the Knot preset, therefore do
 not reach the field. Keys the keymap leaves go to the field's `TextInput`,
-which handles its own editing, as transient fields do. Global bindings still
-apply. The command context still captures the editor tab the bar belongs to,
+which handles its own editing, as transient fields do. Tab and ⇧Tab are
+native form keys, like Backspace, with no commands or bindings: they move
+focus to the next or previous field across the editor's bars, top to bottom,
+wrapping, and never indent or insert a tab. Global bindings still apply. The command context still captures the editor tab the bar belongs to,
 so `editor` and `buffer` are the bar's editor. `@knot/find` binds Enter,
 ⇧Enter, and Esc in view `bar`, context `find`. The Knot preset binds ⌘F, ⌘G, and
 ⌘⇧G (with `secondary-` equivalents) for both the `editor` and `bar` view kinds,
@@ -145,10 +147,13 @@ commands.
   focus. Editor-kind bindings stop applying there, global ones still do, and
   unbound keys reach the field.
 - Commands invoked from a bar capture the bar's editor tab.
-- Escape and Tab without bindings leave the field's own handling.
+- Tab and ⇧Tab move focus to the next or previous field across the
+  editor's bars, wrapping; with one field they do nothing. Native handling,
+  not commands. Escape without a binding is left to the field, which
+  ignores it.
 - Router unit tests and real-editor tests: a context-bound Enter runs a
-  command, editor movement bindings do not fire in the field, and a global
-  binding does.
+  command, editor movement bindings do not fire in the field, a global
+  binding does, and Tab and ⇧Tab cycle fields across two bars.
 
 **Implementation context:** `crates/knot-model/src/commands/key_router.rs`
 reports the focused kind and contexts. View-kind declaration in
