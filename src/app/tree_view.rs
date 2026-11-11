@@ -1558,11 +1558,13 @@ impl Render for TreeView {
                 .collect()
         })
         .flex_1()
-        .track_scroll(&self.scroll)
-        .track_focus(&self.focus)
-        .key_context(key_context);
+        .track_scroll(&self.scroll);
 
+        // The tree holds focus while its context menu or edit field does, so
+        // the session keeps the tree as the target of what they run.
         div()
+            .track_focus(&self.focus)
+            .key_context(key_context)
             .size_full()
             .flex()
             .flex_col()

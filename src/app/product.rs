@@ -920,12 +920,12 @@ impl ProductShell {
                 continue;
             }
             // A view focused before its subscription exists sends no event.
-            if handle.is_focused(window) {
+            if handle.contains_focused(window, cx) {
                 self.focus_view(&handle, cx);
             }
             self.application_focus.push((
                 handle.clone(),
-                cx.on_focus(&handle, window, {
+                cx.on_focus_in(&handle, window, {
                     let handle = handle.clone();
                     move |this, _, cx| {
                         this.focus_view(&handle, cx);
@@ -1244,7 +1244,12 @@ impl ProductShell {
             else {
                 return;
             };
-            let _ = window.update(cx, |_, window, cx| window.focus(&handle, cx));
+            let _ = window.update(cx, |_, window, cx| {
+                // Focus inside the view, such as in its menu, stays there.
+                if !handle.contains_focused(window, cx) {
+                    window.focus(&handle, cx);
+                }
+            });
         });
     }
 

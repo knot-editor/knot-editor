@@ -52,6 +52,7 @@ struct Fixture {
     shell: Entity<ProductShell>,
     window: gpui::AnyWindowHandle,
     tree: Entity<TreeView>,
+    editor: gpui::FocusHandle,
 }
 
 impl Fixture {
@@ -65,17 +66,35 @@ impl Fixture {
         load_source(&host, cx);
         let tree = wait_for_contributed_view(&shell, "example.actions", cx);
         wait_for_api_condition(cx, |cx| tree.read(cx).root_labels().len() == 2);
-        cx.update_window(window, |_, window, cx| {
-            let handle = tree.focus_handle(cx);
-            handle.focus(window, cx);
-            focus_view(&handle, window, cx);
-        })
-        .unwrap();
-        Self {
+        let editor = cx.read(|cx| {
+            shell
+                .read(cx)
+                .workbench
+                .read(cx)
+                .focused_editor()
+                .unwrap()
+                .focus_handle(cx)
+        });
+        let fixture = Self {
             shell,
             window,
             tree,
-        }
+            editor,
+        };
+        fixture.focus(
+            &fixture.tree.read_with(cx, |tree, cx| tree.focus_handle(cx)),
+            cx,
+        );
+        fixture
+    }
+
+    fn focus(&self, handle: &gpui::FocusHandle, cx: &mut TestAppContext) {
+        cx.update_window(self.window, |_, window, cx| {
+            handle.focus(window, cx);
+            focus_view(handle, window, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
     }
 
     fn row(&self, index: usize, cx: &mut TestAppContext) -> gpui::Point<gpui::Pixels> {
@@ -158,6 +177,21 @@ fn right_click_opens_a_row_menu_whose_actions_run_and_return_focus(cx: &mut Test
     );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Unavailable);
     assert!(!fixture.menu_open(cx));
+}
+
+#[gpui::test]
+fn a_menu_action_runs_when_another_view_had_focus(cx: &mut TestAppContext) {
+    let fixture = Fixture::start(cx);
+    // Focus events reach the session only in an active window.
+    cx.update_window(fixture.window, |_, window, _| window.activate_window())
+        .unwrap();
+    let editor = fixture.editor.clone();
+    fixture.focus(&editor, cx);
+    fixture.right_click(0, cx);
+    assert!(fixture.menu_open(cx));
+    fixture.press("down down enter", cx);
+    fixture.wait_for_clipboard("copied two", cx);
+    assert!(fixture.tree_focused(cx));
 }
 
 #[gpui::test]
