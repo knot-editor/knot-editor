@@ -13,6 +13,8 @@ use gpui_component::{
 };
 
 use super::keys::Keystroke;
+use super::picker::highlighted;
+use knot_model::matching::{MatchStyle, Matcher, Query};
 
 use knot_protocol::{
     Command, CommandArgumentValue, ExtensionId, ExtensionLifecycleId, TreeAction,
@@ -137,6 +139,33 @@ struct ActionFocus {
     index: usize,
 }
 
+/// Typeahead over the loaded rows: the typed query, the rows it matches in
+/// display order with the label ranges to highlight, and the current match.
+struct SpeedSearch {
+    query: String,
+    matches: Vec<String>,
+    ranges: HashMap<String, Vec<std::ops::Range<usize>>>,
+    current: usize,
+}
+
+/// The character a key types into a search, if it types one.
+fn typed_character(keystroke: &Keystroke) -> Option<char> {
+    let modifiers = &keystroke.modifiers;
+    if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
+        return None;
+    }
+    let text = match (&keystroke.key_char, keystroke.key.as_str()) {
+        (Some(text), _) => text.clone(),
+        (None, "space") => " ".to_owned(),
+        (None, key) if key.chars().count() == 1 && modifiers.shift => key.to_uppercase(),
+        (None, key) if key.chars().count() == 1 => key.to_owned(),
+        _ => return None,
+    };
+    let mut chars = text.chars();
+    let character = chars.next()?;
+    (chars.next().is_none() && !character.is_control()).then_some(character)
+}
+
 /// A row's ID and its bounds when last painted.
 type RowBounds = Option<(String, Bounds<Pixels>)>;
 
@@ -159,6 +188,7 @@ pub(crate) struct TreeView {
     selected: Option<String>,
     /// The ID path of a reveal waiting for rows to load.
     pending_reveal: Option<Vec<String>>,
+    search: Option<SpeedSearch>,
     action_focus: Option<ActionFocus>,
     context_menu: Option<ContextMenu>,
     /// The selected row and its bounds when last painted.
@@ -187,6 +217,7 @@ impl TreeView {
             expanded: HashSet::new(),
             selected: None,
             pending_reveal: None,
+            search: None,
             action_focus: None,
             context_menu: None,
             selected_bounds: Rc::default(),
@@ -401,8 +432,150 @@ impl TreeView {
         self.expanded.clear();
         self.selected = None;
         self.pending_reveal = None;
+        self.search = None;
         self.action_focus = None;
         cx.notify();
+    }
+
+    /// Match the query against the visible rows and move to the best match,
+    /// or keep the current one when `keep_current` and it still matches.
+    fn refresh_search(&mut self, keep_current: bool) {
+        let Some(search) = self.search.take() else {
+            return;
+        };
+        let labels = self
+            .visible_rows()
+            .into_iter()
+            .filter_map(|row| match row {
+                VisibleRow::Item { item, .. } => Some((item.id, item.label)),
+                VisibleRow::Status { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        let styles = [MatchStyle::Substring, MatchStyle::Flex];
+        // Speed search ignores case, so the query is never smart-cased.
+        let query = Query::new(&search.query.to_lowercase(), &styles);
+        let ranked = Matcher::new().rank(
+            &query,
+            &labels
+                .iter()
+                .map(|(_, label)| label.as_str())
+                .collect::<Vec<_>>(),
+        );
+        let best = ranked.first().map(|(index, _)| labels[*index].0.clone());
+        let mut found = ranked.iter().map(|(index, _)| *index).collect::<Vec<_>>();
+        found.sort_unstable();
+        let matches = found
+            .iter()
+            .map(|index| labels[*index].0.clone())
+            .collect::<Vec<_>>();
+        let ranges = ranked
+            .into_iter()
+            .map(|(index, found)| (labels[index].0.clone(), found.ranges))
+            .collect();
+        let previous = keep_current
+            .then(|| search.matches.get(search.current))
+            .flatten()
+            .filter(|id| matches.contains(id))
+            .cloned();
+        let current = previous
+            .or(best)
+            .and_then(|id| matches.iter().position(|candidate| *candidate == id))
+            .unwrap_or(0);
+        self.search = Some(SpeedSearch {
+            query: search.query,
+            matches,
+            ranges,
+            current,
+        });
+    }
+
+    /// Select the current search match and scroll it into view.
+    fn select_search_match(&mut self) {
+        let Some(id) = self
+            .search
+            .as_ref()
+            .and_then(|search| search.matches.get(search.current).cloned())
+        else {
+            return;
+        };
+        let position = self
+            .visible_rows()
+            .iter()
+            .position(|row| matches!(row, VisibleRow::Item { item, .. } if item.id == id));
+        self.selected = Some(id);
+        if let Some(flat) = position {
+            self.scroll.scroll_to_item(flat, ScrollStrategy::Center);
+        }
+    }
+
+    /// Handle a key while the search is active or starting; false when the
+    /// key belongs to ordinary navigation.
+    fn search_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let key = keystroke.key.to_lowercase();
+        if self.search.is_some() {
+            match key.as_str() {
+                "escape" => {
+                    self.search = None;
+                }
+                "backspace" => {
+                    let search = self.search.as_mut().expect("search is active");
+                    search.query.pop();
+                    if search.query.is_empty() {
+                        self.search = None;
+                    } else {
+                        self.refresh_search(false);
+                        self.select_search_match();
+                    }
+                }
+                "up" | "down" => {
+                    let search = self.search.as_mut().expect("search is active");
+                    let count = search.matches.len();
+                    if count > 0 {
+                        search.current = if key == "down" {
+                            (search.current + 1) % count
+                        } else {
+                            (search.current + count - 1) % count
+                        };
+                        self.select_search_match();
+                    }
+                }
+                // Enter and the other navigation keys act on the selected row
+                // and end the search.
+                "enter" | "left" | "right" | "home" | "end" | "pageup" | "pagedown" | "tab" => {
+                    self.search = None;
+                    return false;
+                }
+                _ => {
+                    let Some(character) = typed_character(keystroke) else {
+                        return false;
+                    };
+                    self.search
+                        .as_mut()
+                        .expect("search is active")
+                        .query
+                        .push(character);
+                    self.refresh_search(false);
+                    self.select_search_match();
+                }
+            }
+            cx.notify();
+            return true;
+        }
+        match typed_character(keystroke) {
+            Some(character) if !character.is_whitespace() => {
+                self.search = Some(SpeedSearch {
+                    query: character.to_string(),
+                    matches: Vec::new(),
+                    ranges: HashMap::new(),
+                    current: 0,
+                });
+                self.refresh_search(false);
+                self.select_search_match();
+                cx.notify();
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Expand each ancestor named by `path`, wait for its children, then
@@ -514,6 +687,7 @@ impl TreeView {
             let _ = self.invalidate(provider.registration, Some(id), cx);
         }
         self.advance_reveal(cx);
+        self.refresh_search(true);
         cx.notify();
         true
     }
@@ -615,6 +789,7 @@ impl TreeView {
                 }
             }
         }
+        self.refresh_search(true);
         cx.notify();
     }
 
@@ -848,6 +1023,9 @@ impl TreeView {
             self.action_focus = None;
         }
 
+        if self.search_key(keystroke, cx) {
+            return true;
+        }
         let rows = self.visible_rows();
         // Keep each navigable item's flat list index so scrolling follows the
         // rendered rows even when transient loading/error status rows appear.
@@ -877,6 +1055,7 @@ impl TreeView {
                 };
                 let (_, id, parent) = item_rows[index];
                 if self.expanded.remove(id) {
+                    self.refresh_search(true);
                     cx.notify();
                 } else if let Some(parent) = parent {
                     self.selected = Some(parent.to_owned());
@@ -961,6 +1140,18 @@ impl Render for TreeView {
         let action_focus = self.action_focus.clone();
         let frame_actions = self.frame_actions.clone();
         let selected_bounds = self.selected_bounds.clone();
+        let search_ranges = self
+            .search
+            .as_ref()
+            .map(|search| search.ranges.clone())
+            .unwrap_or_default();
+        let search_bar = self.search.as_ref().map(|search| {
+            (
+                search.query.clone(),
+                search.matches.len(),
+                search.current + 1,
+            )
+        });
         let context_menu = self
             .context_menu
             .as_ref()
@@ -1077,7 +1268,14 @@ impl Render for TreeView {
                                     .min_w_0()
                                     .flex()
                                     .flex_col()
-                                    .child(div().truncate().child(item.label.clone()))
+                                    .child(match search_ranges.get(&item.id) {
+                                        Some(ranges) => div().truncate().child(highlighted(
+                                            item.label.clone(),
+                                            ranges,
+                                            theme.paint_color(color::LIST_MATCH_FOREGROUND),
+                                        )),
+                                        None => div().truncate().child(item.label.clone()),
+                                    })
                                     .when_some(item.detail.clone(), |column, detail| {
                                         column.child(
                                             div()
@@ -1219,6 +1417,32 @@ impl Render for TreeView {
             .flex_col()
             .when_some(toolbar, |container, toolbar| container.child(toolbar))
             .child(list)
+            .when_some(search_bar, |container, (query, matches, current)| {
+                let theme = theme(cx);
+                container.child(
+                    div()
+                        .id("extension-tree-speed-search")
+                        .w_full()
+                        .px_2()
+                        .py_0p5()
+                        .flex()
+                        .flex_row()
+                        .gap_2()
+                        .border_t_1()
+                        .border_color(border)
+                        .text_sm()
+                        .child(div().flex_1().truncate().child(query))
+                        .child(
+                            div()
+                                .text_color(theme.paint_color(color::TEXT_MUTED))
+                                .child(if matches == 0 {
+                                    "no matches".to_owned()
+                                } else {
+                                    format!("{current}/{matches}")
+                                }),
+                        ),
+                )
+            })
             .when_some(context_menu, |container, (menu, position)| {
                 container.child(
                     deferred(

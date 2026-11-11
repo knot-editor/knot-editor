@@ -749,3 +749,106 @@ fn reveal_of_a_loaded_row_selects_it_at_once(cx: &mut TestAppContext) {
     fixture.reveal(cx, &["z"]);
     assert_eq!(fixture.selected(cx).as_deref(), Some("z"));
 }
+
+fn press(tree: &gpui::Entity<TreeView>, key: &str, cx: &mut TestAppContext) -> bool {
+    let keystroke = crate::app::keys::Keystroke::parse(key).unwrap();
+    tree.update(cx, |tree, cx| tree.key_down(&keystroke, cx))
+}
+
+#[gpui::test]
+fn speed_search_jumps_to_the_best_match_and_moves_between_matches(cx: &mut TestAppContext) {
+    let fixture = RevealFixture::new(cx);
+    fixture.answer(cx, None, &["f-alpha", "f-banana", "f-bandana", "f-cherry"]);
+    let tree = &fixture.tree;
+    let search = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            tree.read(cx)
+                .search
+                .as_ref()
+                .map(|search| (search.query.clone(), search.matches.clone(), search.current))
+        })
+    };
+
+    assert!(press(tree, "b", cx));
+    assert_eq!(fixture.selected(cx).as_deref(), Some("f-banana"));
+    assert!(press(tree, "a", cx));
+    assert!(press(tree, "n", cx));
+    assert!(press(tree, "d", cx));
+    assert_eq!(fixture.selected(cx).as_deref(), Some("f-bandana"));
+    let (query, matches, _) = search(cx).unwrap();
+    assert_eq!(query, "band");
+    assert_eq!(matches, ["f-bandana"]);
+    // The matched text is what the row highlights.
+    cx.read(|cx| {
+        let ranges = &tree.read(cx).search.as_ref().unwrap().ranges["f-bandana"];
+        assert_eq!(ranges.len(), 1);
+        assert_eq!((ranges[0].start, ranges[0].end), (2, 6));
+    });
+
+    assert!(press(tree, "backspace", cx));
+    assert!(press(tree, "backspace", cx));
+    let (query, matches, _) = search(cx).unwrap();
+    assert_eq!(query, "ba");
+    assert_eq!(matches, ["f-banana", "f-bandana"]);
+    assert!(press(tree, "down", cx));
+    assert_eq!(fixture.selected(cx).as_deref(), Some("f-bandana"));
+    assert!(press(tree, "down", cx));
+    assert_eq!(fixture.selected(cx).as_deref(), Some("f-banana"));
+    assert!(press(tree, "up", cx));
+    assert_eq!(fixture.selected(cx).as_deref(), Some("f-bandana"));
+    // Rows are highlighted, not filtered out.
+    assert_eq!(fixture.labels(cx).len(), 4);
+}
+
+#[gpui::test]
+fn speed_search_ends_on_escape_enter_and_an_empty_query(cx: &mut TestAppContext) {
+    let fixture = RevealFixture::new(cx);
+    fixture.answer(cx, None, &["f-alpha", "f-beta"]);
+    let tree = &fixture.tree;
+    let active = |cx: &mut TestAppContext| cx.read(|cx| tree.read(cx).search.is_some());
+
+    assert!(press(tree, "z", cx));
+    assert!(active(cx), "a query without matches stays open");
+    assert_eq!(fixture.selected(cx), None);
+    assert!(press(tree, "escape", cx));
+    assert!(!active(cx));
+
+    assert!(press(tree, "B", cx));
+    assert_eq!(fixture.selected(cx).as_deref(), Some("f-beta"));
+    assert!(press(tree, "backspace", cx));
+    assert!(!active(cx));
+
+    // Enter ends the search and activates the selected row.
+    let (events, _subscriber) = subscribe_commands(cx, tree);
+    assert!(press(tree, "a", cx));
+    assert!(press(tree, "enter", cx));
+    assert!(!active(cx));
+    assert_eq!(events.borrow().len(), 1);
+
+    // Modified keys and a lone space do not start a search.
+    assert!(!press(tree, "ctrl-a", cx));
+    assert!(!press(tree, "space", cx));
+    assert!(!active(cx));
+}
+
+#[gpui::test]
+fn speed_search_follows_rows_that_load_later(cx: &mut TestAppContext) {
+    let fixture = RevealFixture::new(cx);
+    fixture.answer(cx, None, &["a", "f-zebra"]);
+    assert!(press(&fixture.tree, "z", cx));
+    fixture.tree.update(cx, |tree, cx| {
+        tree.activate("a", TreeGesture::Click, cx);
+    });
+    fixture.answer(cx, Some("a"), &["f-zoo"]);
+    let matches = cx.read(|cx| {
+        fixture
+            .tree
+            .read(cx)
+            .search
+            .as_ref()
+            .unwrap()
+            .matches
+            .clone()
+    });
+    assert_eq!(matches, ["f-zoo", "f-zebra"]);
+}

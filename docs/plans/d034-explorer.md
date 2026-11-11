@@ -1,6 +1,6 @@
 # D034 — Explorer as a bundled extension
 
-Status: 🚧 in progress; checkpoint 1 done. Item of the
+Status: 🚧 in progress; checkpoint 2 awaiting review. Item of the
 [daily-driver plan](daily-driver.md); absorbs D053. Depends on D008, D010,
 D072, D081, and D122, all done.
 
@@ -120,16 +120,22 @@ explorer's behavior is not a constraint.
 rows apply the `.open` variant when expanded; picker items and input
 completions carry an icon, used by Go to File and Vim's `:e`.
 
-### 2. Tree API
+### 2. Tree API 🔎 awaiting review
 
-- Activation gestures, `TreeItem.arguments`, `selectedTreeItem()` (removing
+- ✅ Activation gestures, `TreeItem.arguments`, `selectedTreeItem()` (removing
   `selectedText()`'s tree path and moving `@knot/projects` to it), `reveal`,
   and speed search.
-- Validation: `TreeView` tests for each gesture, reveal through unloaded
+- ✅ Validation: `TreeView` tests for each gesture, reveal through unloaded
   ancestors and stale generations, and speed search matching, navigation, and
   dismissal; product tests for the activation event's arguments and
   `selectedTreeItem()`; the projects package tests.
 - Review gate: a `Try:` tree exercising gestures, reveal, and speed search.
+
+Scope decisions: a double click delivers `click` then `doubleClick`; an
+expandable row toggles on click and Enter and runs no command; `rightClick` is
+delivered only for rows without actions, because actions move focus to the
+context menu. The speed-search field is drawn by the tree itself, not
+`TextInput`, since it takes only typed characters. Its matches ignore case.
 
 **Implementation context:** `src/app/tree_view.rs` (`TreeViewEvent::InvokeCommand`,
 click handling, `key_down`, `expanded`, `apply_response`) and its tests in
