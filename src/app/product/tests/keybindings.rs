@@ -298,7 +298,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
                     } },
                 });
                 await knot.commands.registerForView('example.outline', 'copy', async () => {
-                    const text = await knot.workbench.selectedText();
+                    const text = await knot.workbench.selectedTreeItem();
                     await knot.workbench.writeClipboardText(text);
                 });
             "#,
@@ -391,7 +391,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
             cx.read_from_clipboard()
                 .and_then(|item| item.text())
                 .as_deref()
-                == Some("Tree item")
+                == Some("first")
         }) {
             break;
         }

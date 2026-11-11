@@ -985,6 +985,7 @@ pub(super) fn tree_item_from_v8<'s>(
         collapsible_state,
         icon,
         command: optional_text_property(scope, object, "command")?,
+        arguments: optional_argument_property(scope, object, "arguments")?,
         kind,
         status_text: optional_text_property(scope, object, "statusText")?,
         badge: optional_text_property(scope, object, "badge")?,
@@ -1025,6 +1026,19 @@ fn icon_name_property<'s>(
     match optional_text_property(scope, reference, "folder")? {
         Some(folder) => Ok(Some(knot_protocol::IconRef::Folder { folder })),
         None => Err(BoundaryError::Type("an icon needs a name, file, or folder")),
+    }
+}
+
+fn optional_argument_property<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    object: v8::Local<'s, v8::Object>,
+    name: &str,
+) -> Result<CommandArgumentValue, BoundaryError> {
+    let value = property(scope, object, name, "invalid tree item arguments")?;
+    if value.is_null_or_undefined() {
+        Ok(CommandArgumentValue::Null)
+    } else {
+        command_argument_from_v8(scope, value)
     }
 }
 

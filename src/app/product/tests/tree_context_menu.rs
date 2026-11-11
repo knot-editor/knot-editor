@@ -120,7 +120,7 @@ impl Fixture {
     }
 
     fn selected(&self, cx: &TestAppContext) -> Option<String> {
-        cx.read(|cx| self.tree.read(cx).selected_text())
+        cx.read(|cx| self.tree.read(cx).selected_label())
     }
 
     fn wait_for_clipboard(&self, text: &str, cx: &mut TestAppContext) {

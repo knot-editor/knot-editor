@@ -577,7 +577,7 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
     .unwrap();
     let copy = dispatch_tree_copy(&shell, window, cx);
     assert_eq!(wait_for_command(copy, cx), CommandOutcome::Completed);
-    cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "Guide"));
+    cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "root"));
     wait_for_api_condition(cx, |cx| {
         super::super::super::extensions::host::completion_provider_count(cx) == 1
     });

@@ -2445,6 +2445,16 @@ pub(crate) async fn selected_view_text(
     context.foreground(|host, cx| host.contextual_selected_text(&request, arguments.target, cx))?
 }
 
+#[host_operation("selectedTreeItem")]
+pub(crate) async fn selected_tree_item(
+    context: HostContext,
+    arguments: ContextArguments,
+) -> Result<Option<String>, ContextError> {
+    let request = context.request;
+    context
+        .foreground(|host, cx| host.contextual_selected_tree_item(&request, arguments.target, cx))?
+}
+
 /// What an editor operation acts through: a command's captured target, or a
 /// long-lived handle bound to one tab presentation. Handles travel as
 /// `EDITOR_HANDLE_AUTHORITY + id`, above every invocation ID and still exact

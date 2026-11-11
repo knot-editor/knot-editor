@@ -62,18 +62,15 @@ export async function registerCommands(state: ProjectsState) {
     if (project !== null) await switchTo(state, project, target.windowTarget);
   }, { title: "Switch Project…", description: "Replace this window's session with another project." });
 
-  // Row activation routes through the focused tree instance and reads the
-  // selected row's label, which is the project's display name.
-  await commands.registerForView(VIEW_ID, "projects.select", async ({ target }) => {
+  // Row activation routes through the focused tree instance. A click or Enter
+  // switches to the selected row's project; other gestures do nothing.
+  await commands.registerForView(VIEW_ID, "projects.select", async ({ target, arguments: args }) => {
+    const gesture = object(args)?.gesture;
+    if (gesture !== "click" && gesture !== "enter") return;
     await reload(state);
-    const label = await workbench.selectedText();
-    const matches = state.registry.projects.filter((project) => displayName(project) === label);
-    const [project] = matches;
-    if (matches.length > 1) {
-      await report(`several projects are called ${label}; use Switch Project…`);
-    } else if (project !== undefined) {
-      await switchTo(state, project, target.windowTarget);
-    }
+    const id = await workbench.selectedTreeItem();
+    const project = id === null ? null : projectById(state.registry, id);
+    if (project !== null) await switchTo(state, project, target.windowTarget);
   });
 
   // A window opened with the project's roots binds to it like any other window

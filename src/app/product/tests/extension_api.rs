@@ -664,8 +664,8 @@ getChildren(parentId) {
 });
 const viewCopy = await commands.registerForView("example.outline", "copy", async (context) => {
   if (context.buffer !== null || await knot.editor.activeBuffer(context.target) !== null) throw new Error("outline has a text buffer");
-  const text = await workbench.selectedText(context.target);
-  if (text === "Fail") throw new Error("copy failed");
+  const text = await workbench.selectedTreeItem(context.target);
+  if (text === "failure") throw new Error("copy failed");
   await workbench.writeClipboardText(text);
 });
 await commands.register("test.view-first", async () => {
@@ -676,7 +676,7 @@ await commands.registerForView("example.outline", "test.view-first", async () =>
 });
 await commands.register("test.view-null", () => { throw new Error("global null handler"); });
 await commands.registerForView("example.outline", "test.view-null", async (context) => {
-  if (context.target.view === null || await workbench.selectedText(context.target) !== null) throw new Error("missing selection is not null");
+  if (context.target.view === null || await workbench.selectedTreeItem(context.target) !== null) throw new Error("missing selection is not null");
 });
 await commands.register("test.nested-view-copy", async () => {
   const outcome = await commands.invoke("copy");
@@ -819,7 +819,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         cx.run_until_parked();
         if cx.read(|cx| {
             cx.read_from_clipboard()
-                .is_some_and(|item| item.text().as_deref() == Some("Selected tree item"))
+                .is_some_and(|item| item.text().as_deref() == Some("first"))
         }) {
             break;
         }
@@ -853,12 +853,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         focus_view(&tree.focus_handle(cx), window, cx)
     })
     .unwrap();
-    cx.read(|cx| {
-        assert_eq!(
-            cx.read_from_clipboard().unwrap().text().unwrap(),
-            "Selected tree item"
-        )
-    });
+    cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "first"));
 
     let (second_shell, second_window) = product_window(document, model.clone(), cx);
     let second_tree = wait_for_contributed_view(&second_shell, "example.outline", cx);
@@ -1156,7 +1151,7 @@ getChildren(parentId) {
   } },
 });
 await commands.registerForView("example.outline", "copy", async () => {
-  const text = await workbench.selectedText();
+  const text = await workbench.selectedTreeItem();
   await workbench.writeClipboardText(text);
 });
 "#;
@@ -1224,12 +1219,7 @@ await commands.registerForView("example.outline", "copy", async () => {
         wait_for_command(execution, cx),
         CommandOutcome::InvalidTarget
     );
-    cx.read(|cx| {
-        assert_eq!(
-            cx.read_from_clipboard().unwrap().text().unwrap(),
-            "Held selection"
-        )
-    });
+    cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "held"));
     let closed_view = cx.read(|cx| tree.read(cx).instance_id());
     drop(shell);
     cx.run_until_parked();
@@ -1282,10 +1272,7 @@ await commands.registerForView("example.outline", "copy", async () => {
     host.update(cx, |host, cx| host.release_view_requests(cx));
     assert_eq!(wait_for_command(interrupted, cx), CommandOutcome::Cancelled);
     cx.read(|cx| {
-        assert_eq!(
-            cx.read_from_clipboard().unwrap().text().unwrap(),
-            "Held selection"
-        );
+        assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "held");
         assert!(!second_tree.read(cx).lifecycle_state().0);
     });
 }

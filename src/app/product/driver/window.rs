@@ -466,7 +466,7 @@ impl TestTree {
 
     /// The selected row's label.
     pub fn selected(&self, cx: &mut TestAppContext) -> Option<String> {
-        cx.read(|cx| self.tree.read(cx).selected_text())
+        cx.read(|cx| self.tree.read(cx).selected_label())
     }
 
     /// Whether a tab of the window shows the tree.

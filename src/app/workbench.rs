@@ -71,8 +71,16 @@ impl ExtensionView {
 
     pub(crate) fn selected_text(&self, cx: &App) -> Option<String> {
         match self {
-            Self::Tree(view) => view.read(cx).selected_text(),
+            Self::Tree(_) => None,
             Self::Text(view) => view.read(cx).selected_text(cx),
+        }
+    }
+
+    /// The ID of the selected row of a tree.
+    pub(crate) fn selected_tree_item(&self, cx: &App) -> Option<String> {
+        match self {
+            Self::Tree(view) => view.read(cx).selected_item_id(),
+            Self::Text(_) => None,
         }
     }
 

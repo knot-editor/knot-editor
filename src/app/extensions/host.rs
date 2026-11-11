@@ -1696,6 +1696,35 @@ impl ProductExtensionHost {
         explicit: Option<CommandInvocationId>,
         cx: &App,
     ) -> Result<Option<String>, handlers::ContextError> {
+        use crate::app::workbench::ExtensionView;
+        let view = self.contextual_extension_view(request, explicit, cx)?;
+        match view {
+            ExtensionView::Text(_) => Ok(view.selected_text(cx)),
+            ExtensionView::Tree(_) => Err(handlers::ContextError::UnsupportedOperation),
+        }
+    }
+
+    fn contextual_selected_tree_item(
+        &self,
+        request: &knot_protocol::RequestContext,
+        explicit: Option<CommandInvocationId>,
+        cx: &App,
+    ) -> Result<Option<String>, handlers::ContextError> {
+        use crate::app::workbench::ExtensionView;
+        let view = self.contextual_extension_view(request, explicit, cx)?;
+        match view {
+            ExtensionView::Tree(_) => Ok(view.selected_tree_item(cx)),
+            ExtensionView::Text(_) => Err(handlers::ContextError::UnsupportedOperation),
+        }
+    }
+
+    /// The contributed view a view-scoped command handler was admitted for.
+    fn contextual_extension_view(
+        &self,
+        request: &knot_protocol::RequestContext,
+        explicit: Option<CommandInvocationId>,
+        cx: &App,
+    ) -> Result<crate::app::workbench::ExtensionView, handlers::ContextError> {
         use handlers::{AccessError, ContextError};
         let target = self.context_target(request, explicit, cx)?;
         let (handler, name) = self
@@ -1720,7 +1749,7 @@ impl ProductExtensionHost {
         if extension.instance_id(cx) != view {
             return Err(AccessError::InvalidTarget.into());
         }
-        Ok(extension.selected_text(cx))
+        Ok(extension)
     }
 
     fn drain_command_events(&mut self, cx: &mut Context<Self>) {

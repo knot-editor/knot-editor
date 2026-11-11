@@ -112,6 +112,7 @@ function emptyState() {
     directories: new Set<string>(),
     fileWatches: [] as { uri: string; recursive: boolean; listener: (uris: readonly string[]) => void | Promise<void> }[],
     selectedText: null as string | null,
+    selectedTreeItem: null as string | null,
     failures: new Map<string, HostErrorCode[]>(),
     replaced: [] as Knot.ReplaceWindowsOptions[],
     languages: [] as Knot.LanguageDefinition[],
@@ -810,6 +811,10 @@ export function clipboard() {
 
 export function setSelectedText(text: string | null) {
   state.selectedText = text;
+}
+
+export function setSelectedTreeItem(id: string | null) {
+  state.selectedTreeItem = id;
 }
 
 export function view(id: string): FakeView {
@@ -1937,6 +1942,7 @@ export const api: KnotApi = {
       };
     },
     selectedText: async () => state.selectedText,
+    selectedTreeItem: async () => state.selectedTreeItem,
     readClipboardText: async () => state.clipboard,
     writeClipboardText: async (text) => {
       state.clipboard = text;

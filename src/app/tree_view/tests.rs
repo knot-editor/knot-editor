@@ -3,7 +3,9 @@ use std::rc::Rc;
 
 use gpui::{AppContext, Subscription, TestAppContext};
 
-use super::{TreeProviderIdentity, TreeView, TreeViewEvent, TreeViewRegistrationError};
+use super::{
+    TreeGesture, TreeProviderIdentity, TreeView, TreeViewEvent, TreeViewRegistrationError,
+};
 use knot_protocol::{
     CommandArgumentValue, ExtensionId, ExtensionLifecycleId, TreeAction, TreeChildrenResponse,
     TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderRegistrationId,
@@ -52,6 +54,7 @@ fn item(id: &str, label: &str, kind: TreeItemKind, actions: Vec<TreeAction>) -> 
         icon: None,
         collapsible_state: TreeCollapsibleState::None,
         command: Some("example.activate".into()),
+        arguments: CommandArgumentValue::Null,
         kind,
         status_text: Some("M".into()),
         badge: Some("warning".to_owned()),
@@ -149,6 +152,7 @@ fn stale_and_disposed_tree_responses_are_ignored(cx: &mut TestAppContext) {
                     icon: None,
                     collapsible_state: TreeCollapsibleState::None,
                     command: None,
+                    arguments: knot_protocol::CommandArgumentValue::Null,
                     kind: knot_protocol::TreeItemKind::Item,
                     status_text: None,
                     badge: None,
@@ -272,17 +276,90 @@ fn groups_fetch_children_and_are_not_activated(cx: &mut TestAppContext) {
         ["Staged", "file.rs", "notes.txt"]
     );
 
-    tree.update(cx, |tree, cx| tree.activate("staged", cx));
+    tree.update(cx, |tree, cx| {
+        tree.activate("staged", TreeGesture::Click, cx)
+    });
     assert!(
         events.borrow().is_empty(),
         "a group header is not activatable"
     );
 
-    tree.update(cx, |tree, cx| tree.activate("notes", cx));
+    tree.update(cx, |tree, cx| {
+        tree.activate("notes", TreeGesture::Click, cx)
+    });
     let events = events.borrow();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].0, "example.activate");
-    assert_eq!(events[0].1, CommandArgumentValue::Null);
+    assert_eq!(
+        events[0].1,
+        gesture_arguments("click", CommandArgumentValue::Null)
+    );
+}
+
+fn gesture_arguments(gesture: &str, arguments: CommandArgumentValue) -> CommandArgumentValue {
+    CommandArgumentValue::Object(
+        [
+            (
+                "gesture".to_owned(),
+                CommandArgumentValue::String(gesture.to_owned()),
+            ),
+            ("arguments".to_owned(), arguments),
+        ]
+        .into(),
+    )
+}
+
+#[gpui::test]
+fn a_row_command_receives_the_gesture_and_the_row_arguments(cx: &mut TestAppContext) {
+    let registration = TreeProviderRegistrationId::new(8);
+    let tree = tree(cx);
+    let (events, _subscriber) = subscribe_commands(cx, &tree);
+    let generation = tree.update(cx, |tree, cx| {
+        tree.register_provider("example.git", owner(registration), Vec::new(), cx)
+            .unwrap();
+        tree.root_generation()
+    });
+    let view = cx.read(|cx| tree.read(cx).instance_id());
+    let mut file = item("file", "file.rs", TreeItemKind::Item, Vec::new());
+    file.arguments = CommandArgumentValue::String("payload".into());
+    let mut folder = item("folder", "folder", TreeItemKind::Item, Vec::new());
+    folder.collapsible_state = TreeCollapsibleState::Collapsed;
+    tree.update(cx, |tree, cx| {
+        assert!(tree.apply_response(
+            response(registration, view, None, generation, vec![file, folder]),
+            cx
+        ));
+    });
+    for (gesture, name) in [
+        (TreeGesture::Click, "click"),
+        (TreeGesture::DoubleClick, "doubleClick"),
+        (TreeGesture::MiddleClick, "middleClick"),
+        (TreeGesture::RightClick, "rightClick"),
+        (TreeGesture::Enter, "enter"),
+    ] {
+        tree.update(cx, |tree, cx| tree.activate("file", gesture, cx));
+        let last = events.borrow().last().cloned().unwrap();
+        assert_eq!(
+            last.1,
+            gesture_arguments(name, CommandArgumentValue::String("payload".into()))
+        );
+    }
+    assert_eq!(events.borrow().len(), 5);
+
+    // An expandable row toggles on click and Enter only.
+    let expanded =
+        |cx: &mut TestAppContext| cx.read(|cx| tree.read(cx).expanded.contains("folder"));
+    for (gesture, toggled) in [
+        (TreeGesture::DoubleClick, false),
+        (TreeGesture::MiddleClick, false),
+        (TreeGesture::RightClick, false),
+        (TreeGesture::Click, true),
+        (TreeGesture::Enter, false),
+    ] {
+        tree.update(cx, |tree, cx| tree.activate("folder", gesture, cx));
+        assert_eq!(expanded(cx), toggled, "{gesture:?}");
+    }
+    assert_eq!(events.borrow().len(), 5, "folders run no command");
 }
 
 #[gpui::test]

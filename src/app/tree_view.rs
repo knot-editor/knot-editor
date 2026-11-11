@@ -49,6 +49,33 @@ fn action_tooltip(
 pub(crate) static NEXT_VIEW_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_TREE_GENERATION: AtomicU64 = AtomicU64::new(1);
 
+/// How a row was activated.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TreeGesture {
+    Click,
+    DoubleClick,
+    MiddleClick,
+    RightClick,
+    Enter,
+}
+
+impl TreeGesture {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Click => "click",
+            Self::DoubleClick => "doubleClick",
+            Self::MiddleClick => "middleClick",
+            Self::RightClick => "rightClick",
+            Self::Enter => "enter",
+        }
+    }
+
+    /// Whether the gesture expands or collapses an expandable row.
+    fn toggles(self) -> bool {
+        matches!(self, Self::Click | Self::Enter)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct TreeProviderIdentity {
     pub extension: ExtensionId,
@@ -169,7 +196,12 @@ impl TreeView {
         self.instance_id
     }
 
-    pub(crate) fn selected_text(&self) -> Option<String> {
+    pub(crate) fn selected_item_id(&self) -> Option<String> {
+        self.selected.clone()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn selected_label(&self) -> Option<String> {
         let selected = self.selected.as_deref()?;
         self.children
             .values()
@@ -200,7 +232,7 @@ impl TreeView {
     ) -> super::commands::dispatch::CommandClaim {
         use super::commands::dispatch::{ApplicationProductCommands, COPY_COMMAND, CommandClaim};
 
-        if command.name.as_ref() == COPY_COMMAND && self.selected_text().is_none() {
+        if command.name.as_ref() == COPY_COMMAND && self.selected.is_none() {
             return CommandClaim::Declined;
         }
         let catalog = cx
@@ -222,7 +254,7 @@ impl TreeView {
 
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn activate_row_for_test(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.activate(id, cx);
+        self.activate(id, TreeGesture::Click, cx);
     }
 
     #[cfg(test)]
@@ -479,7 +511,7 @@ impl TreeView {
             .find(|item| item.id == id)
     }
 
-    fn activate(&mut self, id: &str, cx: &mut Context<Self>) {
+    fn activate(&mut self, id: &str, gesture: TreeGesture, cx: &mut Context<Self>) {
         self.selected = Some(id.to_owned());
         let Some(item) = self.item(id).cloned() else {
             return;
@@ -493,15 +525,26 @@ impl TreeView {
         match item.collapsible_state {
             TreeCollapsibleState::None => {
                 if let (Some(provider), Some(command)) = (self.provider, item.command) {
+                    let arguments = CommandArgumentValue::Object(
+                        [
+                            (
+                                "gesture".to_owned(),
+                                CommandArgumentValue::String(gesture.name().to_owned()),
+                            ),
+                            ("arguments".to_owned(), item.arguments),
+                        ]
+                        .into(),
+                    );
                     cx.emit(TreeViewEvent::InvokeCommand {
                         provider,
                         command,
-                        arguments: CommandArgumentValue::Null,
+                        arguments,
                         window: self.window.clone(),
                         view: self.instance_id,
                     });
                 }
             }
+            _ if !gesture.toggles() => {}
             _ if self.expanded.remove(id) => {}
             _ => {
                 self.expanded.insert(id.to_owned());
@@ -608,6 +651,21 @@ impl TreeView {
             window: self.window.clone(),
             view: self.instance_id,
         });
+    }
+
+    /// Select row `id` and open its context menu. A row with no actions has
+    /// no menu, so the click activates it as `rightClick`; with a menu the
+    /// focus moves to the menu, away from the tree the command needs.
+    fn right_click(
+        &mut self,
+        id: &str,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.open_context_menu(id, position, window, cx) {
+            self.activate(id, TreeGesture::RightClick, cx);
+        }
     }
 
     /// Select row `id` and open a menu of its actions at `position`, which
@@ -776,7 +834,7 @@ impl TreeView {
                     .item(id)
                     .is_some_and(|item| item.collapsible_state != TreeCollapsibleState::None);
                 if collapsible {
-                    self.activate(id, cx);
+                    self.activate(id, TreeGesture::Enter, cx);
                 } else {
                     self.selected = Some(id.to_owned());
                     self.enter_action_focus(cx);
@@ -785,7 +843,7 @@ impl TreeView {
             }
             "enter" => {
                 let index = current.unwrap_or(0);
-                self.activate(item_rows[index].1, cx);
+                self.activate(item_rows[index].1, TreeGesture::Enter, cx);
                 return true;
             }
             _ => return false,
@@ -1035,11 +1093,27 @@ impl Render for TreeView {
                         row.on_click({
                             let entity = entity.clone();
                             let id = id.clone();
+                            move |event, window, cx| {
+                                let gesture = if event.click_count() >= 2 {
+                                    TreeGesture::DoubleClick
+                                } else {
+                                    TreeGesture::Click
+                                };
+                                entity.update(cx, |tree, cx| {
+                                    tree.focus_handle(cx).focus(window, cx);
+                                    tree.activate(&id, gesture, cx);
+                                });
+                            }
+                        })
+                        .on_mouse_down(MouseButton::Middle, {
+                            let entity = entity.clone();
+                            let id = id.clone();
                             move |_, window, cx| {
                                 entity.update(cx, |tree, cx| {
                                     tree.focus_handle(cx).focus(window, cx);
-                                    tree.activate(&id, cx);
+                                    tree.activate(&id, TreeGesture::MiddleClick, cx);
                                 });
+                                cx.stop_propagation();
                             }
                         })
                         .on_mouse_down(MouseButton::Right, {
@@ -1047,9 +1121,7 @@ impl Render for TreeView {
                             move |event, window, cx| {
                                 entity.update(cx, |tree, cx| {
                                     tree.focus_handle(cx).focus(window, cx);
-                                    tree.selected = Some(id.clone());
-                                    tree.open_context_menu(&id, event.position, window, cx);
-                                    cx.notify();
+                                    tree.right_click(&id, event.position, window, cx);
                                 });
                                 cx.stop_propagation();
                             }

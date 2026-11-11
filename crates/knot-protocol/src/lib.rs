@@ -209,6 +209,10 @@ pub enum CommandArgumentValue {
     Object(BTreeMap<String, Self>),
 }
 
+fn no_arguments() -> CommandArgumentValue {
+    CommandArgumentValue::Null
+}
+
 /// A semantic command independent of its invocation source and native adapter.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Command {
@@ -410,6 +414,9 @@ pub struct TreeItem {
     pub collapsible_state: TreeCollapsibleState,
     #[serde(default)]
     pub command: Option<String>,
+    /// Passed to the row's command with the gesture that activated it.
+    #[serde(default = "no_arguments")]
+    pub arguments: CommandArgumentValue,
     #[serde(default)]
     pub kind: TreeItemKind,
     #[serde(default)]

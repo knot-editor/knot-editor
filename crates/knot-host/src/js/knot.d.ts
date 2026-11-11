@@ -1498,6 +1498,13 @@ declare module "knot" {
    * paints a fallback icon.
    */
   export type IconRef = string | { readonly file: string } | { readonly folder: string };
+  /** How a tree row was activated. */
+  export type TreeGesture = "click" | "doubleClick" | "middleClick" | "rightClick" | "enter";
+  /** The argument value of a tree row's command. */
+  export interface TreeRowActivation {
+    readonly gesture: TreeGesture;
+    readonly arguments: JsonValue;
+  }
   /**
    * One semantic command-backed action on a row, group header, or frame.
    * Arguments are JSON and are passed to the command as its argument value;
@@ -1529,8 +1536,18 @@ declare module "knot" {
     readonly icon?: IconRef | null;
     /** Required expansion state; never inferred from child results. */
     readonly collapsibleState: "none" | "collapsed" | "expanded";
-    /** Activation command for ordinary item rows; ignored for groups. */
+    /**
+     * Activation command for ordinary item rows; ignored for groups. A row that
+     * can expand toggles on click and Enter and runs no command. The command
+     * receives `{ gesture, arguments }` as its argument value, with the
+     * gesture that activated the row and this item's `arguments`.
+     * A double click runs `click` and then `doubleClick`. `rightClick` is
+     * delivered only for a row without actions, since actions open the
+     * context menu instead.
+     */
     readonly command?: string | null;
+    /** Passed to the row's command as `arguments`; JSON, absent is null. */
+    readonly arguments?: JsonValue;
     /** Row kind; defaults to "item". */
     readonly kind?: "item" | "group";
     /** Right-aligned short status text, e.g. a Git change letter. */
@@ -2093,14 +2110,24 @@ declare module "knot" {
      */
     registerStatusItem(id: string, options: StatusItemOptions): Promise<StatusItem>;
     /**
-     * Read selection for an admitted contributed view handler; no selection is
-     * null. Omission uses its current capture; explicit target must be authorized
-     * for that invocation. Native editor/terminal selection is not exposed here.
+     * Read the selection of an admitted text-frame view handler; no selection
+     * is null. Omission uses its current capture; explicit target must be
+     * authorized for that invocation. Native editor/terminal selection is not
+     * exposed here, and a tree view uses `selectedTreeItem`.
      * @throws HostError with ContextUnavailable outside a command, InvalidTarget
      * for invalid captures, UnsupportedOperation for unsupported surfaces,
      * or Cancelled after cancellation.
      */
     selectedText(target?: CommandTarget): Promise<string | null>;
+    /**
+     * The ID of the selected row of the tree view an admitted view-scoped
+     * command handler runs in; no selection is null. Omission uses its current
+     * capture; explicit target must be authorized for that invocation.
+     * @throws HostError with ContextUnavailable outside a command, InvalidTarget
+     * for invalid captures, UnsupportedOperation for a view that is not a tree,
+     * or Cancelled after cancellation.
+     */
+    selectedTreeItem(target?: CommandTarget): Promise<string | null>;
     /**
      * Write application clipboard text without a window/selection requirement.
      * Valid during activation and callbacks. Resolution acknowledges the native

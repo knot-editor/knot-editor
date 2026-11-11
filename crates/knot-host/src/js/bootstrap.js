@@ -176,6 +176,7 @@ function treeItem(value) {
     icon: iconRef(value.icon),
     collapsibleState,
     command: optionalText(value.command),
+    arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
     kind: kind === null ? "item" : kind,
     statusText: optionalText(value.statusText),
     badge: optionalText(value.badge),
@@ -577,6 +578,10 @@ export async function registerViewCommand(viewKind, name, handler) {
 
 export async function selectedViewText(target) {
   return request("selectedViewText", contextualAuthority(target));
+}
+
+export async function selectedTreeItem(target) {
+  return request("selectedTreeItem", contextualAuthority(target));
 }
 
 export async function writeClipboardText(text) {

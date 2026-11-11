@@ -76,7 +76,7 @@ await log.setText("guide: activated\n");
 await log.setText("guide: ready\n");
 
 const viewCommand = await commands.registerForView("guide.outline", "copy", async ({ target }) => {
-  const selected = await workbench.selectedText(target);
+  const selected = await workbench.selectedTreeItem(target);
   if (selected !== null) await workbench.writeClipboardText(selected);
 });
 

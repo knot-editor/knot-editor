@@ -632,6 +632,7 @@ mod tests {
                         icon: None,
                         collapsible_state: TreeCollapsibleState::None,
                         command: None,
+                        arguments: knot_protocol::CommandArgumentValue::Null,
                         kind: knot_protocol::TreeItemKind::Item,
                         status_text: None,
                         badge: None,

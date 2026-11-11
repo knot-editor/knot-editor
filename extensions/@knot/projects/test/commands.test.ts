@@ -107,8 +107,10 @@ test("selecting from the picker or a tree row switches to the project", async ()
   await host.run("projects.select");
   assert.deepEqual(host.rootsOf(host.windowTargets()[0]!), [BETA]);
 
-  host.setSelectedText("Alpha");
-  await host.run("projects.select", { view: VIEW_ID });
+  host.setSelectedTreeItem("a");
+  await host.run("projects.select", { view: VIEW_ID, arguments: { gesture: "rightClick", arguments: null } });
+  assert.equal(host.replaced().length, 1);
+  await host.run("projects.select", { view: VIEW_ID, arguments: { gesture: "click", arguments: null } });
   assert.equal(host.replaced().length, 2);
   assert.deepEqual(host.windowTargets().map(host.rootsOf), [[ALPHA]]);
 });
