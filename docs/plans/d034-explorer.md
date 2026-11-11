@@ -1,6 +1,6 @@
 # D034 — Explorer as a bundled extension
 
-Status: 🚧 in progress; checkpoints 1 and 2 done, checkpoint 3 awaiting review. Item of the
+Status: 🚧 in progress; checkpoints 1 to 3 done. Item of the
 [daily-driver plan](daily-driver.md); absorbs D053. Depends on D008, D010,
 D072, D081, and D122, all done.
 
@@ -129,41 +129,16 @@ focus to the context menu), `TreeItem.arguments`, `selectedTreeItem()`,
 `ViewRegistration.reveal`, and speed search drawn by the tree itself (not
 `TextInput`; matching ignores case).
 
-### 3. Explorer browsing, native explorer removed 🔎 awaiting review
+### 3. Explorer browsing, native explorer removed ✅ done
 
-- ✅ `@knot/explorer` with browsing, sorting, gestures, watch refresh, the
-  ignored toggle, Reveal Active File, `explorer.autoReveal`, and Toggle
-  Explorer.
-- ✅ Remove `src/app/workspace_tree.rs`, the native explorer tool
-  (`EXPLORER_TOOL_ID`, `ensure_explorer`, `explorer_frame`, the
-  first-run explorer special cases), `workbench.toggle-explorer`, and the
-  `tool.knot.explorer` icon; tool-layout memory treats the explorer as any
-  contributed view.
-- ✅ Validation: package tests through the real editor for multi-root rows,
-  sorting, each gesture's resulting tab, watch refresh after external
-  changes, ignored rows, and reveal; workbench and tool-layout tests updated
-  for the removed native tool.
-- Review gate: daily use of the explorer in a multi-root window.
-
-Scope decisions: the explorer needed three public API additions, all general:
-`documents.open(…, { focus: false })`, `ViewRegistration.toggle`, and
-`TreeItem.muted`. `workspace.remove-folder`, `workspace.move-folder-up`, and
-`workspace.move-folder-down` acted on the native explorer's selected root and
-are removed with it; Add Folder to Workspace stays native. The knot crate's own
-tests load no packages, so workbench tests use a registered test tool
+`extensions/@knot/explorer/` browses the roots of each window; the native
+workspace tree, its tool registration, and `workbench.toggle-explorer` are
+gone. General API added for it: `documents.open(…, { focus: false })`,
+`ViewRegistration.toggle`, and `TreeItem.muted`. `workspace.remove-folder` and
+`workspace.move-folder-up`/`-down` acted on the native selection and were
+removed with it (Add Folder to Workspace stays). The knot crate's own tests
+load no packages, so its workbench tests register a test tool
 (`ensure_test_tool`) in place of the explorer.
-
-**Implementation context:** new `extensions/@knot/explorer/` mirroring
-`extensions/@knot/projects/` (`knot.jsonc`, `src/`, `test/`), compiled by
-`crates/knot-ext-workbench` (`build.rs`, `src/`) with tests in
-`crates/knot-ext-workbench/tests/workbench/`; `files.list`, `files.watch`,
-`documents.open`, and `workbench.observe` (`activeTargetChanged`,
-`workspaceChanged`); native removal across `src/app/product/tools.rs`,
-`src/app/product/roots.rs`, `src/app/product/commands.rs`,
-`src/app/product/sessions.rs`, `src/app/workbench.rs`,
-`src/app/tool_layout.rs`, `src/app/window_layout.rs`,
-`crates/knot-model/src/workbench/tools.rs`, `crates/knot-model/src/icons.rs`,
-and the product tests that name the explorer.
 
 ### 4. Inline editing and file actions
 
