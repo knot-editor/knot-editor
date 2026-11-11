@@ -387,7 +387,7 @@ declare module "knot" {
   /**
    * Facts that must all match where a value applies, or that describe the
    * context of a read. `language` is a document's effective language ID;
-   * `view` is a native surface kind ("editor", "terminal") or a contributed
+   * `view` is a native surface kind ("editor", "terminal", "bar") or a contributed
    * view ID, as for keybindings; `document` is a document's ID, whose values
    * the application drops when the document closes.
    */
@@ -2313,7 +2313,9 @@ declare module "knot" {
   /**
    * Optional focused view scope; omission/null means application-wide. A
    * `context` additionally requires the focused view to hold that key
-   * context (see `Editor.setKeyContext`) and needs a `view`.
+   * context (see `Editor.setKeyContext`) and needs a `view`. While an editor
+   * bar's field has focus, the view is "bar" and its only context is the
+   * bar's ID.
    */
   export interface KeybindingOptions {
     readonly view?: string | null;

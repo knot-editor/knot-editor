@@ -220,6 +220,57 @@ fn declared_kinds_and_sequences_are_validated_and_normalized() {
 }
 
 #[test]
+fn bar_is_a_native_view_kind_whose_keys_skip_editor_bindings() {
+    let mut registry = BindingRegistry::new();
+    assert_eq!(
+        registry.declare_extension_kind("bar"),
+        Err(BindingError::View)
+    );
+    let find = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    let preset = BindingOwner::Preset;
+    registry
+        .set(
+            preset,
+            "ctrl-a",
+            Some("editor"),
+            Some(command("line-start")),
+        )
+        .unwrap();
+    registry
+        .set(preset, "f5", None, Some(command("global")))
+        .unwrap();
+    registry
+        .set_in_context(
+            find,
+            "enter",
+            Some("bar"),
+            Some("find"),
+            Some(command("next")),
+        )
+        .unwrap();
+    assert_eq!(
+        matched(&registry, "ctrl-a", Some("bar"), &["find"]),
+        (None, false)
+    );
+    assert_eq!(
+        matched(&registry, "f5", Some("bar"), &["find"]),
+        (Some("global".into()), false)
+    );
+    assert_eq!(
+        matched(&registry, "enter", Some("bar"), &["find"]),
+        (Some("next".into()), false)
+    );
+    assert_eq!(
+        matched(&registry, "enter", Some("bar"), &["other"]),
+        (None, false)
+    );
+    assert_eq!(
+        matched(&registry, "enter", Some("editor"), &["find"]),
+        (None, false)
+    );
+}
+
+#[test]
 fn bare_uppercase_key_preserves_implicit_shift() {
     let mut registry = BindingRegistry::new();
     registry

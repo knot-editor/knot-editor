@@ -158,10 +158,21 @@ impl ProductShell {
                     tree.update(cx, |tree, cx| tree.key_down(keystroke, cx))
                 }
                 Some(CommandView::Editor(view)) => {
-                    let input = view.read(cx).editor().read(cx).focused_bar_input().cloned();
-                    input.is_some_and(|input| {
-                        input.update(cx, |input, cx| input.key_down(keystroke, cx))
-                    })
+                    let editor = view.read(cx).editor().clone();
+                    let Some(input) = editor.read(cx).focused_bar_input().cloned() else {
+                        return false;
+                    };
+                    let modifiers = keystroke.modifiers;
+                    if keystroke.key == "tab"
+                        && !(modifiers.platform || modifiers.control || modifiers.alt)
+                    {
+                        let forward = !modifiers.shift;
+                        editor.update(cx, |editor, cx| {
+                            editor.focus_adjacent_bar_field(forward, cx)
+                        });
+                        return true;
+                    }
+                    input.update(cx, |input, cx| input.key_down(keystroke, cx))
                 }
                 Some(CommandView::Extension(ExtensionView::Text(_))) | None => false,
             },
@@ -262,14 +273,16 @@ impl ProductShell {
         let target = self.capture_command_target(cx);
         let contexts = Self::target_editor(&target, cx)
             .map(|editor| {
-                editor
-                    .read(cx)
-                    .editor()
-                    .read(cx)
-                    .key_contexts()
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect()
+                let state = editor.read(cx).editor().read(cx);
+                match state.bars().focused_bar() {
+                    // A bar field's keys resolve against the bar alone.
+                    Some(bar) => vec![bar.id.clone()],
+                    None => state
+                        .key_contexts()
+                        .into_iter()
+                        .map(str::to_owned)
+                        .collect(),
+                }
             })
             .unwrap_or_default();
         (Self::target_view_kind(&target, cx), contexts)

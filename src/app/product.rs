@@ -1326,7 +1326,13 @@ impl ProductShell {
     fn target_view_kind(target: &ProductCommandTarget, cx: &App) -> Option<String> {
         target.command_view(cx).and_then(|view| {
             target.focused.then(|| match view {
-                super::workbench::CommandView::Editor(_) => "editor".to_owned(),
+                super::workbench::CommandView::Editor(view) => {
+                    if view.read(cx).editor().read(cx).bars().focused().is_some() {
+                        "bar".to_owned()
+                    } else {
+                        "editor".to_owned()
+                    }
+                }
                 super::workbench::CommandView::Terminal(_) => "terminal".to_owned(),
                 super::workbench::CommandView::Extension(view) => view.kind(cx),
             })

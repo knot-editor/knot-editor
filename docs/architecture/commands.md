@@ -99,6 +99,18 @@ them. Menus and palette commands bypass keymaps. gpui holds bindings only for
 menu key equivalents, the config-error window's Quit, and the bindings
 gpui-component installs at startup, which every keymap rebuild restores.
 
+### Editor bars
+
+While a field of an editor bar has Knot-side focus, the router resolves keys
+against the native view kind `bar` and the focused bar's ID as its only key
+context, instead of `editor` and the editor's own contexts. Editor-kind
+bindings, such as movement and editing keys, therefore never reach the field;
+global bindings still apply. Commands a bar key runs capture the bar's editor
+tab, so `editor` and `buffer` are the bar's. Keys the keymap leaves go to the
+field's text input. Tab and Shift+Tab are native form keys with no command or
+binding: they move focus to the next or previous field across the editor's
+bars, top to bottom, wrapping, and never insert text.
+
 ### Key contexts
 
 Extensions set named key contexts on editor views through the editor handle.

@@ -345,3 +345,111 @@ fn a_session_without_a_window_types_into_the_focused_field(cx: &mut TestAppConte
     assert_eq!(text(cx), "xyz");
     assert_eq!(cx.read(|cx| model.read(cx).text()), "q");
 }
+
+/// Two bars with three fields, and bindings scoped to the `bar` kind, the
+/// bar's context, the editor kind, and everywhere.
+const KEYS_SOURCE: &str = r#"
+import { commands, keymaps, workbench } from "knot";
+let handle = null;
+const editor = async () => {
+  if (!handle) {
+    const { snapshot } = await workbench.observe(() => {});
+    handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+  }
+  return handle;
+};
+const note = (name) => async ({ editor: captured, buffer }) => {
+  const { text } = await buffer.snapshot();
+  await workbench.writeClipboardText(`${name}:${text}:${captured ? "editor" : "none"}`);
+};
+await commands.register("keys.open", async () => {
+  const handle = await editor();
+  await handle.openBar("find", { fields: [{ id: "query" }, { id: "other" }] });
+  await handle.openBar("goto", { fields: [{ id: "line" }] });
+  await handle.focusBarField("find", "query");
+});
+await commands.register("keys.enter", note("enter"));
+await commands.register("keys.editor", note("editor"));
+await commands.register("keys.global", note("global"));
+await commands.register("keys.wrong", note("wrong"));
+keymaps.bind("enter", "keys.enter", { view: "bar", context: "find" });
+keymaps.bind("f6", "keys.wrong", { view: "bar", context: "goto" });
+keymaps.bind("f7", "keys.editor", { view: "editor" });
+keymaps.bind("f9", "keys.global");
+"#;
+
+#[gpui::test]
+fn bar_fields_resolve_keys_against_the_bar_kind_and_cycle_with_tab(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    let host = cx.read(|cx| crate::app::extensions::host::entity(cx).unwrap());
+    let owner = ExtensionKey::new(ExtensionId::new(805), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(owner, KEYS_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        keymap_command(cx, "f9", Some("editor")).as_deref() == Some("keys.global")
+    });
+    wait_for_api_condition(cx, |cx| {
+        keymap_command(cx, "f7", Some("editor")).as_deref() == Some("keys.editor")
+    });
+    fixture.run("keys.open", cx);
+    let focused = |cx: &TestAppContext| {
+        cx.read(|cx| {
+            fixture
+                .editor
+                .read(cx)
+                .bars()
+                .focused()
+                .map(|field| (field.bar.clone(), field.field.clone()))
+        })
+    };
+    assert_eq!(focused(cx), Some(("find".into(), "query".into())));
+
+    // The editor kind stops applying, and a bar's context-bound key runs its
+    // command in the bar's editor.
+    cx.simulate_keystrokes(fixture.window, "f7");
+    cx.run_until_parked();
+    assert_eq!(clipboard(cx), None);
+    cx.simulate_keystrokes(fixture.window, "enter");
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("enter:text:editor".into())
+    });
+    assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
+
+    // A global binding applies, and unbound keys reach the field.
+    cx.simulate_keystrokes(fixture.window, "f9");
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("global:text:editor".into())
+    });
+    // Later input waits for the key's command to complete.
+    wait_for_api_condition(cx, |cx| fixture.shell.read(cx).key_hold.is_none());
+    assert_eq!(fixture.field_focus(owner, cx), (true, true));
+    cx.simulate_input(fixture.window, "ab");
+    assert_eq!(
+        fixture.field_text(owner, cx),
+        "ab",
+        "typed into the query field"
+    );
+    assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
+
+    // Tab and shift-tab cycle the fields across both bars, wrapping, and
+    // never indent; another bar's context does not apply.
+    for expected in ["other", "line", "query"] {
+        cx.simulate_keystrokes(fixture.window, "tab");
+        assert_eq!(focused(cx).unwrap().1, expected);
+    }
+    cx.simulate_keystrokes(fixture.window, "shift-tab");
+    assert_eq!(focused(cx), Some(("goto".into(), "line".into())));
+    cx.simulate_keystrokes(fixture.window, "shift-tab");
+    assert_eq!(focused(cx), Some(("find".into(), "other".into())));
+    assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
+    cx.simulate_keystrokes(fixture.window, "f6");
+    cx.run_until_parked();
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|item| item.text()),
+        Some("global:text:editor".into()),
+        "the goto bar's binding does not apply in the find bar"
+    );
+}

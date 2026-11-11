@@ -111,7 +111,11 @@ focus following, and painting in `src/app/editor/bars.rs`. Theme keys
 Tab included, still act on the text while a field has focus. D140 then needs
 only the `showInput` option.
 
-### 3. Bar keys
+### 3. Bar keys 🔎
+
+Implemented; awaiting the review gate. Tests: `src/app/product/tests/editor_bars.rs`
+(`bar_fields_resolve_keys_against_the_bar_kind_and_cycle_with_tab`) and
+`bar_is_a_native_view_kind_whose_keys_skip_editor_bindings` in the keymap tests.
 
 - The `bar` view kind with the bar's ID as its key context while a field has
   focus. Editor-kind bindings stop applying there, global ones still do, and

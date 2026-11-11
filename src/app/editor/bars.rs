@@ -87,6 +87,12 @@ impl Editor {
         }
     }
 
+    /// Move the editor's focus to the next or previous bar field.
+    pub(crate) fn focus_adjacent_bar_field(&mut self, forward: bool, cx: &mut Context<Self>) {
+        self.state.bars_mut().focus_adjacent(forward);
+        cx.notify();
+    }
+
     /// The text field of the bar field with the editor's focus.
     pub(crate) fn focused_bar_input(&self) -> Option<&Entity<TextInput>> {
         let focused = self.state.bars().focused()?;

@@ -139,6 +139,25 @@ impl EditorBars {
         true
     }
 
+    /// Move focus to the next or previous field across all bars, top to
+    /// bottom, wrapping. Does nothing without a focused field.
+    pub fn focus_adjacent(&mut self, forward: bool) {
+        let Some(focus) = &self.focus else {
+            return;
+        };
+        let fields = self.fields().collect::<Vec<_>>();
+        let Some(index) = fields.iter().position(|field| field == focus) else {
+            return;
+        };
+        let count = fields.len();
+        let next = if forward {
+            (index + 1) % count
+        } else {
+            (index + count - 1) % count
+        };
+        self.focus = Some(fields[next].clone());
+    }
+
     /// Return focus to the text.
     pub fn focus_text(&mut self) {
         self.focus = None;
@@ -250,6 +269,35 @@ mod tests {
         assert!(bars.focused().is_some());
         bars.remove_owner(owner(2));
         assert_eq!(bars.focused(), None);
+    }
+
+    #[test]
+    fn adjacent_focus_cycles_across_bars_and_wraps() {
+        let mut bars = EditorBars::default();
+        bars.open(owner(1), "find", spec(&["query", "replace"]));
+        bars.open(owner(2), "goto", spec(&["line"]));
+        bars.focus_adjacent(true);
+        assert_eq!(bars.focused(), None);
+
+        let at = |bar: &EditorBars| bar.focused().map(|f| f.field.clone()).unwrap();
+        bars.focus_field(BarFieldRef::new(owner(1), "find", "query"));
+        bars.focus_adjacent(true);
+        assert_eq!(at(&bars), "replace");
+        bars.focus_adjacent(true);
+        assert_eq!(at(&bars), "line");
+        bars.focus_adjacent(true);
+        assert_eq!(at(&bars), "query");
+        bars.focus_adjacent(false);
+        assert_eq!(at(&bars), "line");
+        bars.focus_adjacent(false);
+        assert_eq!(at(&bars), "replace");
+
+        bars.close(owner(2), "goto");
+        bars.close(owner(1), "find");
+        bars.open(owner(1), "one", spec(&["only"]));
+        bars.focus_field(BarFieldRef::new(owner(1), "one", "only"));
+        bars.focus_adjacent(true);
+        assert_eq!(at(&bars), "only");
     }
 
     #[test]

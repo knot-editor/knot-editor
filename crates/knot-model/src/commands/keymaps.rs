@@ -142,13 +142,13 @@ impl BindingRegistry {
     pub fn new() -> Self {
         let mut this = Self::default();
         this.kinds
-            .extend(["editor", "terminal"].into_iter().map(str::to_owned));
+            .extend(["editor", "terminal", "bar"].into_iter().map(str::to_owned));
         this
     }
 
     pub fn declare_extension_kind(&mut self, kind: &str) -> Result<(), BindingError> {
         if kind.is_empty()
-            || matches!(kind, "editor" | "terminal")
+            || matches!(kind, "editor" | "terminal" | "bar")
             || kind.chars().any(char::is_whitespace)
         {
             return Err(BindingError::View);
@@ -159,7 +159,7 @@ impl BindingRegistry {
 
     /// Remove a contributed view kind together with its scoped bindings.
     pub fn remove_extension_kind(&mut self, kind: &str) -> bool {
-        if matches!(kind, "editor" | "terminal") || !self.kinds.remove(kind) {
+        if matches!(kind, "editor" | "terminal" | "bar") || !self.kinds.remove(kind) {
             return false;
         }
         let keys = self
