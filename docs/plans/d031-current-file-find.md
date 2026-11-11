@@ -83,13 +83,6 @@ avoiding existing bindings.
 
 ## Deferred decisions
 
-- ✅ JS shapes of the bar API, settled in checkpoint 2: `Editor.openBar(id,
-  { fields: [{ id, placeholder }], message })` opens or updates in place,
-  keeping the text of fields it keeps; `closeBar(id)`; `focusBarField(id,
-  field, { text })` focuses a field and optionally replaces its text, all
-  selected; `barFields(id)`. `EditorHandle.onDidEditBar` reports user edits
-  only (typing, deleting, pasting) with the bar's field texts, coalesced like
-  `onDidChangeSelection`; text set through `focusBarField` is not reported.
 - Theme defaults for the match colors and the bar's appearance are reviewed
   in the running app at checkpoint 4. The current match is selected, so
   selection paints above its background, and the review decides whether
@@ -106,40 +99,17 @@ limit defaults to 1,000 and is capped at 100,000. There is no reverse
 search: stepping back past the highlight cap reads the matches before the
 caret with a large `limit`.
 
-### 2. Editor bar core 🔍
+### 2. Editor bar core ✅
 
-Implemented; awaiting the review gate. Until checkpoint 3, keys the editor
-view binds (Backspace, arrows, Emacs keys) still act on the text while a field
-has focus; unbound keys and typed text reach the field.
-
-- ✅ Bars per editor view: open, update, and close by ID, stacked in opening order
-  above the text area. Each has fields with placeholders and a message
-  line.
-- ✅ Field focus as Knot-side focus inside the editor tab. Clicking the field
-  or the text moves focus. Typing goes to the shared `TextInput`, which
-  gains placeholder rendering.
-- ✅ A coalescing field-change subscription, lifecycle cleanup, and closure with
-  the view.
-- ✅ Theme keys the bar paints with, reusing existing keys where they fit:
-  `editor.bar.background`, `editor.bar.border`, `input.background`,
-  `input.border`, and `input.focused.border`, each defaulting to an existing
-  key; bundled themes set them from their own palettes.
-- ✅ Tests through the real editor with a test package: stacking two bars from
-  two lifecycles, updates, typing into a field reaching the listener,
-  focus moves, and teardown removing a lifecycle's bars.
-
-**Implementation context:** per-editor bar state where editor key contexts
-live (`Editor::set_key_context` in `crates/knot-model/src/editor.rs`), so
-sessions without windows route to it. Rendering in `src/app/editor/paint.rs` /
-`view.rs` above the element, with the text area shrinking to fit. Field
-widget `src/app/text_input.rs`. Lifecycle-owned registration and cleanup
-mirror the status bar (`src/app/status_bar.rs` and the status item handlers
-in `src/app/extensions/host/handlers.rs`). Event delivery mirrors
-`onDidChangeSelection`. Contract in `knot.d.ts` on `Editor`.
-D140 then needs only the `showInput` option.
-
-**Review gate:** look and focus behavior of a bar in the real app via `Try:`
-commands.
+Approved. Extensions open bars through `Editor.openBar`, `closeBar`,
+`focusBarField`, and `barFields`, and hear user edits through
+`EditorHandle.onDidEditBar`, coalesced like selection notifications and never
+reporting text set through `focusBarField`; specified in `knot.d.ts`. Bar
+state and field focus live in `crates/knot-model/src/editor/bars.rs`; fields,
+focus following, and painting in `src/app/editor/bars.rs`. Theme keys
+`editor.bar.*` and `input.*`. Until checkpoint 3, keys the editor view binds,
+Tab included, still act on the text while a field has focus. D140 then needs
+only the `showInput` option.
 
 ### 3. Bar keys
 
