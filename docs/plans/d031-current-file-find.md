@@ -119,33 +119,18 @@ between fields natively. Specified in
 [commands](../architecture/commands.md#editor-bars); routing in
 `src/app/product/key_routing.rs`.
 
-### 4. `@knot/find` ✅ implemented, awaiting review
+### 4. `@knot/find` ✅
 
-- Package `extensions/@knot/find`, added to `crates/knot-ext-workbench`.
-- Commands: find, next, previous, and close. ⌘F, ⌘G, and ⌘⇧G in the Knot preset.
-  Enter, ⇧Enter, and Esc bound by the package in `bar`/`find`.
-- Live highlights, capped at 1,000, current match selected and revealed, the
-  message line, and re-search after edits, debounced.
-- Theme keys `editor.findMatch` and `editor.findMatchCurrent`.
-- `node:test` package tests and end-to-end tests in
-  `crates/knot-ext-workbench/tests/workbench/find.rs`: typing highlights,
-  stepping and wrapping, the cap, edits while open, Esc, ⌘G with the bar
-  closed, and ⌘F pre-fill.
-- `Try:` commands for manual review: `Try: Find Sample` and `Try: Find Many`
-  (personal `post-init.js`) open tabs to search; then ⌘F, ⌘G, ⌘⇧G, Enter,
-  ⇧Enter, Esc. On Windows and Linux next and previous are F3 and ⇧F3, since
-  Ctrl+G is Go to Line. Match colors are provisional for the review; the current match is a background only, and every bundled theme's selection is translucent so it shows through.
-
-**Implementation context:** mirror `extensions/@knot/go-to-line` (package
-layout, `test/`, `knot.jsonc`) and its Rust test
-`crates/knot-ext-workbench/tests/workbench/go_to_line.rs`. Register in
-`crates/knot-ext-workbench/build.rs`. Preset bindings in
-`src/app/commands/keymaps/presets.rs`. Theme keys in
-`crates/knot-model/src/theme.rs`. Highlights through
-`buffer.contributions.replace` at the revision `buffer.find` returns.
-
-**Review gate:** daily use in the real app, including match and current-match
-colors.
+Approved. The bundled `extensions/@knot/find` package owns the commands
+`editor.find`, `editor.find-next`, `editor.find-previous`, and
+`editor.find-close`, and binds Enter, ⇧Enter, and Esc in `bar`/`find`. The Knot
+preset binds ⌘F, ⌘G, and ⌘⇧G, with F3 and ⇧F3 for next and previous on Windows
+and Linux, where Ctrl+G is Go to Line. Highlights are buffer contributions in
+`editor.findMatch` and `editor.findMatchCurrent`; the current match is a
+background only, and the bundled themes' selections are translucent so it
+shows through. Review found the dark themes' match colors serviceable but
+subtle, particularly the current match; they may be revisited. End-to-end
+tests are in `crates/knot-ext-workbench/tests/workbench/find.rs`.
 
 ### 5. Toggles and buttons
 
