@@ -1525,3 +1525,25 @@ async fn a_discarding_close_skips_the_prompt_and_recovery_keeps_the_text_until_i
     recovery(cx).flush().await.unwrap();
     assert!(recovery(cx).automatic(identity).await.unwrap().is_none());
 }
+
+#[gpui::test]
+fn closing_the_last_window_quits_through_the_storage_drain(cx: &mut TestAppContext) {
+    install_globals(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    cx.update(super::super::launch::quit_with_last_window);
+    cx.update(|cx| {
+        super::super::open_product_window(None, cx);
+        super::super::open_product_window(None, cx);
+    });
+    let close = |window: gpui::AnyWindowHandle, cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, _| window.remove_window())
+            .unwrap();
+        cx.run_until_parked();
+    };
+    let windows = cx.windows();
+
+    close(windows[0], cx);
+    assert!(!cx.read(|cx| host.read(cx).storage_stopping()));
+    close(windows[1], cx);
+    assert!(cx.read(|cx| host.read(cx).storage_stopping()));
+}

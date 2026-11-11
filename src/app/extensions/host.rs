@@ -714,6 +714,11 @@ impl ProductExtensionHost {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn storage_stopping(&self) -> bool {
+        self.storage_stopping
+    }
+
     pub(crate) fn shutdown_storage(&mut self) -> Option<Task<()>> {
         if self.storage_stopping {
             return None;

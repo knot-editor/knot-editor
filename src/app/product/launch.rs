@@ -447,6 +447,9 @@ pub(crate) fn run(
         extension_host.update(cx, |host, _| host.set_bundled_packages(packages));
         bind_product_keys(cx);
         install_menus(cx);
+        if cfg!(not(target_os = "macos")) {
+            quit_with_last_window(cx);
+        }
         let first_request = initial_request.or_else(|| incoming_requests.try_recv().ok());
         if let Some(request) = first_request {
             dispatch_launch_request(Some(request), cx);
@@ -463,6 +466,24 @@ pub(crate) fn run(
             host.start_product_startup(config_root, extensions_root, cx)
         });
     });
+}
+
+/// Quit once the last window closes, as other platforms than macOS expect.
+///
+/// gpui quits on its own only without flushing Knot's durable state, so it is
+/// told to wait for an explicit quit and Knot quits through its storage drain.
+pub(super) fn quit_with_last_window(cx: &mut App) {
+    cx.set_quit_mode(QuitMode::Explicit);
+    cx.on_window_closed(|cx, _| {
+        // Deferred, so a window that replaces the closed one, such as a torn
+        // out tab's, already counts.
+        cx.defer(|cx| {
+            if cx.windows().is_empty() {
+                crate::app::extensions::host::quit_after_storage(cx);
+            }
+        })
+    })
+    .detach();
 }
 
 pub(super) fn install_menus(cx: &mut App) {

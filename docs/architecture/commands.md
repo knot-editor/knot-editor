@@ -151,7 +151,8 @@ On macOS the application outlives its last window, so Quit, New, New Blank
 Window, and Open… use a separate menu action that an application-level handler
 also takes: with no window open, Quit quits and the others open a window and
 run in it, while every other menu item is disabled because no handler takes
-its action. Other platforms quit when the last window closes.
+its action. Other platforms quit when the last window closes, through the
+same storage drain as Quit rather than gpui's own quit, which would skip it.
 macOS performs a menu's key equivalent only when the window leaves the key
 unhandled, so a key that some view unbinds shows no menu key. Show Keybindings
 lists every slot with its owner and the owner that overrides it, using the same
