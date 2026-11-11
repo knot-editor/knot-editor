@@ -50,7 +50,7 @@ The [daily-driver editor](plans/daily-driver.md) initiative is selected: it
 removes demo surfaces and adds workbench and editing commands, a richer
 palette, themes, Find, navigation, file watching, and bundled explorer,
 project-selector, and search extensions, keymap presets, and extension
-entitlements. It promotes D007, D008, D010, D031, D034, D053, D060, D064, D068,
+entitlements. It promotes D007, D008, D010, D031, D034, D060, D064, D068,
 and D089 and adds D069–D088, D120–D123, D127, D134, D143, and D173.
 
 The editor API and Vim mode initiative is complete: key contexts, long-lived
@@ -97,7 +97,7 @@ complete list for that item.
   - D114 → D027
   - D077 → D117 → D067
   - D071 → D067, D082
-  - D053 → D119
+  - D034 → D119
 - **Find:** D031 → D001, with or after D092; D031 → D150.
 - **Package manager:** D087 → D101 → D102 → D103 → D104 → D106;
   D064, D071, D103 → D105 → D106; D106 → D107, D108; D103 → D116.
@@ -276,6 +276,30 @@ complete list for that item.
     center reflowing is disruptive. Then add the mode per tool as a
     placement, with focus loss dismissing it.
   - Order: independent.
+
+- **D176 — Drag and drop in trees**
+  - Deferred: The explorer (D034) moves files through Cut and Paste or
+    Rename; contributed trees take no drags or drops.
+  - Reconsider: Daily use wants files moved by pointer. Then add native drag
+    sources and drop targets to contributed trees, reported to the extension
+    as semantic row IDs, and use them in the explorer.
+  - Order: after D034.
+
+- **D177 — Multi-select in trees**
+  - Deferred: Contributed trees select one row, so explorer actions apply to
+    one item.
+  - Reconsider: Daily use wants bulk delete, copy, or move. Then let trees
+    select several rows, return them from the selected-item API, and apply
+    explorer actions to all of them.
+  - Order: after D034.
+
+- **D178 — Compact folders in the explorer**
+  - Deferred: Each folder is its own row. VS Code and IntelliJ can join a
+    chain of single-child folders (`a/b/c`) into one row.
+  - Reconsider: Deep single-child chains, such as Java packages, make the
+    explorer tedious. Then decide row identity, reveal, and actions on a
+    joined row.
+  - Order: after D034.
 
 - **D037 — Whole-pane dragging and arbitrary split-tree reshaping**
   - Deferred: D004 moves individual tabs into existing panes or new edge splits;
@@ -593,8 +617,8 @@ complete list for that item.
     application menus or the context menus of the editor and tabs.
   - Reconsider: A bundled or installed extension needs a command where users
     look for it by pointer. Then let a registration place a command in a
-    named menu location, reusing the tree context menus D053 adds.
-  - Order: after D053.
+    named menu location, reusing the tree context menus.
+  - Order: after D034.
 
 - **D057 — Extension and product localization (i18n)**
   - Deferred: Contributed view titles, tree labels, status text, native prompt

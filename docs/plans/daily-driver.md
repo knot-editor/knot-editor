@@ -1,6 +1,6 @@
 # Daily-driver editor
 
-Status: 🚧 approved, not started. Promotes D007, D008, D010, D031, D034, D053,
+Status: 🚧 approved, not started. Promotes D007, D008, D010, D031, D034,
 D060, D064, D068, and D089 from the [roadmap](../roadmap.md) and adds
 D069–D088, D120–D123, D127, D134, D143, and D173.
 
@@ -336,8 +336,9 @@ to be rebuilt later:
     policy.
   - Vim's Ex line completes `:e` paths from the base `:e` opens against.
 
-- **D034 / D053 — Explorer as a bundled extension** (depends on D008, D010, D122,
-  D081, D072)
+- **D034 — Explorer as a bundled extension** (depends on D008, D010, D122,
+  D081, D072; absorbs D053)
+  - 🚧 [Plan](d034-explorer.md).
   - A bundled `@knot/explorer` package replaces the native explorer tool and
     its commands, using the contributed tree API.
   - It provides:
