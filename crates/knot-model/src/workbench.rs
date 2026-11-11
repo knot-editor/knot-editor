@@ -1193,8 +1193,8 @@ mod terminals;
 pub use terminals::{DEFAULT_TERMINAL_HOME, TerminalToggle};
 mod tools;
 pub use tools::{
-    DockLocation, EXPLORER_TOOL_ID, HiddenTool, StoredDock, StoredNode, StoredPlacement,
-    TOOL_LAYOUT_VERSION, ToolFrame, ToolFrameId, ToolLayoutSnapshot,
+    DockLocation, HiddenTool, StoredDock, StoredNode, StoredPlacement, TOOL_LAYOUT_VERSION,
+    ToolFrame, ToolFrameId, ToolLayoutSnapshot,
 };
 
 mod arrange;

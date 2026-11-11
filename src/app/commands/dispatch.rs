@@ -384,13 +384,6 @@ pub(crate) fn dispatch_to_captured_target(
         && target.focused
     {
         let result = match view {
-            CommandView::Workspace(_) => crate::app::commands::declarations::registry().dispatch(
-                crate::app::commands::declarations::Participant::WorkspaceTree,
-                command,
-                target,
-                completion.clone(),
-                cx,
-            ),
             CommandView::Extension(view) => view.handle_command(command, cx),
             CommandView::Editor(_) => crate::app::commands::declarations::registry().dispatch(
                 crate::app::commands::declarations::Participant::Editor,

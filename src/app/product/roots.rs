@@ -1,13 +1,10 @@
 //! Native commands that edit the window's ordered workspace roots.
 //!
 //! Every edit is a replacement of the whole root set computed from the live
-//! state on the foreground, so retained roots keep their identity and the
-//! explorer keeps their expansion. Remove and Move act on the explorer's
-//! selected root: the root row itself or the root shown above the selection.
+//! state on the foreground, so retained roots keep their identity.
 
 use super::*;
 use crate::app::resource::ResourceUri;
-use knot_protocol::CommandOutcome;
 
 impl ProductShell {
     /// Choose a directory in the session's transient slot and append it.
@@ -69,36 +66,6 @@ impl ProductShell {
         self.replace_workspace_roots(roots, cx);
     }
 
-    pub(super) fn remove_selected_root(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> Result<(), CommandOutcome> {
-        let index = self.selected_root_index(cx)?;
-        let mut roots = self.root_uris();
-        roots.remove(index);
-        self.replace_workspace_roots(roots, cx);
-        Ok(())
-    }
-
-    /// Move the selected root one position earlier (`up`) or later.
-    pub(super) fn move_selected_root(
-        &mut self,
-        up: bool,
-        cx: &mut Context<Self>,
-    ) -> Result<(), CommandOutcome> {
-        let index = self.selected_root_index(cx)?;
-        let mut roots = self.root_uris();
-        let destination = if up {
-            index.checked_sub(1)
-        } else {
-            Some(index + 1).filter(|destination| *destination < roots.len())
-        }
-        .ok_or(CommandOutcome::Unavailable)?;
-        roots.swap(index, destination);
-        self.replace_workspace_roots(roots, cx);
-        Ok(())
-    }
-
     pub(crate) fn root_uris(&self) -> Vec<ResourceUri> {
         self.workspace
             .snapshot()
@@ -106,23 +73,5 @@ impl ProductShell {
             .iter()
             .map(|root| root.uri.clone())
             .collect()
-    }
-
-    fn selected_root_index(&self, cx: &App) -> Result<usize, CommandOutcome> {
-        let tree = self
-            .workspace_tree
-            .as_ref()
-            .ok_or(CommandOutcome::Unavailable)?;
-        let selected = tree
-            .read(cx)
-            .selected_root()
-            .ok_or(CommandOutcome::Unavailable)?
-            .id;
-        self.workspace
-            .snapshot()
-            .roots()
-            .iter()
-            .position(|root| root.id == selected)
-            .ok_or(CommandOutcome::Unavailable)
     }
 }

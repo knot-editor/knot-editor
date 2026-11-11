@@ -2,6 +2,8 @@
 
 use super::*;
 use crate::app::workbench::TabMoveDestination;
+#[cfg(any(test, feature = "test-support"))]
+use crate::app::workbench::ToolFrameId;
 use knot_protocol::CommandOutcome;
 
 impl ProductShell {
@@ -191,11 +193,6 @@ impl ProductShell {
         true
     }
 
-    pub(super) fn explorer_frame(&self, cx: &App) -> Option<ToolFrameId> {
-        let tree = self.workspace_tree.as_ref()?.entity_id();
-        self.workbench.read(cx).tool_presenting(tree)
-    }
-
     /// Move a tab to the end of another area's last focused pane. Unavailable
     /// when the tab is already there or its kind does not allow the area.
     /// Moving a tool rehomes it, publishing the fresh-window default as any
@@ -232,9 +229,6 @@ impl ProductShell {
     /// and return to the center (see [`Workbench::toggle_tool`]). Toggling
     /// the explorer registers it first.
     pub(crate) fn toggle_tool(&mut self, stable_id: &str, cx: &mut Context<Self>) {
-        if stable_id == crate::app::tool_layout::EXPLORER_TOOL_ID {
-            self.ensure_explorer(false, cx);
-        }
         let Some(id) = self.workbench.read(cx).tool_by_stable_id(stable_id) else {
             return;
         };
@@ -291,53 +285,8 @@ impl ProductShell {
             }
         }
         self.file_index_leases = leases;
-        if let Some(tree) = &self.workspace_tree {
-            tree.update(cx, |tree, cx| tree.set_workspace(workspace.clone(), cx));
-        } else if !workspace.roots().is_empty() {
-            self.ensure_explorer(false, cx);
-        }
         cx.notify();
         workspace
-    }
-
-    /// Register the native explorer frame and apply the stored tool arrangement.
-    /// `show` forces visibility for explicit user requests; automatic presentation
-    /// (workspace open, fresh-window restore) honors stored visibility instead and
-    /// never publishes a new default.
-    pub(super) fn ensure_explorer(&mut self, show: bool, cx: &mut Context<Self>) {
-        if self.workspace_tree.is_some() {
-            return;
-        }
-        let tree = cx.new(|cx| WorkspaceTree::new(self.workspace.snapshot(), cx));
-        self.workspace_tree_subscription = Some(cx.subscribe(
-            &tree,
-            |this, _tree, event: &WorkspaceTreeEvent, cx| {
-                this.handle_workspace_tree_event(event.clone(), cx);
-            },
-        ));
-        let load = tree.clone();
-        cx.defer(move |cx| load.update(cx, |tree, cx| tree.load(cx)));
-        let stored = Self::stored_tool_layout(cx);
-        self.workbench.update(cx, |workbench, _| {
-            let previous = workbench.focused_pane_id();
-            let id = workbench.register_tool(
-                crate::app::tool_layout::EXPLORER_TOOL_ID,
-                "Explorer",
-                ToolContent::Workspace(tree.clone()),
-                DockLocation::Left,
-            );
-            if let Some(snapshot) = &stored {
-                workbench.set_dock_sizes(snapshot.dock_sizes());
-            }
-            workbench.place_registered_tool(id, stored.as_ref(), DockLocation::Left, 0, true);
-            if show {
-                workbench.show_tool(id);
-            }
-            if let Some(pane) = previous {
-                workbench.focus_pane(pane);
-            }
-        });
-        self.workspace_tree = Some(tree);
     }
 
     /// The last user-customized tool arrangement, or product defaults when no
@@ -364,9 +313,6 @@ impl ProductShell {
 
     /// Reset this window's tools to product defaults and publish the reset.
     pub(super) fn reset_tool_layout(&mut self, cx: &mut Context<Self>) {
-        if self.workspace_tree.is_none() {
-            self.ensure_explorer(false, cx);
-        }
         let defaults = crate::app::tool_layout::ToolLayoutSnapshot::product_default();
         let definitions = crate::app::extensions::host::view_definitions(cx);
         self.workbench.update(cx, |workbench, _| {
@@ -389,9 +335,8 @@ impl ProductShell {
 
     /// Inherit the last customized arrangement on a fresh window. Only runs
     /// at window creation: already-open windows never re-read the default.
-    /// Uncustomized stores keep first-run behavior (no eager explorer before
-    /// any folder or toggle); hidden tools stay hidden; contributed tools
-    /// take their stored places as they attach. Never publishes.
+    /// Hidden tools stay hidden and contributed tools take their stored
+    /// places as they attach. Never publishes.
     pub(super) fn restore_fresh_window_layout(&mut self, cx: &mut Context<Self>) {
         let Some(snapshot) = Self::stored_tool_layout(cx) else {
             return;
@@ -400,85 +345,96 @@ impl ProductShell {
             workbench.set_dock_sizes(snapshot.dock_sizes());
             workbench.set_terminal_home(snapshot.terminal_home);
         });
-        if !snapshot.customized {
-            return;
-        }
-        if matches!(
-            snapshot.placement(crate::app::tool_layout::EXPLORER_TOOL_ID),
-            Some(knot_model::workbench::StoredPlacement::Docked(_))
-        ) {
-            self.ensure_explorer(false, cx);
-        }
     }
 
-    pub(super) fn handle_workspace_tree_event(
-        &mut self,
-        event: WorkspaceTreeEvent,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            WorkspaceTreeEvent::RequestChildren(request) => {
-                self.enumerate_workspace(request, cx);
-            }
-            WorkspaceTreeEvent::OpenFile {
-                workspace,
-                uri,
-                preview,
-            } => {
-                if !self.workspace.is_current(&workspace) {
-                    return;
-                }
-                let workbench = self.workbench.read(cx);
-                let Some(id) = self.explorer_frame(cx) else {
-                    return;
-                };
-                let Some((pane, tab)) = workbench.tool_tab(id) else {
-                    return;
-                };
-                let target = OpenTarget::at(cx.weak_entity(), &self.workbench, pane, tab, cx);
-                drop(self.start_open_operation_with(
-                    OpenRequest::from_uri_for_product(uri),
-                    target,
-                    operations::OpenOptions {
-                        preview,
-                        ..Default::default()
-                    },
-                    cx,
-                ));
-            }
-        }
-    }
-
-    pub(super) fn enumerate_workspace(
-        &mut self,
-        request: WorkspaceTreeRequest,
-        cx: &mut Context<Self>,
-    ) {
-        if !self.workspace.is_current(&request.workspace) {
+    /// Register a left dock tool for tests of the workbench, standing in for
+    /// the contributed explorer, which the knot crate's tests do not load.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(super) fn ensure_test_tool(&mut self, show: bool, cx: &mut Context<Self>) {
+        if self.test_tool_frame(cx).is_some() {
             return;
         }
-        let providers = Self::filesystems(cx);
-        let task = cx.spawn(async move |this, cx| {
-            let result = enumerate_directory(providers, request.parent.clone()).await;
-            let _ = this.update(cx, |this, cx| {
-                if !this.workspace.is_current(&request.workspace) {
-                    return;
-                }
-                if let Some(tree) = &this.workspace_tree {
-                    tree.update(cx, |tree, cx| {
-                        tree.apply_response(
-                            WorkspaceTreeResponse {
-                                workspace: request.workspace,
-                                parent: request.parent,
-                                generation: request.generation,
-                                result: result.map_err(|error| error.to_string().into()),
-                            },
-                            cx,
-                        );
-                    });
-                }
-            });
+        let window = super::session_id(cx.entity_id());
+        let tree = cx.new(|cx| crate::app::tree_view::TreeView::new(TEST_TOOL_ID, window, cx));
+        let stored = Self::stored_tool_layout(cx);
+        self.workbench.update(cx, |workbench, _| {
+            let previous = workbench.focused_pane_id();
+            let id = workbench.register_tool(
+                TEST_TOOL_ID,
+                "Test Tool",
+                ToolContent::Extension(crate::app::workbench::ExtensionView::Tree(tree)),
+                DockLocation::Left,
+            );
+            if let Some(snapshot) = &stored {
+                workbench.set_dock_sizes(snapshot.dock_sizes());
+            }
+            workbench.place_registered_tool(id, stored.as_ref(), DockLocation::Left, 0, true);
+            if show {
+                workbench.show_tool(id);
+            }
+            if let Some(pane) = previous {
+                workbench.focus_pane(pane);
+            }
         });
-        self.tasks.push(task);
+    }
+
+    /// The tree of the tool `ensure_test_tool` registers.
+    #[cfg(test)]
+    pub(super) fn test_tool_tree(&self, cx: &App) -> Entity<crate::app::tree_view::TreeView> {
+        let frame = self
+            .test_tool_frame(cx)
+            .expect("the test tool is registered");
+        match self.workbench.read(cx).tool_content(frame) {
+            Some(ToolContent::Extension(crate::app::workbench::ExtensionView::Tree(tree))) => {
+                tree.clone()
+            }
+            _ => panic!("the test tool shows a tree"),
+        }
+    }
+
+    /// Open a file the way a click in a tool would: as a preview or a tab,
+    /// beside the tool's own tab.
+    #[cfg(test)]
+    pub(super) fn open_from_test_tool(
+        &mut self,
+        uri: crate::app::resource::ResourceUri,
+        preview: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let frame = self
+            .test_tool_frame(cx)
+            .expect("the test tool is registered");
+        let (pane, tab) = self
+            .workbench
+            .read(cx)
+            .tool_tab(frame)
+            .expect("the test tool is shown");
+        let target = OpenTarget::at(cx.weak_entity(), &self.workbench, pane, tab, cx);
+        drop(self.start_open_operation_with(
+            OpenRequest::from_uri_for_product(uri),
+            target,
+            operations::OpenOptions {
+                preview,
+                ..Default::default()
+            },
+            cx,
+        ));
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub(super) fn test_tool_frame(&self, cx: &App) -> Option<ToolFrameId> {
+        self.workbench.read(cx).tool_by_stable_id(TEST_TOOL_ID)
     }
 }
+
+/// While set, every window registers the test tool as it attaches, as a
+/// contributed view would.
+#[cfg(test)]
+pub(crate) struct TestToolInEveryWindow;
+
+#[cfg(test)]
+impl gpui::Global for TestToolInEveryWindow {}
+
+/// The stable ID of the tool `ensure_test_tool` registers.
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) const TEST_TOOL_ID: &str = "test.tool";

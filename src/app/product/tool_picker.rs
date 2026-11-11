@@ -7,27 +7,14 @@ use knot_protocol::PickerItem;
 pub(super) const TOGGLE_TOOL_TITLE: &str = "Toggle Tool";
 
 impl ProductShell {
-    /// Offer every tool of this window, the explorer included before it is
-    /// registered, and toggle the choice.
+    /// Offer every tool of this window and toggle the choice.
     pub(super) fn start_toggle_tool(&mut self, cx: &mut Context<Self>) {
         let workbench = self.workbench.read(cx);
-        let mut tools = workbench
+        let tools = workbench
             .tools()
             .iter()
             .map(|tool| (tool.stable_id.clone(), tool.title.clone()))
             .collect::<Vec<_>>();
-        if workbench
-            .tool_by_stable_id(crate::app::tool_layout::EXPLORER_TOOL_ID)
-            .is_none()
-        {
-            tools.insert(
-                0,
-                (
-                    crate::app::tool_layout::EXPLORER_TOOL_ID.into(),
-                    "Explorer".into(),
-                ),
-            );
-        }
         let items = tools
             .into_iter()
             .map(|(id, title)| PickerItem {

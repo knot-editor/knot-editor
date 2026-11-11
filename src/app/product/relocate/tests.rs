@@ -446,7 +446,7 @@ fn tool_tear_out_and_cross_window_transfer_cancel_without_new_window(cx: &mut Te
     let (source, source_window) = product_window(document, model.clone(), cx);
     let (destination, _) = product_window(document, model, cx);
     source.update(cx, |shell, cx| {
-        shell.ensure_explorer(false, cx);
+        shell.ensure_test_tool(false, cx);
         cx.notify();
     });
     cx.run_until_parked();
@@ -454,7 +454,7 @@ fn tool_tear_out_and_cross_window_transfer_cancel_without_new_window(cx: &mut Te
     let tool = cx.read(|cx| {
         let shell = source.read(cx);
         let workbench = shell.workbench.read(cx);
-        let explorer = shell.explorer_frame(cx).unwrap();
+        let explorer = shell.test_tool_frame(cx).unwrap();
         let (tool_pane, tool_tab) = workbench.tool_tab(explorer).unwrap();
         shell
             .capture_tab_relocation(tool_pane, tool_tab, cx)

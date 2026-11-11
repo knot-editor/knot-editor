@@ -4,13 +4,13 @@ use super::*;
 use crate::app::workbench::DockLocation;
 use gpui::{Modifiers, MouseButton, VisualTestContext, point, px};
 
-const EXPLORER_BUTTON: &str = "stripe-button-knot.explorer";
+const EXPLORER_BUTTON: &str = "stripe-button-test.tool";
 
 fn explorer_shown(shell: &Entity<ProductShell>, cx: &TestAppContext) -> bool {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         let explorer = workbench
-            .tool_by_stable_id(crate::app::tool_layout::EXPLORER_TOOL_ID)
+            .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
             .unwrap();
         workbench.tool_visible(explorer)
     })
@@ -28,8 +28,7 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let (shell, window) = empty_product_window(&documents, cx);
-    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    toggle_test_tool(&shell, cx);
     cx.run_until_parked();
     assert!(explorer_shown(&shell, cx));
 
@@ -80,7 +79,7 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         let explorer = workbench
-            .tool_by_stable_id(crate::app::tool_layout::EXPLORER_TOOL_ID)
+            .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
             .unwrap();
         assert_eq!(workbench.tool_home(explorer), Some(DockLocation::Right));
         let (pane, _) = workbench.tool_tab(explorer).unwrap();
@@ -172,13 +171,12 @@ await workbench.registerView({
             .tool_by_stable_id("example.notes")
             .is_some()
     });
-    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    toggle_test_tool(&shell, cx);
     cx.run_until_parked();
     let shown = |cx: &TestAppContext| {
         cx.read(|cx| {
             let workbench = shell.read(cx).workbench.read(cx);
-            ["knot.explorer", "example.notes"].map(|id| {
+            [crate::app::product::tools::TEST_TOOL_ID, "example.notes"].map(|id| {
                 let tool = workbench.tool_by_stable_id(id).unwrap();
                 workbench.tool_visible(tool)
             })
@@ -209,12 +207,13 @@ await workbench.registerView({
     assert_eq!(shown(cx), [true, true]);
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
-        let [first, second] = ["knot.explorer", "example.notes"].map(|id| {
-            workbench
-                .tool_tab(workbench.tool_by_stable_id(id).unwrap())
-                .unwrap()
-                .0
-        });
+        let [first, second] =
+            [crate::app::product::tools::TEST_TOOL_ID, "example.notes"].map(|id| {
+                workbench
+                    .tool_tab(workbench.tool_by_stable_id(id).unwrap())
+                    .unwrap()
+                    .0
+            });
         assert_ne!(first, second);
     });
 }

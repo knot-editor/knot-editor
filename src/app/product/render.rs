@@ -240,7 +240,6 @@ impl ProductShell {
                 return None;
             };
             workbench.tool_content(tool).map(|content| match content {
-                ToolContent::Workspace(view) => view.clone().into_any_element(),
                 ToolContent::Extension(crate::app::workbench::ExtensionView::Tree(view)) => {
                     view.clone().into_any_element()
                 }

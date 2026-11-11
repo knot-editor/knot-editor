@@ -196,7 +196,7 @@ fn painted(
 fn docked_window(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
     let (shell, window) = four_tabs(cx);
     shell.update(cx, |shell, cx| {
-        shell.ensure_explorer(true, cx);
+        shell.ensure_test_tool(true, cx);
         let pane = shell.workbench.read(cx).center_pane().unwrap();
         shell
             .workbench
@@ -362,16 +362,15 @@ fn pane_cycling_stays_in_the_focused_area(cx: &mut TestAppContext) {
 fn a_full_width_bottom_dock_runs_under_the_side_docks(cx: &mut TestAppContext) {
     use crate::app::commands::dispatch::FOCUS_PANE_DOWN_COMMAND;
     use crate::app::workbench::{DockLocation, ToolContent};
-    use crate::app::workspace_tree::WorkspaceTree;
     let (shell, window) = docked_window(cx);
     let (dock, _) = dock_and_main(&shell, cx);
     let bottom = shell.update(cx, |shell, cx| {
-        let tree = cx.new(|cx| WorkspaceTree::new(shell.workspace.snapshot(), cx));
+        let tree = cx.new(|cx| crate::app::tree_view::TreeView::new("test.bottom", "1", cx));
         let bottom = shell.workbench.update(cx, |workbench, _| {
             let id = workbench.register_tool(
                 "test.bottom",
                 "Bottom",
-                ToolContent::Workspace(tree),
+                ToolContent::Extension(crate::app::workbench::ExtensionView::Tree(tree)),
                 DockLocation::Bottom,
             );
             workbench.show_tool(id).unwrap().0

@@ -744,16 +744,6 @@ async fn close_target(
         .await
 }
 
-#[command("workbench.toggle-explorer", title = "Toggle Explorer", description = "Show and focus the file explorer, or hide it when focused.", id = TOGGLE_EXPLORER_COMMAND, participant = Workbench)]
-pub(crate) async fn toggle_explorer(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    context
-        .shell(|shell, _, cx| {
-            shell.toggle_tool(crate::app::tool_layout::EXPLORER_TOOL_ID, cx);
-            Ok(())
-        })
-        .await
-}
-
 #[command("workbench.toggle-tool", title = "Toggle Tool…", description = "Choose a tool to show and focus, or to hide when focused.", id = TOGGLE_TOOL_COMMAND, participant = Workbench)]
 pub(crate) async fn toggle_tool(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
@@ -790,30 +780,6 @@ pub(crate) async fn add_folder(context: CommandContext, (): ()) -> Result<(), Co
             shell.start_add_folder(cx);
             Ok(())
         })
-        .await
-}
-
-#[command("workspace.remove-folder", title = "Remove Folder from Workspace", description = "Remove the selected root folder from the workspace.", id = REMOVE_FOLDER_COMMAND, participant = Workbench)]
-pub(crate) async fn remove_folder(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    context
-        .shell(|shell, _, cx| shell.remove_selected_root(cx))
-        .await
-}
-
-#[command("workspace.move-folder-up", title = "Move Folder Up", description = "Move the selected root folder up.", id = MOVE_FOLDER_UP_COMMAND, participant = Workbench)]
-pub(crate) async fn move_folder_up(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    context
-        .shell(|shell, _, cx| shell.move_selected_root(true, cx))
-        .await
-}
-
-#[command("workspace.move-folder-down", title = "Move Folder Down", description = "Move the selected root folder down.", id = MOVE_FOLDER_DOWN_COMMAND, participant = Workbench)]
-pub(crate) async fn move_folder_down(
-    context: CommandContext,
-    (): (),
-) -> Result<(), CommandOutcome> {
-    context
-        .shell(|shell, _, cx| shell.move_selected_root(false, cx))
         .await
 }
 

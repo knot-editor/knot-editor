@@ -5,20 +5,18 @@ use crate::app::documents::DocumentDirty;
 use crate::app::workbench::DockLocation;
 
 #[gpui::test]
-fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut TestAppContext) {
+fn a_docked_tool_opens_resources_beside_it_and_has_a_nontext_snapshot(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let (shell, window) = empty_product_window(&documents, cx);
-    shell.update(cx, |shell, cx| {
-        shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
-    });
+    shell.update(cx, |shell, cx| shell.ensure_test_tool(true, cx));
     cx.run_until_parked();
-    let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
+    let tree = cx.read(|cx| shell.read(cx).test_tool_tree(cx));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     cx.update_window(window, |_, window, cx| {
         focus_view(&tree.focus_handle(cx), window, cx);
-        tree.update(cx, |tree, cx| {
-            assert!(tree.activate_for_test(&uri, false, cx))
+        shell.update(cx, |shell, cx| {
+            shell.open_from_test_tool(uri.clone(), false, cx)
         });
     })
     .unwrap();
@@ -46,28 +44,6 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
         assert!(matches!(target.tab.unwrap().surface, TabSurfaceId::Tool(_)));
         assert!(target.document_id(cx).is_err());
     });
-    let copy = cx.update(|cx| {
-        cx.global::<ApplicationProductCommands>()
-            .0
-            .clone()
-            .update(cx, |dispatcher, cx| {
-                dispatcher.dispatch(
-                    Command {
-                        name: super::super::COPY_COMMAND.into(),
-                        arguments: CommandArgumentValue::Null,
-                    },
-                    target.clone(),
-                    cx,
-                )
-            })
-    });
-    assert_eq!(wait_for_command(copy, cx), CommandOutcome::Completed);
-    cx.read(|cx| {
-        assert_eq!(
-            cx.read_from_clipboard().unwrap().text().unwrap(),
-            uri.to_string()
-        )
-    });
     cx.update_window(window, |_, _, cx| {
         let state = shell.read(cx).application_window(
             shell.entity_id(),
@@ -90,8 +66,9 @@ fn docked_explorer_opens_resources_routes_copy_and_has_nontext_snapshot(cx: &mut
     let close = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     assert!(!cx.has_pending_prompt());
-    let reopen = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
-    assert_eq!(wait_for_command(reopen, cx), CommandOutcome::Completed);
+    shell.update(cx, |shell, cx| {
+        shell.toggle_tool(crate::app::product::tools::TEST_TOOL_ID, cx)
+    });
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         assert_eq!(
@@ -115,7 +92,7 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
     let documents = install_globals(cx);
     let (shell, window) = empty_product_window(&documents, cx);
     let workbench = cx.read(|cx| shell.read(cx).workbench.clone());
-    shell.update(cx, |shell, cx| shell.ensure_explorer(false, cx));
+    shell.update(cx, |shell, cx| shell.ensure_test_tool(false, cx));
     let document = cx.read(|cx| {
         workbench
             .read(cx)
@@ -175,7 +152,7 @@ fn workspace_refresh_does_not_reopen_or_reposition_tool(cx: &mut TestAppContext)
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let (shell, _) = empty_product_window(&documents, cx);
     shell.update(cx, |shell, cx| {
-        shell.ensure_explorer(false, cx);
+        shell.ensure_test_tool(false, cx);
         let id = id_of(shell.workbench.read(cx));
         shell.workbench.update(cx, |workbench, _| {
             workbench.place_tool(id, DockLocation::Bottom);
@@ -198,7 +175,7 @@ async fn tools_do_not_bypass_dirty_document_or_terminal_protection(cx: &mut Test
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
     let (shell, window) = product_window(document, model, cx);
-    shell.update(cx, |shell, cx| shell.ensure_explorer(false, cx));
+    shell.update(cx, |shell, cx| shell.ensure_test_tool(false, cx));
     let close = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
@@ -209,8 +186,7 @@ async fn tools_do_not_bypass_dirty_document_or_terminal_protection(cx: &mut Test
     assert_eq!(wait_for_command(close_tool, cx), CommandOutcome::Completed);
     assert!(!cx.has_pending_prompt());
     cx.read(|cx| assert!(documents.read(cx).get(document).unwrap().is_dirty(cx)));
-    let reopen = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
-    assert_eq!(wait_for_command(reopen, cx), CommandOutcome::Completed);
+    toggle_test_tool(&shell, cx);
     let terminal = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(wait_for_command(terminal, cx), CommandOutcome::Completed);
     let session = cx.read(|cx| {
@@ -270,14 +246,14 @@ async fn tools_do_not_bypass_dirty_document_or_terminal_protection(cx: &mut Test
 }
 
 #[gpui::test]
-fn explorer_docks_have_visible_geometry_and_open_files_by_click(cx: &mut TestAppContext) {
+fn docked_tools_have_visible_geometry(cx: &mut TestAppContext) {
     for dock in DockLocation::ALL {
         let documents = install_globals(cx);
         cx.set_global(ApplicationFileSystems(memory_filesystems()));
         let (shell, window) = empty_product_window(&documents, cx);
         shell.update(cx, |shell, cx| {
-            shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
-            let id = shell.explorer_frame(cx).unwrap();
+            shell.ensure_test_tool(false, cx);
+            let id = shell.test_tool_frame(cx).unwrap();
             shell.workbench.update(cx, |workbench, _| {
                 assert!(workbench.place_tool(id, dock));
                 assert_eq!(workbench.tool_tab(id).unwrap().0.value(), 3);
@@ -301,16 +277,15 @@ fn explorer_docks_have_visible_geometry_and_open_files_by_click(cx: &mut TestApp
         assert!(editor.size.width > px(100.));
         assert!(editor.size.height > px(100.));
         shell.update(&mut visual, |shell, cx| {
-            let id = shell.explorer_frame(cx).unwrap();
+            let id = shell.test_tool_frame(cx).unwrap();
             shell.workbench.update(cx, |workbench, _| {
                 assert!(workbench.hide_tool(id));
             });
             cx.notify();
         });
         visual.run_until_parked();
-        assert!(visual.debug_bounds("workspace-tree-row-3").is_none());
         shell.update(&mut visual, |shell, cx| {
-            let id = shell.explorer_frame(cx).unwrap();
+            let id = shell.test_tool_frame(cx).unwrap();
             shell.workbench.update(cx, |workbench, _| {
                 workbench.show_tool(id).unwrap();
             });
@@ -319,23 +294,6 @@ fn explorer_docks_have_visible_geometry_and_open_files_by_click(cx: &mut TestApp
         visual.run_until_parked();
         let reopened = visual.debug_bounds("pane-4").unwrap();
         assert_eq!(reopened.size, explorer.size);
-        let file = visual.debug_bounds("workspace-tree-row-3").unwrap();
-        assert!(file.size.width > px(100.));
-        assert!(file.size.height > px(0.));
-        assert!(explorer.contains(&file.center()));
-        visual.simulate_click(file.center(), Modifiers::default());
-        visual.run_until_parked();
-        visual.read(|cx| {
-            let state = shell.read(cx);
-            let workbench = state.workbench.read(cx);
-            let pane = workbench.focused_pane().unwrap();
-            let document = pane.active_tab().document_id().unwrap();
-            assert_eq!(
-                documents.read(cx).get(document).unwrap().resource_uri(),
-                Some(&ResourceUri::parse("mem://product/notes.txt").unwrap())
-            );
-            assert!(state.workbench.read(cx).dock_location(pane.id()).is_none());
-        });
     }
 }
 
@@ -346,9 +304,10 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     let (shell, window) = empty_product_window(&documents, cx);
     shell.update(cx, |shell, cx| {
         shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
+        shell.ensure_test_tool(false, cx);
     });
     cx.run_until_parked();
-    let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
+    let tree = cx.read(|cx| shell.read(cx).test_tool_tree(cx));
     let state = |cx: &mut TestAppContext| {
         cx.update_window(window, |_, _, cx| {
             shell.read(cx).application_window(
@@ -435,7 +394,7 @@ fn toggle_explorer_and_toggle_tool_show_focus_then_hide_to_the_center(cx: &mut T
         cx.read(|cx| {
             let workbench = shell.read(cx).workbench.read(cx);
             let explorer = workbench
-                .tool_by_stable_id(crate::app::tool_layout::EXPLORER_TOOL_ID)
+                .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
                 .unwrap();
             (
                 workbench.tool_visible(explorer),
@@ -444,12 +403,10 @@ fn toggle_explorer_and_toggle_tool_show_focus_then_hide_to_the_center(cx: &mut T
         })
     };
     // Not registered yet: it shows and takes focus.
-    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    toggle_test_tool(&shell, cx);
     assert_eq!(state(cx), (true, false));
     // Focused: it hides and the center takes focus back.
-    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    toggle_test_tool(&shell, cx);
     assert_eq!(state(cx), (false, true));
 
     // The picker toggles the chosen tool the same way.
@@ -457,21 +414,19 @@ fn toggle_explorer_and_toggle_tool_show_focus_then_hide_to_the_center(cx: &mut T
         let picker = dispatch_product_command(&shell, window, "workbench.toggle-tool", cx);
         assert_eq!(wait_for_command(picker, cx), CommandOutcome::Completed);
         wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
-        cx.simulate_input(window, "Explorer");
+        cx.simulate_input(window, "Test Tool");
         cx.simulate_keystrokes(window, "enter");
         cx.run_until_parked();
         assert_eq!(state(cx), expected);
     }
 
     // Visible but unfocused: it takes focus instead of hiding.
-    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    toggle_test_tool(&shell, cx);
     shell.update(cx, |shell, cx| {
         shell
             .workbench
             .update(cx, |workbench, _| workbench.focus_pane(center));
     });
-    let toggle = dispatch_product_command(&shell, window, "workbench.toggle-explorer", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    toggle_test_tool(&shell, cx);
     assert_eq!(state(cx), (true, false));
 }

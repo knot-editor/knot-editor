@@ -376,17 +376,6 @@ impl WindowLayout {
         documents
     }
 
-    /// Whether any tab of this layout presents the given tool.
-    pub(crate) fn names_tool(&self, tool: &str) -> bool {
-        let mut named = false;
-        for root in self.roots() {
-            root.tabs(&mut |tab| {
-                named |= matches!(tab, LayoutTab::Tool { tool: id, .. } if id == tool);
-            });
-        }
-        named
-    }
-
     /// Plan the pruned arrangement of this layout. `resolve` maps a document
     /// tab's identity and URI to a live document; `has_tool` reports whether
     /// a stable tool ID is registered in the destination window.

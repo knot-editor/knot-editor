@@ -902,7 +902,8 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
     assert_eq!(wait_for_command(split, cx), CommandOutcome::Completed);
     let (second, second_window) = product_window(document, model.clone(), cx);
     first.update(cx, |shell, cx| {
-        shell.install_workspace(ResourceUri::parse("mem://observer/").unwrap(), cx)
+        shell.install_workspace(ResourceUri::parse("mem://observer/").unwrap(), cx);
+        shell.ensure_test_tool(false, cx);
     });
     let source = cx.read(|cx| {
         let shell = first.read(cx);

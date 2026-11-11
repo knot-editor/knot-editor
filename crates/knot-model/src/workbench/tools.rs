@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use super::*;
 
 pub const TOOL_LAYOUT_VERSION: u32 = 3;
-pub const EXPLORER_TOOL_ID: &str = "knot.explorer";
+/// A stable tool ID the tests register in the left dock.
+#[cfg(test)]
+pub(crate) const LEFT_TOOL_ID: &str = "test.left";
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ToolFrameId(u64);
@@ -184,8 +186,8 @@ pub struct ToolLayoutSnapshot {
     /// The dock new terminals open in when none lives in a dock.
     pub terminal_home: DockLocation,
     /// Whether the user has ever customized the arrangement. Fresh windows
-    /// only auto-show stored tools once set, preserving first-run behavior
-    /// (no eager explorer before any folder or toggle) on fresh installs.
+    /// only auto-show stored tools once set, preserving first-run behavior on
+    /// fresh installs.
     #[serde(default)]
     pub customized: bool,
 }
@@ -211,13 +213,7 @@ impl ToolLayoutSnapshot {
         Self {
             version: TOOL_LAYOUT_VERSION,
             docks: [
-                dock(
-                    DockLocation::Left,
-                    Some(StoredNode::Pane {
-                        selected: 0,
-                        tools: vec![EXPLORER_TOOL_ID.to_owned()],
-                    }),
-                ),
+                dock(DockLocation::Left, None),
                 dock(DockLocation::Right, None),
                 dock(DockLocation::Bottom, None),
             ],
@@ -775,7 +771,7 @@ mod tests {
     use super::*;
 
     fn explorer(workbench: &mut Workbench) -> ToolFrameId {
-        workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left)
+        workbench.register_tool(LEFT_TOOL_ID, "Explorer", DockLocation::Left)
     }
 
     fn tool_ids(workbench: &Workbench, pane: PaneId) -> Vec<TabSurfaceId> {
@@ -1114,7 +1110,7 @@ mod tests {
                 root: Some(StoredNode::Split {
                     direction: SplitDirection::Vertical,
                     ratio: 0.5,
-                    first: Box::new(pane(EXPLORER_TOOL_ID)),
+                    first: Box::new(pane(LEFT_TOOL_ID)),
                     second: Box::new(pane("knot.other")),
                 }),
             }

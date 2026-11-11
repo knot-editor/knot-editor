@@ -44,7 +44,6 @@ pub(crate) use knot_handler_macros::command;
 pub(crate) enum Participant {
     Editor,
     Terminal,
-    WorkspaceTree,
     Workbench,
     Application,
 }

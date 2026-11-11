@@ -285,7 +285,7 @@ fn tool_fixture(cx: &mut TestAppContext) -> (Entity<ProductShell>, AnyWindowHand
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
     shell.update(cx, |shell, cx| {
-        shell.ensure_explorer(false, cx);
+        shell.ensure_test_tool(false, cx);
         cx.notify();
     });
     cx.run_until_parked();
@@ -299,7 +299,7 @@ fn tool_fixture(cx: &mut TestAppContext) -> (Entity<ProductShell>, AnyWindowHand
 fn tool_tab_id(shell: &Entity<ProductShell>, cx: &TestAppContext) -> u64 {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
-        let id = shell.read(cx).explorer_frame(cx).unwrap();
+        let id = shell.read(cx).test_tool_frame(cx).unwrap();
         workbench.tool_tab(id).unwrap().1.value()
     })
 }
@@ -310,13 +310,13 @@ fn tool_presentation(
 ) -> crate::app::workbench::PresentationId {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
-        let id = shell.read(cx).explorer_frame(cx).unwrap();
+        let id = shell.read(cx).test_tool_frame(cx).unwrap();
         workbench.tool(id).unwrap().presentation
     })
 }
 
 fn assert_tool_focused(shell: &Entity<ProductShell>, visual: &mut VisualTestContext) {
-    let tree = visual.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
+    let tree = visual.read(|cx| shell.read(cx).test_tool_tree(cx));
     visual.update(|window, cx| assert!(tree.focus_handle(cx).is_focused(window)));
 }
 
@@ -380,7 +380,7 @@ fn tool_drag_moves_between_docks_and_never_enters_the_center(cx: &mut TestAppCon
         visual.run_until_parked();
         visual.read(|cx| {
             let workbench = shell.read(cx).workbench.read(cx);
-            let id = shell.read(cx).explorer_frame(cx).unwrap();
+            let id = shell.read(cx).test_tool_frame(cx).unwrap();
             assert_eq!(
                 workbench.dock_location(workbench.tool_tab(id).unwrap().0),
                 Some(dock)
@@ -410,7 +410,7 @@ fn hiding_tool_mid_drag_cancels_drop(cx: &mut TestAppContext) {
     let mut visual = VisualTestContext::from_window(window, cx);
     start_drag(&mut visual, tool_tab_id(&shell, cx));
     shell.update(&mut visual, |shell, cx| {
-        let id = shell.explorer_frame(cx).unwrap();
+        let id = shell.test_tool_frame(cx).unwrap();
         shell.workbench.update(cx, |workbench, _| {
             workbench.hide_tool(id);
         });
@@ -422,7 +422,7 @@ fn hiding_tool_mid_drag_cancels_drop(cx: &mut TestAppContext) {
     visual.run_until_parked();
     visual.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
-        let id = shell.read(cx).explorer_frame(cx).unwrap();
+        let id = shell.read(cx).test_tool_frame(cx).unwrap();
         assert!(workbench.tool_tab(id).is_none());
         assert_eq!(workbench.tab_snapshots().len(), before.len() - 1);
     });

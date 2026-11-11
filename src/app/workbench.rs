@@ -26,7 +26,6 @@ use super::{
     terminal::view::TerminalView,
     text_view::TextView,
     tree_view::TreeView,
-    workspace_tree::WorkspaceTree,
 };
 
 /// Native content owned by one contributed view instance.
@@ -95,21 +94,18 @@ impl ExtensionView {
 /// The native view of a tool.
 #[derive(Clone)]
 pub(crate) enum ToolContent {
-    Workspace(Entity<WorkspaceTree>),
     Extension(ExtensionView),
 }
 
 impl ToolContent {
     fn entity_id(&self) -> EntityId {
         match self {
-            Self::Workspace(view) => view.entity_id(),
             Self::Extension(view) => view.entity_id(),
         }
     }
 
     pub(crate) fn command_view(&self) -> CommandView {
         match self {
-            Self::Workspace(view) => CommandView::Workspace(view.clone()),
             Self::Extension(view) => CommandView::Extension(view.clone()),
         }
     }
@@ -120,7 +116,6 @@ pub(crate) enum CommandView {
     Editor(Entity<EditorView>),
     Terminal(Entity<TerminalView>),
     Extension(ExtensionView),
-    Workspace(Entity<WorkspaceTree>),
 }
 
 impl CommandView {
@@ -129,7 +124,6 @@ impl CommandView {
             Self::Editor(view) => view.focus_handle(cx),
             Self::Terminal(view) => view.focus_handle(cx),
             Self::Extension(view) => view.focus_handle(cx),
-            Self::Workspace(view) => view.focus_handle(cx),
         }
     }
 }
@@ -752,24 +746,19 @@ mod tests {
     #[gpui::test]
     fn unregistering_a_tool_drops_its_view_but_hiding_keeps_it(cx: &mut TestAppContext) {
         let workbench = cx.new(|_| Workbench::empty());
-        let tree = cx.new(|cx| {
-            WorkspaceTree::new(
-                crate::app::workspace::WorkspaceState::default().snapshot(),
-                cx,
-            )
-        });
+        let tree = cx.new(|cx| crate::app::tree_view::TreeView::new("example.tool", "1", cx));
         let weak = tree.downgrade();
         workbench.update(cx, |workbench, _| {
             let id = workbench.register_tool(
-                "knot.explorer",
-                "Explorer",
-                ToolContent::Workspace(tree.clone()),
+                "example.tool",
+                "Tool",
+                ToolContent::Extension(ExtensionView::Tree(tree.clone())),
                 DockLocation::Left,
             );
             let again = workbench.register_tool(
-                "knot.explorer",
-                "Explorer",
-                ToolContent::Workspace(tree),
+                "example.tool",
+                "Tool",
+                ToolContent::Extension(ExtensionView::Tree(tree)),
                 DockLocation::Left,
             );
             assert_eq!(again, id);

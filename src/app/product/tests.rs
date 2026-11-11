@@ -302,7 +302,8 @@ fn place_explorer(
 ) {
     cx.update_window(window_handle, |_, _, cx| {
         shell.update(cx, |shell, cx| {
-            let id = shell.explorer_frame(cx).unwrap();
+            shell.ensure_test_tool(false, cx);
+            let id = shell.test_tool_frame(cx).unwrap();
             let (pane, tab) = shell.workbench.read(cx).tool_tab(id).unwrap();
             let area = crate::app::workbench::Area::Dock(dock);
             if shell.workbench.read(cx).pane_area(pane) != Some(area) {
@@ -504,4 +505,14 @@ fn wait_for_api_condition(cx: &mut TestAppContext, mut ready: impl FnMut(&gpui::
         );
         std::thread::yield_now();
     }
+}
+
+/// Toggle the left test tool as the explorer's toggle command did, registering
+/// it first.
+fn toggle_test_tool(shell: &Entity<ProductShell>, cx: &mut TestAppContext) {
+    shell.update(cx, |shell, cx| {
+        shell.ensure_test_tool(false, cx);
+        shell.toggle_tool(crate::app::product::tools::TEST_TOOL_ID, cx);
+    });
+    cx.run_until_parked();
 }

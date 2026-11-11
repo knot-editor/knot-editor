@@ -146,9 +146,6 @@ impl ProductShell {
                 Some(CommandView::Terminal(view)) => {
                     view.update(cx, |view, cx| view.key_down(keystroke, cx))
                 }
-                Some(CommandView::Workspace(tree)) => {
-                    tree.update(cx, |tree, cx| tree.key_down(keystroke, cx))
-                }
                 Some(CommandView::Extension(ExtensionView::Tree(tree))) => {
                     tree.update(cx, |tree, cx| tree.key_down(keystroke, cx))
                 }

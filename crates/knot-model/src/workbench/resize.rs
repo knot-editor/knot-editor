@@ -516,7 +516,11 @@ mod tests {
             .split_pane(left, SplitDirection::Horizontal, SplitPlacement::After)
             .unwrap();
         workbench.set_split_ratio(right, 0.25);
-        let explorer = workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
+        let explorer = workbench.register_tool(
+            crate::workbench::tools::LEFT_TOOL_ID,
+            "Explorer",
+            DockLocation::Left,
+        );
         let (dock, _) = workbench.show_tool(explorer).unwrap();
         let other = workbench.register_tool("knot.other", "Other", DockLocation::Bottom);
         let (bottom, _) = workbench.show_tool(other).unwrap();
@@ -559,7 +563,11 @@ mod tests {
     fn dock_panes_resize_their_dock_and_splits_across_it() {
         let workbench = &mut Workbench::empty();
         let (pane, _) = workbench.open_document_in_center(DocumentId::new(6));
-        let first = workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
+        let first = workbench.register_tool(
+            crate::workbench::tools::LEFT_TOOL_ID,
+            "Explorer",
+            DockLocation::Left,
+        );
         let (dock, tab) = workbench.show_tool(first).unwrap();
         let second = workbench.register_tool("knot.other", "Other", DockLocation::Left);
         workbench.show_tool(second).unwrap();

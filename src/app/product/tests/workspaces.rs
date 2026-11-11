@@ -65,7 +65,6 @@ await commands.register("workspaces.validate", async ({ target: command }) => {
     cx.read(|cx| {
         assert_eq!(first.read(cx).workspace.snapshot().generation(), 1);
         assert_eq!(second.read(cx).workspace.snapshot().generation(), 5);
-        assert!(second.read(cx).workspace_tree.is_some());
         assert_eq!(documents.read(cx).documents().count(), 2);
     });
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
@@ -256,18 +255,6 @@ await commands.register("workspaces.empty-ready", () => {});
         cx,
     );
     cx.read(|cx| {
-        assert!(shell.read(cx).workspace_tree.is_some());
-        assert!(
-            shell
-                .read(cx)
-                .workspace_tree
-                .as_ref()
-                .unwrap()
-                .read(cx)
-                .workspace()
-                .roots()
-                .is_empty()
-        );
         assert_eq!(shell.read(cx).workspace.snapshot().generation(), 2);
         assert_eq!(documents.read(cx).documents().count(), 0);
     });
@@ -275,9 +262,7 @@ await commands.register("workspaces.empty-ready", () => {});
 }
 
 #[gpui::test]
-fn native_root_commands_add_reorder_and_remove_roots_without_closing_documents(
-    cx: &mut TestAppContext,
-) {
+fn add_folder_appends_a_root_and_open_leaves_a_window_with_roots_alone(cx: &mut TestAppContext) {
     let first_dir = tempfile::tempdir().unwrap();
     let second_dir = tempfile::tempdir().unwrap();
     let file_uri = |path: &std::path::Path| {
@@ -306,17 +291,6 @@ fn native_root_commands_add_reorder_and_remove_roots_without_closing_documents(
     };
     let installed = roots(cx);
 
-    // Removing or moving without a selected root is unavailable.
-    for command in [
-        super::super::commands::REMOVE_FOLDER_COMMAND,
-        super::super::commands::MOVE_FOLDER_UP_COMMAND,
-    ] {
-        assert_eq!(
-            wait_for_command(dispatch_product_command(&shell, window, command, cx), cx),
-            CommandOutcome::Unavailable
-        );
-    }
-
     let add = super::super::commands::ADD_FOLDER_COMMAND;
     assert_eq!(
         wait_for_command(dispatch_product_command(&shell, window, add, cx), cx),
@@ -336,39 +310,6 @@ fn native_root_commands_add_reorder_and_remove_roots_without_closing_documents(
     assert_eq!(
         cx.read(|cx| shell.read(cx).workspace.snapshot().generation()),
         generation
-    );
-
-    let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
-    tree.update(cx, |tree, cx| {
-        assert!(tree.activate_for_test(&second, false, cx))
-    });
-    let up = super::super::commands::MOVE_FOLDER_UP_COMMAND;
-    assert_eq!(
-        wait_for_command(dispatch_product_command(&shell, window, up, cx), cx),
-        CommandOutcome::Completed
-    );
-    assert_eq!(roots(cx), [added[1].clone(), added[0].clone()]);
-    assert_eq!(
-        wait_for_command(dispatch_product_command(&shell, window, up, cx), cx),
-        CommandOutcome::Unavailable
-    );
-    let down = super::super::commands::MOVE_FOLDER_DOWN_COMMAND;
-    assert_eq!(
-        wait_for_command(dispatch_product_command(&shell, window, down, cx), cx),
-        CommandOutcome::Completed
-    );
-    assert_eq!(roots(cx), added);
-
-    let remove = super::super::commands::REMOVE_FOLDER_COMMAND;
-    let open_documents = cx.read(|cx| documents.read(cx).documents().count());
-    assert_eq!(
-        wait_for_command(dispatch_product_command(&shell, window, remove, cx), cx),
-        CommandOutcome::Completed
-    );
-    assert_eq!(roots(cx), [installed[0].clone()]);
-    assert_eq!(
-        cx.read(|cx| documents.read(cx).documents().count()),
-        open_documents
     );
 
     // Open leaves a window that has roots alone and opens the folder in a new

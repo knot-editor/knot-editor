@@ -16,12 +16,13 @@ fn explorer_window(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyW
     let (shell, window) = empty_product_window(&documents, cx);
     shell.update(cx, |shell, cx| {
         shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
+        shell.ensure_test_tool(true, cx);
     });
     cx.run_until_parked();
     (shell, window)
 }
 
-/// Click a file in the explorer: once for a preview, twice for a tab.
+/// Open a file from the test tool: a preview, or a tab.
 fn click(
     shell: &Entity<ProductShell>,
     window: gpui::AnyWindowHandle,
@@ -29,12 +30,12 @@ fn click(
     preview: bool,
     cx: &mut TestAppContext,
 ) {
-    let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
+    let tree = cx.read(|cx| shell.read(cx).test_tool_tree(cx));
     let uri = ResourceUri::parse(&format!("mem://product/{name}")).unwrap();
     cx.update_window(window, |_, window, cx| {
         focus_view(&tree.focus_handle(cx), window, cx);
-        tree.update(cx, |tree, cx| {
-            assert!(tree.activate_for_test(&uri, preview, cx))
+        shell.update(cx, |shell, cx| {
+            shell.open_from_test_tool(uri.clone(), preview, cx)
         });
     })
     .unwrap();

@@ -267,3 +267,39 @@ fn toggle_explorer_hides_a_focused_explorer_and_shows_it_again(cx: &mut TestAppC
     assert!(tree.is_attached(cx) && tree.is_focused(cx));
     let _ = &explorer.product;
 }
+
+fn tool_in(layout: &serde_json::Value, dock: &str) -> Option<String> {
+    layout["docks"][dock]["root"]["tabs"]
+        .as_array()?
+        .iter()
+        .find_map(|tab| tab["tool"].as_str().map(str::to_owned))
+}
+
+#[gpui::test]
+fn the_explorer_is_an_ordinary_tool_for_layout_memory(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let window = &explorer.window;
+    assert_eq!(
+        tool_in(&window.layout(cx), "left").as_deref(),
+        Some(VIEW),
+        "the explorer starts in the left dock"
+    );
+
+    explorer.tree.focus(cx);
+    assert_eq!(
+        window.run_command("workbench.move-tab-to-right-dock", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(tool_in(&window.layout(cx), "right").as_deref(), Some(VIEW));
+    assert_eq!(tool_in(&window.layout(cx), "left"), None);
+
+    assert_eq!(
+        window.run_command("workbench.reset-layout", cx),
+        CommandOutcome::Completed
+    );
+    wait_until(cx, |cx| {
+        tool_in(&window.layout(cx), "left").as_deref() == Some(VIEW)
+    });
+}

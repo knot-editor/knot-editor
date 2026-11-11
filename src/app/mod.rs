@@ -49,7 +49,6 @@ mod window_sessions;
 #[cfg(any(test, feature = "test-support"))]
 mod work_counts;
 mod workbench;
-mod workspace_tree;
 mod zoom;
 
 use command_palette::CommandPalette;

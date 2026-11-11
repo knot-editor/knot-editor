@@ -272,6 +272,7 @@ fn active(cx: &TestAppContext) -> Option<gpui::AnyWindowHandle> {
 fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_terminals(
     cx: &mut TestAppContext,
 ) {
+    cx.set_global(crate::app::product::tools::TestToolInEveryWindow);
     let launch = Launch::new(cx);
     let text = format!("first\n{}", "line\n".repeat(300));
     launch
@@ -327,7 +328,14 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     second.update(cx, |shell, cx| {
         shell.replace_workspace_roots(vec![uri("b")], cx);
     });
-    second.update(cx, |shell, cx| shell.new_document_in_pane(None, cx));
+    second.update(cx, |shell, cx| {
+        shell.ensure_test_tool(true, cx);
+        let tool = shell.test_tool_frame(cx).unwrap();
+        shell.workbench.update(cx, |workbench, _| {
+            workbench.show_tool(tool);
+        });
+        shell.new_document_in_pane(None, cx)
+    });
     edit(first_document(&second, cx), "notes", cx);
     launch.open_file(&second, "b/two.txt", cx);
     cx.update_window(first_window, |_, window, _| window.activate_window())

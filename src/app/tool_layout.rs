@@ -16,7 +16,7 @@
 use std::time::Duration;
 
 use gpui::Global;
-pub(crate) use knot_model::workbench::{EXPLORER_TOOL_ID, TOOL_LAYOUT_VERSION, ToolLayoutSnapshot};
+pub(crate) use knot_model::workbench::{TOOL_LAYOUT_VERSION, ToolLayoutSnapshot};
 
 use super::record_store::{RecordStore, StateDatabase};
 

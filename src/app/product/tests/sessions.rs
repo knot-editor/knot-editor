@@ -590,13 +590,11 @@ fn multi_window_sessions_close_every_source_and_create_every_destination(cx: &mu
             .collect::<Vec<_>>()
     });
     assert_eq!(created_roots, ["mem://product/a", "mem://product/b"]);
-    // A destination without documents has an empty center beside its
-    // root's explorer dock.
+    // A destination without documents has an empty center.
     assert!(h.texts(&created_shell, cx).is_empty());
     cx.read(|cx| {
         let workbench = created_shell.read(cx).workbench.read(cx);
         assert_eq!(workbench.center(), None);
-        assert!(workbench.tool_visible(created_shell.read(cx).explorer_frame(cx).unwrap()));
     });
     assert_eq!(h.texts(&first_shell, cx), ["one"]);
 }
@@ -1026,6 +1024,7 @@ fn terminal_sessions(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<T
 #[gpui::test]
 fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAppContext) {
     use crate::app::editor::EditorViewState;
+    cx.set_global(crate::app::product::tools::TestToolInEveryWindow);
     let h = harness(cx);
     // Long enough that restored scroll positions are not clamped by paint.
     let text = format!("first\nsecond\nthird\nfourth\n{}", "line\n".repeat(400));
@@ -1123,7 +1122,7 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
 
     // A tool in another dock, beside a hidden one, is placed exactly too.
     let tab = restored.update(cx, |shell, cx| {
-        let explorer = shell.explorer_frame(cx).unwrap();
+        let explorer = shell.test_tool_frame(cx).unwrap();
         let pane = shell.workbench.read(cx).center_pane().unwrap();
         shell.workbench.update(cx, |workbench, _| {
             workbench.place_tool(explorer, DockLocation::Bottom);
@@ -1294,11 +1293,6 @@ fn layouts_prune_unknown_tabs_hide_unnamed_tools_and_ignore_unsupported_versions
     assert_eq!(captured["docks"]["bottom"]["root"], serde_json::Value::Null);
     assert_eq!(h.texts(&pruned, cx), ["one", "loose"]);
     assert_eq!(captured["docks"]["left"]["size"], 200.);
-    cx.read(|cx| {
-        let shell = pruned.read(cx);
-        let explorer = shell.explorer_frame(cx).unwrap();
-        assert!(shell.workbench.read(cx).tool_tab(explorer).is_none());
-    });
     // The ignored layout falls back to the entries-only arrangement.
     let (fallback, _) = created(&result, 1, cx);
     assert_eq!(h.texts(&fallback, cx), ["two"]);

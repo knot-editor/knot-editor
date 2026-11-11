@@ -756,9 +756,6 @@ impl ProductShell {
                         .and_then(|(_, resolved)| *resolved)
                 })
         };
-        if layout.names_tool(crate::app::tool_layout::EXPLORER_TOOL_ID) {
-            self.ensure_explorer(false, cx);
-        }
         let plan = {
             let workbench = self.workbench.read(cx);
             layout.plan(resolve, |tool| workbench.tool_by_stable_id(tool).is_some())

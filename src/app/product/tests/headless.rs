@@ -168,47 +168,6 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     cx.read(|cx| assert_eq!(model.read(cx).text(), "q"));
 }
 
-#[gpui::test]
-fn explorer_keys_select_and_open_a_file(cx: &mut TestAppContext) {
-    let documents = install_globals(cx);
-    let (filesystems, provider) = memory_filesystems_with_provider();
-    for name in ["a.txt", "b.txt"] {
-        provider
-            .seed_file(
-                ResourceUri::parse(&format!("mem://product/{name}")).unwrap(),
-                name.as_bytes(),
-            )
-            .unwrap();
-    }
-    cx.set_global(ApplicationFileSystems(filesystems));
-    let (shell, _) = headless_session(&documents, cx);
-    shell.update(cx, |shell, cx| {
-        shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
-    });
-    cx.run_until_parked();
-    let tree = cx.read(|cx| shell.read(cx).workspace_tree.clone().unwrap());
-    shell.update(cx, |shell, cx| {
-        let handle = tree.read(cx).focus_handle(cx);
-        shell.focus_view(&handle, cx);
-    });
-    let row = cx.read(|cx| {
-        let labels = tree.read(cx).row_labels();
-        labels.iter().position(|label| label == "  b.txt").unwrap()
-    });
-    press(&shell, &"down ".repeat(row + 1), cx);
-    press(&shell, "enter", cx);
-    cx.read(|cx| {
-        let documents = documents.read(cx);
-        let workbench = shell.read(cx).workbench.read(cx);
-        let pane = workbench.pane(workbench.center_pane().unwrap()).unwrap();
-        let uri = pane
-            .active_tab()
-            .document_id()
-            .and_then(|document| documents.get(document)?.resource_uri().cloned());
-        assert_eq!(uri.unwrap().to_string(), "mem://product/b.txt");
-    });
-}
-
 #[cfg(unix)]
 #[gpui::test]
 fn terminal_keys_and_text_reach_the_program(cx: &mut TestAppContext) {

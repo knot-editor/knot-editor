@@ -937,7 +937,7 @@ export async function registerView(contribution) {
   const value = record(contribution, "workbench.registerView requires a contribution object");
   const id = string(value.id, "view id must be text");
   if (id.length === 0 || id.startsWith("knot.") || /\s/.test(id)
-      || ["editor", "terminal", "workspace-tree"].includes(id)) {
+      || ["editor", "terminal"].includes(id)) {
     throw new TypeError("view id must be a unique, non-reserved namespaced string");
   }
   const title = string(value.title, "view title must be text");

@@ -76,7 +76,7 @@ use super::{
         ResourceStat, ResourceVersion,
     },
     model::{Buffer, BufferModel},
-    open::{OpenResource, enumerate_directory, load_resource},
+    open::{OpenResource, load_resource},
     picker::{Picker, PickerEntry, PickerEvent},
     terminal::session::TerminalSession,
     terminal::view::TerminalView,
@@ -85,13 +85,10 @@ use super::{
     },
     workbench::{
         Area, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, SplitDirection,
-        SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent, ToolFrameId,
-        Workbench, WorkbenchLayout,
+        SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent, Workbench,
+        WorkbenchLayout,
     },
     workspace::WorkspaceState,
-    workspace_tree::{
-        WorkspaceTree, WorkspaceTreeEvent, WorkspaceTreeRequest, WorkspaceTreeResponse,
-    },
 };
 
 /// Every open product session. A session opens when it is created and closes
@@ -571,8 +568,6 @@ pub(crate) struct ProductShell {
     /// Repaints the status bar when its items or settings change.
     _status_bar_observers: Vec<Subscription>,
     application_focus: Vec<(FocusHandle, Subscription, Subscription)>,
-    workspace_tree: Option<Entity<WorkspaceTree>>,
-    workspace_tree_subscription: Option<Subscription>,
     contributed_views: BTreeMap<String, ContributedView>,
     _contributed_view_release: Option<Subscription>,
     _window_closed: Option<Subscription>,
@@ -712,8 +707,6 @@ impl ProductShell {
             _appearance_observer: None,
             _status_bar_observers: Vec::new(),
             application_focus: Vec::new(),
-            workspace_tree: None,
-            workspace_tree_subscription: None,
             contributed_views: BTreeMap::new(),
             _contributed_view_release: None,
             _window_closed: None,
@@ -857,6 +850,10 @@ impl ProductShell {
     /// Report the session to extensions as it changes and show their
     /// contributed frames, which needs no window.
     pub(crate) fn observe_application(&mut self, cx: &mut Context<Self>) {
+        #[cfg(test)]
+        if cx.has_global::<tools::TestToolInEveryWindow>() {
+            self.ensure_test_tool(false, cx);
+        }
         self.application_observer = Some(cx.observe(&cx.entity(), |this, _, cx| {
             super::extensions::host::application_changed(cx);
             this.schedule_view_state(cx);
@@ -1325,7 +1322,6 @@ impl ProductShell {
             target.focused.then(|| match view {
                 super::workbench::CommandView::Editor(_) => "editor".to_owned(),
                 super::workbench::CommandView::Terminal(_) => "terminal".to_owned(),
-                super::workbench::CommandView::Workspace(_) => "workspace-tree".to_owned(),
                 super::workbench::CommandView::Extension(view) => view.kind(cx),
             })
         })

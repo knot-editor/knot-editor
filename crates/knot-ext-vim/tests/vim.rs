@@ -722,7 +722,7 @@ fn ctrl_w_directions_stay_in_the_center(cx: &mut TestAppContext) {
     let product = start(cx);
     let session = open(&product, "one", 0, cx);
     let (editor, explorer) = (0, 1);
-    session.run_command("workbench.toggle-explorer", cx);
+    session.toggle_dock_tool(cx);
     assert_eq!(session.pane_count(cx), 2);
     assert_eq!(session.focused_pane(cx), explorer);
     session.run_command("workbench.focus-pane-right", cx);

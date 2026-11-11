@@ -450,6 +450,16 @@ impl TestEditor {
             .update(cx, |shell, cx| shell.replace_workspace_roots(roots, cx));
     }
 
+    /// Show and focus a tool in the left dock, or hide it when focused, as the
+    /// toggle command of a contributed view does.
+    pub fn toggle_dock_tool(&self, cx: &mut TestAppContext) {
+        self.shell.update(cx, |shell, cx| {
+            shell.ensure_test_tool(false, cx);
+            shell.toggle_tool(crate::app::product::tools::TEST_TOOL_ID, cx);
+        });
+        cx.run_until_parked();
+    }
+
     /// How many panes the workbench holds.
     pub fn pane_count(&self, cx: &mut TestAppContext) -> usize {
         cx.read(|cx| self.shell.read(cx).workbench.read(cx).panes().len())

@@ -96,8 +96,7 @@ impl Workbench {
 #[cfg(test)]
 mod tests {
     use super::super::{
-        DocumentId, EXPLORER_TOOL_ID, StoredPlacement, TabMoveDestination, TabSurfaceId,
-        ToolLayoutSnapshot,
+        DocumentId, StoredPlacement, TabMoveDestination, TabSurfaceId, ToolLayoutSnapshot,
     };
     use super::*;
 
@@ -197,7 +196,11 @@ mod tests {
     #[test]
     fn the_snapshot_records_the_terminal_home() {
         let workbench = &mut Workbench::empty();
-        workbench.register_tool(EXPLORER_TOOL_ID, "Explorer", DockLocation::Left);
+        workbench.register_tool(
+            crate::workbench::tools::LEFT_TOOL_ID,
+            "Explorer",
+            DockLocation::Left,
+        );
         assert_eq!(
             workbench.tool_layout_snapshot().terminal_home,
             DEFAULT_TERMINAL_HOME
@@ -209,7 +212,7 @@ mod tests {
             serde_json::from_str(&serde_json::to_string(&snapshot).unwrap()).unwrap();
         assert_eq!(decoded.terminal_home, DockLocation::Left);
         assert_eq!(
-            snapshot.placement(EXPLORER_TOOL_ID),
+            snapshot.placement(crate::workbench::tools::LEFT_TOOL_ID),
             Some(StoredPlacement::Hidden {
                 dock: DockLocation::Left,
                 index: usize::MAX
