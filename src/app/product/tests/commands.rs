@@ -589,3 +589,46 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
         assert_eq!(workbench.focused_pane().unwrap().tabs().len(), 1);
     });
 }
+
+#[gpui::test]
+async fn open_runs_in_a_new_blank_window_without_a_focused_tab(cx: &mut TestAppContext) {
+    struct CountingOpenDialog(Arc<std::sync::atomic::AtomicUsize>);
+    impl ProductOpenDialog for CountingOpenDialog {
+        fn select(&self) -> OpenDialogFuture {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async { OpenDialogOutcome::Cancelled })
+        }
+    }
+    let documents = install_globals(cx);
+    let opened = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    cx.set_global(ApplicationOpenDialog(Arc::new(CountingOpenDialog(
+        opened.clone(),
+    ))));
+    cx.update(super::super::bind_product_keys);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, first) = product_window(document, model, cx);
+    cx.update_window(first, |_, window, cx| {
+        window.activate_window();
+        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(first, "secondary-shift-p");
+    cx.run_until_parked();
+    cx.simulate_keystrokes(first, "w i n d o w . n e w enter");
+    cx.run_until_parked();
+    let second = cx
+        .windows()
+        .into_iter()
+        .find(|window| *window != first)
+        .expect("a new window");
+    cx.update_window(second, |_, window, _| window.activate_window())
+        .unwrap();
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(second, "secondary-o");
+    cx.run_until_parked();
+    assert_eq!(opened.load(std::sync::atomic::Ordering::SeqCst), 1);
+}

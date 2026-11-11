@@ -16,9 +16,7 @@ impl ProductShell {
     }
 
     pub(super) fn target_is_live(&self, target: &ProductCommandTarget, cx: &App) -> bool {
-        target.workbench.upgrade() == Some(self.workbench.clone())
-            && target.validate_tab(cx).is_ok()
-            && target.validate_view(cx).is_ok()
+        target.workbench.upgrade() == Some(self.workbench.clone()) && target.validate(cx).is_ok()
     }
 
     pub(crate) fn start_save_command(
