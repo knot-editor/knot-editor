@@ -1,6 +1,6 @@
 // New File, New Folder, Rename, and Delete: inline editing on the row they
 // act on, then the file operation, then the tree follows.
-import { commands, documents, files, keymaps, workbench, workspaces } from "knot";
+import { commands, documents, files, keymaps, platform, workbench, workspaces } from "knot";
 import type { CommandContext, JsonValue, WindowTarget } from "knot";
 import { childUri, pathSegments, renameSelection } from "./names.js";
 import { activeFile, revealFile } from "./reveal.js";
@@ -197,5 +197,5 @@ export async function registerActions(state: ExplorerState) {
   }
   keymaps.bind("f2", RENAME, { view: VIEW_ID });
   keymaps.bind("delete", DELETE, { view: VIEW_ID });
-  keymaps.bind("cmd-backspace", DELETE, { view: VIEW_ID });
+  if (platform === "macos") keymaps.bind("cmd-backspace", DELETE, { view: VIEW_ID });
 }

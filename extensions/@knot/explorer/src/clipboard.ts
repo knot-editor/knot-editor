@@ -1,11 +1,11 @@
 // Copy, Cut, and Paste of a file or folder, and the texts and file manager
 // actions of a row: its path, relative path, and name.
-import { commands, files, keymaps, workbench } from "knot";
+import { commands, files, keymaps, platform, workbench } from "knot";
 import type { CommandContext, WorkspaceRoot } from "knot";
 import { describe, report, rootsOf, rowFor, showCreated } from "./actions.js";
 import { childUri, copyName } from "./names.js";
 import {
-  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, displayPath, nameOf, parentOf, parseRowId, PASTE, REVEAL,
+  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, displayPath, nameOf, parentOf, parseRowId, PASTE, REVEAL, REVEAL_LABEL,
   rowId, rootOf, trimmed, VIEW_ID,
 } from "./rows.js";
 import type { ExplorerState } from "./state.js";
@@ -102,7 +102,7 @@ export async function registerClipboard(state: ExplorerState) {
       (ctx, s) => copyText(ctx, s, async (row, c) => relativePath(await rootsOf(c.target.windowTarget), row.root, row.uri))],
     [COPY_NAME, "Copy File Name", "Copy the name of the selected file or folder of the explorer.",
       (ctx, s) => copyText(ctx, s, async (row) => nameOf(row.uri))],
-    [REVEAL, "Reveal in Finder", "Show the selected file or folder of the explorer in the file manager.", async (ctx, s) => {
+    [REVEAL, REVEAL_LABEL, "Show the selected file or folder of the explorer in the file manager.", async (ctx, s) => {
       const row = await rowOf(ctx, s);
       if (row === null) return commands.unavailable();
       try {
@@ -116,7 +116,8 @@ export async function registerClipboard(state: ExplorerState) {
     await commands.register(name, (ctx) => run(ctx, false), { title, description });
     await commands.registerForView(VIEW_ID, name, (ctx) => run(ctx, true));
   }
-  keymaps.bind("cmd-x", CUT, { view: VIEW_ID });
-  keymaps.bind("cmd-c", COPY, { view: VIEW_ID });
-  keymaps.bind("cmd-v", PASTE, { view: VIEW_ID });
+  const mod = platform === "macos" ? "cmd" : "ctrl";
+  keymaps.bind(`${mod}-x`, CUT, { view: VIEW_ID });
+  keymaps.bind(`${mod}-c`, COPY, { view: VIEW_ID });
+  keymaps.bind(`${mod}-v`, PASTE, { view: VIEW_ID });
 }

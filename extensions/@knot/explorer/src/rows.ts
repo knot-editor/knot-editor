@@ -1,4 +1,5 @@
 // The explorer's rows: identities, ordering, and the tree items of a folder.
+import { platform } from "knot";
 import type { FileEntry, TreeAction, TreeItem, WorkspaceRoot } from "knot";
 
 export const VIEW_ID = "builtin.explorer";
@@ -17,6 +18,10 @@ export const COPY_RELATIVE_PATH = "explorer.copy-relative-path";
 export const COPY_NAME = "explorer.copy-file-name";
 export const REVEAL = "explorer.reveal-in-finder";
 
+/** The name of the platform's file manager action. */
+export const REVEAL_LABEL =
+  platform === "macos" ? "Reveal in Finder" : platform === "windows" ? "Reveal in File Explorer" : "Reveal in File Manager";
+
 /** What a row's context menu offers: new items in a folder, clipboard and
  * rename and delete for anything but a root, and copied paths. */
 function menuActions(id: string, folder: boolean, root: boolean): TreeAction[] {
@@ -34,7 +39,7 @@ function menuActions(id: string, folder: boolean, root: boolean): TreeAction[] {
     action("Copy Relative Path", COPY_RELATIVE_PATH),
     action("Copy File Name", COPY_NAME),
     ...(root ? [] : [action("Rename…", RENAME), action("Delete…", DELETE)]),
-    action("Reveal in Finder", REVEAL),
+    action(REVEAL_LABEL, REVEAL),
   ];
 }
 
