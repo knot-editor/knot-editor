@@ -176,6 +176,10 @@ pub trait FileSystemProvider: Send + Sync {
     /// its parent must; a symlink moves itself, not its target.
     fn rename(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()>;
 
+    /// Copies a file or a directory tree to a destination that does not exist
+    /// and whose parent does, within this provider.
+    fn copy(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()>;
+
     /// Removes a file or a directory tree. Unless `permanent`, a provider with
     /// a trash moves the entry there and one without rejects; a provider
     /// without a trash always removes.
@@ -374,6 +378,9 @@ mod tests {
             Box::pin(async { Ok(()) })
         }
         fn rename(&self, _: ResourceUri, _: ResourceUri) -> ProviderFuture<'_, ()> {
+            Box::pin(async { Ok(()) })
+        }
+        fn copy(&self, _: ResourceUri, _: ResourceUri) -> ProviderFuture<'_, ()> {
             Box::pin(async { Ok(()) })
         }
         fn delete(&self, _: ResourceUri, _: bool) -> ProviderFuture<'_, ()> {

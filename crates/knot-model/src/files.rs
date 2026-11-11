@@ -324,6 +324,39 @@ pub async fn rename(
     Ok((from, to))
 }
 
+/// Copies a file or directory tree to a destination that does not exist,
+/// creating its missing parents. Returns the normalized destination.
+pub async fn copy(
+    providers: Arc<FileSystemProviderRegistry>,
+    from: &str,
+    to: &str,
+) -> Result<ResourceUri, ResourceError> {
+    let from = providers.normalize(parse(from)?).await?;
+    let to = providers.normalize(parse(to)?).await?;
+    if from.scheme() != to.scheme() {
+        return Err(ResourceError::InvalidUri {
+            uri: to.to_string(),
+            reason: "a resource cannot be copied to another scheme".into(),
+        });
+    }
+    if to.is_within(&from) {
+        return Err(ResourceError::InvalidUri {
+            uri: to.to_string(),
+            reason: "a resource cannot be copied into itself".into(),
+        });
+    }
+    let provider = providers.provider(&from)?;
+    if provider.stat(from.clone()).await? == ResourceStat::Missing {
+        return Err(ResourceError::NotFound { uri: from });
+    }
+    if provider.stat(to.clone()).await? != ResourceStat::Missing {
+        return Err(ResourceError::AlreadyExists { uri: to });
+    }
+    ensure_parent(provider.as_ref(), &to).await?;
+    provider.copy(from, to.clone()).await?;
+    Ok(to)
+}
+
 /// Deletes a file or directory tree, to the trash unless `permanent`. Returns
 /// the normalized URI.
 pub async fn delete(
@@ -568,6 +601,34 @@ mod tests {
         ));
         assert!(matches!(
             run(rename(providers, "mem://f/missing", "mem://f/elsewhere")),
+            Err(ResourceError::NotFound { .. })
+        ));
+    }
+
+    #[test]
+    fn copy_duplicates_trees_and_refuses_clobbering_and_cycles() {
+        let providers = fixture();
+        let to = run(copy(providers.clone(), "mem://f/src", "mem://f/x/y/dup")).unwrap();
+        assert_eq!(to.to_string(), "mem://f/x/y/dup");
+        assert_eq!(
+            run(read_text(providers.clone(), "mem://f/x/y/dup/lib.rs")).unwrap(),
+            "fn main() {}"
+        );
+        assert_eq!(
+            run(read_text(providers.clone(), "mem://f/src/lib.rs")).unwrap(),
+            "fn main() {}"
+        );
+        run(copy(providers.clone(), "mem://f/notes.txt", "mem://f/n2.txt")).unwrap();
+        assert!(matches!(
+            run(copy(providers.clone(), "mem://f/bom.txt", "mem://f/n2.txt")),
+            Err(ResourceError::AlreadyExists { .. })
+        ));
+        assert!(matches!(
+            run(copy(providers.clone(), "mem://f/src", "mem://f/src/inside")),
+            Err(ResourceError::InvalidUri { .. })
+        ));
+        assert!(matches!(
+            run(copy(providers, "mem://f/missing", "mem://f/elsewhere")),
             Err(ResourceError::NotFound { .. })
         ));
     }

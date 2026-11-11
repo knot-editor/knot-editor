@@ -13,11 +13,12 @@ use super::{
 };
 use crate::resource::ResourceUri;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct MemoryDirectory {
     children: BTreeMap<String, MemoryNode>,
 }
 
+#[derive(Clone)]
 enum MemoryNode {
     File(ResourceFile),
     Directory(MemoryDirectory),
@@ -412,6 +413,33 @@ impl FileSystemProvider for MemoryFileSystemProvider {
                 .insert(to_name, node);
             drop(hierarchy);
             self.report(&from);
+            self.report(&to);
+            Ok(())
+        })
+    }
+
+    fn copy(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()> {
+        Box::pin(async move {
+            let from = self.normalize_scoped(from)?;
+            let to = self.normalize_scoped(to)?;
+            let from_path = relative_segments(&self.root, &from);
+            let mut to_path = relative_segments(&self.root, &to);
+            let Some(to_name) = to_path.pop() else {
+                return Err(ResourceError::AlreadyExists { uri: to });
+            };
+            let mut hierarchy = self
+                .hierarchy
+                .write()
+                .map_err(|error| ResourceError::io("lock memory provider", error))?;
+            let node = find_node(&hierarchy, &from_path)
+                .ok_or_else(|| ResourceError::NotFound { uri: from.clone() })?
+                .clone();
+            let parent = directory_mut(&mut hierarchy, &to_path, &to)?;
+            if parent.children.contains_key(&to_name) {
+                return Err(ResourceError::AlreadyExists { uri: to });
+            }
+            parent.children.insert(to_name, node);
+            drop(hierarchy);
             self.report(&to);
             Ok(())
         })

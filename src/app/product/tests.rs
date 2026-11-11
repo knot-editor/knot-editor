@@ -131,6 +131,10 @@ impl FileSystemProvider for GatedFileSystemProvider {
         self.inner.rename(from, to)
     }
 
+    fn copy(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()> {
+        self.inner.copy(from, to)
+    }
+
     fn delete(&self, uri: ResourceUri, permanent: bool) -> ProviderFuture<'_, ()> {
         self.inner.delete(uri, permanent)
     }

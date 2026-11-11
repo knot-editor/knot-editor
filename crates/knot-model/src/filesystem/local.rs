@@ -430,6 +430,32 @@ impl FileSystemProvider for LocalFileSystemProvider {
         })
     }
 
+    fn copy(&self, from: ResourceUri, to: ResourceUri) -> ProviderFuture<'_, ()> {
+        let ((from, from_path), (to, to_path)) = match self
+            .scoped_path(from)
+            .and_then(|f| Ok((f, self.scoped_path(to)?)))
+        {
+            Ok(resolved) => resolved,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+        let mutation_lock = self.mutation_lock.clone();
+        self.spawn("copy task", move || {
+            let _guard = mutation_lock
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            if from_path.symlink_metadata().is_err() {
+                return Err(ResourceError::NotFound { uri: from });
+            }
+            if to_path.symlink_metadata().is_ok() {
+                return Err(ResourceError::AlreadyExists { uri: to });
+            }
+            if to_path.parent().is_some_and(|parent| !parent.is_dir()) {
+                return Err(ResourceError::NotFound { uri: to });
+            }
+            copy_tree(&from_path, &to_path).map_err(|error| map_io("copy", &from, error))
+        })
+    }
+
     fn delete(&self, uri: ResourceUri, permanent: bool) -> ProviderFuture<'_, ()> {
         let (uri, path) = match self.scoped_path(uri) {
             Ok(resolved) => resolved,
@@ -505,6 +531,25 @@ impl FileSystemProvider for LocalFileSystemProvider {
             .map_err(|error| ResourceError::io("watch", error))?;
         Ok(Box::new(watcher))
     }
+}
+
+/// Copies a file, keeping its permissions, or a directory tree. A symlink is
+/// copied as a link.
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    let kind = from.symlink_metadata()?.file_type();
+    if kind.is_dir() {
+        std::fs::create_dir(to)?;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            copy_tree(&entry.path(), &to.join(entry.file_name()))?;
+        }
+        return Ok(());
+    }
+    #[cfg(unix)]
+    if kind.is_symlink() {
+        return std::os::unix::fs::symlink(std::fs::read_link(from)?, to);
+    }
+    std::fs::copy(from, to).map(|_| ())
 }
 
 fn resource_version(metadata: &std::fs::Metadata) -> Result<ResourceVersion, ResourceError> {
@@ -880,5 +925,38 @@ mod tests {
         assert!(!temporary.path().join("link").exists());
         run(provider.delete(child_uri(&root, "renamed"), true)).unwrap();
         assert!(temporary.path().join("target/f").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_duplicates_trees_keeping_permissions_and_links() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temporary = tempfile::tempdir().unwrap();
+        let provider = LocalFileSystemProvider::new(temporary.path()).unwrap();
+        fs::create_dir_all(temporary.path().join("tree/inner")).unwrap();
+        let script = temporary.path().join("tree/inner/run.sh");
+        fs::write(&script, b"#!/bin/sh").unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("inner", temporary.path().join("tree/link")).unwrap();
+
+        let root = provider.root().clone();
+        run(provider.copy(child_uri(&root, "tree"), child_uri(&root, "dup"))).unwrap();
+        let copy = temporary.path().join("dup");
+        assert_eq!(fs::read(copy.join("inner/run.sh")).unwrap(), b"#!/bin/sh");
+        assert_eq!(
+            fs::metadata(copy.join("inner/run.sh"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
+        assert!(copy.join("link").is_symlink());
+        assert!(temporary.path().join("tree/inner/run.sh").exists());
+        assert!(matches!(
+            run(provider.copy(child_uri(&root, "tree"), child_uri(&root, "dup"))),
+            Err(ResourceError::AlreadyExists { .. })
+        ));
     }
 }
