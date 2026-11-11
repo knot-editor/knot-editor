@@ -268,12 +268,14 @@ to be rebuilt later:
     [decisions](../decisions/documents-and-persistence.md#file-watching),
     [settings](../settings.md)).
 
-- **D010 — Filesystem mutation API**
+- ✅ **D010 — Filesystem mutation API**
   - Create file, create directory, rename or move, and delete (to the trash
     where the platform supports it), through providers and a public API.
   - Open documents follow renames, and deletion of their file is reported to
     them.
-  - 🚧 [Plan](d010-filesystem-mutation.md)
+    ([architecture](../architecture/documents-and-persistence.md#uri-providers),
+    [decisions](../decisions/documents-and-persistence.md#extension-file-mutation),
+    [guide](../extension-api.md#change-files)).
 
 - **D087 — Extension entitlements**
   - Packages declare entitlements in `knot.jsonc`. Start with process
