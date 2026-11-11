@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 use gpui::{prelude::*, *};
 
+use super::icons::{AppIcon, ref_definition};
 use super::keys::Keystroke;
 
 use knot_protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId, InputCompletion};
@@ -265,6 +266,13 @@ impl Render for InputView {
                             .when(selected, |row| {
                                 row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
                                     .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
+                            })
+                            .when_some(item.icon.as_ref(), |row, icon| {
+                                row.child(
+                                    div()
+                                        .debug_selector(move || format!("completion-icon-{index}"))
+                                        .child(AppIcon::new(ref_definition(icon, false, cx))),
+                                )
                             })
                             .child(div().flex_shrink_0().child(highlighted(
                                 item.label.clone(),

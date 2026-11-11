@@ -84,7 +84,7 @@ fn the_pack_setting_selects_the_pack_and_follows_changes(cx: &mut TestAppContext
         );
         apply_at_startup(cx);
         assert_eq!(
-            file_definition(None, None, cx),
+            file_definition(None, None, false, cx),
             IconDefinition::lucide("file")
         );
     });
@@ -96,7 +96,10 @@ fn the_pack_setting_selects_the_pack_and_follows_changes(cx: &mut TestAppContext
     });
     cx.run_until_parked();
     cx.update(|cx| {
-        assert_eq!(file_definition(None, None, cx).color, IconColor::Original);
+        assert_eq!(
+            file_definition(None, None, false, cx).color,
+            IconColor::Original
+        );
         assert_eq!(
             folder_definition(None, false, cx),
             IconDefinition::lucide("folder")
@@ -109,8 +112,46 @@ fn the_pack_setting_selects_the_pack_and_follows_changes(cx: &mut TestAppContext
     cx.run_until_parked();
     cx.update(|cx| {
         assert_eq!(
-            file_definition(None, None, cx),
+            file_definition(None, None, false, cx),
             IconDefinition::lucide("file")
         )
+    });
+}
+
+#[gpui::test]
+fn references_resolve_names_files_and_folders_with_the_open_form(cx: &mut TestAppContext) {
+    use knot_protocol::IconRef;
+    cx.update(|cx| {
+        let name = |name: &str| IconRef::Name(name.to_owned());
+        let file = IconRef::File {
+            file: "main.rs".to_owned(),
+        };
+        let folder = IconRef::Folder {
+            folder: "src".to_owned(),
+        };
+        assert_eq!(
+            ref_definition(&name("folder"), false, cx),
+            IconDefinition::lucide("folder")
+        );
+        assert_eq!(
+            ref_definition(&name("folder"), true, cx),
+            IconDefinition::lucide("folder-open")
+        );
+        assert_eq!(
+            ref_definition(&name("no.such.icon"), false, cx),
+            IconDefinition::lucide("circle-question-mark")
+        );
+        assert_eq!(
+            ref_definition(&file, false, cx),
+            IconDefinition::lucide("file")
+        );
+        assert_eq!(
+            ref_definition(&folder, false, cx),
+            IconDefinition::lucide("folder")
+        );
+        assert_eq!(
+            ref_definition(&folder, true, cx),
+            IconDefinition::lucide("folder-open")
+        );
     });
 }

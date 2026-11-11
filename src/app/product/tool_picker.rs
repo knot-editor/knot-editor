@@ -33,6 +33,7 @@ impl ProductShell {
             .map(|(id, title)| PickerItem {
                 detail: None,
                 hint: None,
+                icon: None,
                 id,
                 label: title,
                 description: None,

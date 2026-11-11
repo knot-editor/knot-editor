@@ -1,6 +1,6 @@
 # D034 — Explorer as a bundled extension
 
-Status: 🚧 approved, not started. Item of the
+Status: 🚧 in progress; checkpoint 1 awaiting review. Item of the
 [daily-driver plan](daily-driver.md); absorbs D053. Depends on D008, D010,
 D072, D081, and D122, all done.
 
@@ -113,14 +113,14 @@ explorer's behavior is not a constraint.
 
 ## Checkpoints
 
-### 1. Icon references
+### 1. Icon references 🔎 awaiting review
 
-- `IconRef` in the protocol and `knot.d.ts`, resolved natively wherever an
+- ✅ `IconRef` in the protocol and `knot.d.ts`, resolved natively wherever an
   icon is painted; the `open` variant rule for expanded tree rows; `icon` on
   picker items and input completions.
-- Go to File shows file icons; Vim's `:e` completion shows file and folder
+- ✅ Go to File shows file icons; Vim's `:e` completion shows file and folder
   icons.
-- Validation: model tests for the variant fallback order and `{ file }` /
+- ✅ Validation: model tests for the variant fallback order and `{ file }` /
   `{ folder }` resolution; tree, picker, and completion rendering tests; Go to
   File and Vim package tests that observe the icons.
 - Review gate: icons in a personal-config `Try:` tree, Go to File, and `:e`.

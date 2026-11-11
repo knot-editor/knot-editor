@@ -79,6 +79,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
             description: None,
             detail: None,
             hint: None,
+            icon: None,
         })
         .to_vec();
     let pick = |items: Vec<PickerItem>, cx: &mut TestAppContext| {

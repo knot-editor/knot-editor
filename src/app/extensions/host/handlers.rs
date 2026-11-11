@@ -1401,6 +1401,7 @@ fn picker_entry(row: PickerRow) -> crate::app::picker::PickerEntry {
         description: item.description,
         detail: item.detail,
         hint: item.hint,
+        icon: item.icon,
         ..crate::app::picker::PickerEntry::new(item.label)
     }
 }

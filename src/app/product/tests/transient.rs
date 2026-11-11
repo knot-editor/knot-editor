@@ -18,13 +18,18 @@ fn picker_items() -> Vec<PickerItem> {
         PickerItem {
             detail: None,
             hint: None,
+
             id: "alpha".into(),
+            icon: Some(knot_protocol::IconRef::File {
+                file: "alpha.rs".into(),
+            }),
             label: "Alpha".into(),
             description: Some("first".into()),
         },
         PickerItem {
             detail: None,
             hint: None,
+            icon: None,
             id: "beta".into(),
             label: "Beta".into(),
             description: Some("second".into()),
@@ -86,6 +91,10 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
         .unwrap();
     assert!(matches!(overlap, Err(TransientError::OperationInProgress)));
 
+    let mut visual = gpui::VisualTestContext::from_window(window, cx);
+    visual.run_until_parked();
+    assert!(visual.debug_bounds("picker-icon-0").is_some());
+    assert!(visual.debug_bounds("picker-icon-1").is_none());
     cx.simulate_input(window, "beta");
     cx.simulate_keystrokes(window, "enter");
     assert_eq!(
@@ -640,6 +649,7 @@ await commands.register("transient.completing-input", async () => {
           label: WORDS[index],
           value: WORDS[index],
           detail: "word",
+          icon: WORDS[index] === "beta" ? { folder: "beta" } : { file: WORDS[index] },
           matches: ranges,
         })),
       };
@@ -874,7 +884,7 @@ fn live_input_settles_on_dismissal_and_unload(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, _completion) =
+    let (_host, _key, shell, window, _completion) =
         start_live_input("transient.completing-input", cx);
     let input = transient_input(&shell, cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx).len() == 3);
@@ -882,8 +892,25 @@ fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext
     type_into(&input, &["al"], cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["alpha", "alps"]);
     cx.read(|cx| {
-        assert_eq!(input.read(cx).items()[0].matches, Some(vec![[0, 2]]));
+        let items = input.read(cx).items();
+        assert_eq!(items[0].matches, Some(vec![[0, 2]]));
+        assert_eq!(
+            items[0].icon,
+            Some(knot_protocol::IconRef::File {
+                file: "alpha".into()
+            })
+        );
     });
+    let mut visual = gpui::VisualTestContext::from_window(window, cx);
+    visual.run_until_parked();
+    for index in 0..2 {
+        assert!(
+            visual
+                .debug_bounds(format!("completion-icon-{index}").leak())
+                .is_some(),
+            "completion {index} paints its icon"
+        );
+    }
     type_into(&input, &["zz"], cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx).is_empty());
 }

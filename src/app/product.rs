@@ -1468,6 +1468,7 @@ impl ProductShell {
                 description: item.description,
                 detail: item.detail,
                 hint: item.hint,
+                icon: item.icon,
                 ..PickerEntry::new(item.label)
             })
             .collect();

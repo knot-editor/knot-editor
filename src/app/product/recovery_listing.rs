@@ -54,6 +54,7 @@ impl ProductShell {
                 .map(|(index, snapshot)| PickerItem {
                     detail: None,
                     hint: None,
+                    icon: None,
                     id: index.to_string(),
                     label: snapshot.title.clone(),
                     description: Some(describe_snapshot(snapshot, now)),

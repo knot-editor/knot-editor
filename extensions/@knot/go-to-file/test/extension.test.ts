@@ -25,6 +25,7 @@ test("each query lists the matching files with name and directory", async () => 
   assert.equal(all?.length, 3);
   assert.deepEqual(matched?.map((row) => [row.label, row.description]), [["button.ts", "src/ui"]]);
   assert.deepEqual(matched?.[0]?.labelMatches, [[0, 4]]);
+  assert.deepEqual(matched?.[0]?.icon, { file: "button.ts" });
 });
 
 test("choosing a row opens that file", async () => {

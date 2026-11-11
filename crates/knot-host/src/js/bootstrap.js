@@ -118,6 +118,12 @@ function arrayItems(items, convert) {
 function optionalText(value) {
   return value == null ? null : string(value, "expected text or null");
 }
+function iconRef(value) {
+  if (value == null || typeof value === "string") return value ?? null;
+  record(value, "icon must be a name, { file } or { folder }");
+  if (value.file != null) return { file: string(value.file, "icon file must be text") };
+  return { folder: string(value.folder, "icon folder must be text") };
+}
 function token(value, allowed) {
   if (value == null) return null;
   if (!allowed.includes(value)) throw new TypeError("invalid semantic token");
@@ -150,7 +156,7 @@ function treeAction(value) {
   return {
     label: string(value.label, "tree action label must be text"),
     command: string(value.command, "tree action command must be text"),
-    icon: optionalText(value.icon),
+    icon: iconRef(value.icon),
     arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
   };
 }
@@ -167,7 +173,7 @@ function treeItem(value) {
     label: string(value.label, "tree item label must be text"),
     description: optionalText(value.description),
     detail: optionalText(value.detail),
-    icon: optionalText(value.icon),
+    icon: iconRef(value.icon),
     collapsibleState,
     command: optionalText(value.command),
     kind: kind === null ? "item" : kind,
@@ -592,6 +598,7 @@ function pickerItem(value) {
     description: optionalText(value.description),
     detail: optionalText(value.detail),
     hint: optionalText(value.hint),
+    icon: iconRef(value.icon),
   };
 }
 
@@ -601,6 +608,7 @@ function inputCompletion(value) {
     label: string(value.label, "input completion label must be text"),
     value: string(value.value, "input completion value must be text"),
     detail: optionalText(value.detail),
+    icon: iconRef(value.icon),
     matches: value.matches == null ? null : arrayItems(value.matches, textRange),
   };
 }
@@ -742,7 +750,7 @@ function statusItemValue(options) {
   if (!Number.isSafeInteger(priority)) throw new TypeError("status item priority must be an integer");
   return {
     text: string(value.text, "status item text must be text"),
-    icon: optionalText(value.icon),
+    icon: iconRef(value.icon),
     tooltip: optionalText(value.tooltip),
     command: command && {
       name: string(command.name, "status item command name must be text"),

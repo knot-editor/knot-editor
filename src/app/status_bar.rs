@@ -40,9 +40,9 @@ fn no_arguments() -> CommandArgumentValue {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct StatusItem {
     pub(crate) text: String,
-    /// An icon name painted before the text, in `color` when one is set.
+    /// An icon painted before the text, in `color` when one is set.
     #[serde(default)]
-    pub(crate) icon: Option<String>,
+    pub(crate) icon: Option<knot_protocol::IconRef>,
     #[serde(default)]
     pub(crate) tooltip: Option<String>,
     #[serde(default)]

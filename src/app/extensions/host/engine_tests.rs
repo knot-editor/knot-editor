@@ -124,6 +124,7 @@ use knot_host::{
     module_graph::{ConfigPhase, ModuleGraph},
     scheduler::PoolConfig,
 };
+use knot_protocol::IconRef;
 use knot_protocol::{
     ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
     ByteRange, CommandArgumentValue, CommandInvocation, CommandInvocationId, CommandInvokeDispatch,
@@ -2730,7 +2731,11 @@ fn install_semantic_providers(
                         label: "Tree item",
                         description: "fixture",
                         icon: "symbol",
-                        actions: [{ label: "Open", icon: "action.open", command: "example.open" }],
+                        actions: [
+                          { label: "Open", icon: "action.open", command: "example.open" },
+                          { label: "Source", icon: { folder: "src" }, command: "example.open" },
+                          { label: "Main", icon: { file: "main.rs" }, command: "example.open" },
+                        ],
                         collapsibleState: parentId === null ? "expanded" : "none",
                       }];
                     },
@@ -2826,8 +2831,23 @@ fn semantic_provider_callbacks_preserve_typed_generations_and_recover_from_failu
     assert_eq!(tree.generation, 8);
     let item = &tree.result.unwrap()[0];
     assert_eq!(item.id, "root");
-    assert_eq!(item.icon, Some("symbol".to_owned()));
-    assert_eq!(item.actions[0].icon.as_deref(), Some("action.open"));
+    assert_eq!(item.icon, Some(IconRef::Name("symbol".to_owned())));
+    assert_eq!(
+        item.actions[0].icon,
+        Some(IconRef::Name("action.open".to_owned()))
+    );
+    assert_eq!(
+        item.actions[1].icon,
+        Some(IconRef::Folder {
+            folder: "src".to_owned()
+        })
+    );
+    assert_eq!(
+        item.actions[2].icon,
+        Some(IconRef::File {
+            file: "main.rs".to_owned()
+        })
+    );
     assert_eq!(
         item.collapsible_state,
         knot_protocol::TreeCollapsibleState::Expanded

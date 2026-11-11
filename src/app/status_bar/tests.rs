@@ -141,7 +141,7 @@ fn items_decode_from_javascript_values() {
     }))
     .unwrap();
     assert_eq!(item.side, StatusSide::Right);
-    assert_eq!(item.icon.as_deref(), Some("status.position"));
+    assert_eq!(item.icon, Some("status.position".into()));
     assert_eq!(item.command.unwrap().name, "go-to-line.go");
     assert!(serde_json::from_value::<StatusItem>(serde_json::json!({ "text": 1 })).is_err());
     assert!(

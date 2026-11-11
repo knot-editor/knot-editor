@@ -992,20 +992,40 @@ pub(super) fn tree_item_from_v8<'s>(
     })
 }
 
+/// An icon reference: an icon name, or an object with a `file` or `folder`
+/// name.
 fn icon_name_property<'s>(
     scope: &mut v8::PinScope<'s, '_>,
     object: v8::Local<'s, v8::Object>,
-) -> Result<Option<String>, BoundaryError> {
-    let icon = optional_text_property(scope, object, "icon")?;
-    if icon.as_deref().is_some_and(|icon| {
-        icon.is_empty()
-            || !icon
+) -> Result<Option<knot_protocol::IconRef>, BoundaryError> {
+    let value = property(scope, object, "icon", "invalid icon")?;
+    if value.is_null_or_undefined() {
+        return Ok(None);
+    }
+    let valid = |name: &str| {
+        !name.is_empty()
+            && name
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-    }) {
-        return Err(BoundaryError::Type("invalid icon name"));
+    };
+    let invalid = BoundaryError::Type("invalid icon name");
+    if let Ok(name) = v8::Local::<v8::String>::try_from(value) {
+        let name = name.to_rust_string_lossy(scope);
+        return if valid(&name) {
+            Ok(Some(knot_protocol::IconRef::Name(name)))
+        } else {
+            Err(invalid)
+        };
     }
-    Ok(icon)
+    let reference = v8::Local::<v8::Object>::try_from(value)
+        .map_err(|_| BoundaryError::Type("invalid icon"))?;
+    if let Some(file) = optional_text_property(scope, reference, "file")? {
+        return Ok(Some(knot_protocol::IconRef::File { file }));
+    }
+    match optional_text_property(scope, reference, "folder")? {
+        Some(folder) => Ok(Some(knot_protocol::IconRef::Folder { folder })),
+        None => Err(BoundaryError::Type("an icon needs a name, file, or folder")),
+    }
 }
 
 pub(super) fn tree_actions_from_v8<'s>(

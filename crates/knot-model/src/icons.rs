@@ -334,10 +334,14 @@ impl IconRegistry {
     }
 
     /// The first of `candidates` that has a definition, else the fallback.
-    pub fn first_defined(&self, candidates: &[&str]) -> IconDefinition {
+    /// In the expanded form each candidate `X` is tried as `X.open` before `X`.
+    pub fn first_defined(&self, candidates: &[&str], open: bool) -> IconDefinition {
         candidates
             .iter()
-            .find_map(|name| self.lookup(name))
+            .find_map(|name| {
+                let opened = open.then(|| self.lookup(&format!("{name}.open"))).flatten();
+                opened.or_else(|| self.lookup(name))
+            })
             .unwrap_or_else(|| self.icon(FALLBACK))
     }
 
@@ -351,9 +355,15 @@ impl IconRegistry {
     }
 
     /// The icon for a file: the name its file name or extension is associated
-    /// with, its language's `file.<id>`, then `file`. A name nothing defines
+    /// with, its language's `file.<id>`, then `file`; expanded, each also as
+    /// `<name>.open` first. A name nothing defines
     /// is skipped. The longest extension claimed wins, so `d.ts` beats `ts`.
-    pub fn file_icon(&self, file_name: Option<&str>, language: Option<&str>) -> IconDefinition {
+    pub fn file_icon(
+        &self,
+        file_name: Option<&str>,
+        language: Option<&str>,
+        open: bool,
+    ) -> IconDefinition {
         let mut candidates = Vec::new();
         if let Some(name) = file_name {
             candidates.extend(self.claimed(|claims| claims.files.get(name)));
@@ -372,24 +382,16 @@ impl IconRegistry {
         let language = language.map(|id| format!("file.{id}"));
         candidates.extend(language.as_deref());
         candidates.push("file");
-        self.first_defined(&candidates)
+        self.first_defined(&candidates, open)
     }
 
-    /// The icon for a directory, in its expanded form when `open`: the name
-    /// its folder name is associated with, then `folder`.
+    /// The icon for a directory: the name its folder name is associated
+    /// with, then `folder`.
     pub fn folder_icon(&self, name: Option<&str>, open: bool) -> IconDefinition {
-        let associated = name.and_then(|name| self.claimed(|claims| claims.folders.get(name)));
-        let open_associated = associated.map(|name| format!("{name}.open"));
         let mut candidates = Vec::new();
-        if open {
-            candidates.extend(open_associated.as_deref());
-        }
-        candidates.extend(associated);
-        if open {
-            candidates.push("folder.open");
-        }
+        candidates.extend(name.and_then(|name| self.claimed(|claims| claims.folders.get(name))));
         candidates.push("folder");
-        self.first_defined(&candidates)
+        self.first_defined(&candidates, open)
     }
 }
 

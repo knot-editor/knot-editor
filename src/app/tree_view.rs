@@ -21,13 +21,14 @@ use knot_protocol::{
 };
 
 use super::TREE_KEY_CONTEXT;
-use super::icons::{AppIcon, icon_definition};
+use super::icons::{AppIcon, icon_definition, ref_definition};
 use super::theme::{color, theme};
+use knot_model::icons::IconDefinition;
 
 /// An action's face: its icon when it has one, else its label.
 fn action_content(action: &TreeAction, cx: &App) -> AnyElement {
-    match action.icon.as_deref() {
-        Some(name) => AppIcon::new(icon_definition(name, cx)).into_any_element(),
+    match action.icon.as_ref() {
+        Some(icon) => AppIcon::new(ref_definition(icon, false, cx)).into_any_element(),
         None => action.label.clone().into_any_element(),
     }
 }
@@ -816,9 +817,13 @@ impl TreeView {
         }
     }
 
-    fn icon(item: &TreeItem, cx: &App) -> Option<AppIcon> {
-        let name = item.icon.as_deref()?;
-        Some(AppIcon::new(icon_definition(name, cx)))
+    /// The row's icon, in its `.open` form when the row is expanded.
+    fn icon_definition(item: &TreeItem, expanded: bool, cx: &App) -> Option<IconDefinition> {
+        Some(ref_definition(item.icon.as_ref()?, expanded, cx))
+    }
+
+    fn icon(item: &TreeItem, expanded: bool, cx: &App) -> Option<AppIcon> {
+        Self::icon_definition(item, expanded, cx).map(AppIcon::new)
     }
 }
 
@@ -947,7 +952,7 @@ impl Render for TreeView {
                                 })
                             })
                             .child(Self::disclosure(item, expanded.contains(&item.id), cx))
-                            .children(Self::icon(item, cx))
+                            .children(Self::icon(item, expanded.contains(&item.id), cx))
                             .child(
                                 div()
                                     .flex_1()

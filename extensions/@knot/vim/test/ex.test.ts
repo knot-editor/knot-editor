@@ -119,6 +119,13 @@ test(":e completes the entries of the typed directory", async () => {
   assert.deepEqual(await values("e missing/"), []);
 });
 
+test(":e completion shows file and folder icons", async () => {
+  host.seedFile("file:///p/src/main.ts", "");
+  host.seedFile("file:///p/src/lib/a.ts", "");
+  const items = await completeEx("e ", "file:///p/src");
+  assert.deepEqual(items.map((item) => item.icon), [{ folder: "lib" }, { file: "main.ts" }]);
+});
+
 test(":e completion leaves out ignored entries and needs a directory", async () => {
   host.seedFile("file:///p/src/a.ts", "");
   host.seedFile("file:///p/src/out.js", "");

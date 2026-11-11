@@ -108,21 +108,21 @@ fn removing_a_lifecycle_removes_its_registrations_only() {
 fn file_icons_try_the_language_then_the_generic_file() {
     let mut registry = IconRegistry::default();
     assert_eq!(
-        registry.file_icon(None, Some("rust")),
+        registry.file_icon(None, Some("rust"), false),
         IconDefinition::lucide("file")
     );
     registry.define(owner(1), "file.rust", svg("crab")).unwrap();
-    assert_eq!(registry.file_icon(None, Some("rust")), svg("crab"));
+    assert_eq!(registry.file_icon(None, Some("rust"), false), svg("crab"));
     assert_eq!(
-        registry.file_icon(None, Some("go")),
+        registry.file_icon(None, Some("go"), false),
         IconDefinition::lucide("file")
     );
     assert_eq!(
-        registry.file_icon(None, None),
+        registry.file_icon(None, None, false),
         IconDefinition::lucide("file")
     );
     registry.register_override(owner(1), "file", svg("generic"));
-    assert_eq!(registry.file_icon(None, Some("go")), svg("generic"));
+    assert_eq!(registry.file_icon(None, Some("go"), false), svg("generic"));
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn associations_pick_names_by_file_name_then_longest_extension_then_language() {
             ..Default::default()
         },
     );
-    let icon = |file: &str, language| registry.file_icon(Some(file), language);
+    let icon = |file: &str, language| registry.file_icon(Some(file), language, false);
     assert_eq!(icon("Cargo.toml", Some("toml")), svg("file.cargo"));
     assert_eq!(icon("a.ts", None), svg("file.ts"));
     assert_eq!(icon("a.d.ts", None), svg("file.dts"));
@@ -181,13 +181,19 @@ fn associations_pick_names_by_file_name_then_longest_extension_then_language() {
             ..Default::default()
         },
     );
-    assert_eq!(registry.file_icon(Some("a.ts"), None), svg("file.rust"));
+    assert_eq!(
+        registry.file_icon(Some("a.ts"), None, false),
+        svg("file.rust")
+    );
     assert!(!registry.unassociate(owner(1), second));
     assert!(registry.unassociate(owner(2), second));
-    assert_eq!(registry.file_icon(Some("a.ts"), None), svg("file.ts"));
+    assert_eq!(
+        registry.file_icon(Some("a.ts"), None, false),
+        svg("file.ts")
+    );
     registry.remove_lifecycle(owner(1).extension, owner(1).lifecycle);
     assert_eq!(
-        registry.file_icon(Some("a.ts"), None),
+        registry.file_icon(Some("a.ts"), None, false),
         IconDefinition::lucide("file")
     );
 }
@@ -203,14 +209,20 @@ fn an_associated_name_the_active_pack_lacks_falls_through() {
             ..Default::default()
         },
     );
-    assert_eq!(registry.file_icon(Some("a.rs"), Some("rust")), svg("crab"));
+    assert_eq!(
+        registry.file_icon(Some("a.rs"), Some("rust"), false),
+        svg("crab")
+    );
     registry.register_pack(
         owner(1),
         "Material",
         pack(&[("file.material-rust", "gear")]),
     );
     registry.select_pack("Material");
-    assert_eq!(registry.file_icon(Some("a.rs"), Some("rust")), svg("gear"));
+    assert_eq!(
+        registry.file_icon(Some("a.rs"), Some("rust"), false),
+        svg("gear")
+    );
 }
 
 #[test]
@@ -276,4 +288,42 @@ fn specs_name_one_source_and_a_compatible_color() {
         assert!(spec(invalid).is_err(), "{invalid}");
     }
     assert!(serde_json::from_str::<IconSpec>(r#"{"lucide":"file","size":2}"#).is_err());
+}
+
+#[test]
+fn expanded_forms_try_open_before_each_candidate() {
+    let mut registry = IconRegistry::default();
+    registry.associate(
+        owner(1),
+        IconAssociation {
+            files: names(&[("Makefile", "file.make")]),
+            ..Default::default()
+        },
+    );
+    registry.define(owner(1), "file.make", svg("make")).unwrap();
+    registry
+        .define(owner(1), "file.make.open", svg("make open"))
+        .unwrap();
+    registry.define(owner(1), "tool", svg("tool")).unwrap();
+    registry
+        .define(owner(1), "tool.open", svg("tool open"))
+        .unwrap();
+    assert_eq!(
+        registry.file_icon(Some("Makefile"), None, false),
+        svg("make")
+    );
+    assert_eq!(
+        registry.file_icon(Some("Makefile"), None, true),
+        svg("make open")
+    );
+    assert_eq!(
+        registry.file_icon(Some("other"), None, true),
+        IconDefinition::lucide("file")
+    );
+    assert_eq!(registry.first_defined(&["tool"], true), svg("tool open"));
+    assert_eq!(registry.first_defined(&["tool"], false), svg("tool"));
+    assert_eq!(
+        registry.first_defined(&["nothing", "tool"], true),
+        svg("tool open")
+    );
 }

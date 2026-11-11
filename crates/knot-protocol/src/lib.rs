@@ -354,6 +354,22 @@ pub enum TreeCollapsibleState {
     Expanded,
 }
 
+/// The icon a surface paints. A name is an icon name; `file` and `folder` name
+/// a file or folder, which the icon associations resolve at paint time.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(untagged)]
+pub enum IconRef {
+    Name(String),
+    File { file: String },
+    Folder { folder: String },
+}
+
+impl From<&str> for IconRef {
+    fn from(name: &str) -> Self {
+        Self::Name(name.to_owned())
+    }
+}
+
 /// One semantic command-backed action attached to a row, group, or frame.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -361,9 +377,9 @@ pub struct TreeAction {
     pub label: String,
     pub command: String,
     pub arguments: CommandArgumentValue,
-    /// An icon name; the action then renders as an icon button.
+    /// The action then renders as an icon button.
     #[serde(default)]
-    pub icon: Option<String>,
+    pub icon: Option<IconRef>,
 }
 
 /// Whether a tree row is ordinary selectable content or a group header.
@@ -387,9 +403,9 @@ pub struct TreeItem {
     /// shows every row at two-line height.
     #[serde(default)]
     pub detail: Option<String>,
+    /// An unknown name paints the fallback icon.
     #[serde(default)]
-    /// An icon name; an unknown name paints the fallback icon.
-    pub icon: Option<String>,
+    pub icon: Option<IconRef>,
     #[serde(default)]
     pub collapsible_state: TreeCollapsibleState,
     #[serde(default)]
@@ -424,6 +440,8 @@ pub struct PickerItem {
     pub detail: Option<String>,
     #[serde(default)]
     pub hint: Option<String>,
+    #[serde(default)]
+    pub icon: Option<IconRef>,
 }
 
 /// One row a query-driven picker is given for a query: an item with the
@@ -468,6 +486,8 @@ pub struct InputCompletion {
     pub value: String,
     #[serde(default)]
     pub detail: Option<String>,
+    #[serde(default)]
+    pub icon: Option<IconRef>,
     /// UTF-16 code unit ranges of the label to highlight as matched.
     #[serde(default, deserialize_with = "unit_ranges")]
     pub matches: Option<Vec<[usize; 2]>>,

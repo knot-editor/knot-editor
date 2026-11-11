@@ -516,9 +516,20 @@ fn row_icons_follow_the_item_name_and_fall_back_when_unknown(cx: &mut TestAppCon
     use knot_model::icons::IconDefinition;
     let mut named = item("a", "a", TreeItemKind::Item, Vec::new());
     cx.update(|cx| {
-        assert!(TreeView::icon(&named, cx).is_none());
+        assert!(TreeView::icon(&named, false, cx).is_none());
         named.icon = Some("folder".into());
-        assert!(TreeView::icon(&named, cx).is_some());
+        assert!(TreeView::icon(&named, false, cx).is_some());
+        named.icon = Some(knot_protocol::IconRef::Folder {
+            folder: "src".into(),
+        });
+        assert_eq!(
+            TreeView::icon_definition(&named, false, cx),
+            Some(IconDefinition::lucide("folder"))
+        );
+        assert_eq!(
+            TreeView::icon_definition(&named, true, cx),
+            Some(IconDefinition::lucide("folder-open"))
+        );
         assert_eq!(
             crate::app::icons::icon_definition("folder", cx),
             IconDefinition::lucide("folder")

@@ -193,7 +193,7 @@ fn tab_icons_follow_the_language_and_associations(cx: &mut TestAppContext) {
     let tab_icon = |cx: &mut TestAppContext| {
         cx.read(|cx| {
             let language = crate::app::languages::effective_language(model.read(cx), cx);
-            crate::app::icons::file_definition(Some("Untitled"), Some(&language), cx)
+            crate::app::icons::file_definition(Some("Untitled"), Some(&language), false, cx)
         })
     };
     let tab = shell.read_with(cx, |shell, cx| {

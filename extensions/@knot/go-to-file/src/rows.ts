@@ -34,6 +34,7 @@ export function rowFor(hit: FileSearchHit, root: string | null): PickerRow {
   return {
     id: hit.uri,
     label: hit.name,
+    icon: { file: hit.name },
     description: description === "" ? null : description,
     labelMatches: within(hit.ranges, nameStart, hit.path.length),
     descriptionMatches: within(hit.ranges, 0, directory.length).map(

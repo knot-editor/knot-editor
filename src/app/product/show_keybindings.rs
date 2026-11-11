@@ -81,6 +81,7 @@ fn keybinding_item(
         _ => {}
     }
     PickerItem {
+        icon: None,
         id: index.to_string(),
         label,
         description: Some(description),

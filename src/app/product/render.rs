@@ -285,6 +285,7 @@ impl ProductShell {
                         Some(crate::app::icons::file_definition(
                             Some(document.title()),
                             Some(&language),
+                            false,
                             cx,
                         ))
                     }
@@ -494,10 +495,11 @@ impl ProductShell {
                         .build(window, cx)
                 })
             })
-            .when_some(icon, |element, name| {
-                let icon =
-                    crate::app::icons::AppIcon::new(crate::app::icons::icon_definition(&name, cx))
-                        .tinted(color_key);
+            .when_some(icon, |element, icon| {
+                let icon = crate::app::icons::AppIcon::new(crate::app::icons::ref_definition(
+                    &icon, false, cx,
+                ))
+                .tinted(color_key);
                 let selector = format!("status-icon-{id}");
                 element
                     .gap_1()

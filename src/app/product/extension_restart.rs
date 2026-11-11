@@ -27,6 +27,7 @@ impl ProductShell {
                 Some(PickerItem {
                     detail: None,
                     hint: None,
+                    icon: None,
                     id: name.clone(),
                     label: name,
                     description: Some(match &entry.result {

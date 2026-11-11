@@ -181,7 +181,8 @@ async function completePath(head: string, typed: string, directory: string | nul
   return matches.map(({ index, ranges }) => {
     const entry = entries[index]!;
     const label = entry.kind === "directory" ? `${entry.name}/` : entry.name;
-    return { label, value: `${head}${prefix}${label}`, matches: ranges };
+    const icon = entry.kind === "directory" ? { folder: entry.name } : { file: entry.name };
+    return { label, value: `${head}${prefix}${label}`, icon, matches: ranges };
   });
 }
 

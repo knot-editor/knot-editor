@@ -34,6 +34,7 @@ impl ProductShell {
         let mut items = vec![PickerItem {
             detail: None,
             hint: None,
+            icon: None,
             id: "0".into(),
             label: "Auto Detect".into(),
             description: Some(
@@ -54,6 +55,7 @@ impl ProductShell {
             items.push(PickerItem {
                 detail: None,
                 hint: None,
+                icon: None,
                 id: choices.len().to_string(),
                 label: language.name,
                 description: Some(description),

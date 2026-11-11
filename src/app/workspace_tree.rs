@@ -452,7 +452,7 @@ impl WorkspaceTree {
         cx: &App,
     ) -> IconDefinition {
         match kind {
-            ResourceKind::File => named_file_definition(name, cx),
+            ResourceKind::File => named_file_definition(name, false, cx),
             ResourceKind::Directory => folder_definition(Some(name), expanded, cx),
         }
     }

@@ -15,6 +15,7 @@ use std::ops::Range;
 
 use gpui::{prelude::*, *};
 
+use super::icons::{AppIcon, ref_definition};
 use super::keys::Keystroke;
 use knot_model::matching::{Matcher, Query, styles_from_names};
 
@@ -39,6 +40,8 @@ pub(crate) struct PickerEntry {
     pub(crate) detail: Option<String>,
     /// Right-aligned text, such as a keybinding.
     pub(crate) hint: Option<String>,
+    /// Painted before the label.
+    pub(crate) icon: Option<knot_protocol::IconRef>,
     /// Matched after the label and description but never displayed.
     pub(crate) match_text: Option<String>,
     /// Names the row to an owner that supplies the rows.
@@ -405,6 +408,13 @@ impl Render for Picker {
                             .flex_row()
                             .items_center()
                             .gap_3()
+                            .when_some(entry.icon.as_ref(), |line, icon| {
+                                line.child(
+                                    div()
+                                        .debug_selector(move || format!("picker-icon-{index}"))
+                                        .child(AppIcon::new(ref_definition(icon, false, cx))),
+                                )
+                            })
                             .child(div().flex_shrink_0().child(highlighted(
                                 entry.label.clone(),
                                 &found.label,

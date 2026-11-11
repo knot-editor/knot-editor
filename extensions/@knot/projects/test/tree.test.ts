@@ -50,5 +50,5 @@ test("every action icon the tool names resolves", async () => {
     ...(projectItems(state(), window)[0]?.actions ?? []),
   ];
   assert.ok(actions.length > 0 && actions.every((action) => action.icon !== undefined));
-  for (const action of actions) assert.notEqual(host.resolveIcon(action.icon!), null, action.label);
+  for (const action of actions) assert.notEqual(host.resolveIcon(action.icon as string), null, action.label);
 });

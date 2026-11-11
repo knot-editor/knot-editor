@@ -1490,6 +1490,15 @@ declare module "knot" {
     | { kind: "invalidArgument" | "handlerFailure"; message: string }
   >;
   /**
+   * The icon a surface paints: an icon name such as `file` or `symbol`, or
+   * `{ file }` or `{ folder }` with a file or folder name, which resolves
+   * through the icon associations and the active pack when painted, so it
+   * follows changes to them. A tree paints an expanded row's icon in its
+   * `.open` form (`X.open` before `X`) when one is defined. An unknown name
+   * paints a fallback icon.
+   */
+  export type IconRef = string | { readonly file: string } | { readonly folder: string };
+  /**
    * One semantic command-backed action on a row, group header, or frame.
    * Arguments are JSON and are passed to the command as its argument value;
    * an absent value is null. Clicking an action never activates the row.
@@ -1498,8 +1507,8 @@ declare module "knot" {
    */
   export interface TreeAction {
     readonly label: string;
-    /** An icon name such as `action.refresh`; an unknown name paints a fallback icon. */
-    readonly icon?: string;
+    /** An icon such as `action.refresh`. */
+    readonly icon?: IconRef;
     readonly command: string;
     readonly arguments?: JsonValue;
   }
@@ -1516,8 +1525,8 @@ declare module "knot" {
     /** A muted second line under the label. When any row of a view has one, the
      * view shows every row at two-line height. */
     readonly detail?: string | null;
-    /** An icon name such as `file`, `folder`, or `symbol`; an unknown name paints a fallback icon. */
-    readonly icon?: string | null;
+    /** An icon such as `symbol`, `{ file: "main.rs" }`, or `{ folder: "src" }`. */
+    readonly icon?: IconRef | null;
     /** Required expansion state; never inferred from child results. */
     readonly collapsibleState: "none" | "collapsed" | "expanded";
     /** Activation command for ordinary item rows; ignored for groups. */
@@ -1631,6 +1640,8 @@ declare module "knot" {
     readonly detail?: string | null;
     /** Right-aligned text, such as a keybinding. */
     readonly hint?: string | null;
+    /** Painted before the label. */
+    readonly icon?: IconRef | null;
   }
   /** Selection or explicit dismissal; dismissal is not an operational failure. */
   export type PickerResult = Readonly<
@@ -1686,6 +1697,8 @@ declare module "knot" {
     readonly value: string;
     /** Muted text after the label. */
     readonly detail?: string;
+    /** Painted before the label. */
+    readonly icon?: IconRef;
     /** UTF-16 ranges of `label` to highlight as matched, as `completion.match`
      * returns them. */
     readonly matches?: readonly (readonly [start: number, end: number])[];
@@ -1739,9 +1752,8 @@ declare module "knot" {
     /** An item with empty text is not shown, so a window's value can hide an
      * item there. */
     readonly text: string;
-    /** An icon name painted before the text, in `color` when one is set; an
-     * unknown name paints a fallback icon. */
-    readonly icon?: string;
+    /** An icon painted before the text, in `color` when one is set. */
+    readonly icon?: IconRef;
     /** Shown while the pointer rests on the item. */
     readonly tooltip?: string;
     /** Run when the item is clicked, in the window that shows it. */
