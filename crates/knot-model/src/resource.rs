@@ -57,6 +57,18 @@ impl ResourceUri {
         self.same_authority(root) && path_segments(root).is_prefix_of(&path_segments(self))
     }
 
+    /// This URI with its `from` prefix replaced by `to`, or `None` when it is
+    /// not at or under `from`.
+    pub fn rebase(&self, from: &Self, to: &Self) -> Option<Self> {
+        if !self.is_within(from) {
+            return None;
+        }
+        let suffix = &self.0.path()[from.0.path().trim_end_matches('/').len()..];
+        let mut url = to.0.clone();
+        url.set_path(&format!("{}{suffix}", to.0.path().trim_end_matches('/')));
+        Some(Self(url))
+    }
+
     /// The containing directory, or `None` at the root.
     pub fn parent(&self) -> Option<Self> {
         let path = self.0.path().trim_end_matches('/');
@@ -130,6 +142,19 @@ mod tests {
             ResourceUri::parse("file:///a.txt").unwrap().parent(),
             Some(ResourceUri::parse("file:///").unwrap())
         );
+    }
+
+    #[test]
+    fn rebase_replaces_the_prefix_at_a_segment_boundary() {
+        let from = ResourceUri::parse("mem://w/a").unwrap();
+        let to = ResourceUri::parse("mem://w/x/b").unwrap();
+        let rebased = |text: &str| ResourceUri::parse(text).unwrap().rebase(&from, &to);
+        assert_eq!(rebased("mem://w/a"), Some(to.clone()));
+        assert_eq!(
+            rebased("mem://w/a/c/d.txt"),
+            Some(ResourceUri::parse("mem://w/x/b/c/d.txt").unwrap())
+        );
+        assert_eq!(rebased("mem://w/ab/c.txt"), None);
     }
 
     #[test]

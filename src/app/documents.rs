@@ -150,6 +150,37 @@ impl DocumentCollection {
         true
     }
 
+    /// Follow a rename the application performed: every persisted document at
+    /// or under `from` moves to the matching URI under `to`, and takes the
+    /// language its new name selects. Returns the documents that moved.
+    pub(crate) fn follow_rename(
+        &mut self,
+        from: &ResourceUri,
+        to: &ResourceUri,
+        title: impl Fn(&ResourceUri) -> Arc<str>,
+        cx: &mut App,
+    ) -> Vec<DocumentId> {
+        let moved = self.0.relocate(from, to, title);
+        for id in &moved {
+            let document = self.0.get(*id).expect("a moved document is live");
+            super::languages::detect_document(document.model(), document.resource_uri(), cx);
+            super::recovery::publish(document, cx);
+        }
+        if !moved.is_empty() {
+            super::application_observation::changed(cx);
+        }
+        moved
+    }
+
+    /// Mark the persisted documents at or under a deleted `uri` deleted.
+    pub(crate) fn follow_delete(&mut self, uri: &ResourceUri, cx: &mut App) -> Vec<DocumentId> {
+        let deleted = self.0.mark_deleted_under(uri);
+        if !deleted.is_empty() {
+            super::application_observation::changed(cx);
+        }
+        deleted
+    }
+
     /// Load `text` into the document's model as one undoable edit of only the
     /// changed lines, then commit it as the persisted state like
     /// [`Self::finish_persistence`]. Fails when the model refuses the edits or

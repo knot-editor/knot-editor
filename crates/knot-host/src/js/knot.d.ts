@@ -768,7 +768,7 @@ declare module "knot" {
       options?: { readonly styles?: readonly string[] },
     ): Promise<readonly CompletionMatch[]>;
   }>;
-  /** Reads, lists, and stats stored resources through the registered resource
+  /** Reads, lists, stats, and changes stored resources through the registered resource
    * providers. Any URI with a registered provider is readable, independently of
    * workspace roots. These operations see only what is stored: an open
    * document's unsaved edits are ignored. `list`, `search`, and `isIgnored`
@@ -815,6 +815,39 @@ declare module "knot" {
      * Symlinks report their target's kind.
      * @throws HostError with InvalidUri or ProviderFailure. */
     stat(uri: string): Promise<FileStat | null>;
+    /** Creates an empty file, and any missing parent directories, and resolves
+     * its normalized URI. Nothing is overwritten.
+     * @throws HostError with InvalidUri, ResourceAlreadyExists when anything
+     * exists at `uri`, ResourceWrongKind when a parent is a file, or
+     * ProviderFailure. */
+    createFile(uri: string): Promise<string>;
+    /** Creates a directory, and any missing parents, and resolves its
+     * normalized URI.
+     * @throws HostError with InvalidUri, ResourceAlreadyExists when anything
+     * exists at `uri`, ResourceWrongKind when a parent is a file, or
+     * ProviderFailure. */
+    createDirectory(uri: string): Promise<string>;
+    /** Moves a file or a directory tree to `to`, creating its missing parents,
+     * and resolves the normalized destination. Nothing is overwritten: delete
+     * the destination first to replace it. Open documents at or under `from`,
+     * clean or modified, follow to the new URI, keeping their text, history,
+     * and views; their titles and languages are re-detected. Renames made
+     * outside Knot are not followed: the old file vanishes and its document
+     * becomes a deleted one.
+     * @throws HostError with InvalidUri for a destination inside `from` or in
+     * another scheme, ResourceNotFound, ResourceAlreadyExists when anything
+     * exists at `to`, ResourceWrongKind when a parent of `to` is a file, or
+     * ProviderFailure. */
+    rename(from: string, to: string): Promise<string>;
+    /** Deletes a file or a directory tree. By default the entry moves to the
+     * operating system's trash; with `permanent` it is removed outright. A
+     * provider without a trash, such as the in-memory one, always removes.
+     * Open documents at or under `uri` keep their text and become deleted
+     * documents, dirty and associated with the missing file, so saving
+     * recreates it. Nothing is confirmed and no document is closed.
+     * @throws HostError with InvalidUri, ResourceNotFound, or ProviderFailure,
+     * including when the platform cannot trash the entry. */
+    delete(uri: string, options?: { readonly permanent?: boolean }): Promise<void>;
     /** Whether the resource is hidden or ignored by the same policy `list`
      * applies, including through an ignored or hidden directory above it. A
      * missing resource is judged by its name alone.
@@ -1020,7 +1053,7 @@ declare module "knot" {
     | "ViewNotFound" | "ViewIdInUse" | "InvalidViewId"
     | "ViewRegistrationNotFound" | "ContentKindMismatch"
     | "CompletionProviderNotFound" | "CommandNameInUse" | "CommandNotFound"
-    | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
+    | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
     | "UnknownGrammar" | "InvalidQuery" | "LanguageRegistrationNotFound"
     | "DuplicateSetting" | "SettingTypeMismatch"

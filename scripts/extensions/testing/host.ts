@@ -109,6 +109,7 @@ function emptyState() {
     messages: [] as Knot.MessageOptions[],
     clipboard: null as string | null,
     files: new Map<string, string>(),
+    directories: new Set<string>(),
     fileWatches: [] as { uri: string; recursive: boolean; listener: (uris: readonly string[]) => void | Promise<void> }[],
     selectedText: null as string | null,
     failures: new Map<string, HostErrorCode[]>(),
@@ -761,6 +762,7 @@ function notifyFileWatchers(uri: string) {
 
 function fileKind(uri: string): Knot.FileKind | null {
   if (state.files.has(uri)) return "file";
+  if (state.directories.has(uri)) return "directory";
   const directory = uri.endsWith("/") ? uri : `${uri}/`;
   for (const file of state.files.keys()) if (file.startsWith(directory)) return "directory";
   return null;
@@ -777,6 +779,24 @@ function fileNameSetting(key: string): string[] {
 function isIgnoredUri(uri: string): boolean {
   const names = [...fileNameSetting("files.hidden"), ...fileNameSetting("files.ignored")];
   return uri.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split("/").some((segment) => names.includes(segment));
+}
+
+/** The stored files and directories at or under `uri`, which may itself be a file. */
+function storedUnder(uri: string): string[] {
+  const within = (stored: string) => stored === uri || stored.startsWith(`${uri}/`);
+  return [...state.files.keys(), ...state.directories].filter(within);
+}
+
+/** Creates the missing directories above `uri`, or throws when a file is in the way. */
+function makeParents(uri: string) {
+  const root = /^[a-z][a-z0-9+.-]*:\/\/[^/]*/i.exec(uri)![0];
+  const missing: string[] = [];
+  for (let parent = uri.slice(0, uri.lastIndexOf("/")); parent.length > root.length; parent = parent.slice(0, parent.lastIndexOf("/"))) {
+    const kind = fileKind(parent);
+    if (kind === "file") throw hostError("ResourceWrongKind");
+    if (kind === null) missing.push(parent);
+  }
+  for (const directory of missing) state.directories.add(directory);
 }
 
 function checkedFileUri(uri: string): string {
@@ -1673,6 +1693,68 @@ export const api: KnotApi = {
       maybeFail("files.stat");
       const kind = fileKind(checkedFileUri(uri));
       return kind === null ? null : { kind };
+    },
+    createFile: async (uri) => {
+      maybeFail("files.createFile");
+      const checked = checkedFileUri(uri);
+      if (fileKind(checked) !== null) throw hostError("ResourceAlreadyExists");
+      makeParents(checked);
+      seedFile(checked, "");
+      return checked;
+    },
+    createDirectory: async (uri) => {
+      maybeFail("files.createDirectory");
+      const checked = checkedFileUri(uri);
+      if (fileKind(checked) !== null) throw hostError("ResourceAlreadyExists");
+      makeParents(checked);
+      state.directories.add(checked);
+      notifyFileWatchers(checked);
+      return checked;
+    },
+    rename: async (from, to) => {
+      maybeFail("files.rename");
+      const source = checkedFileUri(from);
+      const target = checkedFileUri(to);
+      if (target.startsWith(`${source}/`)) throw hostError("InvalidUri");
+      if (fileKind(source) === null) throw hostError("ResourceNotFound");
+      if (fileKind(target) !== null) throw hostError("ResourceAlreadyExists");
+      makeParents(target);
+      for (const stored of storedUnder(source)) {
+        const moved = target + stored.slice(source.length);
+        if (state.files.has(stored)) {
+          state.files.set(moved, state.files.get(stored)!);
+          state.files.delete(stored);
+        } else {
+          state.directories.delete(stored);
+          state.directories.add(moved);
+        }
+        notifyFileWatchers(stored);
+        notifyFileWatchers(moved);
+      }
+      for (const document of state.documents.values()) {
+        if (document.kind !== "persisted" || document.resourceUri === null) continue;
+        if (document.resourceUri !== source && !document.resourceUri.startsWith(`${source}/`)) continue;
+        document.resourceUri = target + document.resourceUri.slice(source.length);
+        document.title = document.resourceUri.split("/").pop()!;
+      }
+      return target;
+    },
+    delete: async (uri) => {
+      maybeFail("files.delete");
+      const checked = checkedFileUri(uri);
+      if (fileKind(checked) === null) throw hostError("ResourceNotFound");
+      for (const stored of storedUnder(checked)) {
+        state.files.delete(stored);
+        state.directories.delete(stored);
+        notifyFileWatchers(stored);
+      }
+      for (const document of state.documents.values()) {
+        if (document.kind !== "persisted" || document.resourceUri === null) continue;
+        if (document.resourceUri === checked || document.resourceUri.startsWith(`${checked}/`)) {
+          document.kind = "destination";
+          document.dirty = true;
+        }
+      }
     },
   },
   terminals: {

@@ -378,3 +378,24 @@ async fn with_auto_reload_off_a_clean_document_is_marked_and_asks(cx: &mut TestA
         Some(ExternalChange::Changed { .. })
     ));
 }
+
+#[gpui::test]
+async fn a_followed_rename_moves_the_documents_watch_with_it(cx: &mut TestAppContext) {
+    let f = fixture(cx).await;
+    let moved = ResourceUri::parse("mem://product/docs/renamed.txt").unwrap();
+    let (from, to) = knot_model::files::rename(
+        cx.read(|cx| cx.global::<ApplicationFileSystems>().0.clone()),
+        &f.uri.to_string(),
+        &moved.to_string(),
+    )
+    .await
+    .unwrap();
+    cx.update(|cx| super::super::operations::follow_rename(&from, &to, cx));
+    cx.run_until_parked();
+    assert_eq!(f.provider.watch_count(), 1);
+
+    let changed = format!("external\n{TEXT}");
+    f.provider.seed_file(moved, changed.as_str()).unwrap();
+    wait_for_api_condition(cx, |cx| f.model.read(cx).text() == changed);
+    assert!(!f.dirty(cx));
+}

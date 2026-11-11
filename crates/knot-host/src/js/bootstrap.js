@@ -1622,6 +1622,23 @@ export async function statFile(uri) {
   const kind = await request("statFile", string(uri, "resource URI must be text"));
   return kind === null ? null : Object.freeze({ kind });
 }
+export function createFile(uri) {
+  return request("createFile", string(uri, "resource URI must be text"));
+}
+export function createDirectory(uri) {
+  return request("createDirectory", string(uri, "resource URI must be text"));
+}
+export function renameFile(from, to) {
+  return request("renameFile",
+    string(from, "resource URI must be text"), string(to, "resource URI must be text"));
+}
+export async function deleteFile(uri, options) {
+  const permanent = options === undefined
+    ? false
+    : record(options, "delete options must be an object").permanent ?? false;
+  if (typeof permanent !== "boolean") throw new TypeError("delete permanent must be a boolean");
+  await request("deleteFile", string(uri, "resource URI must be text"), permanent);
+}
 export async function openWindow(options) {
   const roots = options === undefined
     ? undefined

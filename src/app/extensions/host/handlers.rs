@@ -145,6 +145,8 @@ pub(crate) enum OpenError {
     ResourceNotFound,
     #[error(code = "ResourceWrongKind", message = "ResourceWrongKind")]
     ResourceWrongKind,
+    #[error(code = "ResourceAlreadyExists", message = "ResourceAlreadyExists")]
+    ResourceAlreadyExists,
     #[error(code = "ProviderFailure", message = "ProviderFailure")]
     ProviderFailure,
     #[error(code = "BufferClosed", message = "BufferClosed")]
@@ -2064,6 +2066,88 @@ async fn stat_file(
         .await
         .map(|kind| kind.map(file_kind))
         .map_err(|error| product::operations::resource_error(error.into()))
+}
+
+#[host_operation("createFile")]
+async fn create_file(
+    context: HostContext,
+    arguments: FileUriArguments,
+) -> Result<String, OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    knot_model::files::create_file(providers, &arguments.uri)
+        .await
+        .map(|uri| uri.to_string())
+        .map_err(|error| product::operations::resource_error(error.into()))
+}
+
+#[host_operation("createDirectory")]
+async fn create_directory(
+    context: HostContext,
+    arguments: FileUriArguments,
+) -> Result<String, OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    knot_model::files::create_directory(providers, &arguments.uri)
+        .await
+        .map(|uri| uri.to_string())
+        .map_err(|error| product::operations::resource_error(error.into()))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RenameFileArguments {
+    from: String,
+    to: String,
+}
+
+impl HostArguments for RenameFileArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            from: reader.text(2, "resource URI must be text")?,
+            to: reader.text(3, "resource URI must be text")?,
+        })
+    }
+}
+
+#[host_operation("renameFile")]
+async fn rename_file(
+    context: HostContext,
+    arguments: RenameFileArguments,
+) -> Result<String, OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let (from, to) = knot_model::files::rename(providers, &arguments.from, &arguments.to)
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    context.foreground(|_, cx| product::operations::follow_rename(&from, &to, cx))?;
+    Ok(to.to_string())
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DeleteFileArguments {
+    uri: String,
+    permanent: bool,
+}
+
+impl HostArguments for DeleteFileArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            uri: reader.text(2, "resource URI must be text")?,
+            permanent: reader
+                .optional_boolean(3, "delete permanent must be a boolean")?
+                .unwrap_or(false),
+        })
+    }
+}
+
+#[host_operation("deleteFile")]
+async fn delete_file(
+    context: HostContext,
+    arguments: DeleteFileArguments,
+) -> Result<(), OpenError> {
+    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let uri = knot_model::files::delete(providers, &arguments.uri, arguments.permanent)
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    context.foreground(|_, cx| product::operations::follow_delete(&uri, cx))?;
+    Ok(())
 }
 
 #[host_operation("registerView")]

@@ -158,9 +158,28 @@ pub(crate) fn resource_error(error: super::super::open::OpenResourceError) -> Op
             ResourceError::InvalidUri { .. } => OpenError::InvalidUri,
             ResourceError::NotFound { .. } => OpenError::ResourceNotFound,
             ResourceError::WrongKind { .. } => OpenError::ResourceWrongKind,
+            ResourceError::AlreadyExists { .. } => OpenError::ResourceAlreadyExists,
             _ => OpenError::ProviderFailure,
         },
     }
+}
+
+/// Open documents follow a rename the application performed.
+pub(crate) fn follow_rename(
+    from: &super::super::resource::ResourceUri,
+    to: &super::super::resource::ResourceUri,
+    cx: &mut App,
+) {
+    let documents = cx.global::<ApplicationDocuments>().0.clone();
+    documents.update(cx, |documents, cx| {
+        documents.follow_rename(from, to, |uri| super::resource_title(uri).into(), cx)
+    });
+}
+
+/// Open documents learn that the application deleted their file.
+pub(crate) fn follow_delete(uri: &super::super::resource::ResourceUri, cx: &mut App) {
+    let documents = cx.global::<ApplicationDocuments>().0.clone();
+    documents.update(cx, |documents, cx| documents.follow_delete(uri, cx));
 }
 
 /// Resolve a user-selected path to a normalized, existing directory URI.

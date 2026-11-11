@@ -2,6 +2,7 @@
 
 use super::operations::{empty_product_window, install_operation_fixture};
 use super::*;
+use crate::app::documents::{DocumentDirty as _, ExternalChange};
 use crate::app::extensions;
 
 #[gpui::test]
@@ -330,5 +331,212 @@ await commands.register("files.report", async () => {
     });
     assert!(!indexed(cx));
     assert_eq!(provider.watch_count(), 0);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
+
+fn document_at(
+    documents: &Entity<DocumentCollection>,
+    uri: &str,
+    cx: &TestAppContext,
+) -> Option<(super::super::DocumentId, Entity<Buffer>)> {
+    cx.read(|cx| {
+        let documents = documents.read(cx);
+        let id = documents.document_for_resource(&ResourceUri::parse(uri).unwrap())?;
+        Some((id, documents.get(id)?.model().clone()))
+    })
+}
+
+#[gpui::test]
+fn files_create_rename_and_delete_change_the_stored_resources(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (filesystems, _) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let key = install_operation_fixture(
+        &host,
+        r#"
+import { commands, files } from "knot";
+async function rejects(action, code) {
+  try { await action(); } catch (error) { if (error.code === code) return; throw error; }
+  throw new Error(`expected ${code}`);
+}
+await commands.register("files.mutate", async () => {
+  if (await files.createFile("mem://product/new/deep/a.txt") !== "mem://product/new/deep/a.txt") throw new Error("create");
+  if ((await files.stat("mem://product/new/deep")).kind !== "directory") throw new Error("parents");
+  if (await files.readText("mem://product/new/deep/a.txt") !== "") throw new Error("empty");
+  await files.createDirectory("mem://product/made");
+  await rejects(() => files.createFile("mem://product/new/deep/a.txt"), "ResourceAlreadyExists");
+  await rejects(() => files.createDirectory("mem://product/made"), "ResourceAlreadyExists");
+  await rejects(() => files.createFile("mem://product/notes.txt/x"), "ResourceWrongKind");
+  await rejects(() => files.rename("mem://product/notes.txt", "mem://product/made"), "ResourceAlreadyExists");
+  await rejects(() => files.rename("mem://product/src", "mem://product/src/in"), "InvalidUri");
+  await rejects(() => files.rename("mem://product/gone", "mem://product/x"), "ResourceNotFound");
+  if (await files.rename("mem://product/notes.txt", "mem://product/made/sub/notes.txt") !== "mem://product/made/sub/notes.txt") throw new Error("rename");
+  if (await files.stat("mem://product/notes.txt") !== null) throw new Error("source remains");
+  if (await files.readText("mem://product/made/sub/notes.txt") !== "loaded text") throw new Error("moved text");
+  await files.delete("mem://product/made");
+  if (await files.stat("mem://product/made") !== null) throw new Error("delete");
+  await rejects(() => files.delete("mem://product/made"), "ResourceNotFound");
+  await files.delete("mem://product/new", { permanent: true });
+  if (await files.stat("mem://product/new") !== null) throw new Error("permanent delete");
+});
+"#,
+        "files.mutate",
+        cx,
+    );
+    let (shell, window) = empty_product_window(&documents, cx);
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command(&shell, window, "files.mutate", cx),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
+
+#[gpui::test]
+fn open_documents_follow_a_rename_and_keep_their_edits_history_and_save_path(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    provider
+        .seed_file(
+            ResourceUri::parse("mem://product/src/lib.txt").unwrap(),
+            "lib",
+        )
+        .unwrap();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let key = install_operation_fixture(
+        &host,
+        r#"
+import { commands, documents, files, windows } from "knot";
+await commands.register("files.open", async () => {
+  const [window] = await windows.list();
+  await documents.open("mem://product/src/lib.txt", { target: window.target });
+  const opened = await documents.open("mem://product/notes.txt", { target: window.target });
+  await opened.document.buffer.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 0 }, text: "edited " }], { ifRevision: 0 });
+});
+await commands.register("files.rename", async () => {
+  await files.rename("mem://product/notes.txt", "mem://product/docs/renamed.md");
+  await files.rename("mem://product/src", "mem://product/lib");
+});
+"#,
+        "files.open",
+        cx,
+    );
+    let (shell, window) = empty_product_window(&documents, cx);
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        assert_eq!(
+            wait_for_command(dispatch_product_command(&shell, window, name, cx), cx),
+            CommandOutcome::Completed
+        );
+    };
+    run("files.open", cx);
+    let (notes, notes_model) = document_at(&documents, "mem://product/notes.txt", cx).unwrap();
+    let (lib, _) = document_at(&documents, "mem://product/src/lib.txt", cx).unwrap();
+    let identity = cx.read(|cx| documents.read(cx).get(notes).unwrap().identity());
+
+    run("files.rename", cx);
+
+    assert_eq!(
+        document_at(&documents, "mem://product/docs/renamed.md", cx).map(|found| found.0),
+        Some(notes)
+    );
+    assert_eq!(
+        document_at(&documents, "mem://product/lib/lib.txt", cx).map(|found| found.0),
+        Some(lib)
+    );
+    assert!(document_at(&documents, "mem://product/notes.txt", cx).is_none());
+    cx.read(|cx| {
+        let documents = documents.read(cx);
+        let document = documents.get(notes).unwrap();
+        assert_eq!(document.title(), "renamed.md");
+        assert_eq!(document.identity(), identity);
+        assert_eq!(document.model(), &notes_model);
+        assert!(document.is_dirty(cx));
+        assert_eq!(notes_model.read(cx).text(), "edited loaded text");
+        assert_eq!(documents.get(lib).unwrap().title(), "lib.txt");
+        assert!(!documents.get(lib).unwrap().is_dirty(cx));
+    });
+
+    // Saving writes the new path, and Undo still reverts the edit.
+    run("file.save", cx);
+    assert_eq!(
+        pollster::block_on(
+            provider.read(ResourceUri::parse("mem://product/docs/renamed.md").unwrap())
+        )
+        .unwrap()
+        .bytes,
+        b"edited loaded text"
+    );
+    assert!(
+        pollster::block_on(provider.stat(ResourceUri::parse("mem://product/notes.txt").unwrap()))
+            .unwrap()
+            == ResourceStat::Missing
+    );
+    cx.update(|cx| {
+        notes_model.update(cx, |model, _| model.undo().unwrap());
+    });
+    assert_eq!(cx.read(|cx| notes_model.read(cx).text()), "loaded text");
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
+
+#[gpui::test]
+fn deleting_a_file_marks_its_open_documents_deleted_and_keeps_their_text(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    provider
+        .seed_file(
+            ResourceUri::parse("mem://product/src/lib.txt").unwrap(),
+            "lib",
+        )
+        .unwrap();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let key = install_operation_fixture(
+        &host,
+        r#"
+import { commands, documents, files, windows } from "knot";
+await commands.register("files.delete", async () => {
+  const [window] = await windows.list();
+  const clean = await documents.open("mem://product/notes.txt", { target: window.target });
+  const dirty = await documents.open("mem://product/src/lib.txt", { target: window.target });
+  await dirty.document.buffer.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 0 }, text: "kept " }], { ifRevision: 0 });
+  await files.delete("mem://product/notes.txt");
+  await files.delete("mem://product/src");
+});
+"#,
+        "files.delete",
+        cx,
+    );
+    let (shell, window) = empty_product_window(&documents, cx);
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command(&shell, window, "files.delete", cx),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+    for (uri, text) in [
+        ("mem://product/notes.txt", "loaded text"),
+        ("mem://product/src/lib.txt", "kept lib"),
+    ] {
+        let (id, model) = document_at(&documents, uri, cx).unwrap();
+        cx.read(|cx| {
+            let documents = documents.read(cx);
+            let document = documents.get(id).unwrap();
+            assert!(matches!(
+                document.state(),
+                DocumentState::Destination { .. }
+            ));
+            assert_eq!(document.external_change(), Some(&ExternalChange::Deleted));
+            assert!(document.is_dirty(cx));
+            assert_eq!(model.read(cx).text(), text);
+        });
+    }
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }

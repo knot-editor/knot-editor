@@ -338,6 +338,14 @@ const ignoredByPolicy: boolean = await files.isIgnored("file:///tmp/a.txt");
 void ignoredByPolicy;
 const fileStat: import("knot").FileStat | null = await files.stat("file:///tmp/a.txt");
 void fileStat;
+const createdFile: string = await files.createFile("file:///tmp/new/a.txt");
+const createdDirectory: string = await files.createDirectory("file:///tmp/new/dir");
+const renamedTo: string = await files.rename(createdFile, "file:///tmp/b.txt");
+await files.delete(renamedTo);
+await files.delete(createdDirectory, { permanent: true });
+void createdFile;
+// @ts-expect-error permanent is a boolean
+await files.delete("file:///tmp/b.txt", { permanent: "yes" });
 // @ts-expect-error file kinds are file or directory only
 const badKind: import("knot").FileKind = "symlink";
 void badKind;

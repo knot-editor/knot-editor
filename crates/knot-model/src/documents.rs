@@ -313,6 +313,66 @@ impl<M: PartialEq> DocumentCollection<M> {
         }
     }
 
+    /// Move every persisted document at or under `from` to the matching URI
+    /// under `to`, retitled by `title`, keeping identity, text, and recorded
+    /// version. A document whose new URI another document owns stays put.
+    /// Returns the moved documents.
+    pub fn relocate(
+        &mut self,
+        from: &ResourceUri,
+        to: &ResourceUri,
+        title: impl Fn(&ResourceUri) -> Arc<str>,
+    ) -> Vec<DocumentId> {
+        let moves: Vec<_> = self
+            .documents
+            .iter()
+            .filter_map(|document| match &document.state {
+                DocumentState::Persisted { uri, .. } => {
+                    Some((document.id, uri.clone(), uri.rebase(from, to)?))
+                }
+                _ => None,
+            })
+            .collect();
+        // Take every source out first so documents can swap places in a tree.
+        for (_, old, _) in &moves {
+            self.resources.remove(old);
+        }
+        let mut moved = Vec::new();
+        for (id, old, new) in moves {
+            if self.resources.contains_key(&new) {
+                self.resources.insert(old, id);
+                continue;
+            }
+            let document = self
+                .documents
+                .iter_mut()
+                .find(|document| document.id == id)
+                .expect("a moved document is live");
+            if let DocumentState::Persisted { uri, .. } = &mut document.state {
+                *uri = new.clone();
+            }
+            document.title = title(&new);
+            self.resources.insert(new, id);
+            moved.push(id);
+        }
+        moved
+    }
+
+    /// Mark every persisted document at or under `uri` deleted. Returns them.
+    pub fn mark_deleted_under(&mut self, uri: &ResourceUri) -> Vec<DocumentId> {
+        let ids: Vec<_> = self
+            .documents
+            .iter()
+            .filter(|document| {
+                matches!(&document.state, DocumentState::Persisted { uri: own, .. } if own.is_within(uri))
+            })
+            .map(|document| document.id)
+            .collect();
+        ids.into_iter()
+            .filter(|id| self.mark_deleted(*id))
+            .collect()
+    }
+
     /// Turn a persisted document whose file is gone into a dirty one
     /// associated with the missing file. Returns whether it changed.
     pub fn mark_deleted(&mut self, id: DocumentId) -> bool {
@@ -669,5 +729,106 @@ mod tests {
         let capture = documents.begin_persistence(id, &1).unwrap();
         documents.complete_persistence(id, &1, &capture, ("a.txt", file), (version(6), 0));
         assert!(documents.get(id).unwrap().external_change().is_none());
+    }
+
+    fn opened(documents: &mut DocumentCollection<u32>, model: u32, text: &str) -> DocumentId {
+        documents
+            .insert_persisted(text, model, uri(&format!("mem://w/{text}")), 0, version(1))
+            .id()
+    }
+
+    fn title(uri: &ResourceUri) -> Arc<str> {
+        uri.to_string().rsplit('/').next().unwrap().into()
+    }
+
+    #[test]
+    fn a_moved_tree_takes_its_open_documents_along() {
+        let mut documents = DocumentCollection::new();
+        let file = opened(&mut documents, 1, "dir/a.txt");
+        let nested = opened(&mut documents, 2, "dir/sub/b.txt");
+        let sibling = opened(&mut documents, 3, "dir2/c.txt");
+        let unrelated = opened(&mut documents, 4, "other.txt");
+        let untitled = documents.insert_untitled("Untitled", 5, 0);
+        let identity = documents.get(file).unwrap().identity();
+
+        let moved = documents.relocate(&uri("mem://w/dir"), &uri("mem://w/x/new"), title);
+
+        assert_eq!(moved, vec![file, nested]);
+        let document = documents.get(file).unwrap();
+        assert_eq!(document.resource_uri(), Some(&uri("mem://w/x/new/a.txt")));
+        assert_eq!(document.title(), "a.txt");
+        assert_eq!(document.identity(), identity);
+        assert_eq!(document.model(), &1);
+        assert_eq!(document.state().persisted_version(), Some(&version(1)));
+        assert_eq!(
+            documents.document_for_resource(&uri("mem://w/x/new/sub/b.txt")),
+            Some(nested)
+        );
+        assert_eq!(
+            documents.document_for_resource(&uri("mem://w/dir/a.txt")),
+            None
+        );
+        assert_eq!(
+            documents.get(sibling).unwrap().resource_uri(),
+            Some(&uri("mem://w/dir2/c.txt"))
+        );
+        assert_eq!(
+            documents.get(unrelated).unwrap().resource_uri(),
+            Some(&uri("mem://w/other.txt"))
+        );
+        assert_eq!(documents.get(untitled).unwrap().resource_uri(), None);
+    }
+
+    #[test]
+    fn relocation_skips_deleted_documents_and_taken_destinations() {
+        let mut documents = DocumentCollection::new();
+        let gone = opened(&mut documents, 1, "dir/gone.txt");
+        assert!(documents.mark_deleted(gone));
+        let owner = documents
+            .insert_destination("a.txt", 2, uri("mem://w/new/a.txt"))
+            .id();
+        let blocked = opened(&mut documents, 3, "dir/a.txt");
+
+        let moved = documents.relocate(&uri("mem://w/dir"), &uri("mem://w/new"), title);
+
+        assert!(moved.is_empty());
+        assert_eq!(
+            documents.document_for_resource(&uri("mem://w/dir/a.txt")),
+            Some(blocked)
+        );
+        assert_eq!(
+            documents.document_for_resource(&uri("mem://w/new/a.txt")),
+            Some(owner)
+        );
+        assert_eq!(
+            documents.get(gone).unwrap().resource_uri(),
+            Some(&uri("mem://w/dir/gone.txt"))
+        );
+    }
+
+    #[test]
+    fn deletion_marks_the_documents_at_or_under_a_uri() {
+        let mut documents = DocumentCollection::new();
+        let file = opened(&mut documents, 1, "dir/a.txt");
+        let nested = opened(&mut documents, 2, "dir/sub/b.txt");
+        let sibling = opened(&mut documents, 3, "dir2/c.txt");
+        let already = opened(&mut documents, 4, "dir/d.txt");
+        assert!(documents.mark_deleted(already));
+
+        let deleted = documents.mark_deleted_under(&uri("mem://w/dir"));
+
+        assert_eq!(deleted, vec![file, nested]);
+        for id in [file, nested] {
+            let document = documents.get(id).unwrap();
+            assert!(matches!(
+                document.state(),
+                DocumentState::Destination { .. }
+            ));
+            assert_eq!(document.external_change(), Some(&ExternalChange::Deleted));
+        }
+        assert!(matches!(
+            documents.get(sibling).unwrap().state(),
+            DocumentState::Persisted { .. }
+        ));
     }
 }

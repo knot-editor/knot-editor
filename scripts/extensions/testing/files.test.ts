@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { files, settings } from "knot";
+import { documents, files, settings } from "knot";
 import * as host from "knot/testing";
 
 beforeEach(() => host.reset());
@@ -103,4 +103,62 @@ test("watching reports changes under the directory until disposed", async () => 
   await Promise.resolve();
   assert.equal(direct.length, 1);
   await assert.rejects(files.watch("file:///p/missing", () => {}), { code: "ResourceNotFound" });
+});
+
+test("creating makes missing parents and refuses to overwrite", async () => {
+  assert.equal(await files.createFile("file:///p/a/b/c.txt"), "file:///p/a/b/c.txt");
+  assert.equal(await files.readText("file:///p/a/b/c.txt"), "");
+  assert.deepEqual(await files.stat("file:///p/a/b"), { kind: "directory" });
+  assert.equal(await files.createDirectory("file:///p/empty/inner"), "file:///p/empty/inner");
+  assert.deepEqual(await files.stat("file:///p/empty"), { kind: "directory" });
+
+  await assert.rejects(files.createFile("file:///p/a/b/c.txt"), { code: "ResourceAlreadyExists" });
+  await assert.rejects(files.createFile("file:///p/a"), { code: "ResourceAlreadyExists" });
+  await assert.rejects(files.createDirectory("file:///p/empty"), { code: "ResourceAlreadyExists" });
+  await assert.rejects(files.createFile("file:///p/a/b/c.txt/d"), { code: "ResourceWrongKind" });
+  await assert.rejects(files.createFile("nonsense"), { code: "InvalidUri" });
+});
+
+test("renaming moves a tree, creates parents, and refuses to overwrite or nest", async () => {
+  host.seedFile("file:///p/src/a.txt", "a");
+  host.seedFile("file:///p/src/sub/b.txt", "b");
+  host.seedFile("file:///p/taken.txt", "t");
+
+  assert.equal(await files.rename("file:///p/src", "file:///p/out/dst"), "file:///p/out/dst");
+  assert.equal(await files.readText("file:///p/out/dst/sub/b.txt"), "b");
+  assert.equal(await files.stat("file:///p/src"), null);
+
+  await assert.rejects(files.rename("file:///p/missing", "file:///p/x"), { code: "ResourceNotFound" });
+  await assert.rejects(files.rename("file:///p/out", "file:///p/taken.txt"), { code: "ResourceAlreadyExists" });
+  await assert.rejects(files.rename("file:///p/out", "file:///p/out/dst/in"), { code: "InvalidUri" });
+});
+
+test("open documents follow a rename and become deleted with their file", async () => {
+  host.seedFile("file:///p/src/a.txt", "a");
+  host.seedFile("file:///p/src/b.txt", "b");
+  host.openWindow();
+  const moved = await documents.open("file:///p/src/a.txt");
+  const removed = await documents.open("file:///p/src/b.txt");
+
+  await files.rename("file:///p/src", "file:///p/lib");
+  const followed = (await documents.get(moved.document.id))!;
+  assert.equal(followed.resourceUri, "file:///p/lib/a.txt");
+  assert.equal(followed.title, "a.txt");
+
+  await files.delete("file:///p/lib/b.txt");
+  const deleted = (await documents.get(removed.document.id))!;
+  assert.equal(deleted.kind, "destination");
+  assert.equal(deleted.dirty, true);
+  assert.equal(deleted.resourceUri, "file:///p/lib/b.txt");
+});
+
+test("deleting removes a tree and notifies watchers", async () => {
+  host.seedFile("file:///p/dir/a.txt", "a");
+  const seen: string[][] = [];
+  await files.watch("file:///p", (uris) => void seen.push([...uris]), { recursive: true });
+
+  await files.delete("file:///p/dir", { permanent: true });
+  assert.equal(await files.stat("file:///p/dir"), null);
+  assert.deepEqual(seen, [["file:///p/dir/a.txt"]]);
+  await assert.rejects(files.delete("file:///p/dir"), { code: "ResourceNotFound" });
 });
