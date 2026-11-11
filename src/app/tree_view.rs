@@ -1392,10 +1392,16 @@ impl Render for TreeView {
                         error,
                     } => div()
                         .id(("extension-tree-status", index))
+                        .debug_selector(move || format!("extension-tree-status-{index}"))
                         .w_full()
                         .pl(crate::app::zoom::rems(22. + *depth as f32 * 14.))
+                        .pr_2()
                         .py_1()
                         .text_sm()
+                        // Rows share one height, so a long message is cut
+                        // short rather than wrapped over the rows below.
+                        .truncate()
+                        .when(two_lines, |row| row.h(crate::app::zoom::rems(44.)))
                         .text_color(theme.paint_color(if *error {
                             color::ERROR
                         } else {

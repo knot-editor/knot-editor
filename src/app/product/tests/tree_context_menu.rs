@@ -237,3 +237,51 @@ fn a_session_without_a_window_opens_no_menu(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert!(!cx.read(|cx| tree.read(cx).context_menu_open()));
 }
+
+#[gpui::test]
+fn a_long_error_row_keeps_the_height_of_the_rows_around_it(cx: &mut TestAppContext) {
+    const FAILING: &str = r#"
+import { workbench } from "knot";
+await workbench.registerView({
+  id: "example.failing",
+  title: "Failing",
+  content: { kind: "tree", provider: {
+    getChildren(parentId) {
+      if (parentId === "bad") throw new Error("a very long failure message ".repeat(20));
+      return parentId === null ? [
+        { id: "bad", label: "Bad", collapsibleState: "collapsed" },
+        { id: "next", label: "Next", collapsibleState: "none" },
+      ] : [];
+    },
+  } },
+});
+"#;
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(991), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, FAILING).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    let tree = wait_for_contributed_view(&shell, "example.failing", cx);
+    wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["Bad", "Next"]);
+    cx.update_window(window, |_, window, cx| {
+        let handle = tree.focus_handle(cx);
+        handle.focus(window, cx);
+        focus_view(&handle, window, cx);
+    })
+    .unwrap();
+    cx.update(|cx| tree.update(cx, |tree, cx| tree.activate_row_for_test("bad", cx)));
+    wait_for_api_condition(cx, |cx| !tree.read(cx).is_loading());
+    cx.refresh().unwrap();
+    let mut visual = VisualTestContext::from_window(window, cx);
+    let row = visual.debug_bounds("extension-tree-row-0").unwrap();
+    let status = visual.debug_bounds("extension-tree-status-1").unwrap();
+    assert_eq!(status.size.height, row.size.height);
+}
