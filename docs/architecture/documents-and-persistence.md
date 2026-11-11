@@ -46,7 +46,7 @@ a command outcome or looking up focus later.
 Admission captures the destination window/pane/exact presentation. Provider work
 normalizes and stats asynchronously, then reads and UTF-8-decodes existing files
 before changing foreground state. Missing files create dirty destination-associated
-documents; native directory Open installs roots and tree. Completion revalidates
+documents; native directory Open installs roots. Completion revalidates
 caller lifecycle/cancellation, Open generation, native window, and exact
 presentation. Later opens, replacement, or transfer reject stale work even if
 tab/document IDs are unchanged.
@@ -66,7 +66,7 @@ converts file URIs to paths; generic workspace, tree, document, and shell state
 remains path-independent.
 
 The application registry routes normalization, enumeration, versioned read,
-no-clobber create, conditional replace, directory creation, rename, delete,
+no-clobber create, conditional replace, directory creation, rename, copy, delete,
 and stat by scheme. Memory and local
 providers implement the same typed results/errors. Local writes flush a temporary
 sibling, install atomically, and sync the parent directory before reporting
@@ -84,8 +84,11 @@ which runs the `knot-model` file operations over the same unscoped providers off
 the foreground. Reads see only stored content, never an open document's buffer,
 and no entitlement gates them.
 
-`knot.files` also creates files and directories, renames, and deletes through
-the same operations, which create missing parents and never overwrite. The
+`knot.files` also creates files and directories, renames, copies, and deletes
+through the same operations, which create missing parents and never overwrite.
+A copy stays within one provider and refuses a destination inside its source;
+the local provider keeps permissions and copies symlinks as links. `reveal`
+shows a local file in the platform's file manager and writes nothing. The
 local provider deletes to the operating system's trash through the `trash`
 crate unless asked to remove permanently; the memory provider always removes.
 Test products give the local provider a scratch directory as its trash, so
@@ -95,6 +98,9 @@ under the old URI to the matching new ones
 ([`DocumentCollection::relocate`](../../crates/knot-model/src/documents.rs)),
 and a delete marks them deleted as an external deletion does. Index and watch
 listeners learn of the change from the provider watch, as for any other write.
+The workspace file index also applies a create, rename, copy, or delete the
+application made at once, so a listing right afterwards sees it without waiting
+for the watch's coalescing delay.
 
 One native ignore policy, built from `files.hidden`, `files.ignored`, and
 `files.respectGitignore` on the foreground and evaluated off it, applies to any
@@ -181,7 +187,7 @@ Folder Open and root replacement address the native window independently of any
 selected document. Folder Open installs the folder in a window without roots and
 opens a new window for it otherwise; root replacement always edits the target
 window. They normalize/stat every proposed directory before one shared
-root/tree commit, revalidating caller lifetime, window, Open generation, and root
+root commit, revalidating caller lifetime, window, Open generation, and root
 set generation. Unrelated documents stay open. Results use the committed snapshot.
 
 The public folder picker presents the same native directory prompt one interaction
@@ -190,11 +196,8 @@ returning a URI. It never commits roots; callers choose whether to open or repla
 them. A missing selection rejects `ResourceNotFound` and a file rejects
 `ResourceWrongKind`.
 
-`WorkspaceTree` owns cached entries, expansion, selection, loading, and errors.
-Enumeration checks captured roots, root generation, and per-directory request
-generation before applying results; clearing roots clears the cache. Painting
-and input use cached foreground state only. Documents open through the application
-provider independently of root containment.
+Documents open through the application provider independently of root
+containment.
 
 ## Saving
 
@@ -334,7 +337,7 @@ physical schema live in [recovery.rs](../../src/app/recovery.rs).
 
 ## Observation
 
-Creation, final removal, persistence, and root/tree commits signal
+Creation, final removal, persistence, and root commits signal
 [application observation](extension-host.md#application-observation). Content edits
 use model commits. Persistence can change resource/title/dirty metadata while
 preserving document UUID; observation does not depend on author buffer lookup.

@@ -584,8 +584,7 @@ so each tool's home reaches fresh windows, and the terminal home dock. Documents
 terminals, the center, and live handles never enter the record.
 
 A fresh window takes the stored dock sizes and gives each tool its stored place
-as the tool registers: the explorer when a folder opens or a customized record
-shows it, contributed tools as their packages attach. While a dock still holds
+as the tool registers, as packages attach. While a dock still holds
 exactly the record's arrangement of the tools registered so far, the record's
 tree is installed over it, so tools attaching one by one in any order rebuild
 the stored arrangement and selection; a dock the user has changed meanwhile is
@@ -609,32 +608,18 @@ frame currently provides either a semantic tree or read-only text; text content
 owns a private buffer rendered by the editor and never enters the document
 collection or persistence.
 
-## Native resource tree
+## Workspace roots
 
-`WorkspaceTree` owns cached native filesystem presentation state. It emits
-normalized resource requests and workspace generations to the shell, independently
-of the extension `TreeView` provider protocol. The explorer is native tool
-content in the workbench; the shell owns its resource event subscription.
-Every root is a top-level row in root order, labelled by its last path segment
-plus the parent segment when names collide. Directory listings are cached by URI
-and shared between overlapping roots, while expansion and selection are keyed by
-root and URI so a nested root browses independently. Changing workspace roots
-keeps retained roots' expansion, selection, and listings, re-requests directories
-that were loading under the stale snapshot, and never changes placement or
-visibility. Hiding preserves selection, expansion, and the live native view.
-Reopening returns to the pane and tab position it left while that pane is
-still in its dock, else to its dock. A single click opens a file as a preview
-tab, and a double click or Enter as a regular one. Files opened from a dock go
-to the center, creating its first pane when it is empty. Root and directory request
-validation belongs to [documents and workspaces](documents-and-persistence.md).
+Root and directory request validation belongs to
+[documents and workspaces](documents-and-persistence.md). The file explorer is
+the bundled `@knot/explorer` package, an ordinary extension tool; see
+[extension trees](semantic-ui.md#extension-trees) for the surface it uses.
 
 Native Open retains its captured target through the picker. Platforms unable to
 select files and folders together first ask which kind to open; cancellation
 leaves the workbench intact. Opening a folder replaces every root. Add Folder to
-Workspace appends one through the window's transient folder prompt, and Remove
-Folder and Move Folder Up/Down act on the explorer's selected root (the root row
-or the root above the selection). Each edit replaces the whole set computed from
-live foreground state.
+Workspace appends one through the window's transient folder prompt. Each edit
+replaces the whole set computed from live foreground state.
 
 ## Terminal sessions and views
 
@@ -726,4 +711,4 @@ replicating ownership. Committed layout, relocation, focus, activation, and clos
 transitions signal the [application observer](extension-host.md#application-observation).
 Diagnostic windows are excluded; terminals and tools remain explicit
 non-document surfaces with no buffer/document association. Tool focus participates
-in captured command targeting; native explorer Copy copies the selected URI.
+in captured command targeting.

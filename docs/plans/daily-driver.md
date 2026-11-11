@@ -336,23 +336,19 @@ to be rebuilt later:
     policy.
   - Vim's Ex line completes `:e` paths from the base `:e` opens against.
 
-- **D034 — Explorer as a bundled extension** (depends on D008, D010, D122,
+- ✅ **D034 — Explorer as a bundled extension** (depends on D008, D010, D122,
   D081, D072; absorbs D053)
-  - 🚧 [Plan](d034-explorer.md).
-  - A bundled `@knot/explorer` package replaces the native explorer tool and
-    its commands, using the contributed tree API.
-  - It provides:
-    - multi-root browsing
-    - single click opens a preview tab, double click a regular one (D072)
-    - new, rename, and delete actions
-    - reveal the active file
-    - refresh on watch events
-    - filtering
-  - Removing the native explorer also removes its private workspace-tree path.
-    Any gap this exposes in the public tree API (such as context menus,
-    keyboard actions on rows, or inline rename) is closed here.
-  - It is an ordinary tool for tool-layout memory: it has a stable tool ID
-    and a default placement.
+  - Shipped ([architecture](../architecture/semantic-ui.md#extension-trees),
+    [decisions](../decisions/bundled-packages.md#bundled-explorer),
+    [guide](../extension-api.md#activation-selection-and-editing-in-trees),
+    [settings](../settings.md)).
+  - `@knot/explorer` replaces the native explorer and its private
+    workspace-tree path. It browses every root, opens previews and regular
+    tabs, follows the active file, refreshes from file watching, and creates,
+    renames, deletes, copies, and moves files inline.
+  - The tree API gained icon references, gestures, row arguments, reveal,
+    speed search, and inline editing; `files.copy` and `files.reveal` joined
+    the file API.
 
 - ✅ **D173 — Workspace file index** (depends on D008, D081)
   - Shipped ([architecture](../architecture/documents-and-persistence.md#workspace-file-index),

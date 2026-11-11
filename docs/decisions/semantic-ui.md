@@ -122,6 +122,14 @@ editor surface, which avoids a second text renderer and reuses selection, copy,
 and scrolling. The embedding is provisional; a dedicated read-only presentation
 is D054.
 
+Trees also carry what a file browser needs, generally rather than for the
+explorer alone: row activation reports its gesture, rows carry their own
+arguments, and `reveal` takes the ID path so the extension derives it from a URI
+and no `getParent` callback exists. Speed search is in every tree and highlights
+and jumps instead of filtering, as IntelliJ does, because filtering would hide
+the loaded rows the user is navigating among. Inline editing reuses the shared
+text field and validates through the input pull loop, as VS Code does.
+
 Reference: [semantic UI](../architecture/semantic-ui.md#extension-trees).
 
 ## Icons
@@ -148,6 +156,14 @@ restart-only pack would make Select Icon Pack unusable. Package-shipped asset
 files, icon fonts, raster formats, and per-appearance variants are rejected for
 now: SVG text and Lucide names cover the surfaces, and tinted icons already
 follow the theme.
+
+Extensions name the icon of a file or folder as `{ file }` or `{ folder }` and
+the host resolves it at paint time, rather than resolving a name in JavaScript
+(`icons.forFile`), which goes stale when packs or associations change and
+cannot follow expansion. Open and closed forms are a lookup rule of the surface
+(`name.open` before `name`), not API, so an extension never chooses between
+them. VS Code resolves a theme icon from a resource the same way, and Zed's
+icon themes pair collapsed and expanded directory icons.
 
 Reference: [semantic UI](../architecture/semantic-ui.md#icons).
 

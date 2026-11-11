@@ -292,6 +292,14 @@ leaves a file without an icon. Associations are global rather than per pack,
 and the latest claim of a pattern wins. Each bundled `language-*` package
 defines `file.<id>` with its own color key.
 
+Wherever the API takes an icon it takes an `IconRef`: a name, or `{ file }` or
+`{ folder }` holding a file or folder name. The reference resolves at paint
+time through the rules above (`IconRegistry::first_defined`, `ref_definition` in
+`src/app/icons.rs`), so a pack, override, or association change repaints
+without the extension. Variants are a lookup rule of the surface, not API: a
+surface tries `name.open` before `name` for each candidate in turn, and trees
+apply it to expanded rows. Picker items and input completions carry an icon.
+
 `AppIcon` paints a definition at the surrounding text size, so zoom needs no
 extra work. Tinted icons go through gpui-component's `Icon`, which gpui keys by
 the SVG bytes, so replacing a definition invalidates the cache without an
@@ -340,7 +348,31 @@ window, and is unavailable outside a focused extension tree or for a row
 without actions. Items emit the same captured-window command event as the
 row's controls. The menu takes focus, receives the keys the keymap leaves
 ([keymaps](commands.md#keymaps)), closes when dismissed or when it loses
-focus, and returns focus to the tree on dismissal.
+focus, and returns focus to the tree on dismissal. The menu and an edit field
+render inside the tree's focus subtree, and the session follows focus entering
+a view, so an action runs when another view held focus before the right click.
+An action marked `menuOnly` appears in the menu and not as a row button.
+
+A row's command receives how it was activated (`click`, `doubleClick`,
+`middleClick`, `rightClick`, or `enter`) and the row's `arguments`. A double
+click delivers `click` then `doubleClick`; an expandable row toggles on click
+and Enter and runs no command; `rightClick` reaches only rows without actions,
+because actions move focus to the menu. A command bound to a key in a view's
+scope asks `workbench.selectedTreeItem()` for the selected row. The extension
+selects rows through `ViewRegistration.reveal`, which expands each ancestor in
+turn, waiting for its children, then selects and scrolls to the last ID.
+
+Typing on a focused tree opens speed search: a query field drawn by the tree
+that matches the loaded rows ignoring case, highlights the matched text, and
+jumps to the best match without filtering rows out. Up and Down move between
+matches, Enter activates, and Escape clears.
+
+`editLabel` turns a row's label into the shared `TextInput`, and `editNewItem`
+shows a temporary row at the top of a parent's children. Enter or focus loss
+commits, Escape dismisses, and a `validate` message shows under the field and
+blocks the commit. Validation is asked through the host's input pull loop, so a
+commit waits for the answer to the current text; focus loss while a message
+shows dismisses. An empty commit of a new item dismisses.
 
 Contributed text frames are a separate content kind. Each instance owns a
 private read-only `BufferModel` rendered by the ordinary `EditorView`; it is not

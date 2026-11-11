@@ -62,9 +62,10 @@ touches.
   plus exactly one required style; backgrounds as quads.
 - [Icons](decisions/semantic-ui.md#icons): named icons in override, pack,
   default, fallback layers; associations apart from packs; native Lucide
-  defaults; live application.
+  defaults; live application; file and folder references resolved natively.
 - [Extension tree content and actions](decisions/semantic-ui.md#extension-tree-content-and-actions):
-  one frame registration; text frames reuse the editor surface.
+  one frame registration; text frames reuse the editor surface; general
+  gesture, reveal, speed search, and inline editing rather than explorer-only.
 - [Extension transient interactions](decisions/semantic-ui.md#extension-transient-interactions):
   typed results, complete lists filtered natively or rows supplied per query,
   pulled rather than pushed updates; whole-value completion items with menu accept; one native matcher
@@ -113,6 +114,8 @@ touches.
   a bundled package that proves the editor API.
 - [Bundled Vim mode](decisions/bundled-packages.md#bundled-vim-mode): public
   APIs only, a JavaScript state machine over typed text.
+- [Bundled explorer](decisions/bundled-packages.md#bundled-explorer): public
+  API only, every gap closed generally; the taken item stays in the extension.
 - [Bundled project registry](decisions/bundled-packages.md#bundled-project-registry):
   `@knot/projects` owns records; native code owns workspaces and roots; every
   opened folder set is remembered.

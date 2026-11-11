@@ -84,6 +84,8 @@ and `icons.pack` when the user runs Select Icon Pack.
 | Key | Type | Default | Scope | Owner | Description |
 | --- | --- | --- | --- | --- | --- |
 | `vim.enabled` | boolean | `false` | Read with the editor's `document`, `language`, and `view: "editor"`, so scoped values turn Vim off for a language or view | `@knot/vim` | Edit with Vim's modes and keys. |
+| `explorer.autoReveal` | boolean | `true` | Global | `@knot/explorer` | Select the active file in the explorer whenever it changes. |
+| `explorer.showIgnored` | boolean | `true` | Global | `@knot/explorer` | Show files and folders that ignore rules match, dimmed; off hides them. |
 | `projects.rememberedLimit` | integer | `30` | Global | `@knot/projects` | How many unnamed projects to remember. The least recently opened are forgotten first; named and active projects, and projects holding unsaved text, are kept. |
 
 The other bundled packages (`go-to-file`, `go-to-line`, `language-*`, `status-bar`, `themes`) define no settings; some write native keys, as noted

@@ -284,12 +284,39 @@ const view = await workbench.registerView({
 });
 ```
 
+Wherever an icon is accepted it may be an `IconRef`: a name, or `{ file: name }`
+or `{ folder: name }` to get the icon a file or folder of that name gets through
+the associations. Those resolve natively at paint time, show the open variant of
+an expanded row, and follow pack and association changes, so a file browser
+names icons without resolving them. Picker items and input completions take the
+same `icon`.
+
 Actions invoke existing registered commands. Their JSON `arguments` become the
 handler's `context.arguments`, so an action retains the row identity it was
 created for even after focus changes. Clicking an action never activates the
 row, and the captured window is the one where the click happened. Rows remain
 usable without a pointer: move the selection, press Right to enter its actions,
 cycle with Up/Down, press Enter to invoke, and Escape to return.
+
+### Activation, selection, and editing in trees
+
+A row's `command` receives `arguments` (the row's `arguments`) and a `gesture`:
+`click`, `doubleClick`, `middleClick`, `rightClick`, or `enter`. Expandable
+rows toggle on click and Enter instead. A command bound to a key with
+`keymaps.bind(key, command, { view })` learns the selected row from
+`workbench.selectedTreeItem()`. `ViewRegistration.reveal(idPath)` expands each
+ancestor, waiting for its children, then selects and scrolls to the last ID. A
+row may be `muted`, and an action with `menuOnly` shows in the context menu and
+not as a row button. Every tree has speed search: typing on a focused tree
+highlights and jumps to matching loaded rows.
+
+`editLabel(id, { value, selection, validate })` turns a row's label into a text
+field and `editNewItem(parentId, { icon, validate })` shows an empty temporary
+row under a parent. Both resolve `accepted` with the text or `dismissed`;
+`validate` returns a message to show under the field, which blocks the commit.
+The bundled `@knot/explorer` package is the reference use of all of this: it
+browses every root, follows the active file, and creates, renames, deletes,
+copies, and moves files with only the public API.
 
 ### Read-only text frames
 
@@ -1026,10 +1053,11 @@ for a missing resource instead of rejecting. The fake host seeds files with
 
 ## Change files
 
-`files.createFile(uri)`, `createDirectory(uri)`, `rename(from, to)`, and
-`delete(uri, { permanent })` change stored resources through the same
-providers. Nothing is overwritten and missing parent directories are created:
-creating or renaming onto an existing entry rejects `ResourceAlreadyExists`,
+`files.createFile(uri)`, `createDirectory(uri)`, `rename(from, to)`,
+`copy(from, to)`, and `delete(uri, { permanent })` change stored resources
+through the same providers. Nothing is overwritten and missing parent
+directories are created: creating, renaming, or copying onto an existing entry
+rejects `ResourceAlreadyExists`,
 and replacing one is a `delete` followed by a `rename` the caller chooses.
 `delete` moves the entry to the operating system's trash unless `permanent` is
 set, and rejects instead of deleting for good where the platform has no trash.
@@ -1044,10 +1072,13 @@ followed; its documents become deleted ones.
 ```js
 const created = await files.createFile(`${directory}/notes/todo.md`);
 const renamed = await files.rename(created, `${directory}/notes/done.md`);
+const copy = await files.copy(renamed, `${directory}/notes/copy.md`);
 await files.delete(renamed);
 ```
 
-The fake host applies the same rules to its seeded files and open documents.
+`files.reveal(uri)` shows a local file or folder in the platform's file
+manager. The fake host applies the same rules to its seeded files and open
+documents, and `revealed()` from `knot/testing` lists the reveals.
 
 ## Acknowledge cleanup and handle failures
 
