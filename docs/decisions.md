@@ -152,6 +152,9 @@ touches.
   `workspaces.pickFolder` returns a checked directory without committing roots.
 - [Extension file reads](decisions/documents-and-persistence.md#extension-file-reads):
   ungated, text-only `files` reads over any provider; no bytes or list options.
+- [Extension file mutation](decisions/documents-and-persistence.md#extension-file-mutation):
+  no-clobber with parents created, trash by default, rename-following only for
+  Knot-issued renames; no prompts or closing.
 - [Workspace ignore policy](decisions/documents-and-persistence.md#workspace-ignore-policy):
   one native, setting-driven policy for hidden and ignored entries; one
   classifier for walks rather than `rg --files` or a `WalkBuilder` fast path;

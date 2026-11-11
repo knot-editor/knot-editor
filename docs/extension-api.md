@@ -982,7 +982,7 @@ complete observer: it waits for `launched`, then tracks windows and documents.
 
 `files` reads stored resources through the registered resource providers, for
 any URI with a provider, whether or not a workspace root contains it. It reads,
-lists, and stats; it never writes.
+lists, and stats; [changing files](#change-files) is separate.
 
 ```js
 const root = (await workspaces.get(target)).roots[0].uri;
@@ -1023,6 +1023,31 @@ saved, never an open document's buffer, so unsaved edits are invisible; use
 no particular order, so sort and filter in JavaScript. `stat` resolves `null`
 for a missing resource instead of rejecting. The fake host seeds files with
 `seedFile` from `knot/testing`.
+
+## Change files
+
+`files.createFile(uri)`, `createDirectory(uri)`, `rename(from, to)`, and
+`delete(uri, { permanent })` change stored resources through the same
+providers. Nothing is overwritten and missing parent directories are created:
+creating or renaming onto an existing entry rejects `ResourceAlreadyExists`,
+and replacing one is a `delete` followed by a `rename` the caller chooses.
+`delete` moves the entry to the operating system's trash unless `permanent` is
+set, and rejects instead of deleting for good where the platform has no trash.
+None of them asks for confirmation, so an explorer confirms before calling.
+
+Open documents follow what Knot did: after a `rename`, every document at or
+under the old URI keeps its text, history, and views under the new URI, and
+`delete` turns the documents it affects into deleted ones, which keep their
+text and recreate the file when saved. A rename made by another program is not
+followed; its documents become deleted ones.
+
+```js
+const created = await files.createFile(`${directory}/notes/todo.md`);
+const renamed = await files.rename(created, `${directory}/notes/done.md`);
+await files.delete(renamed);
+```
+
+The fake host applies the same rules to its seeded files and open documents.
 
 ## Acknowledge cleanup and handle failures
 

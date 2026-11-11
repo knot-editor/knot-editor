@@ -66,7 +66,8 @@ converts file URIs to paths; generic workspace, tree, document, and shell state
 remains path-independent.
 
 The application registry routes normalization, enumeration, versioned read,
-no-clobber create, conditional replace, and stat by scheme. Memory and local
+no-clobber create, conditional replace, directory creation, rename, delete,
+and stat by scheme. Memory and local
 providers implement the same typed results/errors. Local writes flush a temporary
 sibling, install atomically, and sync the parent directory before reporting
 success. Replacement resolves symlinks first, so it rewrites the link's target
@@ -82,6 +83,16 @@ Extensions read through `knot.files` (`readText`, `list`, `search`, `isIgnored`,
 which runs the `knot-model` file operations over the same unscoped providers off
 the foreground. Reads see only stored content, never an open document's buffer,
 and no entitlement gates them.
+
+`knot.files` also creates files and directories, renames, and deletes through
+the same operations, which create missing parents and never overwrite. The
+local provider deletes to the operating system's trash through the `trash`
+crate unless asked to remove permanently; the memory provider always removes.
+After a provider rename succeeds, the foreground moves the open documents at or
+under the old URI to the matching new ones
+([`DocumentCollection::relocate`](../../crates/knot-model/src/documents.rs)),
+and a delete marks them deleted as an external deletion does. Index and watch
+listeners learn of the change from the provider watch, as for any other write.
 
 One native ignore policy, built from `files.hidden`, `files.ignored`, and
 `files.respectGitignore` on the foreground and evaluated off it, applies to any
@@ -208,8 +219,8 @@ reload below.
 ### Detecting external changes
 
 While `files.watchDocuments` is on, every persisted document holds a
-[watch](#watching) on its parent directory, moved when Save As changes its
-resource and released when the setting turns off. An event naming the document's
+[watch](#watching) on its parent directory, moved when Save As or a rename
+Knot performed changes its resource and released when the setting turns off. An event naming the document's
 file or directory, and the application becoming active, read the file and
 compare its provider version with the recorded one. Equal versions are Knot's
 own save or no change; a new version with the saved content only records the
@@ -227,7 +238,8 @@ native prompt offers Reload or Keep, once per marked version. Reload loads the
 file through the same diff, which Undo takes back; Keep leaves the text and the
 recorded version, so the next save reaches the conflict prompt. A file that
 disappears turns its document into a dirty one associated with the missing file,
-shown as deleted, whose save recreates it; documents associated with a file that
+shown as deleted, whose save recreates it, so a rename made outside Knot is a
+deletion; only a rename Knot performed re-associates a document. Documents associated with a file that
 does not exist are watched too, so a file that reappears is marked like any
 other change.
 

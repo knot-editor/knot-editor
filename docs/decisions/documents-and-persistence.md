@@ -83,6 +83,25 @@ second pattern syntax beside project settings' globs.
 
 Reference: [URI providers](../architecture/documents-and-persistence.md#uri-providers).
 
+## Extension file mutation
+
+Creation and the destination of a rename never overwrite, and they create
+missing parents. A caller that wants to replace deletes first, so a destructive
+step is never implicit in a call that reads as harmless, and an explorer needs
+no parent-directory bookkeeping. Delete moves to the OS trash and rejects where
+the platform has none, because a silent permanent delete is the failure the
+default exists to prevent; `permanent` is the explicit opt-in. Rejected: a
+`create` that overwrites, and a trash fallback that deletes outright.
+
+Documents follow only renames Knot performed. Inferring a rename from a file
+that vanishes and one that appears in the same watch batch is a guess that can
+attach a document to an unrelated file, so external renames stay deletions.
+Deleting never closes a document or asks: the text stays in an open document, so
+protected closure and recovery keep working, and prompting belongs to the
+caller. Mutations are ungated like reads until D087.
+
+Reference: [URI providers](../architecture/documents-and-persistence.md#uri-providers).
+
 ## Workspace ignore policy
 
 One native policy, set by three global settings, decides what `files.list`,
