@@ -1,6 +1,6 @@
 # D034 — Explorer as a bundled extension
 
-Status: 🚧 in progress; checkpoints 1 to 3 done, checkpoint 4 awaiting review. Item of the
+Status: 🚧 in progress; checkpoints 1 to 4 done. Item of the
 [daily-driver plan](daily-driver.md); absorbs D053. Depends on D008, D010,
 D072, D081, and D122, all done.
 
@@ -140,37 +140,21 @@ removed with it (Add Folder to Workspace stays). The knot crate's own tests
 load no packages, so its workbench tests register a test tool
 (`ensure_test_tool`) in place of the explorer.
 
-### 4. Inline editing and file actions 🔎 awaiting review
+### 4. Inline editing and file actions ✅ done
 
-- ✅ `editLabel` and `editNewItem` in the native tree; New File, New Folder,
-  Rename, and Delete in the explorer.
-- ✅ Validation: `TreeView` tests for commit, dismissal, focus loss, and
-  validation; package tests for each action, nested creation, the opened tab,
-  open documents following a rename, and delete confirmation.
-- Review gate: `Try:` walk through the file actions.
-
-Scope decisions: an edit settles through the host's input pull loop, so
-`validate` is asked asynchronously and a commit waits for the answer to the
-current text; focus loss commits unless a message is showing, then it dismisses.
-The explorer's actions are `menuOnly` (a new `TreeAction` flag), so rows show no
-buttons; two toolbar buttons create files and folders. Rename, Delete, and F2/
-Delete keys act on the selected row; from the palette they act on the active
-file. Created, renamed, and deleted entries refresh the workspace file index at
-once (`FileIndex::apply_changes`), because a listing right after a mutation
-otherwise lagged the watch by its coalescing delay.
-
-✅ Fixed in review: a context-menu action did nothing when another view had
-focus before the right click. The tree handed focus to its menu before a frame
-drew, so the session never saw the tree focused and dropped the action. The
-menu and edit field now render inside the tree's focus subtree, the session
-follows focus entering a view (`on_focus_in`), and refocusing the session's
-view leaves focus already inside it alone.
-
-**Implementation context:** the field is `src/app/text_input.rs`, as
-transient prompts use it (`src/app/transient.rs`); row rendering and key
-routing in `src/app/tree_view.rs`; mutation through `files.createFile`,
-`files.createDirectory`, `files.rename`, and `files.delete` (`crates/knot-model/src/files.rs`,
-`rename_file` and siblings in `src/app/extensions/host/handlers.rs`).
+`editLabel` and `editNewItem` in the native tree (`src/app/tree_view.rs`); New
+File, New Folder, Rename, and Delete in the explorer. An edit settles through
+the host's input pull loop, so `validate` is asked asynchronously and a commit
+waits for the answer to the current text; focus loss commits unless a message
+is showing, then it dismisses. The explorer's actions are `menuOnly` (a
+`TreeAction` flag), so rows show no buttons; two toolbar buttons create files
+and folders. Rename, Delete, and F2/Delete keys act on the selected row; from
+the palette they act on the active file. Created, renamed, and deleted entries
+refresh the workspace file index at once (`FileIndex::apply_changes`), because
+a listing right after a mutation otherwise lagged the watch by its coalescing
+delay. The tree's context menu and edit field render inside its focus subtree,
+and the session follows focus entering a view, so a menu action works when
+another view had focus before the right click.
 
 ### 5. Clipboard and paths
 
