@@ -159,6 +159,15 @@ file. Created, renamed, and deleted entries refresh the workspace file index at
 once (`FileIndex::apply_changes`), because a listing right after a mutation
 otherwise lagged the watch by its coalescing delay.
 
+Open issue found in review: Rename from the right-click menu sometimes does
+nothing, with no repro yet. Headless tests of the menu path (keyboard and mouse,
+five rounds each) always keep the field open. Suspects: the menu's focus
+restore landing after the field opened (losing focus commits, and an unchanged
+name commits to nothing); the menu click being dropped because the tree does
+not yet hold focus when the command is dispatched; a click inside the field
+refocusing the tree. Needs the symptom (nothing, field flashes, Enter does
+nothing, or a click in the field closes it) or temporary logging.
+
 **Implementation context:** the field is `src/app/text_input.rs`, as
 transient prompts use it (`src/app/transient.rs`); row rendering and key
 routing in `src/app/tree_view.rs`; mutation through `files.createFile`,
