@@ -553,7 +553,14 @@ impl Render for ProductShell {
             .key_context("product")
             .capture_key_down(cx.listener(Self::cancel_tab_drag))
             .on_modifiers_changed(cx.listener(Self::modifiers_changed))
-            .on_action(cx.listener(|this, source, _, cx| this.dispatch_source(source, cx)))
+            .on_action(cx.listener(|this, source: &ProductCommandSource, _, cx| {
+                this.dispatch_source(source.command(), cx)
+            }))
+            .on_action(
+                cx.listener(|this, source: &ApplicationCommandSource, _, cx| {
+                    this.dispatch_source(source.command(), cx)
+                }),
+            )
             .flex()
             .flex_col()
             .size_full()
@@ -768,7 +775,7 @@ pub(super) fn command_button(
         .child(label)
         .on_click(move |_, _, cx| {
             shell.update(cx, |shell, cx| {
-                shell.dispatch_source(&ProductCommandSource::new(command), cx);
+                shell.dispatch_source(ProductCommandSource::new(command).command(), cx);
             })
         })
 }

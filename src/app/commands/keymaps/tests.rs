@@ -381,7 +381,7 @@ fn rebuilt_map_retains_fixed_config_error_binding(cx: &mut TestAppContext) {
             bindings[0]
                 .action()
                 .as_any()
-                .is::<crate::app::commands::dispatch::ProductCommandSource>()
+                .is::<crate::app::commands::dispatch::ApplicationCommandSource>()
         );
     });
 }
@@ -391,11 +391,9 @@ fn menu_shortcuts_follow_the_effective_global_keymap(cx: &mut TestAppContext) {
     fn menu_key(cx: &gpui::App, command: &str) -> Option<String> {
         let keymap = cx.key_bindings();
         let keymap = keymap.borrow();
-        let action = ProductCommandSource {
-            name: command.to_owned().into(),
-        };
+        let action = crate::app::commands::dispatch::menu_action(command);
         let keys = keymap
-            .bindings_for_action(&action)
+            .bindings_for_action(action.as_ref())
             .filter(|binding| {
                 binding
                     .predicate()

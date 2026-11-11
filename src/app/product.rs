@@ -58,13 +58,13 @@ use super::{
     CommandCompletion, CommandPalette,
     command_history::ApplicationCommandHistory,
     commands::dispatch::{
-        ApplicationProductCommands, CLOSE_TAB_COMMAND, CLOSE_WINDOW_COMMAND, COPY_COMMAND,
-        CUT_COMMAND, NEW_COMMAND, NEW_TERMINAL_COMMAND, NEW_WINDOW_COMMAND, OPEN_COMMAND,
-        PASTE_COMMAND, ProductCommandDispatcher, ProductCommandSource, ProductCommandTarget,
-        QUIT_COMMAND, REDO_COMMAND, RESET_ZOOM_COMMAND, SAVE_AS_COMMAND, SAVE_COMMAND,
-        SELECT_ALL_COMMAND, SHOW_EXTENSION_REPORT_COMMAND, SPLIT_HORIZONTAL_COMMAND,
-        SPLIT_VERTICAL_COMMAND, TargetTab, UNDO_COMMAND, ZOOM_IN_COMMAND, ZOOM_OUT_COMMAND,
-        dispatch_close_to_captured_target, dispatch_open_to_captured_target,
+        ApplicationCommandSource, ApplicationProductCommands, CLOSE_TAB_COMMAND,
+        CLOSE_WINDOW_COMMAND, COPY_COMMAND, CUT_COMMAND, NEW_COMMAND, NEW_TERMINAL_COMMAND,
+        NEW_WINDOW_COMMAND, OPEN_COMMAND, PASTE_COMMAND, ProductCommandDispatcher,
+        ProductCommandSource, ProductCommandTarget, QUIT_COMMAND, REDO_COMMAND, RESET_ZOOM_COMMAND,
+        SAVE_AS_COMMAND, SAVE_COMMAND, SELECT_ALL_COMMAND, SHOW_EXTENSION_REPORT_COMMAND,
+        SPLIT_HORIZONTAL_COMMAND, SPLIT_VERTICAL_COMMAND, TargetTab, UNDO_COMMAND, ZOOM_IN_COMMAND,
+        ZOOM_OUT_COMMAND, dispatch_close_to_captured_target, dispatch_open_to_captured_target,
         dispatch_save_to_captured_target,
     },
     commands::keymaps::ApplicationKeymaps,
@@ -1297,9 +1297,9 @@ impl ProductShell {
         });
     }
 
-    fn dispatch_source(&mut self, source: &ProductCommandSource, cx: &mut Context<Self>) {
+    fn dispatch_source(&mut self, command: knot_protocol::Command, cx: &mut Context<Self>) {
         let target = self.capture_command_target(cx);
-        self.dispatch_command(source.command(), target, cx);
+        self.dispatch_command(command, target, cx);
     }
 
     #[cfg(test)]

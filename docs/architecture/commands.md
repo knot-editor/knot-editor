@@ -147,6 +147,11 @@ keyboard. Composition preedit is not queued, since the IME already shows it.
 Menus show each command's shown global single-keystroke binding through a
 binding to the menu action in a context no element declares, so it labels the
 menu without dispatching. The menus are set again whenever the keymap changes.
+On macOS the application outlives its last window, so Quit, New, New Blank
+Window, and Open… use a separate menu action that an application-level handler
+also takes: with no window open, Quit quits and the others open a window and
+run in it, while every other menu item is disabled because no handler takes
+its action. Other platforms quit when the last window closes.
 macOS performs a menu's key equivalent only when the window leaves the key
 unhandled, so a key that some view unbinds shows no menu key. Show Keybindings
 lists every slot with its owner and the owner that overrides it, using the same

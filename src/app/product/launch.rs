@@ -446,13 +446,7 @@ pub(crate) fn run(
         let extension_host = crate::app::extensions::host::install(cx);
         extension_host.update(cx, |host, _| host.set_bundled_packages(packages));
         bind_product_keys(cx);
-        cx.set_menus(product_menus());
-        // Menu key equivalents are read when the menus are set, so set them
-        // again whenever the keymap changes.
-        cx.observe_global::<crate::app::commands::keymaps::ApplicationKeymaps>(|cx| {
-            cx.set_menus(product_menus())
-        })
-        .detach();
+        install_menus(cx);
         let first_request = initial_request.or_else(|| incoming_requests.try_recv().ok());
         if let Some(request) = first_request {
             dispatch_launch_request(Some(request), cx);
@@ -471,78 +465,101 @@ pub(crate) fn run(
     });
 }
 
+pub(super) fn install_menus(cx: &mut App) {
+    cx.on_action(run_without_window);
+    cx.set_menus(product_menus());
+    // Menu key equivalents are read when the menus are set, so set them
+    // again whenever the keymap changes.
+    cx.observe_global::<crate::app::commands::keymaps::ApplicationKeymaps>(|cx| {
+        cx.set_menus(product_menus())
+    })
+    .detach();
+}
+
 fn product_menus() -> Vec<Menu> {
+    fn item(title: &'static str, command: &str) -> MenuItem {
+        MenuItem::Action {
+            name: title.into(),
+            action: crate::app::commands::dispatch::menu_action(command),
+            os_action: None,
+            checked: false,
+            disabled: false,
+        }
+    }
+    let menu = |name: &'static str, items| Menu {
+        name: name.into(),
+        items,
+        disabled: false,
+    };
     vec![
-        Menu {
-            name: "Knot".into(),
-            items: vec![MenuItem::action(
-                "Quit Knot",
-                ProductCommandSource::new(QUIT_COMMAND),
-            )],
-            disabled: false,
-        },
-        Menu {
-            name: "File".into(),
-            items: vec![
-                MenuItem::action("New", ProductCommandSource::new(NEW_COMMAND)),
-                MenuItem::action(
-                    "New Terminal",
-                    ProductCommandSource::new(NEW_TERMINAL_COMMAND),
-                ),
-                MenuItem::action(
-                    "New Blank Window",
-                    ProductCommandSource::new(NEW_WINDOW_COMMAND),
-                ),
-                MenuItem::action("Open…", ProductCommandSource::new(OPEN_COMMAND)),
-                MenuItem::action(
-                    "Add Folder to Workspace…",
-                    ProductCommandSource::new(commands::ADD_FOLDER_COMMAND),
-                ),
-                MenuItem::action("Save", ProductCommandSource::new(SAVE_COMMAND)),
-                MenuItem::action("Save As…", ProductCommandSource::new(SAVE_AS_COMMAND)),
-                MenuItem::action(
-                    "Recover Unsaved Documents…",
-                    ProductCommandSource::new(commands::RECOVER_COMMAND),
-                ),
-                MenuItem::action("Close Tab", ProductCommandSource::new(CLOSE_TAB_COMMAND)),
-                MenuItem::action(
-                    "Close Window",
-                    ProductCommandSource::new(CLOSE_WINDOW_COMMAND),
-                ),
+        menu("Knot", vec![item("Quit Knot", QUIT_COMMAND)]),
+        menu(
+            "File",
+            vec![
+                item("New", NEW_COMMAND),
+                item("New Terminal", NEW_TERMINAL_COMMAND),
+                item("New Blank Window", NEW_WINDOW_COMMAND),
+                item("Open…", OPEN_COMMAND),
+                item("Add Folder to Workspace…", commands::ADD_FOLDER_COMMAND),
+                item("Save", SAVE_COMMAND),
+                item("Save As…", SAVE_AS_COMMAND),
+                item("Recover Unsaved Documents…", commands::RECOVER_COMMAND),
+                item("Close Tab", CLOSE_TAB_COMMAND),
+                item("Close Window", CLOSE_WINDOW_COMMAND),
             ],
-            disabled: false,
-        },
-        Menu {
-            name: "Edit".into(),
-            items: vec![
-                MenuItem::action("Undo", ProductCommandSource::new(UNDO_COMMAND)),
-                MenuItem::action("Redo", ProductCommandSource::new(REDO_COMMAND)),
-                MenuItem::action("Cut", ProductCommandSource::new(CUT_COMMAND)),
-                MenuItem::action("Copy", ProductCommandSource::new(COPY_COMMAND)),
-                MenuItem::action("Paste", ProductCommandSource::new(PASTE_COMMAND)),
-                MenuItem::action("Select All", ProductCommandSource::new(SELECT_ALL_COMMAND)),
+        ),
+        menu(
+            "Edit",
+            vec![
+                item("Undo", UNDO_COMMAND),
+                item("Redo", REDO_COMMAND),
+                item("Cut", CUT_COMMAND),
+                item("Copy", COPY_COMMAND),
+                item("Paste", PASTE_COMMAND),
+                item("Select All", SELECT_ALL_COMMAND),
             ],
-            disabled: false,
-        },
-        Menu {
-            name: "View".into(),
-            items: vec![
-                MenuItem::action(
-                    "Split Right",
-                    ProductCommandSource::new(SPLIT_HORIZONTAL_COMMAND),
-                ),
-                MenuItem::action(
-                    "Split Down",
-                    ProductCommandSource::new(SPLIT_VERTICAL_COMMAND),
-                ),
+        ),
+        menu(
+            "View",
+            vec![
+                item("Split Right", SPLIT_HORIZONTAL_COMMAND),
+                item("Split Down", SPLIT_VERTICAL_COMMAND),
                 MenuItem::separator(),
-                MenuItem::action("Zoom In", ProductCommandSource::new(ZOOM_IN_COMMAND)),
-                MenuItem::action("Zoom Out", ProductCommandSource::new(ZOOM_OUT_COMMAND)),
-                MenuItem::action("Reset Zoom", ProductCommandSource::new(RESET_ZOOM_COMMAND)),
+                item("Zoom In", ZOOM_IN_COMMAND),
+                item("Zoom Out", ZOOM_OUT_COMMAND),
+                item("Reset Zoom", RESET_ZOOM_COMMAND),
             ],
-            disabled: false,
-        },
+        ),
     ]
+}
+
+/// Run a windowless menu command that no window handled: on macOS the
+/// application outlives its last window, and its menu stays.
+fn run_without_window(source: &ApplicationCommandSource, cx: &mut App) {
+    let name = source.name.as_ref();
+    if name == QUIT_COMMAND {
+        crate::app::extensions::host::quit_after_storage(cx);
+        return;
+    }
+    let ready = cx
+        .global::<ApplicationLaunchGate>()
+        .0
+        .borrow_mut()
+        .request(None);
+    // Before startup finishes the request waits with the others, and the
+    // window it opens is enough.
+    if ready.is_none() {
+        return;
+    }
+    let window = open_product_window_with(None, None, cx);
+    cx.activate(true);
+    if name == NEW_WINDOW_COMMAND {
+        return;
+    }
+    let command = source.command();
+    if let Some(window) = window.downcast::<ProductShell>() {
+        let _ = window.update(cx, |shell, _, cx| shell.dispatch_source(command, cx));
+    }
 }
 
 pub(in crate::app) fn bind_product_keys(cx: &mut App) {

@@ -8,7 +8,7 @@ use gpui::{App, Global, KeyBinding, KeyBindingContextPredicate};
 
 pub(crate) use knot_model::commands::keymaps::*;
 
-use crate::app::commands::dispatch::{ProductCommandSource, QUIT_COMMAND};
+use crate::app::commands::dispatch::{QUIT_COMMAND, menu_action};
 
 /// A key context no element declares, for bindings that only label menus.
 const MENU_SHORTCUT_CONTEXT: &str = "menu_shortcut";
@@ -48,9 +48,7 @@ fn binding(key: &str, command: &str, context: &str, cx: &App) -> Option<KeyBindi
     let context = KeyBindingContextPredicate::parse(context).ok()?;
     KeyBinding::load(
         key,
-        Box::new(ProductCommandSource {
-            name: command.to_owned().into(),
-        }),
+        menu_action(command),
         Some(context.into()),
         false,
         None,

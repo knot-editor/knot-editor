@@ -23,10 +23,45 @@ impl ProductCommandSource {
     }
 
     pub(crate) fn command(&self) -> Command {
-        Command {
-            name: self.name.as_ref().into(),
-            arguments: CommandArgumentValue::Null,
-        }
+        command(&self.name)
+    }
+}
+
+/// A menu command that also runs with no window open, such as Quit or Open.
+///
+/// It is a separate action because gpui enables a menu item without a window
+/// only when an application-level handler takes its action type, and the other
+/// menu items need a window.
+#[derive(Clone, PartialEq, Action)]
+#[action(namespace = knot, no_json)]
+pub(crate) struct ApplicationCommandSource {
+    pub(crate) name: SharedString,
+}
+
+impl ApplicationCommandSource {
+    pub(crate) fn command(&self) -> Command {
+        command(&self.name)
+    }
+}
+
+/// The commands that run from the menu with no window open.
+pub(crate) const WINDOWLESS_COMMANDS: [&str; 4] =
+    [QUIT_COMMAND, NEW_COMMAND, NEW_WINDOW_COMMAND, OPEN_COMMAND];
+
+/// The action a menu item for `name` runs, and its key equivalent labels.
+pub(crate) fn menu_action(name: &str) -> Box<dyn Action> {
+    let name = SharedString::from(name.to_owned());
+    if WINDOWLESS_COMMANDS.contains(&name.as_ref()) {
+        Box::new(ApplicationCommandSource { name })
+    } else {
+        Box::new(ProductCommandSource { name })
+    }
+}
+
+fn command(name: &str) -> Command {
+    Command {
+        name: name.into(),
+        arguments: CommandArgumentValue::Null,
     }
 }
 

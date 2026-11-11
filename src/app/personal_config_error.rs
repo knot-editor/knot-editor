@@ -8,7 +8,7 @@ use gpui::{
     div, px, size,
 };
 
-use super::commands::dispatch::{ProductCommandSource, QUIT_COMMAND};
+use super::commands::dispatch::ApplicationCommandSource;
 use super::personal_config::ConfigDiagnostic;
 use super::theme::{color, theme};
 
@@ -52,15 +52,17 @@ impl Render for PersonalConfigErrorView {
         div()
             .track_focus(&self.focus)
             .key_context("config-error")
-            .on_action(cx.listener(|_this, source: &ProductCommandSource, _, cx| {
-                if source.name.as_ref() == QUIT_COMMAND {
-                    #[cfg(test)]
-                    {
-                        _this.quit_requested = true;
+            .on_action(
+                cx.listener(|_this, source: &ApplicationCommandSource, _, cx| {
+                    if source.name.as_ref() == super::commands::dispatch::QUIT_COMMAND {
+                        #[cfg(test)]
+                        {
+                            _this.quit_requested = true;
+                        }
+                        super::extensions::host::quit_after_storage(cx);
                     }
-                    super::extensions::host::quit_after_storage(cx);
-                }
-            }))
+                }),
+            )
             .size_full()
             .flex()
             .flex_col()

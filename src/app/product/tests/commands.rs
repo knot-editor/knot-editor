@@ -590,15 +590,17 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
     });
 }
 
+struct CountingOpenDialog(Arc<std::sync::atomic::AtomicUsize>);
+
+impl ProductOpenDialog for CountingOpenDialog {
+    fn select(&self) -> OpenDialogFuture {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async { OpenDialogOutcome::Cancelled })
+    }
+}
+
 #[gpui::test]
 async fn open_runs_in_a_new_blank_window_without_a_focused_tab(cx: &mut TestAppContext) {
-    struct CountingOpenDialog(Arc<std::sync::atomic::AtomicUsize>);
-    impl ProductOpenDialog for CountingOpenDialog {
-        fn select(&self) -> OpenDialogFuture {
-            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Box::pin(async { OpenDialogOutcome::Cancelled })
-        }
-    }
     let documents = install_globals(cx);
     let opened = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     cx.set_global(ApplicationOpenDialog(Arc::new(CountingOpenDialog(
@@ -630,5 +632,63 @@ async fn open_runs_in_a_new_blank_window_without_a_focused_tab(cx: &mut TestAppC
 
     cx.simulate_keystrokes(second, "secondary-o");
     cx.run_until_parked();
+    assert_eq!(opened.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[gpui::test]
+async fn windowless_menu_commands_run_after_the_last_window_closes(cx: &mut TestAppContext) {
+    use super::super::super::commands::dispatch::{
+        ApplicationCommandSource, NEW_WINDOW_COMMAND, OPEN_COMMAND,
+    };
+    use super::super::ApplicationLaunchGate;
+    let opened = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    install_globals(cx);
+    cx.set_global(ApplicationOpenDialog(Arc::new(CountingOpenDialog(
+        opened.clone(),
+    ))));
+    cx.update(super::super::bind_product_keys);
+    cx.update(super::super::launch::install_menus);
+    install_launch_gate(cx);
+    cx.update(|cx| {
+        cx.global::<ApplicationLaunchGate>()
+            .0
+            .borrow_mut()
+            .complete();
+    });
+    let menu = |command: &'static str| ApplicationCommandSource {
+        name: command.into(),
+    };
+    let close_all = |cx: &mut TestAppContext| {
+        for window in cx.windows() {
+            cx.update_window(window, |_, window, _| window.remove_window())
+                .unwrap();
+        }
+        cx.run_until_parked();
+        assert!(cx.windows().is_empty());
+    };
+
+    cx.update(|cx| {
+        assert!(cx.is_action_available(&menu(NEW_WINDOW_COMMAND)));
+        assert!(!cx.is_action_available(&ProductCommandSource::new(SAVE_COMMAND)));
+    });
+
+    cx.update(|cx| cx.dispatch_action(&menu(NEW_WINDOW_COMMAND)));
+    cx.run_until_parked();
+    assert_eq!(cx.windows().len(), 1);
+    close_all(cx);
+
+    cx.update(|cx| cx.dispatch_action(&menu(NEW_COMMAND)));
+    cx.run_until_parked();
+    let window = cx.windows()[0].downcast::<ProductShell>().unwrap();
+    cx.read(|cx| {
+        let shell = window.entity(cx).unwrap();
+        let workbench = shell.read(cx).workbench.read(cx);
+        assert!(workbench.focused_editor().is_some());
+    });
+    close_all(cx);
+
+    cx.update(|cx| cx.dispatch_action(&menu(OPEN_COMMAND)));
+    cx.run_until_parked();
+    assert_eq!(cx.windows().len(), 1);
     assert_eq!(opened.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
