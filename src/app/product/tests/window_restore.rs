@@ -742,3 +742,39 @@ fn an_explicit_language_survives_hot_exit(cx: &mut TestAppContext) {
         assert!(model.language_is_explicit());
     });
 }
+
+#[gpui::test]
+fn closing_the_last_window_quits_and_restores_it_where_that_quits(cx: &mut TestAppContext) {
+    let launch = Launch::new(cx);
+    launch.start(Vec::new(), cx);
+    cx.update(crate::app::extensions::host::install);
+    cx.update(super::super::launch::quit_with_last_window);
+    let (_, shell) = shells(cx).remove(0);
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        shell.update(cx, |shell, cx| {
+            shell.dispatch_source(ProductCommandSource::new(name).command(), cx)
+        });
+        cx.run_until_parked();
+    };
+    run(NEW_COMMAND, cx);
+    let model = cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.clone();
+        let editor = workbench.read(cx).focused_editor().unwrap();
+        editor.read(cx).model().clone()
+    });
+    model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
+
+    run(CLOSE_WINDOW_COMMAND, cx);
+    assert!(!cx.has_pending_prompt());
+    let recorded = cx.read(window_sessions::current).unwrap();
+    assert_eq!(recorded.windows.len(), 1);
+
+    launch.relaunch(Vec::new(), cx);
+    let (_, shell) = shells(cx).remove(0);
+    let text = cx.read(|cx| {
+        let workbench = shell.read(cx).workbench.read(cx);
+        let editor = workbench.focused_editor().unwrap();
+        editor.read(cx).model().read(cx).text()
+    });
+    assert_eq!(text, "unsaved");
+}

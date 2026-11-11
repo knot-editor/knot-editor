@@ -246,13 +246,22 @@ impl ProductShell {
     }
 
     pub(super) fn begin_protected_operation(
-        request: ProtectedCloseRequest,
+        mut request: ProtectedCloseRequest,
         completion: ProtectedCloseCompletion,
         cx: &mut App,
     ) {
         if Self::protected_closure_is_active(cx) {
             completion(Err(ProtectedCloseFailure::InProgress), cx);
             return;
+        }
+        // Where the application quits with its last window, closing that
+        // window is quitting, which keeps unsaved text and the window for the
+        // next launch.
+        if request.kind == ProtectedCloseKind::Window
+            && cx.has_global::<super::launch::ApplicationQuitsWithLastWindow>()
+            && super::sessions(cx).len() == 1
+        {
+            request.kind = ProtectedCloseKind::Quit;
         }
         let kind = request.kind;
         let mut plan = match Self::build_protected_close_plan(request, cx) {

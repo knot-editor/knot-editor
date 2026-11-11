@@ -512,7 +512,10 @@ windows, so diagnostic windows and a launch whose config failed never write.
 Settled window changes and window closure re-record every product window in
 creation order; closing a window removes it, so quitting with no windows
 restores none. Quit records the windows before closing them and stops
-recording, and the quit path flushes the record before exit.
+recording, and the quit path flushes the record before exit. Except on macOS,
+where the application outlives its last window, closing the last window is a
+Quit, so it restores like one; a window closed without protected closure,
+such as one with no panes, quits through the same storage drain.
 
 Startup marks the record consumed durably before restoring it through the
 session commit, so a crash during restoration loses only the arrangement and

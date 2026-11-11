@@ -468,11 +468,17 @@ pub(crate) fn run(
     });
 }
 
+/// Present when closing the last window quits the application.
+pub(super) struct ApplicationQuitsWithLastWindow;
+
+impl Global for ApplicationQuitsWithLastWindow {}
+
 /// Quit once the last window closes, as other platforms than macOS expect.
 ///
 /// gpui quits on its own only without flushing Knot's durable state, so it is
 /// told to wait for an explicit quit and Knot quits through its storage drain.
 pub(super) fn quit_with_last_window(cx: &mut App) {
+    cx.set_global(ApplicationQuitsWithLastWindow);
     cx.set_quit_mode(QuitMode::Explicit);
     cx.on_window_closed(|cx, _| {
         // Deferred, so a window that replaces the closed one, such as a torn
