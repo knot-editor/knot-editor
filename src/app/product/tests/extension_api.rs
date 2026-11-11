@@ -1372,3 +1372,106 @@ await commands.register("test.reveal", async () => { await view.reveal(["dir", "
         );
     });
 }
+
+#[gpui::test]
+fn inline_edits_validate_asynchronously_and_settle_with_the_typed_value(cx: &mut TestAppContext) {
+    use knot_protocol::ExtensionKey;
+
+    const SOURCE: &str = r#"
+import * as knot from "knot"; const { commands, workbench } = knot;
+const view = await workbench.registerView({
+  id: "example.edit",
+  title: "Edit",
+  content: { kind: "tree", provider: { getChildren: (parentId) => parentId === null ? [
+    { id: "dir", label: "dir", collapsibleState: "collapsed" },
+    { id: "file", label: "file.txt", collapsibleState: "none" },
+  ] : [] } },
+});
+const report = (result) => workbench.writeClipboardText(JSON.stringify(result));
+await commands.register("test.rename", async () => {
+  await report(await view.editLabel("file", {
+    value: "file.txt",
+    selection: [0, 4],
+    validate: (value) => value.includes("/") ? "no slashes" : null,
+  }));
+});
+await commands.register("test.create", async () => {
+  await report(await view.editNewItem("dir", { icon: "file" }));
+});
+await commands.register("test.missing", async () => {
+  try { await view.editLabel("absent"); } catch (error) { await report({ error: error.code }); }
+});
+"#;
+
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(89), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    let tree = wait_for_contributed_view(&shell, "example.edit", cx);
+    wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["dir", "file.txt"]);
+    cx.update_window(window, |_, window, cx| {
+        focus_view(&tree.focus_handle(cx), window, cx)
+    })
+    .unwrap();
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("test.rename")
+            .is_ok()
+    });
+    let clipboard = |expected: &'static str, cx: &mut TestAppContext| {
+        wait_for_api_condition(cx, |cx| {
+            cx.read_from_clipboard()
+                .and_then(|item| item.text())
+                .as_deref()
+                == Some(expected)
+        });
+    };
+
+    // A rename selects the stem, so typing replaces it; a message blocks Enter.
+    let mut rename = dispatch_product_command(&shell, window, "test.rename", cx);
+    wait_for_api_condition(cx, |cx| {
+        if let Ok(outcome) = rename.completion.try_recv() {
+            panic!("rename finished early: {outcome:?}");
+        }
+        tree.read(cx).is_editing()
+    });
+    cx.simulate_input(window, "a/");
+    wait_for_api_condition(cx, |cx| {
+        tree.read(cx).edit_message_for_test().as_deref() == Some("no slashes")
+    });
+    cx.simulate_keystrokes(window, "enter");
+    cx.run_until_parked();
+    assert!(
+        cx.read(|cx| tree.read(cx).is_editing()),
+        "the message blocks the commit"
+    );
+    cx.simulate_keystrokes(window, "backspace");
+    cx.simulate_keystrokes(window, "enter");
+    assert_eq!(wait_for_command(rename, cx), CommandOutcome::Completed);
+    clipboard(r#"{"kind":"accepted","value":"a.txt"}"#, cx);
+    assert!(cx.read(|cx| !tree.read(cx).is_editing()));
+
+    // A new row shows first among the expanded parent's children.
+    let create = dispatch_product_command(&shell, window, "test.create", cx);
+    wait_for_api_condition(cx, |cx| tree.read(cx).is_editing());
+    cx.simulate_keystrokes(window, "escape");
+    assert_eq!(wait_for_command(create, cx), CommandOutcome::Completed);
+    clipboard(r#"{"kind":"dismissed"}"#, cx);
+
+    let missing = dispatch_product_command(&shell, window, "test.missing", cx);
+    assert_eq!(wait_for_command(missing, cx), CommandOutcome::Completed);
+    clipboard(r#"{"error":"TreeItemNotFound"}"#, cx);
+}

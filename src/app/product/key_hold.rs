@@ -44,6 +44,16 @@ impl ProductShell {
         }
     }
 
+    /// Stop holding input and replay what waited, because an interaction the
+    /// running command started takes the keys now.
+    pub(crate) fn release_key_hold_now(&mut self, cx: &mut Context<Self>) {
+        let Some(generation) = self.key_hold.as_ref().map(|hold| hold.generation) else {
+            return;
+        };
+        let shell = cx.weak_entity();
+        cx.defer(move |cx| release_key_hold(&shell, generation, cx));
+    }
+
     /// Begin holding input; `None` when a hold is already active.
     fn start_key_hold(&mut self, editor: Option<WeakEntity<Editor>>, cx: &App) -> Option<u64> {
         if self.key_hold.is_some() {

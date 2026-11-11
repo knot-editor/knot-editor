@@ -384,6 +384,9 @@ pub struct TreeAction {
     /// The action then renders as an icon button.
     #[serde(default)]
     pub icon: Option<IconRef>,
+    /// Offer the action only in the context menu.
+    #[serde(default)]
+    pub menu_only: bool,
 }
 
 /// Whether a tree row is ordinary selectable content or a group header.

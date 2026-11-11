@@ -2596,6 +2596,66 @@ impl ProductExtensionHost {
         shell.update(cx, |shell, cx| access(shell, cx))
     }
 
+    /// Start an inline edit in the tree view `arguments.registration`
+    /// contributes to the resolved window.
+    pub(crate) fn begin_tree_edit(
+        &mut self,
+        request: &knot_protocol::RequestContext,
+        arguments: handlers::TreeEditArguments,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        (
+            crate::app::tree_view::EditSession,
+            gpui::WeakEntity<crate::app::tree_view::TreeView>,
+        ),
+        handlers::TreeEditError,
+    > {
+        use crate::app::tree_view::EditTarget;
+        use handlers::{AccessError, TreeEditError};
+        if !self
+            .lifecycles
+            .contains(&ExtensionKey::new(request.extension, request.lifecycle))
+        {
+            return Err(AccessError::Cancelled.into());
+        }
+        let handlers::TreeEditArguments {
+            registration,
+            new_row,
+            id,
+            value,
+            selection,
+            icon,
+            watching,
+            window,
+        } = arguments;
+        let kind = self.semantics.owned_kind(registration, request)?;
+        let shell = self.transient_session(request, window.as_deref(), cx)?;
+        let (tree, handle) = shell
+            .read(cx)
+            .contributed_tree(&kind)
+            .ok_or(crate::app::extensions::semantics::SemanticError::ViewNotFound)?;
+        let selection =
+            selection.and_then(|range| knot_model::matching::byte_ranges(&value, &[range]).pop());
+        let target = if new_row {
+            EditTarget::New { parent: id, icon }
+        } else {
+            EditTarget::Label(id)
+        };
+        let weak = tree.downgrade();
+        let session = handle
+            .update(cx, |_, window, cx| {
+                tree.update(cx, |tree, cx| {
+                    tree.begin_edit(target, value, selection, watching, window, cx)
+                })
+            })
+            .map_err(|_| AccessError::InvalidTarget)?
+            .ok_or(TreeEditError::ItemNotFound)?;
+        // The command that started the edit waits for it, so the keys typed
+        // meanwhile belong to the field.
+        shell.update(cx, |shell, cx| shell.release_key_hold_now(cx));
+        Ok((session, weak))
+    }
+
     /// Keep a previewing picker between pulls and return the number its
     /// caller asks again with.
     pub(crate) fn keep_transient_session(&mut self, session: handlers::TransientSession) -> u64 {

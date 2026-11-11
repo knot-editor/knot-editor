@@ -161,6 +161,7 @@ function treeAction(value) {
     label: string(value.label, "tree action label must be text"),
     command: string(value.command, "tree action command must be text"),
     icon: iconRef(value.icon),
+    menuOnly: value.menuOnly == null ? false : flag(value.menuOnly, "tree action menuOnly must be a boolean"),
     arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
   };
 }
@@ -1035,6 +1036,14 @@ export async function registerView(contribution) {
       const path = arrayItems(idPath, (id) => string(id, "reveal IDs must be text"));
       await owned.track(request("revealViewItem", registration, path, optionalWindowAuthority(window)));
     },
+    async editLabel(id, options) {
+      owned.assertActive();
+      return owned.track(editTree(registration, false, string(id, "tree item ID must be text"), options));
+    },
+    async editNewItem(parentId, options) {
+      owned.assertActive();
+      return owned.track(editTree(registration, true, string(parentId, "tree item ID must be text"), options));
+    },
     async setText(text, window) {
       owned.assertActive();
       await owned.track(request(
@@ -1046,6 +1055,39 @@ export async function registerView(contribution) {
     },
     dispose: () => owned.dispose(),
   });
+}
+
+// An inline edit is pulled inside this turn, as an input with `onChange` is:
+// each value goes to `validate`, and its message travels back with the pull.
+async function editTree(registration, newRow, id, options) {
+  const fields = options == null ? {} : record(options, "edit options must be an object");
+  const value = optionalText(fields.value) ?? "";
+  const selection = fields.selection == null ? null : textRange(fields.selection);
+  const validate = fields.validate;
+  if (validate != null && typeof validate !== "function") {
+    throw new TypeError("edit validate must be a function");
+  }
+  let failure = null;
+  let update = await request(
+    "beginTreeEdit", registration, newRow ? 1 : 0, id, value, selection,
+    iconRef(fields.icon), validate == null ? 0 : 1, null,
+  );
+  while (update.kind === "changed") {
+    let message = null;
+    if (failure === null) {
+      try {
+        const result = await validate(update.value);
+        message = result == null ? null : string(result, "edit validate must return text or nothing");
+      } catch (error) {
+        failure = { error };
+      }
+    }
+    update = await request("nextInputEvent", update.session, message, []);
+  }
+  if (failure !== null) throw failure.error;
+  return update.kind === "accepted"
+    ? Object.freeze({ kind: "accepted", value: update.value })
+    : Object.freeze({ kind: "dismissed" });
 }
 
 globalThis.__knotRequestTreeChildren = async (registration, window, instance, parentId, generation) => {

@@ -68,6 +68,21 @@ impl TextInput {
         cx.emit(TextInputEvent::Changed);
     }
 
+    /// Select the bytes `range` of the text, clamped to it and to character
+    /// boundaries.
+    pub(crate) fn select_range(&mut self, range: Range<usize>, cx: &mut Context<Self>) {
+        let clamp = |mut index: usize| {
+            index = index.min(self.text.len());
+            while !self.text.is_char_boundary(index) {
+                index -= 1;
+            }
+            index
+        };
+        self.anchor = clamp(range.start);
+        self.caret = clamp(range.end);
+        cx.notify();
+    }
+
     fn selection(&self) -> Range<usize> {
         self.anchor.min(self.caret)..self.anchor.max(self.caret)
     }

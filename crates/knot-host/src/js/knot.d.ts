@@ -1054,7 +1054,7 @@ declare module "knot" {
     | "Cancelled" | "UnsupportedOperation" | "BufferClosed" | "BufferReadOnly"
     | "InvalidRange" | "InvalidEditBatch" | "RevisionConflict" | "ContributionSetNotFound"
     | "ViewNotFound" | "ViewIdInUse" | "InvalidViewId"
-    | "ViewRegistrationNotFound" | "ContentKindMismatch"
+    | "ViewRegistrationNotFound" | "ContentKindMismatch" | "TreeItemNotFound"
     | "CompletionProviderNotFound" | "CommandNameInUse" | "CommandNotFound"
     | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
@@ -1521,6 +1521,9 @@ declare module "knot" {
     readonly icon?: IconRef;
     readonly command: string;
     readonly arguments?: JsonValue;
+    /** Offer the action only in the context menu, not as a button on the row
+     * or toolbar. */
+    readonly menuOnly?: boolean;
   }
   /**
    * Native tree semantics. Optional description, icon and command are nullable.
@@ -1615,6 +1618,21 @@ declare module "knot" {
      * Text frames only; defaults to false. */
     readonly gutter?: boolean;
   }
+  export interface TreeEditOptions {
+    /** The initial text; defaults to empty. */
+    readonly value?: string;
+    /** UTF-16 range of `value` to select; all of it when omitted. */
+    readonly selection?: readonly [start: number, end: number];
+    /** Called with each typed value, and the initial one; a returned message
+     * shows under the field and blocks the commit, nothing or null accepts.
+     * Calls are serial; a throw stops further calls and is rethrown once the
+     * edit settles. */
+    readonly validate?: (value: string) => string | null | undefined | Promise<string | null | undefined>;
+  }
+  export interface TreeNewItemOptions extends TreeEditOptions {
+    /** The icon of the new row. */
+    readonly icon?: IconRef;
+  }
   /** Registration owns one contributed view across every live product window. */
   export interface ViewRegistration extends Disposable {
     readonly id: string;
@@ -1644,6 +1662,24 @@ declare module "knot" {
      * window without a live instance, or Cancelled on teardown.
      */
     invalidate(parentId?: string | null, window?: WindowTarget): Promise<void>;
+    /**
+     * Turn the label of row `id` into a text field in the window the command
+     * runs in. Enter or losing focus commits, and Escape dismisses. While
+     * `validate` has not answered the typed value, a commit waits; a message
+     * it returns shows under the field and blocks the commit. Keys typed
+     * while a key-invoked command waits for the edit go to the field.
+     * @throws HostError with ContextUnavailable outside a command,
+     * TreeItemNotFound for a row that is not loaded, ViewNotFound, or
+     * Cancelled.
+     */
+    editLabel(id: string, options?: TreeEditOptions): Promise<InputResult>;
+    /**
+     * Expand the row `parentId` and show a temporary row with an empty field
+     * first among its children, in the window the command runs in. Committing
+     * an empty field dismisses; otherwise it behaves like `editLabel`. The
+     * caller creates the item and invalidates the parent.
+     */
+    editNewItem(parentId: string, options?: TreeNewItemOptions): Promise<InputResult>;
     /**
      * Expand each ancestor named by `idPath`, waiting for its children, then
      * select and scroll to the last ID, in every live window or one explicit

@@ -110,6 +110,9 @@ impl ProductShell {
                 Some(CommandView::Terminal(view)) => {
                     view.update(cx, |view, cx| view.insert_text(text, cx));
                 }
+                Some(CommandView::Extension(ExtensionView::Tree(tree))) => {
+                    tree.update(cx, |tree, cx| tree.edit_insert_text(text, cx));
+                }
                 _ => {}
             },
             Focus::Palette => {

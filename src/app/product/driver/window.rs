@@ -541,6 +541,21 @@ impl TestTree {
         cx.run_until_parked();
     }
 
+    /// Whether an inline edit is open in the tree.
+    pub fn is_editing(&self, cx: &mut TestAppContext) -> bool {
+        cx.read(|cx| self.tree.read(cx).is_editing())
+    }
+
+    /// The text of the open inline edit.
+    pub fn edit_text(&self, cx: &mut TestAppContext) -> Option<String> {
+        cx.read(|cx| self.tree.read(cx).edit_text_for_test(cx))
+    }
+
+    /// The message shown under the open inline edit.
+    pub fn edit_message(&self, cx: &mut TestAppContext) -> Option<String> {
+        cx.read(|cx| self.tree.read(cx).edit_message_for_test())
+    }
+
     /// The ID of the first visible row labelled `label`.
     pub fn row_id(&self, label: &str, cx: &mut TestAppContext) -> Option<String> {
         cx.read(|cx| self.tree.read(cx).row_id_for_test(label))

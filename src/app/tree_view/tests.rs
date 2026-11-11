@@ -4,7 +4,8 @@ use std::rc::Rc;
 use gpui::{AppContext, Subscription, TestAppContext};
 
 use super::{
-    TreeGesture, TreeProviderIdentity, TreeView, TreeViewEvent, TreeViewRegistrationError,
+    EditSession, EditTarget, TreeGesture, TreeProviderIdentity, TreeView, TreeViewEvent,
+    TreeViewRegistrationError,
 };
 use knot_protocol::{
     CommandArgumentValue, ExtensionId, ExtensionLifecycleId, TreeAction, TreeChildrenResponse,
@@ -374,6 +375,7 @@ fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
         command: "example.refresh".into(),
         arguments: CommandArgumentValue::Null,
         icon: None,
+        menu_only: false,
     };
     let generation = tree.update(cx, |tree, cx| {
         tree.register_provider("example.git", owner(registration), vec![frame_action], cx)
@@ -392,6 +394,7 @@ fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
             .into(),
         ),
         icon: Some("action.stage".into()),
+        menu_only: false,
     };
     tree.update(cx, |tree, cx| {
         assert!(tree.apply_response(
@@ -853,4 +856,331 @@ fn speed_search_follows_rows_that_load_later(cx: &mut TestAppContext) {
             .clone()
     });
     assert_eq!(matches, ["f-zoo", "f-zebra"]);
+}
+
+/// A tree in a window, with the folder `a` and the file `f-b` loaded.
+struct EditFixture {
+    window: gpui::WindowHandle<TreeView>,
+    registration: TreeProviderRegistrationId,
+    view: knot_protocol::ViewId,
+}
+
+impl EditFixture {
+    fn new(cx: &mut TestAppContext) -> Self {
+        let registration = TreeProviderRegistrationId::new(21);
+        let window = cx.add_window(|_, cx| TreeView::new("example.git", "1", cx));
+        window
+            .update(cx, |_, window, _| window.activate_window())
+            .unwrap();
+        let view = window
+            .update(cx, |tree, _, cx| {
+                tree.register_provider("example.git", owner(registration), Vec::new(), cx)
+                    .unwrap();
+                tree.instance_id()
+            })
+            .unwrap();
+        let fixture = Self {
+            window,
+            registration,
+            view,
+        };
+        fixture.answer(cx, None, &["a", "f-b"]);
+        // An edit starts while the tree has focus.
+        fixture
+            .window
+            .update(cx, |tree, window, cx| tree.focus.focus(window, cx))
+            .unwrap();
+        draw(cx, fixture.window);
+        fixture
+    }
+
+    fn answer(&self, cx: &mut TestAppContext, parent: Option<&str>, ids: &[&str]) {
+        self.window
+            .update(cx, |tree, _, cx| {
+                let generation = tree.children[&parent.map(str::to_owned)].generation;
+                let items = ids
+                    .iter()
+                    .map(|id| {
+                        let mut row = item(id, id, TreeItemKind::Item, Vec::new());
+                        if !id.starts_with('f') {
+                            row.collapsible_state = TreeCollapsibleState::Collapsed;
+                        }
+                        row
+                    })
+                    .collect();
+                assert!(tree.apply_response(
+                    response(
+                        self.registration,
+                        self.view,
+                        parent.map(str::to_owned),
+                        generation,
+                        items
+                    ),
+                    cx
+                ));
+            })
+            .unwrap();
+    }
+
+    fn begin(
+        &self,
+        cx: &mut TestAppContext,
+        target: EditTarget,
+        value: &str,
+        selection: Option<std::ops::Range<usize>>,
+        watching: bool,
+    ) -> Option<EditSession> {
+        let session = self
+            .window
+            .update(cx, |tree, window, cx| {
+                tree.begin_edit(target, value.into(), selection, watching, window, cx)
+            })
+            .unwrap();
+        // The field is painted, so the window tracks its focus.
+        draw(cx, self.window);
+        // The window's focus listeners activate in the next effect cycle.
+        cx.run_until_parked();
+        session
+    }
+
+    fn type_text(&self, cx: &mut TestAppContext, text: &str) {
+        self.window
+            .update(cx, |tree, _, cx| tree.edit_insert_text(text, cx))
+            .unwrap();
+    }
+
+    fn press(&self, cx: &mut TestAppContext, key: &str) {
+        press_window(self, cx, key);
+    }
+
+    fn text(&self, cx: &mut TestAppContext) -> Option<String> {
+        self.window
+            .update(cx, |tree, _, cx| tree.edit_text_for_test(cx))
+            .unwrap()
+    }
+
+    fn drafts(&self, cx: &mut TestAppContext) -> usize {
+        self.window
+            .update(cx, |tree, _, _| {
+                tree.visible_rows()
+                    .iter()
+                    .filter(|row| matches!(row, super::VisibleRow::Draft { .. }))
+                    .count()
+            })
+            .unwrap()
+    }
+}
+
+/// Paint the window, so it tracks the focus of what it shows.
+fn draw(cx: &mut TestAppContext, window: gpui::WindowHandle<TreeView>) {
+    cx.update_window(window.into(), |_, window, cx| {
+        window.refresh();
+        window.draw(cx).clear(cx)
+    })
+    .unwrap();
+}
+
+fn press_window(fixture: &EditFixture, cx: &mut TestAppContext, key: &str) {
+    let keystroke = crate::app::keys::Keystroke::parse(key).unwrap();
+    fixture
+        .window
+        .update(cx, |tree, _, cx| tree.key_down(&keystroke, cx))
+        .unwrap();
+    cx.run_until_parked();
+}
+
+fn outcome(session: &mut EditSession) -> Option<crate::app::transient::TransientOutcome> {
+    session.completion.try_recv().ok()
+}
+
+#[gpui::test]
+fn a_label_edit_replaces_the_selection_and_commits_on_enter(cx: &mut TestAppContext) {
+    use crate::app::transient::TransientOutcome;
+    let fixture = EditFixture::new(cx);
+    let mut session = fixture
+        .begin(
+            cx,
+            EditTarget::Label("f-b".into()),
+            "name.txt",
+            Some(0..4),
+            false,
+        )
+        .unwrap();
+    fixture.type_text(cx, "other");
+    assert_eq!(fixture.text(cx).as_deref(), Some("other.txt"));
+    assert!(outcome(&mut session).is_none());
+    fixture.press(cx, "enter");
+    assert_eq!(
+        outcome(&mut session),
+        Some(TransientOutcome::Input("other.txt".into()))
+    );
+    assert_eq!(fixture.text(cx), None);
+}
+
+#[gpui::test]
+fn escape_dismisses_and_focus_loss_commits(cx: &mut TestAppContext) {
+    use crate::app::transient::TransientOutcome;
+    let fixture = EditFixture::new(cx);
+    let mut session = fixture
+        .begin(cx, EditTarget::Label("f-b".into()), "name", None, false)
+        .unwrap();
+    fixture.press(cx, "escape");
+    assert_eq!(outcome(&mut session), Some(TransientOutcome::Dismissed));
+
+    let mut session = fixture
+        .begin(cx, EditTarget::Label("f-b".into()), "name", None, false)
+        .unwrap();
+    fixture.type_text(cx, "kept");
+    fixture
+        .window
+        .update(cx, |tree, window, cx| tree.focus.focus(window, cx))
+        .unwrap();
+    draw(cx, fixture.window);
+    cx.run_until_parked();
+    assert_eq!(
+        outcome(&mut session),
+        Some(TransientOutcome::Input("kept".into()))
+    );
+}
+
+#[gpui::test]
+fn a_new_row_edit_expands_its_parent_and_an_empty_commit_dismisses(cx: &mut TestAppContext) {
+    use crate::app::transient::TransientOutcome;
+    let fixture = EditFixture::new(cx);
+    let mut session = fixture
+        .begin(
+            cx,
+            EditTarget::New {
+                parent: "a".into(),
+                icon: Some("file".into()),
+            },
+            "",
+            None,
+            false,
+        )
+        .unwrap();
+    assert_eq!(fixture.drafts(cx), 1);
+    fixture.answer(cx, Some("a"), &["f-existing"]);
+    assert_eq!(fixture.drafts(cx), 1);
+    fixture.press(cx, "enter");
+    assert_eq!(outcome(&mut session), Some(TransientOutcome::Dismissed));
+    assert_eq!(fixture.drafts(cx), 0);
+
+    let mut session = fixture
+        .begin(
+            cx,
+            EditTarget::New {
+                parent: "a".into(),
+                icon: None,
+            },
+            "",
+            None,
+            false,
+        )
+        .unwrap();
+    fixture.type_text(cx, "a/b.txt");
+    fixture.press(cx, "enter");
+    assert_eq!(
+        outcome(&mut session),
+        Some(TransientOutcome::Input("a/b.txt".into()))
+    );
+}
+
+#[gpui::test]
+fn validation_blocks_the_commit_until_the_current_text_is_answered_clean(cx: &mut TestAppContext) {
+    use crate::app::transient::TransientOutcome;
+    let fixture = EditFixture::new(cx);
+    let mut session = fixture
+        .begin(
+            cx,
+            EditTarget::Label("f-b".into()),
+            "name",
+            Some(4..4),
+            true,
+        )
+        .unwrap();
+    // The initial value is published for validation.
+    assert_eq!(session.changes.borrow_and_update().as_deref(), Some("name"));
+    let answer = |cx: &mut TestAppContext, text: &str, message: Option<&str>| {
+        fixture
+            .window
+            .update(cx, |tree, _, cx| {
+                tree.set_edit_feedback(Some(text), message.map(str::to_owned), cx)
+            })
+            .unwrap();
+    };
+
+    // Enter before the answer waits for it.
+    fixture.press(cx, "enter");
+    assert!(outcome(&mut session).is_none());
+    answer(cx, "name", Some("taken"));
+    assert!(
+        outcome(&mut session).is_none(),
+        "a message blocks the commit"
+    );
+    let shown = fixture
+        .window
+        .update(cx, |tree, _, _| tree.edit_message_for_test())
+        .unwrap();
+    assert_eq!(shown.as_deref(), Some("taken"));
+
+    // Typing changes the value, so the old answer no longer applies.
+    fixture.type_text(cx, "2");
+    assert_eq!(
+        session.changes.borrow_and_update().as_deref(),
+        Some("name2")
+    );
+    answer(cx, "name", None);
+    fixture.press(cx, "enter");
+    assert!(
+        outcome(&mut session).is_none(),
+        "an answer for older text is dropped"
+    );
+    answer(cx, "name2", None);
+    assert_eq!(
+        outcome(&mut session),
+        Some(TransientOutcome::Input("name2".into()))
+    );
+}
+
+#[gpui::test]
+fn focus_loss_with_a_message_dismisses_and_a_vanished_row_ends_the_edit(cx: &mut TestAppContext) {
+    use crate::app::transient::TransientOutcome;
+    let fixture = EditFixture::new(cx);
+    let mut session = fixture
+        .begin(cx, EditTarget::Label("f-b".into()), "name", None, true)
+        .unwrap();
+    fixture
+        .window
+        .update(cx, |tree, _, cx| {
+            tree.set_edit_feedback(Some("name"), Some("taken".into()), cx)
+        })
+        .unwrap();
+    fixture
+        .window
+        .update(cx, |tree, window, cx| tree.focus.focus(window, cx))
+        .unwrap();
+    draw(cx, fixture.window);
+    cx.run_until_parked();
+    assert_eq!(outcome(&mut session), Some(TransientOutcome::Dismissed));
+
+    let mut session = fixture
+        .begin(cx, EditTarget::Label("f-b".into()), "name", None, false)
+        .unwrap();
+    fixture
+        .window
+        .update(cx, |tree, _, cx| {
+            let generation = tree.children[&None].generation;
+            assert!(tree.apply_response(
+                response(fixture.registration, fixture.view, None, generation, vec![]),
+                cx
+            ));
+        })
+        .unwrap();
+    assert_eq!(outcome(&mut session), Some(TransientOutcome::Dismissed));
+    assert!(
+        fixture
+            .begin(cx, EditTarget::Label("missing".into()), "x", None, false)
+            .is_none()
+    );
 }

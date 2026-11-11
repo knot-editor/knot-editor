@@ -22,6 +22,10 @@ use knot_protocol::{
     TreeProviderRegistrationId, ViewId,
 };
 
+mod edit;
+use edit::TreeEdit;
+pub(crate) use edit::{EditSession, EditTarget};
+
 use super::TREE_KEY_CONTEXT;
 use super::icons::{AppIcon, icon_definition, ref_definition};
 use super::theme::{color, theme};
@@ -124,6 +128,11 @@ enum VisibleRow {
         parent_id: Option<String>,
         depth: usize,
     },
+    /// The new row an edit is typing, first among its parent's children.
+    Draft {
+        icon: Option<knot_protocol::IconRef>,
+        depth: usize,
+    },
     Status {
         depth: usize,
         label: SharedString,
@@ -189,6 +198,7 @@ pub(crate) struct TreeView {
     /// The ID path of a reveal waiting for rows to load.
     pending_reveal: Option<Vec<String>>,
     search: Option<SpeedSearch>,
+    edit: Option<TreeEdit>,
     action_focus: Option<ActionFocus>,
     context_menu: Option<ContextMenu>,
     /// The selected row and its bounds when last painted.
@@ -218,6 +228,7 @@ impl TreeView {
             selected: None,
             pending_reveal: None,
             search: None,
+            edit: None,
             action_focus: None,
             context_menu: None,
             selected_bounds: Rc::default(),
@@ -474,6 +485,7 @@ impl TreeView {
         self.selected = None;
         self.pending_reveal = None;
         self.search = None;
+        self.edit = None;
         self.action_focus = None;
         cx.notify();
     }
@@ -489,7 +501,7 @@ impl TreeView {
             .into_iter()
             .filter_map(|row| match row {
                 VisibleRow::Item { item, .. } => Some((item.id, item.label)),
-                VisibleRow::Status { .. } => None,
+                VisibleRow::Draft { .. } | VisibleRow::Status { .. } => None,
             })
             .collect::<Vec<_>>();
         let styles = [MatchStyle::Substring, MatchStyle::Flex];
@@ -729,6 +741,7 @@ impl TreeView {
         }
         self.advance_reveal(cx);
         self.refresh_search(true);
+        self.drop_orphaned_edit(cx);
         cx.notify();
         true
     }
@@ -751,6 +764,25 @@ impl TreeView {
         let Some(state) = self.children.get(&key) else {
             return;
         };
+        if let Some(TreeEdit {
+            target: EditTarget::New { parent, icon },
+            message,
+            ..
+        }) = &self.edit
+            && parent_id == Some(parent.as_str())
+        {
+            rows.push(VisibleRow::Draft {
+                icon: icon.clone(),
+                depth,
+            });
+            if let Some(message) = message {
+                rows.push(VisibleRow::Status {
+                    depth,
+                    label: message.clone(),
+                    error: true,
+                });
+            }
+        }
         for item in &state.items {
             if !visited.insert(item.id.clone()) {
                 continue;
@@ -760,6 +792,19 @@ impl TreeView {
                 parent_id: key.clone(),
                 depth,
             });
+            if let Some(TreeEdit {
+                target: EditTarget::Label(id),
+                message: Some(message),
+                ..
+            }) = &self.edit
+                && *id == item.id
+            {
+                rows.push(VisibleRow::Status {
+                    depth,
+                    label: message.clone(),
+                    error: true,
+                });
+            }
             if item.kind == TreeItemKind::Group || self.expanded.contains(&item.id) {
                 self.append_children(Some(&item.id), depth + 1, visited, rows);
             }
@@ -840,7 +885,7 @@ impl TreeView {
             .iter()
             .filter_map(|row| match row {
                 VisibleRow::Item { item, .. } => Some(item.label.clone()),
-                VisibleRow::Status { .. } => None,
+                VisibleRow::Draft { .. } | VisibleRow::Status { .. } => None,
             })
             .collect()
     }
@@ -878,10 +923,18 @@ impl TreeView {
             .map(|focus| (focus.row.clone(), focus.index))
     }
 
+    /// Every action of a row, for its context menu.
     fn actions_for_row(&self, id: &str) -> Vec<TreeAction> {
         self.item(id)
             .map(|item| item.actions.clone())
             .unwrap_or_default()
+    }
+
+    /// The actions a row shows as buttons.
+    fn inline_actions_for_row(&self, id: &str) -> Vec<TreeAction> {
+        let mut actions = self.actions_for_row(id);
+        actions.retain(|action| !action.menu_only);
+        actions
     }
 
     fn focused_actions(&self) -> Vec<TreeAction> {
@@ -889,7 +942,7 @@ impl TreeView {
             return Vec::new();
         };
         match &focus.row {
-            Some(row) => self.actions_for_row(row),
+            Some(row) => self.inline_actions_for_row(row),
             None => self.frame_actions.clone(),
         }
     }
@@ -898,7 +951,7 @@ impl TreeView {
     /// frame's toolbar when that row exposes no actions.
     fn enter_action_focus(&mut self, cx: &mut Context<Self>) {
         if let Some(selected) = self.selected.clone()
-            && !self.actions_for_row(&selected).is_empty()
+            && !self.inline_actions_for_row(&selected).is_empty()
         {
             self.action_focus = Some(ActionFocus {
                 row: Some(selected),
@@ -1028,6 +1081,9 @@ impl TreeView {
     /// Handle a key the keymap left unclaimed; false when the tree ignores
     /// it.
     pub(crate) fn key_down(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        if self.edit_key(keystroke, cx) {
+            return true;
+        }
         let key = keystroke.key.to_lowercase();
         if let Some(focus) = self.action_focus.clone() {
             let actions = self.focused_actions();
@@ -1077,7 +1133,7 @@ impl TreeView {
                 VisibleRow::Item {
                     item, parent_id, ..
                 } => Some((flat, item.id.as_str(), parent_id.as_deref())),
-                VisibleRow::Status { .. } => None,
+                VisibleRow::Draft { .. } | VisibleRow::Status { .. } => None,
             })
             .collect::<Vec<_>>();
         if item_rows.is_empty() {
@@ -1258,6 +1314,14 @@ impl Render for TreeView {
 
         // Rows share one height, so a view where any row has a second line
         // shows all of them at two-line height.
+        let edit_label = self.edit.as_ref().and_then(|edit| match &edit.target {
+            EditTarget::Label(id) => Some((id.clone(), edit.input.clone())),
+            EditTarget::New { .. } => None,
+        });
+        let edit_draft = self.edit.as_ref().and_then(|edit| match &edit.target {
+            EditTarget::New { .. } => Some(edit.input.clone()),
+            EditTarget::Label(_) => None,
+        });
         let two_lines = rows.iter().any(|row| match row {
             VisibleRow::Item { item, .. } => item.detail.is_some(),
             _ => false,
@@ -1312,14 +1376,26 @@ impl Render for TreeView {
                                     .min_w_0()
                                     .flex()
                                     .flex_col()
-                                    .child(match search_ranges.get(&item.id) {
-                                        Some(ranges) => div().truncate().child(highlighted(
-                                            item.label.clone(),
-                                            ranges,
-                                            theme.paint_color(color::LIST_MATCH_FOREGROUND),
-                                        )),
-                                        None => div().truncate().child(item.label.clone()),
-                                    })
+                                    .child(
+                                        match (
+                                            edit_label
+                                                .as_ref()
+                                                .filter(|(label, _)| *label == item.id),
+                                            search_ranges.get(&item.id),
+                                        ) {
+                                            (Some((_, input)), _) => div().child(input.clone()),
+                                            (None, Some(ranges)) => {
+                                                div().truncate().child(highlighted(
+                                                    item.label.clone(),
+                                                    ranges,
+                                                    theme.paint_color(color::LIST_MATCH_FOREGROUND),
+                                                ))
+                                            }
+                                            (None, None) => {
+                                                div().truncate().child(item.label.clone())
+                                            }
+                                        },
+                                    )
                                     .when_some(item.detail.clone(), |column, detail| {
                                         column.child(
                                             div()
@@ -1360,7 +1436,12 @@ impl Render for TreeView {
                                     .bg(theme.paint_color(badge)),
                             );
                         }
-                        for (action_index, action) in item.actions.iter().enumerate() {
+                        for (action_index, action) in item
+                            .actions
+                            .iter()
+                            .filter(|action| !action.menu_only)
+                            .enumerate()
+                        {
                             let focused = row_action_focus == Some(action_index);
                             let target = action.clone();
                             let entity = entity.clone();
@@ -1430,6 +1511,26 @@ impl Render for TreeView {
                         })
                         .into_any_element()
                     }
+                    VisibleRow::Draft { icon, depth } => div()
+                        .id(("extension-tree-draft", index))
+                        .debug_selector(move || format!("extension-tree-draft-{index}"))
+                        .w_full()
+                        .pl(crate::app::zoom::rems(8. + *depth as f32 * 14.))
+                        .pr_2()
+                        .py_1()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_1()
+                        .text_sm()
+                        .when(two_lines, |row| row.h(crate::app::zoom::rems(44.)))
+                        .child(AppIcon::blank())
+                        .children(
+                            icon.as_ref()
+                                .map(|icon| AppIcon::new(ref_definition(icon, false, cx))),
+                        )
+                        .children(edit_draft.clone().map(|input| div().flex_1().child(input)))
+                        .into_any_element(),
                     VisibleRow::Status {
                         depth,
                         label,

@@ -80,6 +80,8 @@ type Answers = {
   showInput: Knot.InputResult;
   showConfirmation: Knot.ConfirmationResult;
   pickFolder: Knot.FolderPickerResult;
+  editLabel: Knot.InputResult;
+  editNewItem: Knot.InputResult;
 };
 
 type Prompt = { kind: keyof Answers; options: unknown };
@@ -705,6 +707,18 @@ function matchCandidates(query: string, candidates: readonly string[], options?:
  * returned none. */
 export function inputFeedback(): readonly (readonly Knot.InputCompletion[])[] {
   return state.inputFeedback;
+}
+
+/** Settles an inline edit with its scripted answer, after validating the
+ * initial value and each `type`d one. */
+async function editTree(kind: "editLabel" | "editNewItem", id: string, options: Knot.TreeNewItemOptions = {}) {
+  const result = prompt(kind, { id, ...options });
+  const values = [options.value ?? "", ...state.inputValues];
+  state.inputValues = [];
+  if (options.validate !== undefined) {
+    for (const value of values) state.inputMessages.push((await options.validate(value)) ?? null);
+  }
+  return result;
 }
 
 function prompt<K extends keyof Answers>(kind: K, options: unknown): Answers[K] {
@@ -1913,6 +1927,8 @@ export const api: KnotApi = {
         reveal: async (idPath) => {
           registered.reveals.push([...idPath]);
         },
+        editLabel: (id, options) => editTree("editLabel", id, options),
+        editNewItem: (parentId, options) => editTree("editNewItem", parentId, options),
         setText: async (text) => {
           registered.text = text;
         },

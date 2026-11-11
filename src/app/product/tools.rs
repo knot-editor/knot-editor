@@ -193,6 +193,17 @@ impl ProductShell {
         true
     }
 
+    /// The tree a contributed view shows in this window, with the window.
+    pub(crate) fn contributed_tree(
+        &self,
+        kind: &str,
+    ) -> Option<(Entity<crate::app::tree_view::TreeView>, AnyWindowHandle)> {
+        match &self.contributed_views.get(kind)?.content {
+            crate::app::workbench::ExtensionView::Tree(tree) => Some((tree.clone(), self.window?)),
+            crate::app::workbench::ExtensionView::Text(_) => None,
+        }
+    }
+
     /// Move a tab to the end of another area's last focused pane. Unavailable
     /// when the tab is already there or its kind does not allow the area.
     /// Moving a tool rehomes it, publishing the fresh-window default as any

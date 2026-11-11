@@ -1094,6 +1094,7 @@ pub(super) fn tree_action_from_v8<'s>(
         command: string_property(scope, object, "command")?,
         arguments,
         icon: icon_name_property(scope, object)?,
+        menu_only: optional_flag_property(scope, object, "menuOnly")?,
     })
 }
 
