@@ -162,7 +162,7 @@ another view had focus before the right click.
   provider keeps permissions and copies symlinks as links) and the public API;
   `files.reveal` (Finder) as a small native operation.
 - ✅ Copy, Cut, Paste, Copy Path, Copy Relative Path, Copy File Name, and
-  Reveal in Finder in the explorer (`src/clipboard.ts`), as menu entries, palette
+  Reveal in the file manager in the explorer (`src/clipboard.ts`), as menu entries, palette
   commands, and ⌘C/⌘X/⌘V in the view's scope.
 - ✅ Validation: model tests for `files.copy` (directories, clobbering, cycles,
   permissions, links); a host test; package tests for paste after copy and cut,
