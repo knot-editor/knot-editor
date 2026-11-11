@@ -1,6 +1,6 @@
 # D034 — Explorer as a bundled extension
 
-Status: 🚧 in progress; checkpoints 1 to 4 done. Item of the
+Status: 🚧 in progress; checkpoints 1 to 5 done; completion pending. Item of the
 [daily-driver plan](daily-driver.md); absorbs D053. Depends on D008, D010,
 D072, D081, and D122, all done.
 
@@ -156,26 +156,17 @@ delay. The tree's context menu and edit field render inside its focus subtree,
 and the session follows focus entering a view, so a menu action works when
 another view had focus before the right click.
 
-### 5. Clipboard and paths 🔎 awaiting review
+### 5. Clipboard and paths ✅ done
 
-- ✅ `files.copy` through providers (`FileSystemProvider::copy`; the local
-  provider keeps permissions and copies symlinks as links) and the public API;
-  `files.reveal` (Finder) as a small native operation.
-- ✅ Copy, Cut, Paste, Copy Path, Copy Relative Path, Copy File Name, and
-  Reveal in the file manager in the explorer (`src/clipboard.ts`), as menu entries, palette
-  commands, and ⌘C/⌘X/⌘V in the view's scope.
-- ✅ Validation: model tests for `files.copy` (directories, clobbering, cycles,
-  permissions, links); a host test; package tests for paste after copy and cut,
-  naming, and the copied texts.
-- Review gate: `Try: Explorer Clipboard` walks through the actions.
-
-Scope decisions: the taken item lives in the extension, not the system
-clipboard. Cut moves on the first Paste and refuses a taken name; Copy picks
-`name copy`, `name copy 2` before the extension.
-
-**Implementation context:** `crates/knot-model/src/files.rs` beside `rename`,
-the provider in `crates/knot-model/src/resource.rs`, a handler beside
-`rename_file`, `workbench.writeClipboardText`.
+`FileSystemProvider::copy` (the local provider keeps permissions and copies
+symlinks as links), `files.copy`, and `files.reveal` in the public API; Cut,
+Copy, Paste, Copy Path, Copy Relative Path, Copy File Name, and Reveal (named for
+the platform's file manager) in `extensions/@knot/explorer/src/clipboard.ts`,
+as menu entries, palette commands, and keys in the view's scope. The taken item
+lives in the extension, not the system clipboard. Cut moves on the first Paste
+and refuses a taken name; Copy picks `name copy`, `name copy 2` before the
+extension. The reveal itself is gpui's `reveal_path` and is verified only on
+macOS.
 
 ### Completion
 
