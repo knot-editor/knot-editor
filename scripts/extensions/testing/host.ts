@@ -382,8 +382,18 @@ function moveMarks(document: FakeDocument, edit: Knot.TextEdit) {
   }
 }
 
-// The fake buffer reads and edits text; change listeners and contributions are
-// not faked. Edits leave view offsets alone.
+/** The listeners of `onDidChange` and the contributions of each document. */
+const changeListeners = new WeakMap<FakeDocument, Set<(change: Knot.BufferChange) => void | Promise<void>>>();
+const contributionSets = new WeakMap<FakeDocument, readonly Knot.EditorContribution[]>();
+
+/** The contributions the package set on a document, in the order it gave them. */
+export function contributions(id: Knot.DocumentId): readonly Knot.EditorContribution[] {
+  return contributionSets.get(document(id)) ?? [];
+}
+
+// The fake buffer reads and edits text and runs change listeners after each
+// edit batch it applies; contributions are stored, not painted. Edits leave
+// view offsets alone.
 const buffers = new WeakMap<FakeDocument, Knot.Buffer>();
 
 function buffer(document: FakeDocument): Knot.Buffer {
@@ -413,12 +423,20 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
         moveMarks(document, edit);
       }
       if (changed) {
+        const beforeRevision = document.revision;
         document.text = text;
         document.revision += 1;
+        const change = { buffer: fake as unknown as Knot.Buffer, beforeRevision, revision: document.revision, edits };
+        for (const listener of [...(changeListeners.get(document) ?? [])]) await listener(change);
       }
       return { revision: document.revision };
     },
-    onDidChange: notFaked("Buffer.onDidChange"),
+    onDidChange: async (listener) => {
+      let set = changeListeners.get(document);
+      if (set === undefined) changeListeners.set(document, (set = new Set()));
+      set.add(listener);
+      return { dispose: async () => void set.delete(listener) };
+    },
     lineCount: async () => lineRanges(document.text).length,
     lineRange: async (line) => {
       const range = lineRanges(document.text)[line];
@@ -461,8 +479,11 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       };
     },
     contributions: {
-      replace: notFaked("Buffer.contributions.replace"),
-      dispose: notFaked("Buffer.contributions.dispose"),
+      replace: async (items, { ifRevision }) => {
+        if (ifRevision !== document.revision) throw hostError("RevisionConflict");
+        contributionSets.set(document, structuredClone(items));
+      },
+      dispose: async () => void contributionSets.delete(document),
     },
   };
   return fake as unknown as Knot.Buffer;
@@ -1458,7 +1479,7 @@ export const CAPTURE_NAMES: readonly string[] = [
 /** The color keys native code defines, as the native table lists them. */
 export const NATIVE_COLOR_KEYS: readonly string[] = [
   "background", "border", "border.hover", "button.background", "button.hover.background",
-  "dropTarget.background", "editor.background", "editor.bar.background", "editor.bar.border", "editor.bracketMatch", "editor.cursor", "editor.foldPlaceholder", "editor.foreground",
+  "dropTarget.background", "editor.background", "editor.bar.background", "editor.bar.border", "editor.bracketMatch", "editor.cursor", "editor.findMatch", "editor.findMatchCurrent", "editor.foldPlaceholder", "editor.foreground",
   "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
   "editor.markedText", "editor.selection", "error", "icon", "info", "input.background", "input.border", "input.focused.border", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",

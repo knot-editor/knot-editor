@@ -88,5 +88,5 @@ and `icons.pack` when the user runs Select Icon Pack.
 | `explorer.showIgnored` | boolean | `true` | Global | `@knot/explorer` | Show files and folders that ignore rules match, dimmed; off hides them. |
 | `projects.rememberedLimit` | integer | `30` | Global | `@knot/projects` | How many unnamed projects to remember. The least recently opened are forgotten first; named and active projects, and projects holding unsaved text, are kept. |
 
-The other bundled packages (`go-to-file`, `go-to-line`, `language-*`, `status-bar`, `themes`) define no settings; some write native keys, as noted
+The other bundled packages (`find`, `go-to-file`, `go-to-line`, `language-*`, `status-bar`, `themes`) define no settings; some write native keys, as noted
 above.

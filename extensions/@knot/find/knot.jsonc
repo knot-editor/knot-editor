@@ -1,0 +1,11 @@
+{
+  // Bundled Find command.
+  "name": "@knot/find",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "displayName": "Find",
+  "description": "Search the current file from a bar above the editor, highlighting every match.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}

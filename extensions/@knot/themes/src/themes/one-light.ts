@@ -29,6 +29,8 @@ export const ONE_LIGHT: ThemeDefinition = {
     "editor.bar.border": "#dbdbdc",
     "editor.bracketMatch": "#383a4226",
     "editor.cursor": accent,
+    "editor.findMatch": "#d19a6659",
+    "editor.findMatchCurrent": "#d19a66b3",
     "editor.foldPlaceholder": "#7f848e",
     "editor.foreground": fg,
     "editor.gutter.background": bg,

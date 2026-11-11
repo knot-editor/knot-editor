@@ -305,6 +305,42 @@ impl TestEditor {
         })
     }
 
+    /// The message of the editor's first bar, and the text of that bar's
+    /// first field; `None` without a bar.
+    pub fn first_bar(&self, cx: &mut TestAppContext) -> Option<(Option<String>, String)> {
+        cx.read(|cx| {
+            let editor = self.editor.read(cx);
+            let bar = editor.bars().bars().first()?;
+            let text = editor
+                .bar_field_texts(bar.owner, &bar.id, cx)?
+                .into_iter()
+                .next()
+                .map(|(_, text)| text)
+                .unwrap_or_default();
+            Some((bar.spec.message.clone(), text))
+        })
+    }
+
+    /// The decorated ranges contributed to the text, as start, end, and
+    /// color key.
+    pub fn decorations(&self, cx: &mut TestAppContext) -> Vec<(usize, usize, String)> {
+        cx.read(|cx| {
+            self.model
+                .read(cx)
+                .resolved_contributions()
+                .into_iter()
+                .filter_map(|item| {
+                    let decoration = item.decoration?;
+                    Some((
+                        item.range.start_byte_offset,
+                        item.range.end_byte_offset,
+                        decoration.color,
+                    ))
+                })
+                .collect()
+        })
+    }
+
     /// Whether a transient surface, such as a picker, is open.
     pub fn transient_open(&self, cx: &mut TestAppContext) -> bool {
         cx.read(|cx| self.shell.read(cx).transient.is_some())

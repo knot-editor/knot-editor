@@ -19,9 +19,18 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 pub(crate) const GO_TO_LINE_COMMAND: &str = "editor.go-to-line";
 pub(crate) const GO_TO_FILE_COMMAND: &str = "workspace.go-to-file";
 pub(crate) const OPEN_RECENT_COMMAND: &str = "workspace.open-recent";
+pub(crate) const FIND_COMMAND: &str = "editor.find";
+pub(crate) const FIND_NEXT_COMMAND: &str = "editor.find-next";
+pub(crate) const FIND_PREVIOUS_COMMAND: &str = "editor.find-previous";
 #[cfg(test)]
-pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] =
-    &[GO_TO_LINE_COMMAND, GO_TO_FILE_COMMAND, OPEN_RECENT_COMMAND];
+pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] = &[
+    GO_TO_LINE_COMMAND,
+    GO_TO_FILE_COMMAND,
+    OPEN_RECENT_COMMAND,
+    FIND_COMMAND,
+    FIND_NEXT_COMMAND,
+    FIND_PREVIOUS_COMMAND,
+];
 
 pub(crate) struct ApplicationKeymapPresets(pub(crate) PresetRegistry);
 
@@ -177,6 +186,8 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("delete", DELETE_FORWARD_COMMAND, Some("editor")),
     ("ctrl-space", SHOW_COMPLETIONS_COMMAND, Some("editor")),
     ("ctrl-g", GO_TO_LINE_COMMAND, Some("editor")),
+    ("secondary-f", FIND_COMMAND, Some("editor")),
+    ("secondary-f", FIND_COMMAND, Some("bar")),
     ("shift-f10", SHOW_TREE_CONTEXT_MENU_COMMAND, None),
     ("secondary-n", NEW_COMMAND, None),
     ("ctrl-`", TOGGLE_TERMINAL_COMMAND, None),
@@ -241,6 +252,10 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
 /// macOS word, line, and document movement, the Emacs-style keys that every
 /// Cocoa text view accepts, and tab navigation.
 const MACOS_BINDINGS: &[PresetEntry] = &[
+    ("cmd-g", FIND_NEXT_COMMAND, Some("editor")),
+    ("cmd-g", FIND_NEXT_COMMAND, Some("bar")),
+    ("shift-cmd-g", FIND_PREVIOUS_COMMAND, Some("editor")),
+    ("shift-cmd-g", FIND_PREVIOUS_COMMAND, Some("bar")),
     ("alt-left", MOVE_WORD_LEFT_COMMAND, Some("editor")),
     ("shift-alt-left", SELECT_WORD_LEFT_COMMAND, Some("editor")),
     ("alt-right", MOVE_WORD_RIGHT_COMMAND, Some("editor")),
@@ -294,6 +309,11 @@ const MACOS_BINDINGS: &[PresetEntry] = &[
 /// Windows and Linux word and document movement, the extra Redo key, and tab
 /// navigation keys that shells leave alone.
 const PC_BINDINGS: &[PresetEntry] = &[
+    // ctrl-g is Go to Line.
+    ("f3", FIND_NEXT_COMMAND, Some("editor")),
+    ("f3", FIND_NEXT_COMMAND, Some("bar")),
+    ("shift-f3", FIND_PREVIOUS_COMMAND, Some("editor")),
+    ("shift-f3", FIND_PREVIOUS_COMMAND, Some("bar")),
     ("ctrl-left", MOVE_WORD_LEFT_COMMAND, Some("editor")),
     ("shift-ctrl-left", SELECT_WORD_LEFT_COMMAND, Some("editor")),
     ("ctrl-right", MOVE_WORD_RIGHT_COMMAND, Some("editor")),

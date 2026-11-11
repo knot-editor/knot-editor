@@ -119,7 +119,7 @@ between fields natively. Specified in
 [commands](../architecture/commands.md#editor-bars); routing in
 `src/app/product/key_routing.rs`.
 
-### 4. `@knot/find`
+### 4. `@knot/find` ✅ implemented, awaiting review
 
 - Package `extensions/@knot/find`, added to `crates/knot-ext-workbench`.
 - Commands: find, next, previous, and close. ⌘F, ⌘G, and ⌘⇧G in the Knot preset.
@@ -131,7 +131,10 @@ between fields natively. Specified in
   `crates/knot-ext-workbench/tests/workbench/find.rs`: typing highlights,
   stepping and wrapping, the cap, edits while open, Esc, ⌘G with the bar
   closed, and ⌘F pre-fill.
-- `Try:` commands for manual review.
+- `Try:` commands for manual review: `Try: Find Sample` and `Try: Find Many`
+  (personal `post-init.js`) open tabs to search; then ⌘F, ⌘G, ⌘⇧G, Enter,
+  ⇧Enter, Esc. On Windows and Linux next and previous are F3 and ⇧F3, since
+  Ctrl+G is Go to Line. Match colors are provisional for the review.
 
 **Implementation context:** mirror `extensions/@knot/go-to-line` (package
 layout, `test/`, `knot.jsonc`) and its Rust test

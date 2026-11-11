@@ -290,21 +290,38 @@ pub fn parse_keys(keys: &str) -> Vec<String> {
         if character == '<'
             && let Some(end) = rest.find('>')
         {
-            let name = &rest[1..end];
-            parsed.push(match name {
-                "esc" => "escape".to_owned(),
-                "cr" => "enter".to_owned(),
-                "bs" => "backspace".to_owned(),
-                "del" => "delete".to_owned(),
-                "tab" => "tab".to_owned(),
-                "s-tab" => "shift-tab".to_owned(),
-                "lt" => "<".to_owned(),
-                "left" | "right" | "up" | "down" | "home" | "end" => name.to_owned(),
-                _ => match name.strip_prefix("c-") {
-                    Some(letter) => format!("ctrl-{letter}"),
-                    None => panic!("unknown key <{name}>"),
-                },
+            let mut name = &rest[1..end];
+            let mut keystroke = String::new();
+            // Modifier prefixes: c- control, d- command, s- shift, a- alt.
+            while let Some((modifier, remainder)) = name.split_once('-')
+                && !remainder.is_empty()
+            {
+                keystroke.push_str(match modifier {
+                    "c" => "ctrl-",
+                    "d" => "cmd-",
+                    "s" => "shift-",
+                    "a" => "alt-",
+                    _ => panic!("unknown key <{name}>"),
+                });
+                name = remainder;
+            }
+            keystroke.push_str(match name {
+                "esc" => "escape",
+                "cr" => "enter",
+                "bs" => "backspace",
+                "del" => "delete",
+                "lt" => "<",
+                "tab" | "left" | "right" | "up" | "down" | "home" | "end" => name,
+                _ if name.chars().count() == 1 => name,
+                _ if name.len() > 1
+                    && name.starts_with('f')
+                    && name[1..].chars().all(|c| c.is_ascii_digit()) =>
+                {
+                    name
+                }
+                _ => panic!("unknown key <{name}>"),
             });
+            parsed.push(keystroke);
             rest = &rest[end + 1..];
         } else {
             parsed.push(match character {

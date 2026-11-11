@@ -3,6 +3,7 @@ fn main() {
         "projects",
         "status-bar",
         "go-to-line",
+        "find",
         "go-to-file",
         "explorer",
         "themes",
