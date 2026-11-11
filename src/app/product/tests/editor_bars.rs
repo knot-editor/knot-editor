@@ -53,6 +53,16 @@ await commands.register("LABEL.validate", async ({ editor: captured }) => {
   await expectError(() => captured.openBar("x", { fields: [{ id: "" }] }), (e) => e instanceof RangeError, "empty field id");
   await expectError(() => captured.focusBarField("missing", "query"), (e) => e.code === "BarNotFound", "missing bar");
   await expectError(() => captured.barFields("missing"), (e) => e.code === "BarNotFound", "missing bar fields");
+  const command = { name: "x" };
+  const toggle = { id: "t", icon: "i", command };
+  await expectError(() => captured.openBar("x", { toggles: [{ ...toggle, id: "" }] }),
+    (e) => e instanceof RangeError, "empty toggle id");
+  await expectError(() => captured.openBar("x", { toggles: [toggle], buttons: [toggle] }),
+    (e) => e instanceof RangeError, "repeated control ids");
+  await expectError(() => captured.openBar("x", { buttons: [{ id: "b", icon: "i" }] }),
+    (e) => e instanceof TypeError, "button without a command");
+  await expectError(() => captured.openBar("x", { toggles: [{ ...toggle, active: 1 }] }),
+    (e) => e instanceof TypeError, "toggle state type");
   await captured.closeBar("missing");
   // A command's editor opens bars too; they outlive the command.
   await captured.openBar("other", { message: "from a command" });
@@ -314,7 +324,7 @@ fn a_session_without_a_window_types_into_the_focused_field(cx: &mut TestAppConte
                 id: "query".into(),
                 placeholder: String::new(),
             }],
-            message: None,
+            ..BarSpec::default()
         };
         editor.open_bar(owner, "find", spec, cx);
         assert!(editor.focus_bar_field(field.clone(), None, cx));
@@ -344,6 +354,100 @@ fn a_session_without_a_window_types_into_the_focused_field(cx: &mut TestAppConte
     });
     assert_eq!(text(cx), "xyz");
     assert_eq!(cx.read(|cx| model.read(cx).text()), "q");
+}
+
+/// A bar with a toggle and a button whose commands report the arguments and
+/// whether the bar's editor and buffer were captured.
+const CONTROLS_SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+let handle = null;
+const bar = (active) => ({
+  fields: [{ id: "query" }],
+  toggles: [{ id: "case", icon: "case-sensitive", tooltip: "Match case", active, command: { name: "controls.toggle", arguments: "case" } }],
+  buttons: [{ id: "next", icon: "arrow-down", tooltip: "Next", command: { name: "controls.press", arguments: { to: "next" } } }],
+  message: "controls",
+});
+await commands.register("controls.open", async () => {
+  if (!handle) {
+    const { snapshot } = await workbench.observe(() => {});
+    handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+  }
+  await handle.openBar("find", bar(false));
+});
+await commands.register("controls.toggle", async ({ editor, buffer, arguments: args }) => {
+  await workbench.writeClipboardText(`toggle:${args}:${editor ? "editor" : "none"}:${buffer ? "buffer" : "none"}`);
+  await handle.openBar("find", bar(true));
+});
+await commands.register("controls.press", async ({ editor, arguments: args }) => {
+  await workbench.writeClipboardText(`press:${args.to}:${editor ? "editor" : "none"}`);
+});
+"#;
+
+#[gpui::test]
+fn bar_toggles_and_buttons_paint_and_run_their_commands_in_the_bars_editor(
+    cx: &mut TestAppContext,
+) {
+    let fixture = Fixture::new(cx);
+    let host = cx.read(|cx| crate::app::extensions::host::entity(cx).unwrap());
+    let owner = ExtensionKey::new(ExtensionId::new(806), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(owner, CONTROLS_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("controls.open")
+            .is_ok()
+    });
+    fixture.run("controls.open", cx);
+
+    let bounds = |selector: &'static str, cx: &mut TestAppContext| {
+        VisualTestContext::from_window(fixture.window, cx).debug_bounds(selector)
+    };
+    let toggle = bounds("bar-control-find-case", cx).expect("the toggle paints");
+    let button = bounds("bar-control-find-next", cx).expect("the button paints");
+    let field = cx.read(|cx| {
+        fixture
+            .editor
+            .read(cx)
+            .bar_input(&BarFieldRef::new(owner, "find", "query"))
+            .unwrap()
+            .read(cx)
+            .painted_bounds()
+            .unwrap()
+    });
+    assert!(field.right() <= toggle.left(), "toggle after the field");
+    assert!(toggle.right() <= button.left(), "button after the toggle");
+    let active = |cx: &TestAppContext| {
+        cx.read(|cx| fixture.editor.read(cx).bars().bars()[0].spec.toggles[0].active)
+    };
+    assert!(!active(cx));
+
+    let mut visual = VisualTestContext::from_window(fixture.window, cx);
+    visual.simulate_click(button.center(), Modifiers::default());
+    visual.run_until_parked();
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("press:next:editor".into())
+    });
+    assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
+
+    // A toggle runs its command, which shows the new state.
+    let mut visual = VisualTestContext::from_window(fixture.window, cx);
+    visual.simulate_click(toggle.center(), Modifiers::default());
+    visual.run_until_parked();
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text())
+            == Some("toggle:case:editor:buffer".into())
+    });
+    wait_for_api_condition(cx, |cx| {
+        fixture.editor.read(cx).bars().bars()[0].spec.toggles[0].active
+    });
+    assert_eq!(fixture.bars(cx).len(), 1);
 }
 
 /// Two bars with three fields, and bindings scoped to the `bar` kind, the

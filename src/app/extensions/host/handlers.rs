@@ -3046,7 +3046,46 @@ struct BarSpecValue {
     #[serde(default)]
     fields: Vec<BarFieldValue>,
     #[serde(default)]
+    toggles: Vec<BarToggleValue>,
+    #[serde(default)]
+    buttons: Vec<BarButtonValue>,
+    #[serde(default)]
     message: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BarCommandValue {
+    name: String,
+    arguments: knot_protocol::CommandArgumentValue,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BarToggleValue {
+    id: String,
+    icon: knot_protocol::IconRef,
+    tooltip: Option<String>,
+    active: bool,
+    command: BarCommandValue,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BarButtonValue {
+    id: String,
+    icon: knot_protocol::IconRef,
+    tooltip: Option<String>,
+    command: BarCommandValue,
+}
+
+impl From<BarCommandValue> for knot_model::editor::bars::BarCommand {
+    fn from(value: BarCommandValue) -> Self {
+        Self {
+            name: value.name,
+            arguments: value.arguments,
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -3073,7 +3112,7 @@ pub(crate) struct OpenBarArguments {
 }
 impl HostArguments for OpenBarArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        use knot_model::editor::bars::{BarField, BarSpec};
+        use knot_model::editor::bars::{BarButton, BarField, BarSpec, BarToggle};
         let authority = EditorAuthority::decode(reader, 2)?;
         let id = bar_id(reader, 3)?;
         let value: BarSpecValue =
@@ -3086,6 +3125,27 @@ impl HostArguments for OpenBarArguments {
                 .map(|field| BarField {
                     id: field.id,
                     placeholder: field.placeholder,
+                })
+                .collect(),
+            toggles: value
+                .toggles
+                .into_iter()
+                .map(|toggle| BarToggle {
+                    id: toggle.id,
+                    icon: toggle.icon,
+                    tooltip: toggle.tooltip,
+                    active: toggle.active,
+                    command: toggle.command.into(),
+                })
+                .collect(),
+            buttons: value
+                .buttons
+                .into_iter()
+                .map(|button| BarButton {
+                    id: button.id,
+                    icon: button.icon,
+                    tooltip: button.tooltip,
+                    command: button.command.into(),
                 })
                 .collect(),
             message: value.message,

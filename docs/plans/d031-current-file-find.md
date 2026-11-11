@@ -134,8 +134,13 @@ tests are in `crates/knot-ext-workbench/tests/workbench/find.rs`.
 
 ### 5. Toggles and buttons
 
-- Bar toggles and buttons: data, painting, tooltips, click handling,
+- ✅ Bar toggles and buttons: data, painting, tooltips, click handling,
   toggle-state updates, and command invocation from a button with the bar's
+  editor captured. Toggles and buttons carry an icon, tooltip, and command;
+  a toggle also has `active`, which the extension flips by opening the bar
+  again. They paint between the fields and the message (toggles) and after it
+  (buttons), reusing existing theme colors. A click focuses the view, keeping a
+  field's focus, then runs the command through the shell with the focused
   editor captured.
 - `@knot/find` gains case-sensitive and whole-word toggles (⌥⌘C / ⌥⌘W
   in the bar), previous, next, and close buttons, and the options in the

@@ -5,7 +5,7 @@
 //! bar shows and which field, if any, has the editor's focus instead of its
 //! text. Presentation state, never recorded.
 
-use knot_protocol::ExtensionKey;
+use knot_protocol::{CommandArgumentValue, ExtensionKey, IconRef};
 
 /// A single-line text field of a bar.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -16,26 +16,74 @@ pub struct BarField {
     pub placeholder: String,
 }
 
-/// What a bar shows.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// The command a click on a toggle or button runs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BarCommand {
+    pub name: String,
+    pub arguments: CommandArgumentValue,
+}
+
+/// An icon button of a bar that runs a command.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BarButton {
+    /// Names the button within its bar; unique among the bar's controls.
+    pub id: String,
+    pub icon: IconRef,
+    pub tooltip: Option<String>,
+    pub command: BarCommand,
+}
+
+/// An icon button of a bar that shows whether an option is on. The extension
+/// flips `active` by updating the bar.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BarToggle {
+    /// Names the toggle within its bar; unique among the bar's controls.
+    pub id: String,
+    pub icon: IconRef,
+    pub tooltip: Option<String>,
+    pub active: bool,
+    pub command: BarCommand,
+}
+
+/// What a bar shows: fields, then toggles, a line of text, and buttons.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct BarSpec {
     pub fields: Vec<BarField>,
+    pub toggles: Vec<BarToggle>,
+    pub buttons: Vec<BarButton>,
     /// A line of text after the fields.
     pub message: Option<String>,
 }
 
 impl BarSpec {
-    /// Why the spec is invalid: a field ID is empty or repeated.
+    /// Why the spec is invalid: a field, toggle, or button ID is empty, or
+    /// repeated among the fields or among the toggles and buttons.
     pub fn problem(&self) -> Option<&'static str> {
-        for (index, field) in self.fields.iter().enumerate() {
-            if field.id.is_empty() {
-                return Some("bar field id must not be empty");
-            }
-            if self.fields[..index]
-                .iter()
-                .any(|other| other.id == field.id)
-            {
-                return Some("bar field ids must be unique");
+        let fields = self.fields.iter().map(|field| field.id.as_str());
+        let controls = self
+            .toggles
+            .iter()
+            .map(|toggle| toggle.id.as_str())
+            .chain(self.buttons.iter().map(|button| button.id.as_str()));
+        for (ids, empty, repeated) in [
+            (
+                fields.collect::<Vec<_>>(),
+                "bar field id must not be empty",
+                "bar field ids must be unique",
+            ),
+            (
+                controls.collect::<Vec<_>>(),
+                "bar toggle and button ids must not be empty",
+                "bar toggle and button ids must be unique",
+            ),
+        ] {
+            for (index, id) in ids.iter().enumerate() {
+                if id.is_empty() {
+                    return Some(empty);
+                }
+                if ids[..index].contains(id) {
+                    return Some(repeated);
+                }
             }
         }
         None
@@ -43,7 +91,7 @@ impl BarSpec {
 }
 
 /// One open bar.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EditorBar {
     pub owner: ExtensionKey,
     pub id: String,
@@ -209,7 +257,7 @@ mod tests {
                     placeholder: String::new(),
                 })
                 .collect(),
-            message: None,
+            ..BarSpec::default()
         }
     }
 
@@ -305,5 +353,41 @@ mod tests {
         assert_eq!(spec(&["a", "b"]).problem(), None);
         assert!(spec(&[""]).problem().is_some());
         assert!(spec(&["a", "a"]).problem().is_some());
+
+        let command = || BarCommand {
+            name: "x".into(),
+            arguments: CommandArgumentValue::Null,
+        };
+        let toggle = |id: &str| BarToggle {
+            id: id.into(),
+            icon: "case".into(),
+            tooltip: None,
+            active: false,
+            command: command(),
+        };
+        let button = |id: &str| BarButton {
+            id: id.into(),
+            icon: "next".into(),
+            tooltip: None,
+            command: command(),
+        };
+        let with = |toggles, buttons| BarSpec {
+            toggles,
+            buttons,
+            ..spec(&["a"])
+        };
+        // Controls share a namespace across toggles and buttons, apart from fields.
+        assert_eq!(with(vec![toggle("a")], vec![button("b")]).problem(), None);
+        assert!(
+            with(vec![toggle("a")], vec![button("a")])
+                .problem()
+                .is_some()
+        );
+        assert!(with(vec![toggle("")], vec![]).problem().is_some());
+        assert!(
+            with(vec![], vec![button("b"), button("b")])
+                .problem()
+                .is_some()
+        );
     }
 }

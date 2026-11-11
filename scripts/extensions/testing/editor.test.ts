@@ -157,6 +157,21 @@ test("an editor handle opens bars, focuses fields, and hears typing", async () =
   assert.deepEqual(host.editorBars(window).bars.map((bar) => [bar.id, bar.message]), [["find", "1 of 2"], ["other", "below"]]);
   await assert.rejects(editor.openBar("x", { fields: [{ id: "a" }, { id: "a" }] }), RangeError);
   await assert.rejects(editor.focusBarField("other", "query"), { code: "BarNotFound" });
+
+  // Clicking a control runs its command in the bar's editor.
+  const pressed: unknown[] = [];
+  await commands.register("bar.press", async ({ editor: captured, arguments: args }) => {
+    pressed.push([args, captured !== null]);
+  });
+  const icon = "case-sensitive";
+  const command = { name: "bar.press", arguments: "case" };
+  await editor.openBar("controls", { toggles: [{ id: "case", icon, command, active: true }], buttons: [{ id: "next", icon, command }] });
+  assert.deepEqual(host.editorBars(window).bars[2]!.toggles.map((toggle) => toggle.active), [true]);
+  await host.clickBarControl("controls", "case");
+  await host.clickBarControl("controls", "next");
+  assert.deepEqual(pressed, [["case", true], ["case", true]]);
+  await assert.rejects(editor.openBar("x", { toggles: [{ id: "a", icon, command }], buttons: [{ id: "a", icon, command }] }), RangeError);
+  await editor.closeBar("controls");
   await editor.closeBar("find");
   assert.equal(host.editorBars(window).focus, null);
   await assert.rejects(editor.barFields("find"), { code: "BarNotFound" });

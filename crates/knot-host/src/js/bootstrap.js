@@ -101,10 +101,35 @@ function barId(value) {
   if (typeof value !== "string" || value === "") throw new TypeError("bar id must be a non-empty string");
   return value;
 }
+function barCommand(value) {
+  record(value, "bar command must be an object");
+  const name = string(value.name, "bar command name must be a string");
+  if (name === "") throw new TypeError("bar command name must not be empty");
+  return { name, arguments: value.arguments ?? null };
+}
+function barControl(value, kind) {
+  record(value, `bar ${kind} must be an object`);
+  const tooltip = value.tooltip ?? null;
+  if (tooltip !== null && typeof tooltip !== "string") throw new TypeError(`bar ${kind} tooltip must be a string`);
+  const icon = value.icon;
+  if (typeof icon !== "string" && (icon === null || typeof icon !== "object")) {
+    throw new TypeError(`bar ${kind} icon must be an icon reference`);
+  }
+  return {
+    id: string(value.id, `bar ${kind} id must be a string`),
+    icon,
+    tooltip,
+    command: barCommand(value.command),
+  };
+}
+function barList(value, name) {
+  const list = value ?? [];
+  if (!Array.isArray(list)) throw new TypeError(`bar ${name} must be an array`);
+  return list;
+}
 function barValue(value) {
   record(value, "bar must be an object");
-  const fields = value.fields ?? [];
-  if (!Array.isArray(fields)) throw new TypeError("bar fields must be an array");
+  const fields = barList(value.fields, "fields");
   const message = value.message ?? null;
   if (message !== null && typeof message !== "string") throw new TypeError("bar message must be a string or null");
   return {
@@ -116,6 +141,13 @@ function barValue(value) {
         placeholder: string(placeholder, "bar field placeholder must be a string"),
       };
     }),
+    toggles: barList(value.toggles, "toggles").map((toggle) => {
+      const control = barControl(toggle, "toggle");
+      const active = toggle.active ?? false;
+      if (typeof active !== "boolean") throw new TypeError("bar toggle active must be a boolean");
+      return { ...control, active };
+    }),
+    buttons: barList(value.buttons, "buttons").map((button) => barControl(button, "button")),
     message,
   };
 }

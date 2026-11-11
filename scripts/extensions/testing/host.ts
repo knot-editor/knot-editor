@@ -57,6 +57,8 @@ type FakeTab = {
 export type FakeBar = {
   id: string;
   fields: { id: string; placeholder: string; text: string }[];
+  toggles: { id: string; icon: Knot.IconRef; tooltip: string | null; active: boolean; command: Knot.EditorBarCommand }[];
+  buttons: { id: string; icon: Knot.IconRef; tooltip: string | null; command: Knot.EditorBarCommand }[];
   message: string | null;
 };
 
@@ -1037,6 +1039,19 @@ export async function typeInBar(
   for (const listener of [...tab.barListeners]) await listener(edit);
 }
 
+/** Clicks a toggle or button of a bar of the window's selected editor as the
+ * user would: runs its command in that editor, as `run` does. */
+export async function clickBarControl(
+  bar: string,
+  control: string,
+  window: Knot.WindowTarget = state.windows[0]!.target,
+) {
+  const open = selectedTab(window).bars.find((candidate) => candidate.id === bar);
+  const target = [...(open?.toggles ?? []), ...(open?.buttons ?? [])].find((candidate) => candidate.id === control);
+  if (target === undefined) throw new Error(`no bar control ${bar}/${control}`);
+  return run(target.command.name, { window, arguments: target.command.arguments ?? null });
+}
+
 function barTexts(bar: FakeBar): Record<string, string> {
   return Object.fromEntries(bar.fields.map((field) => [field.id, field.text]));
 }
@@ -1194,6 +1209,11 @@ function editor(tab: FakeTab): Knot.Editor {
       const ids = fields.map((field) => field.id);
       if (ids.some((field) => field === "")) throw new RangeError("bar field id must not be empty");
       if (new Set(ids).size !== ids.length) throw new RangeError("bar field ids must be unique");
+      const toggles = bar.toggles ?? [];
+      const buttons = bar.buttons ?? [];
+      const controls = [...toggles, ...buttons].map((control) => control.id);
+      if (controls.some((control) => control === "")) throw new RangeError("bar toggle and button ids must not be empty");
+      if (new Set(controls).size !== controls.length) throw new RangeError("bar toggle and button ids must be unique");
       const existing = tab.bars.find((candidate) => candidate.id === id);
       const next: FakeBar = {
         id,
@@ -1201,6 +1221,19 @@ function editor(tab: FakeTab): Knot.Editor {
           id: field.id,
           placeholder: field.placeholder ?? "",
           text: existing?.fields.find((kept) => kept.id === field.id)?.text ?? "",
+        })),
+        toggles: toggles.map((toggle) => ({
+          id: toggle.id,
+          icon: toggle.icon,
+          tooltip: toggle.tooltip ?? null,
+          active: toggle.active ?? false,
+          command: toggle.command,
+        })),
+        buttons: buttons.map((button) => ({
+          id: button.id,
+          icon: button.icon,
+          tooltip: button.tooltip ?? null,
+          command: button.command,
         })),
         message: bar.message ?? null,
       };

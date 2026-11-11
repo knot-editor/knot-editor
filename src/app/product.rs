@@ -1298,7 +1298,11 @@ impl ProductShell {
         });
     }
 
-    fn dispatch_source(&mut self, command: knot_protocol::Command, cx: &mut Context<Self>) {
+    pub(crate) fn dispatch_source(
+        &mut self,
+        command: knot_protocol::Command,
+        cx: &mut Context<Self>,
+    ) {
         let target = self.capture_command_target(cx);
         self.dispatch_command(command, target, cx);
     }

@@ -3,8 +3,9 @@
 //! painting. What each bar shows and which field has focus is
 //! [`EditorBars`](knot_model::editor::bars::EditorBars) state.
 
-use knot_model::editor::bars::{BarFieldRef, BarSpec};
+use knot_model::editor::bars::{BarCommand, BarFieldRef, BarSpec, EditorBar};
 use knot_protocol::ExtensionKey;
+use knot_protocol::IconRef;
 
 use super::*;
 use crate::app::convert::ThemePaint as _;
@@ -222,6 +223,28 @@ impl EditorView {
                             .child(input),
                     )
                 });
+                let toggles = bar.spec.toggles.iter().map(|toggle| {
+                    bar_control(
+                        bar,
+                        &toggle.id,
+                        &toggle.icon,
+                        toggle.tooltip.as_deref(),
+                        Some(toggle.active),
+                        &toggle.command,
+                        cx,
+                    )
+                });
+                let buttons = bar.spec.buttons.iter().map(|button| {
+                    bar_control(
+                        bar,
+                        &button.id,
+                        &button.icon,
+                        button.tooltip.as_deref(),
+                        None,
+                        &button.command,
+                        cx,
+                    )
+                });
                 div()
                     .id(("editor-bar", index))
                     .flex()
@@ -234,9 +257,18 @@ impl EditorView {
                     .bg(theme.paint_color(color::EDITOR_BAR_BACKGROUND))
                     .border_b_1()
                     .border_color(theme.paint_color(color::EDITOR_BAR_BORDER))
-                    // A click in a bar never reaches the text below it.
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    // A click in a bar never reaches the text below it. It
+                    // focuses the view, keeping a field's focus, so the
+                    // view's pane has focus when a control runs its command.
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.focus_bar_surface(window, cx);
+                        }),
+                    )
                     .children(fields)
+                    .children(toggles)
                     .when_some(bar.spec.message.clone(), |row, message| {
                         row.child(
                             div()
@@ -246,9 +278,21 @@ impl EditorView {
                                 .child(message),
                         )
                     })
+                    .children(buttons)
                     .into_any_element()
             })
             .collect()
+    }
+
+    /// Focus the field that has the editor's focus, or else the text.
+    fn focus_bar_surface(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let handle = self
+            .editor
+            .read(cx)
+            .focused_bar_input()
+            .map(|input| input.read(cx).focus_handle())
+            .unwrap_or_else(|| self.focus.clone());
+        window.focus(&handle, cx);
     }
 
     /// Have the window focus what has the editor's focus, a bar field or the
@@ -275,4 +319,58 @@ impl EditorView {
             window.defer(cx, move |window, cx| window.focus(&desired, cx));
         }
     }
+}
+
+/// An icon button of `bar` that runs `command` when clicked; a toggle also
+/// shows whether it is `active`.
+fn bar_control(
+    bar: &EditorBar,
+    id: &str,
+    icon: &IconRef,
+    tooltip: Option<&str>,
+    active: Option<bool>,
+    command: &BarCommand,
+    cx: &App,
+) -> AnyElement {
+    let theme = theme(cx);
+    let selector = format!("bar-control-{}-{id}", bar.id);
+    let command = knot_protocol::Command {
+        name: command.name.clone().into(),
+        arguments: command.arguments.clone(),
+    };
+    let hover = theme.paint_color(color::BUTTON_HOVER_BACKGROUND);
+    let icon = crate::app::icons::AppIcon::new(crate::app::icons::ref_definition(icon, false, cx));
+    div()
+        .id(SharedString::from(selector.clone()))
+        .debug_selector(move || selector.clone())
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_0p5()
+        .rounded_sm()
+        .cursor_pointer()
+        .when(active == Some(true), |element| {
+            element.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+        })
+        .hover(move |style| style.bg(hover))
+        .when_some(tooltip.map(str::to_owned), |element, tooltip| {
+            let tooltip = SharedString::from(tooltip);
+            element.tooltip(move |window, cx| {
+                gpui_component::tooltip::Tooltip::new(tooltip.clone())
+                    .text_xs()
+                    .build(window, cx)
+            })
+        })
+        .on_click(move |_, window, cx| {
+            let command = command.clone();
+            // The command captures its target from the shell, after the
+            // click's own handlers have finished with their views.
+            window.defer(cx, move |window, cx| {
+                if let Some(Some(shell)) = window.root::<crate::app::product::ProductShell>() {
+                    shell.update(cx, |shell, cx| shell.dispatch_source(command, cx));
+                }
+            });
+        })
+        .child(icon)
+        .into_any_element()
 }

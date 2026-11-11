@@ -1361,9 +1361,35 @@ declare module "knot" {
     /** Shown while the field is empty. */
     readonly placeholder?: string;
   }
-  /** What an editor bar shows: its fields, then a line of text. */
+  /** A command a click on a bar's toggle or button runs, with the bar's
+   * editor and buffer captured as the editor's own commands have them. */
+  export interface EditorBarCommand {
+    readonly name: string;
+    readonly arguments?: JsonValue;
+  }
+  /** An icon button of an editor bar that runs a command. */
+  export interface EditorBarButton {
+    /** Names the button within its bar; unique among the bar's toggles and
+     * buttons, and non-empty. */
+    readonly id: string;
+    readonly icon: IconRef;
+    /** Shown while the pointer rests on the button. */
+    readonly tooltip?: string;
+    readonly command: EditorBarCommand;
+  }
+  /** An icon button of an editor bar that shows whether an option is on. A
+   * click only runs `command`; the extension shows the new state by opening
+   * the bar again with `active` changed. */
+  export interface EditorBarToggle extends EditorBarButton {
+    /** Defaults to false. */
+    readonly active?: boolean;
+  }
+  /** What an editor bar shows: its fields, then its toggles, a line of text,
+   * and its buttons. */
   export interface EditorBar {
     readonly fields?: readonly EditorBarField[];
+    readonly toggles?: readonly EditorBarToggle[];
+    readonly buttons?: readonly EditorBarButton[];
     readonly message?: string | null;
   }
   /** The user edited a field of the bar `bar`; `fields` holds every field's
@@ -1496,7 +1522,7 @@ declare module "knot" {
      * presentation state, never recorded, and lasts until closed or the view
      * closes. The editor stays editable while bars are open.
      * @throws HostError with InvalidTarget or Cancelled; TypeError for an
-     * empty ID or a malformed bar; RangeError for empty or repeated field IDs.
+     * empty ID or a malformed bar; RangeError for empty or repeated field IDs, or empty or repeated toggle and button IDs.
      */
     openBar(id: string, bar: EditorBar): Promise<void>;
     /** Close the caller's bar `id`; closing a bar that is not open does
