@@ -684,7 +684,9 @@ complete list for that item.
     application menus or the context menus of the editor and tabs.
   - Reconsider: A bundled or installed extension needs a command where users
     look for it by pointer. Then let a registration place a command in a
-    named menu location, reusing the tree context menus.
+    named menu location, reusing the tree context menus. If more popups
+    then take gpui focus, give "a native popup is open" its own Knot-side
+    focus identity instead of extending the key path's popup exception.
   - Order: after D034.
 
 - **D057 — Extension and product localization (i18n)**
