@@ -76,7 +76,13 @@ stamps `CFBundleVersion`, and ad-hoc signs. `scripts/package-macos-app.sh ID`
 (`just app-package`) writes `dist/Knot-ID-macos-arm64.zip` and its `.sha256`.
 See [the macOS packaging notes](../../packaging/macos/README.md).
 
-### 3. Nightly workflow and releases
+### 3. Nightly workflow and releases 🚧
+
+✅ `.github/workflows/nightly.yml` written: a `decide` job (no-new-commits check
+for scheduled runs, wait for green CI unless `skip_ci_wait`), then a `release`
+job on `macos-latest` that packages, publishes the prerelease, and prunes to 7.
+The `gh`/`jq` queries and pruning filter were checked locally; the workflow
+itself can only run once pushed to `main`. Remaining: the review gate.
 
 Add the scheduled workflow: decide whether to build, wait for/verify green CI,
 package, publish the prerelease, prune old ones.

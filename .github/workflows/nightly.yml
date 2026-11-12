@@ -1,0 +1,124 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      skip_ci_wait:
+        description: Build without waiting for CI on the head commit
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  KEEP_NIGHTLIES: 7
+
+jobs:
+  decide:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      version: ${{ steps.decide.outputs.version }}
+    steps:
+      - name: Decide whether to build
+        id: decide
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+          SKIP_CI_WAIT: ${{ inputs.skip_ci_wait }}
+        run: |
+          set -euo pipefail
+          echo "version=$(date -u +nightly.%Y%m%d.%H%M)" >> "$GITHUB_OUTPUT"
+
+          if [ "$MANUAL" != true ]; then
+            last_tag="$(gh release list --repo "$REPO" --limit 100 --json tagName,createdAt \
+              --jq '[.[] | select(.tagName | startswith("nightly-"))] | sort_by(.createdAt) | last | .tagName // ""')"
+            if [ -n "$last_tag" ]; then
+              last_sha="$(gh api "repos/$REPO/commits/$last_tag" --jq .sha)"
+              if [ "$last_sha" = "$SHA" ]; then
+                echo "No commits since $last_tag; skipping."
+                echo "build=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
+          fi
+
+          if [ "$SKIP_CI_WAIT" != true ]; then
+            deadline=$((SECONDS + 3300))
+            while true; do
+              run="$(gh run list --repo "$REPO" --workflow ci.yml --commit "$SHA" --limit 1 \
+                --json status,conclusion --jq '.[0] // {}')"
+              status="$(jq -r '.status // "missing"' <<<"$run")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+              if [ "$status" = completed ]; then
+                if [ "$conclusion" = success ]; then break; fi
+                echo "CI on $SHA concluded '$conclusion'; skipping."
+                echo "build=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "CI on $SHA did not finish in time (status: $status); skipping."
+                echo "build=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              echo "Waiting for CI on $SHA (status: $status)..."
+              sleep 60
+            done
+          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: decide
+    if: needs.decide.outputs.build == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.decide.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Select Rust toolchain
+        run: rustc --version
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          save-if: false
+      - name: Package
+        run: scripts/package-macos-app.sh "$VERSION"
+      - name: Publish prerelease
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tag="nightly-${VERSION#nightly.}"
+          tag="${tag/./-}"
+          gh release create "$tag" dist/Knot-"$VERSION"-macos-*.zip dist/Knot-"$VERSION"-macos-*.zip.sha256 \
+            --target "$SHA" --prerelease --latest=false \
+            --title "Knot $VERSION" \
+            --notes "Nightly build of ${SHA}."
+      - name: Prune old nightlies
+        run: |
+          set -euo pipefail
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq "[.[] | select(.tagName | startswith(\"nightly-\"))] | sort_by(.createdAt) | reverse | .[$KEEP_NIGHTLIES:] | .[].tagName" |
+            while read -r tag; do
+              gh release delete "$tag" --cleanup-tag --yes
+            done
