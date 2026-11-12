@@ -1266,6 +1266,11 @@ declare module "knot" {
     /** Most matches to return, 1000 by default and at most 100000 whatever is asked. */
     readonly limit?: number;
   }
+  /** A unit of text that double click selects; see `Buffer.wordAt`. */
+  export type WordSegment = Readonly<{
+    range: ByteRange;
+    kind: "word" | "separator" | "space";
+  }>;
   export type FindResult = Readonly<{
     /** The revision of the text searched. */
     revision: number;
@@ -1345,6 +1350,14 @@ declare module "knot" {
      * end or splitting a UTF-8 scalar, or Cancelled on teardown.
      */
     lineAt(offset: number): Promise<number>;
+    /**
+     * The word, run of separators, or run of whitespace at a byte offset: the
+     * unit double click selects, within the offset's line. A word ending at the
+     * offset is preferred over what follows it. Null on a line without text.
+     * @throws HostError with BufferClosed, InvalidRange for an offset past the
+     * end or splitting a UTF-8 scalar, or Cancelled on teardown.
+     */
+    wordAt(offset: number): Promise<WordSegment | null>;
     /**
      * Find the occurrences of a literal query, in order and without overlap,
      * in the whole buffer or `options.range`. Matching is native, so the text

@@ -520,6 +520,31 @@ fn words_split_at_vs_code_separators_and_keep_unicode_segments() {
 }
 
 #[test]
+fn word_at_prefers_the_word_ending_at_the_offset() {
+    let model = BufferModel::from_text("foo.bar  é日\n\nlast");
+    let at = |offset| word_at(&model, offset).map(|(range, class)| (model.read(range), class));
+    let word = |text: &str| Some((text.to_string(), WordClass::Word));
+    assert_eq!(at(0), word("foo"));
+    assert_eq!(at(2), word("foo"));
+    assert_eq!(at(3), word("foo"));
+    assert_eq!(at(4), word("bar"));
+    assert_eq!(at(7), word("bar"));
+    assert_eq!(at(8), Some(("  ".to_string(), WordClass::Whitespace)));
+    assert_eq!(at(9), word("é"));
+    assert_eq!(at(11), word("é"));
+    assert_eq!(at(14), word("日"));
+    // The end of a line with a separator last, an empty line, and the last line's end.
+    assert_eq!(at(model.len()), word("last"));
+    assert_eq!(at(15), None);
+    let separators = BufferModel::from_text("a ::");
+    assert_eq!(
+        word_at(&separators, 4).map(|(range, class)| (range, class)),
+        Some((2..4, WordClass::Separator))
+    );
+    assert_eq!(word_at(&BufferModel::from_text(""), 0), None);
+}
+
+#[test]
 fn word_movement_stops_at_separators() {
     let mut f = Fixture::new("a.some_thing(x)  end");
     let mut run = |command| {

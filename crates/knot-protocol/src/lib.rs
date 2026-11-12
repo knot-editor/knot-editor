@@ -1046,6 +1046,23 @@ pub struct FindResult {
     pub more: bool,
 }
 
+/// The class of a word segment.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WordKind {
+    Word,
+    Separator,
+    Space,
+}
+
+/// The unit double-click selects at an offset.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WordSegment {
+    pub range: ByteRange,
+    pub kind: WordKind,
+}
+
 /// One committed editor-visible buffer change in pre-commit coordinates.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BufferChange {

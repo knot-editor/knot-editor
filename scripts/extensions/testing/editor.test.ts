@@ -35,6 +35,25 @@ test("line lookups split at newlines and leave terminators out", async () => {
   assert.equal(line.byteOffsetAtUtf16(2), 4);
 });
 
+test("wordAt returns the word, separator, or space segment in byte offsets", async () => {
+  // Bytes: "foo" 0..3, "." 3..4, "bar" 4..7, two spaces 7..9, "é" 9..11, an empty line at 12.
+  const document = host.addDocument({ text: "foo.bar  é\n\nx" });
+  host.openWindow({ documents: [document] });
+  const buffer = (await capture()).buffer!;
+  const at = async (offset: number) => {
+    const word = await buffer.wordAt(offset);
+    return word === null ? null : [word.range.startByteOffset, word.range.endByteOffset, word.kind];
+  };
+  assert.deepEqual(await at(0), [0, 3, "word"]);
+  assert.deepEqual(await at(3), [0, 3, "word"]);
+  assert.deepEqual(await at(4), [4, 7, "word"]);
+  assert.deepEqual(await at(8), [7, 9, "space"]);
+  assert.deepEqual(await at(11), [9, 11, "word"]);
+  assert.equal(await at(12), null);
+  await assert.rejects(buffer.wordAt(10), { code: "InvalidRange" });
+  await assert.rejects(buffer.wordAt(99), { code: "InvalidRange" });
+});
+
 test("find matches literally in byte offsets with case, word, range, and limit options", async () => {
   // Bytes: é 0..2, É 3..5, 😀 6..10, é 11..13, "cat" at 19, 26 (inside "concat"), and 30.
   const document = host.addDocument({ text: "é É 😀 é xxxx cat concat cat" });

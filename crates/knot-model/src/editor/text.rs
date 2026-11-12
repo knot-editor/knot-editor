@@ -76,7 +76,7 @@ pub fn next_boundary(model: &BufferModel, line: usize, col: usize) -> usize {
 /// so `some.thing` is two words around a `.`.
 const WORD_SEPARATORS: &str = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WordClass {
     Whitespace,
     Separator,
@@ -119,6 +119,27 @@ pub fn word_segments(text: &str) -> Vec<(usize, usize, WordClass)> {
         }
     }
     segments
+}
+
+/// The word segment (see [`word_segments`]) at a byte offset on a character
+/// boundary, with its class: the one containing the offset, except that a word
+/// ending at the offset wins over what follows it. `None` on a line without
+/// text.
+pub fn word_at(model: &BufferModel, offset: usize) -> Option<(Range<usize>, WordClass)> {
+    let line = model.line_range(model.line_of_offset(offset));
+    let text = model.read(line.clone());
+    let at = offset - line.start;
+    let segments = word_segments(&text);
+    let before = segments
+        .iter()
+        .find(|(_, end, class)| *end == at && *class == WordClass::Word);
+    let found = before.or_else(|| {
+        segments
+            .iter()
+            .find(|(start, end, _)| *start <= at && at < *end)
+            .or_else(|| segments.last().filter(|(_, end, _)| *end == at))
+    });
+    found.map(|(start, end, class)| (line.start + start..line.start + end, *class))
 }
 
 /// The nearest word or separator-run end after `caret`, or start before it,

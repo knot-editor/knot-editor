@@ -24,6 +24,18 @@ await commands.register("api.lines", async ({ buffer }) => {
   const snapshot = await buffer.snapshot(await buffer.lineRange(1));
   check(snapshot.text === "é😀" && snapshot.byteOffsetAtUtf16(1) === 2, "line snapshot");
 });
+await commands.register("api.word", async ({ buffer }) => {
+  // "é" is two bytes: "foo" 0..3, "." 3..4, "é" 4..6, spaces 6..8, then an empty line.
+  const at = async (offset) => {
+    const word = await buffer.wordAt(offset);
+    return word === null ? null : [word.range.startByteOffset, word.range.endByteOffset, word.kind];
+  };
+  check(JSON.stringify(await at(3)) === '[0,3,"word"]', "word ending at the offset");
+  check(JSON.stringify(await at(4)) === '[4,6,"word"]', "word after a separator");
+  check(JSON.stringify(await at(7)) === '[6,8,"space"]', "space run");
+  check((await at(9)) === null, "empty line");
+  await expectCode(() => buffer.wordAt(5), "InvalidRange");
+});
 await commands.register("api.find", async ({ buffer }) => {
   // "é" is two bytes and "😀" four: offsets are UTF-8 bytes.
   const ranges = (result) => result.matches.map((m) => [m.startByteOffset, m.endByteOffset]);
@@ -147,6 +159,19 @@ fn buffer_line_lookups_handle_crlf_and_multibyte_text(cx: &mut TestAppContext) {
     });
     let (window, native_window) = product_window(document, model, cx);
     let execution = dispatch_product_command(&window, native_window, "api.lines", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn buffer_word_at_returns_the_segment_at_a_byte_offset(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    load(cx);
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("foo.é  \n\nx")));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Word", model.clone(), cx)
+    });
+    let (window, native_window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&window, native_window, "api.word", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 

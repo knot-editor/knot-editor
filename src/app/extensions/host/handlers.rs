@@ -672,7 +672,7 @@ pub(crate) async fn close_presentation(
 pub(crate) use crate::app::extensions::buffers::BufferError;
 use knot_protocol::{
     BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, FindResult, TextEdit,
-    TextSnapshot,
+    TextSnapshot, WordKind, WordSegment,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -902,6 +902,52 @@ pub(crate) async fn find(
                         .collect(),
                     more: found.more,
                 })
+            },
+        )
+    })?
+}
+
+/// The word segment at an offset, or `None` on a line without text.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WordResult(pub Option<WordSegment>);
+impl HostSuccess for WordResult {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self.0)
+    }
+}
+
+/// The word, separator run, or whitespace run at a byte offset on a
+/// character boundary.
+#[host_operation("wordAt")]
+pub(crate) async fn word_at(
+    context: HostContext,
+    arguments: LineArguments,
+) -> Result<WordResult, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        host.buffers.read_model(
+            &request,
+            arguments.buffer,
+            || commands.is_cancelled(request.invocation),
+            cx,
+            |model| {
+                let offset = model
+                    .text_offset(arguments.value)
+                    .ok_or(BufferError::InvalidRange)?;
+                Ok(WordResult(knot_model::editor::word_at(model, offset).map(
+                    |(range, class)| WordSegment {
+                        range: ByteRange {
+                            start_byte_offset: range.start,
+                            end_byte_offset: range.end,
+                        },
+                        kind: match class {
+                            knot_model::editor::WordClass::Word => WordKind::Word,
+                            knot_model::editor::WordClass::Separator => WordKind::Separator,
+                            knot_model::editor::WordClass::Whitespace => WordKind::Space,
+                        },
+                    },
+                )))
             },
         )
     })?

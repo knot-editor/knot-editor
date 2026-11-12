@@ -321,6 +321,24 @@ function findMatches(
   return matches;
 }
 
+/** The native word segments of a line as UTF-16 `[start, end, kind]` triples. */
+function wordSegments(text: string): [number, number, Knot.WordSegment["kind"]][] {
+  const segments: [number, number, Knot.WordSegment["kind"]][] = [];
+  for (const { index, segment } of new Intl.Segmenter(undefined, { granularity: "word" }).segment(text)) {
+    let offset = 0;
+    for (const character of segment) {
+      const kind = /\s/u.test(character) ? "space" : isWordCharacter(character) ? "word" : "separator";
+      const at = index + offset;
+      const end = at + character.length;
+      const last = segments.at(-1);
+      if (last !== undefined && last[1] === at && last[2] === kind && (kind !== "word" || offset > 0)) last[1] = end;
+      else segments.push([at, end, kind]);
+      offset += character.length;
+    }
+  }
+  return segments;
+}
+
 function lineRanges(text: string): Knot.ByteRange[] {
   const ranges: Knot.ByteRange[] = [];
   let start = 0;
@@ -450,6 +468,27 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       const index = utf16AtByte(document.text, offset);
       if (index === undefined) throw hostError("InvalidRange");
       return document.text.slice(0, index).split("\n").length - 1;
+    },
+    wordAt: async (offset) => {
+      const index = utf16AtByte(document.text, offset);
+      if (index === undefined) throw hostError("InvalidRange");
+      const lineStart = document.text.lastIndexOf("\n", index - 1) + 1;
+      const newline = document.text.indexOf("\n", index);
+      const line = document.text.slice(lineStart, newline < 0 ? undefined : newline);
+      const at = index - lineStart;
+      const segments = wordSegments(line);
+      const found =
+        segments.find(([, end, kind]) => end === at && kind === "word") ??
+        segments.find(([start, end]) => start <= at && at < end) ??
+        segments.find(([, end]) => end === at);
+      if (found === undefined) return null;
+      return {
+        range: {
+          startByteOffset: byteLength(document.text.slice(0, lineStart + found[0])),
+          endByteOffset: byteLength(document.text.slice(0, lineStart + found[1])),
+        },
+        kind: found[2],
+      };
     },
     find: async (query, options) => {
       const range = options?.range ?? { startByteOffset: 0, endByteOffset: byteLength(document.text) };

@@ -33,6 +33,9 @@ const registration: Promise<Disposable> = commands.register("check", async (cont
   const foundRevision: number = found.revision;
   const hasMore: boolean = found.more;
   void [matched, foundRevision, hasMore];
+  const word: import("knot").WordSegment | null = await buffer.wordAt(line.startByteOffset);
+  const wordKind: "word" | "separator" | "space" | undefined = word?.kind;
+  void wordKind;
   const editorHandle: import("knot").Editor | null = context.editor;
   if (editorHandle !== null) {
     const state = await editorHandle.viewState();

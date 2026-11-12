@@ -511,6 +511,13 @@ function bufferFor(handle) {
       return Object.freeze({ startByteOffset: range.startByteOffset, endByteOffset: range.endByteOffset });
     },
     lineAt: (offset) => request("lineAt", handle, safeInteger(offset)),
+    async wordAt(offset) {
+      const word = await request("wordAt", handle, safeInteger(offset));
+      return word === null ? null : Object.freeze({
+        range: Object.freeze({ startByteOffset: word.range.startByteOffset, endByteOffset: word.range.endByteOffset }),
+        kind: word.kind,
+      });
+    },
     async find(query, options) {
       if (typeof query !== "string") throw new TypeError("find query must be a string");
       const limit = options?.limit ?? 1000;
