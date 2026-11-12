@@ -35,20 +35,21 @@ await commands.register("status.drop", async () => { await position.dispose(); }
 "##;
 
 fn bounds(
-    window: gpui::AnyWindowHandle,
+    native_window: gpui::AnyWindowHandle,
     selector: &'static str,
     cx: &mut TestAppContext,
 ) -> Option<gpui::Bounds<gpui::Pixels>> {
     cx.run_until_parked();
-    cx.update_window(window, |_, native_window, cx| {
-        native_window.draw(cx).clear(cx)
-    })
-    .unwrap();
-    VisualTestContext::from_window(window, cx).debug_bounds(selector)
+    cx.update_window(native_window, |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    VisualTestContext::from_window(native_window, cx).debug_bounds(selector)
 }
 
-fn texts(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> (Vec<String>, Vec<String>) {
-    let key = crate::app::product::test_window_id(window);
+fn texts(
+    native_window: gpui::AnyWindowHandle,
+    cx: &mut TestAppContext,
+) -> (Vec<String>, Vec<String>) {
+    let key = crate::app::product::test_window_id(native_window);
     cx.read(|cx| {
         let hidden = crate::app::settings::strings(STATUS_BAR_HIDDEN_ITEMS, cx);
         let items = cx.global::<ApplicationStatusBar>().0.items(&key, &hidden);

@@ -1551,9 +1551,11 @@ fn closing_the_last_window_quits_through_the_storage_drain(cx: &mut TestAppConte
         super::super::open_product_window(None, cx);
         super::super::open_product_window(None, cx);
     });
-    let close = |window: gpui::AnyWindowHandle, cx: &mut TestAppContext| {
-        cx.update_window(window, |_, native_window, _| native_window.remove_window())
-            .unwrap();
+    let close = |native_window: gpui::AnyWindowHandle, cx: &mut TestAppContext| {
+        cx.update_window(native_window, |_, native_window, _| {
+            native_window.remove_window()
+        })
+        .unwrap();
         cx.run_until_parked();
     };
     let windows = cx.windows();

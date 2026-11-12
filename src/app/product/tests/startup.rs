@@ -91,9 +91,9 @@ fn personal_config_gates_product_windows_and_keeps_extension_failures_independen
     for name in ["config.pre", "extension.good", "config.post"] {
         assert!(names.contains(&name.to_owned()), "missing {name}");
     }
-    let report_open = |window: gpui::AnyWindowHandle, cx: &TestAppContext| {
+    let report_open = |native_window: gpui::AnyWindowHandle, cx: &TestAppContext| {
         cx.read(|cx| {
-            let window = window.downcast::<KnotWindow>().unwrap();
+            let window = native_window.downcast::<KnotWindow>().unwrap();
             window.entity(cx).unwrap().read(cx).extension_report_open
         })
     };

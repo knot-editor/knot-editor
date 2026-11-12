@@ -16,8 +16,8 @@ fn explorer_shown(window: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
     })
 }
 
-fn click(window: gpui::AnyWindowHandle, selector: &'static str, cx: &mut TestAppContext) {
-    let mut visual = VisualTestContext::from_window(window, cx);
+fn click(native_window: gpui::AnyWindowHandle, selector: &'static str, cx: &mut TestAppContext) {
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     let center = visual.debug_bounds(selector).unwrap().center();
     visual.simulate_click(center, Modifiers::default());
     visual.run_until_parked();

@@ -89,10 +89,10 @@ fn focused_editor(window: &Entity<KnotWindow>, cx: &mut TestAppContext) -> Entit
 fn focus_editor(
     editor: &Entity<EditorView>,
     caret: usize,
-    window: gpui::AnyWindowHandle,
+    native_window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) {
-    cx.update_window(window, |_, native_window, cx| {
+    cx.update_window(native_window, |_, native_window, cx| {
         editor.update(cx, |editor, cx| {
             editor.editor().clone().update(cx, |editor, cx| {
                 editor.set_selection(caret, caret, Reveal::Nearest, cx)

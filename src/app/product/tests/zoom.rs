@@ -46,9 +46,11 @@ async fn zoom_commands_step_clamp_and_scale_every_window(cx: &mut TestAppContext
     };
     let observed = |cx: &mut TestAppContext| {
         cx.refresh().unwrap();
-        let rem = |window: gpui::AnyWindowHandle, cx: &mut TestAppContext| {
-            cx.update_window(window, |_, native_window, _| native_window.rem_size())
-                .unwrap()
+        let rem = |native_window: gpui::AnyWindowHandle, cx: &mut TestAppContext| {
+            cx.update_window(native_window, |_, native_window, _| {
+                native_window.rem_size()
+            })
+            .unwrap()
         };
         let rems = (rem(first_window, cx), rem(second_window, cx));
         let font_sizes = cx.read(|cx| {

@@ -284,8 +284,8 @@ fn settle(
     }
 }
 
-fn window_id(window: gpui::AnyWindowHandle) -> String {
-    crate::app::product::test_window_id(window)
+fn window_id(native_window: gpui::AnyWindowHandle) -> String {
+    crate::app::product::test_window_id(native_window)
 }
 
 /// The window of a window the replacement created.
@@ -975,9 +975,12 @@ fn interrupted_switch_restores_every_text_exactly_once(cx: &mut TestAppContext) 
     let _ = window;
 }
 
-fn capture_layout(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> serde_json::Value {
+fn capture_layout(
+    native_window: gpui::AnyWindowHandle,
+    cx: &mut TestAppContext,
+) -> serde_json::Value {
     let target = knot_protocol::WindowTarget {
-        window: window_id(window),
+        window: window_id(native_window),
     };
     let layout = cx
         .update(|cx| super::super::sessions::capture_layout(&target, cx))
