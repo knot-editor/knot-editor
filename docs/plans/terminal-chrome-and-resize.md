@@ -1,7 +1,7 @@
 # Terminal chrome and resize limits
 
-Status: 🔨 checkpoints 1 and 2 implemented, each awaiting its review
-gate; checkpoint 3 (restart keeps output) not started.
+Status: ✅ checkpoints 1 and 2 complete; checkpoint 3 (restart
+keeps output) not started.
 Implements the terminal usability report (2026-11-12): drop
 the dev mini-header, lift arbitrary resize caps.
 
@@ -41,57 +41,27 @@ deferred, not part of this plan.
   relocation.
 - No change to mouse-reporting behavior, only to the visibility of its state.
 
-## ✅ Checkpoint 1 — Drop the header, add restart command and exited overlay
+## ✅ Checkpoint 1 — Drop the header, add restart command and exited overlay (complete)
 
-Deliverable: `TerminalView::render` paints only the terminal grid while the
-session runs; when the status is exited, failed, or closed it paints a small
-overlay with the status and a restart affordance. New `terminal.restart`
-palette command restarts the focused terminal.
+A running terminal paints only its grid; the exited/failed/closed
+overlay (status badge, verbatim exit text, restart affordance) renders
+only in the non-running states and steals no grid space. `terminal.restart`
+is palette-only, reusing the terminal-focus participant pattern; close
+stays on the tab bar. Manual review gate passed (exit shell, overlay and
+palette command both revive, no header while running).
 
-Implementation context: `src/app/terminal/view.rs` (`Render` impl ~L688-761,
-`TerminalCommand`, `close`/`restart` handlers); register the command beside
-`terminal.new`/`terminal.toggle` in `src/app/product/commands.rs` with the
-terminal-focus participant pattern used by copy/paste
-(`execute_terminal`, view.rs ~L1154). The overlay must not steal grid space
-while running — render it only in the non-running states.
+## ✅ Checkpoint 2 — Lift the upper resize bounds (complete)
 
-Validation: existing terminal view/session/mouse tests
-(`src/app/terminal/`, `src/app/product/tests/terminal.rs`); add coverage
-that a running terminal renders no header chrome and that restart works
-from the command and from the overlay in the exited state.
-
-Review gate: run a terminal, exit the shell, confirm the overlay and the
-palette command both revive it; confirm no header while running.
-
-## ✅ Checkpoint 2 — Lift the upper resize bounds
-
-Deliverable: a dock (bottom terminal included) drags out to the window edge;
-a center split drags until the shrinking side hits its minimum. The 480px
-dock cap is gone; the 80px dock minimum, 0.1 split minimum, and 120px drag
-minimum remain.
-
-Implementation context: `crates/knot-model/src/workbench/tools.rs`
-(`DockLocation::MAX_SIZE`, `set_dock_size` clamp); `crates/knot-model/src/workbench.rs`
-(`WorkbenchLayout::clamp_ratio` — keep the lower bound, lift the upper);
-`src/app/product/tab_drag.rs` drag limits (~L711-713, keep the shrinking-side
-floor, drop the growing-side ceiling); `src/app/product.rs`
-(`MIN_DRAGGED_PANE_SIZE`). `area_rects` (`resize.rs`) already clamps docks
-to the window, which becomes the effective maximum. Update
-`dock_sizes_clamp_and_survive_hide_reopen` and any ratio tests asserting
-the old upper clamp.
-
-Validation: model workbench tests (`tools.rs`, `resize.rs`), product
-drag/relocate tests; add a test that a dock size above 480 survives
-`set_dock_size` and that a split ratio favors the growing pane past 0.9
-down to the sibling's minimum.
-
-Review gate: drag a bottom-dock terminal and a side-by-side doc pair to
-their new extremes; confirm minimums still hold and layouts restore.
-
-Scope note: `clamp_ratio` keeps the 0.1 share floor on both sides for
-the ratio path (keyboard resize, restore); only the pointer-drag path
-moves past 0.9, floored per side at 120px. The consequence and
-validation sections above require this split.
+Docks drag to the window edge with only the 80px minimum
+(`DockLocation::MAX_SIZE` removed; `area_rects` clamps painted docks to
+the window). Center-split drags move past 0.9 until the shrinking side
+hits its 120px floor via `Workbench::set_split_ratio_bounded`; the ratio
+path (keyboard resize, restore) keeps the 0.1 share floor on both sides —
+dropping `clamp_ratio`'s upper bound outright would have let keyboard
+resize collapse a pane, against the plan's minimums. Model
+workbench/resize and product drag/restore suites green; the terminal pty
+and sandbox filesystem/watch failures seen during validation reproduce
+on the untouched base and are unrelated.
 
 ## Checkpoint 3 — Restart keeps prior output visible
 
