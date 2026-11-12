@@ -29,7 +29,7 @@ could only restate the data, since the behavior is native. TypeScript case
 modules would add type checking but need Node, `build.rs`, or V8 to load them
 for Rust (D133).
 
-References: [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages)
+References: [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages)
 and [extension guide](../extension-api.md#register-a-language).
 
 ## Indentation
@@ -54,8 +54,8 @@ only ever outdents, as in Zed and VS Code, and only when the match reaches the
 caret, so a brace someone placed stays when they type ` else {` after it.
 Reindenting pasted text and an `editor.autoIndent` setting are D135 and D136.
 
-References: [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages)
-and [editor views](../architecture/workbench-and-lifecycle.md#editor-views).
+References: [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages)
+and [editor views](../architecture/editor-and-languages.md#editor-views).
 
 ## Brackets
 
@@ -79,8 +79,8 @@ inserted, as VS Code's `auto` overtype does: overtyping any closer, as Sublime
 Text and Helix do, inserts nothing when someone fixing unbalanced code needs an
 extra `)`.
 
-References: [editor views](../architecture/workbench-and-lifecycle.md#editor-views)
-and [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
+References: [editor views](../architecture/editor-and-languages.md#editor-views)
+and [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages).
 
 ## Editor gutter
 
@@ -100,7 +100,7 @@ Documents show the gutter and text frames opt in through their registration,
 because a setting cannot express that split: the store has one default per key,
 and a frame's view ID scope exists only once someone writes it.
 
-References: [editor views](../architecture/workbench-and-lifecycle.md#editor-views)
+References: [editor views](../architecture/editor-and-languages.md#editor-views)
 and [extension guide](../extension-api.md#read-only-text-frames).
 
 ## Editing commands
@@ -124,8 +124,8 @@ and `don't` as one word, which made double-click select both sides of a member
 access. One definition serves double-click, word drags, and word movement.
 Language-specific word characters, such as `-` in CSS, are D131.
 
-References: [editor views](../architecture/workbench-and-lifecycle.md#editor-views)
-and [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
+References: [editor views](../architecture/editor-and-languages.md#editor-views)
+and [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages).
 
 ## Zoom, text size, and soft wrap
 
@@ -148,7 +148,7 @@ Movement that wrapping changes exists twice, as Emacs pairs `next-line` under
 `line-move-visual` with `next-logical-line`: row movement by default, as VS Code
 and Zed do, and logical twins, so a keymap such as a Vim mode chooses per key.
 
-References: [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
+References: [editor views](../architecture/editor-and-languages.md#editor-views),
 [zoom](../architecture/workbench-and-lifecycle.md#zoom), and
 [core and buffers](../architecture/core-and-buffers.md#application-buffer-ownership).
 
@@ -167,4 +167,4 @@ Rejected: fold state in the buffer, which would couple views and need an
 ownership story across splits; and a fold-aware second row space, which every
 row consumer would have to translate through.
 
-Reference: [editor views](../architecture/workbench-and-lifecycle.md#editor-views).
+Reference: [editor views](../architecture/editor-and-languages.md#editor-views).

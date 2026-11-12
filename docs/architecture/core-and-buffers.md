@@ -150,7 +150,7 @@ BufferEdit log ---> AnchoredRangeStore::stabilize
 - Each state has a globally unique generation that advances when its trees
   change; views cache visible-range highlight queries by it.
 - Which language a buffer parses is application policy: the
-  [language registry](semantic-ui.md#syntax-highlighting-and-languages)
+  [language registry](editor-and-languages.md#syntax-highlighting-and-languages)
   replaces the state whenever the resolved language changes.
 
 ## Reversible edits

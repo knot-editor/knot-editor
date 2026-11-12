@@ -24,7 +24,7 @@ current position as placeholder text, as Zed does, waits for D140.
 `commands.unavailable()` exists so a handler can report that it does not apply,
 the counterpart of `invalidArguments`.
 
-References: [editor views](../architecture/workbench-and-lifecycle.md#editor-views),
+References: [editor views](../architecture/editor-and-languages.md#editor-views),
 [commands](../architecture/commands.md#extension-execution), and
 [extension guide](../extension-api.md#register-a-command).
 

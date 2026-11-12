@@ -60,7 +60,7 @@ first, then line bands, backgrounds in the same severity order, the
 selection, and the bracket match, so the selection stays readable over match
 highlights. Gutter markers share one lane, which shows the most severe marker of each line, the
 latest among equals, and runs that contribution's command when clicked
-([editor views](workbench-and-lifecycle.md#editor-views)).
+([editor views](editor-and-languages.md#editor-views)).
 
 ## Themes and color keys
 
@@ -93,112 +93,6 @@ The bundled `@knot/themes` package registers the themes the native selection
 defaults name and owns Select Theme. It keeps the settings it wrote in its own
 storage and writes them again at start, as any settings UI does, so personal
 `post-init` still overrides the choice.
-
-## Syntax highlighting and languages
-
-Highlight layers compose in a fixed order: syntax, then contribution
-underlines; selection and decoration backgrounds paint beneath the text. Semantic tokens from a future
-language client (D067) slot in above syntax. Syntax highlights are derived and
-never stored as anchored ranges: each view queries its visible lines, with some
-overscan, once per [syntax generation](core-and-buffers.md#syntax-state), and
-painting, caret, hit testing, and IME geometry share that query, so bold and
-italic captures keep geometry consistent. An injected layer paints over its
-host, clipped to its included ranges.
-
-Grammars are compiled in and named by stable native grammar IDs. Language
-definitions are contributed data: extensions and personal config register an
-LSP language ID, the grammar it parses with, the file names, extensions, and
-shebang interpreters it claims, and its highlight, injection, and indent queries, through
-the same `languages` API the bundled `@knot/language-*` packages use. An
-association claims patterns for an ID without defining the language, so
-personal config redirects detection without replacing a package's language.
-
-```text
-languages.register --> background query compilation --> LanguageRegistry
-                                                            |
-Open / Save As / restore / registration change --> detection
-                                                            |
-documents.setLanguage / Set Language Mode --> explicit ID   |
-                                                            v
-                                      BufferModel language --> SyntaxState
-```
-
-- `ApplicationLanguages` owns the registry and tracks every buffer with a
-  language. Registrations and associations are lifecycle-owned and share one
-  order: the latest registration defines an ID, and the latest registration or
-  association claiming a file name, extension, or interpreter wins it, so
-  removal reveals the previous one.
-- Queries compile on the background executor at registration, so a bad query
-  rejects with its location and a package's registrations compile in
-  parallel; only the insertion runs on the foreground.
-- Detection tries exact file names, then extensions, then the shebang
-  interpreter. It runs when a document enters the collection and when
-  persistence moves it to a new resource, never while typing, and never for a
-  document whose language is explicit.
-- A buffer keeps its ID even while nothing registers it and reports
-  `plaintext` meanwhile, so personal config and restoration need no ordering
-  against package startup. A registration change re-detects open documents and
-  reattaches syntax wherever the resolved language changed; a language that
-  injects reparses too, since its injections may resolve differently.
-  Injections resolve by language ID, its lowercase, or a registered extension.
-- Startup awaits every package entry before restoring windows, and the bundled
-  package awaits its registrations in `start()`, so restored documents paint
-  highlighted from their first frame.
-- A registration's editing data, its comment tokens and bracket pairs, is
-  resolved with its defaults at registration and travels with its compiled
-  syntax language, so native editing code reads it without calling
-  JavaScript. Editing commands take the data of the deepest syntax layer at
-  the selection start, so a code fence or an injected `<script>` uses its own
-  language's comments with no lookup by ID. Markdown's inline language, the
-  layer inside every paragraph, therefore registers Markdown's block comment
-  too. A buffer without syntax has no editing data. The line and block
-  comment toggles are plain functions over text and that configuration, with
-  no buffer or view.
-  Each bundled language package keeps line and block comment toggling cases
-  in `test/cases/comments.jsonc`, which a product test runs through the native
-  toggles on the registered configuration.
-- Bracket matching reads the syntax tree with the registered pairs and no
-  extra query. A bracket is a leaf token whose text is a pair's opener or
-  closer, in the deepest layer holding it, and its partner is the first
-  sibling in its direction with the paired text, skipping balanced pairs,
-  so brackets inside strings and comments, which belong to larger leaves,
-  never match, and a parse error leaves a bracket unmatched. Whether the
-  caret is inside a string or comment, which `notIn` reads, comes from the
-  `string` and `comment` highlight captures of the layer holding the text
-  before it, dotted children included, so no grammar needs extra data. A
-  string holds only offsets strictly inside it; a comment also holds its end
-  unless its last line ends with the language's block comment closer.
-  Markdown's inline language shares Markdown's bracket pairs, since it is the
-  language at the caret inside paragraphs. Packages keep typing, Backspace,
-  wrapping, jump, and highlight cases in `test/cases/brackets.jsonc`, run through
-  an editor view; a language with bracket pairs must have cases.
-- An optional `indents` query compiles with the others and drives native
-  indentation. The evaluator follows nvim-treesitter's indent module over the
-  tree of the deepest layer at a line's first non-blank byte, so a code fence
-  indents as its language, and a layer without a query leaves its lines
-  alone rather than falling back to its host's. It returns columns, or that
-  a line keeps its indentation (inside an `@indent.ignore` node, such as a
-  string) or moves with an earlier line (inside an `@indent.auto` node, such
-  as a block comment). Within one reindent each line sees the indentation
-  given to the lines above it. Inside a parse error, each opening bracket of
-  the language's bracket pairs that the error leaves unclosed before the line
-  indents it one level, at most once per row. Packages keep Enter, typing,
-  and reindent cases in `test/cases/indents.jsonc`, which a product test runs
-  through an editor view; a language with an indent query must have cases.
-- An optional `folds` query lists the nodes whose lines can fold, as `@fold`
-  captures, over every layer's tree. A multi-line node is a region from its
-  first line through its last; a closing bracket that ends the node and
-  starts the line stays visible, an indented block after a colon starts on
-  the line of its header, and trailing blank lines are left out. A language
-  without a query folds by indentation. The regions are candidates that
-  Fold, Unfold, and Fold All choose among, cached per text revision and
-  syntax generation on the buffer model; only collapsed folds are view
-  state. Packages keep region cases in `test/cases/folds.jsonc`, which a
-  product test runs through an editor view; a language with a folds query
-  must have cases.
-- The native Set Language Mode command offers the registered languages, or Auto
-  Detect, in the window's transient picker. Contributed text frames take a
-  fixed language at registration.
 
 ## Completion ownership and aggregation
 

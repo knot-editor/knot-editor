@@ -298,7 +298,7 @@ observer of that key through the ordinary FIFO listener path, the same as
 application observation: the commit never awaits listeners, and a listener
 reads the values it needs with `get`. Native consumers do not observe through
 the host; editor views observe the global itself (see
-[editor views](workbench-and-lifecycle.md#editor-views)).
+[editor views](editor-and-languages.md#editor-views)).
 
 ## Extension record storage
 

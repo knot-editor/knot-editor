@@ -107,5 +107,5 @@ could not remove a package's entries, and a merging write would still leave
 entries without owners.
 
 References: [extension host](../architecture/extension-host.md#settings),
-[editor views](../architecture/workbench-and-lifecycle.md#editor-views), and
-[semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
+[editor views](../architecture/editor-and-languages.md#editor-views), and
+[languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages).

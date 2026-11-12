@@ -33,7 +33,7 @@ resource (Save As, a first save), unless the language is explicit; a plain Save
 or typing never re-detects. An explicit language is recorded in
 [window layouts](workbench-and-lifecycle.md#window-layouts), so it survives hot
 exit and project sessions without another store. Detection and registration
-are described in [semantic UI](semantic-ui.md#syntax-highlighting-and-languages).
+are described in [languages](editor-and-languages.md#syntax-highlighting-and-languages).
 
 ## Opening resources
 

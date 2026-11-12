@@ -140,9 +140,13 @@ extensions supply asynchronous content rather than rendering callbacks.
 - [Workbench and lifecycle](architecture/workbench-and-lifecycle.md): startup,
   sessions, windows, panes, tabs, protected closure, relocation, and terminal
   ownership.
+- [Editor and languages](architecture/editor-and-languages.md): editor state
+  and views, native editing behavior, editor bars, syntax highlighting,
+  language registration, and language-driven editing.
 - [Commands](architecture/commands.md): captured targets, focus routing,
   composition, cancellation, and keymaps.
 - [Extension host](architecture/extension-host.md): runtime isolation, transport,
   scheduling, lifecycle, observation, and extension storage.
 - [Semantic UI](architecture/semantic-ui.md): contributions, highlight layers,
-  languages, trees, completion aggregation, and generated text surfaces.
+  themes, icons, trees, completion aggregation, pickers, and generated text
+  surfaces.

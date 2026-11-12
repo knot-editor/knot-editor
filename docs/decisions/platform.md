@@ -120,7 +120,7 @@ is a cell's drift beside proportional fallback glyphs and on right-to-left
 lines, which Knot's monospace text rarely shows.
 
 References: [semantic UI](../architecture/semantic-ui.md) and
-[editor views](../architecture/workbench-and-lifecycle.md#editor-views).
+[editor views](../architecture/editor-and-languages.md#editor-views).
 
 ## Product window chrome and failure notices
 

@@ -58,7 +58,7 @@ against package startup. Layouts record only explicit languages, so restores
 detect again.
 
 References: [core and buffers](../architecture/core-and-buffers.md#syntax-state)
-and [semantic UI](../architecture/semantic-ui.md#syntax-highlighting-and-languages).
+and [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages).
 
 ## Themes
 
@@ -233,7 +233,7 @@ whole buffer on every keystroke. The workflow itself stays in the bundled
 belong to the editor that owns the bar, a path D080 shares. Regular expressions and replace remain deferred (D001), so
 the matcher is a literal one.
 
-References: [editor bars](../architecture/workbench-and-lifecycle.md#editor-bars),
+References: [editor bars](../architecture/editor-and-languages.md#editor-bars),
 [key routing](../architecture/commands.md#editor-bars), and
 [text search](../architecture/core-and-buffers.md#text-search).
 

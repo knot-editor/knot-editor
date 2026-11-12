@@ -126,12 +126,6 @@ context set by the previous key may not have reached, and a sequence bound in
 a context holds no key where that context is off. Menus and the palette ignore contexts, and a key that some
 context unbinds shows no menu key.
 
-An editor also takes a caret shape (`bar`, `block`, or `underline`) from an
-extension, kept per lifecycle like key contexts: the latest set wins, clearing
-reveals the previous one, and teardown clears its own. A block or underline
-covers the character under the caret, with a half-line width at the end of a
-line; the shape is presentation state and never recorded.
-
 ### Text bindings
 
 A text binding routes committed text that an editor would insert to a command
