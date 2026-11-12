@@ -87,6 +87,7 @@ to be rebuilt later:
 - ✅ **D031 — Current-file Find**
 
 - **D080 — Word occurrence highlighting extension** (depends on D064, D031)
+  - 🚧 [Plan](d080-word-highlight.md)
   - When the cursor rests on a word, a bundled JavaScript extension highlights
     every other occurrence in the buffer. It uses the syntax tree or word
     boundaries, debounced after cursor movement.
