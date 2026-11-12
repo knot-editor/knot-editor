@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import { windows, workbench } from "knot";
 import type { DocumentId, WindowTarget } from "knot";
 import * as host from "knot/testing";
-import { CLOSE, CURRENT_COLOR, FIND, MATCH_COLOR, NEXT, PREVIOUS, start } from "../src/extension.js";
+import { CLOSE, CURRENT_COLOR, FIND, MATCH_COLOR, NEXT, PREVIOUS, TOGGLE_CASE, TOGGLE_WORD, start } from "../src/extension.js";
 
 const TEXT = "foo bar\nFoo baz foo\nfoofoo\n";
 const offset = (text: string) => new TextEncoder().encode(text).length;
@@ -48,6 +48,8 @@ test("find binds its keys in the bar", async () => {
   await start();
   const bound = host.bindings().map((binding) => [binding.key, binding.command, binding.view, binding.context]);
   assert.deepEqual(bound, [
+    ["cmd-alt-c", TOGGLE_CASE, "bar", "find"],
+    ["cmd-alt-w", TOGGLE_WORD, "bar", "find"],
     ["enter", NEXT, "bar", "find"],
     ["shift-enter", PREVIOUS, "bar", "find"],
     ["escape", CLOSE, "bar", "find"],
@@ -204,4 +206,41 @@ test("a command without an editor is unavailable", async () => {
   const window = host.openWindow();
   assert.equal(await host.run(FIND, { window }), "unavailable");
   assert.equal(await host.run(NEXT, { window }), "unavailable");
+});
+
+test("the toggles switch case and whole word and search again", async () => {
+  const { window, editor } = await setup();
+  await search(window, "foo");
+  const bar = () => host.editorBars(window).bars[0]!;
+  assert.deepEqual(bar().toggles.map((toggle) => [toggle.id, toggle.active]), [["case", false], ["word", false]]);
+  assert.equal(message(window), "1 of 5");
+
+  await host.clickBarControl("find", "case", window);
+  assert.equal(bar().toggles[0]!.active, true);
+  assert.equal(message(window), "1 of 4");
+  await host.clickBarControl("find", "word", window);
+  assert.equal(bar().toggles[1]!.active, true);
+  assert.equal(message(window), "1 of 2");
+  assert.equal(await selected(editor, TEXT), "foo");
+
+  await host.run(TOGGLE_CASE, { window });
+  await host.run(TOGGLE_WORD, { window });
+  assert.deepEqual(bar().toggles.map((toggle) => toggle.active), [false, false]);
+  assert.equal(message(window), "1 of 5");
+});
+
+test("the buttons step and close", async () => {
+  const { window, document, editor } = await setup();
+  await search(window, "foo");
+  const bar = () => host.editorBars(window).bars[0]!;
+  assert.deepEqual(bar().buttons.map((button) => button.id), ["previous", "next", "close"]);
+
+  await host.clickBarControl("find", "next", window);
+  assert.equal(message(window), "2 of 5");
+  await host.clickBarControl("find", "previous", window);
+  assert.equal(message(window), "1 of 5");
+  await host.clickBarControl("find", "close", window);
+  assert.deepEqual(host.editorBars(window).bars, []);
+  assert.deepEqual(host.contributions(document), []);
+  assert.equal(await selected(editor, TEXT), "foo");
 });

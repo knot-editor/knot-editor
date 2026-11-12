@@ -149,3 +149,27 @@ fn the_key_fills_the_field_from_a_selection_or_the_last_query(cx: &mut TestAppCo
         editor.first_bar(cx).is_some_and(|(_, text)| text == "two")
     });
 }
+
+#[gpui::test]
+fn the_toggle_keys_switch_case_and_whole_word_in_the_bar(cx: &mut TestAppContext) {
+    let product = TestProduct::start(PACKAGES, cx);
+    let editor = product.windowed_editor("foo foobar Foo\n", cx);
+    let (case, word) = if cfg!(target_os = "macos") {
+        ("<a-d-c>", "<a-d-w>")
+    } else {
+        ("<a-c-c>", "<a-c-w>")
+    };
+
+    open_with(&editor, "foo", cx);
+    wait_for_message(&editor, "1 of 3", cx);
+    editor.press_unsettled(case, cx);
+    wait_for_message(&editor, "1 of 2", cx);
+    editor.press_unsettled(word, cx);
+    wait_for_message(&editor, "1 of 1", cx);
+    // The keys went to the bar, not the text, and toggling back restores
+    // the matches.
+    assert_eq!(editor.marked(cx).replace('‸', ""), "foo foobar Foo\n");
+    editor.press_unsettled(case, cx);
+    editor.press_unsettled(word, cx);
+    wait_for_message(&editor, "1 of 3", cx);
+}

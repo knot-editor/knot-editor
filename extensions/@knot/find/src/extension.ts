@@ -1,7 +1,7 @@
 // Find: a bar above the focused editor that highlights every match of its
 // text as it is typed and selects the current one. Enter and Shift+Enter in
 // the bar, or the next and previous commands anywhere, step between matches.
-import { commands, keymaps, windows, workbench } from "knot";
+import { commands, icons, keymaps, platform, windows, workbench } from "knot";
 import type { Buffer, ByteRange, CommandContext, Disposable, Editor, EditorHandle } from "knot";
 import { highlights, matchBefore, matchFrom, sameRange, summary } from "./search.js";
 import type { Options } from "./search.js";
@@ -10,6 +10,8 @@ export const FIND = "editor.find";
 export const NEXT = "editor.find-next";
 export const PREVIOUS = "editor.find-previous";
 export const CLOSE = "editor.find-close";
+export const TOGGLE_CASE = "editor.find-toggle-case";
+export const TOGGLE_WORD = "editor.find-toggle-word";
 
 const BAR = "find";
 const FIELD = "query";
@@ -110,7 +112,31 @@ async function refresh(session: Session, selection: { anchor: number; caret: num
 
 async function showBar(session: Session, message: string | null) {
   try {
-    await session.editor.openBar(BAR, { fields: [{ id: FIELD, placeholder: "Find" }], message });
+    await session.editor.openBar(BAR, {
+      fields: [{ id: FIELD, placeholder: "Find" }],
+      toggles: [
+        {
+          id: "case",
+          icon: "find.case",
+          tooltip: `Match Case (${shortcut("alt-c")})`,
+          active: options.caseSensitive,
+          command: { name: TOGGLE_CASE },
+        },
+        {
+          id: "word",
+          icon: "find.word",
+          tooltip: `Whole Word (${shortcut("alt-w")})`,
+          active: options.wholeWord,
+          command: { name: TOGGLE_WORD },
+        },
+      ],
+      message,
+      buttons: [
+        { id: "previous", icon: "find.previous", tooltip: "Previous Match", command: { name: PREVIOUS } },
+        { id: "next", icon: "find.next", tooltip: "Next Match", command: { name: NEXT } },
+        { id: "close", icon: "find.close", tooltip: "Close", command: { name: CLOSE } },
+      ],
+    });
   } catch (error) {
     if (!isInvalid(error)) throw error;
   }
@@ -162,6 +188,14 @@ async function step(context: CommandContext, forward: boolean) {
   if (session !== undefined) await refresh(session, { anchor: match.startByteOffset, caret: match.endByteOffset });
 }
 
+/** Flip an option and search again from the current selection. */
+async function toggle(context: CommandContext, flip: () => void) {
+  const session = await openSession(context);
+  if (session === undefined) return;
+  flip();
+  await select(session, await session.editor.selection());
+}
+
 /** The session of the command's editor while its bar is open. */
 async function openSession(context: CommandContext): Promise<Session | undefined> {
   const target = (await windows.get(context.target.windowTarget))?.currentTarget;
@@ -183,7 +217,20 @@ async function close(context: CommandContext) {
   }
 }
 
+/** A key as the tooltip shows it. */
+function shortcut(key: string): string {
+  return platform === "macos" ? `⌥⌘${key.slice(-1).toUpperCase()}` : `Ctrl+Alt+${key.slice(-1).toUpperCase()}`;
+}
+
 export async function start() {
+  query = "";
+  options.caseSensitive = false;
+  options.wholeWord = false;
+  await icons.define("find.case", { lucide: "case-sensitive" });
+  await icons.define("find.word", { lucide: "whole-word" });
+  await icons.define("find.previous", { lucide: "arrow-up" });
+  await icons.define("find.next", { lucide: "arrow-down" });
+  await icons.define("find.close", { lucide: "x" });
   await commands.register(FIND, open, {
     title: "Find…",
     description: "Search the current file.",
@@ -191,6 +238,17 @@ export async function start() {
   await commands.register(NEXT, (context) => step(context, true), { title: "Find Next" });
   await commands.register(PREVIOUS, (context) => step(context, false), { title: "Find Previous" });
   await commands.register(CLOSE, close, { title: "Close Find", palette: false });
+  await commands.register(TOGGLE_CASE, (context) => toggle(context, () => (options.caseSensitive = !options.caseSensitive)), {
+    title: "Find: Toggle Match Case",
+    palette: false,
+  });
+  await commands.register(TOGGLE_WORD, (context) => toggle(context, () => (options.wholeWord = !options.wholeWord)), {
+    title: "Find: Toggle Whole Word",
+    palette: false,
+  });
+  const mod = platform === "macos" ? "cmd" : "ctrl";
+  keymaps.bind(`${mod}-alt-c`, TOGGLE_CASE, { view: "bar", context: BAR });
+  keymaps.bind(`${mod}-alt-w`, TOGGLE_WORD, { view: "bar", context: BAR });
   keymaps.bind("enter", NEXT, { view: "bar", context: BAR });
   keymaps.bind("shift-enter", PREVIOUS, { view: "bar", context: BAR });
   keymaps.bind("escape", CLOSE, { view: "bar", context: BAR });

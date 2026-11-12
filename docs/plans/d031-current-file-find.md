@@ -142,11 +142,12 @@ tests are in `crates/knot-ext-workbench/tests/workbench/find.rs`.
   (buttons), reusing existing theme colors. A click focuses the view, keeping a
   field's focus, then runs the command through the shell with the focused
   editor captured.
-- `@knot/find` gains case-sensitive and whole-word toggles (⌥⌘C / ⌥⌘W
-  in the bar), previous, next, and close buttons, and the options in the
-  message.
-- Real-editor tests for clicking a toggle and a button and for the toggle
-  keys.
+- ✅ `@knot/find` gains case-sensitive and whole-word toggles (⌥⌘C / ⌥⌘W
+  in the bar; Ctrl+Alt elsewhere) and previous, next, and close buttons. The
+  toggles' state shows which options apply, so the message does not repeat
+  them. Toggling searches again from the selection.
+- ✅ Real-editor tests for clicking a toggle and a button (sub-step 1) and
+  for the toggle keys (`find.rs`).
 
 **Implementation context:** extend the checkpoint 2 bar data and rendering.
 Icons through `IconRef` as status items and tree rows use them. Buttons
