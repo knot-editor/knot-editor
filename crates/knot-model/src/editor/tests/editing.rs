@@ -537,10 +537,7 @@ fn word_at_prefers_the_word_ending_at_the_offset() {
     assert_eq!(at(model.len()), word("last"));
     assert_eq!(at(15), None);
     let separators = BufferModel::from_text("a ::");
-    assert_eq!(
-        word_at(&separators, 4).map(|(range, class)| (range, class)),
-        Some((2..4, WordClass::Separator))
-    );
+    assert_eq!(word_at(&separators, 4), Some((2..4, WordClass::Separator)));
     assert_eq!(word_at(&BufferModel::from_text(""), 0), None);
 }
 
