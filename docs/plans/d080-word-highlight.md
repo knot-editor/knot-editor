@@ -150,14 +150,11 @@ exposed as `Editor.setDecorations` in `knot.d.ts` through the
 `editorSetDecorations` handler. Behavior:
 [semantic UI](../architecture/semantic-ui.md#semantic-extension-ui).
 
-### 3. Find on per-view decorations — 🔍 awaiting review gate
+### 3. Find on per-view decorations — ✅ done
 
-`@knot/find` paints through its session's `EditorHandle.setDecorations`, and
-the D179 roadmap entry is removed. A product test with two splits of one
-buffer covers separate bars and highlights.
-
-Review gate: in the real app, two find bars over one buffer (personal-config
-`Try: Find Sample`, then Split Right and ⌘F in each split).
+`@knot/find` paints through its session's `EditorHandle.setDecorations`
+(`refresh` in `extensions/@knot/find/src/extension.ts`), so splits of one
+buffer keep their own bars and highlights; the D179 roadmap entry is gone.
 
 ### 4. Word lookup and the highlight package
 
