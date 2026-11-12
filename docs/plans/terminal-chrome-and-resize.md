@@ -1,7 +1,7 @@
 # Terminal chrome and resize limits
 
-Status: 🔨 checkpoint 1 implemented, awaiting its review gate; checkpoint 2
-not started; checkpoint 3 (restart keeps output) added, not started.
+Status: 🔨 checkpoints 1 and 2 implemented, each awaiting its review
+gate; checkpoint 3 (restart keeps output) not started.
 Implements the terminal usability report (2026-11-12): drop
 the dev mini-header, lift arbitrary resize caps.
 
@@ -41,7 +41,7 @@ deferred, not part of this plan.
   relocation.
 - No change to mouse-reporting behavior, only to the visibility of its state.
 
-## Checkpoint 1 — Drop the header, add restart command and exited overlay
+## ✅ Checkpoint 1 — Drop the header, add restart command and exited overlay
 
 Deliverable: `TerminalView::render` paints only the terminal grid while the
 session runs; when the status is exited, failed, or closed it paints a small
@@ -63,7 +63,7 @@ from the command and from the overlay in the exited state.
 Review gate: run a terminal, exit the shell, confirm the overlay and the
 palette command both revive it; confirm no header while running.
 
-## Checkpoint 2 — Lift the upper resize bounds
+## ✅ Checkpoint 2 — Lift the upper resize bounds
 
 Deliverable: a dock (bottom terminal included) drags out to the window edge;
 a center split drags until the shrinking side hits its minimum. The 480px
@@ -87,6 +87,11 @@ down to the sibling's minimum.
 
 Review gate: drag a bottom-dock terminal and a side-by-side doc pair to
 their new extremes; confirm minimums still hold and layouts restore.
+
+Scope note: `clamp_ratio` keeps the 0.1 share floor on both sides for
+the ratio path (keyboard resize, restore); only the pointer-drag path
+moves past 0.9, floored per side at 120px. The consequence and
+validation sections above require this split.
 
 ## Checkpoint 3 — Restart keeps prior output visible
 
