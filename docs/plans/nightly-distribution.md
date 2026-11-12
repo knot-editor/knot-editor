@@ -21,6 +21,14 @@ trigger and release shape.
   `CFBundleVersion`. The crate and `CFBundleShortVersionString` keep their own
   version. Every build has a distinct version, so `brew upgrade` sees manual
   runs and no release is overwritten.
+- **Build identity.** One value, `KNOT_VERSION`, set by the packaging step at
+  compile time and read with `option_env!`: the nightly id for nightlies, the
+  tag without its `v` for tagged releases, and the Cargo version plus `-dev`
+  for local builds. The short commit hash is embedded beside it. The app shows
+  it in a `Knot: About` palette command and `knot --version`, and the bundle's
+  `Info.plist` carries it. Packaging takes the version as an argument and does
+  not care which channel produced it, so a tag-triggered release workflow can
+  reuse it later.
 - **Package.** `Knot.app` from `scripts/build-macos-app.sh --release`,
   ad-hoc code signed, zipped with `ditto` (preserves bundle metadata), with a
   SHA-256. Apple Silicon only, built on `macos-latest`. No Developer ID or
@@ -39,6 +47,9 @@ trigger and release shape.
 ## Exclusions
 
 - Developer ID signing, notarization, and Sparkle-style self-update.
+- The tag-triggered release workflow and stable `knot` cask (the packaging
+  and build identity are written to serve them), a macOS menu-bar About item,
+  and an extension API for the version.
 - Intel or universal builds, Windows, Linux, and a stable release channel.
 - Submitting to `homebrew/cask`.
 
@@ -47,17 +58,36 @@ trigger and release shape.
 - Notarization once Knot is shared beyond the author's machines.
 - How the Windows and Linux packages are published (winget, Scoop, deb/rpm,
   Homebrew on Linux) when those platforms are built.
-- Whether the in-app version display should show the nightly id.
 
 ## Checkpoints
 
-### 1. Nightly macOS archive
+### 1. Build identity
 
-Extend the app bundle script so the nightly build can stamp a version,
-ad-hoc sign, and emit `Knot-nightly.YYYYMMDD.HHMM-macos-arm64.zip` and its SHA-256.
+Compile the version and commit into the binary, and show them in `knot
+--version` and a `Knot: About` command.
 
-- **Implementation context:** `scripts/build-macos-app.sh` (add an optional
-  version stamp via `PlistBuddy` on `packaging/macos/Info.plist`'s copy inside
+- **Implementation context:** a `build.rs` for the root `knot` package that
+  reads `KNOT_VERSION` (fallback: Cargo version plus `-dev`) and the commit
+  from `git rev-parse --short HEAD` (fallback: `unknown`), emitting
+  `rerun-if-env-changed`; a small build-info module in `src/app`; `--version`
+  handled in `entry::parse_launch_arguments` (`src/app/entry.rs`, called from
+  `run` in `src/app/mod.rs`) before the product starts; the About command
+  mirrors `show_keybindings` (`src/app/product/show_keybindings.rs`, handler
+  in `src/app/product/commands.rs`, declaration in
+  `src/app/commands/declarations.rs`).
+- **Validation:** tests of the argument parse and of the About command through
+  the product test driver (see `src/app/product/tests/keybindings.rs`); a build
+  with `KNOT_VERSION` set reports it.
+- **Review gate:** you run `knot --version` and `Knot: About` from a local
+  build.
+
+### 2. Nightly macOS archive
+
+Extend the app bundle script so a build takes a version argument, sets
+`KNOT_VERSION` for the compile, stamps the bundle, ad-hoc signs, and emit `Knot-nightly.YYYYMMDD.HHMM-macos-arm64.zip` and its SHA-256.
+
+- **Implementation context:** `scripts/build-macos-app.sh` (add a version
+  argument and stamp via `PlistBuddy` on `packaging/macos/Info.plist`'s copy inside
   the bundle, then `codesign --force --deep --sign -`), a new
   `scripts/package-macos-app.sh` wrapping it, and the `just app-release`
   recipe in `justfile`. Release builds need the Metal toolchain noted in
@@ -66,7 +96,7 @@ ad-hoc sign, and emit `Knot-nightly.YYYYMMDD.HHMM-macos-arm64.zip` and its SHA-2
   `plutil -p` shows the stamp, the unzipped app launches.
 - **Review gate:** you open the zip's app on your machine.
 
-### 2. Nightly workflow and releases
+### 3. Nightly workflow and releases
 
 Add the scheduled workflow: decide whether to build, wait for/verify green CI,
 package, publish the prerelease, prune old ones.
@@ -76,13 +106,13 @@ package, publish the prerelease, prune old ones.
   `Swatinem/rust-cache`); `permissions: contents: write`; use `gh` for the
   last-tag lookup, the CI status check
   (`gh run list --workflow ci.yml --commit <sha>`), release creation, and
-  pruning. Call the checkpoint 1 script.
+  pruning. Call the checkpoint 2 script.
 - **Validation:** scheduled-path logic with and without new commits; a red-CI
   commit is skipped; manual dispatch builds regardless and two runs the same
   day produce distinct releases; pruning keeps 7.
 - **Review gate:** you inspect the first prerelease and its asset.
 
-### 3. Homebrew tap and cask publishing
+### 4. Homebrew tap and cask publishing
 
 Create the tap, the cask template, and the publish step.
 
@@ -100,14 +130,14 @@ Create the tap, the cask template, and the publish step.
 - **Review gate:** on your work machine, tap, install, launch `Knot` and the
   `knot` command, then trigger a manual run and `brew upgrade` to receive it.
 
-### 4. Documentation
+### 5. Documentation
 
 Record the nightly pipeline and install steps, and the rationale for the
 choices above.
 
 - **Implementation context:** `docs/development.md` (a release section),
   `README.md` and the website getting-started text for the install commands,
-  a `docs/decisions/` entry (unsigned plus quarantine removal, separate tap,
+  a `docs/decisions/` entry (unsigned plus quarantine removal, one build identity, separate tap,
   Apple Silicon only) with its index line, and removal of this plan with
   durable content preserved.
 - **Validation:** `just check`.
