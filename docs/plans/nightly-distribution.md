@@ -1,6 +1,6 @@
 # Nightly distribution through Homebrew
 
-Status: 🚧 in progress; checkpoint 1 awaits review.
+Status: 🚧 in progress; checkpoint 1 is complete.
 
 ## Goal
 
@@ -61,29 +61,13 @@ trigger and release shape.
 
 ## Checkpoints
 
-### 1. Build identity ✅ (awaiting review)
+### 1. Build identity ✅
 
-Compile the version and commit into the binary, and show them in `knot
---version` and a `Knot: About` command.
-
-- **Implementation context:** a `build.rs` for the root `knot` package that
-  reads `KNOT_VERSION` (fallback: Cargo version plus `-dev`) and the commit
-  from `git rev-parse --short HEAD` (fallback: `unknown`), emitting
-  `rerun-if-env-changed`; a small build-info module in `src/app`; `--version`
-  handled in `entry::parse_launch_arguments` (`src/app/entry.rs`, called from
-  `run` in `src/app/mod.rs`) before the product starts; the About command
-  mirrors `show_keybindings` (`src/app/product/show_keybindings.rs`, handler
-  in `src/app/product/commands.rs`, declaration in
-  `src/app/commands/declarations.rs`).
-- **Validation:** tests of the argument parse and of the About command through
-  the product test driver (see `src/app/product/tests/keybindings.rs`); a build
-  with `KNOT_VERSION` set reports it.
-- **Review gate:** you run `knot --version` and `Knot: About` from a local
-  build.
-- **Done:** `build.rs`, `src/app/build_info.rs`, `entry::is_version_request`
-  (checked in `run` before the product starts), and `app.about` in
-  `src/app/product/about.rs`, shown as a picker of version and commit. `just
-  check` passes.
+`knot --version` and `Knot: About` report the version and commit compiled in
+by `build.rs` (`KNOT_VERSION`, else the Cargo version plus `-dev`). About shows
+them as picker rows until D180 adds a modal surface. Code: `build.rs`,
+`src/app/build_info.rs`, `entry::is_version_request`,
+`src/app/product/about.rs`.
 
 ### 2. Nightly macOS archive
 
