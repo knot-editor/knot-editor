@@ -96,6 +96,7 @@ complete list for that item.
   - D145 before D021, which is reconsidered only if D145 falls short.
   - D114 → D027
   - D077 → D117 → D067
+  - D117 → D181
   - D071 → D067, D082
   - D034 → D119
 - **Find:** D001 with or after D092.
@@ -611,6 +612,16 @@ complete list for that item.
     a title, optional percentage, and cancellation, shown through the D077
     status bar rather than a new surface.
   - Order: after D077; before D067.
+
+- **D181 — Native operation failures in the status bar**
+  - Deferred: A native operation whose failure leaves no other visible
+    effect, such as Save, Open, Add Folder, or recovery, reports it through a
+    native warning prompt, which interrupts and leaves no trace once
+    dismissed. The status bar carries no operation messages.
+  - Reconsider: D117 adds the transient notice. Then report these failures
+    through it, keep the last ones reachable from the status bar, and keep
+    prompts only for failures that need a decision.
+  - Order: with or after D117.
 
 - **D140 — Placeholder text in input fields**
   - Deferred: `TextInput` renders placeholder text, which editor bars use, but
