@@ -430,6 +430,16 @@ complete list for that item.
     values, to help spot typos.
   - Order: after D070.
 
+- **D184 — Document-scoped settings survive hot exit**
+  - Deferred: Values scoped to a document end with it, and a window layout
+    records only a document's explicit language. After quit and relaunch a
+    restored document keeps its language but loses its own
+    `editor.tabSize` and `editor.softWrap`.
+  - Reconsider: Daily use resets a document's tab size or wrapping on
+    relaunch. Then record a document tab's document-scoped setting values in
+    the window layout and write them back on restore, as the explicit
+    language is, so nothing is kept for documents that are not open.
+
 - **D124 — Workspace trust**
   - Deferred: Project-local settings (D089) start as data that runs no code,
     and nothing else executes on behalf of a repository.
