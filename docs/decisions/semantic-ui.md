@@ -229,8 +229,8 @@ Rendering extension-drawn bars was rejected for the same reason.
 Matching is native (`buffer.find`) rather than JavaScript over snapshots. An
 extension addresses text in UTF-8 byte offsets, and a snapshot would copy the
 whole buffer on every keystroke. The workflow itself stays in the bundled
-`@knot/find` package, and its highlights reuse the buffer contribution path,
-which D080 shares. Regular expressions and replace remain deferred (D001), so
+`@knot/find` package, and its highlights are per-view decorations, so they
+belong to the editor that owns the bar, a path D080 shares. Regular expressions and replace remain deferred (D001), so
 the matcher is a literal one.
 
 References: [editor bars](../architecture/workbench-and-lifecycle.md#editor-bars),

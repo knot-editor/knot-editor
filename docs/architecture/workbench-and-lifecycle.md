@@ -296,10 +296,12 @@ command through the product shell with the bar's editor captured, deferred
 until the click has finished with its views; an extension flips a toggle by
 opening the bar again. [Commands](commands.md#editor-bars) covers key routing
 while a field has focus. The bundled `@knot/find` package is the first user.
-Its highlights are buffer contributions in `editor.findMatch` and
+Its highlights are the editor's own decorations
+([semantic UI](semantic-ui.md#semantic-extension-ui)) in `editor.findMatch` and
 `editor.findMatchCurrent`, capped at 1,000 matches, and it finds matches with
 the buffer's native `find` ([core and buffers](core-and-buffers.md#text-search)).
-Because contributions belong to the buffer, other views of it show them too.
+Because the decorations belong to the view, each split of a buffer shows only
+its own bar's matches.
 
 ## Status bar
 
