@@ -108,8 +108,8 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let execution = dispatch_product_command(&shell, window, "demo.started", cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&window, native_window, "demo.started", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     assert_eq!(cx.read(clipboard).as_deref(), Some("started=6"));
     let warnings = cx.read(crate::app::extensions::host::setting_warnings);
@@ -147,9 +147,9 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
                 documents.create_untitled("Untitled", model.clone(), cx)
             })
         });
-        let (shell, window) = product_window(document, model, cx);
-        cx.update_window(window, |_, window, cx| {
-            let editor = shell
+        let (window, native_window) = product_window(document, model, cx);
+        cx.update_window(native_window, |_, native_window, cx| {
+            let editor = window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -157,8 +157,8 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
                 .unwrap()
                 .clone();
             editor.update(cx, |editor, cx| {
-                let tab = editor.caret_x_at(1, window, cx);
-                let letter = editor.caret_x_at(2, window, cx) - tab;
+                let tab = editor.caret_x_at(1, native_window, cx);
+                let letter = editor.caret_x_at(2, native_window, cx) - tab;
                 (f32::from(tab) / f32::from(letter)).round() as usize
             })
         })
@@ -196,7 +196,7 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
         entry.result,
         crate::app::extensions::load::LoadResult::Loaded
     );
-    let execution = dispatch_product_command(&shell, window, "demo.started", cx);
+    let execution = dispatch_product_command(&window, native_window, "demo.started", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     assert_eq!(cx.read(clipboard).as_deref(), Some("started=12"));
     assert_eq!(tab_sizes(cx), [8, 3]);
@@ -261,11 +261,12 @@ fn personal_config_associates_an_extension_and_open_documents_redetect(cx: &mut 
     let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution =
+        dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let opened = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         workbench
             .editor(pane.active_tab())
@@ -281,7 +282,7 @@ fn personal_config_associates_an_extension_and_open_documents_redetect(cx: &mut 
 
     // The language's own registration of "rs" comes back on disposal.
     for (command, expected) in [("assoc.remap", "python"), ("assoc.dispose", "rust")] {
-        let execution = dispatch_product_command(&shell, window, command, cx);
+        let execution = dispatch_product_command(&window, native_window, command, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         assert_eq!(language(cx), expected);
     }

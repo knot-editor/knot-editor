@@ -20,7 +20,7 @@ use crate::app::workbench::ArrangedTab;
 use knot_protocol::WindowTarget;
 use knot_protocol::declarations::HostError as _;
 
-/// One document presented in a window leaving its current session, with the
+/// One document presented in a window leaving its current window, with the
 /// capture that retains its text when its final view is removed.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 pub(crate) struct SuspendedDocument {
@@ -125,30 +125,30 @@ enum Staged {
 }
 
 struct CapturedWindow {
-    shell: Entity<KnotWindow>,
+    window: Entity<KnotWindow>,
 }
 
 impl CapturedWindow {
     fn is_live(&self, cx: &App) -> bool {
         cx.global::<ApplicationWindows>()
-            .is_open(self.shell.entity_id())
+            .is_open(self.window.entity_id())
     }
 
     fn target(&self) -> WindowTarget {
         WindowTarget {
-            window: window_id(self.shell.entity_id()),
+            window: window_id(self.window.entity_id()),
         }
     }
 }
 
 fn capture(window: &str, cx: &mut App) -> Result<CapturedWindow, AccessError> {
-    let shell = operations::capture_window(
+    let window = operations::capture_window(
         &WindowTarget {
             window: window.to_owned(),
         },
         cx,
     )?;
-    Ok(CapturedWindow { shell })
+    Ok(CapturedWindow { window })
 }
 
 fn parse_uri(uri: &str) -> Result<super::super::resource::ResourceUri, OpenError> {
@@ -370,7 +370,7 @@ async fn stage_entry(
 fn source_documents(sources: &[&CapturedWindow], cx: &App) -> Vec<DocumentId> {
     let mut documents = Vec::new();
     for window in sources {
-        for pane in window.shell.read(cx).workbench.read(cx).panes() {
+        for pane in window.window.read(cx).workbench.read(cx).panes() {
             for tab in pane.tabs() {
                 if let Some(document) = tab.document_id()
                     && !documents.contains(&document)
@@ -388,7 +388,7 @@ fn source_view_count(sources: &[&CapturedWindow], document: DocumentId, cx: &App
         .iter()
         .map(|window| {
             window
-                .shell
+                .window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -487,11 +487,11 @@ fn commit(
             .and_then(|layout| layout.as_ref())
             .and_then(|layout| layout.geometry.as_ref());
         match launch::open_blank_window(geometry, cx) {
-            Ok((shell, _)) => destinations.push(CapturedWindow { shell }),
+            Ok((window, _)) => destinations.push(CapturedWindow { window }),
             Err(_) => {
                 for window in destinations {
-                    window.shell.update(cx, |shell, cx| {
-                        let _ = shell.close_window(cx);
+                    window.window.update(cx, |window, cx| {
+                        let _ = window.close_window(cx);
                     });
                 }
                 return Err(AccessError::InvalidTarget.into());
@@ -501,12 +501,12 @@ fn commit(
 
     // Released windows close as any window does, stopping their terminals.
     for window in &released {
-        let terminals = window.shell.update(cx, |shell, cx| {
-            shell.next_open_generation();
-            shell
+        let terminals = window.window.update(cx, |window, cx| {
+            window.next_open_generation();
+            window
                 .workbench
                 .update(cx, |workbench, _| workbench.remove_document_tabs());
-            shell
+            window
                 .workbench
                 .read(cx)
                 .tab_snapshots()
@@ -518,8 +518,8 @@ fn commit(
                 .collect::<Vec<_>>()
         });
         KnotWindow::close_terminal_ids(terminals, cx);
-        window.shell.update(cx, |shell, cx| {
-            let _ = shell.close_window(cx);
+        window.window.update(cx, |window, cx| {
+            let _ = window.close_window(cx);
         });
     }
 
@@ -538,11 +538,11 @@ fn commit(
             entries.push(outcome);
             resolved.push(document);
         }
-        let outcome = window.shell.update(cx, |shell, cx| {
-            shell.replace_workspace_roots(roots, cx);
+        let outcome = window.window.update(cx, |window, cx| {
+            window.replace_workspace_roots(roots, cx);
             let outcome = match &layout {
                 Some(Some(layout)) => {
-                    shell.apply_layout(layout, &destination.entries, &resolved, cx);
+                    window.apply_layout(layout, &destination.entries, &resolved, cx);
                     Some(LayoutOutcome::Applied)
                 }
                 Some(None) => Some(LayoutOutcome::Ignored),
@@ -552,7 +552,7 @@ fn commit(
             // so restored text is never hidden.
             let mut tabs = Vec::new();
             for document in resolved {
-                tabs.push(document.map(|document| shell.present_document(document, cx)));
+                tabs.push(document.map(|document| window.present_document(document, cx)));
             }
             if outcome != Some(LayoutOutcome::Applied) {
                 let selected = destination
@@ -560,7 +560,7 @@ fn commit(
                     .and_then(|index| tabs.get(index).copied().flatten())
                     .or_else(|| tabs.iter().flatten().next().copied());
                 if let Some((pane, tab)) = selected {
-                    shell
+                    window
                         .workbench
                         .update(cx, |workbench, _| workbench.activate_tab(pane, tab));
                 }
@@ -589,9 +589,9 @@ fn commit(
     for (index, window) in destinations.iter().enumerate() {
         let focused = request.focus == Some(index);
         if focused {
-            window.shell.update(cx, |shell, cx| {
-                shell.activate_window(cx);
-                shell.focus_active_surface(cx);
+            window.window.update(cx, |window, cx| {
+                window.activate_window(cx);
+                window.focus_active_surface(cx);
             });
         }
     }
@@ -630,7 +630,7 @@ fn resolve(
         Staged::Live => (
             EntryOutcome::Failed {
                 code: "DocumentNotFound",
-                message: "the document closed while the session was opening".into(),
+                message: "the document closed while the window was opening".into(),
             },
             None,
         ),
@@ -695,7 +695,7 @@ fn resolve(
 }
 
 impl KnotWindow {
-    /// Capture this session's layout with the geometry of `window`, the
+    /// Capture the window's layout with the geometry of `native_window`, the
     /// window it is shown in.
     pub(crate) fn capture_layout(&self, window: Option<&Window>, cx: &App) -> WindowLayout {
         WindowLayout::capture(
@@ -707,16 +707,18 @@ impl KnotWindow {
         )
     }
 
-    /// Capture `shell`'s layout with its window's geometry.
-    pub(crate) fn capture_attached_layout(shell: &Entity<Self>, cx: &mut App) -> WindowLayout {
-        let geometry = native_window(shell.entity_id(), cx).and_then(|window| {
+    /// Capture `window`'s layout with its window's geometry.
+    pub(crate) fn capture_attached_layout(window: &Entity<Self>, cx: &mut App) -> WindowLayout {
+        let geometry = native_window(window.entity_id(), cx).and_then(|window| {
             window
-                .update(cx, |_, window, cx| window_geometry(window, cx))
+                .update(cx, |_, native_window, cx| {
+                    window_geometry(native_window, cx)
+                })
                 .ok()
         });
-        let shell = shell.read(cx);
+        let window = window.read(cx);
         WindowLayout::capture(
-            shell.workbench.read(cx),
+            window.workbench.read(cx),
             geometry,
             Self::documents(cx).read(cx),
             &|id| Self::terminal_session_directory(id, cx),
@@ -842,12 +844,12 @@ impl KnotWindow {
     }
 }
 
-/// Restore the recorded product windows at startup: a replacement with no
+/// Restore the recorded windows at startup: a replacement with no
 /// sources whose entries are the layouts' document tabs. Documents resolve live
 /// by identity first, so restored recovery documents are presented, then by
 /// opening their file; untitled documents nobody recovered are pruned.
 pub(crate) fn restore_windows(
-    record: crate::app::window_sessions::WindowSession,
+    record: crate::app::window_record::WindowRecord,
     completion: impl FnOnce(Result<ReplaceWindowsResult, ReplaceError>) + 'static,
     cx: &mut App,
 ) -> Result<(), ReplaceError> {
@@ -886,42 +888,42 @@ pub(crate) fn restore_windows(
     )
 }
 
-/// Open a blank product window, as New Blank Window does.
+/// Open a blank window, as New Blank Window does.
 pub(crate) fn open_window(cx: &mut App) -> WindowTarget {
     let handle = launch::open_product_window_with(None, None, cx);
-    let shell = cx
+    let window = cx
         .global::<ApplicationWindows>()
         .in_native_window(handle)
-        .expect("a product window shows a session");
+        .expect("the native window shows a window");
     WindowTarget {
-        window: window_id(shell.entity_id()),
+        window: window_id(window.entity_id()),
     }
 }
 
 /// Remove a window from `open_window` whose roots could not be applied.
 pub(crate) fn discard_window(target: &WindowTarget, cx: &mut App) {
-    if let Ok(shell) = operations::capture_window(target, cx) {
-        shell.update(cx, |shell, cx| {
-            let _ = shell.close_window(cx);
+    if let Ok(window) = operations::capture_window(target, cx) {
+        window.update(cx, |window, cx| {
+            let _ = window.close_window(cx);
         });
     }
 }
 
-/// Capture a product window's layout.
+/// Capture a window's layout.
 pub(crate) fn capture_layout(
     target: &WindowTarget,
     cx: &mut App,
 ) -> Result<WindowLayout, AccessError> {
-    let shell = operations::capture_window(target, cx)?;
-    Ok(KnotWindow::capture_attached_layout(&shell, cx))
+    let window = operations::capture_window(target, cx)?;
+    Ok(KnotWindow::capture_attached_layout(&window, cx))
 }
 
-/// Activate a product window and focus its active surface.
+/// Activate a window and focus its active surface.
 pub(crate) fn focus_window(target: &WindowTarget, cx: &mut App) -> Result<(), AccessError> {
-    let shell = operations::capture_window(target, cx)?;
-    shell.update(cx, |shell, cx| {
-        shell.activate_window(cx);
-        shell.focus_active_surface(cx);
+    let window = operations::capture_window(target, cx)?;
+    window.update(cx, |window, cx| {
+        window.activate_window(cx);
+        window.focus_active_surface(cx);
     });
     Ok(())
 }

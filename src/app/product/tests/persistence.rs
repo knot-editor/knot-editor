@@ -10,12 +10,12 @@ async fn cancelling_the_native_open_selection_settles_the_command(cx: &mut TestA
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -51,12 +51,12 @@ async fn save_creates_a_destination_before_binding_it_as_persisted(cx: &mut Test
     let document = documents.update(cx, |documents, cx| {
         documents.create_destination("created.txt", model.clone(), uri.clone(), cx)
     });
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -108,11 +108,12 @@ fn opening_and_saving_through_a_symlink_keeps_the_link_and_updates_its_target(
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution =
+        dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let opened = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         workbench
             .editor(pane.active_tab())
@@ -128,7 +129,7 @@ fn opening_and_saving_through_a_symlink_keeps_the_link_and_updates_its_target(
         cx.notify();
     });
 
-    let execution = dispatch_product_command(&shell, window, SAVE_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, SAVE_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     assert!(
         std::fs::symlink_metadata(&link)
@@ -176,15 +177,15 @@ async fn edit_racing_save_keeps_the_newer_revision_dirty(cx: &mut TestAppContext
         model.replace(0..len, "captured text").unwrap();
     });
     let captured_revision = model.read_with(cx, |model, _| model.revision());
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     let (completion, receiver) = super::super::CommandCompletion::new();
     cx.update_window(window_handle, |_, _, cx| {
-        let target = shell.update(cx, |shell, cx| {
-            shell.focus_active_editor(cx);
-            shell.capture_command_target(cx)
+        let target = window.update(cx, |window, cx| {
+            window.focus_active_editor(cx);
+            window.capture_command_target(cx)
         });
-        shell.update(cx, |shell, cx| {
-            shell.start_save_command(false, target, completion, cx)
+        window.update(cx, |window, cx| {
+            window.start_save_command(false, target, completion, cx)
         });
         model.update(cx, |model, _| {
             let len = model.text().len();
@@ -224,26 +225,26 @@ async fn save_completion_rejects_a_closed_captured_tab(cx: &mut TestAppContext) 
         )
     });
     model.update(cx, |model, _| model.replace(0..0, "changed ").unwrap());
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     let (completion, receiver) = super::super::CommandCompletion::new();
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            assert!(shell.split_pane(
-                shell.workbench.read(cx).focused_pane_id().unwrap(),
+    cx.update_window(window_handle, |_, native_window, cx| {
+        window.update(cx, |window, cx| {
+            assert!(window.split_pane(
+                window.workbench.read(cx).focused_pane_id().unwrap(),
                 SplitDirection::Horizontal,
                 super::super::SplitPlacement::After,
                 cx,
             ));
         });
-        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
-        shell.update(cx, |shell, cx| {
-            shell.start_save_command(false, target.clone(), completion, cx);
+        let target = window.update(cx, |window, cx| window.capture_command_target(cx));
+        window.update(cx, |window, cx| {
+            window.start_save_command(false, target.clone(), completion, cx);
             assert_eq!(
-                shell.close_tab(
+                window.close_tab(
                     target.tab.unwrap().pane,
                     target.tab.unwrap().tab,
                     super::super::target_document(&target).unwrap(),
-                    window,
+                    native_window,
                     cx
                 ),
                 CommandOutcome::Completed
@@ -278,12 +279,12 @@ async fn save_as_overwrites_the_selected_file_and_retargets_only_after_success(
             documents.create_untitled("Untitled", model.clone(), cx)
         })
     });
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -324,12 +325,12 @@ async fn save_as_cancellation_preserves_untitled_identity(cx: &mut TestAppContex
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -373,12 +374,12 @@ async fn save_as_failure_preserves_text_and_document_identity(cx: &mut TestAppCo
             documents.create_untitled("Untitled", model.clone(), cx)
         })
     });
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -430,12 +431,12 @@ async fn external_save_conflict_offers_reload_and_installs_the_external_version(
     });
     model.update(cx, |model, _| model.replace(0..0, "local ").unwrap());
     provider.seed_file(uri.clone(), b"external text").unwrap();
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -504,8 +505,8 @@ async fn external_conflict_reload_rejects_an_edit_racing_its_read(cx: &mut TestA
         )
     });
     model.update(cx, |model, _| model.replace(0..0, "local ").unwrap());
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
-    let execution = dispatch_product_command(&shell, window_handle, SAVE_COMMAND, cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
+    let execution = dispatch_product_command(&window, window_handle, SAVE_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Reload");
@@ -554,12 +555,12 @@ async fn cancelling_an_external_save_conflict_preserves_the_dirty_document(
     });
     model.update(cx, |model, _| model.replace(0..0, "local ").unwrap());
     provider.seed_file(uri.clone(), b"external text").unwrap();
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -623,12 +624,12 @@ async fn save_as_after_an_external_conflict_retargets_only_after_saving(cx: &mut
     provider
         .seed_file(original_uri.clone(), b"external text")
         .unwrap();
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -680,11 +681,11 @@ async fn file_and_missing_file_open_replace_the_launch_placeholder(cx: &mut Test
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (shell, _) = product_window(placeholder, model, cx);
+    let (window, _) = product_window(placeholder, model, cx);
 
-    let target = cx.read(|cx| current_open_target(&shell, cx));
-    shell.update(cx, |shell, cx| {
-        shell.start_open_request(
+    let target = cx.read(|cx| current_open_target(&window, cx));
+    window.update(cx, |window, cx| {
+        window.start_open_request(
             OpenRequest::from_uri_for_product(
                 ResourceUri::parse("mem://product/notes.txt").unwrap(),
             ),
@@ -704,9 +705,9 @@ async fn file_and_missing_file_open_replace_the_launch_placeholder(cx: &mut Test
         assert!(matches!(document.state(), DocumentState::Persisted { .. }));
     });
 
-    let target = cx.read(|cx| current_open_target(&shell, cx));
-    shell.update(cx, |shell, cx| {
-        shell.start_open_request(
+    let target = cx.read(|cx| current_open_target(&window, cx));
+    window.update(cx, |window, cx| {
+        window.start_open_request(
             OpenRequest::from_uri_for_product(ResourceUri::parse("mem://product/new.txt").unwrap()),
             target,
             false,
@@ -733,11 +734,11 @@ async fn open_deduplicates_resources_and_rejects_stale_completions(cx: &mut Test
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (shell, _) = product_window(placeholder, model, cx);
-    let target = cx.read(|cx| current_open_target(&shell, cx));
+    let (window, _) = product_window(placeholder, model, cx);
+    let target = cx.read(|cx| current_open_target(&window, cx));
 
-    shell.update(cx, |shell, cx| {
-        shell.start_open_request(
+    window.update(cx, |window, cx| {
+        window.start_open_request(
             OpenRequest::from_uri_for_product(
                 ResourceUri::parse("mem://product/notes.txt").unwrap(),
             ),
@@ -746,7 +747,7 @@ async fn open_deduplicates_resources_and_rejects_stale_completions(cx: &mut Test
             None,
             cx,
         );
-        shell.start_open_request(
+        window.start_open_request(
             OpenRequest::from_uri_for_product(ResourceUri::parse("mem://product/new.txt").unwrap()),
             target,
             true,
@@ -771,9 +772,9 @@ async fn open_deduplicates_resources_and_rejects_stale_completions(cx: &mut Test
         );
     });
 
-    let target = cx.read(|cx| current_open_target(&shell, cx));
-    shell.update(cx, |shell, cx| {
-        shell.start_open_request(
+    let target = cx.read(|cx| current_open_target(&window, cx));
+    window.update(cx, |window, cx| {
+        window.start_open_request(
             OpenRequest::from_uri_for_product(ResourceUri::parse("mem://product/new.txt").unwrap()),
             target,
             false,
@@ -785,7 +786,7 @@ async fn open_deduplicates_resources_and_rejects_stale_completions(cx: &mut Test
     cx.read(|cx| {
         assert_eq!(documents.read(cx).documents().count(), 1);
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -806,11 +807,11 @@ async fn folder_open_installs_a_workspace_and_failures_preserve_the_document(
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (shell, _) = product_window(placeholder, model, cx);
-    let target = cx.read(|cx| current_open_target(&shell, cx));
+    let (window, _) = product_window(placeholder, model, cx);
+    let target = cx.read(|cx| current_open_target(&window, cx));
 
-    shell.update(cx, |shell, cx| {
-        shell.start_open_request(
+    window.update(cx, |window, cx| {
+        window.start_open_request(
             OpenRequest::from_uri_for_product(
                 ResourceUri::parse("mem://product/invalid.txt").unwrap(),
             ),
@@ -824,7 +825,7 @@ async fn folder_open_installs_a_workspace_and_failures_preserve_the_document(
     cx.read(|cx| {
         assert_eq!(documents.read(cx).documents().count(), 1);
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -841,9 +842,9 @@ async fn folder_open_installs_a_workspace_and_failures_preserve_the_document(
     assert!(detail.contains("not valid UTF-8"));
     cx.simulate_prompt_answer("OK");
 
-    let target = cx.read(|cx| current_open_target(&shell, cx));
-    shell.update(cx, |shell, cx| {
-        shell.start_open_request(
+    let target = cx.read(|cx| current_open_target(&window, cx));
+    window.update(cx, |window, cx| {
+        window.start_open_request(
             OpenRequest::from_uri_for_product(ResourceUri::parse("mem://product/src").unwrap()),
             target,
             false,
@@ -853,9 +854,14 @@ async fn folder_open_installs_a_workspace_and_failures_preserve_the_document(
     });
     cx.run_until_parked();
     cx.read(|cx| {
-        let shell = shell.read(cx);
+        let window = window.read(cx);
         assert_eq!(
-            shell.workspace.snapshot().first_root().unwrap().to_string(),
+            window
+                .workspace
+                .snapshot()
+                .first_root()
+                .unwrap()
+                .to_string(),
             "mem://product/src"
         );
         assert_eq!(documents.read(cx).documents().count(), 1);
@@ -872,22 +878,23 @@ fn open_from_terminal_requests_picker_and_preserves_terminal(cx: &mut TestAppCon
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let terminal_tab = shell.update(cx, |shell, cx| {
-        let (session, view) = shell.create_terminal(cx);
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, _| {
+    let (window, native_window) = product_window(document, model, cx);
+    let terminal_tab = window.update(cx, |window, cx| {
+        let (session, view) = window.create_terminal(cx);
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, _| {
             workbench.open_terminal_tab(pane, session, view).unwrap()
         })
     });
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_surface(cx));
     })
     .unwrap();
-    let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
+    let execution =
+        dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         assert!(
             pane.tabs()

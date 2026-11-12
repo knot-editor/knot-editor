@@ -230,7 +230,7 @@ impl KnotWindow {
             None => return Err(CommandOutcome::Unavailable),
         };
         let destination = TabRelocationDestination {
-            shell: cx.weak_entity(),
+            window: cx.weak_entity(),
             workbench: self.workbench.downgrade(),
             tab: target,
         };

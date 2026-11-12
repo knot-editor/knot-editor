@@ -3,27 +3,27 @@ use super::*;
 use crate::app::documents::DocumentDirty;
 use crate::app::product::relocate::TabRelocationSource;
 
-fn capture_active_tab(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> TabRelocationSource {
+fn capture_active_tab(window: &Entity<KnotWindow>, cx: &TestAppContext) -> TabRelocationSource {
     cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
-        shell
+        window
             .capture_tab_relocation(pane.id(), pane.active_tab().id(), cx)
             .unwrap()
     })
 }
 
 fn relocate_to_new_window(
-    shell: &Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     source: &TabRelocationSource,
     cx: &mut TestAppContext,
     create_destination: impl FnOnce(&mut gpui::App) -> anyhow::Result<gpui::WindowHandle<KnotWindow>>,
 ) -> CommandOutcome {
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.relocate_tab_to_new_window_with(source, cx, create_destination)
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window.relocate_tab_to_new_window_with(source, cx, create_destination)
         })
     })
     .unwrap()
@@ -43,10 +43,10 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     assert_eq!(
         dispatch_product_command(
-            &shell,
+            &window,
             window_handle,
             TOGGLE_TERMINAL_MOUSE_REPORTING_COMMAND,
             cx
@@ -82,12 +82,12 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
                 .sessions
                 .insert(id, session.clone());
             let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
-            shell.update(cx, |shell, cx| {
-                let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-                let tab = shell.workbench.update(cx, |workbench, _| {
+            window.update(cx, |window, cx| {
+                let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+                let tab = window.workbench.update(cx, |workbench, _| {
                     workbench.open_terminal_tab(pane, id, view.clone()).unwrap()
                 });
-                shell.activate_tab(pane, tab, cx);
+                window.activate_tab(pane, tab, cx);
             });
             view
         })
@@ -95,7 +95,7 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
     cx.refresh().unwrap();
     assert_eq!(
         dispatch_product_command(
-            &shell,
+            &window,
             window_handle,
             TOGGLE_TERMINAL_MOUSE_REPORTING_COMMAND,
             cx
@@ -107,14 +107,15 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
     );
     cx.read(|cx| assert!(!session.read(cx).mouse_reporting_enabled()));
     let (start, end) = cx
-        .update_window(window_handle, |_, window, cx| {
+        .update_window(window_handle, |_, native_window, cx| {
             let mut parser: Processor = Processor::new();
             parser.advance(
                 &mut *session.read(cx).terminal().unwrap().lock(),
                 b"\x1b[?1002h\x1b[?1006h\x1b[2J\x1b[3J\x1b[Hcopy me",
             );
             let bounds = view.read(cx).interaction_bounds();
-            let width = px(session.read(cx).size().cell_width as f32 / window.scale_factor());
+            let width =
+                px(session.read(cx).size().cell_width as f32 / native_window.scale_factor());
             (
                 bounds.origin + point(px(0.1), px(0.1)),
                 bounds.origin + point(width * 3 + px(0.1), px(0.1)),
@@ -143,7 +144,7 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
     });
     assert_eq!(
         dispatch_product_command(
-            &shell,
+            &window,
             window_handle,
             TOGGLE_TERMINAL_MOUSE_REPORTING_COMMAND,
             cx
@@ -164,17 +165,17 @@ async fn terminal_tab_has_a_captured_surface_and_document_commands_are_unavailab
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let (pane, tab) = shell.update(cx, |shell, cx| {
-        let (session, view) = shell.create_terminal(cx);
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        let tab = shell.workbench.update(cx, |workbench, _| {
+    let (window, native_window) = product_window(document, model, cx);
+    let (pane, tab) = window.update(cx, |window, cx| {
+        let (session, view) = window.create_terminal(cx);
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        let tab = window.workbench.update(cx, |workbench, _| {
             workbench.open_terminal_tab(pane, session, view).unwrap()
         });
         (pane, tab)
     });
     let session = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -184,24 +185,24 @@ async fn terminal_tab_has_a_captured_surface_and_document_commands_are_unavailab
             .surface_id()
     });
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.activate_tab(pane, tab, cx);
-                shell.capture_command_target(cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.activate_tab(pane, tab, cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
     assert_eq!(target.tab.unwrap().surface, session);
     cx.read(|cx| {
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
         assert_eq!(
             cx.global::<ApplicationWindows>().view_count(document, cx),
             1
         );
     });
     let (completion, receiver) = super::super::CommandCompletion::new();
-    shell.update(cx, |shell, cx| {
-        shell.start_save_command(false, target.clone(), completion, cx)
+    window.update(cx, |window, cx| {
+        window.start_save_command(false, target.clone(), completion, cx)
     });
     assert_eq!(receiver.await.unwrap(), CommandOutcome::Unavailable);
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
@@ -245,31 +246,31 @@ async fn closing_terminal_tab_preserves_dirty_document_and_invalidates_its_targe
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
-    let (pane, tab) = shell.update(cx, |shell, cx| {
-        let (session, view) = shell.create_terminal(cx);
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        let tab = shell.workbench.update(cx, |workbench, _| {
+    let (window, native_window) = product_window(document, model, cx);
+    let (pane, tab) = window.update(cx, |window, cx| {
+        let (session, view) = window.create_terminal(cx);
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        let tab = window.workbench.update(cx, |workbench, _| {
             workbench.open_terminal_tab(pane, session, view).unwrap()
         });
         (pane, tab)
     });
     let stale = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.activate_tab(pane, tab, cx);
-                shell.capture_command_target(cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.activate_tab(pane, tab, cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
-    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(
         execution.completion.await.unwrap(),
         CommandOutcome::Completed
     );
     assert!(!cx.has_pending_prompt());
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.clone();
+        let workbench = window.read(cx).workbench.clone();
         assert_eq!(workbench.read(cx).tab_snapshots().len(), 1);
         assert_eq!(workbench.read(cx).view_count(document), 1);
         assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
@@ -298,17 +299,17 @@ async fn mixed_window_and_quit_cancellation_preserve_every_surface(cx: &mut Test
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
-    let (pane, tab) = shell.update(cx, |shell, cx| {
-        let (session, view) = shell.create_terminal(cx);
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        let tab = shell.workbench.update(cx, |workbench, _| {
+    let (window, native_window) = product_window(document, model, cx);
+    let (pane, tab) = window.update(cx, |window, cx| {
+        let (session, view) = window.create_terminal(cx);
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        let tab = window.workbench.update(cx, |workbench, _| {
             workbench.open_terminal_tab(pane, session, view).unwrap()
         });
         (pane, tab)
     });
     let session = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -317,12 +318,12 @@ async fn mixed_window_and_quit_cancellation_preserve_every_surface(cx: &mut Test
             .active_tab()
             .surface_id()
     });
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.activate_tab(pane, tab, cx));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.activate_tab(pane, tab, cx));
     })
     .unwrap();
     for command in [CLOSE_WINDOW_COMMAND, QUIT_COMMAND] {
-        let execution = dispatch_product_command(&shell, window, command, cx);
+        let execution = dispatch_product_command(&window, native_window, command, cx);
         cx.run_until_parked();
         assert!(cx.has_pending_prompt());
         cx.simulate_prompt_answer("Cancel");
@@ -331,8 +332,8 @@ async fn mixed_window_and_quit_cancellation_preserve_every_surface(cx: &mut Test
             CommandOutcome::Cancelled
         );
         cx.read(|cx| {
-            assert!(cx.windows().contains(&window));
-            let snapshots = shell.read(cx).workbench.read(cx).tab_snapshots();
+            assert!(cx.windows().contains(&native_window));
+            let snapshots = window.read(cx).workbench.read(cx).tab_snapshots();
             assert_eq!(snapshots.len(), 2);
             assert!(
                 snapshots
@@ -360,13 +361,14 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
 
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
+    let command =
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
     let (pane, first, document_tab) = cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         (
             pane.id(),
@@ -377,16 +379,16 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
     let TabSurfaceId::Terminal(first_id) = first else {
         panic!("terminal command opened a document")
     };
-    cx.update_window(window, |_, window, cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+    cx.update_window(native_window, |_, native_window, cx| {
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let pane = workbench.pane(pane).unwrap();
         assert!(
             workbench
                 .terminal_view(pane.active_tab())
                 .unwrap()
                 .focus_handle(cx)
-                .contains_focused(window, cx)
+                .contains_focused(native_window, cx)
         );
     })
     .unwrap();
@@ -400,20 +402,20 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
         );
     });
 
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.activate_tab(pane, document_tab, cx));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.activate_tab(pane, document_tab, cx));
     })
     .unwrap();
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            let terminal_tab = shell.workbench.read(cx).pane(pane).unwrap().tabs()[1].id();
-            shell.activate_tab(pane, terminal_tab, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            let terminal_tab = window.workbench.read(cx).pane(pane).unwrap().tabs()[1].id();
+            window.activate_tab(pane, terminal_tab, cx);
         });
     })
     .unwrap();
     cx.read(|cx| {
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -432,11 +434,11 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
         );
     });
 
-    let split = dispatch_product_command(&shell, window, SPLIT_HORIZONTAL_COMMAND, cx);
+    let split = dispatch_product_command(&window, native_window, SPLIT_HORIZONTAL_COMMAND, cx);
     assert_eq!(split.completion.await.unwrap(), CommandOutcome::Completed);
     let second_id = cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         assert_eq!(workbench.panes().len(), 2);
         match workbench.focused_pane().unwrap().active_tab().surface_id() {
             TabSurfaceId::Terminal(id) => id,
@@ -459,16 +461,16 @@ async fn terminal_close_and_reopen_settle_the_exact_session(cx: &mut TestAppCont
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     let (first_id, first_session) = cx.read(|cx| {
-        let TabSurfaceId::Terminal(id) = shell
+        let TabSurfaceId::Terminal(id) = window
             .read(cx)
             .workbench
             .read(cx)
@@ -489,7 +491,7 @@ async fn terminal_close_and_reopen_settle_the_exact_session(cx: &mut TestAppCont
         )
     });
     assert_eq!(
-        dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx)
+        dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx)
             .completion
             .await
             .unwrap(),
@@ -509,14 +511,14 @@ async fn terminal_close_and_reopen_settle_the_exact_session(cx: &mut TestAppCont
         );
     });
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     cx.read(|cx| {
-        let TabSurfaceId::Terminal(second_id) = shell
+        let TabSurfaceId::Terminal(second_id) = window
             .read(cx)
             .workbench
             .read(cx)
@@ -543,17 +545,17 @@ async fn closing_the_final_terminal_tab_leaves_an_empty_center(cx: &mut TestAppC
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx)
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     let (pane, document_tab, session) = cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         let TabSurfaceId::Terminal(id) = pane.active_tab().surface_id() else {
             panic!()
@@ -568,34 +570,34 @@ async fn closing_the_final_terminal_tab_leaves_an_empty_center(cx: &mut TestAppC
                 .clone(),
         )
     });
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.activate_tab(pane, document_tab, cx));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.activate_tab(pane, document_tab, cx));
     })
     .unwrap();
     assert_eq!(
-        dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx)
+        dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     cx.read(|cx| {
-        let shell = shell.read(cx);
-        let tabs = shell.workbench.read(cx).tab_snapshots();
+        let window = window.read(cx);
+        let tabs = window.workbench.read(cx).tab_snapshots();
         assert_eq!(tabs.len(), 1);
         assert!(matches!(tabs[0].surface, TabSurfaceId::Terminal(_)));
         assert!(documents.read(cx).get(document).is_none());
     });
     assert_eq!(
-        dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx)
+        dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     cx.read(|cx| {
-        let shell = shell.read(cx);
-        assert!(shell.workbench.read(cx).tab_snapshots().is_empty());
+        let window = window.read(cx);
+        assert!(window.workbench.read(cx).tab_snapshots().is_empty());
         assert_eq!(
             session.read(cx).status(),
             crate::app::terminal::session::TerminalStatus::Closed
@@ -615,16 +617,16 @@ async fn window_close_shuts_down_terminal_after_protected_decisions(cx: &mut Tes
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     let session = cx.read(|cx| {
-        let TabSurfaceId::Terminal(id) = shell
+        let TabSurfaceId::Terminal(id) = window
             .read(cx)
             .workbench
             .read(cx)
@@ -642,14 +644,14 @@ async fn window_close_shuts_down_terminal_after_protected_decisions(cx: &mut Tes
             .clone()
     });
     assert_eq!(
-        dispatch_product_command(&shell, window, CLOSE_WINDOW_COMMAND, cx)
+        dispatch_product_command(&window, native_window, CLOSE_WINDOW_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     cx.read(|cx| {
-        assert!(!cx.windows().contains(&window));
+        assert!(!cx.windows().contains(&native_window));
         assert_eq!(
             session.read(cx).status(),
             crate::app::terminal::session::TerminalStatus::Closed
@@ -674,16 +676,16 @@ async fn mixed_window_save_failure_keeps_terminal_running(cx: &mut TestAppContex
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     let (id, session) = cx.read(|cx| {
-        let TabSurfaceId::Terminal(id) = shell
+        let TabSurfaceId::Terminal(id) = window
             .read(cx)
             .workbench
             .read(cx)
@@ -703,7 +705,7 @@ async fn mixed_window_save_failure_keeps_terminal_running(cx: &mut TestAppContex
                 .clone(),
         )
     });
-    let execution = dispatch_product_command(&shell, window, CLOSE_WINDOW_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_WINDOW_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Save");
@@ -712,8 +714,8 @@ async fn mixed_window_save_failure_keeps_terminal_running(cx: &mut TestAppContex
         CommandOutcome::HandlerFailure { .. }
     ));
     cx.read(|cx| {
-        assert!(cx.windows().contains(&window));
-        assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
+        assert!(cx.windows().contains(&native_window));
+        assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
         assert!(
             cx.global::<ApplicationTerminalSessions>()
                 .0
@@ -734,13 +736,16 @@ async fn quit_shuts_down_terminal_sessions_in_every_window(cx: &mut TestAppConte
     let documents = install_globals(cx);
     let first = cx.update(|cx| create_untitled_document(&documents, cx));
     let first_model = cx.read(|cx| documents.read(cx).get(first).unwrap().model().clone());
-    let (first_shell, first_window) = product_window(first, first_model, cx);
+    let (first_window, first_native_window) = product_window(first, first_model, cx);
     let second = cx.update(|cx| create_untitled_document(&documents, cx));
     let second_model = cx.read(|cx| documents.read(cx).get(second).unwrap().model().clone());
-    let (second_shell, second_window) = product_window(second, second_model, cx);
-    for (shell, window) in [(&first_shell, first_window), (&second_shell, second_window)] {
+    let (second_window, second_native_window) = product_window(second, second_model, cx);
+    for (window, native_window) in [
+        (&first_window, first_native_window),
+        (&second_window, second_native_window),
+    ] {
         assert_eq!(
-            dispatch_product_command(shell, window, NEW_TERMINAL_COMMAND, cx)
+            dispatch_product_command(window, native_window, NEW_TERMINAL_COMMAND, cx)
                 .completion
                 .await
                 .unwrap(),
@@ -758,7 +763,7 @@ async fn quit_shuts_down_terminal_sessions_in_every_window(cx: &mut TestAppConte
     });
     assert_eq!(sessions.len(), 2);
     assert_eq!(
-        dispatch_product_command(&first_shell, first_window, QUIT_COMMAND, cx)
+        dispatch_product_command(&first_window, first_native_window, QUIT_COMMAND, cx)
             .completion
             .await
             .unwrap(),
@@ -797,8 +802,8 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
         CommandOutcome::Completed
     );
     let (id, session, grid, source_view) = cx.read(|cx| {
-        let shell = source.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = source.read(cx);
+        let workbench = window.workbench.read(cx);
         let tab = workbench.focused_pane().unwrap().active_tab();
         let TabSurfaceId::Terminal(id) = tab.surface_id() else {
             panic!()
@@ -835,8 +840,8 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
             .unwrap()
     });
     let destination = cx
-        .update_window(destination_window, |_, window, _| {
-            window.root::<KnotWindow>().flatten().unwrap()
+        .update_window(destination_window, |_, native_window, _| {
+            native_window.root::<KnotWindow>().flatten().unwrap()
         })
         .unwrap();
     let destination_view = cx.read(|cx| {
@@ -848,11 +853,11 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
             .unwrap()
             .clone()
     });
-    cx.update_window(destination_window, |_, window, cx| {
+    cx.update_window(destination_window, |_, native_window, cx| {
         assert!(
             destination_view
                 .focus_handle(cx)
-                .contains_focused(window, cx)
+                .contains_focused(native_window, cx)
         );
     })
     .unwrap();
@@ -882,8 +887,8 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
                 .iter()
                 .any(|tab| tab.surface == TabSurfaceId::Terminal(id))
         );
-        let destination_shell = destination.read(cx);
-        let workbench = destination_shell.workbench.read(cx);
+        let destination_window = destination.read(cx);
+        let workbench = destination_window.workbench.read(cx);
         let tab = workbench.focused_pane().unwrap().active_tab();
         assert_eq!(tab.surface_id(), TabSurfaceId::Terminal(id));
         assert_ne!(workbench.terminal_view(tab), Some(&source_view));
@@ -940,22 +945,22 @@ async fn failed_terminal_destination_leaves_source_attached(cx: &mut TestAppCont
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
-    let relocation = capture_active_tab(&shell, cx);
-    let outcome = relocate_to_new_window(&shell, window, &relocation, cx, |_| {
+    let relocation = capture_active_tab(&window, cx);
+    let outcome = relocate_to_new_window(&window, native_window, &relocation, cx, |_| {
         anyhow::bail!("simulated window creation failure")
     });
     assert!(matches!(outcome, CommandOutcome::HandlerFailure { .. }));
     cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let tab = workbench.focused_pane().unwrap().active_tab();
         let TabSurfaceId::Terminal(id) = tab.surface_id() else {
             panic!()
@@ -977,24 +982,26 @@ async fn vanished_terminal_destination_leaves_source_attached(cx: &mut TestAppCo
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
-    let relocation = capture_active_tab(&shell, cx);
-    let outcome = relocate_to_new_window(&shell, window, &relocation, cx, |cx| {
+    let relocation = capture_active_tab(&window, cx);
+    let outcome = relocate_to_new_window(&window, native_window, &relocation, cx, |cx| {
         let destination = open_tab_transfer_window(cx)?;
-        cx.update_window(destination.into(), |_, window, _| window.remove_window())?;
+        cx.update_window(destination.into(), |_, native_window, _| {
+            native_window.remove_window()
+        })?;
         Ok(destination)
     });
     assert_eq!(outcome, CommandOutcome::InvalidTarget);
     cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let tab = workbench.focused_pane().unwrap().active_tab();
         let TabSurfaceId::Terminal(id) = tab.surface_id() else {
             panic!()
@@ -1016,24 +1023,30 @@ async fn stale_terminal_relocation_is_rejected(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
-    let relocation = capture_active_tab(&shell, cx);
+    let relocation = capture_active_tab(&window, cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx)
+        dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     assert_eq!(
-        relocate_to_new_window(&shell, window, &relocation, cx, open_tab_transfer_window),
+        relocate_to_new_window(
+            &window,
+            native_window,
+            &relocation,
+            cx,
+            open_tab_transfer_window
+        ),
         CommandOutcome::InvalidTarget
     );
     cx.read(|cx| assert_eq!(cx.windows().len(), 1));
@@ -1077,7 +1090,7 @@ async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppC
             )
         })
     });
-    let id = source.update(cx, |shell, cx| {
+    let id = source.update(cx, |window, cx| {
         let id = cx
             .global::<ApplicationTerminalSessions>()
             .0
@@ -1089,14 +1102,14 @@ async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppC
             .sessions
             .insert(id, session.clone());
         let view = cx.new(|cx| crate::app::terminal::view::TerminalView::new(session.clone(), cx));
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, _| {
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, _| {
             workbench.open_terminal_tab(pane, id, view).unwrap()
         });
         id
     });
     cx.update_window(source_window, |_, _, cx| {
-        source.update(cx, |shell, cx| shell.focus_active_surface(cx))
+        source.update(cx, |window, cx| window.focus_active_surface(cx))
     })
     .unwrap();
     let relocation = capture_active_tab(&source, cx);
@@ -1145,11 +1158,11 @@ async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppC
 }
 
 fn focused_terminal_directory(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Option<std::path::PathBuf> {
     cx.read(|cx| {
-        let surface = shell
+        let surface = window
             .read(cx)
             .workbench
             .read(cx)
@@ -1179,23 +1192,23 @@ fn home() -> Option<std::path::PathBuf> {
 }
 
 fn focus_document(
-    shell: &Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     document: crate::app::documents::DocumentId,
     cx: &mut TestAppContext,
 ) {
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| {
-            let tab = shell
+    cx.update_window(native_window, |_, native_window, cx| {
+        window.update(cx, |window, cx| {
+            let tab = window
                 .workbench
                 .read(cx)
                 .tab_snapshots()
                 .into_iter()
                 .find(|tab| tab.surface == TabSurfaceId::Document(document))
                 .unwrap();
-            shell.activate_tab(tab.pane_id, tab.tab_id, cx);
+            window.activate_tab(tab.pane_id, tab.tab_id, cx);
         });
-        window.activate_window();
+        native_window.activate_window();
     })
     .unwrap();
     // Focus events are delivered when the window draws.
@@ -1224,32 +1237,32 @@ async fn new_terminals_start_in_the_root_of_the_last_focused_document(cx: &mut T
         })
     });
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![directory_uri(&first), directory_uri(&second)], cx);
+    let (window, native_window) = product_window(document, model, cx);
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![directory_uri(&first), directory_uri(&second)], cx);
     });
-    focus_document(&shell, window, document, cx);
+    focus_document(&window, native_window, document, cx);
 
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&shell, cx), Some(second));
+    assert_eq!(focused_terminal_directory(&window, cx), Some(second));
 
     // A document outside every root falls back to the first root, and a
     // window without roots to home.
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![directory_uri(&first)], cx);
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![directory_uri(&first)], cx);
     });
-    focus_document(&shell, window, document, cx);
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    focus_document(&window, native_window, document, cx);
+    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&shell, cx), Some(first));
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(Vec::new(), cx)
+    assert_eq!(focused_terminal_directory(&window, cx), Some(first));
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(Vec::new(), cx)
     });
-    focus_document(&shell, window, document, cx);
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    focus_document(&window, native_window, document, cx);
+    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&shell, cx), home());
+    assert_eq!(focused_terminal_directory(&window, cx), home());
 }
 
 #[gpui::test]
@@ -1261,12 +1274,12 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.replace_workspace_roots(vec![directory_uri(&root)], cx);
-            let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            shell
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window.replace_workspace_roots(vec![directory_uri(&root)], cx);
+            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+            window
                 .new_terminal_in_pane(
                     Some(pane),
                     crate::app::product::operations::TerminalLocation::Center,
@@ -1279,15 +1292,18 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
     .unwrap();
 
     // New Terminal follows the focused terminal rather than the window's root.
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&shell, cx), Some(nested.clone()));
+    assert_eq!(
+        focused_terminal_directory(&window, cx),
+        Some(nested.clone())
+    );
 
     // So does splitting a terminal pane.
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            assert!(shell.split_pane(
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+            assert!(window.split_pane(
                 pane,
                 SplitDirection::Horizontal,
                 super::super::SplitPlacement::After,
@@ -1296,13 +1312,13 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
         });
     })
     .unwrap();
-    assert_eq!(focused_terminal_directory(&shell, cx), Some(nested));
+    assert_eq!(focused_terminal_directory(&window, cx), Some(nested));
 
     // A focused document uses the window's default again.
-    focus_document(&shell, window, document, cx);
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    focus_document(&window, native_window, document, cx);
+    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&shell, cx), Some(root));
+    assert_eq!(focused_terminal_directory(&window, cx), Some(root));
 }
 
 #[gpui::test]
@@ -1318,8 +1334,8 @@ async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_
         dispatch_product_command(&source, source_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
     let layout = cx
-        .update_window(source_window, |_, window, cx| {
-            source.read(cx).capture_layout(Some(window), cx)
+        .update_window(source_window, |_, native_window, cx| {
+            source.read(cx).capture_layout(Some(native_window), cx)
         })
         .unwrap();
     let mut value = serde_json::to_value(&layout).unwrap();
@@ -1331,9 +1347,9 @@ async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (restored, _) = product_window(document, model, cx);
-    restored.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![directory_uri(temp.path())], cx);
-        shell.apply_layout(&layout, &[], &[], cx);
+    restored.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![directory_uri(temp.path())], cx);
+        window.apply_layout(&layout, &[], &[], cx);
     });
     assert_eq!(
         focused_terminal_directory(&restored, cx),
@@ -1343,11 +1359,11 @@ async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_
 
 /// The area and kind of the focused tab, and how many terminal sessions live.
 fn focused_area(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Option<crate::app::workbench::Area> {
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         workbench.focused_pane().map(|pane| pane.area())
     })
 }
@@ -1363,11 +1379,11 @@ fn session_count(cx: &TestAppContext) -> usize {
 }
 
 fn terminal_panes(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<(crate::app::workbench::Area, usize)> {
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         workbench
             .panes()
             .iter()
@@ -1391,10 +1407,10 @@ async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let right = Area::Dock(DockLocation::Bottom);
     let toggle = |cx: &mut TestAppContext| {
-        dispatch_product_command(&shell, window, TOGGLE_TERMINAL_COMMAND, cx)
+        dispatch_product_command(&window, native_window, TOGGLE_TERMINAL_COMMAND, cx)
     };
 
     // With no dock terminal, one opens in the home dock and takes focus.
@@ -1402,8 +1418,8 @@ async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
         toggle(cx).completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(terminal_panes(&shell, cx), [(right, 1)]);
-    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(terminal_panes(&window, cx), [(right, 1)]);
+    assert_eq!(focused_area(&window, cx), Some(right));
     assert_eq!(session_count(cx), 1);
 
     // Focused: its dock hides and focus returns to the document.
@@ -1411,10 +1427,10 @@ async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
         toggle(cx).completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(focused_area(&shell, cx), Some(Area::Center));
+    assert_eq!(focused_area(&window, cx), Some(Area::Center));
     cx.read(|cx| {
         assert!(
-            !shell
+            !window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -1427,20 +1443,20 @@ async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
         toggle(cx).completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(focused_area(&window, cx), Some(right));
     assert_eq!(session_count(cx), 1);
 
     // Visible but unfocused: it takes focus without hiding.
-    focus_document(&shell, window, document, cx);
-    assert_eq!(focused_area(&shell, cx), Some(Area::Center));
+    focus_document(&window, native_window, document, cx);
+    assert_eq!(focused_area(&window, cx), Some(Area::Center));
     assert_eq!(
         toggle(cx).completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(focused_area(&window, cx), Some(right));
     cx.read(|cx| {
         assert!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -1449,15 +1465,16 @@ async fn toggle_terminal_creates_shows_focuses_and_hides_the_dock_terminals(
     });
 
     // Center terminals are ignored: the dock terminal still toggles.
-    focus_document(&shell, window, document, cx);
-    let center = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
+    focus_document(&window, native_window, document, cx);
+    let center =
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(center.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_area(&shell, cx), Some(Area::Center));
+    assert_eq!(focused_area(&window, cx), Some(Area::Center));
     assert_eq!(
         toggle(cx).completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(focused_area(&window, cx), Some(right));
     assert_eq!(session_count(cx), 2);
 }
 
@@ -1469,10 +1486,10 @@ async fn new_terminal_follows_a_terminal_then_the_recent_dock_terminal_then_the_
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let right = Area::Dock(DockLocation::Bottom);
     let new = |name: &'static str, cx: &mut TestAppContext| {
-        dispatch_product_command(&shell, window, name, cx)
+        dispatch_product_command(&window, native_window, name, cx)
     };
 
     // From a document with no dock terminal: the home dock, which it shows.
@@ -1480,16 +1497,16 @@ async fn new_terminal_follows_a_terminal_then_the_recent_dock_terminal_then_the_
         new(NEW_TERMINAL_COMMAND, cx).completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(terminal_panes(&shell, cx), [(right, 1)]);
+    assert_eq!(terminal_panes(&window, cx), [(right, 1)]);
 
     // From a document: beside the most recently used dock terminal.
-    focus_document(&shell, window, document, cx);
+    focus_document(&window, native_window, document, cx);
     assert_eq!(
         new(NEW_TERMINAL_COMMAND, cx).completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(terminal_panes(&shell, cx), [(right, 2)]);
-    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(terminal_panes(&window, cx), [(right, 2)]);
+    assert_eq!(focused_area(&window, cx), Some(right));
 
     // New Terminal in Center: the last focused center pane.
     assert_eq!(
@@ -1499,21 +1516,21 @@ async fn new_terminal_follows_a_terminal_then_the_recent_dock_terminal_then_the_
             .unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(terminal_panes(&shell, cx), [(Area::Center, 1), (right, 2)]);
+    assert_eq!(terminal_panes(&window, cx), [(Area::Center, 1), (right, 2)]);
 
     // From a center terminal: beside it, in the center.
     assert_eq!(
         new(NEW_TERMINAL_COMMAND, cx).completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(terminal_panes(&shell, cx), [(Area::Center, 2), (right, 2)]);
+    assert_eq!(terminal_panes(&window, cx), [(Area::Center, 2), (right, 2)]);
 
     // Splitting a dock terminal starts a new session beside it, in the dock.
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            let workbench = shell.workbench.read(cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            let workbench = window.workbench.read(cx);
             let pane = workbench.recent_dock_terminal().unwrap().0;
-            assert!(shell.split_pane(
+            assert!(window.split_pane(
                 pane,
                 SplitDirection::Horizontal,
                 super::super::SplitPlacement::After,
@@ -1523,11 +1540,11 @@ async fn new_terminal_follows_a_terminal_then_the_recent_dock_terminal_then_the_
     })
     .unwrap();
     assert_eq!(
-        terminal_panes(&shell, cx),
+        terminal_panes(&window, cx),
         [(Area::Center, 2), (right, 2), (right, 1)]
     );
     assert_eq!(session_count(cx), 5);
-    assert_eq!(focused_area(&shell, cx), Some(right));
+    assert_eq!(focused_area(&window, cx), Some(right));
 }
 
 #[gpui::test]
@@ -1537,23 +1554,29 @@ async fn moving_a_terminal_to_a_dock_rehomes_terminals_for_fresh_windows(cx: &mu
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let right = Area::Dock(DockLocation::Right);
-    let home = |shell: &Entity<KnotWindow>, cx: &TestAppContext| {
-        cx.read(|cx| shell.read(cx).workbench.read(cx).terminal_home())
+    let home = |window: &Entity<KnotWindow>, cx: &TestAppContext| {
+        cx.read(|cx| window.read(cx).workbench.read(cx).terminal_home())
     };
-    assert_eq!(home(&shell, cx), DockLocation::Bottom);
+    assert_eq!(home(&window, cx), DockLocation::Bottom);
 
-    let center = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
+    let center =
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(center.completion.await.unwrap(), CommandOutcome::Completed);
     // Moving within the center or to the center never rehomes.
-    let to_right = dispatch_product_command(&shell, window, "workbench.move-tab-to-right-dock", cx);
+    let to_right = dispatch_product_command(
+        &window,
+        native_window,
+        "workbench.move-tab-to-right-dock",
+        cx,
+    );
     assert_eq!(
         to_right.completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(terminal_panes(&shell, cx), [(right, 1)]);
-    assert_eq!(home(&shell, cx), DockLocation::Right);
+    assert_eq!(terminal_panes(&window, cx), [(right, 1)]);
+    assert_eq!(home(&window, cx), DockLocation::Right);
     assert_eq!(
         cx.read(|cx| cx
             .global::<ApplicationToolLayout>()
@@ -1562,13 +1585,14 @@ async fn moving_a_terminal_to_a_dock_rehomes_terminals_for_fresh_windows(cx: &mu
             .terminal_home),
         DockLocation::Right
     );
-    let to_center = dispatch_product_command(&shell, window, "workbench.move-tab-to-center", cx);
+    let to_center =
+        dispatch_product_command(&window, native_window, "workbench.move-tab-to-center", cx);
     assert_eq!(
         to_center.completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert_eq!(terminal_panes(&shell, cx), [(Area::Center, 1)]);
-    assert_eq!(home(&shell, cx), DockLocation::Right);
+    assert_eq!(terminal_panes(&window, cx), [(Area::Center, 1)]);
+    assert_eq!(home(&window, cx), DockLocation::Right);
 
     // A fresh window inherits the home, and opens its first dock terminal there.
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -1591,8 +1615,8 @@ async fn window_layouts_restore_dock_terminals_in_their_docks(cx: &mut TestAppCo
     let toggle = dispatch_product_command(&source, source_window, TOGGLE_TERMINAL_COMMAND, cx);
     assert_eq!(toggle.completion.await.unwrap(), CommandOutcome::Completed);
     let layout = cx
-        .update_window(source_window, |_, window, cx| {
-            source.read(cx).capture_layout(Some(window), cx)
+        .update_window(source_window, |_, native_window, cx| {
+            source.read(cx).capture_layout(Some(native_window), cx)
         })
         .unwrap();
     let value = serde_json::to_value(&layout).unwrap();
@@ -1604,7 +1628,7 @@ async fn window_layouts_restore_dock_terminals_in_their_docks(cx: &mut TestAppCo
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (restored, _) = product_window(document, model, cx);
-    restored.update(cx, |shell, cx| shell.apply_layout(&layout, &[], &[], cx));
+    restored.update(cx, |window, cx| window.apply_layout(&layout, &[], &[], cx));
     assert_eq!(
         terminal_panes(&restored, cx),
         [(Area::Dock(DockLocation::Bottom), 1)]
@@ -1619,12 +1643,13 @@ async fn toggle_terminal_restores_a_maximized_dock_terminal(cx: &mut TestAppCont
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let run =
-        |command, cx: &mut TestAppContext| dispatch_product_command(&shell, window, command, cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let run = |command, cx: &mut TestAppContext| {
+        dispatch_product_command(&window, native_window, command, cx)
+    };
     let painted_panes = |cx: &mut TestAppContext| {
         cx.run_until_parked();
-        cx.read(|cx| shell.read(cx).tab_drag.borrow().painted_panes().len())
+        cx.read(|cx| window.read(cx).tab_drag.borrow().painted_panes().len())
     };
 
     run(TOGGLE_TERMINAL_COMMAND, cx).completion.await.unwrap();
@@ -1641,7 +1666,7 @@ async fn toggle_terminal_restores_a_maximized_dock_terminal(cx: &mut TestAppCont
     run(TOGGLE_TERMINAL_COMMAND, cx).completion.await.unwrap();
     assert_eq!(painted_panes(cx), 1);
     assert_eq!(
-        focused_area(&shell, cx),
+        focused_area(&window, cx),
         Some(crate::app::workbench::Area::Dock(
             crate::app::workbench::DockLocation::Bottom,
         ))

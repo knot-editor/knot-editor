@@ -76,8 +76,8 @@ fn capture_destination(
     destination: &DocumentDestination,
     cx: &mut App,
 ) -> Result<(Entity<KnotWindow>, OpenTarget), AccessError> {
-    let shell = capture_window(window_target(destination), cx)?;
-    let state = shell.read(cx);
+    let window = capture_window(window_target(destination), cx)?;
+    let state = window.read(cx);
     let workbench = state.workbench.read(cx);
     let (pane, tab) = match destination {
         // A window with no focused pane opens in its center.
@@ -85,9 +85,9 @@ fn capture_destination(
             Some(pane) => (pane, pane.active_tab()),
             None => {
                 return Ok((
-                    shell.clone(),
+                    window.clone(),
                     OpenTarget {
-                        shell: shell.downgrade(),
+                        window: window.downgrade(),
                         workbench: state.workbench.downgrade(),
                         tab: None,
                     },
@@ -120,8 +120,14 @@ fn capture_destination(
     {
         return Err(AccessError::InvalidTarget);
     }
-    let target = OpenTarget::at(shell.downgrade(), &state.workbench, pane.id(), tab.id(), cx);
-    Ok((shell.clone(), target))
+    let target = OpenTarget::at(
+        window.downgrade(),
+        &state.workbench,
+        pane.id(),
+        tab.id(),
+        cx,
+    );
+    Ok((window.clone(), target))
 }
 
 impl OpenTarget {
@@ -131,7 +137,7 @@ impl OpenTarget {
         PresentationTarget {
             pane: PaneTarget {
                 window: WindowTarget {
-                    window: window_id(self.shell.entity_id()),
+                    window: window_id(self.window.entity_id()),
                 },
                 workbench: self.workbench.entity_id().as_u64().to_string(),
                 pane: tab.pane.value().to_string(),
@@ -267,10 +273,10 @@ pub(crate) fn open_terminal(
     location: TerminalLocation,
     cx: &mut App,
 ) -> Result<PresentationTarget, AccessError> {
-    let (shell, target) = capture_destination(&destination, cx)?;
-    shell.update(cx, |shell, cx| {
-        let directory = directory.or_else(|| shell.terminal_directory(cx));
-        shell
+    let (window, target) = capture_destination(&destination, cx)?;
+    window.update(cx, |window, cx| {
+        let directory = directory.or_else(|| window.terminal_directory(cx));
+        window
             .new_terminal_in_pane(target.tab.map(|tab| tab.pane), location, directory, cx)
             .map(|target| target.public_target())
             .ok_or(AccessError::InvalidTarget)
@@ -287,7 +293,7 @@ impl EditorTab {
     pub(crate) fn editor(&self, cx: &App) -> Option<Entity<crate::app::editor::Editor>> {
         let target = &self.0;
         let workbench = target.workbench.upgrade()?;
-        if !window_is_live(&target.shell, &workbench, cx)
+        if !window_is_live(&target.window, &workbench, cx)
             || !target.matches_presentation(&workbench, cx)
         {
             return None;
@@ -331,9 +337,9 @@ pub(crate) fn open_document(
 ) -> Result<(), OpenError> {
     let uri =
         super::super::resource::ResourceUri::parse(&uri).map_err(|_| OpenError::InvalidUri)?;
-    let (shell, target) = capture_destination(&destination, cx)?;
-    shell.update(cx, |shell, cx| {
-        shell.start_resource_operation(
+    let (window, target) = capture_destination(&destination, cx)?;
+    window.update(cx, |window, cx| {
+        window.start_resource_operation(
             OpenRequest::from_uri_for_product(uri),
             target,
             OpenOptions {
@@ -366,9 +372,9 @@ pub(crate) fn create_untitled(
     destination: DocumentDestination,
     cx: &mut App,
 ) -> Result<(DocumentId, PresentationTarget), OpenError> {
-    let (shell, target) = capture_destination(&destination, cx)?;
-    shell.update(cx, |shell, cx| {
-        let (document, target) = shell
+    let (window, target) = capture_destination(&destination, cx)?;
+    window.update(cx, |window, cx| {
+        let (document, target) = window
             .new_document_in_pane(target.tab.map(|tab| tab.pane), cx)
             .ok_or(OpenError::Access(AccessError::InvalidTarget))?;
         Ok((document, target.public_target()))
@@ -380,17 +386,17 @@ pub(crate) fn present_document(
     destination: DocumentDestination,
     cx: &mut App,
 ) -> Result<(DocumentId, PresentationTarget), OpenError> {
-    let (shell, target) = capture_destination(&destination, cx)?;
+    let (window, target) = capture_destination(&destination, cx)?;
     let document = KnotWindow::documents(cx)
         .read(cx)
         .documents()
         .find(|document| document.identity().to_string() == id)
         .map(|document| document.id())
         .ok_or(OpenError::DocumentNotFound)?;
-    let target = shell.update(cx, |shell, cx| {
-        shell.next_open_generation();
-        let target = shell.present_open_document(document, &target, false, false, cx);
-        shell.focus_active_surface(cx);
+    let target = window.update(cx, |window, cx| {
+        window.next_open_generation();
+        let target = window.present_open_document(document, &target, false, false, cx);
+        window.focus_active_surface(cx);
         cx.notify();
         target
     });
@@ -422,11 +428,11 @@ pub(crate) fn replace_roots(
                 .map_err(|_| WorkspaceError::Resource(OpenError::InvalidUri))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let shell = capture_window(&window_target, cx)?;
-    let shell_id = shell.entity_id();
-    shell.update(cx, |shell, cx| {
-        let generation = shell.next_open_generation();
-        let workspace = shell.workspace.snapshot();
+    let window = capture_window(&window_target, cx)?;
+    let shell_id = window.entity_id();
+    window.update(cx, |window, cx| {
+        let generation = window.next_open_generation();
+        let workspace = window.workspace.snapshot();
         let providers = KnotWindow::filesystems(cx);
         let task = cx.spawn(async move |this, cx| {
             let validated = async {
@@ -455,13 +461,13 @@ pub(crate) fn replace_roots(
             .await;
             let mut completion = Some(completion);
             if this
-                .update(cx, |shell, cx| {
+                .update(cx, |window, cx| {
                     let result = if !caller.is_live(cx) {
                         Err(WorkspaceError::Resource(OpenError::Access(
                             AccessError::Cancelled,
                         )))
-                    } else if shell.open_generation != generation
-                        || !shell.workspace.is_current(&workspace)
+                    } else if window.open_generation != generation
+                        || !window.workspace.is_current(&workspace)
                         || !cx.global::<ApplicationWindows>().is_open(shell_id)
                     {
                         Err(WorkspaceError::Resource(OpenError::Access(
@@ -469,7 +475,7 @@ pub(crate) fn replace_roots(
                         )))
                     } else {
                         validated.map(|roots| {
-                            let snapshot = shell.replace_workspace_roots(roots, cx);
+                            let snapshot = window.replace_workspace_roots(roots, cx);
                             workspace_info(window_target, &snapshot)
                         })
                     };
@@ -482,7 +488,7 @@ pub(crate) fn replace_roots(
                 ))));
             }
         });
-        shell.tasks.push(task);
+        window.tasks.push(task);
     });
     Ok(())
 }
@@ -494,7 +500,7 @@ pub(crate) fn close_presentation(
     completion: impl FnOnce(Result<knot_protocol::PresentationCloseOutcome, CloseError>) + 'static,
     cx: &mut App,
 ) -> Result<(), CloseError> {
-    let (shell, target) = capture_destination(&DocumentDestination::View(presentation), cx)?;
+    let (window, target) = capture_destination(&DocumentDestination::View(presentation), cx)?;
     let workbench = target
         .workbench
         .upgrade()
@@ -506,7 +512,7 @@ pub(crate) fn close_presentation(
         .and_then(|tab| workbench_state.command_view(tab))
         .ok_or(CloseError::Access(AccessError::InvalidTarget))?;
     let origin = ProductCommandTarget {
-        shell: shell.downgrade(),
+        window: window.downgrade(),
         workbench: target.workbench,
         tab: target.tab,
         focused: true,

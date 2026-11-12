@@ -46,7 +46,7 @@ mod transient;
 mod tree_view;
 mod typography;
 mod window_layout;
-mod window_sessions;
+mod window_record;
 #[cfg(any(test, feature = "test-support"))]
 mod work_counts;
 mod workbench;

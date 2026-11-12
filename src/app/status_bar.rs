@@ -1,5 +1,5 @@
-//! Status bar items that extensions register and the bar a product window
-//! shows from them.
+//! Status bar items that extensions register and the bar a window shows from
+//! them.
 //!
 //! An ID names one item. Several lifecycles may register it, the latest
 //! registration defines it, and removing that one reveals the previous, as

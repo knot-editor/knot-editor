@@ -1,10 +1,10 @@
 //! Settled view-state changes of one window.
 //!
 //! Editor cursor, selection, and scroll changes, focus, dock resizing, window
-//! bounds, and shell changes restart a trailing-edge debounce. When it settles
+//! bounds, and window changes restart a trailing-edge debounce. When it settles
 //! the window captures its layout and, when it differs from the last one
 //! published, reports `viewStateChanged` to extension observers. A changed
-//! layout or root set also re-records the native window session.
+//! layout or root set also re-records the window.
 
 use crate::app::documents::DocumentDirty;
 use std::time::Duration;
@@ -85,22 +85,22 @@ impl KnotWindow {
 
     /// Restart this window's view-state debounce.
     pub(super) fn schedule_view_state(&mut self, cx: &mut Context<Self>) {
-        let Some(handle) = self.window else {
+        let Some(native_window) = self.native_window else {
             return;
         };
         self.view_state.pending = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(VIEW_STATE_DEBOUNCE).await;
-            let Ok(Ok(settled)) = cx.update_window(handle, |_, window, cx| {
-                this.update(cx, |shell, cx| shell.settle_view_state(window, cx))
+            let Ok(Ok(settled)) = cx.update_window(native_window, |_, native_window, cx| {
+                this.update(cx, |window, cx| window.settle_view_state(native_window, cx))
             }) else {
                 return;
             };
             cx.update(|cx| match settled {
                 Settled::Unchanged => {}
-                Settled::Roots => crate::app::window_sessions::record(cx),
+                Settled::Roots => crate::app::window_record::record(cx),
                 Settled::Layout(target) => {
                     crate::app::extensions::host::view_state_changed(target, cx);
-                    crate::app::window_sessions::record(cx);
+                    crate::app::window_record::record(cx);
                 }
             });
         }));

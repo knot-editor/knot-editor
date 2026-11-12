@@ -362,8 +362,8 @@ async fn changed_and_deleted_resources_restore_dirty_and_save_reaches_the_confli
     );
 
     // Saving compares the capture-time version and offers the conflict prompt.
-    let (shell, window) = product_window(document, model.clone(), cx);
-    let execution = dispatch_product_command(&shell, window, SAVE_COMMAND, cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    let execution = dispatch_product_command(&window, native_window, SAVE_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Cancel");
@@ -598,10 +598,10 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     let documents = install_globals(cx);
     let (filesystems, _) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));
-    let (shell, window) = super::operations::empty_product_window(&documents, cx);
+    let (window, native_window) = super::operations::empty_product_window(&documents, cx);
     // A live dirty document's own protection is never listed.
     let live = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         pane.active_tab().document_id().unwrap()
     });
@@ -630,11 +630,15 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     seed(&[&restored, &discarded], cx).await;
 
     let open_listing = |cx: &mut TestAppContext| {
-        let execution =
-            dispatch_product_command(&shell, window, super::super::commands::RECOVER_COMMAND, cx);
+        let execution = dispatch_product_command(
+            &window,
+            native_window,
+            super::super::commands::RECOVER_COMMAND,
+            cx,
+        );
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while cx.read(|cx| shell.read(cx).transient.is_none()) {
+        while cx.read(|cx| window.read(cx).transient.is_none()) {
             assert!(std::time::Instant::now() < deadline, "listing did not open");
             cx.run_until_parked();
             std::thread::yield_now();
@@ -643,7 +647,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
 
     // The newest snapshot is first; Enter selects it and the prompt restores it.
     open_listing(cx);
-    cx.simulate_keystrokes(window, "enter");
+    cx.simulate_keystrokes(native_window, "enter");
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Restore");
@@ -663,7 +667,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     }
     let document = document_by_identity(&documents, restored.document_id, cx);
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         assert_eq!(pane.active_tab().document_id(), Some(document));
     });
@@ -671,7 +675,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
 
     // The remaining snapshot is discarded explicitly.
     open_listing(cx);
-    cx.simulate_keystrokes(window, "enter");
+    cx.simulate_keystrokes(native_window, "enter");
     cx.run_until_parked();
     cx.simulate_prompt_answer("Discard");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -694,16 +698,20 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
             .unwrap()
             .is_empty()
     );
-    open_listing_empty(&shell, window, cx);
+    open_listing_empty(&window, native_window, cx);
 }
 
 fn open_listing_empty(
-    shell: &Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) {
-    let execution =
-        dispatch_product_command(shell, window, super::super::commands::RECOVER_COMMAND, cx);
+    let execution = dispatch_product_command(
+        window,
+        native_window,
+        super::super::commands::RECOVER_COMMAND,
+        cx,
+    );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while !cx.has_pending_prompt() {
@@ -711,7 +719,7 @@ fn open_listing_empty(
         cx.run_until_parked();
         std::thread::yield_now();
     }
-    cx.read(|cx| assert!(shell.read(cx).transient.is_none()));
+    cx.read(|cx| assert!(window.read(cx).transient.is_none()));
     assert_eq!(
         cx.pending_prompt().unwrap().0,
         "No unsaved documents to recover"
@@ -742,11 +750,11 @@ async fn startup_restores_into_the_launch_window_without_any_extension_host(
     assert!(wait_for_product_startup(cx));
     assert_eq!(cx.windows().len(), 1);
     let document = document_by_identity(&documents, draft.document_id, cx);
-    let shell = cx.windows()[0].downcast::<KnotWindow>().unwrap();
-    let shell = cx.update(|cx| shell.entity(cx).unwrap());
+    let window = cx.windows()[0].downcast::<KnotWindow>().unwrap();
+    let window = cx.update(|cx| window.entity(cx).unwrap());
     cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         // The restored document takes the place of the untitled placeholder.
         assert_eq!(pane.tabs().len(), 1);
@@ -895,10 +903,10 @@ async fn quit_is_a_hot_exit_that_restores_dirty_documents_on_relaunch(cx: &mut T
     });
     let untitled = cx.update(|cx| create_untitled_document(&documents, cx));
     let untitled_model = cx.read(|cx| documents.read(cx).get(untitled).unwrap().model().clone());
-    let (shell, window) = product_window(saved, saved_model.clone(), cx);
-    shell.update(cx, |shell, cx| {
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, cx| {
+    let (window, native_window) = product_window(saved, saved_model.clone(), cx);
+    window.update(cx, |window, cx| {
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, cx| {
             workbench
                 .open_tab_for_document(pane, untitled, untitled_model.clone(), cx)
                 .unwrap();
@@ -916,7 +924,7 @@ async fn quit_is_a_hot_exit_that_restores_dirty_documents_on_relaunch(cx: &mut T
         [saved, untitled].map(|document| documents.get(document).unwrap().identity())
     });
 
-    let execution = dispatch_product_command(&shell, window, QUIT_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, QUIT_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     assert!(!cx.has_pending_prompt());
     assert_eq!(
@@ -991,13 +999,13 @@ fn object(fields: &[(&str, &str)]) -> CommandArgumentValue {
 }
 
 fn run_reporting(
-    shell: &Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     name: &'static str,
     arguments: CommandArgumentValue,
     cx: &mut TestAppContext,
 ) -> serde_json::Value {
-    let execution = dispatch_product_command_with(shell, window, name, arguments, cx);
+    let execution = dispatch_product_command_with(window, native_window, name, arguments, cx);
     assert_eq!(
         wait_for_command(execution, cx),
         CommandOutcome::Completed,
@@ -1054,7 +1062,7 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
             .identity()
             .to_string()
     });
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let start = |cx: &mut TestAppContext| {
         host.update(cx, |host, cx| {
             host.start_installed_extensions(extensions.path().to_owned(), cx)
@@ -1081,8 +1089,8 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
     // captures of different revisions of one document coexist.
     edit("first", cx);
     let first = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "owner.retain",
         object(&[("document", &identity)]),
         cx,
@@ -1094,8 +1102,8 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
     assert_eq!(retained_text(&first_id, cx).as_deref(), Some("first"));
     edit("second", cx);
     let second = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "owner.retain",
         object(&[("document", &identity)]),
         cx,
@@ -1108,8 +1116,8 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
     // Another owner cannot list, release, or restore the captures, even with
     // the exact ID; a foreign capture is indistinguishable from a missing one.
     let probe = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "other.probe",
         object(&[("id", &first_id)]),
         cx,
@@ -1126,8 +1134,8 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
     // Restoring while the captured document is open preserves both: the older
     // text opens as a separate document and the capture stays retained.
     let restored = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "owner.restore",
         object(&[("id", &first_id)]),
         cx,
@@ -1150,16 +1158,16 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
 
     // Release deletes only the owner's capture; a second release is false.
     let released = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "owner.release",
         object(&[("id", &first_id)]),
         cx,
     );
     assert_eq!(released, true);
     let again = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "owner.release",
         object(&[("id", &first_id)]),
         cx,
@@ -1183,8 +1191,8 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
             .to_string()
     });
     let third = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "owner.retain",
         object(&[("document", &closing_identity)]),
         cx,
@@ -1192,8 +1200,8 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
     let third_id = third["capture"]["id"].as_str().unwrap().to_owned();
     documents.update(cx, |documents, cx| documents.remove(closing, cx));
     let restored = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "owner.restore",
         object(&[("id", &third_id)]),
         cx,
@@ -1212,8 +1220,8 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
         assert_eq!(copy.title(), "Notes");
     });
     let released = run_reporting(
-        &shell,
-        window,
+        &window,
+        native_window,
         "owner.release",
         object(&[("id", &third_id)]),
         cx,
@@ -1246,6 +1254,12 @@ fn extension_captures_are_owner_isolated_durable_and_survive_failure_and_restart
     )
     .unwrap();
     start(cx);
-    let listed = run_reporting(&shell, window, "owner.list", CommandArgumentValue::Null, cx);
+    let listed = run_reporting(
+        &window,
+        native_window,
+        "owner.list",
+        CommandArgumentValue::Null,
+        cx,
+    );
     assert_eq!(listed, serde_json::json!([second_id]));
 }

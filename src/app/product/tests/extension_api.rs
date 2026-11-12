@@ -82,7 +82,8 @@ await commands.register("api.cross", async (context) => {
             .clone()
     });
     first_model.update(cx, |model, _| model.replace(0..0, "first").unwrap());
-    let (first_shell, first_window) = product_window(first_document, first_model.clone(), cx);
+    let (first_window, first_native_window) =
+        product_window(first_document, first_model.clone(), cx);
     let second_document = cx.update(|cx| create_untitled_document(&documents, cx));
     let second_model = cx.read(|cx| {
         documents
@@ -93,7 +94,7 @@ await commands.register("api.cross", async (context) => {
             .clone()
     });
     second_model.update(cx, |model, _| model.replace(0..0, "second").unwrap());
-    let (second_shell, second_window) = product_window(second_document, second_model, cx);
+    let (second_window, second_native_window) = product_window(second_document, second_model, cx);
     for (id, source) in [(701, SOURCE), (702, CROSS)] {
         host.update(cx, |host, cx| {
             let execution = host
@@ -118,7 +119,7 @@ await commands.register("api.cross", async (context) => {
         catalog.resolve("api.capture").is_ok() && catalog.resolve("api.cross").is_ok()
     });
     wait_for_api_condition(cx, |cx| {
-        first_shell
+        first_window
             .read(cx)
             .contributed_views
             .get("example.outline")
@@ -126,11 +127,11 @@ await commands.register("api.cross", async (context) => {
     });
     // Capture before the palette takes focus, then admit the saved origin.
     let origin = cx
-        .update_window(first_window, |_, _, cx| {
-            first_shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
-                shell.open_command_palette(cx);
-                shell.command_palette.as_ref().unwrap().origin()
+        .update_window(first_native_window, |_, _, cx| {
+            first_window.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
+                window.open_command_palette(cx);
+                window.command_palette.as_ref().unwrap().origin()
             })
         })
         .unwrap();
@@ -148,8 +149,8 @@ await commands.register("api.cross", async (context) => {
             )
         });
         wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
-        cx.update_window(second_window, |_, _, cx| {
-            second_shell.update(cx, |shell, cx| shell.focus_active_surface(cx))
+        cx.update_window(second_native_window, |_, _, cx| {
+            second_window.update(cx, |window, cx| window.focus_active_surface(cx))
         })
         .unwrap();
         host.update(cx, |host, cx| host.release_view_requests(cx));
@@ -157,7 +158,7 @@ await commands.register("api.cross", async (context) => {
         cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "first"));
     }
     let editor = cx.read(|cx| {
-        first_shell
+        first_window
             .read(cx)
             .workbench
             .read(cx)
@@ -166,8 +167,8 @@ await commands.register("api.cross", async (context) => {
             .clone()
     });
     let completion = dispatch_product_command(
-        &first_shell,
-        first_window,
+        &first_window,
+        first_native_window,
         super::super::SHOW_COMPLETIONS_COMMAND,
         cx,
     );
@@ -182,10 +183,13 @@ await commands.register("api.cross", async (context) => {
                 items == 1 && pending == 0 && failures == 0
             })
     });
-    let (_shared_shell, _shared_window) = product_window(first_document, first_model.clone(), cx);
-    cx.update_window(first_window, |_, window, _| window.remove_window())
-        .unwrap();
-    drop(first_shell);
+    let (_shared_window, _shared_native_window) =
+        product_window(first_document, first_model.clone(), cx);
+    cx.update_window(first_native_window, |_, native_window, _| {
+        native_window.remove_window()
+    })
+    .unwrap();
+    drop(first_window);
     first_model.update(cx, |model, cx| {
         model.replace(0..5, "shared callback").unwrap();
         cx.notify();
@@ -248,18 +252,18 @@ await commands.register("api.nontext", async (context) => {
     for change in ["replace", "close", "transfer"] {
         let document = cx.update(|cx| create_untitled_document(&documents, cx));
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-        let (shell, window) = product_window(document, model.clone(), cx);
+        let (window, native_window) = product_window(document, model.clone(), cx);
         host.update(cx, |host, _| host.hold_clipboard_writes());
-        let execution = dispatch_product_command(&shell, window, "api.stale", cx);
+        let execution = dispatch_product_command(&window, native_window, "api.stale", cx);
         wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
         let target = cx
-            .update_window(window, |_, _, cx| {
-                shell.update(cx, |shell, cx| shell.capture_command_target(cx))
+            .update_window(native_window, |_, _, cx| {
+                window.update(cx, |window, cx| window.capture_command_target(cx))
             })
             .unwrap();
         match change {
             "replace" => {
-                let workbench = cx.read(|cx| shell.read(cx).workbench.clone());
+                let workbench = cx.read(|cx| window.read(cx).workbench.clone());
                 workbench.update(cx, |workbench, cx| {
                     assert!(workbench.replace_tab_document(
                         target.tab.unwrap().pane,
@@ -271,8 +275,10 @@ await commands.register("api.nontext", async (context) => {
                 });
             }
             "close" => {
-                cx.update_window(window, |_, window, _| window.remove_window())
-                    .unwrap();
+                cx.update_window(native_window, |_, native_window, _| {
+                    native_window.remove_window()
+                })
+                .unwrap();
             }
             "transfer" => {
                 let destination_document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -284,10 +290,10 @@ await commands.register("api.nontext", async (context) => {
                         .model()
                         .clone()
                 });
-                let (destination_shell, _) =
+                let (destination_window, _) =
                     product_window(destination_document, destination_model, cx);
                 let source = cx.read(|cx| {
-                    shell
+                    window
                         .read(cx)
                         .capture_tab_relocation(
                             target.tab.unwrap().pane,
@@ -297,10 +303,10 @@ await commands.register("api.nontext", async (context) => {
                         .unwrap()
                 });
                 let destination = cx.read(|cx| {
-                    let workbench = &destination_shell.read(cx).workbench;
+                    let workbench = &destination_window.read(cx).workbench;
                     let pane = workbench.read(cx).focused_pane().unwrap();
                     super::super::relocate::TabRelocationDestination {
-                        shell: destination_shell.downgrade(),
+                        window: destination_window.downgrade(),
                         workbench: workbench.downgrade(),
                         tab: crate::app::workbench::TabMoveDestination::At {
                             anchor: workbench
@@ -312,9 +318,9 @@ await commands.register("api.nontext", async (context) => {
                     }
                 });
                 let outcome = cx
-                    .update_window(window, |_, _, cx| {
-                        shell.update(cx, |shell, cx| {
-                            shell.relocate_tab_to(&source, &destination, cx)
+                    .update_window(native_window, |_, _, cx| {
+                        window.update(cx, |window, cx| {
+                            window.relocate_tab_to(&source, &destination, cx)
                         })
                     })
                     .unwrap();
@@ -336,19 +342,19 @@ await commands.register("api.nontext", async (context) => {
     }
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            let (session, view) = shell.create_terminal(cx);
-            let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            let tab = shell.workbench.update(cx, |workbench, _| {
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            let (session, view) = window.create_terminal(cx);
+            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+            let tab = window.workbench.update(cx, |workbench, _| {
                 workbench.open_terminal_tab(pane, session, view).unwrap()
             });
-            shell.activate_tab(pane, tab, cx);
+            window.activate_tab(pane, tab, cx);
         })
     })
     .unwrap();
-    let execution = dispatch_product_command(&shell, window, "api.nontext", cx);
+    let execution = dispatch_product_command(&window, native_window, "api.nontext", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 
@@ -471,9 +477,9 @@ await commands.register("api.owned-cleanup", async () => {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "owned").unwrap());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let editor = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -502,18 +508,22 @@ await commands.register("api.owned-cleanup", async () => {
                 .resolve("api.owned-cleanup")
                 .is_ok()
         });
-        let setup = dispatch_product_command(&shell, window, "api.owned-setup", cx);
+        let setup = dispatch_product_command(&window, native_window, "api.owned-setup", cx);
         assert_eq!(wait_for_command(setup, cx), CommandOutcome::Completed);
         wait_for_api_condition(cx, |cx| {
-            shell
+            window
                 .read(cx)
                 .contributed_views
                 .get("example.owned")
                 .is_some_and(|view| view.tree().read(cx).root_labels() == ["owned"])
         });
         cx.read(|cx| assert_eq!(model.read(cx).resolved_contributions().len(), 1));
-        let completion =
-            dispatch_product_command(&shell, window, super::super::SHOW_COMPLETIONS_COMMAND, cx);
+        let completion = dispatch_product_command(
+            &window,
+            native_window,
+            super::super::SHOW_COMPLETIONS_COMMAND,
+            cx,
+        );
         assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
         wait_for_api_condition(cx, |cx| {
             editor
@@ -524,14 +534,14 @@ await commands.register("api.owned-cleanup", async () => {
                 .is_some_and(|(items, pending, _, _)| items == 1 && pending == 0)
         });
         if explicit_cleanup {
-            let cleanup = dispatch_product_command(&shell, window, "api.owned-cleanup", cx);
+            let cleanup = dispatch_product_command(&window, native_window, "api.owned-cleanup", cx);
             assert_eq!(wait_for_command(cleanup, cx), CommandOutcome::Completed);
         } else {
             host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         }
         cx.read(|cx| {
             assert!(model.read(cx).resolved_contributions().is_empty());
-            assert!(shell.read(cx).contributed_views.is_empty());
+            assert!(window.read(cx).contributed_views.is_empty());
             assert!(
                 cx.global::<ApplicationProductCommands>()
                     .0
@@ -582,7 +592,7 @@ await commands.register("api.owned-cleanup", async () => {
             .resolve("api.owned-cleanup")
             .is_ok()
     });
-    let setup = dispatch_product_command(&shell, window, "api.owned-setup", cx);
+    let setup = dispatch_product_command(&window, native_window, "api.owned-setup", cx);
     assert_eq!(wait_for_command(setup, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(model.read(cx).resolved_contributions().len(), 1));
     cx.update(|cx| {
@@ -592,7 +602,7 @@ await commands.register("api.owned-cleanup", async () => {
     cx.run_until_parked();
     cx.read(|cx| {
         assert!(model.read(cx).resolved_contributions().is_empty());
-        assert!(shell.read(cx).contributed_views.is_empty());
+        assert!(window.read(cx).contributed_views.is_empty());
         assert!(
             cx.global::<ApplicationProductCommands>()
                 .0
@@ -639,8 +649,8 @@ getChildren() { return [{ id: "root", label: "Deferred", collapsibleState: "none
 
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, _window) = product_window(document, model, cx);
-    let tree = wait_for_contributed_view(&shell, "example.deferred", cx);
+    let (window, _window) = product_window(document, model, cx);
+    let tree = wait_for_contributed_view(&window, "example.deferred", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["Deferred"]);
 }
 
@@ -694,7 +704,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let key = ExtensionKey::new(ExtensionId::new(87), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host.load_test_source(key, SOURCE).unwrap();
@@ -704,7 +714,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         .detach();
     });
 
-    let tree = wait_for_contributed_view(&shell, "example.outline", cx);
+    let tree = wait_for_contributed_view(&window, "example.outline", cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -728,24 +738,24 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         std::thread::yield_now();
     }
 
-    cx.update_window(window, |_, window, cx| {
-        focus_view(&tree.focus_handle(cx), window, cx);
-        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+    cx.update_window(native_window, |_, native_window, cx| {
+        focus_view(&tree.focus_handle(cx), native_window, cx);
+        let target = window.update(cx, |window, cx| window.capture_command_target(cx));
         assert_eq!(target.view, Some(tree.read(cx).instance_id()));
     })
     .unwrap();
-    let declined = dispatch_tree_copy(&shell, window, cx);
+    let declined = dispatch_tree_copy(&window, native_window, cx);
     assert_eq!(wait_for_command(declined, cx), CommandOutcome::Unavailable);
-    let empty_selection = dispatch_tree_command(&shell, window, "test.view-null", cx);
+    let empty_selection = dispatch_tree_command(&window, native_window, "test.view-null", cx);
     assert_eq!(
         wait_for_command(empty_selection, cx),
         CommandOutcome::Completed
     );
-    let view_first = dispatch_tree_command(&shell, window, "test.view-first", cx);
+    let view_first = dispatch_tree_command(&window, native_window, "test.view-first", cx);
     assert_eq!(wait_for_command(view_first, cx), CommandOutcome::Completed);
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "enter");
+    cx.simulate_keystrokes(native_window, "enter");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -761,14 +771,14 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         );
         std::thread::yield_now();
     }
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     cx.refresh().unwrap();
     {
-        let mut window_cx = VisualTestContext::from_window(window, cx);
+        let mut window_cx = VisualTestContext::from_window(native_window, cx);
         let row = window_cx
             .debug_bounds("extension-tree-row-0")
             .expect("contributed tree row is laid out")
@@ -792,7 +802,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         std::thread::yield_now();
     }
     cx.update(|cx| tree.update(cx, |tree, cx| assert!(tree.select_item("first", cx))));
-    let copy = dispatch_tree_copy(&shell, window, cx);
+    let copy = dispatch_tree_copy(&window, native_window, cx);
     assert_eq!(wait_for_command(copy, cx), CommandOutcome::Completed);
     cx.update(|cx| {
         assert!(
@@ -813,7 +823,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into()));
     });
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "cmd-alt-y");
+    cx.simulate_keystrokes(native_window, "cmd-alt-y");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -829,16 +839,16 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         );
         std::thread::yield_now();
     }
-    let nested = dispatch_tree_command(&shell, window, "test.nested-view-copy", cx);
+    let nested = dispatch_tree_command(&window, native_window, "test.nested-view-copy", cx);
     assert_eq!(wait_for_command(nested, cx), CommandOutcome::Completed);
-    let nested_native = dispatch_tree_command(&shell, window, "test.nested-new", cx);
+    let nested_native = dispatch_tree_command(&window, native_window, "test.nested-new", cx);
     assert_eq!(
         wait_for_command(nested_native, cx),
         CommandOutcome::Completed
     );
     cx.read(|cx| {
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -849,14 +859,14 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
             2
         );
     });
-    cx.update_window(window, |_, window, cx| {
-        focus_view(&tree.focus_handle(cx), window, cx)
+    cx.update_window(native_window, |_, native_window, cx| {
+        focus_view(&tree.focus_handle(cx), native_window, cx)
     })
     .unwrap();
     cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "first"));
 
-    let (second_shell, second_window) = product_window(document, model.clone(), cx);
-    let second_tree = wait_for_contributed_view(&second_shell, "example.outline", cx);
+    let (second_window, second_native_window) = product_window(document, model.clone(), cx);
+    let second_tree = wait_for_contributed_view(&second_window, "example.outline", cx);
     assert_ne!(
         cx.read(|cx| tree.read(cx).instance_id()),
         cx.read(|cx| second_tree.read(cx).instance_id())
@@ -873,27 +883,30 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         );
         std::thread::yield_now();
     }
-    cx.update_window(second_window, |_, window, cx| {
+    cx.update_window(second_native_window, |_, native_window, cx| {
         second_tree.update(cx, |tree, cx| assert!(tree.select_item("first", cx)));
-        focus_view(&second_tree.focus_handle(cx), window, cx);
+        focus_view(&second_tree.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     assert_eq!(
-        wait_for_command(dispatch_tree_copy(&second_shell, second_window, cx), cx),
+        wait_for_command(
+            dispatch_tree_copy(&second_window, second_native_window, cx),
+            cx
+        ),
         CommandOutcome::Completed
     );
 
     cx.update(|cx| tree.update(cx, |tree, cx| assert!(tree.select_item("failure", cx))));
-    let failure = dispatch_tree_copy(&shell, window, cx);
+    let failure = dispatch_tree_copy(&window, native_window, cx);
     assert!(matches!(
         wait_for_command(failure, cx),
         CommandOutcome::HandlerFailure { .. }
     ));
     cx.update(|cx| tree.update(cx, |tree, cx| assert!(tree.select_item("first", cx))));
-    let recovery = dispatch_tree_copy(&shell, window, cx);
+    let recovery = dispatch_tree_copy(&window, native_window, cx);
     assert_eq!(wait_for_command(recovery, cx), CommandOutcome::Completed);
 
-    let dispose = dispatch_product_command(&shell, window, "test.dispose-view-copy", cx);
+    let dispose = dispatch_product_command(&window, native_window, "test.dispose-view-copy", cx);
     assert_eq!(wait_for_command(dispose, cx), CommandOutcome::Completed);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
@@ -915,7 +928,7 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         );
         std::thread::yield_now();
     }
-    let disposed = dispatch_tree_copy(&second_shell, second_window, cx);
+    let disposed = dispatch_tree_copy(&second_window, second_native_window, cx);
     assert_eq!(wait_for_command(disposed, cx), CommandOutcome::Unavailable);
 
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
@@ -933,8 +946,8 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         );
     });
     cx.read(|cx| {
-        assert!(shell.read(cx).contributed_views.is_empty());
-        assert!(second_shell.read(cx).contributed_views.is_empty());
+        assert!(window.read(cx).contributed_views.is_empty());
+        assert!(second_window.read(cx).contributed_views.is_empty());
         assert!(!tree.read(cx).lifecycle_state().0);
         assert!(!second_tree.read(cx).lifecycle_state().0);
     });
@@ -948,9 +961,9 @@ fn startup_script_command_cannot_borrow_the_focused_product_window(cx: &mut Test
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
     })
     .unwrap();
 
@@ -994,7 +1007,7 @@ if (!rejected) throw new Error("startup borrowed focus");
     }
     cx.read(|cx| {
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -1015,7 +1028,7 @@ fn extension_command_with_editor_prefix_keeps_its_arguments(cx: &mut TestAppCont
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(91), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host
@@ -1055,9 +1068,9 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
         std::thread::yield_now();
     }
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| window.focus_active_editor(cx));
+            window.update(cx, |window, cx| window.capture_command_target(cx))
         })
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
@@ -1088,7 +1101,7 @@ fn nested_script_waits_for_a_pending_native_command(cx: &mut TestAppContext) {
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(90), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host
@@ -1128,7 +1141,7 @@ await commands.register("test.nested-open", async () => {
         );
         std::thread::yield_now();
     }
-    let execution = dispatch_product_command(&shell, window, "test.nested-open", cx);
+    let execution = dispatch_product_command(&window, native_window, "test.nested-open", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(documents.read(cx).documents().count(), 1));
 }
@@ -1160,7 +1173,7 @@ await commands.registerForView("example.outline", "copy", async () => {
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let key = ExtensionKey::new(ExtensionId::new(88), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host.load_test_source(key, SOURCE).unwrap();
@@ -1169,7 +1182,7 @@ await commands.registerForView("example.outline", "copy", async () => {
         })
         .detach();
     });
-    let tree = wait_for_contributed_view(&shell, "example.outline", cx);
+    let tree = wait_for_contributed_view(&window, "example.outline", cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -1192,14 +1205,14 @@ await commands.registerForView("example.outline", "copy", async () => {
         );
         std::thread::yield_now();
     }
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(native_window, |_, native_window, cx| {
         tree.update(cx, |tree, cx| assert!(tree.select_item("held", cx)));
-        focus_view(&tree.focus_handle(cx), window, cx);
+        focus_view(&tree.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     host.update(cx, |host, _| host.hold_clipboard_writes());
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
-    let execution = dispatch_tree_copy(&shell, window, cx);
+    let execution = dispatch_tree_copy(&window, native_window, cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -1212,8 +1225,10 @@ await commands.registerForView("example.outline", "copy", async () => {
         );
         std::thread::yield_now();
     }
-    cx.update_window(window, |_, window, _| window.remove_window())
-        .unwrap();
+    cx.update_window(native_window, |_, native_window, _| {
+        native_window.remove_window()
+    })
+    .unwrap();
     host.update(cx, |host, cx| host.release_view_requests(cx));
     assert_eq!(
         wait_for_command(execution, cx),
@@ -1221,7 +1236,7 @@ await commands.registerForView("example.outline", "copy", async () => {
     );
     cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "held"));
     let closed_view = cx.read(|cx| tree.read(cx).instance_id());
-    drop(shell);
+    drop(window);
     cx.run_until_parked();
     cx.read(|cx| {
         assert!(
@@ -1235,8 +1250,8 @@ await commands.registerForView("example.outline", "copy", async () => {
         )
     });
 
-    let (second_shell, second_window) = product_window(document, model, cx);
-    let second_tree = wait_for_contributed_view(&second_shell, "example.outline", cx);
+    let (second_window, second_native_window) = product_window(document, model, cx);
+    let second_tree = wait_for_contributed_view(&second_window, "example.outline", cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -1249,13 +1264,13 @@ await commands.registerForView("example.outline", "copy", async () => {
         );
         std::thread::yield_now();
     }
-    cx.update_window(second_window, |_, window, cx| {
+    cx.update_window(second_native_window, |_, native_window, cx| {
         second_tree.update(cx, |tree, cx| assert!(tree.select_item("held", cx)));
-        focus_view(&second_tree.focus_handle(cx), window, cx);
+        focus_view(&second_tree.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     host.update(cx, |host, _| host.hold_clipboard_writes());
-    let interrupted = dispatch_tree_copy(&second_shell, second_window, cx);
+    let interrupted = dispatch_tree_copy(&second_window, second_native_window, cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -1309,7 +1324,7 @@ await commands.register("test.reveal", async () => { await view.reveal(["dir", "
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(88), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host.load_test_source(key, SOURCE).unwrap();
@@ -1318,15 +1333,15 @@ await commands.register("test.reveal", async () => { await view.reveal(["dir", "
         })
         .detach();
     });
-    let tree = wait_for_contributed_view(&shell, "example.reveal", cx);
+    let tree = wait_for_contributed_view(&window, "example.reveal", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["dir", "file"]);
-    cx.update_window(window, |_, window, cx| {
-        focus_view(&tree.focus_handle(cx), window, cx)
+    cx.update_window(native_window, |_, native_window, cx| {
+        focus_view(&tree.focus_handle(cx), native_window, cx)
     })
     .unwrap();
 
     let click = |count: usize, cx: &mut TestAppContext| {
-        let mut visual = VisualTestContext::from_window(window, cx);
+        let mut visual = VisualTestContext::from_window(native_window, cx);
         let row = visual
             .debug_bounds("extension-tree-row-1")
             .expect("file row is laid out")
@@ -1360,7 +1375,7 @@ await commands.register("test.reveal", async () => { await view.reveal(["dir", "
             == Some(r#"{"arguments":{"n":1},"gesture":"doubleClick"}|file"#)
     });
 
-    let reveal = dispatch_product_command(&shell, window, "test.reveal", cx);
+    let reveal = dispatch_product_command(&window, native_window, "test.reveal", cx);
     assert_eq!(wait_for_command(reveal, cx), CommandOutcome::Completed);
     wait_for_api_condition(cx, |cx| {
         tree.read(cx).selected_item_id().as_deref() == Some("dir/inner/leaf")
@@ -1407,7 +1422,7 @@ await commands.register("test.missing", async () => {
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(89), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host.load_test_source(key, SOURCE).unwrap();
@@ -1416,10 +1431,10 @@ await commands.register("test.missing", async () => {
         })
         .detach();
     });
-    let tree = wait_for_contributed_view(&shell, "example.edit", cx);
+    let tree = wait_for_contributed_view(&window, "example.edit", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["dir", "file.txt"]);
-    cx.update_window(window, |_, window, cx| {
-        focus_view(&tree.focus_handle(cx), window, cx)
+    cx.update_window(native_window, |_, native_window, cx| {
+        focus_view(&tree.focus_handle(cx), native_window, cx)
     })
     .unwrap();
     wait_for_api_condition(cx, |cx| {
@@ -1441,37 +1456,37 @@ await commands.register("test.missing", async () => {
     };
 
     // A rename selects the stem, so typing replaces it; a message blocks Enter.
-    let mut rename = dispatch_product_command(&shell, window, "test.rename", cx);
+    let mut rename = dispatch_product_command(&window, native_window, "test.rename", cx);
     wait_for_api_condition(cx, |cx| {
         if let Ok(outcome) = rename.completion.try_recv() {
             panic!("rename finished early: {outcome:?}");
         }
         tree.read(cx).is_editing()
     });
-    cx.simulate_input(window, "a/");
+    cx.simulate_input(native_window, "a/");
     wait_for_api_condition(cx, |cx| {
         tree.read(cx).edit_message_for_test().as_deref() == Some("no slashes")
     });
-    cx.simulate_keystrokes(window, "enter");
+    cx.simulate_keystrokes(native_window, "enter");
     cx.run_until_parked();
     assert!(
         cx.read(|cx| tree.read(cx).is_editing()),
         "the message blocks the commit"
     );
-    cx.simulate_keystrokes(window, "backspace");
-    cx.simulate_keystrokes(window, "enter");
+    cx.simulate_keystrokes(native_window, "backspace");
+    cx.simulate_keystrokes(native_window, "enter");
     assert_eq!(wait_for_command(rename, cx), CommandOutcome::Completed);
     clipboard(r#"{"kind":"accepted","value":"a.txt"}"#, cx);
     assert!(cx.read(|cx| !tree.read(cx).is_editing()));
 
     // A new row shows first among the expanded parent's children.
-    let create = dispatch_product_command(&shell, window, "test.create", cx);
+    let create = dispatch_product_command(&window, native_window, "test.create", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).is_editing());
-    cx.simulate_keystrokes(window, "escape");
+    cx.simulate_keystrokes(native_window, "escape");
     assert_eq!(wait_for_command(create, cx), CommandOutcome::Completed);
     clipboard(r#"{"kind":"dismissed"}"#, cx);
 
-    let missing = dispatch_product_command(&shell, window, "test.missing", cx);
+    let missing = dispatch_product_command(&window, native_window, "test.missing", cx);
     assert_eq!(wait_for_command(missing, cx), CommandOutcome::Completed);
     clipboard(r#"{"error":"TreeItemNotFound"}"#, cx);
 }
@@ -1494,7 +1509,7 @@ await commands.register("timers.arm", async () => {
     let host = cx.update(crate::app::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(971), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -1512,7 +1527,7 @@ await commands.register("timers.arm", async () => {
     // shows whether the timer has fired.
     let report = |cx: &mut TestAppContext| {
         cx.run_until_parked();
-        let execution = dispatch_product_command(&shell, window, "timers.report", cx);
+        let execution = dispatch_product_command(&window, native_window, "timers.report", cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         cx.read_from_clipboard().and_then(|item| item.text())
     };
@@ -1523,7 +1538,7 @@ await commands.register("timers.arm", async () => {
         .advance_clock(std::time::Duration::from_millis(1));
     assert_eq!(report(cx).as_deref(), Some("timeout"));
 
-    let execution = dispatch_product_command(&shell, window, "timers.arm", cx);
+    let execution = dispatch_product_command(&window, native_window, "timers.arm", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     host.update(cx, |host, cx| host.unload(key, cx)).unwrap();
     cx.executor()

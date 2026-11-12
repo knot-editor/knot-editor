@@ -13,8 +13,8 @@ struct Fixture {
     model: Entity<Buffer>,
     document: super::super::DocumentId,
     documents: Entity<DocumentCollection>,
-    shell: Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
 }
 
 async fn fixture(cx: &mut TestAppContext) -> Fixture {
@@ -36,9 +36,11 @@ async fn fixture(cx: &mut TestAppContext) -> Fixture {
             cx,
         )
     });
-    let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, window, _| window.activate_window())
-        .unwrap();
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    cx.update_window(native_window, |_, native_window, _| {
+        native_window.activate_window()
+    })
+    .unwrap();
     cx.run_until_parked();
     Fixture {
         provider,
@@ -46,7 +48,7 @@ async fn fixture(cx: &mut TestAppContext) -> Fixture {
         model,
         document,
         documents,
-        shell,
+        native_window,
         window,
     }
 }
@@ -92,7 +94,7 @@ async fn external_write_reloads_a_clean_document_in_place_as_one_undo_step(
 ) {
     let f = fixture(cx).await;
     assert_eq!(f.provider.watch_count(), 1);
-    let editor = active_editor(&f.shell, cx);
+    let editor = active_editor(&f.window, cx);
     let caret = TEXT.find("five").unwrap();
     editor.update(cx, |editor, cx| {
         editor.set_selection(caret, caret, crate::app::editor::Reveal::Nearest, cx);
@@ -123,7 +125,7 @@ async fn knots_own_save_triggers_nothing(cx: &mut TestAppContext) {
     let f = fixture(cx).await;
     f.model
         .update(cx, |model, _| model.replace(0..0, "local ").unwrap());
-    let execution = dispatch_product_command(&f.shell, f.window, SAVE_COMMAND, cx);
+    let execution = dispatch_product_command(&f.window, f.native_window, SAVE_COMMAND, cx);
     assert_eq!(
         execution.completion.await.unwrap(),
         CommandOutcome::Completed
@@ -284,7 +286,7 @@ async fn a_dirty_document_is_marked_and_asks_once_and_keep_leaves_the_text(
     cx.update(document_watch::recheck_all);
     f.settle(cx);
     assert!(!cx.has_pending_prompt());
-    let execution = dispatch_product_command(&f.shell, f.window, SAVE_COMMAND, cx);
+    let execution = dispatch_product_command(&f.window, f.native_window, SAVE_COMMAND, cx);
     wait_for_prompt(cx);
     cx.simulate_prompt_answer("Cancel");
     assert_eq!(
@@ -317,12 +319,12 @@ async fn the_prompt_waits_for_the_document_to_be_focused(cx: &mut TestAppContext
     let other = f.documents.update(cx, |documents, cx| {
         documents.create_untitled("Other", other_model.clone(), cx)
     });
-    let pane = f.shell.read_with(cx, |shell, cx| {
-        shell.workbench.read(cx).focused_pane_id().unwrap()
+    let pane = f.window.read_with(cx, |window, cx| {
+        window.workbench.read(cx).focused_pane_id().unwrap()
     });
     let show = |document, model: &Entity<Buffer>, cx: &mut TestAppContext| {
-        f.shell.update(cx, |shell, cx| {
-            shell.workbench.update(cx, |workbench, cx| {
+        f.window.update(cx, |window, cx| {
+            window.workbench.update(cx, |workbench, cx| {
                 workbench
                     .open_tab_for_document(pane, document, model.clone(), cx)
                     .unwrap();
@@ -351,7 +353,7 @@ async fn a_deleted_file_keeps_the_document_dirty_and_saving_recreates_it(cx: &mu
 
     assert_eq!(f.text(cx), TEXT);
     assert!(f.dirty(cx));
-    let execution = dispatch_product_command(&f.shell, f.window, SAVE_COMMAND, cx);
+    let execution = dispatch_product_command(&f.window, f.native_window, SAVE_COMMAND, cx);
     assert_eq!(
         execution.completion.await.unwrap(),
         CommandOutcome::Completed

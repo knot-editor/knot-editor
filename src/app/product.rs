@@ -1,6 +1,7 @@
-//! Native product windows backed by application documents and workbenches.
+//! Windows backed by application documents and workbenches, each rendered by
+//! a native window.
 //!
-//! This module owns shell state, focus, command routing, terminals, and
+//! This module owns window state, focus, command routing, terminals, and
 //! transient interactions. Save, open, protected closure, tools, rendering, and
 //! launch live in submodules.
 
@@ -450,7 +451,7 @@ pub(crate) fn native_window(window: EntityId, cx: &App) -> Option<AnyWindowHandl
 /// open was captured without one.
 #[derive(Clone)]
 struct OpenTarget {
-    shell: WeakEntity<KnotWindow>,
+    window: WeakEntity<KnotWindow>,
     workbench: WeakEntity<Workbench>,
     tab: Option<TargetTab>,
 }
@@ -458,7 +459,7 @@ struct OpenTarget {
 impl OpenTarget {
     fn from_command(target: &ProductCommandTarget) -> Self {
         Self {
-            shell: target.shell.clone(),
+            window: target.window.clone(),
             workbench: target.workbench.clone(),
             tab: target.tab,
         }
@@ -466,7 +467,7 @@ impl OpenTarget {
 
     /// A target at a live tab of `workbench`.
     fn at(
-        shell: WeakEntity<KnotWindow>,
+        window: WeakEntity<KnotWindow>,
         workbench: &Entity<Workbench>,
         pane: PaneId,
         tab: TabId,
@@ -477,7 +478,7 @@ impl OpenTarget {
             .capture_tab_move(pane, tab)
             .expect("open targets name live tabs");
         Self {
-            shell,
+            window,
             workbench: workbench.downgrade(),
             tab: Some(TargetTab {
                 pane,
@@ -539,7 +540,7 @@ fn target_document(target: &ProductCommandTarget) -> Option<DocumentId> {
 
 pub(crate) struct KnotWindow {
     workbench: Entity<Workbench>,
-    window: Option<AnyWindowHandle>,
+    native_window: Option<AnyWindowHandle>,
     tab_drag: std::rc::Rc<RefCell<tab_drag::TabDragState>>,
     dock_resize: Option<DockResizeDrag>,
     /// The open right-click menu of a tool stripe button.
@@ -580,7 +581,7 @@ pub(crate) struct KnotWindow {
     extension_report_open: bool,
     extension_report_subscription: Option<Subscription>,
     view_state: view_state::ViewStateTracking,
-    /// Creation order across product windows; window identities are reused.
+    /// Creation order across windows; native window identities are reused.
     created: u64,
     /// Input waiting for a key-invoked extension command to finish.
     key_hold: Option<key_hold::KeyHold>,
@@ -602,7 +603,7 @@ struct FocusTarget {
     tab: Option<TabId>,
 }
 
-/// The layer of a session that has focus: the focused pane's active
+/// The layer of a window that has focus: the focused pane's active
 /// surface, the command palette, or the transient interaction.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum Focus {
@@ -682,14 +683,14 @@ struct SplitResizeDrag {
 const MIN_DRAGGED_PANE_SIZE: f32 = 120.;
 
 impl KnotWindow {
-    /// Open a session showing `workbench`, without a window.
+    /// Open a window showing `workbench`, without a native window.
     fn new(workbench: Entity<Workbench>, cx: &mut Context<Self>) -> Self {
         cx.global::<ApplicationWindows>()
             .register(cx.weak_entity(), &workbench);
         document_watch::install(cx);
         Self {
             workbench,
-            window: None,
+            native_window: None,
             tab_drag: Default::default(),
             dock_resize: None,
             stripe_menu: None,
@@ -731,25 +732,29 @@ impl KnotWindow {
         }
     }
 
-    /// Bring the session's window to the front once the current update ends.
+    /// Bring the native window to the front once the current update ends.
     fn activate_window(&self, cx: &mut App) {
-        let Some(window) = self.window else {
+        let Some(native_window) = self.native_window else {
             return;
         };
         cx.defer(move |cx| {
-            let _ = window.update(cx, |_, window, _| window.activate_window());
+            let _ = native_window.update(cx, |_, window, _| window.activate_window());
         });
     }
 
-    /// The modifier keys held in the session's window; none without one.
+    /// The modifier keys held in the native window; none without one.
     fn modifiers(&self, cx: &mut App) -> Modifiers {
-        self.window
-            .and_then(|window| window.update(cx, |_, window, _| window.modifiers()).ok())
+        self.native_window
+            .and_then(|native_window| {
+                native_window
+                    .update(cx, |_, window, _| window.modifiers())
+                    .ok()
+            })
             .unwrap_or_default()
     }
 
-    /// Ask with a native prompt in the session's window once the current
-    /// update ends, so a caller may hold the session or the window.
+    /// Ask with a native prompt in the native window once the current
+    /// update ends, so a caller may hold the window or its native window.
     pub(super) fn prompt(
         &self,
         level: PromptLevel,
@@ -758,44 +763,46 @@ impl KnotWindow {
         buttons: Vec<PromptButton>,
         cx: &mut App,
     ) -> PromptAnswer {
-        prompt(self.window, level, title.into(), detail, buttons, cx)
+        prompt(self.native_window, level, title.into(), detail, buttons, cx)
     }
 
-    /// Orders product windows by creation.
+    /// Orders windows by creation.
     pub(crate) fn creation_order(&self) -> u64 {
         self.created
     }
 
-    /// Show the session in `window`, which focuses what the session has
-    /// focused. Closing the window ends the session: its live frames and any
-    /// pending transient interaction go, while other sessions keep theirs.
-    pub(super) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.window.is_some() {
+    /// Show the window in `native_window`, which focuses what the window has
+    /// focused. Closing the native window ends the window: its live frames and
+    /// pending transient interaction go, while other windows keep theirs.
+    pub(super) fn attach_window(&mut self, native_window: &mut Window, cx: &mut Context<Self>) {
+        if self.native_window.is_some() {
             return;
         }
-        let handle = window.window_handle();
-        self.window = Some(handle);
+        let handle = native_window.window_handle();
+        self.native_window = Some(handle);
         cx.global::<ApplicationWindows>()
             .attach(cx.entity_id(), handle);
         #[cfg(any(test, feature = "test-support"))]
         TEST_WINDOW_IDS.with_borrow_mut(|ids| {
             ids.insert(handle.window_id().as_u64(), window_id(cx.entity_id()))
         });
-        let shell = cx.weak_entity();
+        let window = cx.weak_entity();
         self._window_closed = Some(cx.on_window_closed(move |cx, _| {
-            let shell = shell.clone();
+            let window = window.clone();
             cx.defer(move |cx| {
-                let Some(shell) = shell.upgrade() else { return };
+                let Some(window) = window.upgrade() else {
+                    return;
+                };
                 if cx.windows().contains(&handle) {
                     return;
                 }
-                shell.update(cx, |this, cx| this.end(cx));
+                window.update(cx, |this, cx| this.end(cx));
             });
         }));
         self.follow_focus(cx);
     }
 
-    /// Close the session without its window.
+    /// Close the window without its native window.
     fn end(&mut self, cx: &mut Context<Self>) {
         cx.global::<ApplicationWindows>().close(cx.entity_id());
         let ids = self.contributed_views.keys().cloned().collect::<Vec<_>>();
@@ -805,21 +812,21 @@ impl KnotWindow {
         self.finish_transient(TransientOutcome::Cancelled, cx);
     }
 
-    /// Close the session's window, which ends the session, or end a session
+    /// Close the native window, which ends the window, or end a window
     /// without one.
     fn close_window(&mut self, cx: &mut Context<Self>) -> Result<(), ProtectedCloseFailure> {
-        let Some(window) = self.window else {
+        let Some(native_window) = self.native_window else {
             self.end(cx);
             return Ok(());
         };
-        cx.update_window(window, |_, window, cx| {
+        cx.update_window(native_window, |_, window, cx| {
             tab_drag::cancel_source_window(window, cx);
             window.remove_window();
         })
         .map_err(|_| ProtectedCloseFailure::InvalidTarget)
     }
 
-    /// Show the session in `native_window` and report it to extensions.
+    /// Show the window in `native_window` and report it to extensions.
     fn observe_extension_host(&mut self, native_window: &mut Window, cx: &mut Context<Self>) {
         self.attach_window(native_window, cx);
         self.observe_window_bounds(native_window, cx);
@@ -836,7 +843,7 @@ impl KnotWindow {
             native_window.observe_window_appearance(|_, cx| super::themes::selection_changed(cx)),
         );
         // The bar and settings change only what the window paints, so they
-        // redraw it without notifying the session, which extensions observe.
+        // redraw it without notifying the window, which extensions observe.
         self._status_bar_observers = vec![
             cx.observe_global_in::<super::status_bar::ApplicationStatusBar>(
                 native_window,
@@ -850,8 +857,8 @@ impl KnotWindow {
         self.observe_application(cx);
     }
 
-    /// Report the session to extensions as it changes and show their
-    /// contributed frames, which needs no window.
+    /// Report the window to extensions as it changes and show their
+    /// contributed frames, which needs no native window.
     pub(crate) fn observe_application(&mut self, cx: &mut Context<Self>) {
         #[cfg(test)]
         if cx.has_global::<tools::TestToolInEveryWindow>() {
@@ -890,15 +897,15 @@ impl KnotWindow {
         }
     }
 
-    /// Make this session the active one while no window is active, as
-    /// focusing its window would.
+    /// Make this window the active one while no native window is active, as
+    /// focusing its native window would.
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn activate(&mut self, cx: &mut Context<Self>) {
         cx.global::<ApplicationWindows>().activate(cx.entity_id());
         super::extensions::host::application_changed(cx);
     }
 
-    fn observe_application_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn observe_application_focus(&mut self, native_window: &mut Window, cx: &mut Context<Self>) {
         let handles = self
             .workbench
             .read(cx)
@@ -923,12 +930,12 @@ impl KnotWindow {
                 continue;
             }
             // A view focused before its subscription exists sends no event.
-            if handle.contains_focused(window, cx) {
+            if handle.contains_focused(native_window, cx) {
                 self.focus_view(&handle, cx);
             }
             self.application_focus.push((
                 handle.clone(),
-                cx.on_focus_in(&handle, window, {
+                cx.on_focus_in(&handle, native_window, {
                     let handle = handle.clone();
                     move |this, _, cx| {
                         this.focus_view(&handle, cx);
@@ -936,7 +943,7 @@ impl KnotWindow {
                         this.schedule_view_state(cx);
                     }
                 }),
-                cx.on_blur(&handle, window, |_, _, cx| {
+                cx.on_blur(&handle, native_window, |_, _, cx| {
                     super::extensions::host::application_changed(cx)
                 }),
             ));
@@ -1022,7 +1029,7 @@ impl KnotWindow {
 
     pub(crate) fn application_window(
         &self,
-        session: EntityId,
+        window: EntityId,
         buffers: &std::collections::HashMap<DocumentId, knot_protocol::BufferHandle>,
         cx: &App,
     ) -> knot_protocol::WindowInfo {
@@ -1031,7 +1038,7 @@ impl KnotWindow {
             WindowTarget,
         };
         let target = WindowTarget {
-            window: window_id(session),
+            window: window_id(window),
         };
         let workbench = self.workbench.read(cx);
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
@@ -1233,21 +1240,21 @@ impl KnotWindow {
         }
     }
 
-    /// Have the attached window focus what has Knot-side focus once the
+    /// Have the attached native window focus what has Knot-side focus once the
     /// current update ends, so a caller may hold the window.
     fn follow_focus(&self, cx: &mut Context<Self>) {
-        let Some(window) = self.window else {
+        let Some(native_window) = self.native_window else {
             return;
         };
-        let shell = cx.weak_entity();
+        let window = cx.weak_entity();
         cx.defer(move |cx| {
-            let Some(handle) = shell
+            let Some(handle) = window
                 .upgrade()
-                .and_then(|shell| shell.read(cx).focused_handle(cx))
+                .and_then(|window| window.read(cx).focused_handle(cx))
             else {
                 return;
             };
-            let _ = window.update(cx, |_, window, cx| {
+            let _ = native_window.update(cx, |_, window, cx| {
                 // Focus inside the view, such as in its menu, stays there.
                 if !handle.contains_focused(window, cx) {
                     window.focus(&handle, cx);
@@ -1273,7 +1280,7 @@ impl KnotWindow {
                 _ => None,
             });
         ProductCommandTarget {
-            shell: cx.entity().downgrade(),
+            window: cx.entity().downgrade(),
             workbench: self.workbench.downgrade(),
             tab: pane.map(|pane| {
                 let tab = pane.active_tab();
@@ -1327,7 +1334,7 @@ impl KnotWindow {
     }
 
     /// The keymap view kind of a captured target's focused tab; contributed
-    /// frames and native tools share this path instead of a shell-level
+    /// frames and native tools share this path instead of a window-level
     /// special case.
     fn target_view_kind(target: &ProductCommandTarget, cx: &App) -> Option<String> {
         target.command_view(cx).and_then(|view| {
@@ -1991,7 +1998,7 @@ impl KnotWindow {
         self.focus_active_surface(cx);
     }
 
-    /// Report an outcome that has no other visible effect in this session.
+    /// Report an outcome that has no other visible effect in this window.
     /// The prompt needs no answer.
     pub(super) fn show_notice(
         &self,
@@ -2000,7 +2007,7 @@ impl KnotWindow {
         detail: Option<String>,
         cx: &mut App,
     ) {
-        show_notice(self.window, level, title.into(), detail, cx);
+        show_notice(self.native_window, level, title.into(), detail, cx);
     }
 
     pub(crate) fn toggle_extension_report(&mut self, cx: &mut Context<Self>) {
@@ -2010,13 +2017,13 @@ impl KnotWindow {
 }
 
 /// The index of the button a prompt was answered with; an error when the
-/// session has no window or it closed first.
+/// window has no native window or it closed first.
 type PromptAnswer = tokio::sync::oneshot::Receiver<usize>;
 
-/// Ask with a native prompt in a session's `window` once the current update
-/// ends, so a caller may hold the session or the window.
+/// Ask with a native prompt in the window's native window once the current
+/// update ends, so a caller may hold the window or its native window.
 fn prompt(
-    window: Option<AnyWindowHandle>,
+    native_window: Option<AnyWindowHandle>,
     level: PromptLevel,
     title: String,
     detail: Option<String>,
@@ -2024,9 +2031,9 @@ fn prompt(
     cx: &mut App,
 ) -> PromptAnswer {
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    if let Some(window) = window {
+    if let Some(native_window) = native_window {
         cx.defer(move |cx| {
-            let Ok(answer) = window.update(cx, |_, window, cx| {
+            let Ok(answer) = native_window.update(cx, |_, window, cx| {
                 window.prompt(level, &title, detail.as_deref(), &buttons, cx)
             }) else {
                 return;
@@ -2043,17 +2050,17 @@ fn prompt(
     receiver
 }
 
-/// Report an outcome that has no other visible effect in a session shown in
-/// `window`. The prompt needs no answer.
+/// Report an outcome that has no other visible effect in the window shown in
+/// `native_window`. The prompt needs no answer.
 pub(super) fn show_notice(
-    window: Option<AnyWindowHandle>,
+    native_window: Option<AnyWindowHandle>,
     level: PromptLevel,
     title: String,
     detail: Option<String>,
     cx: &mut App,
 ) {
     drop(prompt(
-        window,
+        native_window,
         level,
         title,
         detail,

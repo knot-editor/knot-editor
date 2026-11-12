@@ -99,7 +99,7 @@ pub(crate) enum TreeViewEvent {
         provider: TreeProviderIdentity,
         command: String,
         arguments: CommandArgumentValue,
-        /// The session showing the tree.
+        /// The window showing the tree.
         window: String,
         /// The tree, which must still have focus there.
         view: ViewId,
@@ -1561,7 +1561,7 @@ impl Render for TreeView {
         .track_scroll(&self.scroll);
 
         // The tree holds focus while its context menu or edit field does, so
-        // the session keeps the tree as the target of what they run.
+        // the window keeps the tree as the target of what they run.
         div()
             .track_focus(&self.focus)
             .key_context(key_context)
@@ -1624,7 +1624,9 @@ pub(crate) async fn show_context_menu(
             else {
                 return Err(CommandOutcome::Unavailable);
             };
-            let window = target.native_window(cx).ok_or(CommandOutcome::Unavailable)?;
+            let window = target
+                .native_window(cx)
+                .ok_or(CommandOutcome::Unavailable)?;
             let opened = window
                 .update(cx, |_, window, cx| {
                     tree.update(cx, |tree, cx| tree.open_selected_context_menu(window, cx))

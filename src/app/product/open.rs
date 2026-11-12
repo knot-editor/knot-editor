@@ -272,7 +272,7 @@ impl KnotWindow {
         cx: &mut Context<Self>,
     ) -> tokio::sync::oneshot::Receiver<Result<OpenCommit, OpenFailure>> {
         let (completion, result) = tokio::sync::oneshot::channel();
-        let window = self.window;
+        let native_window = self.native_window;
         self.start_resource_operation(
             request,
             target,
@@ -280,7 +280,7 @@ impl KnotWindow {
             move |outcome, cx| {
                 if let Err(OpenFailure::Resource(error)) = &outcome {
                     show_notice(
-                        window,
+                        native_window,
                         PromptLevel::Warning,
                         "Open failed".into(),
                         Some(error.to_string()),
@@ -321,7 +321,7 @@ impl KnotWindow {
                     {
                         Err(OpenFailure::Cancelled)
                     } else if this.open_generation != generation
-                        || !window_is_live(&target.shell, &this.workbench, cx)
+                        || !window_is_live(&target.window, &this.workbench, cx)
                         || !target.matches_presentation(&this.workbench, cx)
                     {
                         Err(OpenFailure::InvalidTarget)
@@ -395,14 +395,14 @@ impl KnotWindow {
             return self.install_workspace(root, cx);
         }
         let handle = super::launch::open_product_window_with(None, None, cx);
-        let shell = cx
+        let window = cx
             .global::<ApplicationWindows>()
             .in_native_window(handle)
-            .expect("a product window shows a session");
-        shell.update(cx, |shell, cx| {
-            let workspace = shell.install_workspace(root, cx);
+            .expect("the native window shows a window");
+        window.update(cx, |window, cx| {
+            let workspace = window.install_workspace(root, cx);
             // The window exists now, so the focus can follow.
-            shell.focus_active_surface(cx);
+            window.focus_active_surface(cx);
             workspace
         })
     }
@@ -528,6 +528,6 @@ impl KnotWindow {
                 }),
             }
         };
-        OpenTarget::at(target.shell.clone(), &self.workbench, pane, tab, cx)
+        OpenTarget::at(target.window.clone(), &self.workbench, pane, tab, cx)
     }
 }

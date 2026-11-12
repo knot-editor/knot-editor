@@ -6,15 +6,15 @@ async fn editing_commands_keep_the_captured_view_and_native_clipboard(cx: &mut T
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     let (target, dispatcher) = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+            window.update(cx, |window, cx| window.focus_active_editor(cx));
+            let target = window.update(cx, |window, cx| window.capture_command_target(cx));
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                 "fn café() {\n    👩‍💻\n}\n".into(),
             ));
-            shell.update(cx, |shell, cx| shell.new_tab(cx));
+            window.update(cx, |window, cx| window.new_tab(cx));
             (target, cx.global::<ApplicationProductCommands>().0.clone())
         })
         .unwrap();
@@ -40,7 +40,7 @@ async fn editing_commands_keep_the_captured_view_and_native_clipboard(cx: &mut T
     }
     cx.read(|cx| {
         assert_eq!(model.read(cx).text(), "fn café() {\n    👩‍💻\n}\n");
-        let active = shell.read(cx).workbench.read(cx).focused_editor().unwrap();
+        let active = window.read(cx).workbench.read(cx).focused_editor().unwrap();
         assert_eq!(active.read(cx).model().read(cx).text(), "");
     });
     let execution = dispatcher.update(cx, |dispatcher, cx| {
@@ -87,9 +87,9 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, window, cx| {
-        let editor = shell
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    cx.update_window(native_window, |_, native_window, cx| {
+        let editor = window
             .read(cx)
             .workbench
             .read(cx)
@@ -97,17 +97,18 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
-            editor.replace_text_in_range(None, "selected text", window, cx);
+            editor.replace_text_in_range(None, "selected text", native_window, cx);
         });
     })
     .unwrap();
-    let no_selection = dispatch_product_command(&shell, window, super::super::COPY_COMMAND, cx);
+    let no_selection =
+        dispatch_product_command(&window, native_window, super::super::COPY_COMMAND, cx);
     assert_eq!(
         no_selection.completion.await.unwrap(),
         CommandOutcome::Unavailable
     );
-    cx.update_window(window, |_, _, cx| {
-        let editor = shell
+    cx.update_window(native_window, |_, _, cx| {
+        let editor = window
             .read(cx)
             .workbench
             .read(cx)
@@ -122,11 +123,12 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
     })
     .unwrap();
     let editor_target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| window.capture_command_target(cx))
         })
         .unwrap();
-    let editor_copy = dispatch_product_command(&shell, window, super::super::COPY_COMMAND, cx);
+    let editor_copy =
+        dispatch_product_command(&window, native_window, super::super::COPY_COMMAND, cx);
     assert_eq!(
         editor_copy.completion.await.unwrap(),
         CommandOutcome::Completed
@@ -137,18 +139,18 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
             "selected text"
         )
     });
-    let legacy_copy = dispatch_product_command(&shell, window, "editor.copy", cx);
+    let legacy_copy = dispatch_product_command(&window, native_window, "editor.copy", cx);
     assert_eq!(
         legacy_copy.completion.await.unwrap(),
         CommandOutcome::Unavailable
     );
 
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.open_command_palette(cx));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.open_command_palette(cx));
     })
     .unwrap();
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "c o p y enter");
+    cx.simulate_keystrokes(native_window, "c o p y enter");
     cx.run_until_parked();
     cx.update(|cx| {
         assert_eq!(
@@ -177,8 +179,8 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
         })
     });
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
                 let session = cx
                     .global::<ApplicationTerminalSessions>()
                     .0
@@ -192,12 +194,12 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
                 let view = cx.new(|cx| {
                     crate::app::terminal::view::TerminalView::new(terminal_session.clone(), cx)
                 });
-                let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-                let tab = shell.workbench.update(cx, |workbench, _| {
+                let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+                let tab = window.workbench.update(cx, |workbench, _| {
                     workbench.open_terminal_tab(pane, session, view).unwrap()
                 });
-                shell.activate_tab(pane, tab, cx);
-                shell.capture_command_target(cx)
+                window.activate_tab(pane, tab, cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -282,7 +284,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
     });
     assert!(!selected_text.is_empty());
     let selected_terminal =
-        dispatch_product_command(&shell, window, super::super::COPY_COMMAND, cx);
+        dispatch_product_command(&window, native_window, super::super::COPY_COMMAND, cx);
     assert_eq!(
         selected_terminal.completion.await.unwrap(),
         CommandOutcome::Completed
@@ -294,8 +296,8 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
         );
     });
     let application = dispatch_product_command(
-        &shell,
-        window,
+        &window,
+        native_window,
         super::super::SHOW_EXTENSION_REPORT_COMMAND,
         cx,
     );
@@ -303,7 +305,7 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
         application.completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    cx.read(|cx| assert!(shell.read(cx).extension_report_open));
+    cx.read(|cx| assert!(window.read(cx).extension_report_open));
 
     let scripted = dispatcher.update(cx, |dispatcher, cx| {
         dispatcher.dispatch(
@@ -359,10 +361,10 @@ fn product_editor_accepts_utf16_composition_and_grapheme_deletion(cx: &mut TestA
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-        let editor = shell
+    let (window, window_handle) = product_window(document, model.clone(), cx);
+    cx.update_window(window_handle, |_, native_window, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
+        let editor = window
             .read(cx)
             .workbench
             .read(cx)
@@ -370,14 +372,20 @@ fn product_editor_accepts_utf16_composition_and_grapheme_deletion(cx: &mut TestA
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
-            editor.replace_text_in_range(None, "# Notes\n👩‍💻 é ", window, cx);
+            editor.replace_text_in_range(None, "# Notes\n👩‍💻 é ", native_window, cx);
             let start = "# Notes\n👩‍💻 é ".encode_utf16().count();
-            editor.replace_and_mark_text_in_range(None, "に", Some(1..1), window, cx);
-            assert_eq!(editor.marked_text_range(window, cx), Some(start..start + 1));
-            editor.replace_and_mark_text_in_range(None, "日本", Some(2..2), window, cx);
-            assert_eq!(editor.marked_text_range(window, cx), Some(start..start + 2));
-            editor.replace_text_in_range(None, "日本語", window, cx);
-            assert_eq!(editor.marked_text_range(window, cx), None);
+            editor.replace_and_mark_text_in_range(None, "に", Some(1..1), native_window, cx);
+            assert_eq!(
+                editor.marked_text_range(native_window, cx),
+                Some(start..start + 1)
+            );
+            editor.replace_and_mark_text_in_range(None, "日本", Some(2..2), native_window, cx);
+            assert_eq!(
+                editor.marked_text_range(native_window, cx),
+                Some(start..start + 2)
+            );
+            editor.replace_text_in_range(None, "日本語", native_window, cx);
+            assert_eq!(editor.marked_text_range(native_window, cx), None);
             assert!(editor.editor().clone().update(cx, |editor, cx| {
                 editor.execute_editing_command("editor.move-document-start", cx)
             }));
@@ -399,9 +407,9 @@ fn editing_keybindings_use_semantic_commands(cx: &mut TestAppContext) {
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     cx.update_window(window_handle, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.simulate_keystrokes(window_handle, "enter");
@@ -451,12 +459,12 @@ fn product_editor_captures_mouse_selection_outside_its_pane(cx: &mut TestAppCont
     model.update(cx, |model, _| {
         model.replace(0..0, text).unwrap();
     });
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     cx.refresh().unwrap();
     cx.run_until_parked();
 
     let editor = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -491,15 +499,15 @@ async fn undo_command_routes_to_the_captured_editor(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     cx.update(|cx| {
         let model = documents.read(cx).get(document).unwrap().model().clone();
         model.update(cx, |model, _| model.replace(0..0, "edit").unwrap());
     });
     let (target, dispatcher) = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+            window.update(cx, |window, cx| window.focus_active_editor(cx));
+            let target = window.update(cx, |window, cx| window.capture_command_target(cx));
             (target, cx.global::<ApplicationProductCommands>().0.clone())
         })
         .unwrap();
@@ -563,11 +571,11 @@ async fn every_editor_motion_command_reaches_the_focused_view(cx: &mut TestAppCo
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| window.focus_active_editor(cx));
+            window.update(cx, |window, cx| window.capture_command_target(cx))
         })
         .unwrap();
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
@@ -605,14 +613,14 @@ async fn undo_keeps_the_document_captured_before_focus_changes(cx: &mut TestAppC
             .model()
             .clone()
     });
-    let (shell, window_handle) = product_window(first_document, first_model.clone(), cx);
+    let (window, window_handle) = product_window(first_document, first_model.clone(), cx);
     cx.update_window(window_handle, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.new_tab(cx));
+        window.update(cx, |window, cx| window.new_tab(cx));
     })
     .unwrap();
 
     let (pane, first_tab, second_tab, second_document, second_model) = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         let first = &pane.tabs()[0];
         let second = &pane.tabs()[1];
@@ -635,9 +643,9 @@ async fn undo_keeps_the_document_captured_before_focus_changes(cx: &mut TestAppC
 
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.activate_tab(pane, first_tab, cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.activate_tab(pane, first_tab, cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -653,7 +661,7 @@ async fn undo_keeps_the_document_captured_before_focus_changes(cx: &mut TestAppC
         )
     });
     cx.update_window(window_handle, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.activate_tab(pane, second_tab, cx));
+        window.update(cx, |window, cx| window.activate_tab(pane, second_tab, cx));
     })
     .unwrap();
 
@@ -665,7 +673,7 @@ async fn undo_keeps_the_document_captured_before_focus_changes(cx: &mut TestAppC
         assert_eq!(first_model.read(cx).text(), "");
         assert_eq!(second_model.read(cx).text(), "second");
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -685,15 +693,17 @@ fn focus_transfer_and_distinct_views_break_typing_groups(cx: &mut TestAppContext
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model.clone(), cx);
+    let (window, window_handle) = product_window(document, model.clone(), cx);
     cx.update_window(window_handle, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
+        window.update(cx, |window, cx| {
+            window.split(SplitDirection::Horizontal, cx)
+        });
     })
     .unwrap();
     cx.refresh().unwrap();
     cx.run_until_parked();
     let (first, second) = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         (
             workbench
                 .editor(workbench.panes()[0].active_tab())
@@ -705,20 +715,20 @@ fn focus_transfer_and_distinct_views_break_typing_groups(cx: &mut TestAppContext
                 .clone(),
         )
     });
-    cx.update_window(window_handle, |_, window, cx| {
-        focus_view(&first.focus_handle(cx), window, cx)
+    cx.update_window(window_handle, |_, native_window, cx| {
+        focus_view(&first.focus_handle(cx), native_window, cx)
     })
     .unwrap();
     cx.refresh().unwrap();
     cx.simulate_input(window_handle, "a");
-    cx.update_window(window_handle, |_, window, cx| {
-        focus_view(&second.focus_handle(cx), window, cx);
+    cx.update_window(window_handle, |_, native_window, cx| {
+        focus_view(&second.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();
     cx.run_until_parked();
-    cx.update_window(window_handle, |_, window, cx| {
-        focus_view(&first.focus_handle(cx), window, cx);
+    cx.update_window(window_handle, |_, native_window, cx| {
+        focus_view(&first.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -731,15 +741,15 @@ fn focus_transfer_and_distinct_views_break_typing_groups(cx: &mut TestAppContext
 
     cx.simulate_keystrokes(window_handle, "secondary-shift-z");
     cx.run_until_parked();
-    cx.update_window(window_handle, |_, window, cx| {
-        focus_view(&second.focus_handle(cx), window, cx)
+    cx.update_window(window_handle, |_, native_window, cx| {
+        focus_view(&second.focus_handle(cx), native_window, cx)
     })
     .unwrap();
     cx.refresh().unwrap();
     cx.run_until_parked();
     cx.simulate_input(window_handle, "X");
-    cx.update_window(window_handle, |_, window, cx| {
-        focus_view(&first.focus_handle(cx), window, cx)
+    cx.update_window(window_handle, |_, native_window, cx| {
+        focus_view(&first.focus_handle(cx), native_window, cx)
     })
     .unwrap();
     cx.refresh().unwrap();

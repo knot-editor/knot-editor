@@ -13,7 +13,7 @@
 //! Arguments implement `CommandArguments`; success and error types implement
 //! `CommandSuccess` and `CommandError`. Unit arguments reject non-null input;
 //! unit success means Completed. Existing native flows can return CommandOutcome.
-//! Use foreground/shell closures for model access and pending for an owned native
+//! Use foreground/window closures for model access and pending for an owned native
 //! completion channel. Await these methods; closure captures and results must be
 //! owned. Each foreground entry revalidates the captured presentation.
 
@@ -123,8 +123,8 @@ impl CommandContext {
         .await?
     }
 
-    /// Run `access` on the target's session.
-    pub(crate) async fn shell<R: 'static>(
+    /// Run `access` on the target's window.
+    pub(crate) async fn window<R: 'static>(
         &self,
         access: impl FnOnce(
             &mut KnotWindow,
@@ -136,8 +136,8 @@ impl CommandContext {
         let target = self.target.clone();
         self.application(move |cx| {
             target.validate(cx)?;
-            let shell = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
-            shell.update(cx, |shell, cx| access(shell, &target, cx))
+            let window = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
+            window.update(cx, |window, cx| access(window, &target, cx))
         })
         .await?
     }

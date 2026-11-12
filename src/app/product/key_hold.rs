@@ -1,8 +1,8 @@
 //! Ordered key delivery: while an extension command a key invoked is
-//! unfinished, later keys in the session and committed text in the held
+//! unfinished, later keys in the window and committed text in the held
 //! editor wait, then replay in order, so each key sees the state the
 //! previous one committed. Native commands need no hold because they run in
-//! the dispatch turn. The session owns the hold, so it works with or
+//! the dispatch turn. The window owns the hold, so it works with or
 //! without a window.
 //!
 //! The hold ends when the command completes, when a picker, input, or the
@@ -32,7 +32,7 @@ pub(super) struct KeyHold {
 }
 
 impl KnotWindow {
-    /// Hold the session's later input until `completion` settles.
+    /// Hold the window's later input until `completion` settles.
     pub(super) fn hold_keys_until(
         &mut self,
         completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
@@ -50,8 +50,8 @@ impl KnotWindow {
         let Some(generation) = self.key_hold.as_ref().map(|hold| hold.generation) else {
             return;
         };
-        let shell = cx.weak_entity();
-        cx.defer(move |cx| release_key_hold(&shell, generation, cx));
+        let window = cx.weak_entity();
+        cx.defer(move |cx| release_key_hold(&window, generation, cx));
     }
 
     /// Begin holding input; `None` when a hold is already active.
@@ -90,7 +90,7 @@ impl KnotWindow {
         .detach();
     }
 
-    /// Queue a key while the session holds its input; true when it did.
+    /// Queue a key while the window holds its input; true when it did.
     /// A key arriving after focus left the held view releases the hold.
     pub(super) fn hold_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
         let focused = self.focus_target(cx);
@@ -100,13 +100,13 @@ impl KnotWindow {
         hold.queue.push_back(HeldInput::Key(keystroke.clone()));
         if focused != hold.focus {
             let generation = hold.generation;
-            let shell = cx.weak_entity();
-            cx.defer(move |cx| release_key_hold(&shell, generation, cx));
+            let window = cx.weak_entity();
+            cx.defer(move |cx| release_key_hold(&window, generation, cx));
         }
         true
     }
 
-    /// Take text committed into `editor` when the session holds it behind a
+    /// Take text committed into `editor` when the window holds it behind a
     /// command or a text binding routes it to one; false when the editor
     /// should insert it. A composition commits in place, since its preedit
     /// is already in the text.
@@ -144,28 +144,27 @@ impl KnotWindow {
                 .into(),
             ),
         };
-        let shell = cx.weak_entity();
+        let window = cx.weak_entity();
         cx.defer(move |cx| {
-            let Some(entity) = shell.upgrade() else {
+            let Some(entity) = window.upgrade() else {
                 return;
             };
             let dispatched = entity.update(cx, |this, cx| {
                 let target = this.capture_command_target(cx);
-                let execution = KnotWindow::command_dispatcher(cx)
-                    .update(cx, |dispatcher, cx| {
-                        dispatcher.dispatch(command, target, cx)
-                    });
+                let execution = KnotWindow::command_dispatcher(cx).update(cx, |dispatcher, cx| {
+                    dispatcher.dispatch(command, target, cx)
+                });
                 this.release_key_hold_after(generation, execution.completion, cx);
                 Some(())
             });
             if dispatched.is_none() {
-                release_key_hold(&shell, generation, cx);
+                release_key_hold(&window, generation, cx);
             }
         });
         true
     }
 
-    /// Type `text` into `editor` as committed input, unless the session
+    /// Type `text` into `editor` as committed input, unless the window
     /// takes it.
     pub(super) fn type_into_editor(
         &mut self,
@@ -188,8 +187,8 @@ impl KnotWindow {
             return;
         }
         let generation = hold.generation;
-        let shell = cx.weak_entity();
-        cx.defer(move |cx| release_key_hold(&shell, generation, cx));
+        let window = cx.weak_entity();
+        cx.defer(move |cx| release_key_hold(&window, generation, cx));
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -198,17 +197,17 @@ impl KnotWindow {
     }
 }
 
-/// Offer text committed into an editor of a product window to its session.
+/// Offer text committed into an editor of a window to that window.
 fn route_typed_text(
     editor: &Entity<Editor>,
     text: &str,
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
-    let Some(Some(shell)) = window.root::<KnotWindow>() else {
+    let Some(Some(window)) = window.root::<KnotWindow>() else {
         return false;
     };
-    shell.update(cx, |shell, cx| shell.take_typed_text(editor, text, cx))
+    window.update(cx, |window, cx| window.take_typed_text(editor, text, cx))
 }
 
 pub(super) fn install_text_router(cx: &mut App) {
@@ -217,34 +216,34 @@ pub(super) fn install_text_router(cx: &mut App) {
 
 /// End the hold `generation` and replay its input. A replayed key that
 /// starts another extension command holds whatever is still queued.
-fn release_key_hold(shell: &WeakEntity<KnotWindow>, generation: u64, cx: &mut App) {
-    let Some(shell) = shell.upgrade() else {
+fn release_key_hold(window: &WeakEntity<KnotWindow>, generation: u64, cx: &mut App) {
+    let Some(window) = window.upgrade() else {
         return;
     };
-    let Some(hold) = shell.update(cx, |shell, _| {
-        if shell.key_hold.as_ref()?.generation != generation {
+    let Some(hold) = window.update(cx, |window, _| {
+        if window.key_hold.as_ref()?.generation != generation {
             return None;
         }
-        shell.key_hold.take()
+        window.key_hold.take()
     }) else {
         return;
     };
     let editor = hold.editor.as_ref().and_then(WeakEntity::upgrade);
-    replay(&shell, editor, hold.queue, cx);
+    replay(&window, editor, hold.queue, cx);
 }
 
 /// Replay the first of `pending`, then the rest once the effects it started
 /// have run. A replayed key that starts another hold takes whatever is
-/// still queued. Keys go through the session's window when it has one, so
+/// still queued. Keys go through the native window when it has one, so
 /// they reach its text input as typed keys do.
 fn replay(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     editor: Option<Entity<Editor>>,
     mut pending: VecDeque<HeldInput>,
     cx: &mut App,
 ) {
-    let held = shell.update(cx, |shell, _| {
-        let next = shell.key_hold.as_mut()?;
+    let held = window.update(cx, |window, _| {
+        let next = window.key_hold.as_mut()?;
         pending.append(&mut next.queue);
         next.queue = std::mem::take(&mut pending);
         Some(())
@@ -256,23 +255,23 @@ fn replay(
         return;
     };
     match input {
-        HeldInput::Key(keystroke) => match shell.read(cx).window {
+        HeldInput::Key(keystroke) => match window.read(cx).native_window {
             Some(window) => {
-                let _ = window.update(cx, |_, window, cx| {
-                    window.dispatch_keystroke(keystroke_to_gpui(&keystroke), cx)
+                let _ = window.update(cx, |_, native_window, cx| {
+                    native_window.dispatch_keystroke(keystroke_to_gpui(&keystroke), cx)
                 });
             }
-            None => shell.update(cx, |shell, cx| shell.press_key(keystroke, cx)),
+            None => window.update(cx, |window, cx| window.press_key(keystroke, cx)),
         },
         HeldInput::Text(text) => {
             if let Some(editor) = &editor {
-                shell.update(cx, |shell, cx| shell.type_into_editor(editor, &text, cx));
+                window.update(cx, |window, cx| window.type_into_editor(editor, &text, cx));
             }
         }
     }
     if pending.is_empty() {
         return;
     }
-    let shell = shell.clone();
-    cx.defer(move |cx| replay(&shell, editor, pending, cx));
+    let window = window.clone();
+    cx.defer(move |cx| replay(&window, editor, pending, cx));
 }

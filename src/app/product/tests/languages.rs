@@ -125,9 +125,9 @@ fn reported(model: &Entity<Buffer>, cx: &TestAppContext) -> String {
     cx.read(|cx| crate::app::languages::effective_language(model.read(cx), cx))
 }
 
-fn active_model(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Entity<Buffer> {
+fn active_model(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Entity<Buffer> {
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         workbench
             .editor(pane.active_tab())
@@ -157,7 +157,7 @@ fn registered_languages_detect_on_open_and_save_as_and_follow_teardown(cx: &mut 
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let untitled = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     untitled.update(cx, |model, _| model.replace(0..0, "x = 1\n").unwrap());
-    let (shell, window) = product_window(document, untitled.clone(), cx);
+    let (window, native_window) = product_window(document, untitled.clone(), cx);
     let key = ExtensionKey::new(ExtensionId::new(950), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -177,13 +177,14 @@ fn registered_languages_detect_on_open_and_save_as_and_follow_teardown(cx: &mut 
     assert_eq!(editing.line_comments, ["//"]);
     assert!(!editing.brackets[1].newline);
 
-    let execution = dispatch_product_command(&shell, window, SAVE_AS_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, SAVE_AS_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     assert_eq!(language(&untitled, cx), (Some("python".into()), true));
 
-    let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
+    let execution =
+        dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-    let opened = active_model(&shell, cx);
+    let opened = active_model(&window, cx);
     assert_eq!(language(&opened, cx), (Some("rust".into()), true));
     cx.run_until_parked();
     assert!(
@@ -197,8 +198,8 @@ fn registered_languages_detect_on_open_and_save_as_and_follow_teardown(cx: &mut 
     // document returns to detection; an unregistered one reports plain text.
     host.update(cx, |host, _| host.take_test_application_events());
     let execution = dispatch_product_command_with(
-        &shell,
-        window,
+        &window,
+        native_window,
         "lang.set",
         CommandArgumentValue::String("cobol".into()),
         cx,
@@ -212,13 +213,18 @@ fn registered_languages_detect_on_open_and_save_as_and_follow_teardown(cx: &mut 
         let change = serde_json::to_value(&event.change).unwrap();
         change["type"] == "documentChanged" && change["document"]["language"] == "plaintext"
     }));
-    let execution =
-        dispatch_product_command_with(&shell, window, "lang.set", CommandArgumentValue::Null, cx);
+    let execution = dispatch_product_command_with(
+        &window,
+        native_window,
+        "lang.set",
+        CommandArgumentValue::Null,
+        cx,
+    );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     assert_eq!(language(&opened, cx), (Some("rust".into()), true));
 
     let log = cx.read(
-        |cx| match &shell.read(cx).contributed_views["lang.log"].content {
+        |cx| match &window.read(cx).contributed_views["lang.log"].content {
             ExtensionView::Text(view) => view.read(cx).model().clone(),
             ExtensionView::Tree(_) => panic!("log is a text frame"),
         },
@@ -244,7 +250,7 @@ fn set_language_mode_picks_an_explicit_language_or_returns_to_detection(cx: &mut
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "x = 1\n").unwrap());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let key = ExtensionKey::new(ExtensionId::new(951), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -260,15 +266,15 @@ fn set_language_mode_picks_an_explicit_language_or_returns_to_detection(cx: &mut
 
     let pick = |label: &str, cx: &mut TestAppContext| {
         let execution = dispatch_product_command(
-            &shell,
-            window,
+            &window,
+            native_window,
             super::super::commands::SET_LANGUAGE_MODE_COMMAND,
             cx,
         );
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-        wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
-        cx.simulate_input(window, label);
-        cx.simulate_keystrokes(window, "enter");
+        wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
+        cx.simulate_input(native_window, label);
+        cx.simulate_keystrokes(native_window, "enter");
         cx.run_until_parked();
     };
     pick("Python", cx);
@@ -290,11 +296,12 @@ fn opened_documents_detect_their_indentation_and_untitled_ones_do_not(cx: &mut T
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let untitled = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, untitled.clone(), cx);
+    let (window, native_window) = product_window(document, untitled.clone(), cx);
 
-    let execution = dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx);
+    let execution =
+        dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-    let opened = active_model(&shell, cx);
+    let opened = active_model(&window, cx);
     cx.read(|cx| {
         let spaces = |model: &Entity<Buffer>| {
             crate::app::settings::editor_insert_spaces(

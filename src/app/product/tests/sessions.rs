@@ -109,8 +109,8 @@ impl Harness {
     ) {
         let document = self.open_file(path, cx);
         let model = self.model(document, cx);
-        let (shell, window) = product_window(document, model, cx);
-        (document, shell, window)
+        let (window, native_window) = product_window(document, model, cx);
+        (document, window, native_window)
     }
 
     fn open_file(&self, path: &str, cx: &mut TestAppContext) -> crate::app::documents::DocumentId {
@@ -205,9 +205,9 @@ impl Harness {
     }
 
     /// Document identities in a window's tabs, in layout order.
-    fn tab_identities(&self, shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
+    fn tab_identities(&self, window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
         cx.read(|cx| {
-            let workbench = shell.read(cx).workbench.read(cx);
+            let workbench = window.read(cx).workbench.read(cx);
             workbench
                 .tab_snapshots()
                 .into_iter()
@@ -223,9 +223,9 @@ impl Harness {
         })
     }
 
-    fn texts(&self, shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
+    fn texts(&self, window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
         cx.read(|cx| {
-            let workbench = shell.read(cx).workbench.read(cx);
+            let workbench = window.read(cx).workbench.read(cx);
             workbench
                 .tab_snapshots()
                 .into_iter()
@@ -243,14 +243,14 @@ impl Harness {
 
     fn present(
         &self,
-        shell: &Entity<KnotWindow>,
+        window: &Entity<KnotWindow>,
         document: crate::app::documents::DocumentId,
         cx: &mut TestAppContext,
     ) {
         let model = self.model(document, cx);
-        shell.update(cx, |shell, cx| {
-            let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            shell.workbench.update(cx, |workbench, cx| {
+        window.update(cx, |window, cx| {
+            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+            window.workbench.update(cx, |workbench, cx| {
                 workbench.open_tab_for_document(pane, document, model, cx);
             });
         });
@@ -288,7 +288,7 @@ fn window_id(window: gpui::AnyWindowHandle) -> String {
     crate::app::product::test_window_id(window)
 }
 
-/// The shell of a window the replacement created.
+/// The window of a window the replacement created.
 fn created(
     result: &ReplaceWindowsResult,
     index: usize,
@@ -302,19 +302,15 @@ fn created(
             .find(|window| window_id(*window) == *id)
             .expect("created window is open");
         (
-            window
-                .downcast::<KnotWindow>()
-                .unwrap()
-                .entity(cx)
-                .unwrap(),
+            window.downcast::<KnotWindow>().unwrap().entity(cx).unwrap(),
             window,
         )
     })
 }
 
-fn root(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<String> {
+fn root(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<String> {
     cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workspace
             .snapshot()
@@ -351,11 +347,11 @@ fn round_trip_suspends_and_restores_dirty_destination_and_untitled_documents(
     cx: &mut TestAppContext,
 ) {
     let h = harness(cx);
-    let (one, shell, window) = h.file_window("a/one.txt", cx);
+    let (one, window, native_window) = h.file_window("a/one.txt", cx);
     let new = h.destination("a/new.txt", cx);
     let untitled = h.untitled("scratch", cx);
-    h.present(&shell, new, cx);
-    h.present(&shell, untitled, cx);
+    h.present(&window, new, cx);
+    h.present(&window, untitled, cx);
     h.edit(one, " edited", cx);
     let ids = [one, new, untitled].map(|document| h.identity(document, cx));
     let captures = [one, new, untitled].map(|document| h.retain(document, cx));
@@ -369,21 +365,21 @@ fn round_trip_suspends_and_restores_dirty_destination_and_untitled_documents(
                     .collect::<Vec<_>>(),
                 "windows": [{ "roots": ["mem://product/b/"],
                               "entries": [{ "uri": "mem://product/b/two.txt" }] }],
-                "release": [window_id(window)],
+                "release": [window_id(native_window)],
                 "focus": 0,
             }),
             cx,
         )
         .unwrap();
     assert!(!cx.has_pending_prompt());
-    assert!(!cx.read(|cx| cx.windows().contains(&window)));
-    let (shell, window) = created(&result, 0, cx);
+    assert!(!cx.read(|cx| cx.windows().contains(&native_window)));
+    let (window, native_window) = created(&result, 0, cx);
     assert!(matches!(
         result.windows[0].entries[..],
         [EntryOutcome::Opened { .. }]
     ));
-    assert_eq!(root(&shell, cx).as_deref(), Some("mem://product/b"));
-    assert_eq!(h.texts(&shell, cx), ["two"]);
+    assert_eq!(root(&window, cx).as_deref(), Some("mem://product/b"));
+    assert_eq!(h.texts(&window, cx), ["two"]);
     cx.read(|cx| {
         let documents = h.documents.read(cx);
         assert_eq!(documents.documents().count(), 1);
@@ -394,7 +390,7 @@ fn round_trip_suspends_and_restores_dirty_destination_and_untitled_documents(
 
     // B → A: captures restore with their text and dirty state; the clean
     // file leaves without a capture.
-    let two = h.tab_identities(&shell, cx).remove(0);
+    let two = h.tab_identities(&window, cx).remove(0);
     let result = h
         .replace(
             json!({
@@ -406,13 +402,13 @@ fn round_trip_suspends_and_restores_dirty_destination_and_untitled_documents(
                                   { "uri": "mem://product/a/new.txt", "document": ids[1], "capture": captures[1] },
                                   { "document": ids[2], "capture": captures[2] },
                               ] }],
-                "release": [window_id(window)],
+                "release": [window_id(native_window)],
             }),
             cx,
         )
         .unwrap();
     assert!(result.protected);
-    let (shell, _) = created(&result, 0, cx);
+    let (window, _) = created(&result, 0, cx);
     let resources = result.windows[0]
         .entries
         .iter()
@@ -422,11 +418,11 @@ fn round_trip_suspends_and_restores_dirty_destination_and_untitled_documents(
         })
         .collect::<Vec<_>>();
     assert_eq!(resources, ["unchanged", "unchanged", "untitled"]);
-    assert_eq!(root(&shell, cx).as_deref(), Some("mem://product/a"));
-    assert_eq!(h.texts(&shell, cx), ["one edited", "drafted", "scratch"]);
+    assert_eq!(root(&window, cx).as_deref(), Some("mem://product/a"));
+    assert_eq!(h.texts(&window, cx), ["one edited", "drafted", "scratch"]);
     cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let active = workbench.focused_pane().unwrap().active_tab();
         let documents = h.documents.read(cx);
         let active = documents.get(active.document_id().unwrap()).unwrap();
@@ -450,8 +446,8 @@ fn round_trip_suspends_and_restores_dirty_destination_and_untitled_documents(
 fn live_documents_are_presented_instead_of_their_captures(cx: &mut TestAppContext) {
     let h = harness(cx);
     let (one, _, window) = h.file_window("a/one.txt", cx);
-    let (_, other_shell, _) = h.file_window("b/two.txt", cx);
-    h.present(&other_shell, one, cx);
+    let (_, other_window, _) = h.file_window("b/two.txt", cx);
+    h.present(&other_window, one, cx);
     h.edit(one, " shared", cx);
     let id = h.identity(one, cx);
 
@@ -466,20 +462,20 @@ fn live_documents_are_presented_instead_of_their_captures(cx: &mut TestAppContex
             cx,
         )
         .unwrap();
-    let (shell, window) = created(&result, 0, cx);
+    let (window, native_window) = created(&result, 0, cx);
     assert_eq!(h.identity(one, cx), id);
     let stale = h.retain(one, cx);
     h.edit(one, " newer", cx);
 
     // The live model is presented and the stale capture ignored; no copy exists.
-    let placeholder = h.tab_identities(&shell, cx);
+    let placeholder = h.tab_identities(&window, cx);
     let result = h
         .replace(
             json!({
                 "suspend": placeholder.iter().map(|document| json!({ "document": document, "capture": null })).collect::<Vec<_>>(),
                 "windows": [{ "roots": ["mem://product/a/"],
                               "entries": [{ "uri": "mem://product/a/one.txt", "document": id, "capture": stale }] }],
-                "release": [window_id(window)],
+                "release": [window_id(native_window)],
             }),
             cx,
         )
@@ -490,8 +486,8 @@ fn live_documents_are_presented_instead_of_their_captures(cx: &mut TestAppContex
             document: id.clone()
         }]
     );
-    let (shell, window) = created(&result, 0, cx);
-    assert_eq!(h.texts(&shell, cx), ["one shared newer"]);
+    let (window, native_window) = created(&result, 0, cx);
+    assert_eq!(h.texts(&window, cx), ["one shared newer"]);
 
     // A file reopened under a new identity is matched by its resource.
     let reopened = h
@@ -502,7 +498,7 @@ fn live_documents_are_presented_instead_of_their_captures(cx: &mut TestAppContex
                               "entries": [{ "uri": "mem://product/a/one.txt",
                                             "document": uuid::Uuid::new_v4().to_string(),
                                             "capture": stale }] }],
-                "release": [window_id(window)],
+                "release": [window_id(native_window)],
             }),
             cx,
         )
@@ -511,7 +507,7 @@ fn live_documents_are_presented_instead_of_their_captures(cx: &mut TestAppContex
         reopened.windows[0].entries,
         [EntryOutcome::Live { document: id }]
     );
-    let _ = shell;
+    let _ = window;
     cx.read(|cx| {
         let documents = h.documents.read(cx);
         assert_eq!(
@@ -525,7 +521,9 @@ fn live_documents_are_presented_instead_of_their_captures(cx: &mut TestAppContex
 }
 
 #[gpui::test]
-fn multi_window_sessions_close_every_source_and_create_every_destination(cx: &mut TestAppContext) {
+fn multi_window_replacement_closes_every_source_and_creates_every_destination(
+    cx: &mut TestAppContext,
+) {
     let h = harness(cx);
     let (one, _, first) = h.file_window("a/one.txt", cx);
     let untitled = h.untitled("", cx);
@@ -551,11 +549,11 @@ fn multi_window_sessions_close_every_source_and_create_every_destination(cx: &mu
         .unwrap();
     assert_eq!(product_windows(cx), 1);
     assert!(!cx.read(|cx| cx.windows().contains(&first) || cx.windows().contains(&second)));
-    let (shell, window) = created(&result, 0, cx);
-    assert_eq!(h.texts(&shell, cx), ["two"]);
+    let (window, native_window) = created(&result, 0, cx);
+    assert_eq!(h.texts(&window, cx), ["two"]);
 
     // One source window to two destinations, each created with its roots.
-    let two = h.tab_identities(&shell, cx);
+    let two = h.tab_identities(&window, cx);
     let result = h
         .replace(
             json!({
@@ -566,7 +564,7 @@ fn multi_window_sessions_close_every_source_and_create_every_destination(cx: &mu
                     { "roots": ["mem://product/a/", "mem://product/b/", "mem://product/./a/"],
                       "entries": [{ "document": uuid::Uuid::new_v4().to_string() }] },
                 ],
-                "release": [window_id(window)],
+                "release": [window_id(native_window)],
                 "focus": 1,
             }),
             cx,
@@ -575,12 +573,12 @@ fn multi_window_sessions_close_every_source_and_create_every_destination(cx: &mu
     assert_eq!(product_windows(cx), 2);
     assert_eq!(result.windows[1].entries, [EntryOutcome::Missing]);
     assert_eq!(result.windows[1].layout, None);
-    let (first_shell, _) = created(&result, 0, cx);
-    let (created_shell, created_window) = created(&result, 1, cx);
-    assert!(cx.read(|cx| cx.active_window()) == Some(created_window));
+    let (first_window, _) = created(&result, 0, cx);
+    let (created_window, created_native_window) = created(&result, 1, cx);
+    assert!(cx.read(|cx| cx.active_window()) == Some(created_native_window));
     // Multiple roots install in order, deduplicated after normalization.
     let created_roots = cx.read(|cx| {
-        created_shell
+        created_window
             .read(cx)
             .workspace
             .snapshot()
@@ -591,22 +589,22 @@ fn multi_window_sessions_close_every_source_and_create_every_destination(cx: &mu
     });
     assert_eq!(created_roots, ["mem://product/a", "mem://product/b"]);
     // A destination without documents has an empty center.
-    assert!(h.texts(&created_shell, cx).is_empty());
+    assert!(h.texts(&created_window, cx).is_empty());
     cx.read(|cx| {
-        let workbench = created_shell.read(cx).workbench.read(cx);
+        let workbench = created_window.read(cx).workbench.read(cx);
         assert_eq!(workbench.center(), None);
     });
-    assert_eq!(h.texts(&first_shell, cx), ["one"]);
+    assert_eq!(h.texts(&first_window, cx), ["one"]);
 }
 
 #[gpui::test]
 fn released_windows_close_and_stop_their_terminals(cx: &mut TestAppContext) {
     let h = harness(cx);
-    let (one, shell, window) = h.file_window("a/one.txt", cx);
-    let session = shell.update(cx, |shell, cx| {
-        let (id, view) = shell.create_terminal(cx);
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, _| {
+    let (one, window, native_window) = h.file_window("a/one.txt", cx);
+    let session = window.update(cx, |window, cx| {
+        let (id, view) = window.create_terminal(cx);
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, _| {
             workbench.open_terminal_tab(pane, id, view)
         });
         id
@@ -625,26 +623,26 @@ fn released_windows_close_and_stop_their_terminals(cx: &mut TestAppContext) {
         json!({
             "suspend": [{ "document": h.identity(one, cx), "capture": null }],
             "windows": [{ "roots": ["mem://product/b/"], "entries": [] }],
-            "release": [window_id(window)],
+            "release": [window_id(native_window)],
         }),
         cx,
     )
     .unwrap();
-    assert!(!cx.read(|cx| cx.windows().contains(&window)));
+    assert!(!cx.read(|cx| cx.windows().contains(&native_window)));
     assert!(!live(cx));
 }
 
 #[gpui::test]
 fn stale_sources_reject_and_leave_everything_untouched(cx: &mut TestAppContext) {
     let h = harness(cx);
-    let (one, shell, window) = h.file_window("a/one.txt", cx);
+    let (one, window, native_window) = h.file_window("a/one.txt", cx);
     h.edit(one, " dirty", cx);
     let id = h.identity(one, cx);
     let capture = h.retain(one, cx);
     let request = |capture: &str| {
         json!({
             "suspend": [{ "document": id, "capture": capture }],
-            "release": [window_id(window)], "windows": [{ "roots": ["mem://product/b/"],
+            "release": [window_id(native_window)], "windows": [{ "roots": ["mem://product/b/"],
                           "entries": [{ "uri": "mem://product/b/two.txt" }] }],
         })
     };
@@ -656,21 +654,21 @@ fn stale_sources_reject_and_leave_everything_untouched(cx: &mut TestAppContext) 
     assert!(conflict(h.replace(
         json!({
             "suspend": [{ "document": id, "capture": null }],
-            "release": [window_id(window)], "windows": [{ "roots": [], "entries": [] }],
+            "release": [window_id(native_window)], "windows": [{ "roots": [], "entries": [] }],
         }),
         cx
     )));
     // An unexpected new tab in a source window.
     let capture = h.retain(one, cx);
     let extra = h.untitled("", cx);
-    h.present(&shell, extra, cx);
+    h.present(&window, extra, cx);
     assert!(conflict(h.replace(request(&capture), cx)));
-    assert_eq!(h.texts(&shell, cx), ["one dirty racing", ""]);
-    assert_eq!(root(&shell, cx), None);
+    assert_eq!(h.texts(&window, cx), ["one dirty racing", ""]);
+    assert_eq!(root(&window, cx), None);
 
     // A closed target.
     let (_, _, closed) = h.file_window("b/two.txt", cx);
-    cx.update_window(closed, |_, window, _| window.remove_window())
+    cx.update_window(closed, |_, native_window, _| native_window.remove_window())
         .unwrap();
     cx.run_until_parked();
     assert!(matches!(
@@ -682,7 +680,7 @@ fn stale_sources_reject_and_leave_everything_untouched(cx: &mut TestAppContext) 
             AccessError::InvalidTarget
         )))
     ));
-    assert_eq!(h.texts(&shell, cx), ["one dirty racing", ""]);
+    assert_eq!(h.texts(&window, cx), ["one dirty racing", ""]);
 }
 
 #[gpui::test]
@@ -690,10 +688,10 @@ fn concurrent_operations_and_caller_unload_during_staging_leave_the_source(
     cx: &mut TestAppContext,
 ) {
     let h = harness(cx);
-    let (one, shell, window) = h.file_window("a/one.txt", cx);
+    let (one, window, native_window) = h.file_window("a/one.txt", cx);
     let request = json!({
         "suspend": [{ "document": h.identity(one, cx), "capture": null }],
-        "release": [window_id(window)], "windows": [{ "roots": ["mem://product/b/"],
+        "release": [window_id(native_window)], "windows": [{ "roots": ["mem://product/b/"],
                       "entries": [{ "uri": "mem://product/b/two.txt" }] }],
     });
     let (release, gate) = tokio::sync::oneshot::channel();
@@ -716,10 +714,10 @@ fn concurrent_operations_and_caller_unload_during_staging_leave_the_source(
         Err(ReplaceError::OperationInProgress)
     ));
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
-                shell.capture_command_target(cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -734,7 +732,7 @@ fn concurrent_operations_and_caller_unload_during_staging_leave_the_source(
     });
     cx.run_until_parked();
     assert_eq!(closed.try_recv().unwrap(), CommandOutcome::Unavailable);
-    assert!(cx.read(|cx| cx.windows().contains(&window)));
+    assert!(cx.read(|cx| cx.windows().contains(&native_window)));
 
     // Unloading the caller before the commit cancels it.
     h.host
@@ -746,8 +744,8 @@ fn concurrent_operations_and_caller_unload_during_staging_leave_the_source(
             AccessError::Cancelled
         )))
     ));
-    assert_eq!(h.texts(&shell, cx), ["one"]);
-    assert_eq!(root(&shell, cx), None);
+    assert_eq!(h.texts(&window, cx), ["one"]);
+    assert_eq!(root(&window, cx), None);
     // The protected slot is free again.
     assert!(!cx.read(KnotWindow::protected_closure_is_active));
 }
@@ -821,17 +819,17 @@ fn missing_changed_and_failed_entries_report_while_the_rest_commits(cx: &mut Tes
             cx,
         )
         .unwrap();
-    let (shell, window) = created(&suspended, 0, cx);
+    let (window, native_window) = created(&suspended, 0, cx);
     // The file changes on disk while its session is suspended.
     h.provider
         .seed_file(uri("a/one.txt"), b"changed on disk")
         .unwrap();
-    let two = h.tab_identities(&shell, cx);
+    let two = h.tab_identities(&window, cx);
     let result = h
         .replace(
             json!({
                 "suspend": [{ "document": two[0], "capture": null }],
-                "release": [window_id(window)], "windows": [{ "roots": ["mem://product/a/"],
+                "release": [window_id(native_window)], "windows": [{ "roots": ["mem://product/a/"],
                               "entries": [
                                   { "uri": "mem://product/a/one.txt", "document": id, "capture": capture },
                                   { "uri": "mem://product/a/gone.txt" },
@@ -841,7 +839,7 @@ fn missing_changed_and_failed_entries_report_while_the_rest_commits(cx: &mut Tes
             cx,
         )
         .unwrap();
-    let (shell, window) = created(&result, 0, cx);
+    let (window, native_window) = created(&result, 0, cx);
     let entries = &result.windows[0].entries;
     assert!(matches!(
         &entries[0],
@@ -858,7 +856,7 @@ fn missing_changed_and_failed_entries_report_while_the_rest_commits(cx: &mut Tes
             ..
         }
     ));
-    assert_eq!(h.texts(&shell, cx), ["one captured"]);
+    assert_eq!(h.texts(&window, cx), ["one captured"]);
     // The capture-time version is kept, so Save reaches the conflict prompt.
     cx.read(|cx| {
         let documents = h.documents.read(cx);
@@ -868,7 +866,7 @@ fn missing_changed_and_failed_entries_report_while_the_rest_commits(cx: &mut Tes
     });
 
     // A destination root that no longer exists rejects before any change.
-    let restored = h.tab_identities(&shell, cx);
+    let restored = h.tab_identities(&window, cx);
     let restored_capture = h.retain(
         cx.read(|cx| h.documents.read(cx).documents().next().unwrap().id()),
         cx,
@@ -877,20 +875,20 @@ fn missing_changed_and_failed_entries_report_while_the_rest_commits(cx: &mut Tes
         h.replace(
             json!({
                 "suspend": [{ "document": restored[0], "capture": restored_capture }],
-                "release": [window_id(window)], "windows": [{ "roots": ["mem://product/missing/"], "entries": [] }],
+                "release": [window_id(native_window)], "windows": [{ "roots": ["mem://product/missing/"], "entries": [] }],
             }),
             cx,
         ),
         Err(ReplaceError::Resource(OpenError::ResourceNotFound))
     ));
-    assert_eq!(h.texts(&shell, cx), ["one captured"]);
+    assert_eq!(h.texts(&window, cx), ["one captured"]);
 }
 
 #[gpui::test]
 fn unavailable_recovery_during_retain_removes_nothing(cx: &mut TestAppContext) {
     let h = harness(cx);
     install_failing_recovery(cx);
-    let (one, shell, window) = h.file_window("a/one.txt", cx);
+    let (one, window, native_window) = h.file_window("a/one.txt", cx);
     h.edit(one, " unsaved", cx);
     let identity = uuid::Uuid::parse_str(&h.identity(one, cx)).unwrap();
     let retain = cx
@@ -900,19 +898,19 @@ fn unavailable_recovery_during_retain_removes_nothing(cx: &mut TestAppContext) {
     assert!(conflict(h.replace(
         json!({
             "suspend": [{ "document": identity.to_string(), "capture": null }],
-            "release": [window_id(window)], "windows": [{ "roots": ["mem://product/b/"], "entries": [] }],
+            "release": [window_id(native_window)], "windows": [{ "roots": ["mem://product/b/"], "entries": [] }],
         }),
         cx
     )));
-    assert_eq!(h.texts(&shell, cx), ["one unsaved"]);
+    assert_eq!(h.texts(&window, cx), ["one unsaved"]);
 }
 
 #[gpui::test]
 fn interrupted_switch_restores_every_text_exactly_once(cx: &mut TestAppContext) {
     let h = harness(cx);
-    let (one, shell, window) = h.file_window("a/one.txt", cx);
+    let (one, window, native_window) = h.file_window("a/one.txt", cx);
     let untitled = h.untitled("loose", cx);
-    h.present(&shell, untitled, cx);
+    h.present(&window, untitled, cx);
     h.edit(one, " unsaved", cx);
     let ids = [one, untitled].map(|document| h.identity(document, cx));
     let captures = [one, untitled].map(|document| h.retain(document, cx));
@@ -921,8 +919,10 @@ fn interrupted_switch_restores_every_text_exactly_once(cx: &mut TestAppContext) 
 
     // The process stops after the suspended record is durable and before the
     // commit: a fresh application restores automatic snapshots by hot exit.
-    cx.update_window(window, |_, window, _| window.remove_window())
-        .unwrap();
+    cx.update_window(native_window, |_, native_window, _| {
+        native_window.remove_window()
+    })
+    .unwrap();
     cx.run_until_parked();
     let fresh = cx.new(|_| DocumentCollection::new());
     cx.set_global(ApplicationDocuments(fresh.clone()));
@@ -932,7 +932,7 @@ fn interrupted_switch_restores_every_text_exactly_once(cx: &mut TestAppContext) 
     assert_eq!(restored.len(), 2);
     let placeholder = cx.update(|cx| create_untitled_document(&fresh, cx));
     let model = cx.read(|cx| fresh.read(cx).get(placeholder).unwrap().model().clone());
-    let (shell, window) = product_window(placeholder, model, cx);
+    let (window, native_window) = product_window(placeholder, model, cx);
     let placeholder = cx.read(|cx| {
         fresh
             .read(cx)
@@ -947,7 +947,7 @@ fn interrupted_switch_restores_every_text_exactly_once(cx: &mut TestAppContext) 
         .replace(
             json!({
                 "suspend": [{ "document": placeholder, "capture": null }],
-                "release": [window_id(window)], "windows": [{ "roots": ["mem://product/a/"],
+                "release": [window_id(native_window)], "windows": [{ "roots": ["mem://product/a/"],
                               "entries": [
                                   { "uri": "mem://product/a/one.txt", "document": ids[0], "capture": captures[0] },
                                   { "document": ids[1], "capture": captures[1] },
@@ -972,7 +972,7 @@ fn interrupted_switch_restores_every_text_exactly_once(cx: &mut TestAppContext) 
     assert_eq!(texts.len(), 2);
     assert!(texts.contains(&"one unsaved".to_owned()));
     assert!(texts.contains(&"loose".to_owned()));
-    let _ = shell;
+    let _ = window;
 }
 
 fn capture_layout(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> serde_json::Value {
@@ -992,11 +992,11 @@ fn arrangement(layout: &serde_json::Value) -> serde_json::Value {
 }
 
 fn editors(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<Entity<crate::app::editor::Editor>> {
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         workbench
             .panes()
             .iter()
@@ -1007,9 +1007,9 @@ fn editors(
     })
 }
 
-fn terminal_sessions(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<TabSurfaceId> {
+fn terminal_sessions(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<TabSurfaceId> {
     cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -1031,7 +1031,7 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
     h.provider
         .seed_file(uri("a/long.txt"), text.as_bytes())
         .unwrap();
-    let (long, shell, window) = h.file_window("a/long.txt", cx);
+    let (long, window, native_window) = h.file_window("a/long.txt", cx);
     let stored = cx.read(|cx| {
         cx.global::<crate::app::tool_layout::ApplicationToolLayout>()
             .0
@@ -1053,11 +1053,11 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
             folds: Vec::new(),
         },
     ];
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![uri("a")], cx);
-        let pane = shell.workbench.read(cx).center_pane().unwrap();
-        let (terminal, view) = shell.create_terminal(cx);
-        shell.workbench.update(cx, |workbench, cx| {
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![uri("a")], cx);
+        let pane = window.workbench.read(cx).center_pane().unwrap();
+        let (terminal, view) = window.create_terminal(cx);
+        window.workbench.update(cx, |workbench, cx| {
             let split = workbench
                 .split_pane(pane, SplitDirection::Horizontal, SplitPlacement::After, cx)
                 .unwrap();
@@ -1066,11 +1066,11 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
             workbench.focus_pane(split);
         });
     });
-    for (editor, state) in editors(&shell, cx).iter().zip(states.clone()) {
+    for (editor, state) in editors(&window, cx).iter().zip(states.clone()) {
         editor.update(cx, |editor, cx| editor.restore_view_state(state, cx));
     }
-    let source_terminals = terminal_sessions(&shell, cx);
-    let layout = capture_layout(window, cx);
+    let source_terminals = terminal_sessions(&window, cx);
+    let layout = capture_layout(native_window, cx);
     assert_eq!(layout["center"]["kind"], "split");
     assert_eq!(layout["docks"]["left"]["root"]["kind"], "pane");
     assert_eq!(layout["docks"]["left"]["size"], 310.);
@@ -1081,7 +1081,7 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
                 "suspend": [{ "document": h.identity(long, cx), "capture": null }],
                 "windows": [{ "roots": ["mem://product/a/"], "layout": layout,
                               "entries": [{ "uri": "mem://product/a/long.txt" }] }],
-                "release": [window_id(window)],
+                "release": [window_id(native_window)],
             }),
             cx,
         )
@@ -1104,7 +1104,7 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
         assert_eq!(views[0].read(cx).view_state(cx), states[0]);
         assert_eq!(views[1].read(cx).view_state(cx), states[1]);
     });
-    // The terminal restores in place as a fresh shell; the old one stopped.
+    // The terminal restores in place as a fresh window; the old one stopped.
     let terminals = terminal_sessions(&restored, cx);
     assert_eq!(terminals.len(), 1);
     assert_ne!(terminals, source_terminals);
@@ -1121,10 +1121,10 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
     });
 
     // A tool in another dock, beside a hidden one, is placed exactly too.
-    let tab = restored.update(cx, |shell, cx| {
-        let explorer = shell.test_tool_frame(cx).unwrap();
-        let pane = shell.workbench.read(cx).center_pane().unwrap();
-        shell.workbench.update(cx, |workbench, _| {
+    let tab = restored.update(cx, |window, cx| {
+        let explorer = window.test_tool_frame(cx).unwrap();
+        let pane = window.workbench.read(cx).center_pane().unwrap();
+        window.workbench.update(cx, |workbench, _| {
             workbench.place_tool(explorer, DockLocation::Bottom);
             workbench.set_dock_visible(DockLocation::Left, false);
             workbench.focus_pane(pane);
@@ -1163,10 +1163,10 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
 }
 
 fn terminal_start_directory(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Option<std::path::PathBuf> {
-    let [TabSurfaceId::Terminal(id)] = terminal_sessions(shell, cx)[..] else {
+    let [TabSurfaceId::Terminal(id)] = terminal_sessions(window, cx)[..] else {
         panic!("expected one terminal")
     };
     cx.read(|cx| {
@@ -1185,15 +1185,15 @@ fn restored_terminals_start_in_their_recorded_directory(cx: &mut TestAppContext)
     let h = harness(cx);
     let temp = tempfile::tempdir().unwrap();
     let directory = std::fs::canonicalize(temp.path()).unwrap();
-    let (one, shell, window) = h.file_window("a/one.txt", cx);
-    shell.update(cx, |shell, cx| {
-        let (id, view) = shell.create_terminal_in(Some(directory.clone()), cx);
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, _| {
+    let (one, window, native_window) = h.file_window("a/one.txt", cx);
+    window.update(cx, |window, cx| {
+        let (id, view) = window.create_terminal_in(Some(directory.clone()), cx);
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, _| {
             workbench.open_terminal_tab(pane, id, view)
         });
     });
-    let layout = capture_layout(window, cx).to_string();
+    let layout = capture_layout(native_window, cx).to_string();
     let recorded = url::Url::from_directory_path(&directory)
         .unwrap()
         .to_string();
@@ -1214,7 +1214,7 @@ fn restored_terminals_start_in_their_recorded_directory(cx: &mut TestAppContext)
             .unwrap();
         created(&result, 0, cx)
     };
-    let (restored, restored_window) = restore(&layout, window, cx);
+    let (restored, restored_window) = restore(&layout, native_window, cx);
     assert_eq!(
         terminal_start_directory(&restored, cx),
         Some(directory.clone())

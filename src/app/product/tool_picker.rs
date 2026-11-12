@@ -35,7 +35,7 @@ impl KnotWindow {
             let Ok(TransientOutcome::Picker(choice)) = receiver.await else {
                 return;
             };
-            let _ = this.update(cx, |shell, cx| shell.toggle_tool(&choice, cx));
+            let _ = this.update(cx, |window, cx| window.toggle_tool(&choice, cx));
         });
         self.tasks.push(task);
     }

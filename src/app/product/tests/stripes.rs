@@ -6,9 +6,9 @@ use gpui::{Modifiers, MouseButton, VisualTestContext, point, px};
 
 const EXPLORER_BUTTON: &str = "stripe-button-test.tool";
 
-fn explorer_shown(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
+fn explorer_shown(window: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let explorer = workbench
             .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
             .unwrap();
@@ -27,14 +27,14 @@ fn click(window: gpui::AnyWindowHandle, selector: &'static str, cx: &mut TestApp
 fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
-    let (shell, window) = empty_product_window(&documents, cx);
-    toggle_test_tool(&shell, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
+    toggle_test_tool(&window, cx);
     cx.run_until_parked();
-    assert!(explorer_shown(&shell, cx));
+    assert!(explorer_shown(&window, cx));
 
     // The explorer's button sits in the left stripe, and the terminal's in
     // its lower end, the terminal home being the bottom dock.
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     let left = visual.debug_bounds("stripe-left").unwrap();
     let explorer = visual.debug_bounds(EXPLORER_BUTTON).unwrap();
     let terminal = visual.debug_bounds("stripe-button-terminal").unwrap();
@@ -44,26 +44,26 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     drop(visual);
 
     // A click toggles: the focused explorer hides, then shows again.
-    click(window, EXPLORER_BUTTON, cx);
-    assert!(!explorer_shown(&shell, cx));
-    click(window, EXPLORER_BUTTON, cx);
-    assert!(explorer_shown(&shell, cx));
+    click(native_window, EXPLORER_BUTTON, cx);
+    assert!(!explorer_shown(&window, cx));
+    click(native_window, EXPLORER_BUTTON, cx);
+    assert!(explorer_shown(&window, cx));
 
     // The terminal button opens a dock terminal in its home, then hides it.
-    click(window, "stripe-button-terminal", cx);
+    click(native_window, "stripe-button-terminal", cx);
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert!(workbench.dock_terminals_visible());
         assert!(workbench.dock_visible(DockLocation::Bottom));
     });
-    click(window, "stripe-button-terminal", cx);
+    click(native_window, "stripe-button-terminal", cx);
     cx.read(|cx| {
-        assert!(!shell.read(cx).workbench.read(cx).dock_terminals_visible());
+        assert!(!window.read(cx).workbench.read(cx).dock_terminals_visible());
     });
 
     // Dragging the explorer's button to the right stripe moves the tool and
     // rehomes it.
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     let from = visual.debug_bounds(EXPLORER_BUTTON).unwrap().center();
     let to = visual.debug_bounds("stripe-group-1").unwrap().center();
     visual.simulate_mouse_down(from, MouseButton::Left, Modifiers::default());
@@ -77,7 +77,7 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     visual.run_until_parked();
     drop(visual);
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let explorer = workbench
             .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
             .unwrap();
@@ -85,7 +85,7 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
         let (pane, _) = workbench.tool_tab(explorer).unwrap();
         assert_eq!(workbench.dock_location(pane), Some(DockLocation::Right));
     });
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     let right = visual.debug_bounds("stripe-right").unwrap();
     let explorer = visual.debug_bounds(EXPLORER_BUTTON).unwrap();
     assert!(right.contains(&explorer.center()));
@@ -108,7 +108,7 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     visual.run_until_parked();
     drop(visual);
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(workbench.terminal_home(), DockLocation::Left);
         assert!(
             workbench
@@ -142,7 +142,7 @@ fn a_stripe_click_replaces_the_tool_in_its_pane_and_the_menu_shows_one_beside(
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let host = cx.update(crate::app::extensions::host::install);
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     host.update(cx, |host, cx| {
         let execution = host
             .load_test_source(
@@ -164,18 +164,18 @@ await workbench.registerView({
         .detach();
     });
     wait_for_api_condition(cx, |cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
             .tool_by_stable_id("example.notes")
             .is_some()
     });
-    toggle_test_tool(&shell, cx);
+    toggle_test_tool(&window, cx);
     cx.run_until_parked();
     let shown = |cx: &TestAppContext| {
         cx.read(|cx| {
-            let workbench = shell.read(cx).workbench.read(cx);
+            let workbench = window.read(cx).workbench.read(cx);
             [crate::app::product::tools::TEST_TOOL_ID, "example.notes"].map(|id| {
                 let tool = workbench.tool_by_stable_id(id).unwrap();
                 workbench.tool_visible(tool)
@@ -185,28 +185,28 @@ await workbench.registerView({
     assert_eq!(shown(cx), [true, false]);
 
     // Clicking the other tool's button replaces the explorer in its pane.
-    click(window, "stripe-button-example.notes", cx);
+    click(native_window, "stripe-button-example.notes", cx);
     assert_eq!(shown(cx), [false, true]);
-    click(window, EXPLORER_BUTTON, cx);
+    click(native_window, EXPLORER_BUTTON, cx);
     assert_eq!(shown(cx), [true, false]);
 
     // The button's menu opens on a right click; its Show Beside action puts
     // the tool in a pane of its own next to the explorer's.
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     let at = visual
         .debug_bounds("stripe-button-example.notes")
         .unwrap()
         .center();
     visual.simulate_mouse_down(at, MouseButton::Right, Modifiers::default());
     visual.run_until_parked();
-    shell.read_with(&visual, |shell, _| assert!(shell.stripe_menu.is_some()));
+    window.read_with(&visual, |window, _| assert!(window.stripe_menu.is_some()));
     drop(visual);
-    shell.update(cx, |shell, cx| {
-        shell.show_tool_beside("example.notes", cx);
+    window.update(cx, |window, cx| {
+        window.show_tool_beside("example.notes", cx);
     });
     assert_eq!(shown(cx), [true, true]);
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let [first, second] =
             [crate::app::product::tools::TEST_TOOL_ID, "example.notes"].map(|id| {
                 workbench

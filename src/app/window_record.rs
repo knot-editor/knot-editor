@@ -1,13 +1,13 @@
-//! Native window hot exit: every product window's roots and layout in one
-//! application state record beside the tool-only snapshot.
+//! Native window hot exit: every window's roots and layout in one application
+//! state record beside the tool-only snapshot.
 //!
-//! Recording starts once product startup has restored and opened its windows,
-//! so diagnostic windows and a launch whose config failed never write.
-//! Settled window changes and window closure re-record every product window
-//! through the store's debounce. Quit captures the windows before closing them
-//! and stops recording, so the closing windows are kept. Startup marks the
-//! record consumed durably before restoring it, so a crash during restoration
-//! loses only the arrangement and the next launch opens the default window.
+//! Recording starts once startup has restored and opened its windows, so
+//! diagnostic windows and a launch whose config failed never write. Settled
+//! window changes and window closure re-record every window through the store's
+//! debounce. Quit captures the windows before closing them and stops recording,
+//! so the closing windows are kept. Startup marks the record consumed durably
+//! before restoring it, so a crash during restoration loses only the
+//! arrangement and the next launch opens the default window.
 
 use std::{cell::Cell, time::Duration};
 
@@ -20,12 +20,12 @@ use super::{
     window_layout::WindowLayout,
 };
 
-pub(crate) const WINDOW_SESSION_VERSION: u32 = 1;
+pub(crate) const WINDOW_RECORD_VERSION: u32 = 1;
 
 const WRITE_DEBOUNCE: Duration = Duration::from_millis(300);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub(crate) struct WindowSession {
+pub(crate) struct WindowRecord {
     /// Set durably before a launch restores the record.
     pub(crate) consumed: bool,
     /// Index of the active window.
@@ -48,19 +48,19 @@ enum Recording {
     Stopped,
 }
 
-pub(crate) struct ApplicationWindowSessions {
-    store: RecordStore<WindowSession>,
+pub(crate) struct ApplicationWindowRecord {
+    store: RecordStore<WindowRecord>,
     recording: Cell<Recording>,
     _closed: Subscription,
 }
 
-impl Global for ApplicationWindowSessions {}
+impl Global for ApplicationWindowRecord {}
 
 /// Load the record and observe window closure.
 pub(crate) fn install(database: &StateDatabase, cx: &mut App) {
-    let store = database.record("window_session", WINDOW_SESSION_VERSION, WRITE_DEBOUNCE);
+    let store = database.record("window_session", WINDOW_RECORD_VERSION, WRITE_DEBOUNCE);
     let closed = cx.on_window_closed(|cx, _| cx.defer(record));
-    cx.set_global(ApplicationWindowSessions {
+    cx.set_global(ApplicationWindowRecord {
         store,
         recording: Cell::new(Recording::Waiting),
         _closed: closed,
@@ -70,30 +70,30 @@ pub(crate) fn install(database: &StateDatabase, cx: &mut App) {
 /// Mark an unconsumed record consumed and resolve with it once that mark is
 /// durable. Resolves `None` without a record, or when the mark cannot be
 /// written, so a record that keeps crashing startup is never retried.
-pub(crate) fn take_for_restore(cx: &App) -> Task<Option<WindowSession>> {
-    let Some(sessions) = cx.try_global::<ApplicationWindowSessions>() else {
+pub(crate) fn take_for_restore(cx: &App) -> Task<Option<WindowRecord>> {
+    let Some(state) = cx.try_global::<ApplicationWindowRecord>() else {
         return Task::ready(None);
     };
-    let Some(record) = sessions
+    let Some(record) = state
         .store
         .current()
         .filter(|record| !record.consumed && !record.windows.is_empty())
     else {
         return Task::ready(None);
     };
-    sessions.store.publish(WindowSession {
+    state.store.publish(WindowRecord {
         consumed: true,
         ..record.clone()
     });
-    let flush = sessions.store.flush();
+    let flush = state.store.flush();
     cx.background_executor()
         .spawn(async move { flush.await.ok().map(|()| record) })
 }
 
-/// Record every product window from now on, starting with the current ones.
+/// Record every window from now on, starting with the current ones.
 pub(crate) fn start_recording(cx: &mut App) {
-    if let Some(sessions) = cx.try_global::<ApplicationWindowSessions>() {
-        sessions.recording.set(Recording::Live);
+    if let Some(state) = cx.try_global::<ApplicationWindowRecord>() {
+        state.recording.set(Recording::Live);
     }
     record(cx);
 }
@@ -101,31 +101,31 @@ pub(crate) fn start_recording(cx: &mut App) {
 /// Record the windows quit is about to close and stop recording.
 pub(crate) fn record_for_quit(cx: &mut App) -> Option<Task<Result<(), String>>> {
     record(cx);
-    let sessions = cx.try_global::<ApplicationWindowSessions>()?;
-    sessions.recording.set(Recording::Stopped);
-    Some(sessions.store.flush())
+    let state = cx.try_global::<ApplicationWindowRecord>()?;
+    state.recording.set(Recording::Stopped);
+    Some(state.store.flush())
 }
 
-/// Re-record every product window's roots and layout.
+/// Re-record every window's roots and layout.
 pub(crate) fn record(cx: &mut App) {
     if cx
-        .try_global::<ApplicationWindowSessions>()
-        .is_none_or(|sessions| sessions.recording.get() != Recording::Live)
+        .try_global::<ApplicationWindowRecord>()
+        .is_none_or(|record| record.recording.get() != Recording::Live)
     {
         return;
     }
-    let active = crate::app::product::active_window(cx).map(|shell| shell.entity_id());
+    let active = crate::app::product::active_window(cx).map(|window| window.entity_id());
     let mut captured = Vec::new();
-    for shell in crate::app::product::windows(cx) {
-        let layout = KnotWindow::capture_attached_layout(&shell, cx);
-        let state = shell.read(cx);
+    for window in crate::app::product::windows(cx) {
+        let layout = KnotWindow::capture_attached_layout(&window, cx);
+        let state = window.read(cx);
         let recorded = RecordedWindow {
             roots: state.root_uris().iter().map(ToString::to_string).collect(),
             layout,
         };
         captured.push((
             state.creation_order(),
-            active == Some(shell.entity_id()),
+            active == Some(window.entity_id()),
             recorded,
         ));
     }
@@ -135,9 +135,9 @@ pub(crate) fn record(cx: &mut App) {
         .into_iter()
         .map(|(_, _, window)| window)
         .collect::<Vec<_>>();
-    cx.global::<ApplicationWindowSessions>()
+    cx.global::<ApplicationWindowRecord>()
         .store
-        .publish(WindowSession {
+        .publish(WindowRecord {
             consumed: false,
             active: active_index,
             windows,
@@ -145,8 +145,8 @@ pub(crate) fn record(cx: &mut App) {
 }
 
 #[cfg(any(test, feature = "test-support"))]
-impl ApplicationWindowSessions {
-    pub(crate) fn publish_for_test(&self, record: WindowSession) {
+impl ApplicationWindowRecord {
+    pub(crate) fn publish_for_test(&self, record: WindowRecord) {
         self.store.publish(record);
     }
 }
@@ -154,18 +154,18 @@ impl ApplicationWindowSessions {
 /// Stop recording as a crash would, without capturing the windows.
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) fn stop_for_test(cx: &App) {
-    if let Some(sessions) = cx.try_global::<ApplicationWindowSessions>() {
-        sessions.recording.set(Recording::Stopped);
+    if let Some(state) = cx.try_global::<ApplicationWindowRecord>() {
+        state.recording.set(Recording::Stopped);
     }
 }
 
 #[cfg(any(test, feature = "test-support"))]
-pub(crate) fn current(cx: &App) -> Option<WindowSession> {
-    cx.try_global::<ApplicationWindowSessions>()
-        .and_then(|sessions| sessions.store.current())
+pub(crate) fn current(cx: &App) -> Option<WindowRecord> {
+    cx.try_global::<ApplicationWindowRecord>()
+        .and_then(|state| state.store.current())
 }
 
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) fn flush(cx: &App) -> Task<Result<(), String>> {
-    cx.global::<ApplicationWindowSessions>().store.flush()
+    cx.global::<ApplicationWindowRecord>().store.flush()
 }

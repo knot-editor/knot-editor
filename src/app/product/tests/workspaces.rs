@@ -162,15 +162,15 @@ await commands.register("workspaces.pending", async () => {
         wait_for_api_condition(cx, |_| provider.release.lock().unwrap().is_none());
         match scenario {
             "focus" => {
-                cx.update_window(second_window, |_, window, cx| {
-                    window.activate_window();
-                    second.update(cx, |shell, cx| shell.focus_active_surface(cx));
+                cx.update_window(second_window, |_, native_window, cx| {
+                    native_window.activate_window();
+                    second.update(cx, |window, cx| window.focus_active_surface(cx));
                 })
                 .unwrap();
             }
             "roots" => {
-                first.update(cx, |shell, cx| {
-                    shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx)
+                first.update(cx, |window, cx| {
+                    window.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx)
                 });
             }
             "close" => {
@@ -223,11 +223,13 @@ await commands.register("workspaces.pending", async () => {
             host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         }
         if scenario != "close" {
-            cx.update_window(window, |_, window, _| window.remove_window())
+            cx.update_window(window, |_, native_window, _| native_window.remove_window())
                 .unwrap();
         }
-        cx.update_window(second_window, |_, window, _| window.remove_window())
-            .unwrap();
+        cx.update_window(second_window, |_, native_window, _| {
+            native_window.remove_window()
+        })
+        .unwrap();
     }
 }
 
@@ -237,10 +239,8 @@ fn explicit_workspace_operations_work_in_an_empty_product_workbench(cx: &mut Tes
     let (filesystems, _) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));
     let window = cx.update(|cx| open_tab_transfer_window(cx).unwrap());
-    let shell = cx
-        .update_window(*window, |root, _, _| {
-            root.downcast::<KnotWindow>().unwrap()
-        })
+    let window = cx
+        .update_window(*window, |root, _, _| root.downcast::<KnotWindow>().unwrap())
         .unwrap();
     let host = cx.update(extensions::host::install);
     let key = install_operation_fixture(
@@ -259,7 +259,7 @@ await commands.register("workspaces.empty-ready", () => {});
         cx,
     );
     cx.read(|cx| {
-        assert_eq!(shell.read(cx).workspace.snapshot().generation(), 2);
+        assert_eq!(window.read(cx).workspace.snapshot().generation(), 2);
         assert_eq!(documents.read(cx).documents().count(), 0);
     });
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
@@ -277,13 +277,13 @@ fn add_folder_appends_a_root_and_open_leaves_a_window_with_roots_alone(cx: &mut 
     cx.set_global(ApplicationOpenDialog(Arc::new(FixedOpenDialog(
         OpenDialogOutcome::Selected(second_dir.path().to_path_buf()),
     ))));
-    let (shell, window) = empty_product_window(&documents, cx);
-    shell.update(cx, |shell, cx| {
-        shell.install_workspace(first.clone(), cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
+    window.update(cx, |window, cx| {
+        window.install_workspace(first.clone(), cx);
     });
     let roots = |cx: &TestAppContext| {
         cx.read(|cx| {
-            shell
+            window
                 .read(cx)
                 .workspace
                 .snapshot()
@@ -297,11 +297,14 @@ fn add_folder_appends_a_root_and_open_leaves_a_window_with_roots_alone(cx: &mut 
 
     let add = super::super::commands::ADD_FOLDER_COMMAND;
     assert_eq!(
-        wait_for_command(dispatch_product_command(&shell, window, add, cx), cx),
+        wait_for_command(
+            dispatch_product_command(&window, native_window, add, cx),
+            cx
+        ),
         CommandOutcome::Completed
     );
     wait_for_api_condition(cx, |cx| {
-        shell.read(cx).workspace.snapshot().roots().len() == 2
+        window.read(cx).workspace.snapshot().roots().len() == 2
     });
     let added = roots(cx);
     assert_eq!(added[0], installed[0]);
@@ -309,23 +312,25 @@ fn add_folder_appends_a_root_and_open_leaves_a_window_with_roots_alone(cx: &mut 
     assert_eq!(second, file_uri(second_dir.path()));
 
     // Adding a folder that is already a root changes nothing.
-    let generation = cx.read(|cx| shell.read(cx).workspace.snapshot().generation());
-    shell.update(cx, |shell, cx| shell.add_workspace_root(second.clone(), cx));
+    let generation = cx.read(|cx| window.read(cx).workspace.snapshot().generation());
+    window.update(cx, |window, cx| {
+        window.add_workspace_root(second.clone(), cx)
+    });
     assert_eq!(
-        cx.read(|cx| shell.read(cx).workspace.snapshot().generation()),
+        cx.read(|cx| window.read(cx).workspace.snapshot().generation()),
         generation
     );
 
     // Open leaves a window that has roots alone and opens the folder in a new
     // window.
-    shell.update(cx, |shell, cx| {
-        shell.add_workspace_root(second.clone(), cx);
+    window.update(cx, |window, cx| {
+        window.add_workspace_root(second.clone(), cx);
     });
     assert_eq!(roots(cx).len(), 2);
     let windows = cx.update(|cx| cx.windows().len());
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx),
+            dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx),
             cx
         ),
         CommandOutcome::Completed

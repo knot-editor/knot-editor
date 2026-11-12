@@ -7,7 +7,7 @@ use super::*;
 use crate::app::resource::ResourceUri;
 
 impl KnotWindow {
-    /// Choose a directory in the session's transient slot and append it.
+    /// Choose a directory in the window's transient slot and append it.
     pub(super) fn start_add_folder(&mut self, cx: &mut Context<Self>) {
         let Ok(receiver) = self.begin_folder_picker(None, cx) else {
             return;
@@ -40,11 +40,11 @@ impl KnotWindow {
             let Ok(result) = resolved.await else {
                 return;
             };
-            let _ = this.update(cx, |shell, cx| match result {
-                Ok(uri) => shell.add_workspace_root(uri, cx),
+            let _ = this.update(cx, |window, cx| match result {
+                Ok(uri) => window.add_workspace_root(uri, cx),
                 Err(error) => {
                     use knot_protocol::declarations::HostError;
-                    shell.show_notice(
+                    window.show_notice(
                         PromptLevel::Warning,
                         "Cannot add folder",
                         Some(error.code().to_string()),

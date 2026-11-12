@@ -63,27 +63,29 @@ fn settle(
 #[gpui::test]
 fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, window) = empty_product_window(&documents, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
+    let (window, native_window) = empty_product_window(&documents, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_surface(cx));
     })
     .unwrap();
     let before = cx
-        .update_window(window, |_, window, cx| window.focused(cx))
+        .update_window(native_window, |_, native_window, cx| {
+            native_window.focused(cx)
+        })
         .unwrap();
     let mut receiver = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
         .unwrap();
 
     let overlap = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window
                     .begin_input(owner(None), "Name".into(), String::new(), None, None, cx)
                     .map(|(receiver, _)| receiver)
             })
@@ -91,18 +93,20 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
         .unwrap();
     assert!(matches!(overlap, Err(TransientError::OperationInProgress)));
 
-    let mut visual = gpui::VisualTestContext::from_window(window, cx);
+    let mut visual = gpui::VisualTestContext::from_window(native_window, cx);
     visual.run_until_parked();
     assert!(visual.debug_bounds("picker-icon-0").is_some());
     assert!(visual.debug_bounds("picker-icon-1").is_none());
-    cx.simulate_input(window, "beta");
-    cx.simulate_keystrokes(window, "enter");
+    cx.simulate_input(native_window, "beta");
+    cx.simulate_keystrokes(native_window, "enter");
     assert_eq!(
         settle(&mut receiver, cx),
         TransientOutcome::Picker("beta".into())
     );
     let after = cx
-        .update_window(window, |_, window, cx| window.focused(cx))
+        .update_window(native_window, |_, native_window, cx| {
+            native_window.focused(cx)
+        })
         .unwrap();
     assert_eq!(before, after);
 }
@@ -110,12 +114,12 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
 #[gpui::test]
 fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
 
     let mut input = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window
                     .begin_input(
                         owner(None),
                         "Add path".into(),
@@ -129,29 +133,29 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
         })
         .unwrap()
         .unwrap();
-    cx.simulate_keystrokes(window, "cmd-a");
-    cx.simulate_input(window, "hello");
-    cx.simulate_keystrokes(window, "enter");
+    cx.simulate_keystrokes(native_window, "cmd-a");
+    cx.simulate_input(native_window, "hello");
+    cx.simulate_keystrokes(native_window, "enter");
     assert_eq!(
         settle(&mut input, cx),
         TransientOutcome::Input("hello".into())
     );
 
     let mut rejected = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
         .unwrap();
-    cx.simulate_keystrokes(window, "escape");
+    cx.simulate_keystrokes(native_window, "escape");
     assert_eq!(settle(&mut rejected, cx), TransientOutcome::Dismissed);
 
     let mut confirmed = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_confirmation(
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_confirmation(
                     owner(None),
                     PromptText {
                         title: "Remove?".into(),
@@ -170,9 +174,9 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     assert_eq!(settle(&mut confirmed, cx), TransientOutcome::Confirmed);
 
     let mut cancelled = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_confirmation(
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_confirmation(
                     owner(None),
                     PromptText {
                         title: "Remove?".into(),
@@ -190,9 +194,9 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     assert_eq!(settle(&mut cancelled, cx), TransientOutcome::Dismissed);
 
     let mut message = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_message(
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_message(
                     owner(None),
                     PromptText {
                         title: "Notice".into(),
@@ -211,7 +215,7 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
 #[gpui::test]
 fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().to_path_buf();
 
@@ -219,9 +223,9 @@ fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) 
         OpenDialogOutcome::Selected(path.clone()),
     ))));
     let mut selected = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_folder_picker(Some(owner(None)), cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_folder_picker(Some(owner(None)), cx)
             })
         })
         .unwrap()
@@ -232,9 +236,9 @@ fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) 
         OpenDialogOutcome::Cancelled,
     ))));
     let mut dismissed = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_folder_picker(Some(owner(None)), cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_folder_picker(Some(owner(None)), cx)
             })
         })
         .unwrap()
@@ -245,9 +249,9 @@ fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) 
         OpenDialogOutcome::Failed("dialog exploded".into()),
     ))));
     let mut failed = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_folder_picker(Some(owner(None)), cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_folder_picker(Some(owner(None)), cx)
             })
         })
         .unwrap()
@@ -261,21 +265,21 @@ fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) 
 #[gpui::test]
 fn cancellation_matches_the_owner_and_two_windows_stay_independent(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (first_shell, first_window) = empty_product_window(&documents, cx);
-    let (second_shell, second_window) = empty_product_window(&documents, cx);
+    let (first_window, first_native_window) = empty_product_window(&documents, cx);
+    let (second_window, second_native_window) = empty_product_window(&documents, cx);
 
     let mut first = cx
-        .update_window(first_window, |_, _, cx| {
-            first_shell.update(cx, |shell, cx| {
-                shell.begin_picker(owner(None), "First".into(), picker_items(), None, cx)
+        .update_window(first_native_window, |_, _, cx| {
+            first_window.update(cx, |window, cx| {
+                window.begin_picker(owner(None), "First".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
         .unwrap();
     let mut second = cx
-        .update_window(second_window, |_, _, cx| {
-            second_shell.update(cx, |shell, cx| {
-                shell.begin_picker(owner(None), "Second".into(), picker_items(), None, cx)
+        .update_window(second_native_window, |_, _, cx| {
+            second_window.update(cx, |window, cx| {
+                window.begin_picker(owner(None), "Second".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
@@ -287,16 +291,16 @@ fn cancellation_matches_the_owner_and_two_windows_stay_independent(cx: &mut Test
         lifecycle: ExtensionLifecycleId::new(9),
         invocation: None,
     };
-    first_shell.update(cx, |shell, cx| shell.cancel_transient(other, cx));
+    first_window.update(cx, |window, cx| window.cancel_transient(other, cx));
     cx.run_until_parked();
     assert!(first.try_recv().is_err());
 
-    first_shell.update(cx, |shell, cx| shell.cancel_transient(owner(None), cx));
+    first_window.update(cx, |window, cx| window.cancel_transient(owner(None), cx));
     assert_eq!(settle(&mut first, cx), TransientOutcome::Cancelled);
 
     // The second window still owns its own interaction.
-    cx.simulate_input(second_window, "alpha");
-    cx.simulate_keystrokes(second_window, "enter");
+    cx.simulate_input(second_native_window, "alpha");
+    cx.simulate_keystrokes(second_native_window, "enter");
     assert_eq!(
         settle(&mut second, cx),
         TransientOutcome::Picker("alpha".into())
@@ -306,17 +310,19 @@ fn cancellation_matches_the_owner_and_two_windows_stay_independent(cx: &mut Test
 #[gpui::test]
 fn window_closure_releases_the_pending_interaction(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     let mut receiver = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
             })
         })
         .unwrap()
         .unwrap();
-    cx.update_window(window, |_, window, _| window.remove_window())
-        .unwrap();
+    cx.update_window(native_window, |_, native_window, _| {
+        native_window.remove_window()
+    })
+    .unwrap();
     cx.run_until_parked();
     assert_eq!(settle(&mut receiver, cx), TransientOutcome::Cancelled);
 }
@@ -352,12 +358,12 @@ await commands.register("transient.await-picker", async () => {
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let pending = dispatch_product_command(&shell, window, "transient.await-picker", cx);
-    wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
+    let (window, native_window) = product_window(document, model, cx);
+    let pending = dispatch_product_command(&window, native_window, "transient.await-picker", cx);
+    wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).transient.is_none()));
+    cx.read(|cx| assert!(window.read(cx).transient.is_none()));
     assert_ne!(wait_for_command(pending, cx), CommandOutcome::Completed);
 }
 
@@ -399,11 +405,11 @@ await commands.register("transient.context-free-ok", () => {});
 }
 
 fn transient_picker(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::picker::Picker> {
     cx.read(
-        |cx| match shell.read(cx).transient.as_ref().unwrap().surface.as_ref() {
+        |cx| match window.read(cx).transient.as_ref().unwrap().surface.as_ref() {
             Some(crate::app::transient::TransientSurface::Picker(picker)) => picker.clone(),
             _ => panic!("the transient is not a picker"),
         },
@@ -466,8 +472,8 @@ fn start_preview(
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let pending = dispatch_product_command(&shell, window, "transient.preview", cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let pending = dispatch_product_command(&window, native_window, "transient.preview", cx);
     // The initial highlight reaches the callback before anything moves.
     wait_for_api_condition(cx, |cx| {
         cx.read_from_clipboard()
@@ -475,13 +481,13 @@ fn start_preview(
             .as_deref()
             == Some("a")
     });
-    (host, key, shell, window, pending)
+    (host, key, window, native_window, pending)
 }
 
 #[gpui::test]
 fn picker_previews_report_the_latest_highlight_then_the_selection(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, completion) = start_preview(cx);
-    let picker = transient_picker(&shell, cx);
+    let (_host, _key, window, _window, completion) = start_preview(cx);
+    let picker = transient_picker(&window, cx);
     picker.read_with(cx, |picker, _| {
         assert_eq!(picker.entry(1).detail.as_deref(), Some("second"));
         assert_eq!(picker.entry(1).hint.as_deref(), Some("B"));
@@ -523,9 +529,9 @@ fn picker_previews_report_the_latest_highlight_then_the_selection(cx: &mut TestA
 
 #[gpui::test]
 fn picker_previews_settle_on_dismissal_and_unload(cx: &mut TestAppContext) {
-    let (host, key, shell, window, completion) = start_preview(cx);
-    let picker = transient_picker(&shell, cx);
-    cx.update_window(window, |_, _, cx| {
+    let (host, key, window, native_window, completion) = start_preview(cx);
+    let picker = transient_picker(&window, cx);
+    cx.update_window(native_window, |_, _, cx| {
         picker.update(cx, |_, cx| {
             cx.emit(crate::app::picker::PickerEvent::Dismissed)
         });
@@ -540,20 +546,20 @@ fn picker_previews_settle_on_dismissal_and_unload(cx: &mut TestAppContext) {
     assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
 
     // Unloading while the extension awaits the next highlight settles it.
-    let pending = dispatch_product_command(&shell, window, "transient.preview", cx);
-    wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
+    let pending = dispatch_product_command(&window, native_window, "transient.preview", cx);
+    wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).transient.is_none()));
+    cx.read(|cx| assert!(window.read(cx).transient.is_none()));
     assert_ne!(wait_for_command(pending, cx), CommandOutcome::Completed);
 }
 
 fn transient_input(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::transient::InputView> {
     cx.read(
-        |cx| match shell.read(cx).transient.as_ref().unwrap().surface.as_ref() {
+        |cx| match window.read(cx).transient.as_ref().unwrap().surface.as_ref() {
             Some(crate::app::transient::TransientSurface::Input(input)) => input.clone(),
             _ => panic!("the transient is not an input"),
         },
@@ -742,17 +748,17 @@ fn start_live_input(
     gpui::AnyWindowHandle,
     crate::app::CommandExecution,
 ) {
-    let (host, key, shell, window) = live_shell(cx);
-    let pending = dispatch_product_command(&shell, window, name, cx);
-    wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
-    (host, key, shell, window, pending)
+    let (host, key, window, native_window) = live_window(cx);
+    let pending = dispatch_product_command(&window, native_window, name, cx);
+    wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
+    (host, key, window, native_window, pending)
 }
 
 thread_local! {
     static STORAGE: std::cell::RefCell<Vec<tempfile::TempDir>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-fn live_shell(
+fn live_window(
     cx: &mut TestAppContext,
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
@@ -790,14 +796,14 @@ fn live_shell(
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    (host, key, shell, window)
+    let (window, native_window) = product_window(document, model, cx);
+    (host, key, window, native_window)
 }
 
 #[gpui::test]
 fn live_input_reports_the_latest_value_and_shows_returned_messages(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, completion) = start_live_input("transient.live-input", cx);
-    let input = transient_input(&shell, cx);
+    let (_host, _key, window, _window, completion) = start_live_input("transient.live-input", cx);
+    let input = transient_input(&window, cx);
     // The initial value reaches the callback, and its message shows once the
     // extension pulls again.
     wait_for_api_condition(cx, |cx| {
@@ -834,13 +840,14 @@ fn live_input_reports_the_latest_value_and_shows_returned_messages(cx: &mut Test
 
 #[gpui::test]
 fn a_throwing_change_callback_stops_and_rethrows_once_the_input_settles(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, completion) = start_live_input("transient.failing-input", cx);
-    let input = transient_input(&shell, cx);
+    let (_host, _key, window, _window, completion) =
+        start_live_input("transient.failing-input", cx);
+    let input = transient_input(&window, cx);
     wait_for_api_condition(cx, |cx| input_message(&input, cx).as_deref() == Some("ok "));
     type_into(&input, &["x"], cx);
     wait_for_api_condition(cx, |cx| input_message(&input, cx).is_none());
     // The input stays open and later values reach no callback.
-    cx.read(|cx| assert!(shell.read(cx).transient.is_some()));
+    cx.read(|cx| assert!(window.read(cx).transient.is_some()));
     type_into(&input, &["y"], cx);
     cx.run_until_parked();
     input.update(cx, |_, cx| {
@@ -857,8 +864,9 @@ fn a_throwing_change_callback_stops_and_rethrows_once_the_input_settles(cx: &mut
 
 #[gpui::test]
 fn live_input_settles_on_dismissal_and_unload(cx: &mut TestAppContext) {
-    let (host, key, shell, window, completion) = start_live_input("transient.live-input", cx);
-    let input = transient_input(&shell, cx);
+    let (host, key, window, native_window, completion) =
+        start_live_input("transient.live-input", cx);
+    let input = transient_input(&window, cx);
     wait_for_api_condition(cx, |cx| {
         input_message(&input, cx).as_deref() == Some("message 1")
     });
@@ -874,19 +882,19 @@ fn live_input_settles_on_dismissal_and_unload(cx: &mut TestAppContext) {
     assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
 
     // Unloading while the extension awaits the next value settles it.
-    let pending = dispatch_product_command(&shell, window, "transient.live-input", cx);
-    wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
+    let pending = dispatch_product_command(&window, native_window, "transient.live-input", cx);
+    wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).transient.is_none()));
+    cx.read(|cx| assert!(window.read(cx).transient.is_none()));
     assert_ne!(wait_for_command(pending, cx), CommandOutcome::Completed);
 }
 
 #[gpui::test]
 fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext) {
-    let (_host, _key, shell, window, _completion) =
+    let (_host, _key, window, native_window, _completion) =
         start_live_input("transient.completing-input", cx);
-    let input = transient_input(&shell, cx);
+    let input = transient_input(&window, cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx).len() == 3);
     cx.read(|cx| assert_eq!(input.read(cx).selected(), 0));
     type_into(&input, &["al"], cx);
@@ -901,7 +909,7 @@ fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext
             })
         );
     });
-    let mut visual = gpui::VisualTestContext::from_window(window, cx);
+    let mut visual = gpui::VisualTestContext::from_window(native_window, cx);
     visual.run_until_parked();
     for index in 0..2 {
         assert!(
@@ -917,9 +925,9 @@ fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext
 
 #[gpui::test]
 fn the_completion_highlight_moves_and_wraps(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, _completion) =
+    let (_host, _key, window, _window, _completion) =
         start_live_input("transient.completing-input", cx);
-    let input = transient_input(&shell, cx);
+    let input = transient_input(&window, cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx).len() == 3);
     let selected = |cx: &mut TestAppContext| cx.read(|cx| input.read(cx).selected());
     assert!(press(&input, "up", cx));
@@ -936,9 +944,9 @@ fn the_completion_highlight_moves_and_wraps(cx: &mut TestAppContext) {
 fn tab_accepts_the_highlighted_completion_and_the_next_answer_replaces_the_list(
     cx: &mut TestAppContext,
 ) {
-    let (_host, _key, shell, _window, _completion) =
+    let (_host, _key, window, _window, _completion) =
         start_live_input("transient.completing-input", cx);
-    let input = transient_input(&shell, cx);
+    let input = transient_input(&window, cx);
     type_into(&input, &["a"], cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["alpha", "alps"]);
     assert!(press(&input, "down", cx));
@@ -950,9 +958,9 @@ fn tab_accepts_the_highlighted_completion_and_the_next_answer_replaces_the_list(
 
 #[gpui::test]
 fn enter_submits_the_typed_text_with_a_row_highlighted(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, completion) =
+    let (_host, _key, window, _window, completion) =
         start_live_input("transient.completing-input", cx);
-    let input = transient_input(&shell, cx);
+    let input = transient_input(&window, cx);
     type_into(&input, &["al"], cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx) == ["alpha", "alps"]);
     assert!(press(&input, "down", cx));
@@ -966,9 +974,9 @@ fn enter_submits_the_typed_text_with_a_row_highlighted(cx: &mut TestAppContext) 
 
 #[gpui::test]
 fn tab_without_a_list_does_nothing(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, _completion) =
+    let (_host, _key, window, _window, _completion) =
         start_live_input("transient.completing-input", cx);
-    let input = transient_input(&shell, cx);
+    let input = transient_input(&window, cx);
     type_into(&input, &["zz"], cx);
     wait_for_api_condition(cx, |cx| completion_labels(&input, cx).is_empty());
     assert!(press(&input, "tab", cx));
@@ -977,8 +985,8 @@ fn tab_without_a_list_does_nothing(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn feedback_for_older_text_is_dropped(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, _completion) = start_live_input("transient.stale-input", cx);
-    let input = transient_input(&shell, cx);
+    let (_host, _key, window, _window, _completion) = start_live_input("transient.stale-input", cx);
+    let input = transient_input(&window, cx);
     wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting "));
     type_into(&input, &["al"], cx);
     cx.write_to_clipboard(gpui::ClipboardItem::new_string("go ".into()));
@@ -1010,8 +1018,8 @@ fn clipboard_has_outcome(cx: &gpui::App) -> bool {
 
 #[gpui::test]
 fn a_queried_picker_shows_the_rows_answering_each_query(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, completion) = start_live_input("transient.query", cx);
-    let picker = transient_picker(&shell, cx);
+    let (_host, _key, window, _window, completion) = start_live_input("transient.query", cx);
+    let picker = transient_picker(&window, cx);
     // The empty query is answered first, and the rows keep their ranges.
     wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["one ", "two "]);
     picker.read_with(cx, |picker, _| {
@@ -1046,13 +1054,14 @@ fn a_queried_picker_shows_the_rows_answering_each_query(cx: &mut TestAppContext)
 
 #[gpui::test]
 fn a_throwing_query_callback_stops_and_rethrows_once_the_picker_settles(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, completion) = start_live_input("transient.failing-query", cx);
-    let picker = transient_picker(&shell, cx);
+    let (_host, _key, window, _window, completion) =
+        start_live_input("transient.failing-query", cx);
+    let picker = transient_picker(&window, cx);
     wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row "]);
     picker.update(cx, |picker, cx| picker.set_query("x", cx));
     wait_for_api_condition(cx, |cx| clipboard_is(cx, ",x"));
     // The picker stays open and later queries reach no callback.
-    cx.read(|cx| assert!(shell.read(cx).transient.is_some()));
+    cx.read(|cx| assert!(window.read(cx).transient.is_some()));
     picker.update(cx, |picker, cx| picker.set_query("y", cx));
     cx.run_until_parked();
     picker.update(cx, |_, cx| {
@@ -1065,8 +1074,8 @@ fn a_throwing_query_callback_stops_and_rethrows_once_the_picker_settles(cx: &mut
 
 #[gpui::test]
 fn rows_for_an_older_query_are_dropped(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, _completion) = start_live_input("transient.stale-query", cx);
-    let picker = transient_picker(&shell, cx);
+    let (_host, _key, window, _window, _completion) = start_live_input("transient.stale-query", cx);
+    let picker = transient_picker(&window, cx);
     wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting "));
     picker.update(cx, |picker, cx| picker.set_query("al", cx));
     cx.write_to_clipboard(gpui::ClipboardItem::new_string("go ".into()));
@@ -1085,9 +1094,9 @@ fn clipboard_is(cx: &gpui::App, expected: &str) -> bool {
 
 #[gpui::test]
 fn a_malformed_completion_answer_rejects_the_call(cx: &mut TestAppContext) {
-    let (_host, _key, shell, _window, completion) =
+    let (_host, _key, window, _window, completion) =
         start_live_input("transient.malformed-input", cx);
-    let input = transient_input(&shell, cx);
+    let input = transient_input(&window, cx);
     cx.run_until_parked();
     input.update(cx, |_, cx| {
         cx.emit(crate::app::transient::InputEvent::Dismissed)
@@ -1102,9 +1111,9 @@ fn a_malformed_completion_answer_rejects_the_call(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn completion_match_follows_the_styles_setting_and_reports_utf16_ranges(cx: &mut TestAppContext) {
-    let (_host, _key, shell, window) = live_shell(cx);
+    let (_host, _key, window, native_window) = live_window(cx);
     let run = |cx: &mut TestAppContext| {
-        let pending = dispatch_product_command(&shell, window, "transient.match", cx);
+        let pending = dispatch_product_command(&window, native_window, "transient.match", cx);
         assert_eq!(wait_for_command(pending, cx), CommandOutcome::Completed);
         clipboard(cx).unwrap()
     };
@@ -1144,8 +1153,8 @@ fn completion_match_follows_the_styles_setting_and_reports_utf16_ranges(cx: &mut
 
 #[gpui::test]
 fn history_orders_recent_items_first_and_persists_in_package_storage(cx: &mut TestAppContext) {
-    let (_host, _key, shell, window) = live_shell(cx);
-    let pending = dispatch_product_command(&shell, window, "transient.history", cx);
+    let (_host, _key, window, native_window) = live_window(cx);
+    let pending = dispatch_product_command(&window, native_window, "transient.history", cx);
     assert_eq!(wait_for_command(pending, cx), CommandOutcome::Completed);
     assert_eq!(clipboard(cx).as_deref(), Some("c,b|c,b,a,d"));
 }

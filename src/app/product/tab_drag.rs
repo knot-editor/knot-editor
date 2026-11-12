@@ -1,4 +1,4 @@
-//! Foreground tab drag coordination across native product windows.
+//! Foreground tab drag coordination across native windows.
 
 use super::relocate::{TabRelocationDestination, TabRelocationSource};
 use super::*;
@@ -217,8 +217,8 @@ pub(super) struct TabDragCoordinator {
 }
 
 struct DragWindow {
-    window: AnyWindowHandle,
-    shell: WeakEntity<KnotWindow>,
+    native_window: AnyWindowHandle,
+    window: WeakEntity<KnotWindow>,
     workbench: WeakEntity<Workbench>,
     state: Rc<RefCell<TabDragState>>,
     accepts_drop: bool,
@@ -226,8 +226,8 @@ struct DragWindow {
 
 #[derive(Clone)]
 struct ActiveTabDrag {
-    shell: WeakEntity<KnotWindow>,
-    window: AnyWindowHandle,
+    window: WeakEntity<KnotWindow>,
+    native_window: AnyWindowHandle,
     source: TabRelocationSource,
 }
 
@@ -271,10 +271,10 @@ fn window_geometries(receiver: &Window, cx: &mut App) -> Vec<WindowGeometry> {
                     content: content_bounds(receiver),
                 })
             } else {
-                cx.update_window(handle, |_, window, _| WindowGeometry {
+                cx.update_window(handle, |_, native_window, _| WindowGeometry {
                     window: handle,
-                    frame: window.bounds(),
-                    content: content_bounds(window),
+                    frame: native_window.bounds(),
+                    content: content_bounds(native_window),
                 })
                 .ok()
             }
@@ -293,10 +293,11 @@ impl TabDragCoordinator {
     }
 
     fn prune(&mut self, live: &[AnyWindowHandle]) -> bool {
-        self.windows
-            .retain(|entry| live.contains(&entry.window) && entry.shell.upgrade().is_some());
+        self.windows.retain(|entry| {
+            live.contains(&entry.native_window) && entry.window.upgrade().is_some()
+        });
         if self.active.as_ref().is_some_and(|active| {
-            !live.contains(&active.window) || active.shell.upgrade().is_none()
+            !live.contains(&active.native_window) || active.window.upgrade().is_none()
         }) {
             self.clear();
             return true;
@@ -331,7 +332,7 @@ impl TabDragCoordinator {
         let Some(entry) = self
             .windows
             .iter()
-            .find(|entry| entry.window == front.window)
+            .find(|entry| entry.native_window == front.window)
         else {
             return DropAction::Invalid;
         };
@@ -345,7 +346,7 @@ impl TabDragCoordinator {
             return DropAction::Invalid;
         };
         DropAction::Target(TabRelocationDestination {
-            shell: entry.shell.clone(),
+            window: entry.window.clone(),
             workbench: entry.workbench.clone(),
             tab: target.tab,
         })
@@ -369,7 +370,7 @@ impl TabDragCoordinator {
                 .iter()
                 .find(|window| {
                     Some(window.window) == self.pointer_window
-                        && window.window == entry.window
+                        && window.window == entry.native_window
                         && entry.accepts_drop
                         && window.content.contains(&pointer)
                 })
@@ -392,8 +393,8 @@ pub(super) fn coordinator(cx: &mut App) -> Rc<RefCell<TabDragCoordinator>> {
         cx.on_window_closed(move |cx, _| {
             let live = cx.windows();
             let cancelled = closed.borrow_mut().prune(&live);
-            if cancelled && let Some(window) = live.first() {
-                let _ = cx.update_window(*window, |_, window, cx| {
+            if cancelled && let Some(native_window) = live.first() {
+                let _ = cx.update_window(*native_window, |_, window, cx| {
                     cx.stop_active_drag(window);
                 });
             }
@@ -415,7 +416,7 @@ pub(super) fn cancel_source_window(window: &mut Window, cx: &mut App) {
         .borrow()
         .active
         .as_ref()
-        .is_some_and(|active| active.window == window.window_handle());
+        .is_some_and(|active| active.native_window == window.window_handle());
     if is_source {
         shared.borrow_mut().clear();
         cx.stop_active_drag(window);
@@ -429,24 +430,25 @@ fn commit_drop_with(
     cx: &mut App,
     create: impl FnOnce(Point<Pixels>, &mut App) -> anyhow::Result<WindowHandle<KnotWindow>>,
 ) {
-    let _ = cx.update_window(active.window, |_, window, cx| {
-        if window
+    let _ = cx.update_window(active.native_window, |_, native_window, cx| {
+        if native_window
             .root::<KnotWindow>()
             .flatten()
-            .map(|shell| shell.downgrade())
-            != Some(active.shell.clone())
+            .map(|window| window.downgrade())
+            != Some(active.window.clone())
         {
             return;
         }
-        let Some(shell) = active.shell.upgrade() else {
+        let Some(window) = active.window.upgrade() else {
             return;
         };
-        shell.update(cx, |shell, cx| match action {
+        window.update(cx, |window, cx| match action {
             DropAction::Target(destination) => {
-                shell.relocate_tab_to(&active.source, &destination, cx);
+                window.relocate_tab_to(&active.source, &destination, cx);
             }
             DropAction::TearOut(pointer) => {
-                shell.relocate_tab_to_new_window_with(&active.source, cx, |cx| create(pointer, cx));
+                window
+                    .relocate_tab_to_new_window_with(&active.source, cx, |cx| create(pointer, cx));
             }
             DropAction::Invalid => {}
         });
@@ -502,18 +504,18 @@ impl KnotWindow {
     ) -> impl Fn(&TabRelocationSource, Point<Pixels>, &mut Window, &mut App) -> Entity<TabDragLabel>
     + use<> {
         let coordinator = cx.global::<ApplicationTabDrag>().0.clone();
-        let shell = cx.entity().downgrade();
-        move |source, _, window, cx| {
-            let geometry = window_geometries(window, cx);
+        let window = cx.entity().downgrade();
+        move |source, _, native_window, cx| {
+            let geometry = window_geometries(native_window, cx);
             let mut state = coordinator.borrow_mut();
             state.clear();
             state.active = Some(ActiveTabDrag {
-                shell: shell.clone(),
-                window: window.window_handle(),
+                window: window.clone(),
+                native_window: native_window.window_handle(),
                 source: source.clone(),
             });
             state.move_pointer(
-                content_bounds(window).origin + window.mouse_position(),
+                content_bounds(native_window).origin + native_window.mouse_position(),
                 &geometry,
             );
             drop(state);
@@ -672,130 +674,134 @@ impl KnotWindow {
     pub(super) fn drag_listener(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
         let state = self.tab_drag.clone();
         let coordinator = cx.global::<ApplicationTabDrag>().0.clone();
-        let shell = cx.entity().downgrade();
+        let window = cx.entity().downgrade();
         let workbench = self.workbench.downgrade();
         let accepts_drop = self.command_palette.is_none() && !self.extension_report_open;
         let drop_target = theme(cx).paint_color(color::DROP_TARGET_BACKGROUND);
         canvas(
             |_, _, _| (),
-            move |_, _, window, _| {
-                let handle = window.window_handle();
+            move |_, _, native_window, _| {
+                let handle = native_window.window_handle();
                 let mut shared = coordinator.borrow_mut();
-                shared.windows.retain(|entry| entry.window != handle);
+                shared.windows.retain(|entry| entry.native_window != handle);
                 shared.windows.push(DragWindow {
-                    window: handle,
-                    shell: shell.clone(),
+                    native_window: handle,
+                    window: window.clone(),
                     workbench: workbench.clone(),
                     state: state.clone(),
                     accepts_drop,
                 });
                 drop(shared);
                 if let Some(preview) = state.borrow().preview {
-                    window.paint_quad(fill(preview.bounds, drop_target));
+                    native_window.paint_quad(fill(preview.bounds, drop_target));
                 }
                 let moves = coordinator.clone();
-                let resize_shell = shell.clone();
-                window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
-                    if phase == DispatchPhase::Capture
-                        && let Some(shell) = resize_shell.upgrade()
-                    {
-                        if let Some(resize) = shell.read(cx).split_resize
-                            && event.dragging()
+                let resize_window = window.clone();
+                native_window.on_mouse_event(
+                    move |event: &MouseMoveEvent, phase, native_window, cx| {
+                        if phase == DispatchPhase::Capture
+                            && let Some(window) = resize_window.upgrade()
                         {
-                            let delta = event.position - resize.start_pointer;
-                            let delta = if resize.horizontal { delta.x } else { delta.y };
-                            let extent = resize.extent.max(1.);
-                            let limit = (MIN_DRAGGED_PANE_SIZE / extent).min(0.5);
-                            let ratio = (resize.start_ratio + f32::from(delta) / extent)
-                                .clamp(limit, 1. - limit);
-                            shell.update(cx, |shell, cx| {
-                                shell.workbench.update(cx, |workbench, _| {
-                                    workbench.set_split_ratio(resize.boundary, ratio);
+                            if let Some(resize) = window.read(cx).split_resize
+                                && event.dragging()
+                            {
+                                let delta = event.position - resize.start_pointer;
+                                let delta = if resize.horizontal { delta.x } else { delta.y };
+                                let extent = resize.extent.max(1.);
+                                let limit = (MIN_DRAGGED_PANE_SIZE / extent).min(0.5);
+                                let ratio = (resize.start_ratio + f32::from(delta) / extent)
+                                    .clamp(limit, 1. - limit);
+                                window.update(cx, |window, cx| {
+                                    window.workbench.update(cx, |workbench, _| {
+                                        workbench.set_split_ratio(resize.boundary, ratio);
+                                    });
+                                    cx.notify();
                                 });
-                                cx.notify();
-                            });
-                            return;
+                                return;
+                            }
+                            let resize = window.read(cx).dock_resize;
+                            if let Some(resize) = resize
+                                && event.dragging()
+                            {
+                                let delta = event.position - resize.start_pointer;
+                                let size = match resize.dock {
+                                    DockLocation::Left => resize.start_size + f32::from(delta.x),
+                                    DockLocation::Right => resize.start_size - f32::from(delta.x),
+                                    DockLocation::Bottom => resize.start_size - f32::from(delta.y),
+                                };
+                                window.update(cx, |window, cx| {
+                                    window.workbench.update(cx, |workbench, _| {
+                                        workbench.set_dock_size(resize.dock, size);
+                                    });
+                                    cx.notify();
+                                });
+                                return;
+                            }
                         }
-                        let resize = shell.read(cx).dock_resize;
-                        if let Some(resize) = resize
-                            && event.dragging()
+                        if phase == DispatchPhase::Capture
+                            && cx.has_active_drag()
+                            && moves.borrow().active.is_some()
                         {
-                            let delta = event.position - resize.start_pointer;
-                            let size = match resize.dock {
-                                DockLocation::Left => resize.start_size + f32::from(delta.x),
-                                DockLocation::Right => resize.start_size - f32::from(delta.x),
-                                DockLocation::Bottom => resize.start_size - f32::from(delta.y),
-                            };
-                            shell.update(cx, |shell, cx| {
-                                shell.workbench.update(cx, |workbench, _| {
-                                    workbench.set_dock_size(resize.dock, size);
-                                });
-                                cx.notify();
-                            });
-                            return;
+                            let geometry = window_geometries(native_window, cx);
+                            moves.borrow_mut().move_pointer(
+                                content_bounds(native_window).origin + event.position,
+                                &geometry,
+                            );
+                            cx.refresh_windows();
                         }
-                    }
-                    if phase == DispatchPhase::Capture
-                        && cx.has_active_drag()
-                        && moves.borrow().active.is_some()
-                    {
-                        let geometry = window_geometries(window, cx);
-                        moves.borrow_mut().move_pointer(
-                            content_bounds(window).origin + event.position,
-                            &geometry,
-                        );
-                        cx.refresh_windows();
-                    }
-                });
+                    },
+                );
                 let releases = coordinator.clone();
-                let resize_release = shell.clone();
-                window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
-                    if phase != DispatchPhase::Capture || event.button != MouseButton::Left {
-                        return;
-                    }
-                    if let Some(shell) = resize_release.upgrade()
-                        && shell.read(cx).split_resize.is_some()
-                    {
-                        // The settled ratio reaches the window layout through
-                        // the view-state debounce that notification restarts.
-                        shell.update(cx, |shell, cx| {
-                            shell.split_resize = None;
-                            cx.notify();
-                        });
-                    }
-                    if let Some(shell) = resize_release.upgrade()
-                        && shell.read(cx).dock_resize.is_some()
-                    {
-                        shell.update(cx, |shell, cx| {
-                            shell.dock_resize = None;
-                            // A settled resize is a user customization; equal
-                            // snapshots are no-ops, so release without movement
-                            // never reaches storage.
-                            shell.publish_tool_layout(cx);
-                            cx.notify();
-                        });
-                    }
-                    let active = releases.borrow_mut().active.take();
-                    if let Some(active) = active {
-                        let geometry = window_geometries(window, cx);
-                        let action = releases.borrow().action_at(
-                            content_bounds(window).origin + event.position,
-                            &geometry,
-                            &active.source,
-                        );
-                        releases.borrow_mut().clear();
-                        if cx.has_active_drag() {
-                            cx.stop_active_drag(window);
-                            cx.stop_propagation();
-                            // Release can arrive in the destination window. Commit
-                            // after dispatch so neither endpoint is borrowed here.
-                            cx.defer(move |cx| {
-                                commit_drop_with(active, action, cx, open_tab_tear_out_window)
+                let resize_window = window.clone();
+                native_window.on_mouse_event(
+                    move |event: &MouseUpEvent, phase, native_window, cx| {
+                        if phase != DispatchPhase::Capture || event.button != MouseButton::Left {
+                            return;
+                        }
+                        if let Some(window) = resize_window.upgrade()
+                            && window.read(cx).split_resize.is_some()
+                        {
+                            // The settled ratio reaches the window layout through
+                            // the view-state debounce that notification restarts.
+                            window.update(cx, |window, cx| {
+                                window.split_resize = None;
+                                cx.notify();
                             });
                         }
-                        cx.refresh_windows();
-                    }
-                });
+                        if let Some(window) = resize_window.upgrade()
+                            && window.read(cx).dock_resize.is_some()
+                        {
+                            window.update(cx, |window, cx| {
+                                window.dock_resize = None;
+                                // A settled resize is a user customization; equal
+                                // snapshots are no-ops, so release without movement
+                                // never reaches storage.
+                                window.publish_tool_layout(cx);
+                                cx.notify();
+                            });
+                        }
+                        let active = releases.borrow_mut().active.take();
+                        if let Some(active) = active {
+                            let geometry = window_geometries(native_window, cx);
+                            let action = releases.borrow().action_at(
+                                content_bounds(native_window).origin + event.position,
+                                &geometry,
+                                &active.source,
+                            );
+                            releases.borrow_mut().clear();
+                            if cx.has_active_drag() {
+                                cx.stop_active_drag(native_window);
+                                cx.stop_propagation();
+                                // Release can arrive in the destination window. Commit
+                                // after dispatch so neither endpoint is borrowed here.
+                                cx.defer(move |cx| {
+                                    commit_drop_with(active, action, cx, open_tab_tear_out_window)
+                                });
+                            }
+                            cx.refresh_windows();
+                        }
+                    },
+                );
             },
         )
         .absolute()

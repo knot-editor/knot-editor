@@ -1,4 +1,4 @@
-//! Application launch, product windows, the launch gate, menus, and default keys.
+//! Application launch, windows, the launch gate, menus, and default keys.
 
 use super::*;
 
@@ -19,7 +19,7 @@ pub(crate) fn open_product_window(request: Option<OpenRequest>, cx: &mut App) {
     open_product_window_with(request, None, cx);
 }
 
-/// Open a product window, presenting documents restored at startup in its
+/// Open a window, presenting documents restored at startup in its
 /// center, which is otherwise empty.
 pub(super) fn open_product_window_with(
     request: Option<OpenRequest>,
@@ -41,10 +41,10 @@ pub(super) fn open_product_window_with(
         .collect::<Vec<_>>();
     let notice = recovery.as_ref().and_then(recovery_listing::startup_notice);
     let workbench = cx.new(|_| Workbench::empty());
-    let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
-    shell.update(cx, |shell, cx| {
-        shell.restore_fresh_window_layout(cx);
-        shell.workbench.update(cx, |workbench, cx| {
+    let window = cx.new(|cx| KnotWindow::new(workbench, cx));
+    window.update(cx, |window, cx| {
+        window.restore_fresh_window_layout(cx);
+        window.workbench.update(cx, |workbench, cx| {
             let first = restored
                 .into_iter()
                 .map(|(document, model)| workbench.open_document_in_center(document, model, cx))
@@ -55,15 +55,15 @@ pub(super) fn open_product_window_with(
                 workbench.activate_tab(pane, tab);
             }
         });
-        shell.focus_active_surface(cx);
+        window.focus_active_surface(cx);
         if let Some(request) = request {
-            let target = OpenTarget::from_command(&shell.capture_command_target(cx));
-            drop(shell.start_open_operation(request, target, false, cx));
+            let target = OpenTarget::from_command(&window.capture_command_target(cx));
+            drop(window.start_open_operation(request, target, false, cx));
         }
     });
     let bounds = Bounds::centered(None, size(px(1000.), px(720.)), cx);
-    let window = show_window(
-        shell.clone(),
+    let native_window = show_window(
+        window.clone(),
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(480.), px(320.))),
@@ -71,34 +71,36 @@ pub(super) fn open_product_window_with(
         },
         cx,
     )
-    .expect("product window must open");
+    .expect("a window must open");
     if let Some((title, detail)) = notice {
-        shell.update(cx, |shell, cx| {
-            shell.show_notice(PromptLevel::Warning, title, detail, cx)
+        window.update(cx, |window, cx| {
+            window.show_notice(PromptLevel::Warning, title, detail, cx)
         });
     }
-    window.into()
+    native_window.into()
 }
 
-/// Open a window that shows `shell`; closing the window ends the session,
-/// and a window that fails to open ends it at once.
+/// Open a native window that shows `window`; closing it ends the window, and
+/// one that fails to open ends it at once.
 pub(super) fn show_window(
-    shell: Entity<KnotWindow>,
+    window: Entity<KnotWindow>,
     options: WindowOptions,
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<KnotWindow>> {
-    let window = cx.open_window(options, {
-        let shell = shell.clone();
-        move |window, cx| {
-            shell.update(cx, |shell, cx| shell.observe_extension_host(window, cx));
-            install_protected_window_close(&shell, window, cx);
-            shell
+    let native_window = cx.open_window(options, {
+        let window = window.clone();
+        move |native_window, cx| {
+            window.update(cx, |window, cx| {
+                window.observe_extension_host(native_window, cx)
+            });
+            install_protected_window_close(&window, native_window, cx);
+            window
         }
     });
-    if window.is_err() {
-        shell.update(cx, |shell, cx| shell.end(cx));
+    if native_window.is_err() {
+        window.update(cx, |window, cx| window.end(cx));
     }
-    window
+    native_window
 }
 
 #[cfg(test)]
@@ -142,9 +144,9 @@ pub(super) fn open_tab_transfer_window_with_bounds(
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<KnotWindow>> {
     let workbench = cx.new(|_| Workbench::empty());
-    let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
+    let window = cx.new(|cx| KnotWindow::new(workbench, cx));
     show_window(
-        shell,
+        window,
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(480.), px(320.))),
@@ -156,7 +158,7 @@ pub(super) fn open_tab_transfer_window_with_bounds(
     )
 }
 
-/// Open an empty product window that inherits the fresh-window tool layout;
+/// Open an empty window that inherits the fresh-window tool layout;
 /// session replacement presents its documents in the same turn. Saved
 /// geometry is fitted to the connected displays.
 pub(super) fn open_blank_window(
@@ -171,10 +173,10 @@ pub(super) fn open_blank_window(
         ),
     };
     let workbench = cx.new(|_| Workbench::empty());
-    let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
-    shell.update(cx, |shell, cx| shell.restore_fresh_window_layout(cx));
+    let window = cx.new(|cx| KnotWindow::new(workbench, cx));
+    window.update(cx, |window, cx| window.restore_fresh_window_layout(cx));
     let handle = show_window(
-        shell.clone(),
+        window.clone(),
         WindowOptions {
             window_bounds: Some(window_bounds),
             window_min_size: Some(size(px(480.), px(320.))),
@@ -184,7 +186,7 @@ pub(super) fn open_blank_window(
         },
         cx,
     )?;
-    Ok((shell, handle.into()))
+    Ok((window, handle.into()))
 }
 
 /// Saved geometry fitted to the connected displays, as window options.
@@ -258,7 +260,7 @@ pub(in crate::app) fn finish_product_startup(
             cx.spawn(async move |cx| {
                 let recovery = recovery.await;
                 let record = cx
-                    .update(|cx| crate::app::window_sessions::take_for_restore(cx))
+                    .update(|cx| crate::app::window_record::take_for_restore(cx))
                     .await;
                 let restored = match record {
                     Some(record) => {
@@ -317,7 +319,7 @@ fn open_launch_windows(
         .filter_map(|window| operations::capture_window(&window.window, cx).ok())
         .collect::<Vec<_>>();
     let mut recovery = Some(recovery);
-    if let Some(shell) = restored.first() {
+    if let Some(window) = restored.first() {
         let recovery = recovery.take().expect("recovery is unclaimed");
         let workbenches = cx.global::<ApplicationWindows>();
         let unpresented = recovery
@@ -327,14 +329,14 @@ fn open_launch_windows(
             .filter(|document| workbenches.view_count(*document, cx) == 0)
             .collect::<Vec<_>>();
         let notice = recovery_listing::startup_notice(&recovery);
-        shell.update(cx, |shell, cx| {
+        window.update(cx, |window, cx| {
             for document in unpresented {
                 if KnotWindow::documents(cx).read(cx).get(document).is_some() {
-                    shell.present_document(document, cx);
+                    window.present_document(document, cx);
                 }
             }
             if let Some((title, detail)) = notice {
-                shell.show_notice(PromptLevel::Warning, title, detail, cx);
+                window.show_notice(PromptLevel::Warning, title, detail, cx);
             }
             cx.notify();
         });
@@ -347,10 +349,10 @@ fn open_launch_windows(
         last = Some(open_product_window_with(Some(request), recovery.take(), cx));
     }
     if let Some(last) = last {
-        let _ = cx.update_window(last, |_, window, _| window.activate_window());
+        let _ = cx.update_window(last, |_, native_window, _| native_window.activate_window());
     }
     open_report_after_failed_startup(cx);
-    crate::app::window_sessions::start_recording(cx);
+    crate::app::window_record::start_recording(cx);
     crate::app::extensions::host::launched(cx);
     cx.activate(true);
 }
@@ -369,9 +371,9 @@ fn open_report_after_failed_startup(cx: &mut App) {
     if !failed {
         return;
     }
-    for shell in windows(cx) {
-        shell.update(cx, |shell, cx| {
-            shell.extension_report_open = true;
+    for window in windows(cx) {
+        window.update(cx, |window, cx| {
+            window.extension_report_open = true;
             cx.notify();
         });
     }
@@ -430,7 +432,7 @@ pub(crate) fn run(
         cx.set_global(crate::app::tool_layout::ApplicationToolLayout(
             crate::app::tool_layout::ToolLayoutStore::open(&state),
         ));
-        crate::app::window_sessions::install(&state, cx);
+        crate::app::window_record::install(&state, cx);
         cx.set_global(crate::app::command_history::ApplicationCommandHistory(
             crate::app::command_history::CommandHistory::open(&state),
         ));
@@ -585,7 +587,7 @@ fn run_without_window(source: &ApplicationCommandSource, cx: &mut App) {
     }
     let command = source.command();
     if let Some(window) = window.downcast::<KnotWindow>() {
-        let _ = window.update(cx, |shell, _, cx| shell.dispatch_source(command, cx));
+        let _ = window.update(cx, |window, _, cx| window.dispatch_source(command, cx));
     }
 }
 

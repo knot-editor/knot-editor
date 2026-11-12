@@ -6,7 +6,7 @@ use std::rc::Rc;
 use super::*;
 use crate::app::documents::DocumentId;
 use crate::app::editor::EditorViewState;
-use crate::app::window_sessions::{self, WindowSession};
+use crate::app::window_record::{self, WindowRecord};
 use crate::app::workbench::{DockLocation, SplitPlacement};
 
 fn uri(path: &str) -> ResourceUri {
@@ -55,7 +55,7 @@ impl Launch {
     fn install_windows(&self, cx: &mut TestAppContext) {
         let executor = cx.background_executor.clone();
         let database = crate::app::record_store::StateDatabase::open(self.path(), executor);
-        cx.update(|cx| window_sessions::install(&database, cx));
+        cx.update(|cx| window_record::install(&database, cx));
     }
 
     /// Run product startup and wait until its windows are open.
@@ -76,7 +76,7 @@ impl Launch {
     fn restart(&self, requests: Vec<OpenRequest>, cx: &mut TestAppContext) {
         let drain = cx.update(|cx| crate::app::recovery::drain(cx));
         wait(drain, cx).unwrap();
-        let recorded = cx.update(window_sessions::record_for_quit).unwrap();
+        let recorded = cx.update(window_record::record_for_quit).unwrap();
         wait(recorded, cx).unwrap();
         self.relaunch(requests, cx);
     }
@@ -90,7 +90,7 @@ impl Launch {
     /// Stop as a crash would and install fresh application state on the same
     /// stores.
     fn reset(&self, cx: &mut TestAppContext) {
-        cx.update(|cx| window_sessions::stop_for_test(cx));
+        cx.update(|cx| window_record::stop_for_test(cx));
         let recovery = cx.read(|cx| {
             cx.global::<crate::app::recovery::ApplicationRecovery>()
                 .0
@@ -99,7 +99,7 @@ impl Launch {
         });
         wait(recovery, cx).unwrap();
         for window in cx.read(|cx| cx.windows()) {
-            let _ = cx.update_window(window, |_, window, _| window.remove_window());
+            let _ = cx.update_window(window, |_, native_window, _| native_window.remove_window());
         }
         cx.run_until_parked();
         let documents = cx.new(|_| DocumentCollection::new());
@@ -122,7 +122,7 @@ impl Launch {
 
     fn open_file(
         &self,
-        shell: &Entity<KnotWindow>,
+        window: &Entity<KnotWindow>,
         path: &str,
         cx: &mut TestAppContext,
     ) -> DocumentId {
@@ -139,8 +139,8 @@ impl Launch {
                 cx,
             )
         });
-        shell.update(cx, |shell, cx| {
-            shell.workbench.update(cx, |workbench, cx| {
+        window.update(cx, |window, cx| {
+            window.workbench.update(cx, |workbench, cx| {
                 workbench.open_document_in_center(document, model, cx)
             });
             cx.notify();
@@ -154,23 +154,23 @@ fn documents(cx: &gpui::App) -> Entity<DocumentCollection> {
 }
 
 /// Product windows in creation order.
-fn shells(cx: &TestAppContext) -> Vec<(gpui::AnyWindowHandle, Entity<KnotWindow>)> {
+fn windows_by_creation(cx: &TestAppContext) -> Vec<(gpui::AnyWindowHandle, Entity<KnotWindow>)> {
     let mut windows = cx
         .read(|cx| cx.windows())
         .into_iter()
         .filter_map(|window| {
-            let shell = window.downcast::<KnotWindow>()?;
-            Some((window, cx.read(|cx| shell.entity(cx).unwrap())))
+            let knot_window = window.downcast::<KnotWindow>()?;
+            Some((window, cx.read(|cx| knot_window.entity(cx).unwrap())))
         })
         .collect::<Vec<_>>();
-    windows.sort_by_key(|(_, shell)| cx.read(|cx| shell.read(cx).creation_order()));
+    windows.sort_by_key(|(_, window)| cx.read(|cx| window.read(cx).creation_order()));
     windows
 }
 
-fn texts(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
+fn texts(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
     cx.read(|cx| {
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -186,9 +186,9 @@ fn texts(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
     })
 }
 
-fn first_document(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> DocumentId {
+fn first_document(window: &Entity<KnotWindow>, cx: &TestAppContext) -> DocumentId {
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.area_panes(crate::app::workbench::Area::Center)[0];
         workbench.pane(pane).unwrap().tabs()[0]
             .document_id()
@@ -213,11 +213,11 @@ fn edit(document: DocumentId, text: &str, cx: &mut TestAppContext) {
 }
 
 fn editors(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<Entity<crate::app::editor::Editor>> {
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         workbench
             .tabs()
             .filter_map(|tab| workbench.editor(tab))
@@ -226,13 +226,13 @@ fn editors(
     })
 }
 
-fn record(cx: &mut TestAppContext) -> WindowSession {
-    cx.update(window_sessions::record);
-    cx.read(window_sessions::current).unwrap()
+fn record(cx: &mut TestAppContext) -> WindowRecord {
+    cx.update(window_record::record);
+    cx.read(window_record::current).unwrap()
 }
 
 /// What restoration reproduces: roots, arrangement, focus, and dock sizes.
-fn arrangement(record: &WindowSession) -> Vec<serde_json::Value> {
+fn arrangement(record: &WindowRecord) -> Vec<serde_json::Value> {
     record
         .windows
         .iter()
@@ -280,19 +280,19 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
         .seed_file(uri("a/long.txt"), text.as_bytes())
         .unwrap();
     launch.start(Vec::new(), cx);
-    let (first_window, first) = shells(cx).remove(0);
-    first.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![uri("a"), uri("b")], cx);
+    let (first_window, first) = windows_by_creation(cx).remove(0);
+    first.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![uri("a"), uri("b")], cx);
     });
     // An untitled document holds unsaved text, so recovery restores it too.
-    first.update(cx, |shell, cx| shell.new_document_in_pane(None, cx));
+    first.update(cx, |window, cx| window.new_document_in_pane(None, cx));
     edit(first_document(&first, cx), "scratch", cx);
     let long = launch.open_file(&first, "a/long.txt", cx);
     edit(long, "dirty", cx);
-    let terminal = first.update(cx, |shell, cx| {
-        let pane = shell.workbench.read(cx).center_pane().unwrap();
-        let (terminal, view) = shell.create_terminal(cx);
-        shell.workbench.update(cx, |workbench, cx| {
+    let terminal = first.update(cx, |window, cx| {
+        let pane = window.workbench.read(cx).center_pane().unwrap();
+        let (terminal, view) = window.create_terminal(cx);
+        window.workbench.update(cx, |workbench, cx| {
             let split = workbench
                 .split_pane(pane, SplitDirection::Vertical, SplitPlacement::After, cx)
                 .unwrap();
@@ -319,27 +319,25 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
 
     let second = cx.update(|cx| {
         let handle = super::super::launch::open_product_window_with(None, None, cx);
-        handle
-            .downcast::<KnotWindow>()
-            .unwrap()
-            .entity(cx)
-            .unwrap()
+        handle.downcast::<KnotWindow>().unwrap().entity(cx).unwrap()
     });
-    second.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![uri("b")], cx);
+    second.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![uri("b")], cx);
     });
-    second.update(cx, |shell, cx| {
-        shell.ensure_test_tool(true, cx);
-        let tool = shell.test_tool_frame(cx).unwrap();
-        shell.workbench.update(cx, |workbench, _| {
+    second.update(cx, |window, cx| {
+        window.ensure_test_tool(true, cx);
+        let tool = window.test_tool_frame(cx).unwrap();
+        window.workbench.update(cx, |workbench, _| {
             workbench.show_tool(tool);
         });
-        shell.new_document_in_pane(None, cx)
+        window.new_document_in_pane(None, cx)
     });
     edit(first_document(&second, cx), "notes", cx);
     launch.open_file(&second, "b/two.txt", cx);
-    cx.update_window(first_window, |_, window, _| window.activate_window())
-        .unwrap();
+    cx.update_window(first_window, |_, native_window, _| {
+        native_window.activate_window()
+    })
+    .unwrap();
     cx.run_until_parked();
     let before = record(cx);
     assert_eq!(before.windows.len(), 2);
@@ -362,7 +360,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     let after = record(cx);
     assert_eq!(arrangement(&after), arrangement(&before));
     assert_eq!(after.active, Some(0));
-    let restored = shells(cx);
+    let restored = windows_by_creation(cx);
     assert_eq!(restored.len(), 2);
     let (restored_window, first) = &restored[0];
     assert!(active(cx) == Some(*restored_window));
@@ -380,7 +378,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
         assert_eq!(views[1].read(cx).view_state(cx), state);
         assert_eq!(views[1].read(cx).model(), views[2].read(cx).model());
     });
-    // The terminal pane restored in place with a fresh shell.
+    // The terminal pane restored in place with a fresh window.
     cx.read(|cx| {
         let terminals = first
             .read(cx)
@@ -401,10 +399,10 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     // Quitting and restarting again produces the same windows, and the
     // record's unknown tool never reaches a window.
     cx.update(|cx| {
-        cx.global::<window_sessions::ApplicationWindowSessions>()
+        cx.global::<window_record::ApplicationWindowRecord>()
             .publish_for_test(failing)
     });
-    let flush = cx.read(window_sessions::flush);
+    let flush = cx.read(window_record::flush);
     wait(flush, cx).unwrap();
     launch.relaunch(Vec::new(), cx);
     assert_eq!(arrangement(&record(cx)), arrangement(&before));
@@ -414,17 +412,17 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
 fn queued_requests_open_after_restoration_without_duplicating_documents(cx: &mut TestAppContext) {
     let launch = Launch::new(cx);
     launch.start(Vec::new(), cx);
-    let (_, shell) = shells(cx).remove(0);
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![uri("a")], cx);
+    let (_, window) = windows_by_creation(cx).remove(0);
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![uri("a")], cx);
     });
-    launch.open_file(&shell, "a/one.txt", cx);
+    launch.open_file(&window, "a/one.txt", cx);
     record(cx);
 
     let file = OpenRequest::from_uri_for_product(uri("a/one.txt"));
     let folder = OpenRequest::from_uri_for_product(uri("b"));
     launch.restart(vec![file, folder], cx);
-    let windows = shells(cx);
+    let windows = windows_by_creation(cx);
     assert_eq!(windows.len(), 3);
     // The restored window comes first and the last request window is focused.
     assert_eq!(texts(&windows[0].1, cx), ["one"]);
@@ -454,7 +452,7 @@ fn queued_requests_open_after_restoration_without_duplicating_documents(cx: &mut
     // A reopen after launch opens one empty window and restores nothing.
     cx.update(|cx| super::super::dispatch_launch_request(None, cx));
     cx.run_until_parked();
-    let windows = shells(cx);
+    let windows = windows_by_creation(cx);
     assert_eq!(windows.len(), 4);
     assert!(texts(&windows[3].1, cx).is_empty());
 }
@@ -471,10 +469,10 @@ fn changed_files_clamp_view_state_and_missing_clean_files_are_skipped(cx: &mut T
         .seed_file(uri("a/gone.txt"), b"gone")
         .unwrap();
     launch.start(Vec::new(), cx);
-    let (_, shell) = shells(cx).remove(0);
-    launch.open_file(&shell, "a/gone.txt", cx);
-    launch.open_file(&shell, "a/long.txt", cx);
-    let view = editors(&shell, cx).pop().unwrap();
+    let (_, window) = windows_by_creation(cx).remove(0);
+    launch.open_file(&window, "a/gone.txt", cx);
+    launch.open_file(&window, "a/long.txt", cx);
+    let view = editors(&window, cx).pop().unwrap();
     view.update(cx, |editor, cx| {
         editor.restore_view_state(
             EditorViewState {
@@ -495,9 +493,9 @@ fn changed_files_clamp_view_state_and_missing_clean_files_are_skipped(cx: &mut T
         .unwrap();
     launch.provider.remove(uri("a/gone.txt")).unwrap();
     launch.restart(Vec::new(), cx);
-    let (_, shell) = shells(cx).remove(0);
-    assert_eq!(texts(&shell, cx), ["é\n".repeat(10)]);
-    let view = editors(&shell, cx).pop().unwrap();
+    let (_, window) = windows_by_creation(cx).remove(0);
+    assert_eq!(texts(&window, cx), ["é\n".repeat(10)]);
+    let view = editors(&window, cx).pop().unwrap();
     let state = cx.read(|cx| view.read(cx).view_state(cx));
     assert_eq!(state.caret, "é\n".repeat(10).len());
     assert!(state.top <= state.caret);
@@ -507,25 +505,25 @@ fn changed_files_clamp_view_state_and_missing_clean_files_are_skipped(cx: &mut T
 fn lost_unsupported_and_consumed_records_open_the_default_window(cx: &mut TestAppContext) {
     let launch = Launch::new(cx);
     launch.start(Vec::new(), cx);
-    let (_, shell) = shells(cx).remove(0);
-    launch.open_file(&shell, "a/one.txt", cx);
+    let (_, window) = windows_by_creation(cx).remove(0);
+    launch.open_file(&window, "a/one.txt", cx);
     record(cx);
-    let flush = cx.read(window_sessions::flush);
+    let flush = cx.read(window_record::flush);
     wait(flush, cx).unwrap();
 
     // A restore interrupted after the record was marked consumed restores
     // nothing at the next launch.
-    let taken = cx.read(window_sessions::take_for_restore);
+    let taken = cx.read(window_record::take_for_restore);
     assert!(wait(taken, cx).is_some());
     launch.relaunch(Vec::new(), cx);
-    let windows = shells(cx);
+    let windows = windows_by_creation(cx);
     assert_eq!(windows.len(), 1);
     assert!(texts(&windows[0].1, cx).is_empty());
 
     // An unreadable record behaves like a missing one.
     std::fs::write(launch.path(), "not a database").unwrap();
     launch.relaunch(Vec::new(), cx);
-    assert_eq!(shells(cx).len(), 1);
+    assert_eq!(windows_by_creation(cx).len(), 1);
     // A record from an unsupported version is ignored.
     let connection = rusqlite::Connection::open(launch.path().with_extension("v99")).unwrap();
     connection
@@ -540,26 +538,21 @@ fn lost_unsupported_and_consumed_records_open_the_default_window(cx: &mut TestAp
     drop(connection);
     std::fs::rename(launch.path().with_extension("v99"), launch.path()).unwrap();
     launch.relaunch(Vec::new(), cx);
-    assert_eq!(shells(cx).len(), 1);
+    assert_eq!(windows_by_creation(cx).len(), 1);
 }
 
 #[gpui::test]
 fn closing_a_window_removes_it_and_quitting_without_windows_restores_none(cx: &mut TestAppContext) {
     let launch = Launch::new(cx);
     launch.start(Vec::new(), cx);
-    let (window, _) = shells(cx).remove(0);
-    cx.update_window(window, |_, window, _| window.remove_window())
+    let (window, _) = windows_by_creation(cx).remove(0);
+    cx.update_window(window, |_, native_window, _| native_window.remove_window())
         .unwrap();
     cx.run_until_parked();
-    assert!(
-        cx.read(window_sessions::current)
-            .unwrap()
-            .windows
-            .is_empty()
-    );
+    assert!(cx.read(window_record::current).unwrap().windows.is_empty());
     launch.restart(Vec::new(), cx);
     // With nothing recorded, the default window opens.
-    assert_eq!(shells(cx).len(), 1);
+    assert_eq!(windows_by_creation(cx).len(), 1);
 }
 
 #[gpui::test]
@@ -583,11 +576,11 @@ fn a_failed_config_launch_never_records_windows(cx: &mut TestAppContext) {
     });
     assert!(!wait_for_product_startup(cx));
     assert_eq!(cx.read(|cx| cx.windows().len()), 1);
-    cx.update(window_sessions::record);
-    if let Some(flush) = cx.update(window_sessions::record_for_quit) {
+    cx.update(window_record::record);
+    if let Some(flush) = cx.update(window_record::record_for_quit) {
         wait(flush, cx).unwrap();
     }
-    assert!(cx.read(window_sessions::current).is_none());
+    assert!(cx.read(window_record::current).is_none());
     assert!(!launch.path().exists());
 }
 
@@ -595,12 +588,12 @@ fn a_failed_config_launch_never_records_windows(cx: &mut TestAppContext) {
 fn native_windows_and_recovery_restore_when_an_extension_fails_at_startup(cx: &mut TestAppContext) {
     let launch = Launch::new(cx);
     launch.start(Vec::new(), cx);
-    let (_, shell) = shells(cx).remove(0);
-    let one = launch.open_file(&shell, "a/one.txt", cx);
+    let (_, window) = windows_by_creation(cx).remove(0);
+    let one = launch.open_file(&window, "a/one.txt", cx);
     edit(one, " unsaved", cx);
     let drain = cx.update(|cx| crate::app::recovery::drain(cx));
     wait(drain, cx).unwrap();
-    let recorded = cx.update(window_sessions::record_for_quit).unwrap();
+    let recorded = cx.update(window_record::record_for_quit).unwrap();
     wait(recorded, cx).unwrap();
 
     launch.reset(cx);
@@ -623,7 +616,7 @@ fn native_windows_and_recovery_restore_when_an_extension_fails_at_startup(cx: &m
     });
     assert!(wait_for_product_startup(cx));
     cx.run_until_parked();
-    let windows = shells(cx);
+    let windows = windows_by_creation(cx);
     assert_eq!(windows.len(), 1);
     assert_eq!(texts(&windows[0].1, cx), ["one unsaved"]);
 }
@@ -636,9 +629,9 @@ fn restored_documents_have_their_languages_before_their_window_exists(cx: &mut T
         .seed_file(uri("a/main.rs"), b"fn main() {}\n")
         .unwrap();
     launch.start(Vec::new(), cx);
-    let (_, shell) = shells(cx).remove(0);
-    launch.open_file(&shell, "a/main.rs", cx);
-    let recorded = cx.update(window_sessions::record_for_quit).unwrap();
+    let (_, window) = windows_by_creation(cx).remove(0);
+    launch.open_file(&window, "a/main.rs", cx);
+    let recorded = cx.update(window_record::record_for_quit).unwrap();
     wait(recorded, cx).unwrap();
 
     launch.reset(cx);
@@ -661,10 +654,10 @@ await languages.register({
     let created = Rc::new(RefCell::new(Vec::new()));
     let sink = created.clone();
     let _observer = cx.update(|cx| {
-        cx.observe_new(move |shell: &mut KnotWindow, _, cx| {
+        cx.observe_new(move |window: &mut KnotWindow, _, cx| {
             let documents = cx.global::<ApplicationDocuments>().0.read(cx);
             sink.borrow_mut().extend(
-                shell
+                window
                     .workbench
                     .read(cx)
                     .tab_snapshots()
@@ -708,8 +701,8 @@ await languages.register({
 fn an_explicit_language_survives_hot_exit(cx: &mut TestAppContext) {
     let launch = Launch::new(cx);
     launch.start(Vec::new(), cx);
-    let (_, shell) = shells(cx).remove(0);
-    let document = launch.open_file(&shell, "a/one.txt", cx);
+    let (_, window) = windows_by_creation(cx).remove(0);
+    let document = launch.open_file(&window, "a/one.txt", cx);
     let model = cx.read(|cx| {
         documents(cx)
             .read(cx)
@@ -729,8 +722,8 @@ fn an_explicit_language_survives_hot_exit(cx: &mut TestAppContext) {
     });
     launch.restart(Vec::new(), cx);
 
-    let (_, shell) = shells(cx).remove(0);
-    let document = first_document(&shell, cx);
+    let (_, window) = windows_by_creation(cx).remove(0);
+    let document = first_document(&window, cx);
     cx.read(|cx| {
         let model = documents(cx)
             .read(cx)
@@ -749,16 +742,16 @@ fn closing_the_last_window_quits_and_restores_it_where_that_quits(cx: &mut TestA
     launch.start(Vec::new(), cx);
     cx.update(crate::app::extensions::host::install);
     cx.update(super::super::launch::quit_with_last_window);
-    let (_, shell) = shells(cx).remove(0);
+    let (_, window) = windows_by_creation(cx).remove(0);
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        shell.update(cx, |shell, cx| {
-            shell.dispatch_source(ProductCommandSource::new(name).command(), cx)
+        window.update(cx, |window, cx| {
+            window.dispatch_source(ProductCommandSource::new(name).command(), cx)
         });
         cx.run_until_parked();
     };
     run(NEW_COMMAND, cx);
     let model = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.clone();
+        let workbench = window.read(cx).workbench.clone();
         let editor = workbench.read(cx).focused_editor().unwrap();
         editor.read(cx).model().clone()
     });
@@ -766,13 +759,13 @@ fn closing_the_last_window_quits_and_restores_it_where_that_quits(cx: &mut TestA
 
     run(CLOSE_WINDOW_COMMAND, cx);
     assert!(!cx.has_pending_prompt());
-    let recorded = cx.read(window_sessions::current).unwrap();
+    let recorded = cx.read(window_record::current).unwrap();
     assert_eq!(recorded.windows.len(), 1);
 
     launch.relaunch(Vec::new(), cx);
-    let (_, shell) = shells(cx).remove(0);
+    let (_, window) = windows_by_creation(cx).remove(0);
     let text = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let editor = workbench.focused_editor().unwrap();
         editor.read(cx).model().read(cx).text()
     });

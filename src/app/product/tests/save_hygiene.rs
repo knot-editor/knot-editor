@@ -12,8 +12,8 @@ const CLEAN: &str = "x\na\nb\nc\n";
 struct Saved {
     document: crate::app::documents::DocumentId,
     model: Entity<Buffer>,
-    shell: Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     provider: Arc<MemoryFileSystemProvider>,
     uri: ResourceUri,
 }
@@ -28,11 +28,11 @@ fn saved_document(cx: &mut TestAppContext, model: BufferModel) -> Saved {
     let document = documents.update(cx, |documents, cx| {
         documents.create_destination("created.txt", model.clone(), uri.clone(), cx)
     });
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     Saved {
         document,
         model,
-        shell,
+        native_window,
         window,
         provider,
         uri,
@@ -40,7 +40,7 @@ fn saved_document(cx: &mut TestAppContext, model: BufferModel) -> Saved {
 }
 
 fn save(saved: &Saved, cx: &mut TestAppContext) {
-    let execution = dispatch_product_command(&saved.shell, saved.window, SAVE_COMMAND, cx);
+    let execution = dispatch_product_command(&saved.window, saved.native_window, SAVE_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 
@@ -73,8 +73,8 @@ fn save_writes_the_cleaned_text_and_undo_restores_it_as_unsaved(cx: &mut TestApp
     };
     assert!(!is_dirty(cx));
 
-    cx.update_window(saved.window, |_, _, cx| {
-        let workbench = saved.shell.read(cx).workbench.read(cx);
+    cx.update_window(saved.native_window, |_, _, cx| {
+        let workbench = saved.window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         let editor = workbench
             .editor(pane.active_tab())
@@ -132,7 +132,8 @@ fn save_as_cleans_the_text_too(cx: &mut TestAppContext) {
     cx.set_global(ApplicationSaveDialog(Arc::new(FixedSaveDialog(
         SaveDialogOutcome::Selected(uri.clone()),
     ))));
-    let execution = dispatch_product_command(&saved.shell, saved.window, SAVE_AS_COMMAND, cx);
+    let execution =
+        dispatch_product_command(&saved.window, saved.native_window, SAVE_AS_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let bytes = pollster::block_on(saved.provider.read(uri)).unwrap().bytes;
     assert_eq!(bytes, CLEAN.as_bytes());

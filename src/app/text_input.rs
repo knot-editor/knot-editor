@@ -4,8 +4,8 @@
 //! at the gpui input boundary, and exposes the same editing path to transient
 //! picker/input surfaces and the command palette. Typing, IME preedit, and
 //! clipboard flow through gpui; the field supplies ordinary arrow/home/end
-//! movement and shift selection in `key_down`, which its session calls
-//! without a window, and pointer click/drag selection.
+//! movement and shift selection in `key_down`, which a window calls without a
+//! native window, and pointer click/drag selection.
 
 use crate::app::convert::ThemePaint as _;
 use gpui::{prelude::*, *};

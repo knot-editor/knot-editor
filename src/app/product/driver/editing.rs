@@ -1,4 +1,4 @@
-//! One editing action run in a bare editor, without a session or window.
+//! One editing action run in a bare editor, without a window.
 
 use std::ops::Range;
 

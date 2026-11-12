@@ -1,8 +1,8 @@
 //! Foreground ownership for extension view and completion providers.
 //!
 //! A contributed view definition and its native instances share one
-//! lifecycle-owned registration. Definitions exist independently of product
-//! windows; each product window owns at most one native instance per definition.
+//! lifecycle-owned registration. Definitions exist independently of windows;
+//! each window owns at most one native instance per definition.
 
 use std::collections::{HashMap, HashSet};
 
@@ -67,7 +67,7 @@ pub(crate) enum ViewPresentation {
     Toggle,
 }
 
-/// One lifecycle-owned contributed view definition visible to the product shell.
+/// One lifecycle-owned contributed view definition visible to a window.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ViewDefinition {
     pub(crate) id: String,

@@ -24,7 +24,7 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let host = cx.update(|cx| {
         let host = super::super::super::extensions::host::install(cx);
         host.update(cx, |host, cx| host.start_test_fixture("product", cx));
@@ -51,7 +51,8 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
         std::thread::yield_now();
     }
 
-    let mut execution = dispatch_product_command(&shell, window, "knot.fixture.primary", cx);
+    let mut execution =
+        dispatch_product_command(&window, native_window, "knot.fixture.primary", cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     let outcome = loop {
         cx.run_until_parked();
@@ -68,8 +69,8 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
     assert_eq!(cx.read(|cx| model.read(cx).text()), "fixture ");
 
     let mut completion = dispatch_product_command(
-        &shell,
-        window,
+        &window,
+        native_window,
         super::super::super::commands::dispatch::SHOW_COMPLETIONS_COMMAND,
         cx,
     );
@@ -80,7 +81,7 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
     );
 
     let editor = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -122,17 +123,19 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
 
     cx.update_window(window_handle, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
+        window.update(cx, |window, cx| {
+            window.split(SplitDirection::Horizontal, cx)
+        });
     })
     .unwrap();
     cx.run_until_parked();
     cx.refresh().unwrap();
 
     let (first_pane, second_pane, first_editor, second_editor) = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let first = &workbench.panes()[0];
         let second = &workbench.panes()[1];
         (
@@ -143,9 +146,9 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
         )
     });
     let target = cx
-        .update_window(window_handle, |_, window, cx| {
-            focus_view(&first_editor.focus_handle(cx), window, cx);
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
+        .update_window(window_handle, |_, native_window, cx| {
+            focus_view(&first_editor.focus_handle(cx), native_window, cx);
+            window.update(cx, |window, cx| window.capture_command_target(cx))
         })
         .unwrap();
     let execution = cx.update(|cx| {
@@ -161,8 +164,8 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
             )
         })
     });
-    cx.update_window(window_handle, |_, window, cx| {
-        focus_view(&second_editor.focus_handle(cx), window, cx)
+    cx.update_window(window_handle, |_, native_window, cx| {
+        focus_view(&second_editor.focus_handle(cx), native_window, cx)
     })
     .unwrap();
 
@@ -171,7 +174,7 @@ async fn dispatch_completion_preserves_the_captured_pane(cx: &mut TestAppContext
         CommandOutcome::Completed
     );
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(workbench.pane(first_pane).unwrap().tabs().len(), 2);
         assert_eq!(workbench.pane(second_pane).unwrap().tabs().len(), 1);
     });
@@ -182,19 +185,19 @@ async fn destroyed_product_targets_are_not_retargeted(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     cx.refresh().unwrap();
 
     let target = cx
         .update_window(window_handle, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
-    cx.update_window(window_handle, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.close_active_tab(window, cx));
+    cx.update_window(window_handle, |_, native_window, cx| {
+        window.update(cx, |window, cx| window.close_active_tab(native_window, cx));
     })
     .unwrap();
     let execution = cx.update(|cx| {
@@ -215,7 +218,7 @@ async fn destroyed_product_targets_are_not_retargeted(cx: &mut TestAppContext) {
         execution.completion.await.unwrap(),
         CommandOutcome::InvalidTarget
     );
-    cx.read(|cx| assert!(shell.read(cx).workbench.read(cx).panes().is_empty()));
+    cx.read(|cx| assert!(window.read(cx).workbench.read(cx).panes().is_empty()));
 }
 
 #[gpui::test]
@@ -223,18 +226,18 @@ fn menu_action_reaches_the_captured_window_in_its_dispatch_turn(cx: &mut TestApp
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
 
-    cx.dispatch_action(window, ProductCommandSource::new(NEW_COMMAND));
+    cx.dispatch_action(native_window, ProductCommandSource::new(NEW_COMMAND));
 
     cx.read(|cx| {
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -260,15 +263,17 @@ async fn palette_discovers_commands_and_keeps_its_opening_target(cx: &mut TestAp
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     cx.update_window(window_handle, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
+        window.update(cx, |window, cx| {
+            window.split(SplitDirection::Horizontal, cx)
+        });
     })
     .unwrap();
     cx.refresh().unwrap();
 
     let (first_pane, second_pane, first_editor) = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let first = &workbench.panes()[0];
         (
             first.id(),
@@ -276,15 +281,15 @@ async fn palette_discovers_commands_and_keeps_its_opening_target(cx: &mut TestAp
             workbench.editor(first.active_tab()).unwrap().clone(),
         )
     });
-    cx.update_window(window_handle, |_, window, cx| {
-        focus_view(&first_editor.focus_handle(cx), window, cx);
+    cx.update_window(window_handle, |_, native_window, cx| {
+        focus_view(&first_editor.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     cx.simulate_keystrokes(window_handle, "secondary-shift-p");
     cx.run_until_parked();
     cx.update_window(window_handle, |_, _, cx| {
-        assert!(shell.read(cx).command_palette.is_some());
-        let workbench = shell.read(cx).workbench.clone();
+        assert!(window.read(cx).command_palette.is_some());
+        let workbench = window.read(cx).workbench.clone();
         workbench.update(cx, |workbench, _| {
             workbench.focus_pane(second_pane);
         });
@@ -295,7 +300,7 @@ async fn palette_discovers_commands_and_keeps_its_opening_target(cx: &mut TestAp
     cx.simulate_keystrokes(window_handle, "f i l e . n e w enter");
 
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(workbench.pane(first_pane).unwrap().tabs().len(), 2);
         assert_eq!(workbench.pane(second_pane).unwrap().tabs().len(), 1);
     });
@@ -306,11 +311,11 @@ async fn native_participants_reject_arguments_before_mutation(cx: &mut TestAppCo
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| window.focus_active_editor(cx));
+            window.update(cx, |window, cx| window.capture_command_target(cx))
         })
         .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("ignored".into())));
@@ -343,7 +348,7 @@ async fn native_participants_reject_arguments_before_mutation(cx: &mut TestAppCo
     cx.read(|cx| {
         assert_eq!(model.read(cx).text(), "");
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -401,16 +406,16 @@ keymaps.bind("ctrl-alt-f", "fixture.described");
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.focus_active_surface(cx);
-            shell.open_command_palette(cx);
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window.focus_active_surface(cx);
+            window.open_command_palette(cx);
         });
     })
     .unwrap();
     cx.update(|cx| {
-        let picker = shell
+        let picker = window
             .read(cx)
             .command_palette
             .as_ref()
@@ -452,13 +457,13 @@ fn confirming_a_palette_command_ranks_it_first_next_time(cx: &mut TestAppContext
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let first_command = |cx: &mut TestAppContext| {
-        cx.update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
-                shell.open_command_palette(cx);
-                let palette = shell.command_palette.as_ref().unwrap();
+        cx.update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
+                window.open_command_palette(cx);
+                let palette = window.command_palette.as_ref().unwrap();
                 let entry = palette.picker().read(cx).selected_entry().unwrap();
                 palette.command(entry).name.to_string()
             })
@@ -467,9 +472,9 @@ fn confirming_a_palette_command_ranks_it_first_next_time(cx: &mut TestAppContext
     };
     assert_ne!(first_command(cx), "workbench.split-horizontal");
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "s p l i t r i g h t enter");
+    cx.simulate_keystrokes(native_window, "s p l i t r i g h t enter");
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).command_palette.is_none()));
+    cx.read(|cx| assert!(window.read(cx).command_palette.is_none()));
     assert_eq!(first_command(cx), "workbench.split-horizontal");
     cx.read(|cx| {
         assert_eq!(
@@ -487,59 +492,59 @@ fn closing_the_palette_returns_focus_to_its_origin(cx: &mut TestAppContext) {
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let editor = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         workbench
             .editor(workbench.panes()[0].active_tab())
             .unwrap()
             .clone()
     });
-    cx.update_window(window, |_, window, cx| {
-        focus_view(&editor.focus_handle(cx), window, cx);
+    cx.update_window(native_window, |_, native_window, cx| {
+        focus_view(&editor.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();
     let palette_key = "secondary-shift-p";
     let editor_focused = |cx: &mut TestAppContext| {
-        cx.update_window(window, |_, window, cx| {
-            editor.focus_handle(cx).is_focused(window)
+        cx.update_window(native_window, |_, native_window, cx| {
+            editor.focus_handle(cx).is_focused(native_window)
         })
         .unwrap()
     };
 
-    cx.simulate_keystrokes(window, palette_key);
+    cx.simulate_keystrokes(native_window, palette_key);
     cx.run_until_parked();
-    cx.simulate_keystrokes(window, "escape");
+    cx.simulate_keystrokes(native_window, "escape");
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).command_palette.is_none()));
+    cx.read(|cx| assert!(window.read(cx).command_palette.is_none()));
     assert!(editor_focused(cx));
 
-    cx.simulate_keystrokes(window, palette_key);
+    cx.simulate_keystrokes(native_window, palette_key);
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).command_palette.is_some()));
-    cx.simulate_keystrokes(window, "t o g g l e p i n enter");
+    cx.read(|cx| assert!(window.read(cx).command_palette.is_some()));
+    cx.simulate_keystrokes(native_window, "t o g g l e p i n enter");
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).command_palette.is_none()));
+    cx.read(|cx| assert!(window.read(cx).command_palette.is_none()));
     assert!(editor_focused(cx));
 
-    cx.simulate_keystrokes(window, "a");
+    cx.simulate_keystrokes(native_window, "a");
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "a"));
 }
 
 #[gpui::test]
-fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
+fn commands_run_in_a_window_without_a_native_window(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let shell = cx.update(|cx| {
+    let window = cx.update(|cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
         cx.new(|cx| KnotWindow::new(workbench, cx))
     });
     let run = |name: &'static str, cx: &mut TestAppContext| {
         let execution = cx.update(|cx| {
-            let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+            let target = window.update(cx, |window, cx| window.capture_command_target(cx));
             KnotWindow::command_dispatcher(cx).update(cx, |dispatcher, cx| {
                 dispatcher.dispatch(
                     Command {
@@ -570,7 +575,7 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
     }
     cx.read(|cx| {
         assert_eq!(model.read(cx).text(), "one\ntw");
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let view = workbench.focused_editor().unwrap();
         assert_eq!(view.read(cx).editor().read(cx).selection(cx), (2, 0));
     });
@@ -578,14 +583,14 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
     assert_eq!(run(SPLIT_HORIZONTAL_COMMAND, cx), CommandOutcome::Completed);
     assert_eq!(run(NEW_COMMAND, cx), CommandOutcome::Completed);
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(workbench.panes().len(), 2);
         assert_eq!(workbench.focused_pane().unwrap().tabs().len(), 2);
     });
     // Closing the last tab of a clean document needs no prompt.
     assert_eq!(run(CLOSE_TAB_COMMAND, cx), CommandOutcome::Completed);
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(workbench.focused_pane().unwrap().tabs().len(), 1);
     });
 }
@@ -609,10 +614,10 @@ async fn open_runs_in_a_new_blank_window_without_a_focused_tab(cx: &mut TestAppC
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, first) = product_window(document, model, cx);
-    cx.update_window(first, |_, window, cx| {
-        window.activate_window();
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    let (window, first) = product_window(document, model, cx);
+    cx.update_window(first, |_, native_window, cx| {
+        native_window.activate_window();
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
     })
     .unwrap();
     cx.run_until_parked();
@@ -626,8 +631,10 @@ async fn open_runs_in_a_new_blank_window_without_a_focused_tab(cx: &mut TestAppC
         .into_iter()
         .find(|window| *window != first)
         .expect("a new window");
-    cx.update_window(second, |_, window, _| window.activate_window())
-        .unwrap();
+    cx.update_window(second, |_, native_window, _| {
+        native_window.activate_window()
+    })
+    .unwrap();
     cx.run_until_parked();
 
     cx.simulate_keystrokes(second, "secondary-o");
@@ -660,7 +667,7 @@ async fn windowless_menu_commands_run_after_the_last_window_closes(cx: &mut Test
     };
     let close_all = |cx: &mut TestAppContext| {
         for window in cx.windows() {
-            cx.update_window(window, |_, window, _| window.remove_window())
+            cx.update_window(window, |_, native_window, _| native_window.remove_window())
                 .unwrap();
         }
         cx.run_until_parked();
@@ -681,8 +688,8 @@ async fn windowless_menu_commands_run_after_the_last_window_closes(cx: &mut Test
     cx.run_until_parked();
     let window = cx.windows()[0].downcast::<KnotWindow>().unwrap();
     cx.read(|cx| {
-        let shell = window.entity(cx).unwrap();
-        let workbench = shell.read(cx).workbench.read(cx);
+        let window = window.entity(cx).unwrap();
+        let workbench = window.read(cx).workbench.read(cx);
         assert!(workbench.focused_editor().is_some());
     });
     close_all(cx);

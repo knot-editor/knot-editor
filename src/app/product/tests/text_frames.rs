@@ -37,7 +37,7 @@ fn text_frames_show_the_gutter_only_when_registered_with_one(cx: &mut TestAppCon
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, _) = product_window(document, model, cx);
+    let (window, _) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(970), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -54,7 +54,7 @@ fn text_frames_show_the_gutter_only_when_registered_with_one(cx: &mut TestAppCon
     cx.run_until_parked();
 
     let text_offset = |id: &str, cx: &mut TestAppContext| {
-        cx.read(|cx| match &shell.read(cx).contributed_views[id].content {
+        cx.read(|cx| match &window.read(cx).contributed_views[id].content {
             ExtensionView::Text(view) => {
                 let editor = view.read(cx).editor().read(cx);
                 let bounds = editor.interaction_bounds();
@@ -66,7 +66,7 @@ fn text_frames_show_the_gutter_only_when_registered_with_one(cx: &mut TestAppCon
     };
     // Pushed text is what the frame's editor shows.
     cx.read(
-        |cx| match &shell.read(cx).contributed_views["frame.plain"].content {
+        |cx| match &window.read(cx).contributed_views["frame.plain"].content {
             ExtensionView::Text(view) => assert_eq!(view.read(cx).text(cx), "one\ntwo\n"),
             ExtensionView::Tree(_) => panic!("frame.plain is a text frame"),
         },

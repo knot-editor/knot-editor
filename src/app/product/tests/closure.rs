@@ -163,7 +163,7 @@ fn public_close_preserves_cancel_and_invalidates_the_final_document_after_save_o
         }
         host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         for window in [first_window, control_window] {
-            cx.update_window(window, |_, window, _| window.remove_window())
+            cx.update_window(window, |_, native_window, _| native_window.remove_window())
                 .unwrap();
         }
     }
@@ -282,8 +282,8 @@ fn replacing_a_prompted_editor_cannot_close_its_replacement(cx: &mut TestAppCont
     let pending = dispatch_product_command(&control, control_window, "close.run", cx);
     wait_prompt(cx);
     let target = cx.read(|cx| current_open_target(&first, cx));
-    first.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, cx| {
+    first.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
             assert!(workbench.replace_tab_document(
                 target.tab.unwrap().pane,
                 target.tab.unwrap().tab,
@@ -348,7 +348,7 @@ fn public_close_cancellation_before_commit_keeps_the_presentation(cx: &mut TestA
             host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         }
         for window in [first_window, control_window] {
-            cx.update_window(window, |_, window, _| window.remove_window())
+            cx.update_window(window, |_, native_window, _| native_window.remove_window())
                 .unwrap();
         }
     }
@@ -415,8 +415,8 @@ fn an_edit_racing_a_public_close_save_preserves_the_live_dirty_document(cx: &mut
 #[gpui::test]
 fn activation_can_close_the_final_tab_and_observe_an_empty_window(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, _) = empty_product_window(&documents, cx);
-    let old_workbench = cx.read(|cx| shell.read(cx).workbench.clone());
+    let (window, _) = empty_product_window(&documents, cx);
+    let old_workbench = cx.read(|cx| window.read(cx).workbench.clone());
     let host = cx.update(extensions::host::install);
     let key = install_operation_fixture(
         &host,
@@ -437,7 +437,7 @@ await commands.register("close.activation-ready", () => {});
         cx,
     );
     cx.read(|cx| {
-        assert_eq!(old_workbench, shell.read(cx).workbench);
+        assert_eq!(old_workbench, window.read(cx).workbench);
         assert_eq!(documents.read(cx).documents().count(), 0);
     });
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
@@ -465,10 +465,10 @@ await commands.register("close.listener-trigger", async () => { id = (await docu
         "close.listener-trigger",
         cx,
     );
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "close.listener-trigger", cx),
+            dispatch_product_command(&window, native_window, "close.listener-trigger", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -484,7 +484,7 @@ await commands.register("close.listener-trigger", async () => { id = (await docu
     });
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "close.listener-ready", cx),
+            dispatch_product_command(&window, native_window, "close.listener-ready", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -519,7 +519,7 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
         let target = current_open_target(&control, cx);
         let workbench = control.read(cx).workbench.clone();
         super::super::relocate::TabRelocationDestination {
-            shell: control.downgrade(),
+            window: control.downgrade(),
             workbench: workbench.downgrade(),
             tab: crate::app::workbench::TabMoveDestination::At {
                 anchor: workbench
@@ -531,9 +531,10 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
         }
     });
     assert_eq!(
-        cx.update_window(first_window, |_, _, cx| first.update(cx, |shell, cx| shell
-            .relocate_tab_to(&source, &destination, cx)))
-            .unwrap(),
+        cx.update_window(first_window, |_, _, cx| first.update(cx, |window, cx| {
+            window.relocate_tab_to(&source, &destination, cx)
+        }))
+        .unwrap(),
         CommandOutcome::Completed
     );
     assert_eq!(
@@ -555,10 +556,10 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
 #[gpui::test]
 fn public_close_removes_a_terminal_without_closing_document_models(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx),
+            dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx),
             cx
         ),
         CommandOutcome::Completed
@@ -587,7 +588,10 @@ await commands.register("close.terminal-ready", () => {});
                 .sessions
                 .is_empty()
         );
-        assert_eq!(shell.read(cx).workbench.read(cx).panes()[0].tabs().len(), 1);
+        assert_eq!(
+            window.read(cx).workbench.read(cx).panes()[0].tabs().len(),
+            1
+        );
         assert_eq!(documents.read(cx).documents().count(), 1);
     });
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
@@ -599,9 +603,9 @@ async fn dirty_final_tab_close_cancel_preserves_the_document_and_view(cx: &mut T
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Cancel");
@@ -612,7 +616,7 @@ async fn dirty_final_tab_close_cancel_preserves_the_document_and_view(cx: &mut T
     );
     cx.read(|cx| {
         assert!(documents.read(cx).get(document).is_some());
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
     });
 }
 
@@ -624,9 +628,9 @@ async fn discarding_a_dirty_final_tab_leaves_an_empty_center_that_close_tab_clos
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     cx.run_until_parked();
     cx.simulate_prompt_answer("Don't Save");
 
@@ -637,17 +641,17 @@ async fn discarding_a_dirty_final_tab_leaves_an_empty_center_that_close_tab_clos
     cx.read(|cx| {
         assert!(documents.read(cx).get(document).is_none());
         assert_eq!(documents.read(cx).documents().count(), 0);
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(workbench.center(), None);
         assert_eq!(workbench.focused_pane_id(), None);
     });
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(
         execution.completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    cx.read(|cx| assert!(!cx.windows().contains(&window)));
+    cx.read(|cx| assert!(!cx.windows().contains(&native_window)));
 }
 
 #[gpui::test]
@@ -655,9 +659,10 @@ fn middle_clicking_an_inactive_dirty_tab_closes_it_after_its_save_decision(
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
-    let (first, second, shell, window) = two_dirty_untitled_documents_in_one_window(&documents, cx);
+    let (first, second, window, native_window) =
+        two_dirty_untitled_documents_in_one_window(&documents, cx);
     let first_tab = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         assert_eq!(pane.active_tab().document_id(), Some(second));
         pane.tabs()
@@ -666,7 +671,7 @@ fn middle_clicking_an_inactive_dirty_tab_closes_it_after_its_save_decision(
             .unwrap()
             .id()
     });
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     visual.run_until_parked();
     let tab = visual
         .debug_bounds(format!("tab-{}", first_tab.value()).leak())
@@ -680,7 +685,7 @@ fn middle_clicking_an_inactive_dirty_tab_closes_it_after_its_save_decision(
 
     visual.read(|cx| {
         assert!(documents.read(cx).get(first).is_none());
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         assert_eq!(pane.tabs().len(), 1);
         assert_eq!(pane.active_tab().document_id(), Some(second));
@@ -708,9 +713,9 @@ async fn saving_a_dirty_tab_uses_existing_persistence_before_closing(cx: &mut Te
         )
     });
     model.update(cx, |model, _| model.replace(0..0, "changed ").unwrap());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     cx.run_until_parked();
     cx.simulate_prompt_answer("Save");
 
@@ -758,13 +763,15 @@ async fn edit_racing_protected_close_save_preserves_the_document_and_every_view(
         )
     });
     model.update(cx, |model, _| model.replace(0..0, "captured ").unwrap());
-    let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window.split(SplitDirection::Horizontal, cx)
+        });
     })
     .unwrap();
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_WINDOW_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_WINDOW_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Save");
@@ -782,10 +789,10 @@ async fn edit_racing_protected_close_save_preserves_the_document_and_every_view(
         b"captured loaded text"
     );
     cx.read(|cx| {
-        assert!(cx.windows().contains(&window));
+        assert!(cx.windows().contains(&native_window));
         assert_eq!(model.read(cx).text(), "newer captured loaded text");
         assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 2);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 2);
     });
 }
 
@@ -797,13 +804,15 @@ async fn closing_one_of_multiple_views_of_a_dirty_document_does_not_prompt(
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window.split(SplitDirection::Horizontal, cx)
+        });
     })
     .unwrap();
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(
         execution.completion.await.unwrap(),
         CommandOutcome::Completed
@@ -811,7 +820,7 @@ async fn closing_one_of_multiple_views_of_a_dirty_document_does_not_prompt(
     assert!(!cx.has_pending_prompt());
     cx.read(|cx| {
         assert!(documents.read(cx).get(document).is_some());
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
     });
 }
 
@@ -821,13 +830,15 @@ async fn window_close_prompts_once_for_a_multiply_viewed_dirty_document(cx: &mut
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window.split(SplitDirection::Horizontal, cx)
+        });
     })
     .unwrap();
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_WINDOW_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_WINDOW_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Don't Save");
@@ -838,7 +849,7 @@ async fn window_close_prompts_once_for_a_multiply_viewed_dirty_document(cx: &mut
     );
     assert!(!cx.has_pending_prompt());
     cx.read(|cx| {
-        assert!(!cx.windows().contains(&window));
+        assert!(!cx.windows().contains(&native_window));
         assert!(documents.read(cx).get(document).is_none());
     });
 }
@@ -851,18 +862,19 @@ async fn window_close_keeps_a_dirty_document_visible_in_another_window_without_p
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (first_shell, first_window) = product_window(document, model.clone(), cx);
-    let (_second_shell, second_window) = product_window(document, model, cx);
+    let (first_window, first_native_window) = product_window(document, model.clone(), cx);
+    let (_second_window, second_native_window) = product_window(document, model, cx);
 
-    let execution = dispatch_product_command(&first_shell, first_window, CLOSE_WINDOW_COMMAND, cx);
+    let execution =
+        dispatch_product_command(&first_window, first_native_window, CLOSE_WINDOW_COMMAND, cx);
     assert_eq!(
         execution.completion.await.unwrap(),
         CommandOutcome::Completed
     );
     assert!(!cx.has_pending_prompt());
     cx.read(|cx| {
-        assert!(!cx.windows().contains(&first_window));
-        assert!(cx.windows().contains(&second_window));
+        assert!(!cx.windows().contains(&first_native_window));
+        assert!(cx.windows().contains(&second_native_window));
         assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
     });
 }
@@ -874,10 +886,10 @@ async fn quit_prompts_once_for_a_document_shared_across_windows(cx: &mut TestApp
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (first_shell, first_window) = product_window(document, model.clone(), cx);
+    let (first_window, first_native_window) = product_window(document, model.clone(), cx);
     let _second = product_window(document, model, cx);
 
-    let execution = dispatch_product_command(&first_shell, first_window, QUIT_COMMAND, cx);
+    let execution = dispatch_product_command(&first_window, first_native_window, QUIT_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Don't Save");
@@ -915,17 +927,17 @@ async fn multi_document_quit_applies_serial_save_and_discard_decisions(cx: &mut 
         documents.create_untitled("Second", second_model.clone(), cx)
     });
     second_model.update(cx, |model, _| model.replace(0..0, "discarded ").unwrap());
-    let (shell, window) = product_window(first, first_model, cx);
-    shell.update(cx, |shell, cx| {
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, cx| {
+    let (window, native_window) = product_window(first, first_model, cx);
+    window.update(cx, |window, cx| {
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, cx| {
             workbench
                 .open_tab_for_document(pane, second, second_model, cx)
                 .unwrap();
         });
     });
 
-    let execution = dispatch_product_command(&shell, window, QUIT_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, QUIT_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Save");
@@ -948,9 +960,10 @@ async fn multi_document_quit_applies_serial_save_and_discard_decisions(cx: &mut 
 async fn later_quit_cancellation_preserves_every_document_and_view(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     install_failing_recovery(cx);
-    let (first, second, shell, window) = two_dirty_untitled_documents_in_one_window(&documents, cx);
+    let (first, second, window, native_window) =
+        two_dirty_untitled_documents_in_one_window(&documents, cx);
 
-    let execution = dispatch_product_command(&shell, window, QUIT_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, QUIT_COMMAND, cx);
     cx.run_until_parked();
     cx.simulate_prompt_answer("Don't Save");
     cx.run_until_parked();
@@ -962,8 +975,8 @@ async fn later_quit_cancellation_preserves_every_document_and_view(cx: &mut Test
         CommandOutcome::Cancelled
     );
     cx.read(|cx| {
-        assert!(cx.windows().contains(&window));
-        assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
+        assert!(cx.windows().contains(&native_window));
+        assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
         assert!(documents.read(cx).get(first).unwrap().is_dirty(cx));
         assert!(documents.read(cx).get(second).unwrap().is_dirty(cx));
     });
@@ -977,9 +990,10 @@ async fn later_quit_save_failure_preserves_every_document_and_view(cx: &mut Test
     cx.set_global(ApplicationSaveDialog(Arc::new(FixedSaveDialog(
         SaveDialogOutcome::Selected(ResourceUri::parse("mem://product/src").unwrap()),
     ))));
-    let (first, second, shell, window) = two_dirty_untitled_documents_in_one_window(&documents, cx);
+    let (first, second, window, native_window) =
+        two_dirty_untitled_documents_in_one_window(&documents, cx);
 
-    let execution = dispatch_product_command(&shell, window, QUIT_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, QUIT_COMMAND, cx);
     cx.run_until_parked();
     cx.simulate_prompt_answer("Don't Save");
     cx.run_until_parked();
@@ -991,8 +1005,8 @@ async fn later_quit_save_failure_preserves_every_document_and_view(cx: &mut Test
         CommandOutcome::HandlerFailure { .. }
     ));
     cx.read(|cx| {
-        assert!(cx.windows().contains(&window));
-        assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
+        assert!(cx.windows().contains(&native_window));
+        assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
         assert!(documents.read(cx).get(first).unwrap().is_dirty(cx));
         assert!(documents.read(cx).get(second).unwrap().is_dirty(cx));
     });
@@ -1011,17 +1025,17 @@ async fn later_window_close_cancellation_preserves_every_tab(cx: &mut TestAppCon
         })
     });
     second_model.update(cx, |model, _| model.replace(0..0, "changed ").unwrap());
-    let (shell, window) = product_window(first, first_model, cx);
-    shell.update(cx, |shell, cx| {
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, cx| {
+    let (window, native_window) = product_window(first, first_model, cx);
+    window.update(cx, |window, cx| {
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, cx| {
             workbench
                 .open_tab_for_document(pane, second, second_model, cx)
                 .unwrap();
         });
     });
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_WINDOW_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_WINDOW_COMMAND, cx);
     cx.run_until_parked();
     cx.simulate_prompt_answer("Don't Save");
     cx.run_until_parked();
@@ -1033,8 +1047,8 @@ async fn later_window_close_cancellation_preserves_every_tab(cx: &mut TestAppCon
         CommandOutcome::Cancelled
     );
     cx.read(|cx| {
-        assert!(cx.windows().contains(&window));
-        assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
+        assert!(cx.windows().contains(&native_window));
+        assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
         assert!(documents.read(cx).get(first).is_some());
         assert!(documents.read(cx).get(second).is_some());
     });
@@ -1050,9 +1064,9 @@ async fn close_save_failure_preserves_the_dirty_tab(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     cx.run_until_parked();
     cx.simulate_prompt_answer("Save");
 
@@ -1062,7 +1076,7 @@ async fn close_save_failure_preserves_the_dirty_tab(cx: &mut TestAppContext) {
     ));
     cx.read(|cx| {
         assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
     });
 }
 
@@ -1072,9 +1086,9 @@ async fn edit_while_discard_prompt_is_open_rejects_the_close(cx: &mut TestAppCon
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "first edit").unwrap());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
 
-    let execution = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     model.update(cx, |model, _| model.replace(0..0, "racing edit ").unwrap());
@@ -1086,7 +1100,7 @@ async fn edit_while_discard_prompt_is_open_rejects_the_close(cx: &mut TestAppCon
     );
     cx.read(|cx| {
         assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
     });
 }
 
@@ -1096,16 +1110,16 @@ async fn scope_change_while_prompting_rejects_window_close(cx: &mut TestAppConte
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
-    let execution = dispatch_product_command(&shell, window, CLOSE_WINDOW_COMMAND, cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_WINDOW_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
 
     let added = cx.update(|cx| create_untitled_document(&documents, cx));
     let added_model = cx.read(|cx| documents.read(cx).get(added).unwrap().model().clone());
-    shell.update(cx, |shell, cx| {
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, cx| {
+    window.update(cx, |window, cx| {
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, cx| {
             workbench
                 .open_tab_for_document(pane, added, added_model, cx)
                 .unwrap();
@@ -1118,8 +1132,8 @@ async fn scope_change_while_prompting_rejects_window_close(cx: &mut TestAppConte
         CommandOutcome::InvalidTarget
     );
     cx.read(|cx| {
-        assert!(cx.windows().contains(&window));
-        assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
+        assert!(cx.windows().contains(&native_window));
+        assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 2);
         assert!(documents.read(cx).get(document).is_some());
         assert!(documents.read(cx).get(added).is_some());
     });
@@ -1131,12 +1145,12 @@ async fn concurrent_close_is_rejected_without_a_second_prompt(cx: &mut TestAppCo
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_editor(cx);
-                shell.capture_command_target(cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.focus_active_editor(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -1171,7 +1185,7 @@ async fn concurrent_close_is_rejected_without_a_second_prompt(cx: &mut TestAppCo
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Cancel");
     assert_eq!(first.completion.await.unwrap(), CommandOutcome::Cancelled);
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1));
+    cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1));
 }
 
 #[gpui::test]
@@ -1180,13 +1194,13 @@ async fn native_window_close_is_vetoed_until_protected_closure_finishes(cx: &mut
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window_cx) = cx.add_window_view(|_, cx| {
+    let (window, window_cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
         KnotWindow::new(workbench, cx)
     });
-    window_cx.update(|window, cx| {
-        install_protected_window_close(&shell, window, cx);
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    window_cx.update(|native_window, cx| {
+        install_protected_window_close(&window, native_window, cx);
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
     });
 
     assert!(!window_cx.simulate_close());
@@ -1221,9 +1235,9 @@ fn bulk_close_fixture(
     for (_, model) in &created[..2] {
         model.update(cx, |model, _| model.replace(0..0, "unsaved ").unwrap());
     }
-    let (shell, window) = product_window(created[0].0, created[0].1.clone(), cx);
-    shell.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, cx| {
+    let (window, native_window) = product_window(created[0].0, created[0].1.clone(), cx);
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
             let pane = workbench.focused_pane_id().unwrap();
             for (document, model) in [&created[0], &created[1], &created[2], &created[3]] {
                 workbench
@@ -1235,15 +1249,15 @@ fn bulk_close_fixture(
         });
     });
     cx.run_until_parked();
-    (shell, window, created.map(|(document, _)| document))
+    (window, native_window, created.map(|(document, _)| document))
 }
 
 fn tab_documents(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<super::super::DocumentId> {
     cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -1260,11 +1274,11 @@ fn tab_documents(
 #[gpui::test]
 async fn cancelling_a_bulk_close_leaves_every_tab(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, window, _) = bulk_close_fixture(&documents, cx);
-    let before = tab_documents(&shell, cx);
+    let (window, native_window, _) = bulk_close_fixture(&documents, cx);
+    let before = tab_documents(&window, cx);
     let execution = dispatch_product_command(
-        &shell,
-        window,
+        &window,
+        native_window,
         crate::app::commands::dispatch::CLOSE_OTHER_TABS_COMMAND,
         cx,
     );
@@ -1276,7 +1290,7 @@ async fn cancelling_a_bulk_close_leaves_every_tab(cx: &mut TestAppContext) {
         execution.completion.await.unwrap(),
         CommandOutcome::Cancelled
     );
-    assert_eq!(tab_documents(&shell, cx), before);
+    assert_eq!(tab_documents(&window, cx), before);
 }
 
 #[gpui::test]
@@ -1284,10 +1298,11 @@ async fn close_other_tabs_prompts_once_per_dirty_document_and_keeps_pinned_tabs(
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
-    let (shell, window, [shared, other, pinned, focused]) = bulk_close_fixture(&documents, cx);
+    let (window, native_window, [shared, other, pinned, focused]) =
+        bulk_close_fixture(&documents, cx);
     let execution = dispatch_product_command(
-        &shell,
-        window,
+        &window,
+        native_window,
         crate::app::commands::dispatch::CLOSE_OTHER_TABS_COMMAND,
         cx,
     );
@@ -1301,7 +1316,7 @@ async fn close_other_tabs_prompts_once_per_dirty_document_and_keeps_pinned_tabs(
         CommandOutcome::Completed
     );
     assert!(!cx.has_pending_prompt());
-    assert_eq!(tab_documents(&shell, cx), [pinned, focused]);
+    assert_eq!(tab_documents(&window, cx), [pinned, focused]);
     cx.read(|cx| {
         assert!(documents.read(cx).get(shared).is_none());
         assert!(documents.read(cx).get(other).is_none());
@@ -1309,8 +1324,8 @@ async fn close_other_tabs_prompts_once_per_dirty_document_and_keeps_pinned_tabs(
 
     // Close Pane closes pinned tabs too, leaving an empty center.
     let execution = dispatch_product_command(
-        &shell,
-        window,
+        &window,
+        native_window,
         crate::app::commands::dispatch::CLOSE_PANE_COMMAND,
         cx,
     );
@@ -1318,31 +1333,31 @@ async fn close_other_tabs_prompts_once_per_dirty_document_and_keeps_pinned_tabs(
         execution.completion.await.unwrap(),
         CommandOutcome::Completed
     );
-    assert!(tab_documents(&shell, cx).is_empty());
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).center(), None));
+    assert!(tab_documents(&window, cx).is_empty());
+    cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).center(), None));
 }
 
 #[gpui::test]
 async fn close_pane_collapses_its_split_and_keeps_the_other_pane(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, window, [_, _, pinned, focused]) = bulk_close_fixture(&documents, cx);
+    let (window, native_window, [_, _, pinned, focused]) = bulk_close_fixture(&documents, cx);
     let split = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-                shell.split_pane(
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+                window.split_pane(
                     pane,
                     SplitDirection::Horizontal,
                     super::super::SplitPlacement::After,
                     cx,
                 );
-                shell.workbench.read(cx).focused_pane_id().unwrap()
+                window.workbench.read(cx).focused_pane_id().unwrap()
             })
         })
         .unwrap();
     let execution = dispatch_product_command(
-        &shell,
-        window,
+        &window,
+        native_window,
         crate::app::commands::dispatch::CLOSE_PANE_COMMAND,
         cx,
     );
@@ -1352,11 +1367,11 @@ async fn close_pane_collapses_its_split_and_keeps_the_other_pane(cx: &mut TestAp
     );
     assert!(!cx.has_pending_prompt());
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert!(workbench.pane(split).is_none());
         assert_eq!(workbench.panes().len(), 1);
     });
-    let remaining = tab_documents(&shell, cx);
+    let remaining = tab_documents(&window, cx);
     assert_eq!(remaining.len(), 5);
     assert_eq!(remaining.first(), Some(&pinned));
     assert_eq!(remaining.last(), Some(&focused));
@@ -1365,33 +1380,33 @@ async fn close_pane_collapses_its_split_and_keeps_the_other_pane(cx: &mut TestAp
 #[gpui::test]
 async fn close_other_panes_closes_every_other_pane_and_keeps_the_origin(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, window, _) = bulk_close_fixture(&documents, cx);
+    let (window, native_window, _) = bulk_close_fixture(&documents, cx);
     let (origin, split) = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                let origin = shell.workbench.read(cx).focused_pane_id().unwrap();
-                shell.split_pane(
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                let origin = window.workbench.read(cx).focused_pane_id().unwrap();
+                window.split_pane(
                     origin,
                     SplitDirection::Horizontal,
                     super::super::SplitPlacement::After,
                     cx,
                 );
-                (origin, shell.workbench.read(cx).focused_pane_id().unwrap())
+                (origin, window.workbench.read(cx).focused_pane_id().unwrap())
             })
         })
         .unwrap();
-    let before = tab_documents(&shell, cx).len();
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            shell
+    let before = tab_documents(&window, cx).len();
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window
                 .workbench
                 .update(cx, |workbench, _| workbench.focus_pane(origin))
         })
     })
     .unwrap();
     let execution = dispatch_product_command(
-        &shell,
-        window,
+        &window,
+        native_window,
         crate::app::commands::dispatch::CLOSE_OTHER_PANES_COMMAND,
         cx,
     );
@@ -1401,20 +1416,21 @@ async fn close_other_panes_closes_every_other_pane_and_keeps_the_origin(cx: &mut
     );
     assert!(!cx.has_pending_prompt());
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert!(workbench.pane(split).is_none());
         assert_eq!(workbench.panes().len(), 1);
         assert_eq!(workbench.focused_pane_id(), Some(origin));
     });
-    assert_eq!(tab_documents(&shell, cx).len(), before - 1);
+    assert_eq!(tab_documents(&window, cx).len(), before - 1);
 }
 
 #[gpui::test]
 fn clicking_a_tab_close_button_closes_that_tab_after_its_save_decision(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (first, second, shell, window) = two_dirty_untitled_documents_in_one_window(&documents, cx);
+    let (first, second, window, native_window) =
+        two_dirty_untitled_documents_in_one_window(&documents, cx);
     let first_tab = cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         pane.tabs()
             .iter()
@@ -1422,7 +1438,7 @@ fn clicking_a_tab_close_button_closes_that_tab_after_its_save_decision(cx: &mut 
             .unwrap()
             .id()
     });
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     visual.run_until_parked();
     let close = visual
         .debug_bounds(format!("close-tab-{}", first_tab.value()).leak())
@@ -1435,24 +1451,24 @@ fn clicking_a_tab_close_button_closes_that_tab_after_its_save_decision(cx: &mut 
 
     visual.read(|cx| {
         assert!(documents.read(cx).get(first).is_none());
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         assert_eq!(pane.tabs().len(), 1);
         assert_eq!(pane.active_tab().document_id(), Some(second));
     });
 }
 
-/// Close the shell's active tab with its changes discarded, running
+/// Close the window's active tab with its changes discarded, running
 /// `between` after the close starts and before it commits.
 fn close_discarding(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     between: impl FnOnce(&mut gpui::App),
     cx: &mut TestAppContext,
 ) -> Result<knot_protocol::PresentationCloseOutcome, ProtectedCloseFailure> {
     let result = std::rc::Rc::new(std::cell::RefCell::new(None));
     let sink = result.clone();
     cx.update(|cx| {
-        let origin = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+        let origin = window.update(cx, |window, cx| window.capture_command_target(cx));
         KnotWindow::begin_protected_operation(
             ProtectedCloseRequest {
                 kind: ProtectedCloseKind::Tab,
@@ -1492,12 +1508,12 @@ async fn a_discarding_close_skips_the_prompt_and_recovery_keeps_the_text_until_i
         model.replace(0..0, "unsaved").unwrap();
         cx.notify();
     });
-    let (shell, _) = product_window(document, model.clone(), cx);
+    let (window, _) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
 
     // An edit racing the close keeps the document and its recovered text.
     let raced = close_discarding(
-        &shell,
+        &window,
         |cx| {
             model.update(cx, |model, cx| {
                 model.replace(0..0, "more ").unwrap();
@@ -1509,14 +1525,14 @@ async fn a_discarding_close_skips_the_prompt_and_recovery_keeps_the_text_until_i
     assert!(matches!(raced, Err(ProtectedCloseFailure::InvalidTarget)));
     cx.read(|cx| {
         assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
     });
     cx.run_until_parked();
     recovery(cx).flush().await.unwrap();
     let kept = recovery(cx).automatic(identity).await.unwrap().unwrap();
     assert_eq!(kept.text, "more unsaved");
 
-    let closed = close_discarding(&shell, |_| {}, cx);
+    let closed = close_discarding(&window, |_| {}, cx);
     assert!(matches!(
         closed,
         Ok(knot_protocol::PresentationCloseOutcome::Closed)
@@ -1536,7 +1552,7 @@ fn closing_the_last_window_quits_through_the_storage_drain(cx: &mut TestAppConte
         super::super::open_product_window(None, cx);
     });
     let close = |window: gpui::AnyWindowHandle, cx: &mut TestAppContext| {
-        cx.update_window(window, |_, window, _| window.remove_window())
+        cx.update_window(window, |_, native_window, _| native_window.remove_window())
             .unwrap();
         cx.run_until_parked();
     };

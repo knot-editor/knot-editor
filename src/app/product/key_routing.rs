@@ -1,6 +1,6 @@
-//! Key matching for a product session. A window's key-downs pass through one
-//! interceptor that hands them to the session; a session without a window
-//! takes keys and text directly. The session first holds a key behind an
+//! Key matching for a window. Its key-downs pass through one interceptor that
+//! hands them to the window; a window without a native window takes keys and
+//! text directly. The window first holds a key behind an
 //! unfinished key-invoked extension command, and otherwise routes it
 //! through its `KeyRouter` against the focused view's kind and live key
 //! contexts while the workbench has focus. A key the keymap does not claim
@@ -38,7 +38,7 @@ struct KeyInterception;
 
 impl Global for KeyInterception {}
 
-/// Route key-downs in product windows. Interceptors run before gpui's
+/// Route key-downs in windows. Interceptors run before gpui's
 /// bindings, view key handlers, and text input, so a handled key reaches
 /// none of them.
 pub(in crate::app) fn intercept_keys(cx: &mut App) {
@@ -47,13 +47,17 @@ pub(in crate::app) fn intercept_keys(cx: &mut App) {
     }
     cx.set_global(KeyInterception);
     super::key_hold::install_text_router(cx);
-    cx.intercept_keystrokes(|event, window, cx| {
-        let Some(Some(shell)) = window.root::<KnotWindow>() else {
+    cx.intercept_keystrokes(|event, native_window, cx| {
+        let Some(Some(window)) = native_window.root::<KnotWindow>() else {
             return;
         };
         // An unhandled key propagates to the window's text input.
-        let handled = shell.update(cx, |shell, cx| {
-            shell.key_down(keystroke_from_gpui(&event.keystroke), Some(window), cx)
+        let handled = window.update(cx, |window, cx| {
+            window.key_down(
+                keystroke_from_gpui(&event.keystroke),
+                Some(native_window),
+                cx,
+            )
         });
         if handled {
             cx.stop_propagation();
@@ -69,19 +73,19 @@ impl KnotWindow {
     fn key_down(
         &mut self,
         keystroke: Keystroke,
-        mut window: Option<&mut Window>,
+        mut native_window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) -> bool {
         if self.hold_key(&keystroke, cx) {
             return true;
         }
         if !std::mem::take(&mut self.keys.native)
-            && self.route_key(keystroke.clone(), window.as_deref_mut(), cx)
+            && self.route_key(keystroke.clone(), native_window.as_deref_mut(), cx)
         {
             return true;
         }
         // A focused gpui-component popup takes the key through gpui's dispatch.
-        if window
+        if native_window
             .as_deref()
             .is_some_and(|window| crate::app::components::popup_focused(window, cx))
         {
@@ -90,7 +94,7 @@ impl KnotWindow {
         self.deliver_key(&keystroke, cx)
     }
 
-    /// Press a key in a session without a window, as `key_down` takes it,
+    /// Press a key in a window without a native window, as `key_down` takes it,
     /// typing its text when nothing does.
     pub(crate) fn press_key(&mut self, keystroke: Keystroke, cx: &mut Context<Self>) {
         let keystroke = keystroke.with_simulated_text();
@@ -231,7 +235,7 @@ impl KnotWindow {
     fn route_key(
         &mut self,
         keystroke: Keystroke,
-        window: Option<&mut Window>,
+        native_window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) -> bool {
         if self.focus != Focus::Workbench {
@@ -260,7 +264,7 @@ impl KnotWindow {
             [KeyAction::Native(native)] if !was_pending && *native == keystroke => false,
             [KeyAction::Run(command)] if !was_pending => self.run_key_command(command.clone(), cx),
             _ => {
-                self.perform_key_actions(actions.into(), window, cx);
+                self.perform_key_actions(actions.into(), native_window, cx);
                 true
             }
         }
@@ -328,7 +332,7 @@ impl KnotWindow {
     fn perform_key_actions(
         &mut self,
         mut actions: VecDeque<KeyAction>,
-        mut window: Option<&mut Window>,
+        mut native_window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) {
         while let Some(action) = actions.pop_front() {
@@ -337,13 +341,13 @@ impl KnotWindow {
                     self.run_key_command(command, cx);
                 }
                 KeyAction::Native(keystroke) => {
-                    let Some(window) = window.as_deref_mut() else {
+                    let Some(native_window) = native_window.as_deref_mut() else {
                         self.deliver_unclaimed(&keystroke, cx);
                         continue;
                     };
-                    let shell = cx.entity().downgrade();
-                    window.defer(cx, move |window, cx| {
-                        deliver_natively(&shell, keystroke, actions, window, cx)
+                    let window = cx.entity().downgrade();
+                    native_window.defer(cx, move |native_window, cx| {
+                        deliver_natively(&window, keystroke, actions, native_window, cx)
                     });
                     return;
                 }
@@ -359,28 +363,29 @@ impl KnotWindow {
                 let Some(this) = this.upgrade() else {
                     return;
                 };
-                let flush =
-                    |this: &mut Self, window: Option<&mut Window>, cx: &mut Context<Self>| {
-                        if this.keys.generation != generation || !this.keys.router.is_pending() {
-                            return;
-                        }
-                        if this.keys.focus != Some(this.focus_target(cx)) {
-                            this.keys.router.clear();
-                            return;
-                        }
-                        let (view, contexts) = this.key_scope(cx);
-                        let contexts = contexts.iter().map(String::as_str).collect::<Vec<_>>();
-                        let keymaps = &cx.global::<ApplicationKeymaps>().0;
-                        let actions = this
-                            .keys
-                            .router
-                            .flush(|typed| keymaps.match_typed(typed, view.as_deref(), &contexts));
-                        this.perform_key_actions(actions.into(), window, cx);
-                    };
-                match this.read(cx).window {
-                    Some(window) => {
-                        let _ = window.update(cx, |_, window, cx| {
-                            this.update(cx, |this, cx| flush(this, Some(window), cx))
+                let flush = |this: &mut Self,
+                             native_window: Option<&mut Window>,
+                             cx: &mut Context<Self>| {
+                    if this.keys.generation != generation || !this.keys.router.is_pending() {
+                        return;
+                    }
+                    if this.keys.focus != Some(this.focus_target(cx)) {
+                        this.keys.router.clear();
+                        return;
+                    }
+                    let (view, contexts) = this.key_scope(cx);
+                    let contexts = contexts.iter().map(String::as_str).collect::<Vec<_>>();
+                    let keymaps = &cx.global::<ApplicationKeymaps>().0;
+                    let actions = this
+                        .keys
+                        .router
+                        .flush(|typed| keymaps.match_typed(typed, view.as_deref(), &contexts));
+                    this.perform_key_actions(actions.into(), native_window, cx);
+                };
+                match this.read(cx).native_window {
+                    Some(native_window) => {
+                        let _ = native_window.update(cx, |_, native_window, cx| {
+                            this.update(cx, |this, cx| flush(this, Some(native_window), cx))
                         });
                     }
                     None => this.update(cx, |this, cx| flush(this, None, cx)),
@@ -398,19 +403,19 @@ impl KnotWindow {
 
 /// Deliver `keystroke` as if no binding existed, then perform `rest`.
 fn deliver_natively(
-    shell: &WeakEntity<KnotWindow>,
+    window: &WeakEntity<KnotWindow>,
     keystroke: Keystroke,
     rest: VecDeque<KeyAction>,
-    window: &mut Window,
+    native_window: &mut Window,
     cx: &mut App,
 ) {
-    let Some(shell) = shell.upgrade() else {
+    let Some(window) = window.upgrade() else {
         return;
     };
-    shell.update(cx, |shell, _| shell.keys.native = true);
-    window.dispatch_keystroke(keystroke_to_gpui(&keystroke), cx);
-    shell.update(cx, |shell, cx| {
-        shell.keys.native = false;
-        shell.perform_key_actions(rest, Some(window), cx);
+    window.update(cx, |window, _| window.keys.native = true);
+    native_window.dispatch_keystroke(keystroke_to_gpui(&keystroke), cx);
+    window.update(cx, |window, cx| {
+        window.keys.native = false;
+        window.perform_key_actions(rest, Some(native_window), cx);
     });
 }

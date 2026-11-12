@@ -1,5 +1,5 @@
 use super::super::{
-    ApplicationProtectedClosure, ApplicationWindows, ApplicationTerminalSessions, KnotWindow,
+    ApplicationProtectedClosure, ApplicationTerminalSessions, ApplicationWindows, KnotWindow,
     create_untitled_document, open_tab_transfer_window,
 };
 use super::{TabRelocationDestination, TabRelocationSource};
@@ -12,23 +12,23 @@ use gpui::{App, AppContext, Entity, Focusable, TestAppContext};
 use knot_protocol::CommandOutcome;
 use std::sync::Arc;
 
-fn capture(shell: &Entity<KnotWindow>, cx: &App) -> TabRelocationSource {
-    let shell = shell.read(cx);
-    let workbench = shell.workbench.read(cx);
+fn capture(window: &Entity<KnotWindow>, cx: &App) -> TabRelocationSource {
+    let window = window.read(cx);
+    let workbench = window.workbench.read(cx);
     let pane = workbench.focused_pane().unwrap();
-    shell
+    window
         .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
         .unwrap()
 }
 
 fn target(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     placement: TabMovePlacement,
     cx: &App,
 ) -> TabRelocationDestination {
-    let source = capture(shell, cx);
+    let source = capture(window, cx);
     TabRelocationDestination {
-        shell: shell.downgrade(),
+        window: window.downgrade(),
         workbench: source.workbench,
         tab: TabMoveDestination::At {
             anchor: source.tab,
@@ -47,10 +47,10 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
     let (source, source_window) = product_window(document, model.clone(), cx);
     let (origin, command, editor) = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
-                let command = shell.capture_command_target(cx);
-                let editor = shell.workbench.read(cx).focused_editor().unwrap().clone();
+            source.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
+                let command = window.capture_command_target(cx);
+                let editor = window.workbench.read(cx).focused_editor().unwrap().clone();
                 editor.update(cx, |editor, cx| {
                     editor.editor().clone().update(cx, |editor, cx| {
                         editor.restore_view_state(
@@ -66,7 +66,7 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
                     })
                 });
                 (
-                    shell
+                    window
                         .capture_tab_relocation(
                             command.tab.unwrap().pane,
                             command.tab.unwrap().tab,
@@ -81,8 +81,8 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
         .unwrap();
     let outcome = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| {
-                shell.relocate_tab_to_new_window_with(&origin, cx, open_tab_transfer_window)
+            source.update(cx, |window, cx| {
+                window.relocate_tab_to_new_window_with(&origin, cx, open_tab_transfer_window)
             })
         })
         .unwrap();
@@ -93,8 +93,8 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
         .find(|window| **window != source_window)
         .unwrap();
     let destination = cx
-        .update_window(destination_window, |_, window, _| {
-            window.root::<KnotWindow>().flatten().unwrap()
+        .update_window(destination_window, |_, native_window, _| {
+            native_window.root::<KnotWindow>().flatten().unwrap()
         })
         .unwrap();
     cx.read(|cx| {
@@ -125,8 +125,8 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
         assert_eq!(source.center(), None);
         assert_eq!(source.focused_pane_id(), None);
     });
-    cx.update_window(destination_window, |_, window, cx| {
-        assert!(editor.focus_handle(cx).is_focused(window))
+    cx.update_window(destination_window, |_, native_window, cx| {
+        assert!(editor.focus_handle(cx).is_focused(native_window))
     })
     .unwrap();
 }
@@ -151,7 +151,9 @@ fn relocation_into_existing_document_pane_keeps_application_view_counts(cx: &mut
     });
     let outcome = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| shell.relocate_tab_to(&origin, &target, cx))
+            source.update(cx, |window, cx| {
+                window.relocate_tab_to(&origin, &target, cx)
+            })
         })
         .unwrap();
     assert_eq!(outcome, CommandOutcome::Completed);
@@ -177,8 +179,8 @@ fn abandoning_an_inactive_tab_capture_keeps_focus_and_document_ownership(cx: &mu
     let (source, source_window) = product_window(document, model.clone(), cx);
     let (destination, _) = product_window(document, model.clone(), cx);
     let inactive = cx.read(|cx| capture(&source, cx));
-    source.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, cx| {
+    source.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
             workbench
                 .open_tab_for_document(inactive.tab.tab.pane_id, document, model, cx)
                 .unwrap();
@@ -186,11 +188,11 @@ fn abandoning_an_inactive_tab_capture_keeps_focus_and_document_ownership(cx: &mu
     });
     let (before, active) = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
+            source.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
                 (
-                    shell.workbench.read(cx).tab_snapshots(),
-                    shell
+                    window.workbench.read(cx).tab_snapshots(),
+                    window
                         .workbench
                         .read(cx)
                         .focused_pane()
@@ -237,32 +239,38 @@ fn failed_creation_and_stale_or_closed_destination_leave_source_intact(cx: &mut 
     let before = cx.read(|cx| source.read(cx).workbench.read(cx).tab_snapshots());
     let outcome = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| {
-                shell.relocate_tab_to_new_window_with(&origin, cx, |_| {
+            source.update(cx, |window, cx| {
+                window.relocate_tab_to_new_window_with(&origin, cx, |_| {
                     anyhow::bail!("creation failed")
                 })
             })
         })
         .unwrap();
     assert!(matches!(outcome, CommandOutcome::HandlerFailure { .. }));
-    destination.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, cx| {
+    destination.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
             let pane = workbench.focused_pane().unwrap();
             workbench.replace_tab_document(pane.id(), pane.active_tab_id(), document, model, cx)
         })
     });
     let outcome = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| shell.relocate_tab_to(&origin, &target, cx))
+            source.update(cx, |window, cx| {
+                window.relocate_tab_to(&origin, &target, cx)
+            })
         })
         .unwrap();
     assert_eq!(outcome, CommandOutcome::InvalidTarget);
     let target = cx.read(|cx| self::target(&destination, TabMovePlacement::End, cx));
-    cx.update_window(destination_window, |_, window, _| window.remove_window())
-        .unwrap();
+    cx.update_window(destination_window, |_, native_window, _| {
+        native_window.remove_window()
+    })
+    .unwrap();
     let outcome = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| shell.relocate_tab_to(&origin, &target, cx))
+            source.update(cx, |window, cx| {
+                window.relocate_tab_to(&origin, &target, cx)
+            })
         })
         .unwrap();
     assert_eq!(outcome, CommandOutcome::InvalidTarget);
@@ -284,8 +292,8 @@ fn source_replaced_during_window_creation_rejects_move_and_cleans_destination(
     let workbench = cx.read(|cx| source.read(cx).workbench.clone());
     let outcome = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| {
-                shell.relocate_tab_to_new_window_with(&origin, cx, |cx| {
+            source.update(cx, |window, cx| {
+                window.relocate_tab_to_new_window_with(&origin, cx, |cx| {
                     let destination = open_tab_transfer_window(cx)?;
                     workbench.update(cx, |workbench, cx| {
                         workbench.replace_tab_document(
@@ -314,10 +322,10 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
     let (source, source_window) = product_window(document, model.clone(), cx);
     let (destination, _) = product_window(document, model, cx);
     cx.update_window(source_window, |_, _, cx| {
-        source.update(cx, |shell, cx| {
-            let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
+        source.update(cx, |window, cx| {
+            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
             assert!(
-                shell
+                window
                     .new_terminal_in_pane(
                         Some(pane),
                         crate::app::product::operations::TerminalLocation::Center,
@@ -329,8 +337,8 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
         })
     })
     .unwrap();
-    source.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, _| {
+    source.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
             let pane = workbench.focused_pane().unwrap();
             let pane_id = pane.id();
             let document_tab = pane
@@ -367,8 +375,8 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
     });
     let grid = cx.read(|cx| session.read(cx).terminal().unwrap().clone());
     assert_eq!(
-        cx.update_window(source_window, |_, _, cx| source.update(cx, |shell, cx| {
-            shell.relocate_tab_to(&origin, &same_window, cx)
+        cx.update_window(source_window, |_, _, cx| source.update(cx, |window, cx| {
+            window.relocate_tab_to(&origin, &same_window, cx)
         }))
         .unwrap(),
         CommandOutcome::Completed
@@ -385,7 +393,8 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
     let target = cx.read(|cx| target(&destination, TabMovePlacement::End, cx));
     assert_eq!(
         cx.update_window(source_window, |_, _, cx| source
-            .update(cx, |shell, cx| shell.relocate_tab_to(&origin, &target, cx)))
+            .update(cx, |window, cx| window
+                .relocate_tab_to(&origin, &target, cx)))
             .unwrap(),
         CommandOutcome::Completed
     );
@@ -445,26 +454,26 @@ fn tool_tear_out_and_cross_window_transfer_cancel_without_new_window(cx: &mut Te
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (source, source_window) = product_window(document, model.clone(), cx);
     let (destination, _) = product_window(document, model, cx);
-    source.update(cx, |shell, cx| {
-        shell.ensure_test_tool(false, cx);
+    source.update(cx, |window, cx| {
+        window.ensure_test_tool(false, cx);
         cx.notify();
     });
     cx.run_until_parked();
     let before = cx.read(|cx| source.read(cx).workbench.read(cx).tab_snapshots());
     let tool = cx.read(|cx| {
-        let shell = source.read(cx);
-        let workbench = shell.workbench.read(cx);
-        let explorer = shell.test_tool_frame(cx).unwrap();
+        let window = source.read(cx);
+        let workbench = window.workbench.read(cx);
+        let explorer = window.test_tool_frame(cx).unwrap();
         let (tool_pane, tool_tab) = workbench.tool_tab(explorer).unwrap();
-        shell
+        window
             .capture_tab_relocation(tool_pane, tool_tab, cx)
             .unwrap()
     });
     assert!(matches!(tool.tab.tab.surface, TabSurfaceId::Tool(_)));
     let outcome = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| {
-                shell.relocate_tab_to_new_window_with(&tool, cx, |_| {
+            source.update(cx, |window, cx| {
+                window.relocate_tab_to_new_window_with(&tool, cx, |_| {
                     panic!("tool tear-out must not create a window")
                 })
             })
@@ -474,7 +483,7 @@ fn tool_tear_out_and_cross_window_transfer_cancel_without_new_window(cx: &mut Te
     let target = cx.read(|cx| target(&destination, TabMovePlacement::End, cx));
     let outcome = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| shell.relocate_tab_to(&tool, &target, cx))
+            source.update(cx, |window, cx| window.relocate_tab_to(&tool, &target, cx))
         })
         .unwrap();
     assert_eq!(outcome, CommandOutcome::Unavailable);

@@ -49,8 +49,8 @@ fn load_source(
 }
 
 struct Fixture {
-    shell: Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     tree: Entity<TreeView>,
     editor: gpui::FocusHandle,
 }
@@ -62,12 +62,12 @@ impl Fixture {
         let host = cx.update(super::super::super::extensions::host::install);
         let document = cx.update(|cx| create_untitled_document(&documents, cx));
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-        let (shell, window) = product_window(document, model, cx);
+        let (window, native_window) = product_window(document, model, cx);
         load_source(&host, cx);
-        let tree = wait_for_contributed_view(&shell, "example.actions", cx);
+        let tree = wait_for_contributed_view(&window, "example.actions", cx);
         wait_for_api_condition(cx, |cx| tree.read(cx).root_labels().len() == 2);
         let editor = cx.read(|cx| {
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -76,7 +76,7 @@ impl Fixture {
                 .focus_handle(cx)
         });
         let fixture = Self {
-            shell,
+            native_window,
             window,
             tree,
             editor,
@@ -89,9 +89,9 @@ impl Fixture {
     }
 
     fn focus(&self, handle: &gpui::FocusHandle, cx: &mut TestAppContext) {
-        cx.update_window(self.window, |_, window, cx| {
-            handle.focus(window, cx);
-            focus_view(handle, window, cx);
+        cx.update_window(self.native_window, |_, native_window, cx| {
+            handle.focus(native_window, cx);
+            focus_view(handle, native_window, cx);
         })
         .unwrap();
         cx.run_until_parked();
@@ -105,7 +105,7 @@ impl Fixture {
         } else {
             "extension-tree-row-1"
         };
-        VisualTestContext::from_window(self.window, cx)
+        VisualTestContext::from_window(self.native_window, cx)
             .debug_bounds(selector)
             .expect("the row is laid out")
             .center()
@@ -113,7 +113,7 @@ impl Fixture {
 
     fn right_click(&self, index: usize, cx: &mut TestAppContext) {
         let row = self.row(index, cx);
-        let mut window_cx = VisualTestContext::from_window(self.window, cx);
+        let mut window_cx = VisualTestContext::from_window(self.native_window, cx);
         window_cx.simulate_mouse_down(row, MouseButton::Right, Modifiers::default());
         window_cx.simulate_mouse_up(row, MouseButton::Right, Modifiers::default());
         cx.run_until_parked();
@@ -121,10 +121,10 @@ impl Fixture {
 
     fn press(&self, keys: &str, cx: &mut TestAppContext) {
         cx.refresh().unwrap();
-        cx.simulate_keystrokes(self.window, keys);
+        cx.simulate_keystrokes(self.native_window, keys);
         // A key can run a command on the package's worker thread, whose
         // completion settles focus and the menu.
-        crate::app::product::driver::settle(&self.shell, cx);
+        crate::app::product::driver::settle(&self.window, cx);
     }
 
     fn menu_open(&self, cx: &TestAppContext) -> bool {
@@ -132,8 +132,8 @@ impl Fixture {
     }
 
     fn tree_focused(&self, cx: &mut TestAppContext) -> bool {
-        cx.update_window(self.window, |_, window, cx| {
-            self.tree.focus_handle(cx).is_focused(window)
+        cx.update_window(self.native_window, |_, native_window, cx| {
+            self.tree.focus_handle(cx).is_focused(native_window)
         })
         .unwrap()
     }
@@ -170,8 +170,8 @@ fn right_click_opens_a_row_menu_whose_actions_run_and_return_focus(cx: &mut Test
     assert!(!fixture.menu_open(cx));
     assert_eq!(fixture.selected(cx).as_deref(), Some("Without actions"));
     let execution = dispatch_tree_command(
-        &fixture.shell,
-        fixture.window,
+        &fixture.window,
+        fixture.native_window,
         SHOW_TREE_CONTEXT_MENU_COMMAND,
         cx,
     );
@@ -182,9 +182,11 @@ fn right_click_opens_a_row_menu_whose_actions_run_and_return_focus(cx: &mut Test
 #[gpui::test]
 fn a_menu_action_runs_when_another_view_had_focus(cx: &mut TestAppContext) {
     let fixture = Fixture::start(cx);
-    // Focus events reach the session only in an active window.
-    cx.update_window(fixture.window, |_, window, _| window.activate_window())
-        .unwrap();
+    // Focus events reach the window only in an active native window.
+    cx.update_window(fixture.native_window, |_, native_window, _| {
+        native_window.activate_window()
+    })
+    .unwrap();
     let editor = fixture.editor.clone();
     fixture.focus(&editor, cx);
     fixture.right_click(0, cx);
@@ -221,8 +223,8 @@ fn shift_f10_opens_the_selected_row_menu_and_bindings_still_win(cx: &mut TestApp
     // The command opens the menu at the selection, and runs its first action.
     fixture.press("up", cx);
     let execution = dispatch_tree_command(
-        &fixture.shell,
-        fixture.window,
+        &fixture.window,
+        fixture.native_window,
         SHOW_TREE_CONTEXT_MENU_COMMAND,
         cx,
     );
@@ -233,27 +235,27 @@ fn shift_f10_opens_the_selected_row_menu_and_bindings_still_win(cx: &mut TestApp
 }
 
 #[gpui::test]
-fn a_session_without_a_window_opens_no_menu(cx: &mut TestAppContext) {
+fn a_window_without_a_native_window_opens_no_menu(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.update(super::super::bind_product_keys);
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let shell = cx.update(|cx| {
+    let window = cx.update(|cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
         cx.new(|cx| KnotWindow::new(workbench, cx))
     });
     load_source(&host, cx);
-    shell.update(cx, |shell, cx| shell.observe_application(cx));
-    let tree = wait_for_contributed_view(&shell, "example.actions", cx);
+    window.update(cx, |window, cx| window.observe_application(cx));
+    let tree = wait_for_contributed_view(&window, "example.actions", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).root_labels().len() == 2);
     cx.update(|cx| {
         assert!(tree.update(cx, |tree, cx| tree.select_item("with", cx)));
         let handle = tree.focus_handle(cx);
-        shell.update(cx, |shell, cx| shell.focus_view(&handle, cx));
+        window.update(cx, |window, cx| window.focus_view(&handle, cx));
     });
 
-    let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+    let target = window.update(cx, |window, cx| window.capture_command_target(cx));
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
     let execution = dispatcher.update(cx, |dispatcher, cx| {
         dispatcher.dispatch(
@@ -267,7 +269,7 @@ fn a_session_without_a_window_opens_no_menu(cx: &mut TestAppContext) {
     });
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Unavailable);
     let keystroke = crate::app::keys::Keystroke::parse("shift-f10").unwrap();
-    shell.update(cx, |shell, cx| shell.press_key(keystroke, cx));
+    window.update(cx, |window, cx| window.press_key(keystroke, cx));
     cx.run_until_parked();
     assert!(!cx.read(|cx| tree.read(cx).context_menu_open()));
 }
@@ -294,7 +296,7 @@ await workbench.registerView({
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(991), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host.load_test_source(key, FAILING).unwrap();
@@ -303,18 +305,18 @@ await workbench.registerView({
         })
         .detach();
     });
-    let tree = wait_for_contributed_view(&shell, "example.failing", cx);
+    let tree = wait_for_contributed_view(&window, "example.failing", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["Bad", "Next"]);
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(native_window, |_, native_window, cx| {
         let handle = tree.focus_handle(cx);
-        handle.focus(window, cx);
-        focus_view(&handle, window, cx);
+        handle.focus(native_window, cx);
+        focus_view(&handle, native_window, cx);
     })
     .unwrap();
     cx.update(|cx| tree.update(cx, |tree, cx| tree.activate_row_for_test("bad", cx)));
     wait_for_api_condition(cx, |cx| !tree.read(cx).is_loading());
     cx.refresh().unwrap();
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     let row = visual.debug_bounds("extension-tree-row-0").unwrap();
     let status = visual.debug_bounds("extension-tree-status-1").unwrap();
     assert_eq!(status.size.height, row.size.height);

@@ -230,7 +230,7 @@ impl KnotWindow {
         &mut self,
         button: StripeButton,
         position: Point<Pixels>,
-        window: &mut Window,
+        native_window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let workbench = self.workbench.read(cx);
@@ -242,14 +242,14 @@ impl KnotWindow {
             ),
             StripeButton::Terminal => (None, false, Some(workbench.terminal_home())),
         };
-        let shell = cx.entity().downgrade();
-        let menu = PopupMenu::build(window, cx, move |menu, _, _| {
+        let window = cx.entity().downgrade();
+        let menu = PopupMenu::build(native_window, cx, move |menu, _, _| {
             let mut items = Vec::new();
             if let Some(stable_id) = stable_id {
-                let shell = shell.clone();
+                let window = window.clone();
                 let label = if visible { "Hide" } else { "Show Beside" };
                 items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
-                    let _ = shell.update(cx, |this, cx| {
+                    let _ = window.update(cx, |this, cx| {
                         if visible {
                             this.hide_tool_by_stripe(&stable_id, cx);
                         } else {
@@ -262,7 +262,7 @@ impl KnotWindow {
                 .into_iter()
                 .filter(|dock| Some(*dock) != home)
             {
-                let shell = shell.clone();
+                let window = window.clone();
                 let label = match (button, dock) {
                     (StripeButton::Tool(_), _) => format!("Move to {} Dock", dock_name(dock)),
                     (StripeButton::Terminal, _) => {
@@ -271,21 +271,21 @@ impl KnotWindow {
                 };
                 items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
                     let _ =
-                        shell.update(cx, |this, cx| this.rehome_stripe_button(button, dock, cx));
+                        window.update(cx, |this, cx| this.rehome_stripe_button(button, dock, cx));
                 }));
             }
             items.into_iter().fold(menu, |menu, item| menu.item(item))
         });
         let menu_focus = menu.focus_handle(cx);
         let subscriptions = [
-            cx.subscribe_in(&menu, window, |this, _, _: &DismissEvent, _, cx| {
+            cx.subscribe_in(&menu, native_window, |this, _, _: &DismissEvent, _, cx| {
                 this.close_stripe_menu(cx)
             }),
-            cx.on_blur(&menu_focus, window, |this, _, cx| {
+            cx.on_blur(&menu_focus, native_window, |this, _, cx| {
                 this.close_stripe_menu(cx)
             }),
         ];
-        menu_focus.focus(window, cx);
+        menu_focus.focus(native_window, cx);
         crate::app::components::track_popup(&menu_focus, cx);
         self.stripe_menu = Some(StripeMenu {
             menu,

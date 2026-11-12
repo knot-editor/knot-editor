@@ -1,7 +1,7 @@
-//! The application zoom level, which scales every product window.
+//! The application zoom level, which scales every window.
 //!
 //! One integer level applies to the whole application; each step scales by
-//! [`STEP`]. Product windows set their rem size from it, which scales every
+//! [`STEP`]. Windows set their rem size from it, which scales every
 //! rem-styled surface: styles given in pixels at 100% use [`rems`], and
 //! painting that measures in pixels multiplies by [`factor`] through
 //! [`scaled`]. Editors and terminals

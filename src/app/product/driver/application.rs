@@ -76,7 +76,7 @@ impl TestProduct {
         product
     }
 
-    /// Every product window, in the order they opened.
+    /// Every window, in the order they opened.
     pub fn windows(&self, cx: &mut TestAppContext) -> Vec<TestWindow> {
         let windows = cx.read(|cx| cx.windows());
         windows
@@ -88,7 +88,7 @@ impl TestProduct {
     /// The focused window.
     pub fn active_window(&self, cx: &mut TestAppContext) -> TestWindow {
         let window = cx.read(|cx| cx.active_window()).expect("an active window");
-        TestWindow::of(window, cx).expect("a product window")
+        TestWindow::of(window, cx).expect("a window")
     }
 
     /// Open a window with an untitled document and no roots.
@@ -97,9 +97,12 @@ impl TestProduct {
         let document =
             cx.update(|cx| crate::app::product::create_untitled_document(&documents, cx));
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-        let (shell, window) = super::setup::product_window(document, model, cx);
+        let (window, native_window) = super::setup::product_window(document, model, cx);
         cx.run_until_parked();
-        TestWindow { shell, window }
+        TestWindow {
+            window,
+            native_window,
+        }
     }
 
     /// Answer every folder or file dialog with `path`.
@@ -252,16 +255,16 @@ impl TestProduct {
         let kept: Vec<Vec<String>> = windows.iter().map(|window| window.roots(cx)).collect();
         let drained = cx.read(crate::app::recovery::drain);
         await_task(drained, cx).unwrap();
-        cx.update(crate::app::window_sessions::record);
-        let mut record = cx.read(crate::app::window_sessions::current).unwrap();
+        cx.update(crate::app::window_record::record);
+        let mut record = cx.read(crate::app::window_record::current).unwrap();
         record.windows.retain(|window| kept.contains(&window.roots));
         record.active = Some(0);
         cx.update(|cx| {
-            crate::app::window_sessions::stop_for_test(cx);
-            cx.global::<crate::app::window_sessions::ApplicationWindowSessions>()
+            crate::app::window_record::stop_for_test(cx);
+            cx.global::<crate::app::window_record::ApplicationWindowRecord>()
                 .publish_for_test(record);
         });
-        let flushed = cx.read(crate::app::window_sessions::flush);
+        let flushed = cx.read(crate::app::window_record::flush);
         await_task(flushed, cx).unwrap();
 
         // Quit stops packages before windows close, so none sees the closure.
@@ -271,7 +274,7 @@ impl TestProduct {
             }
         }
         for window in cx.read(|cx| cx.windows()) {
-            let _ = cx.update_window(window, |_, window, _| window.remove_window());
+            let _ = cx.update_window(window, |_, native_window, _| native_window.remove_window());
         }
         cx.run_until_parked();
 
@@ -293,7 +296,7 @@ impl TestProduct {
             RecoveryStore::open(self.state.path().join("recovery.sqlite3"), executor.clone()),
         )));
         let state = StateDatabase::open(self.state.path().join("state.sqlite3"), executor);
-        cx.update(|cx| crate::app::window_sessions::install(&state, cx));
+        cx.update(|cx| crate::app::window_record::install(&state, cx));
     }
 
     fn storage_root(&self) -> PathBuf {
@@ -323,8 +326,10 @@ fn activate_last_window(cx: &mut TestAppContext) {
     let window = cx
         .read(|cx| cx.windows().last().copied())
         .expect("a window");
-    cx.update_window(window, |_, window, _| window.activate_window())
-        .unwrap();
+    cx.update_window(window, |_, native_window, _| {
+        native_window.activate_window()
+    })
+    .unwrap();
     cx.run_until_parked();
 }
 

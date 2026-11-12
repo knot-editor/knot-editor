@@ -1,5 +1,5 @@
 //! The edge between Knot's own vocabulary types and the toolkit's. Views and
-//! the shell convert here; the rest of the application uses Knot's types.
+//! windows convert here; the rest of the application uses Knot's types.
 
 use gpui::{FontStyle as GpuiFontStyle, FontWeight, Hsla, StrikethroughStyle, UnderlineStyle, px};
 use knot_protocol::DecorationStyle;

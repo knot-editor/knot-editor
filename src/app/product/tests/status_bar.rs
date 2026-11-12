@@ -40,8 +40,10 @@ fn bounds(
     cx: &mut TestAppContext,
 ) -> Option<gpui::Bounds<gpui::Pixels>> {
     cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
+    cx.update_window(window, |_, native_window, cx| {
+        native_window.draw(cx).clear(cx)
+    })
+    .unwrap();
     VisualTestContext::from_window(window, cx).debug_bounds(selector)
 }
 
@@ -58,12 +60,12 @@ fn texts(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> (Vec<String>
 }
 
 fn run(
-    shell: &Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     command: &'static str,
     cx: &mut TestAppContext,
 ) {
-    let execution = dispatch_product_command(shell, window, command, cx);
+    let execution = dispatch_product_command(window, native_window, command, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.run_until_parked();
 }
@@ -74,7 +76,7 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(970), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -90,32 +92,32 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
 
     // The bar sits below the workbench, the left group first and the right
     // group by descending priority.
-    let bar = bounds(window, "status-bar", cx).expect("the bar is laid out");
-    let branch = bounds(window, "status-item-branch", cx).unwrap();
-    let position = bounds(window, "status-item-position", cx).unwrap();
-    let language = bounds(window, "status-item-language", cx).unwrap();
-    let pane = bounds(window, "pane-1", cx).unwrap();
+    let bar = bounds(native_window, "status-bar", cx).expect("the bar is laid out");
+    let branch = bounds(native_window, "status-item-branch", cx).unwrap();
+    let position = bounds(native_window, "status-item-position", cx).unwrap();
+    let language = bounds(native_window, "status-item-language", cx).unwrap();
+    let pane = bounds(native_window, "pane-1", cx).unwrap();
     assert!(bar.top() >= pane.bottom());
     assert!(branch.right() <= position.left());
     assert!(position.right() <= language.left());
     assert!(language.right() <= bar.right());
 
     // An item paints its icon before the text; one without an icon paints none.
-    let icon = bounds(window, "status-icon-branch", cx).expect("the icon is painted");
+    let icon = bounds(native_window, "status-icon-branch", cx).expect("the icon is painted");
     assert!(
         icon.size.width > px(0.) && icon.left() >= branch.left() && icon.right() < branch.right()
     );
-    assert!(bounds(window, "status-icon-language", cx).is_none());
+    assert!(bounds(native_window, "status-icon-language", cx).is_none());
 
     // Clicking an item runs its command with its arguments, in the window's
     // focused view.
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     {
-        let mut window_cx = VisualTestContext::from_window(window, cx);
+        let mut window_cx = VisualTestContext::from_window(native_window, cx);
         let center = position.center();
         window_cx.simulate_click(center, Modifiers::default());
     }
@@ -125,18 +127,21 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
     });
 
     // A window's own value shadows the shared one, which still changes beneath.
-    run(&shell, window, "status.override", cx);
-    assert_eq!(texts(window, cx).1, ["Ln 9", "Rust"]);
-    run(&shell, window, "status.update", cx);
-    assert_eq!(texts(window, cx).1, ["Ln 9", "Rust"]);
-    run(&shell, window, "status.clearOverride", cx);
-    assert_eq!(texts(window, cx).1, ["Ln 2", "Rust"]);
+    run(&window, native_window, "status.override", cx);
+    assert_eq!(texts(native_window, cx).1, ["Ln 9", "Rust"]);
+    run(&window, native_window, "status.update", cx);
+    assert_eq!(texts(native_window, cx).1, ["Ln 9", "Rust"]);
+    run(&window, native_window, "status.clearOverride", cx);
+    assert_eq!(texts(native_window, cx).1, ["Ln 2", "Rust"]);
 
     // Hidden IDs leave the bar while their registrations live on: the item
     // beside the hidden one takes its place at the edge. (Debug bounds of a
     // selector outlive its element, so absence shows in the layout.)
-    let edge =
-        |cx: &mut TestAppContext| bounds(window, "status-item-position", cx).unwrap().right();
+    let edge = |cx: &mut TestAppContext| {
+        bounds(native_window, "status-item-position", cx)
+            .unwrap()
+            .right()
+    };
     let before = edge(cx);
     cx.update(|cx| {
         cx.default_global::<ApplicationSettings>()
@@ -149,7 +154,7 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
             .unwrap();
     });
     assert!(edge(cx) > before);
-    assert_eq!(texts(window, cx).1, ["Ln 2"]);
+    assert_eq!(texts(native_window, cx).1, ["Ln 2"]);
     cx.update(|cx| {
         cx.default_global::<ApplicationSettings>()
             .0
@@ -159,22 +164,22 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
 
     // Toggle Status Bar flips the visibility setting and the workbench takes
     // the bar's height.
-    let height = |cx: &mut TestAppContext| bounds(window, "pane-1", cx).unwrap().size.height;
+    let height = |cx: &mut TestAppContext| bounds(native_window, "pane-1", cx).unwrap().size.height;
     let with_bar = height(cx);
-    run(&shell, window, "workbench.toggle-status-bar", cx);
+    run(&window, native_window, "workbench.toggle-status-bar", cx);
     assert!(height(cx) > with_bar);
-    run(&shell, window, "workbench.toggle-status-bar", cx);
+    run(&window, native_window, "workbench.toggle-status-bar", cx);
     assert_eq!(height(cx), with_bar);
 
     // Disposing an item removes it; unloading removes the rest.
-    run(&shell, window, "status.drop", cx);
+    run(&window, native_window, "status.drop", cx);
     assert_eq!(
-        texts(window, cx),
+        texts(native_window, cx),
         (vec!["main".into()], vec!["Rust".into()])
     );
     host.update(cx, |host, cx| host.unload(key, cx)).unwrap();
     cx.run_until_parked();
-    assert_eq!(texts(window, cx), (vec![], vec![]));
+    assert_eq!(texts(native_window, cx), (vec![], vec![]));
 }
 
 #[gpui::test]
@@ -203,9 +208,9 @@ fn hovering_an_item_with_a_tooltip_shows_it_on_a_popover(cx: &mut TestAppContext
         .into();
     let popovers = |cx: &mut TestAppContext| {
         cx.run_until_parked();
-        cx.update_window(window, |_, window, cx| {
-            window.draw(cx).clear(cx);
-            window
+        cx.update_window(window, |_, native_window, cx| {
+            native_window.draw(cx).clear(cx);
+            native_window
                 .painted_quads()
                 .iter()
                 .filter(|quad| quad.background == popover)
@@ -237,7 +242,7 @@ fn an_unchanged_update_redraws_nothing(cx: &mut TestAppContext) {
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(971), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -252,9 +257,9 @@ fn an_unchanged_update_redraws_nothing(cx: &mut TestAppContext) {
     loaded.lock().unwrap().take().unwrap().unwrap();
 
     for command in ["status.update", "status.override"] {
-        run(&shell, window, command, cx);
+        run(&window, native_window, command, cx);
         crate::app::work_counts::take();
-        run(&shell, window, command, cx);
+        run(&window, native_window, command, cx);
         let counts = crate::app::work_counts::take();
         assert!(
             counts.requests.contains(&"updateStatusItem"),

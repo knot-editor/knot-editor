@@ -17,10 +17,10 @@ use super::KnotWindow;
 /// How long a run may take to settle before the test fails.
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Run until `shell` holds no keys and the extension pool is quiet: no
+/// Run until `window` holds no keys and the extension pool is quiet: no
 /// package has work in progress, and none finished a turn while the
 /// foreground ran what it had.
-pub(super) fn settle(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) {
+pub(super) fn settle(window: &Entity<KnotWindow>, cx: &mut TestAppContext) {
     let pool = cx.read(crate::app::extensions::host::pool);
     let Some(pool) = pool else {
         cx.run_until_parked();
@@ -31,7 +31,7 @@ pub(super) fn settle(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) {
         let before = pool.activity();
         cx.run_until_parked();
         let after = pool.activity();
-        let held = cx.read(|cx| shell.read(cx).holds_keys());
+        let held = cx.read(|cx| window.read(cx).holds_keys());
         if after == before && !after.busy && !held {
             return;
         }
@@ -39,7 +39,7 @@ pub(super) fn settle(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) {
             let remaining = deadline.saturating_duration_since(Instant::now());
             assert!(
                 pool.wait_for_turn(after.finished_turns, remaining),
-                "the session never settled: {}",
+                "the window never settled: {}",
                 if held {
                     "it still holds keys"
                 } else {

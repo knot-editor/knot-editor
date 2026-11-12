@@ -5,10 +5,10 @@ use crate::app::workbench::CommandView;
 use crate::app::zoom;
 
 fn active_editor(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &gpui::App,
 ) -> Entity<crate::app::editor::EditorView> {
-    let workbench = shell.read(cx).workbench.read(cx);
+    let workbench = window.read(cx).workbench.read(cx);
     match workbench.focused_command_view() {
         Some(CommandView::Editor(editor)) => editor,
         _ => panic!("the active tab is not an editor"),
@@ -47,7 +47,7 @@ async fn zoom_commands_step_clamp_and_scale_every_window(cx: &mut TestAppContext
     let observed = |cx: &mut TestAppContext| {
         cx.refresh().unwrap();
         let rem = |window: gpui::AnyWindowHandle, cx: &mut TestAppContext| {
-            cx.update_window(window, |_, window, _| window.rem_size())
+            cx.update_window(window, |_, native_window, _| native_window.rem_size())
                 .unwrap()
         };
         let rems = (rem(first_window, cx), rem(second_window, cx));

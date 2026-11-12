@@ -48,8 +48,8 @@ await commands.register("switch.go", async () => {
 struct Fixture {
     host: Entity<crate::app::extensions::host::ProductExtensionHost>,
     documents: Entity<DocumentCollection>,
-    shell: Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     extensions: tempfile::TempDir,
     _storage: tempfile::TempDir,
 }
@@ -65,7 +65,7 @@ fn start(packages: &[(&str, &[&str], &str)], cx: &mut TestAppContext) -> Fixture
     host.update(cx, |host, cx| {
         host.set_test_storage_root(storage.path().to_owned(), cx)
     });
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     host.update(cx, |host, cx| {
         host.start_installed_extensions(extensions.path().to_owned(), cx)
     });
@@ -80,7 +80,7 @@ fn start(packages: &[(&str, &[&str], &str)], cx: &mut TestAppContext) -> Fixture
     Fixture {
         host,
         documents,
-        shell,
+        native_window,
         window,
         extensions,
         _storage: storage,
@@ -93,7 +93,7 @@ impl Fixture {
     }
 
     fn command(&self, name: &'static str, cx: &mut TestAppContext) -> crate::app::CommandExecution {
-        dispatch_product_command(&self.shell, self.window, name, cx)
+        dispatch_product_command(&self.window, self.native_window, name, cx)
     }
 
     fn clipboard_after(&self, name: &'static str, cx: &mut TestAppContext) -> String {
@@ -106,9 +106,9 @@ impl Fixture {
     fn restart(&self, name: &str, cx: &mut TestAppContext) -> (String, String) {
         let execution = self.command(super::super::commands::RESTART_EXTENSION_COMMAND, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-        wait_for_api_condition(cx, |cx| self.shell.read(cx).transient.is_some());
-        cx.simulate_input(self.window, name);
-        cx.simulate_keystrokes(self.window, "enter");
+        wait_for_api_condition(cx, |cx| self.window.read(cx).transient.is_some());
+        cx.simulate_input(self.native_window, name);
+        cx.simulate_keystrokes(self.native_window, "enter");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while !cx.has_pending_prompt() {
             assert!(
@@ -140,7 +140,7 @@ impl Fixture {
     fn texts(&self, cx: &TestAppContext) -> Vec<String> {
         cx.read(|cx| {
             let documents = self.documents.read(cx);
-            self.shell
+            self.window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -223,7 +223,7 @@ fn show_extension_memory_lists_each_live_package(cx: &mut TestAppContext) {
         cx,
     );
     // Startup turns finish first, so only the spinning package reports a turn.
-    crate::app::product::driver::settle(&fixture.shell, cx);
+    crate::app::product::driver::settle(&fixture.window, cx);
     let spin = fixture.command("loop.spin", cx);
     // The spin turn starts on a worker thread; wait until it is running.
     wait_for_api_condition(cx, |cx| {
@@ -237,7 +237,7 @@ fn show_extension_memory_lists_each_live_package(cx: &mut TestAppContext) {
     let detail = cx.read(|cx| {
         let documents = fixture.documents.read(cx);
         let report = fixture
-            .shell
+            .window
             .read(cx)
             .workbench
             .read(cx)

@@ -283,9 +283,9 @@ pub(crate) fn quit_after_storage(cx: &mut App) {
         return;
     };
     let window_flush = cx.spawn(async move |cx| {
-        // Windows are recorded once the shell that started quit is released,
+        // Windows are recorded once the window that started quit is released,
         // and before quitting closes them.
-        match cx.update(crate::app::window_sessions::record_for_quit) {
+        match cx.update(crate::app::window_record::record_for_quit) {
             Some(flush) => flush.await.is_ok(),
             None => true,
         }
@@ -1934,7 +1934,7 @@ impl ProductExtensionHost {
                         invocation.capture = self.command_targets.get(&root).map(|target| {
                             knot_protocol::CommandCapture {
                                 authority: root,
-                                window: crate::app::product::window_id(target.shell.entity_id()),
+                                window: crate::app::product::window_id(target.window.entity_id()),
                                 view: target.view.map(|view| format!("{view:?}")),
                                 tool: target.extension_tool_id(cx),
                                 editor: matches!(
@@ -2071,9 +2071,9 @@ impl ProductExtensionHost {
                     return;
                 }
                 // The tree must still have focus in its session.
-                let Some(target) = crate::app::product::find_window(window, cx)
-                    .map(|shell| shell.update(cx, |shell, cx| shell.capture_command_target(cx)))
-                else {
+                let Some(target) = crate::app::product::find_window(window, cx).map(|window| {
+                    window.update(cx, |window, cx| window.capture_command_target(cx))
+                }) else {
                     return;
                 };
                 if target.view != Some(*view) {
@@ -2105,7 +2105,7 @@ impl ProductExtensionHost {
         use knot_protocol::CommandOutcome;
 
         target.validate(cx)?;
-        if target.native_window(cx).is_none() {
+        if target.window(cx).is_none() {
             return Err(CommandOutcome::InvalidTarget);
         }
         let name = command.name.clone();
@@ -2129,7 +2129,7 @@ impl ProductExtensionHost {
                 .await
                 .unwrap_or(CommandOutcome::Cancelled);
             let outcome = cx.update(|cx| {
-                if target.native_window(cx).is_none() {
+                if target.window(cx).is_none() {
                     return CommandOutcome::InvalidTarget;
                 }
                 if let Err(invalid) = target.validate(cx) {
@@ -2398,17 +2398,17 @@ impl ProductExtensionHost {
             .documents()
             .map(|document| application_document_info(document, buffers[&document.id()], cx))
             .collect();
-        let active = crate::app::product::active_window(cx).map(|shell| shell.entity_id());
+        let active = crate::app::product::active_window(cx).map(|window| window.entity_id());
         let mut snapshot = ApplicationSnapshot {
             documents: document_infos,
             launched: cx.has_global::<ApplicationLaunched>(),
             ..Default::default()
         };
-        for shell in crate::app::product::windows(cx) {
-            let info = shell
+        for window in crate::app::product::windows(cx) {
+            let info = window
                 .read(cx)
-                .application_window(shell.entity_id(), &buffers, cx);
-            if active == Some(shell.entity_id()) {
+                .application_window(window.entity_id(), &buffers, cx);
+            if active == Some(window.entity_id()) {
                 snapshot.active_window = Some(info.target.clone());
                 snapshot.active_target = info.current_target.clone();
             }
@@ -2610,7 +2610,7 @@ impl ProductExtensionHost {
     ) -> Result<knot_protocol::WindowTarget, handlers::AccessError> {
         use handlers::AccessError;
         use knot_protocol::WindowTarget;
-        let shell = if let Some(invocation) = request.invocation {
+        let window = if let Some(invocation) = request.invocation {
             let root = self
                 .commands
                 .root_of(invocation)
@@ -2618,7 +2618,7 @@ impl ProductExtensionHost {
             self.command_targets
                 .get(&root)
                 .ok_or(AccessError::InvalidTarget)?
-                .shell
+                .window
                 .entity_id()
         } else {
             crate::app::product::active_window(cx)
@@ -2626,7 +2626,7 @@ impl ProductExtensionHost {
                 .entity_id()
         };
         Ok(WindowTarget {
-            window: crate::app::product::window_id(shell),
+            window: crate::app::product::window_id(window),
         })
     }
 
@@ -2737,7 +2737,7 @@ impl ProductExtensionHost {
         crate::app::product::find_window(&window, cx).ok_or(handlers::AccessError::InvalidTarget)
     }
 
-    /// Run one transient interaction install against the resolved session.
+    /// Run one transient interaction install against the resolved window.
     fn with_transient_window<R>(
         &self,
         request: &knot_protocol::RequestContext,
@@ -2748,8 +2748,8 @@ impl ProductExtensionHost {
         ) -> Result<R, handlers::TransientError>,
         cx: &mut Context<Self>,
     ) -> Result<R, handlers::TransientError> {
-        let shell = self.transient_session(request, explicit, cx)?;
-        shell.update(cx, |shell, cx| access(shell, cx))
+        let window = self.transient_session(request, explicit, cx)?;
+        window.update(cx, |window, cx| access(window, cx))
     }
 
     /// Start an inline edit in the tree view `arguments.registration`
@@ -2785,8 +2785,8 @@ impl ProductExtensionHost {
             window,
         } = arguments;
         let kind = self.semantics.owned_kind(registration, request)?;
-        let shell = self.transient_session(request, window.as_deref(), cx)?;
-        let (tree, handle) = shell
+        let knot_window = self.transient_session(request, window.as_deref(), cx)?;
+        let (tree, handle) = knot_window
             .read(cx)
             .contributed_tree(&kind)
             .ok_or(crate::app::extensions::semantics::SemanticError::ViewNotFound)?;
@@ -2808,7 +2808,7 @@ impl ProductExtensionHost {
             .ok_or(TreeEditError::ItemNotFound)?;
         // The command that started the edit waits for it, so the keys typed
         // meanwhile belong to the field.
-        shell.update(cx, |shell, cx| shell.release_key_hold_now(cx));
+        knot_window.update(cx, |knot_window, cx| knot_window.release_key_hold_now(cx));
         Ok((session, weak))
     }
 
@@ -2848,12 +2848,12 @@ impl ProductExtensionHost {
             lifecycle,
             invocation,
         };
-        for shell in crate::app::product::windows(cx) {
-            shell.update(cx, |shell, cx| shell.cancel_transient(owner, cx));
+        for window in crate::app::product::windows(cx) {
+            window.update(cx, |window, cx| window.cancel_transient(owner, cx));
         }
     }
 
-    /// Show, hide, or focus a live registration in all product windows or in
+    /// Show, hide, or focus a live registration in all windows or in
     /// one explicit window. Programmatic presentation never publishes defaults.
     pub(crate) fn present_view(
         &mut self,
@@ -2871,25 +2871,25 @@ impl ProductExtensionHost {
             return Err(AccessError::Cancelled.into());
         }
         let id = self.semantics.owned_kind(registration, request)?;
-        let shells = match window {
+        let windows = match window {
             Some(window) => vec![
                 crate::app::product::find_window(window, cx).ok_or(AccessError::InvalidTarget)?,
             ],
             None => crate::app::product::windows(cx),
         };
-        for shell in shells {
-            shell.update(cx, |shell, cx| match action {
+        for window in windows {
+            window.update(cx, |window, cx| match action {
                 crate::app::extensions::semantics::ViewPresentation::Show => {
-                    shell.set_contributed_view_visible(&id, true, cx);
+                    window.set_contributed_view_visible(&id, true, cx);
                 }
                 crate::app::extensions::semantics::ViewPresentation::Hide => {
-                    shell.set_contributed_view_visible(&id, false, cx);
+                    window.set_contributed_view_visible(&id, false, cx);
                 }
                 crate::app::extensions::semantics::ViewPresentation::Focus => {
-                    shell.focus_contributed_view(&id, cx);
+                    window.focus_contributed_view(&id, cx);
                 }
                 crate::app::extensions::semantics::ViewPresentation::Toggle => {
-                    shell.toggle_tool(&id, cx);
+                    window.toggle_tool(&id, cx);
                 }
             });
         }
@@ -2912,10 +2912,10 @@ impl ProductExtensionHost {
         let Ok(target) = self.operation_window(request, cx) else {
             return;
         };
-        let Some(shell) = crate::app::product::find_window(&target.window, cx) else {
+        let Some(window) = crate::app::product::find_window(&target.window, cx) else {
             return;
         };
-        shell.update(cx, |shell, cx| shell.publish_tool_layout(cx));
+        window.update(cx, |window, cx| window.publish_tool_layout(cx));
     }
 
     fn remove_lifecycle(&mut self, key: ExtensionKey, cx: &mut Context<Self>) {

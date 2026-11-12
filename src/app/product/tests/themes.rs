@@ -67,7 +67,7 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(960), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -101,8 +101,8 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
 
     let select = |key: &str, value: &str, cx: &mut TestAppContext| {
         let execution = dispatch_product_command_with(
-            &shell,
-            window,
+            &window,
+            native_window,
             "theme.select",
             CommandArgumentValue::Array(vec![
                 CommandArgumentValue::String(key.into()),
@@ -131,7 +131,7 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     // Disposing the active theme keeps its colors until the selection
     // changes, and an unregistered selection uses the defaults.
     select("theme.mode", "dark", cx);
-    let execution = dispatch_product_command(&shell, window, "theme.dropDerived", cx);
+    let execution = dispatch_product_command(&window, native_window, "theme.dropDerived", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.run_until_parked();
     assert_eq!(background(cx), gpui::rgb(0x000001).into());
@@ -180,7 +180,7 @@ await commands.register("green", async () => { await settings.set("theme.dark", 
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "abcdef").unwrap());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(961), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -194,13 +194,13 @@ await commands.register("green", async () => { await settings.set("theme.dark", 
     wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
     loaded.lock().unwrap().take().unwrap().unwrap();
     cx.update(crate::app::themes::apply_at_startup);
-    let execution = dispatch_product_command(&shell, window, "decorate", cx);
+    let execution = dispatch_product_command(&window, native_window, "decorate", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.run_until_parked();
 
     let painted = |cx: &mut TestAppContext| {
         cx.read(|cx| {
-            let workbench = shell.read(cx).workbench.read(cx);
+            let workbench = window.read(cx).workbench.read(cx);
             let pane = workbench.focused_pane().unwrap();
             let editor = workbench.editor(pane.active_tab()).unwrap().read(cx);
             (
@@ -222,7 +222,7 @@ await commands.register("green", async () => { await settings.set("theme.dark", 
     );
 
     // A theme that sets the key repaints it.
-    let execution = dispatch_product_command(&shell, window, "green", cx);
+    let execution = dispatch_product_command(&window, native_window, "green", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.run_until_parked();
     let green = gpui::rgb(0x00ff00).into();

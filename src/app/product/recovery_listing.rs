@@ -16,7 +16,7 @@ use knot_protocol::PickerItem;
 pub(super) const LISTING_TITLE: &str = "Recover Unsaved Documents";
 
 impl KnotWindow {
-    /// List recoverable snapshots in this session and act on the selection.
+    /// List recoverable snapshots in this window and act on the selection.
     pub(crate) fn start_recovery_listing(&mut self, cx: &mut Context<Self>) {
         if self.transient.is_some() {
             return;
@@ -60,8 +60,8 @@ impl KnotWindow {
                     description: Some(describe_snapshot(snapshot, now)),
                 })
                 .collect();
-            let Ok(Ok(receiver)) = this.update(cx, |shell, cx| {
-                shell.begin_owned_picker(None, LISTING_TITLE.into(), items, None, cx)
+            let Ok(Ok(receiver)) = this.update(cx, |window, cx| {
+                window.begin_owned_picker(None, LISTING_TITLE.into(), items, None, cx)
             }) else {
                 return;
             };
@@ -73,8 +73,8 @@ impl KnotWindow {
                 return;
             };
             let title = snapshot.title.clone();
-            let Ok(answer) = this.update(cx, |shell, cx| {
-                shell.prompt(
+            let Ok(answer) = this.update(cx, |window, cx| {
+                window.prompt(
                     PromptLevel::Info,
                     format!("Recover “{title}”?"),
                     Some("Restore opens the recovered text as an unsaved document. Discard permanently deletes it.".into()),
@@ -94,8 +94,8 @@ impl KnotWindow {
                     let restore =
                         cx.update(|cx| crate::app::recovery::restore(kind, key, providers, cx));
                     let outcome = restore.await;
-                    let _ = this.update(cx, |shell, cx| {
-                        shell.present_recovered(outcome, &title, cx)
+                    let _ = this.update(cx, |window, cx| {
+                        window.present_recovered(outcome, &title, cx)
                     });
                 }
                 1 => {
@@ -161,7 +161,9 @@ impl KnotWindow {
         detail: Option<String>,
         cx: &mut AsyncApp,
     ) {
-        let _ = this.update(cx, |shell, cx| shell.show_notice(level, title, detail, cx));
+        let _ = this.update(cx, |window, cx| {
+            window.show_notice(level, title, detail, cx)
+        });
     }
 }
 

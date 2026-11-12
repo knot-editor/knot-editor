@@ -2,24 +2,26 @@
 use super::*;
 
 #[gpui::test]
-fn shell_actions_render_tabs_and_both_split_directions(cx: &mut TestAppContext) {
+fn window_actions_render_tabs_and_both_split_directions(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, cx) = cx.add_window_view(|_, cx| {
+    let (window, cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
         KnotWindow::new(workbench, cx)
     });
 
     cx.update(|_, cx| {
-        shell.update(cx, |shell, cx| shell.new_tab(cx));
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Vertical, cx));
+        window.update(cx, |window, cx| window.new_tab(cx));
+        window.update(cx, |window, cx| {
+            window.split(SplitDirection::Horizontal, cx)
+        });
+        window.update(cx, |window, cx| window.split(SplitDirection::Vertical, cx));
     });
     cx.run_until_parked();
 
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(workbench.panes().len(), 3);
         assert!(matches!(
             workbench.center(),
@@ -51,20 +53,22 @@ fn new_tab_targets_the_pane_whose_editor_has_focus(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, cx) = cx.add_window_view(|_, cx| {
+    let (window, cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
         KnotWindow::new(workbench, cx)
     });
 
     cx.update(|_, cx| {
-        shell.update(cx, |shell, cx| shell.split(SplitDirection::Horizontal, cx));
+        window.update(cx, |window, cx| {
+            window.split(SplitDirection::Horizontal, cx)
+        });
     });
     cx.run_until_parked();
     cx.refresh().unwrap();
 
     let (first_pane, first_editor, second_editor) = cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let first_pane = workbench.panes()[0].id();
         (
             first_pane,
@@ -88,12 +92,12 @@ fn new_tab_targets_the_pane_whose_editor_has_focus(cx: &mut TestAppContext) {
     assert!(cx.update(|window, cx| first_editor.focus_handle(cx).is_focused(window)));
 
     cx.update(|_, cx| {
-        shell.update(cx, |shell, cx| shell.new_tab(cx));
+        window.update(cx, |window, cx| window.new_tab(cx));
     });
     cx.run_until_parked();
 
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(workbench.pane(first_pane).unwrap().tabs().len(), 2);
         assert_eq!(
             workbench
@@ -115,18 +119,18 @@ fn closing_the_final_clean_tab_leaves_an_empty_center_that_takes_new_documents(
     let documents = install_globals(cx);
     let original = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(original).unwrap().model().clone());
-    let (shell, cx) = cx.add_window_view(|_, cx| {
+    let (window, cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(original, model, cx));
         KnotWindow::new(workbench, cx)
     });
 
-    cx.update(|window, cx| {
-        shell.update(cx, |shell, cx| shell.close_active_tab(window, cx));
+    cx.update(|native_window, cx| {
+        window.update(cx, |window, cx| window.close_active_tab(native_window, cx));
     });
     cx.run_until_parked();
 
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert!(workbench.panes().is_empty());
         assert!(documents.read(cx).get(original).is_none());
         assert_eq!(documents.read(cx).documents().count(), 0);
@@ -134,10 +138,10 @@ fn closing_the_final_clean_tab_leaves_an_empty_center_that_takes_new_documents(
     // The empty center paints and still opens documents.
     cx.run_until_parked();
     assert!(cx.debug_bounds("empty-center").is_some());
-    shell.update(cx, |shell, cx| shell.new_tab(cx));
+    window.update(cx, |window, cx| window.new_tab(cx));
     cx.run_until_parked();
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         assert_eq!(pane.area(), crate::app::workbench::Area::Center);
         assert!(pane.active_tab().document_id().is_some());
@@ -154,12 +158,12 @@ fn replacing_a_shared_blank_tab_preserves_the_other_windows_document(cx: &mut Te
     let (second, _) = product_window(blank, model.clone(), cx);
     let replacement = cx.update(|cx| create_untitled_document(&documents, cx));
     cx.update_window(first_window, |_, _window, cx| {
-        first.update(cx, |shell, cx| {
-            let workbench = shell.workbench.read(cx);
+        first.update(cx, |window, cx| {
+            let workbench = window.workbench.read(cx);
             let pane = workbench.focused_pane().unwrap();
             let target = super::super::OpenTarget {
-                shell: cx.weak_entity(),
-                workbench: shell.workbench.downgrade(),
+                window: cx.weak_entity(),
+                workbench: window.workbench.downgrade(),
                 tab: Some(crate::app::commands::dispatch::TargetTab {
                     pane: pane.id(),
                     tab: pane.active_tab_id(),
@@ -167,7 +171,7 @@ fn replacing_a_shared_blank_tab_preserves_the_other_windows_document(cx: &mut Te
                     presentation: pane.active_tab().presentation(),
                 }),
             };
-            shell.present_open_document(replacement, &target, true, false, cx);
+            window.present_open_document(replacement, &target, true, false, cx);
         });
     })
     .unwrap();
@@ -195,16 +199,16 @@ fn workbench_registry_counts_views_across_windows(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-async fn retained_closed_shell_does_not_keep_the_last_live_document_open(cx: &mut TestAppContext) {
+async fn retained_closed_window_does_not_keep_the_last_live_document_open(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (closed_shell, closed_window) = product_window(document, model.clone(), cx);
-    let (live_shell, live_window) = product_window(document, model.clone(), cx);
+    let (closed_window, closed_native_window) = product_window(document, model.clone(), cx);
+    let (live_window, live_native_window) = product_window(document, model.clone(), cx);
     assert_eq!(
         dispatch_product_command(
-            &closed_shell,
-            closed_window,
+            &closed_window,
+            closed_native_window,
             super::super::CLOSE_WINDOW_COMMAND,
             cx
         )
@@ -215,7 +219,7 @@ async fn retained_closed_shell_does_not_keep_the_last_live_document_open(cx: &mu
     );
     cx.read(|cx| {
         assert_eq!(
-            closed_shell
+            closed_window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -225,7 +229,7 @@ async fn retained_closed_shell_does_not_keep_the_last_live_document_open(cx: &mu
         assert!(documents.read(cx).get(document).is_some());
     });
     assert_eq!(
-        dispatch_product_command(&live_shell, live_window, CLOSE_TAB_COMMAND, cx)
+        dispatch_product_command(&live_window, live_native_window, CLOSE_TAB_COMMAND, cx)
             .completion
             .await
             .unwrap(),

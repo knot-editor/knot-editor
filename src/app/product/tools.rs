@@ -42,11 +42,7 @@ impl KnotWindow {
         let (content, event, observer) = match definition.content {
             knot_protocol::ViewContentKind::Tree => {
                 let view = cx.new(|cx| {
-                    crate::app::tree_view::TreeView::new(
-                        definition.id.clone(),
-                        window.clone(),
-                        cx,
-                    )
+                    crate::app::tree_view::TreeView::new(definition.id.clone(), window.clone(), cx)
                 });
                 let event = cx.subscribe(&view, |_, _, event, cx| {
                     let event = event.clone();
@@ -62,11 +58,7 @@ impl KnotWindow {
             }
             knot_protocol::ViewContentKind::Text => {
                 let view = cx.new(|cx| {
-                    crate::app::text_view::TextView::new(
-                        definition.id.clone(),
-                        window.clone(),
-                        cx,
-                    )
+                    crate::app::text_view::TextView::new(definition.id.clone(), window.clone(), cx)
                 });
                 let observer = cx.observe(&view, |_, _, cx| cx.notify());
                 (
@@ -199,7 +191,9 @@ impl KnotWindow {
         kind: &str,
     ) -> Option<(Entity<crate::app::tree_view::TreeView>, AnyWindowHandle)> {
         match &self.contributed_views.get(kind)?.content {
-            crate::app::workbench::ExtensionView::Tree(tree) => Some((tree.clone(), self.window?)),
+            crate::app::workbench::ExtensionView::Tree(tree) => {
+                Some((tree.clone(), self.native_window?))
+            }
             crate::app::workbench::ExtensionView::Text(_) => None,
         }
     }
@@ -226,7 +220,7 @@ impl KnotWindow {
             return Err(CommandOutcome::Unavailable);
         }
         let destination = relocate::TabRelocationDestination {
-            shell: cx.weak_entity(),
+            window: cx.weak_entity(),
             workbench: self.workbench.downgrade(),
             tab: destination,
         };

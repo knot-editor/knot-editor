@@ -64,7 +64,7 @@ fn definitions_packs_and_overrides_layer_and_teardown_reveals_the_previous_level
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(962), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -80,14 +80,14 @@ fn definitions_packs_and_overrides_layer_and_teardown_reveals_the_previous_level
     cx.update(apply_at_startup);
 
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        let execution = dispatch_product_command(&shell, window, name, cx);
+        let execution = dispatch_product_command(&window, native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         cx.run_until_parked();
     };
     let select = |pack: &str, cx: &mut TestAppContext| {
         let execution = dispatch_product_command_with(
-            &shell,
-            window,
+            &window,
+            native_window,
             "pack.select",
             CommandArgumentValue::Array(vec![CommandArgumentValue::String(pack.into())]),
             cx,
@@ -171,7 +171,7 @@ fn tab_icons_follow_the_language_and_associations(cx: &mut TestAppContext) {
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let key = ExtensionKey::new(ExtensionId::new(963), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
@@ -186,7 +186,7 @@ fn tab_icons_follow_the_language_and_associations(cx: &mut TestAppContext) {
     loaded.lock().unwrap().take().unwrap().unwrap();
 
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        let execution = dispatch_product_command(&shell, window, name, cx);
+        let execution = dispatch_product_command(&window, native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         cx.run_until_parked();
     };
@@ -196,8 +196,8 @@ fn tab_icons_follow_the_language_and_associations(cx: &mut TestAppContext) {
             crate::app::icons::file_definition(Some("Untitled"), Some(&language), false, cx)
         })
     };
-    let tab = shell.read_with(cx, |shell, cx| {
-        shell
+    let tab = window.read_with(cx, |window, cx| {
+        window
             .workbench
             .read(cx)
             .focused_pane()
@@ -206,7 +206,7 @@ fn tab_icons_follow_the_language_and_associations(cx: &mut TestAppContext) {
             .id()
             .value()
     });
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     visual.run_until_parked();
     let bounds = visual
         .debug_bounds(format!("tab-icon-{tab}").leak())

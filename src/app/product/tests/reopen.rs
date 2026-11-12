@@ -9,11 +9,7 @@ use crate::app::workbench::PaneId;
 /// A window whose pane holds an untitled document followed by three files.
 fn files_window(
     cx: &mut TestAppContext,
-) -> (
-    Entity<KnotWindow>,
-    gpui::AnyWindowHandle,
-    [ResourceUri; 3],
-) {
+) -> (Entity<KnotWindow>, gpui::AnyWindowHandle, [ResourceUri; 3]) {
     let documents = install_globals(cx);
     let (filesystems, provider) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));
@@ -26,7 +22,7 @@ fn files_window(
     });
     let untitled = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(untitled).unwrap().model().clone());
-    let (shell, window) = product_window(untitled, model, cx);
+    let (window, native_window) = product_window(untitled, model, cx);
     for uri in &uris {
         let file = pollster::block_on(provider.read(uri.clone())).unwrap();
         let model = cx.new(|_| {
@@ -44,22 +40,22 @@ fn files_window(
                 cx,
             )
         });
-        shell.update(cx, |shell, cx| {
-            shell.workbench.update(cx, |workbench, cx| {
+        window.update(cx, |window, cx| {
+            window.workbench.update(cx, |workbench, cx| {
                 let pane = workbench.focused_pane_id().unwrap();
                 workbench.open_tab_for_document(pane, document, model, cx);
             });
         });
     }
     cx.run_until_parked();
-    (shell, window, uris)
+    (window, native_window, uris)
 }
 
 /// The focused pane's tabs as resource URIs, `None` for other tabs.
-fn tab_uris(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<Option<String>> {
+fn tab_uris(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<Option<String>> {
     cx.read(|cx| {
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -77,9 +73,9 @@ fn tab_uris(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<Option<Strin
     })
 }
 
-fn activate(shell: &Entity<KnotWindow>, index: usize, cx: &mut TestAppContext) -> PaneId {
-    shell.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, _| {
+fn activate(window: &Entity<KnotWindow>, index: usize, cx: &mut TestAppContext) -> PaneId {
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
             let pane = workbench.focused_pane_id().unwrap();
             let tab = workbench.pane(pane).unwrap().tabs()[index].id();
             workbench.activate_tab(pane, tab);
@@ -89,20 +85,20 @@ fn activate(shell: &Entity<KnotWindow>, index: usize, cx: &mut TestAppContext) -
 }
 
 fn run(
-    shell: &Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     name: &'static str,
     cx: &mut TestAppContext,
 ) -> CommandOutcome {
-    let execution = dispatch_product_command(shell, window, name, cx);
+    let execution = dispatch_product_command(window, native_window, name, cx);
     let outcome = wait_for_command(execution, cx);
     cx.run_until_parked();
     outcome
 }
 
-fn active_document(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<DocumentId> {
+fn active_document(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<DocumentId> {
     cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -115,8 +111,8 @@ fn active_document(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<Do
 
 #[gpui::test]
 fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppContext) {
-    let (shell, window, [a, b, c]) = files_window(cx);
-    activate(&shell, 2, cx);
+    let (window, native_window, [a, b, c]) = files_window(cx);
+    activate(&window, 2, cx);
     let state = crate::app::editor::EditorViewState {
         anchor: 2,
         caret: 3,
@@ -124,17 +120,17 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
         scroll_x: 0.,
         folds: Vec::new(),
     };
-    shell.update(cx, |shell, cx| {
-        let editor = shell.workbench.read(cx).focused_editor().unwrap().clone();
+    window.update(cx, |window, cx| {
+        let editor = window.workbench.read(cx).focused_editor().unwrap().clone();
         editor.update(cx, |editor, cx| {
             editor.editor().clone().update(cx, |editor, cx| {
                 editor.restore_view_state(state.clone(), cx)
             })
         });
     });
-    let closed = active_document(&shell, cx).unwrap();
+    let closed = active_document(&window, cx).unwrap();
     assert_eq!(
-        run(&shell, window, CLOSE_TAB_COMMAND, cx),
+        run(&window, native_window, CLOSE_TAB_COMMAND, cx),
         CommandOutcome::Completed
     );
     cx.read(|cx| {
@@ -147,18 +143,18 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
         )
     });
     let others =
-        |shell: &Entity<KnotWindow>, cx: &TestAppContext| tab_uris(shell, cx)[1..].to_vec();
+        |window: &Entity<KnotWindow>, cx: &TestAppContext| tab_uris(window, cx)[1..].to_vec();
     assert_eq!(
-        others(&shell, cx),
+        others(&window, cx),
         [Some(a.to_string()), Some(c.to_string())]
     );
 
     assert_eq!(
-        run(&shell, window, REOPEN_CLOSED_TAB_COMMAND, cx),
+        run(&window, native_window, REOPEN_CLOSED_TAB_COMMAND, cx),
         CommandOutcome::Completed
     );
     assert_eq!(
-        others(&shell, cx),
+        others(&window, cx),
         [
             Some(a.to_string()),
             Some(b.to_string()),
@@ -166,7 +162,7 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
         ]
     );
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         assert_eq!(pane.active_tab_id(), pane.tabs()[2].id());
         assert_eq!(
@@ -182,7 +178,7 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
     });
     // The stack is empty again.
     assert_eq!(
-        run(&shell, window, REOPEN_CLOSED_TAB_COMMAND, cx),
+        run(&window, native_window, REOPEN_CLOSED_TAB_COMMAND, cx),
         CommandOutcome::Unavailable
     );
 }
@@ -191,33 +187,40 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
 fn untitled_documents_are_skipped_and_a_vanished_pane_falls_back_to_the_focused_one(
     cx: &mut TestAppContext,
 ) {
-    let (shell, window, [a, _, _]) = files_window(cx);
-    let main = activate(&shell, 0, cx);
+    let (window, native_window, [a, _, _]) = files_window(cx);
+    let main = activate(&window, 0, cx);
     // Closing the untitled document leaves nothing to reopen.
-    run(&shell, window, CLOSE_TAB_COMMAND, cx);
+    run(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(
-        run(&shell, window, REOPEN_CLOSED_TAB_COMMAND, cx),
+        run(&window, native_window, REOPEN_CLOSED_TAB_COMMAND, cx),
         CommandOutcome::Unavailable
     );
 
     // A split view closes with its pane; reopening lands in the focused pane.
-    activate(&shell, 0, cx);
-    run(&shell, window, SPLIT_HORIZONTAL_COMMAND, cx);
-    let split = cx.read(|cx| shell.read(cx).workbench.read(cx).focused_pane_id().unwrap());
+    activate(&window, 0, cx);
+    run(&window, native_window, SPLIT_HORIZONTAL_COMMAND, cx);
+    let split = cx.read(|cx| {
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane_id()
+            .unwrap()
+    });
     assert_ne!(split, main);
-    run(&shell, window, CLOSE_TAB_COMMAND, cx);
-    cx.read(|cx| assert!(shell.read(cx).workbench.read(cx).pane(split).is_none()));
-    let before = tab_uris(&shell, cx).len();
+    run(&window, native_window, CLOSE_TAB_COMMAND, cx);
+    cx.read(|cx| assert!(window.read(cx).workbench.read(cx).pane(split).is_none()));
+    let before = tab_uris(&window, cx).len();
     assert_eq!(
-        run(&shell, window, REOPEN_CLOSED_TAB_COMMAND, cx),
+        run(&window, native_window, REOPEN_CLOSED_TAB_COMMAND, cx),
         CommandOutcome::Completed
     );
-    let after = tab_uris(&shell, cx);
+    let after = tab_uris(&window, cx);
     assert_eq!(after.len(), before + 1);
     assert_eq!(after.last().unwrap(), &Some(a.to_string()));
     cx.read(|cx| {
         assert_eq!(
-            shell.read(cx).workbench.read(cx).focused_pane_id(),
+            window.read(cx).workbench.read(cx).focused_pane_id(),
             Some(main)
         )
     });
@@ -225,18 +228,18 @@ fn untitled_documents_are_skipped_and_a_vanished_pane_falls_back_to_the_focused_
 
 #[gpui::test]
 fn a_bulk_close_reopens_in_reverse_order(cx: &mut TestAppContext) {
-    let (shell, window, [a, b, c]) = files_window(cx);
-    activate(&shell, 3, cx);
-    run(&shell, window, CLOSE_OTHER_TABS_COMMAND, cx);
-    assert_eq!(tab_uris(&shell, cx), [Some(c.to_string())]);
-    run(&shell, window, REOPEN_CLOSED_TAB_COMMAND, cx);
+    let (window, native_window, [a, b, c]) = files_window(cx);
+    activate(&window, 3, cx);
+    run(&window, native_window, CLOSE_OTHER_TABS_COMMAND, cx);
+    assert_eq!(tab_uris(&window, cx), [Some(c.to_string())]);
+    run(&window, native_window, REOPEN_CLOSED_TAB_COMMAND, cx);
     assert_eq!(
-        tab_uris(&shell, cx),
+        tab_uris(&window, cx),
         [Some(b.to_string()), Some(c.to_string())]
     );
-    run(&shell, window, REOPEN_CLOSED_TAB_COMMAND, cx);
+    run(&window, native_window, REOPEN_CLOSED_TAB_COMMAND, cx);
     assert_eq!(
-        tab_uris(&shell, cx),
+        tab_uris(&window, cx),
         [
             Some(a.to_string()),
             Some(b.to_string()),
@@ -245,34 +248,34 @@ fn a_bulk_close_reopens_in_reverse_order(cx: &mut TestAppContext) {
     );
     // The untitled document was closed too but is not reopened.
     assert_eq!(
-        run(&shell, window, REOPEN_CLOSED_TAB_COMMAND, cx),
+        run(&window, native_window, REOPEN_CLOSED_TAB_COMMAND, cx),
         CommandOutcome::Unavailable
     );
 }
 
 #[gpui::test]
 fn a_terminal_reopens_in_its_last_directory(cx: &mut TestAppContext) {
-    let (shell, window, _) = files_window(cx);
+    let (window, native_window, _) = files_window(cx);
     let directory = tempfile::tempdir().unwrap();
-    shell.update(cx, |shell, cx| {
-        let (id, view) = shell.create_terminal_in(Some(directory.path().to_owned()), cx);
-        shell.workbench.update(cx, |workbench, _| {
+    window.update(cx, |window, cx| {
+        let (id, view) = window.create_terminal_in(Some(directory.path().to_owned()), cx);
+        window.workbench.update(cx, |workbench, _| {
             let pane = workbench.focused_pane_id().unwrap();
             workbench.open_terminal_tab(pane, id, view);
         });
     });
     cx.run_until_parked();
     assert_eq!(
-        run(&shell, window, CLOSE_TAB_COMMAND, cx),
+        run(&window, native_window, CLOSE_TAB_COMMAND, cx),
         CommandOutcome::Completed
     );
-    assert!(active_document(&shell, cx).is_some());
+    assert!(active_document(&window, cx).is_some());
     assert_eq!(
-        run(&shell, window, REOPEN_CLOSED_TAB_COMMAND, cx),
+        run(&window, native_window, REOPEN_CLOSED_TAB_COMMAND, cx),
         CommandOutcome::Completed
     );
     let started = cx.read(|cx| {
-        let surface = shell
+        let surface = window
             .read(cx)
             .workbench
             .read(cx)

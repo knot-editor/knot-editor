@@ -17,16 +17,16 @@ pub enum CloseKind {
     OtherTabs,
     /// Every tab of the origin's pane.
     Pane,
-    /// Every tab of the session's other panes in the origin's area.
+    /// Every tab of the window's other panes in the origin's area.
     OtherPanes,
     Window,
     Quit,
 }
 
-/// The identity of one open tab across the application's sessions.
+/// The identity of one open tab across the application's windows.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ViewKey {
-    pub session: u64,
+    pub window: u64,
     pub workbench: u64,
     pub presentation: PresentationId,
     pub pane: PaneId,
@@ -34,11 +34,11 @@ pub struct ViewKey {
     pub surface: TabSurfaceId,
 }
 
-/// Where a close starts: its session and workbench, and the tab it was
+/// Where a close starts: its window and workbench, and the tab it was
 /// captured on, which every kind but `Window` and `Quit` needs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CloseOrigin {
-    pub session: u64,
+    pub window: u64,
     pub workbench: u64,
     pub view: Option<ViewKey>,
 }
@@ -46,7 +46,7 @@ pub struct CloseOrigin {
 impl From<ViewKey> for CloseOrigin {
     fn from(view: ViewKey) -> Self {
         Self {
-            session: view.session,
+            window: view.window,
             workbench: view.workbench,
             view: Some(view),
         }
@@ -105,7 +105,7 @@ pub fn scope(kind: CloseKind, origin: &CloseOrigin, views: &[ClosureView]) -> Ve
         .find(|candidate| Some(candidate.key) == view)
         .map(|candidate| candidate.area);
     let same_workbench = |candidate: &ClosureView| {
-        candidate.key.session == origin.session && candidate.key.workbench == origin.workbench
+        candidate.key.window == origin.window && candidate.key.workbench == origin.workbench
     };
     views
         .iter()
@@ -125,7 +125,7 @@ pub fn scope(kind: CloseKind, origin: &CloseOrigin, views: &[ClosureView]) -> Ve
                     && candidate.key.pane != view.pane
                     && Some(candidate.area) == origin_area
             }
-            (CloseKind::Window, _) => candidate.key.session == origin.session,
+            (CloseKind::Window, _) => candidate.key.window == origin.window,
             (CloseKind::Quit, _) => true,
             (
                 CloseKind::Tab | CloseKind::OtherTabs | CloseKind::Pane | CloseKind::OtherPanes,
@@ -281,11 +281,11 @@ pub fn revalidate(
 mod tests {
     use super::*;
 
-    const SESSION: u64 = 1;
+    const WINDOW: u64 = 1;
 
     fn key(pane: u64, tab: u64, document: u64) -> ViewKey {
         ViewKey {
-            session: SESSION,
+            window: WINDOW,
             workbench: 10,
             presentation: PresentationId(tab),
             pane: PaneId(pane),
@@ -348,7 +348,7 @@ mod tests {
     fn window_and_quit_closes_need_no_origin_tab() {
         let views = [view(key(1, 1, 1)), view(key(2, 2, 2))];
         let origin = CloseOrigin {
-            session: SESSION,
+            window: WINDOW,
             workbench: 10,
             view: None,
         };
@@ -383,7 +383,7 @@ mod tests {
             ..view(key(3, 5, 5))
         };
         let other_window = view(ViewKey {
-            session: 2,
+            window: 2,
             ..key(1, 6, 6)
         });
         let views = [

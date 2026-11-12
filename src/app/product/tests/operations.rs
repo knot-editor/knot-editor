@@ -6,13 +6,13 @@ use crate::app::documents::DocumentDirty;
 use crate::app::open::OpenResourceError;
 
 fn begin_open(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     uri: &str,
     cx: &mut TestAppContext,
 ) -> tokio::sync::oneshot::Receiver<Result<OpenCommit, OpenFailure>> {
-    let target = cx.read(|cx| current_open_target(shell, cx));
-    shell.update(cx, |shell, cx| {
-        shell.start_open_operation(
+    let target = cx.read(|cx| current_open_target(window, cx));
+    window.update(cx, |window, cx| {
+        window.start_open_operation(
             OpenRequest::from_uri_for_product(ResourceUri::parse(uri).unwrap()),
             target,
             false,
@@ -28,9 +28,9 @@ fn semantic_open_returns_the_actual_created_or_reused_presentation(cx: &mut Test
     cx.set_global(ApplicationFileSystems(filesystems));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (shell, _) = product_window(placeholder, model, cx);
-    let original = cx.read(|cx| current_open_target(&shell, cx));
-    let mut pending = begin_open(&shell, "mem://product/notes.txt", cx);
+    let (window, _) = product_window(placeholder, model, cx);
+    let original = cx.read(|cx| current_open_target(&window, cx));
+    let mut pending = begin_open(&window, "mem://product/notes.txt", cx);
     cx.run_until_parked();
     let OpenCommit::Document { document, target } = pending.try_recv().unwrap().unwrap() else {
         panic!("file Open returned a workspace");
@@ -38,7 +38,7 @@ fn semantic_open_returns_the_actual_created_or_reused_presentation(cx: &mut Test
     assert_ne!(document, placeholder);
     assert_ne!(target.tab, original.tab);
     cx.read(|cx| {
-        assert!(target.matches_presentation(&shell.read(cx).workbench, cx));
+        assert!(target.matches_presentation(&window.read(cx).workbench, cx));
         assert_eq!(
             target.tab.unwrap().surface,
             TabSurfaceId::Document(document)
@@ -55,12 +55,12 @@ fn semantic_open_returns_the_actual_created_or_reused_presentation(cx: &mut Test
         );
     });
     // Admission from another tab must still return the reused file presentation.
-    shell.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, _| {
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
             assert!(workbench.activate_tab(original.tab.unwrap().pane, original.tab.unwrap().tab));
         })
     });
-    let mut reopened = begin_open(&shell, "mem://product/notes.txt", cx);
+    let mut reopened = begin_open(&window, "mem://product/notes.txt", cx);
     cx.run_until_parked();
     let OpenCommit::Document {
         document: shared,
@@ -86,18 +86,18 @@ fn opening_a_folder_in_a_window_with_roots_uses_a_new_window(cx: &mut TestAppCon
     cx.set_global(ApplicationFileSystems(filesystems));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (shell, _) = product_window(placeholder, model, cx);
+    let (window, _) = product_window(placeholder, model, cx);
     let windows = cx.update(|cx| cx.windows().len());
 
     // A window without roots takes the folder.
-    let mut first = begin_open(&shell, "mem://product/src", cx);
+    let mut first = begin_open(&window, "mem://product/src", cx);
     cx.run_until_parked();
     assert!(first.try_recv().unwrap().is_ok());
     assert_eq!(cx.update(|cx| cx.windows().len()), windows);
 
     // A window with roots keeps them and its tabs; the folder opens elsewhere.
-    let tabs = cx.read(|cx| shell.read(cx).workbench.read(cx).tabs().count());
-    let mut second = begin_open(&shell, "mem://product/", cx);
+    let tabs = cx.read(|cx| window.read(cx).workbench.read(cx).tabs().count());
+    let mut second = begin_open(&window, "mem://product/", cx);
     cx.run_until_parked();
     let OpenCommit::Workspace(workspace) = second.try_recv().unwrap().unwrap() else {
         panic!("folder Open returned a document");
@@ -108,7 +108,7 @@ fn opening_a_folder_in_a_window_with_roots_uses_a_new_window(cx: &mut TestAppCon
         "mem://product/"
     );
     cx.read(|cx| {
-        let original = shell.read(cx);
+        let original = window.read(cx);
         assert_eq!(
             original
                 .workspace
@@ -129,8 +129,8 @@ fn semantic_open_returns_committed_roots_and_preserves_resource_errors(cx: &mut 
     cx.set_global(ApplicationFileSystems(filesystems));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (shell, _) = product_window(placeholder, model, cx);
-    let mut pending = begin_open(&shell, "mem://product/src", cx);
+    let (window, _) = product_window(placeholder, model, cx);
+    let mut pending = begin_open(&window, "mem://product/src", cx);
     cx.run_until_parked();
     let OpenCommit::Workspace(workspace) = pending.try_recv().unwrap().unwrap() else {
         panic!("folder Open returned a document");
@@ -140,21 +140,21 @@ fn semantic_open_returns_committed_roots_and_preserves_resource_errors(cx: &mut 
         workspace.first_root().unwrap().to_string(),
         "mem://product/src"
     );
-    assert!(cx.read(|cx| shell.read(cx).workspace.is_current(&workspace)));
-    let mut invalid = begin_open(&shell, "mem://product/invalid.txt", cx);
+    assert!(cx.read(|cx| window.read(cx).workspace.is_current(&workspace)));
+    let mut invalid = begin_open(&window, "mem://product/invalid.txt", cx);
     cx.run_until_parked();
     assert!(matches!(
         invalid.try_recv().unwrap(),
         Err(OpenFailure::Resource(OpenResourceError::InvalidUtf8 { .. }))
     ));
-    let mut unsupported = begin_open(&shell, "other://product/notes.txt", cx);
+    let mut unsupported = begin_open(&window, "other://product/notes.txt", cx);
     cx.run_until_parked();
     assert!(matches!(
         unsupported.try_recv().unwrap(),
         Err(OpenFailure::Resource(OpenResourceError::Provider(_)))
     ));
     assert_eq!(cx.read(|cx| documents.read(cx).documents().count()), 1);
-    assert!(cx.read(|cx| shell.read(cx).workspace.is_current(&workspace)));
+    assert!(cx.read(|cx| window.read(cx).workspace.is_current(&workspace)));
 }
 
 #[gpui::test]
@@ -174,12 +174,12 @@ async fn semantic_open_rejects_a_replaced_presentation_without_creating_a_docume
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, _) = product_window(document, model.clone(), cx);
-    let pending = begin_open(&shell, "mem://product/notes.txt", cx);
+    let (window, _) = product_window(document, model.clone(), cx);
+    let pending = begin_open(&window, "mem://product/notes.txt", cx);
     wait_for_api_condition(cx, |_| provider.read_release.lock().unwrap().is_none());
-    let target = cx.read(|cx| current_open_target(&shell, cx));
-    shell.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, cx| {
+    let target = cx.read(|cx| current_open_target(&window, cx));
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
             assert!(workbench.replace_tab_document(
                 target.tab.unwrap().pane,
                 target.tab.unwrap().tab,
@@ -327,9 +327,9 @@ await commands.register("operations.delayed", async () => {
     );
     let execution = dispatch_product_command(&first, first_window, "operations.delayed", cx);
     wait_for_api_condition(cx, |_| provider.read_release.lock().unwrap().is_none());
-    cx.update_window(second_window, |_, window, cx| {
-        window.activate_window();
-        second.update(cx, |shell, cx| shell.focus_active_surface(cx));
+    cx.update_window(second_window, |_, native_window, cx| {
+        native_window.activate_window();
+        second.update(cx, |window, cx| window.focus_active_surface(cx));
     })
     .unwrap();
     release.send(()).unwrap();
@@ -360,7 +360,7 @@ fn public_open_rejects_replaced_targets_and_unloaded_callers_after_io(cx: &mut T
         filesystems.register("mem", provider.clone()).unwrap();
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let host = cx.update(extensions::host::install);
-        let (shell, window) = empty_product_window(&documents, cx);
+        let (window, native_window) = empty_product_window(&documents, cx);
         let key = install_operation_fixture(
             &host,
             r#"
@@ -375,14 +375,14 @@ await commands.register("operations.stale", async () => {
             "operations.stale",
             cx,
         );
-        let execution = dispatch_product_command(&shell, window, "operations.stale", cx);
+        let execution = dispatch_product_command(&window, native_window, "operations.stale", cx);
         wait_for_api_condition(cx, |_| provider.read_release.lock().unwrap().is_none());
         if unload {
             host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         } else {
-            let target = cx.read(|cx| current_open_target(&shell, cx));
+            let target = cx.read(|cx| current_open_target(&window, cx));
             let document = cx.read(|cx| {
-                shell
+                window
                     .read(cx)
                     .workbench
                     .read(cx)
@@ -393,8 +393,8 @@ await commands.register("operations.stale", async () => {
                     .unwrap()
             });
             let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-            shell.update(cx, |shell, cx| {
-                shell.workbench.update(cx, |workbench, cx| {
+            window.update(cx, |window, cx| {
+                window.workbench.update(cx, |workbench, cx| {
                     assert!(workbench.replace_tab_document(
                         target.tab.unwrap().pane,
                         target.tab.unwrap().tab,
@@ -424,8 +424,10 @@ await commands.register("operations.stale", async () => {
             host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         }
         // Finish this window before installing another application fixture.
-        cx.update_window(window, |_, window, _| window.remove_window())
-            .unwrap();
+        cx.update_window(native_window, |_, native_window, _| {
+            native_window.remove_window()
+        })
+        .unwrap();
     }
 }
 
@@ -435,7 +437,7 @@ fn activation_and_listeners_can_open_with_explicit_targets(cx: &mut TestAppConte
     let (filesystems, _) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));
     let host = cx.update(extensions::host::install);
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     let key = install_operation_fixture(
         &host,
         r#"
@@ -461,7 +463,7 @@ await commands.register("operations.trigger", async () => {
     );
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "operations.trigger", cx),
+            dispatch_product_command(&window, native_window, "operations.trigger", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -477,7 +479,7 @@ await commands.register("operations.trigger", async () => {
     });
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "operations.listener-ready", cx),
+            dispatch_product_command(&window, native_window, "operations.listener-ready", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -737,10 +739,10 @@ await commands.register("operations.target-loss", async () => {
         match scenario {
             "pane" => {
                 cx.update_window(first_window, |_, _, cx| {
-                    first.update(cx, |shell, cx| {
-                        let pane = &shell.workbench.read(cx).panes()[0];
+                    first.update(cx, |window, cx| {
+                        let pane = &window.workbench.read(cx).panes()[0];
                         let (pane, tab) = (pane.id(), pane.active_tab_id());
-                        shell.activate_tab(pane, tab, cx);
+                        window.activate_tab(pane, tab, cx);
                     })
                 })
                 .unwrap();
@@ -796,11 +798,15 @@ await commands.register("operations.target-loss", async () => {
         }
         host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         if scenario != "window" {
-            cx.update_window(first_window, |_, window, _| window.remove_window())
-                .unwrap();
-        }
-        cx.update_window(control_window, |_, window, _| window.remove_window())
+            cx.update_window(first_window, |_, native_window, _| {
+                native_window.remove_window()
+            })
             .unwrap();
+        }
+        cx.update_window(control_window, |_, native_window, _| {
+            native_window.remove_window()
+        })
+        .unwrap();
     }
 }
 
@@ -838,7 +844,7 @@ fn pick_folder_returns_a_normalized_directory_and_reports_path_failures(cx: &mut
         wait_for_extension_report(&host, cx).report.entries[0].result,
         crate::app::extensions::load::LoadResult::Loaded
     );
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
 
     let directory = tempfile::tempdir().unwrap();
     cx.set_global(ApplicationOpenDialog(Arc::new(FixedOpenDialog(
@@ -846,7 +852,7 @@ fn pick_folder_returns_a_normalized_directory_and_reports_path_failures(cx: &mut
     ))));
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "picker.pick", cx),
+            dispatch_product_command(&window, native_window, "picker.pick", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -867,7 +873,7 @@ fn pick_folder_returns_a_normalized_directory_and_reports_path_failures(cx: &mut
     ))));
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "picker.pick", cx),
+            dispatch_product_command(&window, native_window, "picker.pick", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -879,7 +885,7 @@ fn pick_folder_returns_a_normalized_directory_and_reports_path_failures(cx: &mut
     ))));
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "picker.pick", cx),
+            dispatch_product_command(&window, native_window, "picker.pick", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -937,29 +943,29 @@ await commands.register("operations.terminal", async () => {{
     );
     let host = cx.update(extensions::host::install);
     let key = install_operation_fixture(&host, &source, "operations.terminal", cx);
-    let (shell, window) = empty_product_window(&documents, cx);
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(
+    let (window, native_window) = empty_product_window(&documents, cx);
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(
             vec![ResourceUri::parse(&directory(root.path())).unwrap()],
             cx,
         );
     });
     place_explorer(
-        &shell,
-        window,
+        &window,
+        native_window,
         crate::app::workbench::DockLocation::Left,
         cx,
     );
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "operations.terminal", cx),
+            dispatch_product_command(&window, native_window, "operations.terminal", cx),
             cx
         ),
         CommandOutcome::Completed
     );
     let directories = cx.read(|cx| {
         let sessions = cx.global::<ApplicationTerminalSessions>().0.borrow();
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)

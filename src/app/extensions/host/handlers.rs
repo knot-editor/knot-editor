@@ -1331,7 +1331,7 @@ pub(crate) async fn show_picker(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, cx| shell.begin_picker(owner, title, items, None, cx),
+            move |window, cx| window.begin_picker(owner, title, items, None, cx),
             cx,
         )
     })??;
@@ -1426,10 +1426,10 @@ pub(crate) async fn begin_picker(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, cx| {
+            move |window, cx| {
                 if queried {
                     let (completion, picker) =
-                        shell.begin_queried_picker(owner, title, sender, query_sender, cx)?;
+                        window.begin_queried_picker(owner, title, sender, query_sender, cx)?;
                     Ok((
                         completion,
                         Some(QueriedPicker {
@@ -1439,7 +1439,7 @@ pub(crate) async fn begin_picker(
                         }),
                     ))
                 } else {
-                    let completion = shell.begin_picker(owner, title, items, Some(sender), cx)?;
+                    let completion = window.begin_picker(owner, title, items, Some(sender), cx)?;
                     Ok((completion, None))
                 }
             },
@@ -1631,8 +1631,8 @@ pub(crate) async fn show_input(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, cx| {
-                shell.begin_input(owner, title, value.unwrap_or_default(), prompt, None, cx)
+            move |window, cx| {
+                window.begin_input(owner, title, value.unwrap_or_default(), prompt, None, cx)
             },
             cx,
         )
@@ -1663,8 +1663,8 @@ pub(crate) async fn begin_input(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, cx| {
-                shell.begin_input(
+            move |window, cx| {
+                window.begin_input(
                     owner,
                     title,
                     value.unwrap_or_default(),
@@ -1929,8 +1929,8 @@ pub(crate) async fn show_confirmation(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, cx| {
-                shell.begin_confirmation(
+            move |window, cx| {
+                window.begin_confirmation(
                     owner,
                     PromptText { title, message },
                     confirm_label.unwrap_or_else(|| "OK".to_owned()),
@@ -1964,7 +1964,7 @@ pub(crate) async fn show_message(
         host.with_transient_window(
             &request,
             target.as_deref(),
-            move |shell, cx| shell.begin_message(owner, PromptText { title, message }, cx),
+            move |window, cx| window.begin_message(owner, PromptText { title, message }, cx),
             cx,
         )
     })??;
@@ -1998,7 +1998,7 @@ pub(crate) async fn pick_folder(
         host.with_transient_window(
             &request,
             arguments.target.as_deref(),
-            move |shell, cx| shell.begin_folder_picker(Some(owner), cx),
+            move |window, cx| window.begin_folder_picker(Some(owner), cx),
             cx,
         )
     })??;
@@ -4197,7 +4197,7 @@ async fn open_window(
     context: HostContext,
     arguments: OpenWindowArguments,
 ) -> Result<knot_protocol::WindowInfo, WorkspaceError> {
-    // The window's shell observes the host, so it opens after this host update.
+    // The window's window observes the host, so it opens after this host update.
     let (sender, receiver) = tokio::sync::oneshot::channel();
     context.foreground(|_, cx| {
         cx.defer(move |cx| {

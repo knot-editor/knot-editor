@@ -91,12 +91,12 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
     let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
-                shell.capture_command_target(cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -120,7 +120,7 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
         })
     });
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-    let execution = dispatch_product_command(&shell, window, "test.remap", cx);
+    let execution = dispatch_product_command(&window, native_window, "test.remap", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| {
         assert_eq!(
@@ -133,7 +133,7 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
         );
     });
     let invalid = wait_for_command(
-        dispatch_product_command(&shell, window, "test.invalid", cx),
+        dispatch_product_command(&window, native_window, "test.invalid", cx),
         cx,
     );
     assert!(
@@ -147,7 +147,7 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
     });
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "test.unbind", cx),
+            dispatch_product_command(&window, native_window, "test.unbind", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -164,7 +164,7 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
     });
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "test.restore", cx),
+            dispatch_product_command(&window, native_window, "test.restore", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -177,7 +177,7 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
     });
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "test.remove", cx),
+            dispatch_product_command(&window, native_window, "test.remove", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -220,27 +220,27 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
         )
     });
     assert!(wait_for_product_startup(cx));
-    let window = cx.windows()[0];
-    let shell = cx
-        .update_window(window, |_, window, _| {
-            window.root::<KnotWindow>().flatten()
+    let native_window = cx.windows()[0];
+    let window = cx
+        .update_window(native_window, |_, native_window, _| {
+            native_window.root::<KnotWindow>().flatten()
         })
         .unwrap()
         .unwrap();
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
 
-    cx.simulate_keystrokes(window, "cmd-n");
+    cx.simulate_keystrokes(native_window, "cmd-n");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 0));
-    cx.simulate_keystrokes(window, "cmd-g");
+    cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 0));
+    cx.simulate_keystrokes(native_window, "cmd-g");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 1));
+    cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 1));
 
-    cx.simulate_keystrokes(window, "cmd-r");
+    cx.simulate_keystrokes(native_window, "cmd-r");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -255,16 +255,16 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
         std::thread::yield_now();
     }
 
-    cx.dispatch_action(window, ProductCommandSource::new(NEW_COMMAND));
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 2));
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.open_command_palette(cx));
+    cx.dispatch_action(native_window, ProductCommandSource::new(NEW_COMMAND));
+    cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 2));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.open_command_palette(cx));
     })
     .unwrap();
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "f i l e . n e w enter");
+    cx.simulate_keystrokes(native_window, "f i l e . n e w enter");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).tab_snapshots().len(), 3));
+    cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 3));
 }
 
 #[gpui::test]
@@ -326,14 +326,14 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
             Some("copy")
         );
     });
-    let window = cx.windows()[0];
-    let shell = cx
-        .update_window(window, |_, window, _| {
-            window.root::<KnotWindow>().flatten()
+    let native_window = cx.windows()[0];
+    let window = cx
+        .update_window(native_window, |_, native_window, _| {
+            native_window.root::<KnotWindow>().flatten()
         })
         .unwrap()
         .unwrap();
-    let tree = wait_for_contributed_view(&shell, "example.outline", cx);
+    let tree = wait_for_contributed_view(&window, "example.outline", cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -344,11 +344,11 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
         std::thread::yield_now();
     }
     // The launched window starts empty; a new document gives it an editor.
-    cx.dispatch_action(window, ProductCommandSource::new(NEW_COMMAND));
+    cx.dispatch_action(native_window, ProductCommandSource::new(NEW_COMMAND));
     cx.run_until_parked();
 
-    cx.update_window(window, |_, window, cx| {
-        let editor = shell
+    cx.update_window(native_window, |_, native_window, cx| {
+        let editor = window
             .read(cx)
             .workbench
             .read(cx)
@@ -356,16 +356,16 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
             .unwrap()
             .clone();
         editor.update(cx, |editor, cx| {
-            editor.replace_text_in_range(None, "Editor selection", window, cx);
+            editor.replace_text_in_range(None, "Editor selection", native_window, cx);
             editor.editor().clone().update(cx, |editor, cx| {
                 editor.execute_editing_command("editor.select-all", cx)
             });
         });
-        focus_view(&editor.focus_handle(cx), window, cx);
+        focus_view(&editor.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "cmd-j");
+    cx.simulate_keystrokes(native_window, "cmd-j");
     cx.run_until_parked();
     cx.read(|cx| {
         assert_eq!(
@@ -376,14 +376,14 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
         );
     });
 
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(native_window, |_, native_window, cx| {
         tree.update(cx, |tree, cx| assert!(tree.select_item("first", cx)));
-        focus_view(&tree.focus_handle(cx), window, cx);
+        focus_view(&tree.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "cmd-j");
+    cx.simulate_keystrokes(native_window, "cmd-j");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -535,9 +535,9 @@ async fn keybinding_adapter_enters_the_product_dispatcher(cx: &mut TestAppContex
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window_handle) = product_window(document, model, cx);
+    let (window, window_handle) = product_window(document, model, cx);
     cx.update_window(window_handle, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
 
@@ -546,7 +546,7 @@ async fn keybinding_adapter_enters_the_product_dispatcher(cx: &mut TestAppContex
 
     cx.read(|cx| {
         assert_eq!(
-            shell
+            window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -574,12 +574,12 @@ fn personal_global_binding_overrides_editor_default_in_every_window(cx: &mut Tes
     for _ in 0..2 {
         let document = cx.update(|cx| create_untitled_document(&documents, cx));
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-        let (shell, window) = product_window(document, model.clone(), cx);
-        cx.update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+        let (window, native_window) = product_window(document, model.clone(), cx);
+        cx.update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| window.focus_active_editor(cx))
         })
         .unwrap();
-        windows.push((window, model));
+        windows.push((native_window, model));
     }
     cx.update(|cx| {
         let changed = cx
@@ -599,8 +599,8 @@ fn personal_global_binding_overrides_editor_default_in_every_window(cx: &mut Tes
         super::super::super::commands::keymaps::rebuild(cx);
     });
     cx.refresh().unwrap();
-    for (window, _) in &windows {
-        cx.simulate_keystrokes(*window, "enter");
+    for (native_window, _) in &windows {
+        cx.simulate_keystrokes(*native_window, "enter");
     }
     cx.run_until_parked();
     cx.read(|cx| {
@@ -616,9 +616,9 @@ fn unbinding_an_unmapped_letter_preserves_editor_input(cx: &mut TestAppContext) 
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.update(|cx| {
@@ -632,7 +632,7 @@ fn unbinding_an_unmapped_letter_preserves_editor_input(cx: &mut TestAppContext) 
         super::super::super::commands::keymaps::rebuild(cx);
     });
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "a");
+    cx.simulate_keystrokes(native_window, "a");
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "a"));
 }
@@ -643,13 +643,13 @@ async fn editor_unbind_leaves_global_binding_available_in_terminal(cx: &mut Test
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     // A named key, because Windows and Linux terminals leave ctrl with a
-    // printable character to the shell.
+    // printable character to the window.
     cx.update(|cx| {
         let registry = &mut cx.global_mut::<ApplicationKeymaps>().0;
         let owner = BindingOwner::Extension(ExtensionId::new(0), ExtensionLifecycleId::new(1));
@@ -668,19 +668,30 @@ async fn editor_unbind_leaves_global_binding_available_in_terminal(cx: &mut Test
         super::super::super::commands::keymaps::rebuild(cx);
     });
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "f9");
+    cx.simulate_keystrokes(native_window, "f9");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).panes()[0].tabs().len(), 1));
+    cx.read(|cx| {
+        assert_eq!(
+            window.read(cx).workbench.read(cx).panes()[0].tabs().len(),
+            1
+        )
+    });
 
-    let terminal = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
+    let terminal =
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(
         terminal.completion.await.unwrap(),
         CommandOutcome::Completed
     );
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "f9");
+    cx.simulate_keystrokes(native_window, "f9");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).panes()[0].tabs().len(), 3));
+    cx.read(|cx| {
+        assert_eq!(
+            window.read(cx).workbench.read(cx).panes()[0].tabs().len(),
+            3
+        )
+    });
 }
 
 #[gpui::test]
@@ -689,15 +700,15 @@ fn sequence_prefix_dispatches_the_product_command(cx: &mut TestAppContext) {
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "secondary-k right");
+    cx.simulate_keystrokes(native_window, "secondary-k right");
     cx.run_until_parked();
-    cx.read(|cx| assert_eq!(shell.read(cx).workbench.read(cx).panes().len(), 2));
+    cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).panes().len(), 2));
 }
 
 #[gpui::test]
@@ -706,9 +717,9 @@ fn unavailable_high_priority_binding_does_not_invoke_native_default(cx: &mut Tes
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.update(|cx| {
@@ -729,10 +740,13 @@ fn unavailable_high_priority_binding_does_not_invoke_native_default(cx: &mut Tes
         super::super::super::commands::keymaps::rebuild(cx);
     });
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "secondary-n");
+    cx.simulate_keystrokes(native_window, "secondary-n");
     cx.run_until_parked();
     cx.read(|cx| {
-        assert_eq!(shell.read(cx).workbench.read(cx).panes()[0].tabs().len(), 1);
+        assert_eq!(
+            window.read(cx).workbench.read(cx).panes()[0].tabs().len(),
+            1
+        );
         assert_eq!(
             cx.global::<ApplicationProductCommands>()
                 .0
@@ -750,15 +764,15 @@ fn windows_native_ctrl_shift_p_opens_command_palette(cx: &mut TestAppContext) {
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(window, |_, native_window, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
     })
     .unwrap();
     cx.refresh().unwrap();
     cx.simulate_keystrokes(window, "ctrl-shift-p");
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).command_palette.is_some()));
+    cx.read(|cx| assert!(window.read(cx).command_palette.is_some()));
 }
 
 #[gpui::test]
@@ -782,21 +796,21 @@ fn personal_config_ctrl_shift_p_opens_command_palette(cx: &mut TestAppContext) {
         )
     });
     assert!(wait_for_product_startup(cx));
-    let window = cx.windows()[0];
-    let shell = cx
-        .update_window(window, |_, window, _| {
-            window.root::<KnotWindow>().flatten()
+    let native_window = cx.windows()[0];
+    let window = cx
+        .update_window(native_window, |_, native_window, _| {
+            native_window.root::<KnotWindow>().flatten()
         })
         .unwrap()
         .unwrap();
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
     })
     .unwrap();
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "ctrl-shift-p");
+    cx.simulate_keystrokes(native_window, "ctrl-shift-p");
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).command_palette.is_some()));
+    cx.read(|cx| assert!(window.read(cx).command_palette.is_some()));
 }
 
 #[cfg(target_os = "macos")]
@@ -807,13 +821,16 @@ fn macos_emacs_keys_edit_through_the_knot_preset(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "hello world").unwrap());
-    let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "ctrl-e ctrl-b ctrl-b ctrl-h ctrl-a ctrl-f ctrl-k");
+    cx.simulate_keystrokes(
+        native_window,
+        "ctrl-e ctrl-b ctrl-b ctrl-h ctrl-a ctrl-f ctrl-k",
+    );
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "h"));
 }
@@ -825,30 +842,30 @@ async fn linux_preset_leaves_plain_control_keys_to_the_terminal(cx: &mut TestApp
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     cx.update(|cx| {
         let mut registry = BindingRegistry::new();
         registry.replace_preset(&knot_preset(Platform::Linux));
         cx.global_mut::<ApplicationKeymaps>().0 = registry;
         super::super::super::commands::keymaps::rebuild(cx);
     });
-    let terminal = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    let terminal = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(
         terminal.completion.await.unwrap(),
         CommandOutcome::Completed
     );
     cx.refresh().unwrap();
     let tabs = |cx: &mut TestAppContext| {
-        cx.read(|cx| shell.read(cx).workbench.read(cx).tab_snapshots().len())
+        cx.read(|cx| window.read(cx).workbench.read(cx).tab_snapshots().len())
     };
     assert_eq!(tabs(cx), 2);
-    cx.simulate_keystrokes(window, "ctrl-w");
+    cx.simulate_keystrokes(native_window, "ctrl-w");
     cx.run_until_parked();
     assert_eq!(tabs(cx), 2);
 
-    cx.simulate_keystrokes(window, "ctrl-shift-p");
+    cx.simulate_keystrokes(native_window, "ctrl-shift-p");
     cx.run_until_parked();
-    cx.read(|cx| assert!(shell.read(cx).command_palette.is_some()));
+    cx.read(|cx| assert!(window.read(cx).command_palette.is_some()));
 }
 
 #[cfg(target_os = "macos")]
@@ -891,27 +908,32 @@ fn selected_contributed_preset_replaces_knot_beneath_extension_bindings(cx: &mut
             Some("file.save-as")
         );
     });
-    let window = cx.windows()[0];
-    let shell = cx
-        .update_window(window, |_, window, _| {
-            window.root::<KnotWindow>().flatten()
+    let native_window = cx.windows()[0];
+    let window = cx
+        .update_window(native_window, |_, native_window, _| {
+            native_window.root::<KnotWindow>().flatten()
         })
         .unwrap()
         .unwrap();
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
     })
     .unwrap();
     let tabs = |cx: &mut TestAppContext| {
-        cx.read(|cx| shell.read(cx).workbench.read(cx).tab_snapshots().len())
+        cx.read(|cx| window.read(cx).workbench.read(cx).tab_snapshots().len())
     };
     let before = tabs(cx);
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "cmd-r");
+    cx.simulate_keystrokes(native_window, "cmd-r");
     cx.run_until_parked();
     assert_eq!(tabs(cx), before + 1);
 
-    drop(dispatch_product_command(&shell, window, "test.knot", cx));
+    drop(dispatch_product_command(
+        &window,
+        native_window,
+        "test.knot",
+        cx,
+    ));
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -945,9 +967,9 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     let save = crate::app::keys::Keystroke::parse("secondary-s")
@@ -968,15 +990,15 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
             .unwrap();
     });
     let execution = dispatch_product_command(
-        &shell,
-        window,
+        &window,
+        native_window,
         super::super::commands::SHOW_KEYBINDINGS_COMMAND,
         cx,
     );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.run_until_parked();
     cx.read(|cx| {
-        let picker = match shell.read(cx).transient.as_ref().unwrap().surface.as_ref() {
+        let picker = match window.read(cx).transient.as_ref().unwrap().surface.as_ref() {
             Some(crate::app::transient::TransientSurface::Picker(picker)) => picker.read(cx),
             _ => panic!("the transient is not a picker"),
         };
@@ -1012,11 +1034,11 @@ fn show_keybindings_lists_owners_and_overrides_and_runs_the_accepted_command(
         }));
     });
     let tabs = |cx: &mut TestAppContext| {
-        cx.read(|cx| shell.read(cx).workbench.read(cx).tab_snapshots().len())
+        cx.read(|cx| window.read(cx).workbench.read(cx).tab_snapshots().len())
     };
     let before = tabs(cx);
-    cx.simulate_input(window, "New Document");
-    cx.simulate_keystrokes(window, "enter");
+    cx.simulate_input(native_window, "New Document");
+    cx.simulate_keystrokes(native_window, "enter");
     cx.run_until_parked();
     assert_eq!(tabs(cx), before + 1);
 }
@@ -1088,14 +1110,14 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Probe", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
     let editor = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -1131,20 +1153,20 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
 
     // Warm the isolate and the dispatch path.
     for _ in 0..50 {
-        let execution = dispatch_product_command(&shell, window, "probe.noop", cx);
+        let execution = dispatch_product_command(&window, native_window, "probe.noop", cx);
         wait_for_command(execution, cx);
     }
     let mut round_trips = Vec::with_capacity(KEYS);
     for _ in 0..KEYS {
         let start = Instant::now();
-        let execution = dispatch_product_command(&shell, window, "probe.noop", cx);
+        let execution = dispatch_product_command(&window, native_window, "probe.noop", cx);
         wait_for_command(execution, cx);
         round_trips.push(start.elapsed());
     }
     report("dispatch to completion, no-op handler", round_trips);
 
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
@@ -1152,7 +1174,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
     let mut unbound = Vec::with_capacity(KEYS);
     for _ in 0..KEYS {
         let start = Instant::now();
-        cx.simulate_keystrokes(window, "f7");
+        cx.simulate_keystrokes(native_window, "f7");
         cx.run_until_parked();
         unbound.push(start.elapsed());
     }
@@ -1161,7 +1183,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
     for index in 0..KEYS + 50 {
         let expected = (index + 1) % 10;
         let start = Instant::now();
-        cx.simulate_keystrokes(window, "f9");
+        cx.simulate_keystrokes(native_window, "f9");
         let editor = editor.clone();
         wait(
             cx,
@@ -1195,8 +1217,8 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
                 )
             })
         });
-        cx.simulate_keystrokes(window, "f8");
-        cx.simulate_input(window, "x");
+        cx.simulate_keystrokes(native_window, "f8");
+        cx.simulate_input(native_window, "x");
         let (model_ref, editor_ref) = (model.clone(), editor.clone());
         wait(
             cx,
@@ -1247,13 +1269,13 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Modal", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     let editor = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -1269,28 +1291,28 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
     cx.refresh().unwrap();
     let in_modal = |cx: &gpui::App| editor.read(cx).editor().read(cx).key_contexts() == ["modal"];
 
-    cx.simulate_keystrokes(window, "f8");
+    cx.simulate_keystrokes(native_window, "f8");
     wait_for_api_condition(cx, in_modal);
     // No refresh: the context is not in any painted frame yet.
-    cx.simulate_keystrokes(window, "h");
+    cx.simulate_keystrokes(native_window, "h");
     wait_for_api_condition(cx, |cx| {
         editor.read(cx).editor().read(cx).selection(cx) == (2, 2)
     });
-    cx.simulate_keystrokes(window, "x");
+    cx.simulate_keystrokes(native_window, "x");
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxc");
 
-    cx.simulate_keystrokes(window, "escape");
+    cx.simulate_keystrokes(native_window, "escape");
     wait_for_api_condition(cx, |cx| {
         editor.read(cx).editor().read(cx).key_contexts().is_empty()
     });
-    cx.simulate_keystrokes(window, "h");
+    cx.simulate_keystrokes(native_window, "h");
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhc");
 
-    cx.simulate_keystrokes(window, "f8");
+    cx.simulate_keystrokes(native_window, "f8");
     wait_for_api_condition(cx, in_modal);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.read(|cx| assert!(editor.read(cx).editor().read(cx).key_contexts().is_empty()));
-    cx.simulate_keystrokes(window, "h");
+    cx.simulate_keystrokes(native_window, "h");
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhhc");
 }
 
@@ -1303,9 +1325,9 @@ fn focused_editor_window(
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Keys", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model.clone(), cx);
-    cx.update_window(window, |_, _, cx| {
-        let editor = shell
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    cx.update_window(native_window, |_, _, cx| {
+        let editor = window
             .read(cx)
             .workbench
             .read(cx)
@@ -1317,11 +1339,11 @@ fn focused_editor_window(
                 editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
             })
         });
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
-    (shell, window, model)
+    (window, native_window, model)
 }
 
 /// A sequence another package binds in a context that is off holds no key:
@@ -1364,24 +1386,24 @@ fn a_sequence_bound_in_another_context_leaves_keys_to_a_modal_package(cx: &mut T
         keymap_command(cx, "f7", None).as_deref() == Some("b.enter")
             && keymap_command(cx, "f9", None).as_deref() == Some("a.report")
     });
-    let (shell, window, model) = focused_editor_window(&documents, cx);
+    let (window, native_window, model) = focused_editor_window(&documents, cx);
     let clipboard = |cx: &gpui::App| cx.read_from_clipboard().and_then(|item| item.text());
 
-    cx.simulate_keystrokes(window, "f8");
-    wait_for_api_condition(cx, |cx| !shell.read(cx).holds_keys());
-    cx.simulate_keystrokes(window, "z b");
-    cx.simulate_keystrokes(window, "f9");
+    cx.simulate_keystrokes(native_window, "f8");
+    wait_for_api_condition(cx, |cx| !window.read(cx).holds_keys());
+    cx.simulate_keystrokes(native_window, "z b");
+    cx.simulate_keystrokes(native_window, "f9");
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("zb"));
     cx.read(|cx| {
-        assert!(!shell.read(cx).has_pending_keys());
+        assert!(!window.read(cx).has_pending_keys());
         assert_eq!(model.read(cx).text(), "abc");
     });
 
-    cx.simulate_keystrokes(window, "f7");
-    wait_for_api_condition(cx, |cx| !shell.read(cx).holds_keys());
-    cx.simulate_keystrokes(window, "z t");
+    cx.simulate_keystrokes(native_window, "f7");
+    wait_for_api_condition(cx, |cx| !window.read(cx).holds_keys());
+    cx.simulate_keystrokes(native_window, "z t");
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("top"));
-    cx.simulate_keystrokes(window, "f9");
+    cx.simulate_keystrokes(native_window, "f9");
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("zb"));
 }
 
@@ -1391,23 +1413,23 @@ fn a_sequence_bound_in_another_context_leaves_keys_to_a_modal_package(cx: &mut T
 fn an_unfinished_sequence_delivers_its_keys(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.update(super::super::bind_product_keys);
-    let (shell, window, model) = focused_editor_window(&documents, cx);
+    let (window, native_window, model) = focused_editor_window(&documents, cx);
 
-    cx.simulate_keystrokes(window, "secondary-k");
-    cx.read(|cx| assert!(shell.read(cx).has_pending_keys()));
-    cx.simulate_keystrokes(window, "x y");
+    cx.simulate_keystrokes(native_window, "secondary-k");
+    cx.read(|cx| assert!(window.read(cx).has_pending_keys()));
+    cx.simulate_keystrokes(native_window, "x y");
     cx.run_until_parked();
     cx.read(|cx| {
-        assert!(!shell.read(cx).has_pending_keys());
+        assert!(!window.read(cx).has_pending_keys());
         assert_eq!(model.read(cx).text(), "abcxy");
     });
 
-    cx.simulate_keystrokes(window, "secondary-k");
+    cx.simulate_keystrokes(native_window, "secondary-k");
     cx.executor()
         .advance_clock(crate::app::commands::key_router::SEQUENCE_TIMEOUT);
     cx.run_until_parked();
-    cx.read(|cx| assert!(!shell.read(cx).has_pending_keys()));
-    cx.simulate_keystrokes(window, "z");
+    cx.read(|cx| assert!(!window.read(cx).has_pending_keys()));
+    cx.simulate_keystrokes(native_window, "z");
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "abcxyz"));
 }
@@ -1417,13 +1439,17 @@ fn about_shows_the_compiled_build_identity(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    let execution =
-        dispatch_product_command(&shell, window, super::super::commands::ABOUT_COMMAND, cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(
+        &window,
+        native_window,
+        super::super::commands::ABOUT_COMMAND,
+        cx,
+    );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.run_until_parked();
     cx.read(|cx| {
-        let picker = match shell.read(cx).transient.as_ref().unwrap().surface.as_ref() {
+        let picker = match window.read(cx).transient.as_ref().unwrap().surface.as_ref() {
             Some(crate::app::transient::TransientSurface::Picker(picker)) => picker.read(cx),
             _ => panic!("the transient is not a picker"),
         };

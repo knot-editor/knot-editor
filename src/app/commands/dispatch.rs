@@ -1,4 +1,4 @@
-//! Application-owned command discovery and dispatch for product windows.
+//! Application-owned command discovery and dispatch for windows.
 
 use gpui::*;
 
@@ -88,7 +88,7 @@ impl TargetTab {
 #[derive(Clone, PartialEq)]
 pub(crate) struct ProductCommandTarget {
     /// The session the command runs in.
-    pub(crate) shell: WeakEntity<KnotWindow>,
+    pub(crate) window: WeakEntity<KnotWindow>,
     pub(crate) workbench: WeakEntity<crate::app::workbench::Workbench>,
     /// The focused tab, absent while no pane has focus, as in an empty
     /// window.
@@ -103,15 +103,15 @@ impl ProductCommandTarget {
     /// The session while it is open and still shows the captured workbench.
     pub(crate) fn window(&self, cx: &App) -> Option<Entity<KnotWindow>> {
         let workbench = self.workbench.upgrade()?;
-        crate::app::product::window_is_live(&self.shell, &workbench, cx)
-            .then(|| self.shell.upgrade())
+        crate::app::product::window_is_live(&self.window, &workbench, cx)
+            .then(|| self.window.upgrade())
             .flatten()
     }
 
     /// The window the session is shown in.
     pub(crate) fn native_window(&self, cx: &App) -> Option<AnyWindowHandle> {
         self.window(cx)?;
-        crate::app::product::native_window(self.shell.entity_id(), cx)
+        crate::app::product::native_window(self.window.entity_id(), cx)
     }
 
     /// The captured tab; a command captured without one is unavailable.
@@ -132,7 +132,7 @@ impl ProductCommandTarget {
             .workbench
             .upgrade()
             .ok_or(CommandOutcome::InvalidTarget)?;
-        if crate::app::product::window_is_live(&self.shell, &workbench, cx)
+        if crate::app::product::window_is_live(&self.window, &workbench, cx)
             && tab.is_live(workbench.read(cx))
         {
             Ok(tab)
@@ -362,14 +362,14 @@ pub(crate) fn dispatch_open_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    let shell = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
+    let window = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
     if target.tab.is_some() {
         target.validate_tab(cx)?;
     }
     break_captured_history_group(target, cx);
     let target = target.clone();
-    shell.update(cx, |shell, cx| {
-        shell.start_open_dialog(target, completion, cx)
+    window.update(cx, |window, cx| {
+        window.start_open_dialog(target, completion, cx)
     });
     Ok(())
 }
@@ -380,12 +380,12 @@ pub(crate) fn dispatch_save_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    let shell = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
+    let window = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
     target.document_id(cx)?;
     break_captured_history_group(target, cx);
     let target = target.clone();
-    shell.update(cx, |shell, cx| {
-        shell.start_save_command(save_as, target, completion, cx);
+    window.update(cx, |window, cx| {
+        window.start_save_command(save_as, target, completion, cx);
     });
     Ok(())
 }
@@ -396,7 +396,7 @@ pub(crate) fn dispatch_close_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    target.native_window(cx).ok_or(CommandOutcome::InvalidTarget)?;
+    target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
     target.validate(cx)?;
     break_captured_history_group(target, cx);
     KnotWindow::begin_protected_close(kind, target.clone(), Some(completion), cx);
@@ -409,7 +409,7 @@ pub(crate) fn dispatch_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> CommandClaim {
-    if target.native_window(cx).is_none() {
+    if target.window(cx).is_none() {
         return CommandClaim::Finished(CommandOutcome::InvalidTarget);
     }
     if let Err(outcome) = target.validate(cx) {

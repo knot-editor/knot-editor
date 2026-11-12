@@ -53,10 +53,10 @@ await commands.register("files.api", async () => {
         "files.api",
         cx,
     );
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "files.api", cx),
+            dispatch_product_command(&window, native_window, "files.api", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -113,14 +113,14 @@ await commands.register("files.policy", async () => {
         "files.policy",
         cx,
     );
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     let root = ResourceUri::parse("mem://product/").unwrap();
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![root], cx)
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![root], cx)
     });
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "files.policy", cx),
+            dispatch_product_command(&window, native_window, "files.policy", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -158,10 +158,13 @@ await commands.register("files.unwatch", async () => { await handle.dispose(); }
         "files.watch",
         cx,
     );
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     let run = |name: &'static str, cx: &mut TestAppContext| {
         assert_eq!(
-            wait_for_command(dispatch_product_command(&shell, window, name, cx), cx),
+            wait_for_command(
+                dispatch_product_command(&window, native_window, name, cx),
+                cx
+            ),
             CommandOutcome::Completed
         );
     };
@@ -220,14 +223,14 @@ await commands.register("files.report", async () => {
             "x",
         )
         .unwrap();
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     // Only the first directory is an indexed root; the second is walked.
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![ResourceUri::parse("mem://product/src/").unwrap()], cx)
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![ResourceUri::parse("mem://product/src/").unwrap()], cx)
     });
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "files.report", cx),
+            dispatch_product_command(&window, native_window, "files.report", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -271,12 +274,12 @@ await commands.register("files.report", async () => {
             "x",
         )
         .unwrap();
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     let root = ResourceUri::parse("mem://product/src/").unwrap();
     let report = |cx: &mut TestAppContext| {
         assert_eq!(
             wait_for_command(
-                dispatch_product_command(&shell, window, "files.report", cx),
+                dispatch_product_command(&window, native_window, "files.report", cx),
                 cx
             ),
             CommandOutcome::Completed
@@ -289,8 +292,8 @@ await commands.register("files.report", async () => {
     };
 
     assert!(!indexed(cx));
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![root.clone()], cx)
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![root.clone()], cx)
     });
     assert!(indexed(cx));
     assert_eq!(provider.watch_count(), 1);
@@ -322,12 +325,12 @@ await commands.register("files.report", async () => {
     );
 
     // Keeping the root keeps the index; dropping it releases the watch.
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(vec![root.clone()], cx)
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![root.clone()], cx)
     });
     assert_eq!(provider.watch_count(), 1);
-    shell.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(Vec::new(), cx)
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(Vec::new(), cx)
     });
     assert!(!indexed(cx));
     assert_eq!(provider.watch_count(), 0);
@@ -392,10 +395,10 @@ await commands.register("files.mutate", async () => {
         "files.mutate",
         cx,
     );
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "files.mutate", cx),
+            dispatch_product_command(&window, native_window, "files.mutate", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -436,10 +439,13 @@ await commands.register("files.rename", async () => {
         "files.open",
         cx,
     );
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     let run = |name: &'static str, cx: &mut TestAppContext| {
         assert_eq!(
-            wait_for_command(dispatch_product_command(&shell, window, name, cx), cx),
+            wait_for_command(
+                dispatch_product_command(&window, native_window, name, cx),
+                cx
+            ),
             CommandOutcome::Completed
         );
     };
@@ -521,10 +527,10 @@ await commands.register("files.delete", async () => {
         "files.delete",
         cx,
     );
-    let (shell, window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "files.delete", cx),
+            dispatch_product_command(&window, native_window, "files.delete", cx),
             cx
         ),
         CommandOutcome::Completed

@@ -121,11 +121,11 @@ fn load(cx: &mut TestAppContext) -> Entity<crate::app::extensions::host::Product
 }
 
 pub(super) fn active_editor(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::editor::Editor> {
     cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -145,8 +145,8 @@ fn buffer_line_lookups_handle_crlf_and_multibyte_text(cx: &mut TestAppContext) {
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Lines", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model, cx);
-    let execution = dispatch_product_command(&shell, window, "api.lines", cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&window, native_window, "api.lines", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 
@@ -160,8 +160,8 @@ fn buffer_find_returns_byte_ranges_options_and_revision(cx: &mut TestAppContext)
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Find", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model, cx);
-    let execution = dispatch_product_command(&shell, window, "api.find", cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&window, native_window, "api.find", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 
@@ -173,8 +173,8 @@ fn clipboard_text_reads_back_what_was_written(cx: &mut TestAppContext) {
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Clipboard", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model, cx);
-    let execution = dispatch_product_command(&shell, window, "api.clipboard", cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&window, native_window, "api.clipboard", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 
@@ -186,8 +186,8 @@ fn buffer_marks_follow_edits_and_validate_offsets(cx: &mut TestAppContext) {
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Marks", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model, cx);
-    let execution = dispatch_product_command(&shell, window, "api.marks", cx);
+    let (window, native_window) = product_window(document, model, cx);
+    let execution = dispatch_product_command(&window, native_window, "api.marks", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 
@@ -202,9 +202,9 @@ fn editor_handle_reads_moves_and_restores_the_captured_view(cx: &mut TestAppCont
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Long", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
+    let editor = active_editor(&window, cx);
     let original = crate::app::editor::EditorViewState {
         anchor: 2,
         caret: 6,
@@ -216,7 +216,7 @@ fn editor_handle_reads_moves_and_restores_the_captured_view(cx: &mut TestAppCont
         editor.restore_view_state(original.clone(), cx)
     });
 
-    let execution = dispatch_product_command(&shell, window, "api.editor", cx);
+    let execution = dispatch_product_command(&window, native_window, "api.editor", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     let target = cx.read(|cx| model.read(cx).line_range(150).start);
     cx.read(|cx| {
@@ -227,7 +227,7 @@ fn editor_handle_reads_moves_and_restores_the_captured_view(cx: &mut TestAppCont
         assert!(top_line > 100 && top_line < 150, "top line {top_line}");
     });
 
-    let execution = dispatch_product_command(&shell, window, "api.restore", cx);
+    let execution = dispatch_product_command(&window, native_window, "api.restore", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(editor.read(cx).view_state(cx), original));
 }
@@ -238,12 +238,14 @@ fn editor_handle_rejects_after_its_view_closes(cx: &mut TestAppContext) {
     let host = load(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     host.update(cx, |host, _| host.hold_clipboard_writes());
-    let execution = dispatch_product_command(&shell, window, "api.stale", cx);
+    let execution = dispatch_product_command(&window, native_window, "api.stale", cx);
     wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
-    cx.update_window(window, |_, window, _| window.remove_window())
-        .unwrap();
+    cx.update_window(native_window, |_, native_window, _| {
+        native_window.remove_window()
+    })
+    .unwrap();
     host.update(cx, |host, cx| host.release_view_requests(cx));
     assert_eq!(
         wait_for_command(execution, cx),
@@ -263,19 +265,19 @@ fn commands_on_other_surfaces_have_no_editor(cx: &mut TestAppContext) {
     load(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| {
-            let (session, view) = shell.create_terminal(cx);
-            let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-            let tab = shell.workbench.update(cx, |workbench, _| {
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            let (session, view) = window.create_terminal(cx);
+            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+            let tab = window.workbench.update(cx, |workbench, _| {
                 workbench.open_terminal_tab(pane, session, view).unwrap()
             });
-            shell.activate_tab(pane, tab, cx);
+            window.activate_tab(pane, tab, cx);
         })
     })
     .unwrap();
-    let execution = dispatch_product_command(&shell, window, "api.noeditor", cx);
+    let execution = dispatch_product_command(&window, native_window, "api.noeditor", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Unavailable);
 }
 
@@ -403,11 +405,11 @@ fn load_handle_extension(
 }
 
 fn handle_report(
-    shell: &Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) -> String {
-    let execution = dispatch_product_command(shell, window, "handle.report", cx);
+    let execution = dispatch_product_command(window, native_window, "handle.report", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap())
 }
@@ -418,44 +420,48 @@ fn editor_handle_outlives_its_command_and_rejects_once_its_tab_is_gone(cx: &mut 
     let (_host, _) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     // A second tab, so that moving the active one leaves its pane occupied.
     let second_model = cx.new(|_| Buffer::new(BufferModel::from_text("abc")));
     let second = documents.update(cx, |documents, cx| {
         documents.create_untitled("Second", second_model.clone(), cx)
     });
-    shell.update(cx, |shell, cx| {
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, cx| {
+    window.update(cx, |window, cx| {
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, cx| {
             workbench
                 .open_tab_for_document(pane, second, second_model, cx)
                 .unwrap();
         });
     });
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
+    let editor = active_editor(&window, cx);
 
-    let execution = dispatch_product_command(&shell, window, "handle.attach", cx);
+    let execution = dispatch_product_command(&window, native_window, "handle.attach", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(editor.read(cx).key_contexts(), ["held"]));
 
     // A later command acts through the handle; the target is not rejected
     // for lacking a capture, and a non-target is an InvalidTarget.
-    let execution = dispatch_product_command(&shell, window, "handle.move", cx);
+    let execution = dispatch_product_command(&window, native_window, "handle.move", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(editor.read(cx).selection(cx), (1, 1)));
-    assert_eq!(handle_report(&shell, window, cx), "ok:0:InvalidTarget");
+    assert_eq!(
+        handle_report(&window, native_window, cx),
+        "ok:0:InvalidTarget"
+    );
 
     // Moving the tab to another pane invalidates the handle, once.
-    let execution = dispatch_product_command(&shell, window, "workbench.move-tab-right", cx);
+    let execution =
+        dispatch_product_command(&window, native_window, "workbench.move-tab-right", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.run_until_parked();
     assert_eq!(
-        handle_report(&shell, window, cx),
+        handle_report(&window, native_window, cx),
         "InvalidTarget:1:InvalidTarget"
     );
     assert_eq!(
-        handle_report(&shell, window, cx),
+        handle_report(&window, native_window, cx),
         "InvalidTarget:1:InvalidTarget"
     );
 }
@@ -466,18 +472,18 @@ fn editor_handle_rejects_after_closure_replaces_its_tab(cx: &mut TestAppContext)
     let (_host, _) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     cx.run_until_parked();
-    let execution = dispatch_product_command(&shell, window, "handle.attach", cx);
+    let execution = dispatch_product_command(&window, native_window, "handle.attach", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 
-    // Closing the only tab makes the shell present a fresh untitled one; the
+    // Closing the only tab makes the window present a fresh untitled one; the
     // handle never follows it.
-    let execution = dispatch_product_command(&shell, window, "workbench.close-tab", cx);
+    let execution = dispatch_product_command(&window, native_window, "workbench.close-tab", cx);
     wait_for_command(execution, cx);
     cx.run_until_parked();
     assert_eq!(
-        handle_report(&shell, window, cx),
+        handle_report(&window, native_window, cx),
         "InvalidTarget:1:InvalidTarget"
     );
 }
@@ -488,10 +494,10 @@ fn editor_handle_key_contexts_end_with_their_lifecycle(cx: &mut TestAppContext) 
     let (host, key) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
-    let execution = dispatch_product_command(&shell, window, "handle.attach", cx);
+    let editor = active_editor(&window, cx);
+    let execution = dispatch_product_command(&window, native_window, "handle.attach", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(editor.read(cx).key_contexts(), ["held"]));
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
@@ -507,11 +513,11 @@ fn editor_handle_cursor_style_follows_the_latest_choice_and_ends_with_its_lifecy
     let (host, key) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
+    let editor = active_editor(&window, cx);
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        let execution = dispatch_product_command(&shell, window, name, cx);
+        let execution = dispatch_product_command(&window, native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     };
     run("handle.attach", cx);
@@ -535,7 +541,7 @@ fn view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle(
     let (host, key) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
     cx.update(|cx| {
         model.update(cx, |model, cx| {
@@ -544,7 +550,7 @@ fn view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle(
         });
     });
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        let execution = dispatch_product_command(&shell, window, name, cx);
+        let execution = dispatch_product_command(&window, native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     };
     let painted = |editor: &Entity<crate::app::editor::Editor>, cx: &mut TestAppContext| {
@@ -557,10 +563,10 @@ fn view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle(
                 .collect::<Vec<_>>()
         })
     };
-    let first = active_editor(&shell, cx);
+    let first = active_editor(&window, cx);
     run(SPLIT_HORIZONTAL_COMMAND, cx);
     cx.run_until_parked();
-    let second = active_editor(&shell, cx);
+    let second = active_editor(&window, cx);
     assert_ne!(first.entity_id(), second.entity_id());
     let anchors = |cx: &mut TestAppContext| cx.read(|cx| model.read(cx).anchored_range_count());
     let before = anchors(cx);
@@ -581,7 +587,7 @@ fn view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle(
     cx.run_until_parked();
     assert!(closed.upgrade().is_none());
     assert_eq!(anchors(cx), before - 1);
-    assert_eq!(active_editor(&shell, cx).entity_id(), first.entity_id());
+    assert_eq!(active_editor(&window, cx).entity_id(), first.entity_id());
     assert!(painted(&first, cx).is_empty());
 
     // Teardown clears what the lifecycle set.
@@ -597,7 +603,7 @@ fn editor_handle_scrolls_and_reports_the_viewport(cx: &mut TestAppContext) {
     let (_host, _) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
     cx.update(|cx| {
         model.update(cx, |model, cx| {
@@ -607,7 +613,7 @@ fn editor_handle_scrolls_and_reports_the_viewport(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        let execution = dispatch_product_command(&shell, window, name, cx);
+        let execution = dispatch_product_command(&window, native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     };
     run("handle.attach", cx);
@@ -627,7 +633,7 @@ fn editor_handle_measures_display_cells_and_rejects_bad_positions(cx: &mut TestA
     let (_host, _) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
     cx.update(|cx| {
         model.update(cx, |model, cx| {
@@ -637,7 +643,7 @@ fn editor_handle_measures_display_cells_and_rejects_bad_positions(cx: &mut TestA
     });
     cx.run_until_parked();
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        let execution = dispatch_product_command(&shell, window, name, cx);
+        let execution = dispatch_product_command(&window, native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     };
     run("handle.attach", cx);
@@ -656,7 +662,7 @@ fn editor_handle_maps_rows_validates_arguments_and_always_centers(cx: &mut TestA
     let (_host, _) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
     cx.update(|cx| {
         model.update(cx, |model, cx| {
@@ -666,7 +672,7 @@ fn editor_handle_maps_rows_validates_arguments_and_always_centers(cx: &mut TestA
     });
     cx.run_until_parked();
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        let execution = dispatch_product_command(&shell, window, name, cx);
+        let execution = dispatch_product_command(&window, native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     };
     run("handle.attach", cx);
@@ -686,7 +692,7 @@ fn editor_handle_maps_rows_validates_arguments_and_always_centers(cx: &mut TestA
         });
     });
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
+    let editor = active_editor(&window, cx);
     run("handle.center", cx);
     cx.run_until_parked();
     let top = cx.read(|cx| editor.read(cx).view_state(cx).top);
@@ -700,7 +706,7 @@ fn editor_handle_folds_lines_and_counts_only_the_rows_left_visible(cx: &mut Test
     let (_host, _) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
     cx.update(|cx| {
         model.update(cx, |model, cx| {
@@ -709,9 +715,9 @@ fn editor_handle_folds_lines_and_counts_only_the_rows_left_visible(cx: &mut Test
         });
     });
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
+    let editor = active_editor(&window, cx);
     let run = |name: &'static str, cx: &mut TestAppContext| {
-        let execution = dispatch_product_command(&shell, window, name, cx);
+        let execution = dispatch_product_command(&window, native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     };
     run("handle.attach", cx);
@@ -770,15 +776,15 @@ fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAp
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "abcdefghij").unwrap());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
+    let editor = active_editor(&window, cx);
     let move_to = |caret: usize, cx: &mut TestAppContext| {
         editor.update(cx, |editor, cx| {
             editor.set_selection(caret, caret, crate::app::editor::Reveal::Nearest, cx)
         })
     };
-    let execution = dispatch_product_command(&shell, window, "selection.attach", cx);
+    let execution = dispatch_product_command(&window, native_window, "selection.attach", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 
     // An unchanged selection notifies nobody.
@@ -802,11 +808,11 @@ fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAp
     assert_eq!(cx.read(clipboard_text).as_deref(), Some("2:4"));
 
     // Typing moves the caret, which is a selection change too.
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx))
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
-    cx.simulate_input(window, "x");
+    cx.simulate_input(native_window, "x");
     wait_for_api_condition(cx, |cx| clipboard_text(cx).as_deref() == Some("3:5"));
 }
 
@@ -855,10 +861,10 @@ fn measure_selection_notification_latency(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "0123456789").unwrap());
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
-    let execution = dispatch_product_command(&shell, window, "probe.attach", cx);
+    let editor = active_editor(&window, cx);
+    let execution = dispatch_product_command(&window, native_window, "probe.attach", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 
     let ticking = |cx: &gpui::App| !editor.read(cx).key_contexts().is_empty();
@@ -893,7 +899,7 @@ fn measure_selection_notification_latency(cx: &mut TestAppContext) {
     // Ten changes in separate foreground updates: how many listener runs?
     let mut runs = Vec::with_capacity(BURSTS);
     let tally = |cx: &mut TestAppContext| -> usize {
-        let execution = dispatch_product_command(&shell, window, "probe.count", cx);
+        let execution = dispatch_product_command(&window, native_window, "probe.count", cx);
         wait_for_command(execution, cx);
         cx.read(|cx| {
             cx.read_from_clipboard()
@@ -981,21 +987,21 @@ fn undo_group_fixture(
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     cx.run_until_parked();
-    let editor = active_editor(&shell, cx);
-    let execution = dispatch_product_command(&shell, window, "group.attach", cx);
+    let editor = active_editor(&window, cx);
+    let execution = dispatch_product_command(&window, native_window, "group.attach", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-    (host, key, shell, window, editor, model)
+    (host, key, window, native_window, editor, model)
 }
 
 fn run_group_command(
-    shell: &Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     name: &'static str,
     cx: &mut TestAppContext,
 ) {
-    let execution = dispatch_product_command(shell, window, name, cx);
+    let execution = dispatch_product_command(window, native_window, name, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 
@@ -1005,26 +1011,26 @@ fn type_in(editor: &Entity<crate::app::editor::Editor>, text: &str, cx: &mut Tes
 
 #[gpui::test]
 fn an_undo_group_makes_edits_and_typing_across_commands_one_step(cx: &mut TestAppContext) {
-    let (_host, _, shell, window, editor, model) = undo_group_fixture(cx);
+    let (_host, _, window, native_window, editor, model) = undo_group_fixture(cx);
     type_in(&editor, "one two", cx);
-    cx.update_window(window, |_, _, cx| {
+    cx.update_window(native_window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
-    run_group_command(&shell, window, "group.begin", cx);
-    run_group_command(&shell, window, "group.edit", cx);
+    run_group_command(&window, native_window, "group.begin", cx);
+    run_group_command(&window, native_window, "group.edit", cx);
     // The caret moves between commands; the group stays open.
-    cx.update_window(window, |_, _, cx| {
+    cx.update_window(native_window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
     type_in(&editor, "X", cx);
-    cx.update_window(window, |_, _, cx| {
+    cx.update_window(native_window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
     type_in(&editor, "Y", cx);
-    run_group_command(&shell, window, "group.end", cx);
+    run_group_command(&window, native_window, "group.end", cx);
     cx.read(|cx| assert_eq!(model.read(cx).text(), " twoXY"));
 
     model.update(cx, |model, _| assert!(model.undo().unwrap()));
@@ -1035,15 +1041,15 @@ fn an_undo_group_makes_edits_and_typing_across_commands_one_step(cx: &mut TestAp
 
 #[gpui::test]
 fn a_second_undo_group_is_rejected_until_the_first_ends(cx: &mut TestAppContext) {
-    let (_host, _, shell, window, _editor, _model) = undo_group_fixture(cx);
-    run_group_command(&shell, window, "group.begin", cx);
-    run_group_command(&shell, window, "group.again", cx);
+    let (_host, _, window, native_window, _editor, _model) = undo_group_fixture(cx);
+    run_group_command(&window, native_window, "group.begin", cx);
+    run_group_command(&window, native_window, "group.again", cx);
     assert_eq!(
         cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
         "OperationInProgress"
     );
-    run_group_command(&shell, window, "group.end", cx);
-    run_group_command(&shell, window, "group.again", cx);
+    run_group_command(&window, native_window, "group.end", cx);
+    run_group_command(&window, native_window, "group.again", cx);
     assert_eq!(
         cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
         "opened"
@@ -1052,17 +1058,17 @@ fn a_second_undo_group_is_rejected_until_the_first_ends(cx: &mut TestAppContext)
 
 #[gpui::test]
 fn an_undo_group_ends_with_its_lifecycle_or_its_tab(cx: &mut TestAppContext) {
-    let (host, key, shell, window, editor, model) = undo_group_fixture(cx);
+    let (host, key, window, native_window, editor, model) = undo_group_fixture(cx);
     type_in(&editor, "ab", cx);
-    cx.update_window(window, |_, _, cx| {
+    cx.update_window(native_window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
-    run_group_command(&shell, window, "group.begin", cx);
+    run_group_command(&window, native_window, "group.begin", cx);
     type_in(&editor, "c", cx);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     // Typing after the lifecycle ended is a separate step.
-    cx.update_window(window, |_, _, cx| {
+    cx.update_window(native_window, |_, _, cx| {
         editor.update(cx, |view, cx| view.break_history_group(cx))
     })
     .unwrap();
@@ -1074,10 +1080,10 @@ fn an_undo_group_ends_with_its_lifecycle_or_its_tab(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn an_undo_group_ends_when_its_tab_closes(cx: &mut TestAppContext) {
-    let (host, _, shell, window, _editor, _model) = undo_group_fixture(cx);
-    run_group_command(&shell, window, "group.begin", cx);
+    let (host, _, window, native_window, _editor, _model) = undo_group_fixture(cx);
+    run_group_command(&window, native_window, "group.begin", cx);
     host.read_with(cx, |host, _| assert_eq!(host.open_undo_group_count(), 1));
-    let execution = dispatch_product_command(&shell, window, "workbench.close-tab", cx);
+    let execution = dispatch_product_command(&window, native_window, "workbench.close-tab", cx);
     wait_for_command(execution, cx);
     cx.run_until_parked();
     host.read_with(cx, |host, _| assert_eq!(host.open_undo_group_count(), 0));

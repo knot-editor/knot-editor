@@ -1,4 +1,4 @@
-//! Save, Save As, and save-conflict prompts for the product shell.
+//! Save, Save As, and save-conflict prompts for the window.
 
 use super::*;
 

@@ -333,18 +333,18 @@ pub(super) fn reload(id: DocumentId, cx: &mut App) {
     .detach();
 }
 
-/// Ask each session whose focused document was marked changed on disk.
+/// Ask each window whose focused document was marked changed on disk.
 pub(super) fn prompt_windows(cx: &mut App) {
-    let sessions: Vec<_> = cx
+    let windows: Vec<_> = cx
         .global::<super::ApplicationWindows>()
         .0
         .borrow()
         .iter()
         .map(|open| open.window.clone())
         .collect();
-    for shell in sessions {
-        shell
-            .update(cx, |shell, cx| shell.prompt_external_change(cx))
+    for window in windows {
+        window
+            .update(cx, |window, cx| window.prompt_external_change(cx))
             .ok();
     }
 }
@@ -355,11 +355,13 @@ impl super::KnotWindow {
     pub(super) fn prompt_external_change(&mut self, cx: &mut gpui::Context<Self>) {
         use gpui::{AppContext as _, PromptLevel};
 
-        let Some(window) = self.window else {
+        let Some(native_window) = self.native_window else {
             return;
         };
         if !cx
-            .update_window(window, |_, window, _| window.is_window_active())
+            .update_window(native_window, |_, native_window, _| {
+                native_window.is_window_active()
+            })
             .unwrap_or(false)
         {
             return;

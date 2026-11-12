@@ -2,8 +2,8 @@
 //!
 //! A picker and a text prompt are window-local overlays that own a shared
 //! native text field and settle exactly once; the picker is the shared
-//! [`Picker`]. The product shell keeps at most
-//! one live extension interaction per window; confirmations and messages use
+//! [`Picker`]. A window keeps at most one live extension interaction;
+//! confirmations and messages use
 //! the native platform prompt instead of an overlay.
 
 use crate::app::convert::ThemePaint as _;

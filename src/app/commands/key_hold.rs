@@ -9,10 +9,10 @@ pub(crate) enum HeldInput {
     Text(String),
 }
 
-/// Offers text committed into an editor to the session showing it, which
+/// Offers text committed into an editor to the window showing it, which
 /// holds it behind a running command or sends it to the editor's text
-/// binding. The product shell installs it; `true` means the session took
-/// the text, so the editor must not insert it.
+/// binding. The window installs it; `true` means the window took the text, so
+/// the editor must not insert it.
 pub(crate) struct TypedTextRouter(
     pub(crate)  fn(
         &gpui::Entity<crate::app::editor::Editor>,

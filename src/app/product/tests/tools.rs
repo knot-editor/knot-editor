@@ -8,21 +8,21 @@ use crate::app::workbench::DockLocation;
 fn a_docked_tool_opens_resources_beside_it_and_has_a_nontext_snapshot(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
-    let (shell, window) = empty_product_window(&documents, cx);
-    shell.update(cx, |shell, cx| shell.ensure_test_tool(true, cx));
+    let (window, native_window) = empty_product_window(&documents, cx);
+    window.update(cx, |window, cx| window.ensure_test_tool(true, cx));
     cx.run_until_parked();
-    let tree = cx.read(|cx| shell.read(cx).test_tool_tree(cx));
+    let tree = cx.read(|cx| window.read(cx).test_tool_tree(cx));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
-    cx.update_window(window, |_, window, cx| {
-        focus_view(&tree.focus_handle(cx), window, cx);
-        shell.update(cx, |shell, cx| {
-            shell.open_from_test_tool(uri.clone(), false, cx)
+    cx.update_window(native_window, |_, native_window, cx| {
+        focus_view(&tree.focus_handle(cx), native_window, cx);
+        window.update(cx, |window, cx| {
+            window.open_from_test_tool(uri.clone(), false, cx)
         });
     })
     .unwrap();
     cx.run_until_parked();
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         let pane = workbench.center_pane().unwrap();
         assert!(workbench.pane(pane).unwrap().tabs().iter().any(|tab| {
             tab.document_id()
@@ -35,18 +35,18 @@ fn a_docked_tool_opens_resources_beside_it_and_has_a_nontext_snapshot(cx: &mut T
         );
     });
     let target = cx
-        .update_window(window, |_, window, cx| {
-            focus_view(&tree.focus_handle(cx), window, cx);
-            shell.update(cx, |shell, cx| shell.capture_command_target(cx))
+        .update_window(native_window, |_, native_window, cx| {
+            focus_view(&tree.focus_handle(cx), native_window, cx);
+            window.update(cx, |window, cx| window.capture_command_target(cx))
         })
         .unwrap();
     cx.read(|cx| {
         assert!(matches!(target.tab.unwrap().surface, TabSurfaceId::Tool(_)));
         assert!(target.document_id(cx).is_err());
     });
-    cx.update_window(window, |_, _, cx| {
-        let state = shell.read(cx).application_window(
-            shell.entity_id(),
+    cx.update_window(native_window, |_, _, cx| {
+        let state = window.read(cx).application_window(
+            window.entity_id(),
             &std::collections::HashMap::new(),
             cx,
         );
@@ -61,16 +61,16 @@ fn a_docked_tool_opens_resources_beside_it_and_has_a_nontext_snapshot(cx: &mut T
         assert_eq!(state.current_target, Some(tool.target.clone()));
     })
     .unwrap();
-    place_explorer(&shell, window, DockLocation::Bottom, cx);
+    place_explorer(&window, native_window, DockLocation::Bottom, cx);
     cx.read(|cx| assert_eq!(target.validate_tab(cx), Err(CommandOutcome::InvalidTarget)));
-    let close = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let close = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     assert!(!cx.has_pending_prompt());
-    shell.update(cx, |shell, cx| {
-        shell.toggle_tool(crate::app::product::tools::TEST_TOOL_ID, cx)
+    window.update(cx, |window, cx| {
+        window.toggle_tool(crate::app::product::tools::TEST_TOOL_ID, cx)
     });
     cx.read(|cx| {
-        let workbench = shell.read(cx).workbench.read(cx);
+        let workbench = window.read(cx).workbench.read(cx);
         assert_eq!(
             workbench.tool_presenting(tree.entity_id()),
             Some(id_of(workbench))
@@ -90,9 +90,9 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
-    let (shell, window) = empty_product_window(&documents, cx);
-    let workbench = cx.read(|cx| shell.read(cx).workbench.clone());
-    shell.update(cx, |shell, cx| shell.ensure_test_tool(false, cx));
+    let (window, native_window) = empty_product_window(&documents, cx);
+    let workbench = cx.read(|cx| window.read(cx).workbench.clone());
+    window.update(cx, |window, cx| window.ensure_test_tool(false, cx));
     let document = cx.read(|cx| {
         workbench
             .read(cx)
@@ -102,38 +102,38 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
             .document_id()
             .unwrap()
     });
-    let close = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let close = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     cx.read(|cx| {
         assert!(documents.read(cx).get(document).is_none());
         assert_eq!(documents.read(cx).documents().count(), 0);
-        assert_eq!(&shell.read(cx).workbench, &workbench);
+        assert_eq!(&window.read(cx).workbench, &workbench);
         assert_eq!(workbench.read(cx).tab_snapshots().len(), 1);
         assert!(matches!(
             workbench.read(cx).tab_snapshots()[0].surface,
             TabSurfaceId::Tool(_)
         ));
     });
-    cx.update_window(window, |_, _, cx| {
-        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+    cx.update_window(native_window, |_, _, cx| {
+        let target = window.update(cx, |window, cx| window.capture_command_target(cx));
         assert!(
             target.tab.is_none(),
             "the tool beside the empty center keeps no focus"
         );
     })
     .unwrap();
-    let new = dispatch_product_command(&shell, window, NEW_COMMAND, cx);
+    let new = dispatch_product_command(&window, native_window, NEW_COMMAND, cx);
     assert_eq!(wait_for_command(new, cx), CommandOutcome::Completed);
-    shell.update(cx, |shell, cx| {
-        let id = id_of(shell.workbench.read(cx));
-        shell.workbench.update(cx, |workbench, _| {
+    window.update(cx, |window, cx| {
+        let id = id_of(window.workbench.read(cx));
+        window.workbench.update(cx, |workbench, _| {
             workbench.hide_tool(id);
         });
     });
-    let close = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let close = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     cx.read(|cx| {
-        assert_eq!(&shell.read(cx).workbench, &workbench);
+        assert_eq!(&window.read(cx).workbench, &workbench);
         assert_eq!(documents.read(cx).documents().count(), 0);
         assert_eq!(workbench.read(cx).center(), None);
         assert_eq!(workbench.read(cx).tools().len(), 1);
@@ -150,17 +150,17 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
 fn workspace_refresh_does_not_reopen_or_reposition_tool(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
-    let (shell, _) = empty_product_window(&documents, cx);
-    shell.update(cx, |shell, cx| {
-        shell.ensure_test_tool(false, cx);
-        let id = id_of(shell.workbench.read(cx));
-        shell.workbench.update(cx, |workbench, _| {
+    let (window, _) = empty_product_window(&documents, cx);
+    window.update(cx, |window, cx| {
+        window.ensure_test_tool(false, cx);
+        let id = id_of(window.workbench.read(cx));
+        window.workbench.update(cx, |workbench, _| {
             workbench.place_tool(id, DockLocation::Bottom);
             workbench.hide_tool(id);
         });
-        shell.install_workspace(ResourceUri::parse("mem://product/src").unwrap(), cx);
-        assert!(shell.workbench.read(cx).tool_tab(id).is_none());
-        shell.workbench.update(cx, |workbench, _| {
+        window.install_workspace(ResourceUri::parse("mem://product/src").unwrap(), cx);
+        assert!(window.workbench.read(cx).tool_tab(id).is_none());
+        window.workbench.update(cx, |workbench, _| {
             let (pane, _) = workbench.show_tool(id).unwrap();
             assert_eq!(workbench.dock_location(pane), Some(DockLocation::Bottom));
         });
@@ -174,23 +174,23 @@ async fn tools_do_not_bypass_dirty_document_or_terminal_protection(cx: &mut Test
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
-    let (shell, window) = product_window(document, model, cx);
-    shell.update(cx, |shell, cx| shell.ensure_test_tool(false, cx));
-    let close = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let (window, native_window) = product_window(document, model, cx);
+    window.update(cx, |window, cx| window.ensure_test_tool(false, cx));
+    let close = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Cancel");
     assert_eq!(close.completion.await.unwrap(), CommandOutcome::Cancelled);
-    place_explorer(&shell, window, DockLocation::Bottom, cx);
-    let close_tool = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    place_explorer(&window, native_window, DockLocation::Bottom, cx);
+    let close_tool = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close_tool, cx), CommandOutcome::Completed);
     assert!(!cx.has_pending_prompt());
     cx.read(|cx| assert!(documents.read(cx).get(document).unwrap().is_dirty(cx)));
-    toggle_test_tool(&shell, cx);
-    let terminal = dispatch_product_command(&shell, window, NEW_TERMINAL_COMMAND, cx);
+    toggle_test_tool(&window, cx);
+    let terminal = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(wait_for_command(terminal, cx), CommandOutcome::Completed);
     let session = cx.read(|cx| {
-        match shell
+        match window
             .read(cx)
             .workbench
             .read(cx)
@@ -204,7 +204,7 @@ async fn tools_do_not_bypass_dirty_document_or_terminal_protection(cx: &mut Test
         }
     });
     for command in [CLOSE_WINDOW_COMMAND, QUIT_COMMAND] {
-        let close = dispatch_product_command(&shell, window, command, cx);
+        let close = dispatch_product_command(&window, native_window, command, cx);
         cx.run_until_parked();
         assert!(cx.has_pending_prompt());
         cx.simulate_prompt_answer("Cancel");
@@ -219,16 +219,16 @@ async fn tools_do_not_bypass_dirty_document_or_terminal_protection(cx: &mut Test
             );
             assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
             assert!(
-                shell
+                window
                     .read(cx)
                     .workbench
                     .read(cx)
-                    .tool_tab(id_of(shell.read(cx).workbench.read(cx)))
+                    .tool_tab(id_of(window.read(cx).workbench.read(cx)))
                     .is_some()
             );
         });
     }
-    let close_terminal = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let close_terminal = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(
         wait_for_command(close_terminal, cx),
         CommandOutcome::Completed
@@ -250,18 +250,18 @@ fn docked_tools_have_visible_geometry(cx: &mut TestAppContext) {
     for dock in DockLocation::ALL {
         let documents = install_globals(cx);
         cx.set_global(ApplicationFileSystems(memory_filesystems()));
-        let (shell, window) = empty_product_window(&documents, cx);
-        shell.update(cx, |shell, cx| {
-            shell.ensure_test_tool(false, cx);
-            let id = shell.test_tool_frame(cx).unwrap();
-            shell.workbench.update(cx, |workbench, _| {
+        let (window, native_window) = empty_product_window(&documents, cx);
+        window.update(cx, |window, cx| {
+            window.ensure_test_tool(false, cx);
+            let id = window.test_tool_frame(cx).unwrap();
+            window.workbench.update(cx, |workbench, _| {
                 assert!(workbench.place_tool(id, dock));
                 assert_eq!(workbench.tool_tab(id).unwrap().0.value(), 3);
             });
             cx.notify();
         });
         cx.run_until_parked();
-        let mut visual = VisualTestContext::from_window(window, cx);
+        let mut visual = VisualTestContext::from_window(native_window, cx);
         let explorer = visual.debug_bounds("pane-3").unwrap();
         let editor = visual.debug_bounds("pane-1").unwrap();
         match dock {
@@ -276,17 +276,17 @@ fn docked_tools_have_visible_geometry(cx: &mut TestAppContext) {
         }
         assert!(editor.size.width > px(100.));
         assert!(editor.size.height > px(100.));
-        shell.update(&mut visual, |shell, cx| {
-            let id = shell.test_tool_frame(cx).unwrap();
-            shell.workbench.update(cx, |workbench, _| {
+        window.update(&mut visual, |window, cx| {
+            let id = window.test_tool_frame(cx).unwrap();
+            window.workbench.update(cx, |workbench, _| {
                 assert!(workbench.hide_tool(id));
             });
             cx.notify();
         });
         visual.run_until_parked();
-        shell.update(&mut visual, |shell, cx| {
-            let id = shell.test_tool_frame(cx).unwrap();
-            shell.workbench.update(cx, |workbench, _| {
+        window.update(&mut visual, |window, cx| {
+            let id = window.test_tool_frame(cx).unwrap();
+            window.workbench.update(cx, |workbench, _| {
                 workbench.show_tool(id).unwrap();
             });
             cx.notify();
@@ -301,17 +301,17 @@ fn docked_tools_have_visible_geometry(cx: &mut TestAppContext) {
 fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
-    let (shell, window) = empty_product_window(&documents, cx);
-    shell.update(cx, |shell, cx| {
-        shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
-        shell.ensure_test_tool(false, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
+    window.update(cx, |window, cx| {
+        window.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
+        window.ensure_test_tool(false, cx);
     });
     cx.run_until_parked();
-    let tree = cx.read(|cx| shell.read(cx).test_tool_tree(cx));
+    let tree = cx.read(|cx| window.read(cx).test_tool_tree(cx));
     let state = |cx: &mut TestAppContext| {
-        cx.update_window(window, |_, _, cx| {
-            shell.read(cx).application_window(
-                shell.entity_id(),
+        cx.update_window(native_window, |_, _, cx| {
+            window.read(cx).application_window(
+                window.entity_id(),
                 &std::collections::HashMap::new(),
                 cx,
             )
@@ -319,36 +319,42 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
         .unwrap()
     };
     let settle = |cx: &mut TestAppContext| {
-        cx.update_window(window, |_, window, cx| {
-            window.draw(cx).clear(cx);
+        cx.update_window(native_window, |_, native_window, cx| {
+            native_window.draw(cx).clear(cx);
         })
         .unwrap();
         cx.run_until_parked();
     };
     let focus_editor = |cx: &mut TestAppContext| {
-        cx.update_window(window, |_, window, cx| {
-            shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));
-            shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+        cx.update_window(native_window, |_, native_window, cx| {
+            window.update(cx, |window, cx| {
+                window.observe_application_focus(native_window, cx)
+            });
+            window.update(cx, |window, cx| window.focus_active_editor(cx));
         })
         .unwrap();
-        cx.update_window(window, |_, window, cx| {
-            window.draw(cx).clear(cx);
+        cx.update_window(native_window, |_, native_window, cx| {
+            native_window.draw(cx).clear(cx);
         })
         .unwrap();
         cx.run_until_parked();
     };
 
-    cx.update_window(window, |_, window, _| window.activate_window())
-        .unwrap();
+    cx.update_window(native_window, |_, native_window, _| {
+        native_window.activate_window()
+    })
+    .unwrap();
 
     focus_editor(cx);
     let editor = state(cx).current_target.expect("focused editor");
     assert_eq!(state(cx).status_target, Some(editor.clone()));
 
     // A tool keeps the editor it was focused from.
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));
-        focus_view(&tree.focus_handle(cx), window, cx);
+    cx.update_window(native_window, |_, native_window, cx| {
+        window.update(cx, |window, cx| {
+            window.observe_application_focus(native_window, cx)
+        });
+        focus_view(&tree.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     settle(cx);
@@ -358,23 +364,26 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
 
     // A focused terminal clears the editor items, and its tab hides the
     // editor, so the editor does not return when focus moves to the tool.
-    let command = dispatch_product_command(&shell, window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
+    let command =
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
     assert_eq!(wait_for_command(command, cx), CommandOutcome::Completed);
-    cx.update_window(window, |_, window, cx| {
-        shell.update(cx, |shell, cx| shell.observe_application_focus(window, cx));
+    cx.update_window(native_window, |_, native_window, cx| {
+        window.update(cx, |window, cx| {
+            window.observe_application_focus(native_window, cx)
+        });
     })
     .unwrap();
     assert!(state(cx).current_target.is_some());
     assert_eq!(state(cx).status_target, None);
-    cx.update_window(window, |_, window, cx| {
-        focus_view(&tree.focus_handle(cx), window, cx);
+    cx.update_window(native_window, |_, native_window, cx| {
+        focus_view(&tree.focus_handle(cx), native_window, cx);
     })
     .unwrap();
     assert_eq!(state(cx).status_target, None);
 
     // Showing the editor again restores it, even with focus on the tool.
     cx.update(|cx| {
-        let workbench = shell.read(cx).workbench.clone();
+        let workbench = window.read(cx).workbench.clone();
         workbench.update(cx, |workbench, _| {
             let pane = workbench.center_pane().unwrap();
             let tab = workbench.pane(pane).unwrap().tabs()[0].id();
@@ -388,11 +397,18 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
 fn toggle_explorer_and_toggle_tool_show_focus_then_hide_to_the_center(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
-    let (shell, window) = empty_product_window(&documents, cx);
-    let center = cx.read(|cx| shell.read(cx).workbench.read(cx).focused_pane_id().unwrap());
+    let (window, native_window) = empty_product_window(&documents, cx);
+    let center = cx.read(|cx| {
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane_id()
+            .unwrap()
+    });
     let state = |cx: &mut TestAppContext| {
         cx.read(|cx| {
-            let workbench = shell.read(cx).workbench.read(cx);
+            let workbench = window.read(cx).workbench.read(cx);
             let explorer = workbench
                 .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
                 .unwrap();
@@ -403,30 +419,30 @@ fn toggle_explorer_and_toggle_tool_show_focus_then_hide_to_the_center(cx: &mut T
         })
     };
     // Not registered yet: it shows and takes focus.
-    toggle_test_tool(&shell, cx);
+    toggle_test_tool(&window, cx);
     assert_eq!(state(cx), (true, false));
     // Focused: it hides and the center takes focus back.
-    toggle_test_tool(&shell, cx);
+    toggle_test_tool(&window, cx);
     assert_eq!(state(cx), (false, true));
 
     // The picker toggles the chosen tool the same way.
     for expected in [(true, false), (false, true)] {
-        let picker = dispatch_product_command(&shell, window, "workbench.toggle-tool", cx);
+        let picker = dispatch_product_command(&window, native_window, "workbench.toggle-tool", cx);
         assert_eq!(wait_for_command(picker, cx), CommandOutcome::Completed);
-        wait_for_api_condition(cx, |cx| shell.read(cx).transient.is_some());
-        cx.simulate_input(window, "Test Tool");
-        cx.simulate_keystrokes(window, "enter");
+        wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
+        cx.simulate_input(native_window, "Test Tool");
+        cx.simulate_keystrokes(native_window, "enter");
         cx.run_until_parked();
         assert_eq!(state(cx), expected);
     }
 
     // Visible but unfocused: it takes focus instead of hiding.
-    toggle_test_tool(&shell, cx);
-    shell.update(cx, |shell, cx| {
-        shell
+    toggle_test_tool(&window, cx);
+    window.update(cx, |window, cx| {
+        window
             .workbench
             .update(cx, |workbench, _| workbench.focus_pane(center));
     });
-    toggle_test_tool(&shell, cx);
+    toggle_test_tool(&window, cx);
     assert_eq!(state(cx), (true, false));
 }

@@ -107,9 +107,9 @@ impl TestProduct {
             .collect();
         assert!(failures.is_empty(), "{failures:?}");
         // Launch opens a window when nothing else does; close it, since a
-        // window redraws on every change its session sees.
+        // window redraws on every change it sees.
         for window in cx.windows() {
-            cx.update_window(window, |_, window, _| window.remove_window())
+            cx.update_window(window, |_, native_window, _| native_window.remove_window())
                 .unwrap();
         }
         cx.run_until_parked();
@@ -275,8 +275,8 @@ impl TestProduct {
         assert_eq!(entry.result, LoadResult::Loaded, "{name}");
     }
 
-    /// A windowless session over `text` in `language`, or detected, with the
-    /// selection from `anchor` to `caret`, settled.
+    /// A window without a native window over `text` in `language`, or
+    /// detected, with the selection from `anchor` to `caret`, settled.
     pub fn editor(
         &self,
         text: &str,
@@ -287,8 +287,8 @@ impl TestProduct {
         TestEditor::open(text, language, selection, cx)
     }
 
-    /// A product window over `text` with the caret at its start, for pointer
-    /// input, typed input, prompts, and the work a key costs a window.
+    /// A window over `text` with the caret at its start, for pointer input,
+    /// typed input, prompts, and the work a key costs a window.
     pub fn windowed_editor(&self, text: &str, cx: &mut TestAppContext) -> TestEditor {
         TestEditor::windowed(text, cx)
     }
@@ -317,8 +317,8 @@ impl TestProduct {
         ServedFiles(provider)
     }
 
-    /// A windowless session over the served file at `uri`, caret at its
-    /// start.
+    /// A window without a native window over the served file at `uri`, caret
+    /// at its start.
     pub fn open_file(&self, files: &ServedFiles, uri: &str, cx: &mut TestAppContext) -> TestEditor {
         let uri = ResourceUri::parse(uri).unwrap();
         let opened = pollster::block_on(files.0.read(uri.clone())).unwrap();

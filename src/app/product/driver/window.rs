@@ -1,4 +1,4 @@
-//! One product window, driven through its session and native input.
+//! One window, driven through its native window and the input forwarded to it.
 //!
 //! A window takes keys and text through gpui's window dispatch, as a user
 //! types them, and runs commands captured on its focused surface. Its
@@ -13,7 +13,7 @@ use serde_json::Value;
 use crate::app::CommandExecution;
 use crate::app::editor::EditorViewState;
 use crate::app::product::{
-    ApplicationDocuments, ApplicationProductCommands, OpenRequest, OpenTarget, KnotWindow,
+    ApplicationDocuments, ApplicationProductCommands, KnotWindow, OpenRequest, OpenTarget,
 };
 use crate::app::resource::ResourceUri;
 use crate::app::transient::TransientSurface;
@@ -21,22 +21,26 @@ use crate::app::tree_view::TreeView;
 use crate::app::workbench::{DockLocation, SplitDirection, SplitPlacement, TabSurfaceId};
 use crate::test_support::wait_until;
 
-/// A product window.
+/// A window and the native window that renders it.
 #[derive(Clone)]
 pub struct TestWindow {
-    pub(super) shell: Entity<KnotWindow>,
-    pub(super) window: AnyWindowHandle,
+    pub(super) window: Entity<KnotWindow>,
+    pub(super) native_window: AnyWindowHandle,
 }
 
 impl PartialEq for TestWindow {
     fn eq(&self, other: &Self) -> bool {
-        self.window == other.window
+        self.native_window == other.native_window
     }
 }
 
 impl std::fmt::Debug for TestWindow {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "TestWindow({:?})", self.window.window_id())
+        write!(
+            formatter,
+            "TestWindow({:?})",
+            self.native_window.window_id()
+        )
     }
 }
 
@@ -70,32 +74,37 @@ pub struct EditorTab {
 
 /// A tree a package contributes to a window.
 pub struct TestTree {
-    shell: Entity<KnotWindow>,
-    window: AnyWindowHandle,
+    window: Entity<KnotWindow>,
+    native_window: AnyWindowHandle,
     tree: Entity<TreeView>,
 }
 
 impl TestWindow {
-    pub(super) fn of(window: AnyWindowHandle, cx: &mut TestAppContext) -> Option<Self> {
-        let shell = cx
-            .update_window(window, |root, _, _| root.downcast::<KnotWindow>().ok())
+    pub(super) fn of(native_window: AnyWindowHandle, cx: &mut TestAppContext) -> Option<Self> {
+        let window = cx
+            .update_window(native_window, |root, _, _| {
+                root.downcast::<KnotWindow>().ok()
+            })
             .ok()
             .flatten()?;
-        Some(Self { shell, window })
+        Some(Self {
+            window,
+            native_window,
+        })
     }
 
     /// Whether the window is still open.
     pub fn is_open(&self, cx: &mut TestAppContext) -> bool {
-        cx.read(|cx| cx.windows().contains(&self.window))
+        cx.read(|cx| cx.windows().contains(&self.native_window))
     }
 
     /// Start the command `name` on the focused surface.
     pub fn start_command(&self, name: &str, cx: &mut TestAppContext) -> TestCommand {
         let target = cx
-            .update_window(self.window, |_, _, cx| {
-                self.shell.update(cx, |shell, cx| {
-                    shell.focus_active_surface(cx);
-                    shell.capture_command_target(cx)
+            .update_window(self.native_window, |_, _, cx| {
+                self.window.update(cx, |window, cx| {
+                    window.focus_active_surface(cx);
+                    window.capture_command_target(cx)
                 })
             })
             .unwrap();
@@ -121,19 +130,19 @@ impl TestWindow {
 
     /// Press `keys`, such as `cmd-a enter`, in the window.
     pub fn press(&self, keys: &str, cx: &mut TestAppContext) {
-        cx.simulate_keystrokes(self.window, keys);
+        cx.simulate_keystrokes(self.native_window, keys);
         cx.run_until_parked();
     }
 
     /// Type `text` into the window's focused input.
     pub fn type_input(&self, text: &str, cx: &mut TestAppContext) {
-        cx.simulate_input(self.window, text);
+        cx.simulate_input(self.native_window, text);
         cx.run_until_parked();
     }
 
     /// Whether a transient surface, such as a picker or an input, is open.
     pub fn transient_open(&self, cx: &mut TestAppContext) -> bool {
-        cx.read(|cx| self.shell.read(cx).transient.is_some())
+        cx.read(|cx| self.window.read(cx).transient.is_some())
     }
 
     /// The labels of the rows an open picker shows, best first; empty when
@@ -141,7 +150,7 @@ impl TestWindow {
     pub fn picker_labels(&self, cx: &mut TestAppContext) -> Vec<String> {
         cx.read(|cx| {
             match self
-                .shell
+                .window
                 .read(cx)
                 .transient
                 .as_ref()
@@ -163,7 +172,7 @@ impl TestWindow {
             );
             cx.read(|cx| {
                 matches!(
-                    self.shell
+                    self.window
                         .read(cx)
                         .transient
                         .as_ref()
@@ -177,7 +186,7 @@ impl TestWindow {
     /// The workspace roots, in order.
     pub fn roots(&self, cx: &mut TestAppContext) -> Vec<String> {
         cx.read(|cx| {
-            self.shell
+            self.window
                 .read(cx)
                 .workspace
                 .snapshot()
@@ -190,12 +199,12 @@ impl TestWindow {
 
     /// Replace the workspace roots with `uris`.
     pub fn set_roots(&self, uris: &[&str], cx: &mut TestAppContext) {
-        self.shell.update(cx, |shell, cx| {
+        self.window.update(cx, |window, cx| {
             let roots = uris
                 .iter()
                 .map(|uri| ResourceUri::parse(uri).unwrap())
                 .collect();
-            shell.replace_workspace_roots(roots, cx);
+            window.replace_workspace_roots(roots, cx);
             cx.notify();
         });
         cx.run_until_parked();
@@ -210,9 +219,9 @@ impl TestWindow {
     /// require that it opened.
     pub fn open_path(&self, path: &Path, cx: &mut TestAppContext) {
         let request = OpenRequest::from_path(path, Path::new("/")).unwrap();
-        let target = cx.read(|cx| open_target(&self.shell, cx));
-        let mut opened = self.shell.update(cx, |shell, cx| {
-            shell.start_open_operation(request, target, false, cx)
+        let target = cx.read(|cx| open_target(&self.window, cx));
+        let mut opened = self.window.update(cx, |window, cx| {
+            window.start_open_operation(request, target, false, cx)
         });
         let mut result = None;
         wait_until(cx, |_| {
@@ -224,9 +233,9 @@ impl TestWindow {
 
     /// Open an untitled document in the center.
     pub fn new_document(&self, cx: &mut TestAppContext) {
-        cx.update_window(self.window, |_, _, cx| {
-            self.shell.update(cx, |shell, cx| {
-                shell.new_document_in_pane(None, cx);
+        cx.update_window(self.native_window, |_, _, cx| {
+            self.window.update(cx, |window, cx| {
+                window.new_document_in_pane(None, cx);
             });
         })
         .unwrap();
@@ -236,7 +245,7 @@ impl TestWindow {
     /// Append `text` to the document active in the normal group.
     pub fn append(&self, text: &str, cx: &mut TestAppContext) {
         let model = cx.read(|cx| {
-            let workbench = self.shell.read(cx).workbench.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
             let pane = workbench.center_pane().unwrap();
             let tab = workbench.pane(pane).unwrap().active_tab();
             workbench.editor(tab).unwrap().read(cx).model().clone()
@@ -253,7 +262,7 @@ impl TestWindow {
     pub fn document_texts(&self, cx: &mut TestAppContext) -> Vec<String> {
         cx.read(|cx| {
             let documents = cx.global::<ApplicationDocuments>().0.read(cx);
-            self.shell
+            self.window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -274,7 +283,7 @@ impl TestWindow {
     pub fn document_tabs(&self, cx: &mut TestAppContext) -> Vec<(String, bool)> {
         cx.read(|cx| {
             let documents = cx.global::<ApplicationDocuments>().0.read(cx);
-            let workbench = self.shell.read(cx).workbench.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
             let Some(pane) = workbench
                 .center_pane()
                 .and_then(|pane| workbench.pane(pane))
@@ -294,7 +303,7 @@ impl TestWindow {
     /// Whether the center pane's active tab is the focused one.
     pub fn editor_focused(&self, cx: &mut TestAppContext) -> bool {
         cx.read(|cx| {
-            let workbench = self.shell.read(cx).workbench.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
             workbench.focused_pane_id() == workbench.center_pane()
         })
     }
@@ -302,7 +311,7 @@ impl TestWindow {
     /// Whether the window's center holds a pane.
     pub fn has_center_pane(&self, cx: &mut TestAppContext) -> bool {
         cx.read(|cx| {
-            self.shell
+            self.window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -314,7 +323,7 @@ impl TestWindow {
     /// The editor tabs, in layout order.
     pub fn editors(&self, cx: &mut TestAppContext) -> Vec<EditorTab> {
         cx.read(|cx| {
-            let workbench = self.shell.read(cx).workbench.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
             workbench
                 .tabs()
                 .filter_map(|tab| workbench.editor(tab))
@@ -335,9 +344,9 @@ impl TestWindow {
 
     /// Split the normal group's pane, moving focus to the new pane beside it.
     pub fn split(&self, cx: &mut TestAppContext) {
-        self.shell.update(cx, |shell, cx| {
-            let pane = shell.workbench.read(cx).center_pane().unwrap();
-            shell.workbench.update(cx, |workbench, cx| {
+        self.window.update(cx, |window, cx| {
+            let pane = window.workbench.read(cx).center_pane().unwrap();
+            window.workbench.update(cx, |workbench, cx| {
                 workbench.split_pane(pane, SplitDirection::Horizontal, SplitPlacement::After, cx);
             });
         });
@@ -347,8 +356,8 @@ impl TestWindow {
     /// Size the dock `dock`, `left`, `right`, or `bottom`, to `size`.
     pub fn set_dock_size(&self, dock: &str, size: f32, cx: &mut TestAppContext) {
         let location = dock_location(dock);
-        self.shell.update(cx, |shell, cx| {
-            shell
+        self.window.update(cx, |window, cx| {
+            window
                 .workbench
                 .update(cx, |workbench, _| workbench.set_dock_size(location, size));
         });
@@ -359,7 +368,7 @@ impl TestWindow {
     /// `top` to its top.
     pub fn set_view(&self, anchor: usize, caret: usize, top: usize, cx: &mut TestAppContext) {
         let editor = cx.read(|cx| {
-            self.shell
+            self.window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -387,7 +396,7 @@ impl TestWindow {
     /// The window's layout as packages read it.
     pub fn layout(&self, cx: &mut TestAppContext) -> Value {
         let target = knot_protocol::WindowTarget {
-            window: crate::app::product::test_window_id(self.window),
+            window: crate::app::product::test_window_id(self.native_window),
         };
         let layout = cx
             .update(|cx| crate::app::product::sessions::capture_layout(&target, cx))
@@ -398,14 +407,14 @@ impl TestWindow {
     /// Focus the center pane's active document.
     pub fn focus_document(&self, cx: &mut TestAppContext) {
         let located = cx.read(|cx| {
-            let workbench = self.shell.read(cx).workbench.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
             let pane = workbench.center_pane()?;
             Some((pane, workbench.pane(pane)?.active_tab_id()))
         });
         let (pane, tab) = located.expect("a normal pane");
-        cx.update_window(self.window, |_, _, cx| {
-            self.shell
-                .update(cx, |shell, cx| shell.activate_tab(pane, tab, cx));
+        cx.update_window(self.native_window, |_, _, cx| {
+            self.window
+                .update(cx, |window, cx| window.activate_tab(pane, tab, cx));
         })
         .unwrap();
         cx.run_until_parked();
@@ -413,8 +422,8 @@ impl TestWindow {
 
     /// Lay out the tools as a fresh window does, from the stored layout.
     pub fn restore_fresh_layout(&self, cx: &mut TestAppContext) {
-        self.shell
-            .update(cx, |shell, cx| shell.restore_fresh_window_layout(cx));
+        self.window
+            .update(cx, |window, cx| window.restore_fresh_window_layout(cx));
         cx.run_until_parked();
     }
 
@@ -423,7 +432,7 @@ impl TestWindow {
         let mut tree = None;
         wait_until(cx, |cx| {
             tree = cx.read(|cx| {
-                self.shell
+                self.window
                     .read(cx)
                     .contributed_views
                     .get(id)
@@ -432,8 +441,8 @@ impl TestWindow {
             tree.is_some()
         });
         TestTree {
-            shell: self.shell.clone(),
-            window: self.window,
+            window: self.window.clone(),
+            native_window: self.native_window,
             tree: tree.unwrap(),
         }
     }
@@ -508,7 +517,7 @@ impl TestTree {
     pub fn is_focused(&self, cx: &mut TestAppContext) -> bool {
         cx.read(|cx| {
             let focus = self.tree.read(cx).focus_handle(cx);
-            let workbench = self.shell.read(cx).workbench.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
             workbench.focused_pane().is_some_and(|pane| {
                 workbench
                     .command_view(pane.active_tab())
@@ -520,10 +529,10 @@ impl TestTree {
     /// Activate the tree's tab and focus the tree, as a click would.
     pub fn focus(&self, cx: &mut TestAppContext) {
         self.activate_tab(cx);
-        cx.update_window(self.window, |_, _, cx| {
+        cx.update_window(self.native_window, |_, _, cx| {
             let handle = self.tree.read(cx).focus_handle(cx);
-            self.shell
-                .update(cx, |shell, cx| shell.focus_view(&handle, cx));
+            self.window
+                .update(cx, |window, cx| window.focus_view(&handle, cx));
         })
         .unwrap();
         cx.refresh().unwrap();
@@ -533,7 +542,7 @@ impl TestTree {
     /// Activate the row `row`, as Enter on it would.
     pub fn activate_row(&self, row: &str, cx: &mut TestAppContext) {
         self.activate_tab(cx);
-        cx.update_window(self.window, |_, _, cx| {
+        cx.update_window(self.native_window, |_, _, cx| {
             self.tree
                 .update(cx, |tree, cx| tree.activate_row_for_test(row, cx));
         })
@@ -578,7 +587,7 @@ impl TestTree {
             .row_id(label, cx)
             .unwrap_or_else(|| panic!("no visible row labelled {label}"));
         self.activate_tab(cx);
-        cx.update_window(self.window, |_, _, cx| {
+        cx.update_window(self.native_window, |_, _, cx| {
             self.tree.update(cx, |tree, cx| {
                 tree.activate_row_as_for_test(&row, gesture, cx)
             });
@@ -596,7 +605,7 @@ impl TestTree {
             .find(|action| action.command == command)
             .unwrap_or_else(|| panic!("{row} has no {command} action"));
         self.focus(cx);
-        cx.update_window(self.window, |_, _, cx| {
+        cx.update_window(self.native_window, |_, _, cx| {
             self.tree
                 .update(cx, |tree, cx| tree.invoke_action(action, cx));
         })
@@ -608,7 +617,7 @@ impl TestTree {
         cx: &gpui::App,
     ) -> Option<(crate::app::workbench::PaneId, crate::app::workbench::TabId)> {
         let focus = self.tree.read(cx).focus_handle(cx);
-        let workbench = self.shell.read(cx).workbench.read(cx);
+        let workbench = self.window.read(cx).workbench.read(cx);
         workbench.panes().iter().find_map(|pane| {
             pane.tabs()
                 .iter()
@@ -623,19 +632,19 @@ impl TestTree {
 
     fn activate_tab(&self, cx: &mut TestAppContext) {
         let (pane, tab) = cx.read(|cx| self.located(cx)).expect("the tree has a tab");
-        cx.update_window(self.window, |_, _, cx| {
-            self.shell
-                .update(cx, |shell, cx| shell.activate_tab(pane, tab, cx));
+        cx.update_window(self.native_window, |_, _, cx| {
+            self.window
+                .update(cx, |window, cx| window.activate_tab(pane, tab, cx));
         })
         .unwrap();
         cx.run_until_parked();
     }
 }
 
-fn open_target(shell: &Entity<KnotWindow>, cx: &gpui::App) -> OpenTarget {
-    let session = shell.downgrade();
-    let shell = shell.read(cx);
-    let workbench = shell.workbench.read(cx);
+fn open_target(window: &Entity<KnotWindow>, cx: &gpui::App) -> OpenTarget {
+    let target_window = window.downgrade();
+    let window = window.read(cx);
+    let workbench = window.workbench.read(cx);
     // A window whose center has no pane opens into one.
     let tab = workbench.focused_pane().map(|pane| {
         let tab = pane.active_tab();
@@ -647,8 +656,8 @@ fn open_target(shell: &Entity<KnotWindow>, cx: &gpui::App) -> OpenTarget {
         }
     });
     OpenTarget {
-        shell: session,
-        workbench: shell.workbench.downgrade(),
+        window: target_window,
+        workbench: window.workbench.downgrade(),
         tab,
     }
 }

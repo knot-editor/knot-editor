@@ -93,8 +93,8 @@ fn personal_config_gates_product_windows_and_keeps_extension_failures_independen
     }
     let report_open = |window: gpui::AnyWindowHandle, cx: &TestAppContext| {
         cx.read(|cx| {
-            let shell = window.downcast::<KnotWindow>().unwrap();
-            shell.entity(cx).unwrap().read(cx).extension_report_open
+            let window = window.downcast::<KnotWindow>().unwrap();
+            window.entity(cx).unwrap().read(cx).extension_report_open
         })
     };
     // The failed package opens the report in the launch window only.
@@ -155,8 +155,8 @@ fn queued_file_open_runs_only_after_configured_startup(cx: &mut TestAppContext) 
     }
     // A clean startup leaves the report closed.
     cx.read(|cx| {
-        let shell = cx.windows()[0].downcast::<KnotWindow>().unwrap();
-        assert!(!shell.entity(cx).unwrap().read(cx).extension_report_open);
+        let window = cx.windows()[0].downcast::<KnotWindow>().unwrap();
+        assert!(!window.entity(cx).unwrap().read(cx).extension_report_open);
     });
 }
 
@@ -498,7 +498,7 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "text").unwrap());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     host.update(cx, |host, cx| {
         host.start_installed_extensions(root.path().to_path_buf(), cx)
     });
@@ -513,19 +513,19 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
             Some("guide.compose")
         )
     });
-    let annotate = dispatch_product_command(&shell, window, "guide.compose", cx);
+    let annotate = dispatch_product_command(&window, native_window, "guide.compose", cx);
     assert_eq!(wait_for_command(annotate, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(model.read(cx).resolved_contributions().len(), 1));
-    let invalid = dispatch_product_command(&shell, window, "guide.insert", cx);
+    let invalid = dispatch_product_command(&window, native_window, "guide.insert", cx);
     assert!(matches!(
         wait_for_command(invalid, cx),
         CommandOutcome::InvalidArgument { .. }
     ));
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
-                shell.capture_command_target(cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
@@ -542,18 +542,19 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
     });
     assert_eq!(wait_for_command(insertion, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(model.read(cx).text(), "!text"));
-    let native_child = dispatch_product_command(&shell, window, "guide.select-all", cx);
+    let native_child = dispatch_product_command(&window, native_window, "guide.select-all", cx);
     assert_eq!(
         wait_for_command(native_child, cx),
         CommandOutcome::Completed
     );
-    let native_copy = dispatch_product_command(&shell, window, super::super::COPY_COMMAND, cx);
+    let native_copy =
+        dispatch_product_command(&window, native_window, super::super::COPY_COMMAND, cx);
     assert_eq!(wait_for_command(native_copy, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "!text"));
-    let tree = wait_for_contributed_view(&shell, "guide.outline", cx);
+    let tree = wait_for_contributed_view(&window, "guide.outline", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["Guide"]);
     let copy_editor = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -570,26 +571,30 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
             .resolve_view(tree.read(cx).instance_id(), "copy")
             .is_some()
     });
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(native_window, |_, native_window, cx| {
         tree.update(cx, |tree, cx| assert!(tree.select_item("root", cx)));
-        focus_view(&tree.focus_handle(cx), window, cx);
+        focus_view(&tree.focus_handle(cx), native_window, cx);
     })
     .unwrap();
-    let copy = dispatch_tree_copy(&shell, window, cx);
+    let copy = dispatch_tree_copy(&window, native_window, cx);
     assert_eq!(wait_for_command(copy, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), "root"));
     wait_for_api_condition(cx, |cx| {
         super::super::super::extensions::host::completion_provider_count(cx) == 1
     });
-    cx.update_window(window, |_, window, cx| {
-        focus_view(&copy_editor.read(cx).focus_handle(cx), window, cx);
+    cx.update_window(native_window, |_, native_window, cx| {
+        focus_view(&copy_editor.read(cx).focus_handle(cx), native_window, cx);
     })
     .unwrap();
-    let completion =
-        dispatch_product_command(&shell, window, super::super::SHOW_COMPLETIONS_COMMAND, cx);
+    let completion = dispatch_product_command(
+        &window,
+        native_window,
+        super::super::SHOW_COMPLETIONS_COMMAND,
+        cx,
+    );
     assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
     let editor = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -607,7 +612,7 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
                 items == 1 && pending == 0 && failures == 0
             })
     });
-    let cleanup = dispatch_product_command(&shell, window, "guide.test-deactivate", cx);
+    let cleanup = dispatch_product_command(&window, native_window, "guide.test-deactivate", cx);
     assert_eq!(wait_for_command(cleanup, cx), CommandOutcome::Completed);
     cx.read(|cx| {
         assert!(!tree.read(cx).lifecycle_state().0);
@@ -724,12 +729,12 @@ fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     host.update(cx, |host, cx| {
         host.start_installed_extensions(root.path().to_path_buf(), cx)
     });
     let report = wait_for_extension_report(&host, cx);
-    cx.read(|cx| assert!(shell.read(cx).contributed_views.is_empty()));
+    cx.read(|cx| assert!(window.read(cx).contributed_views.is_empty()));
     let result = |name| {
         report
             .report
@@ -777,8 +782,8 @@ fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
             .count(),
         1
     );
-    cx.read(|cx| assert!(shell.read(cx).contributed_views.is_empty()));
-    let mut execution = dispatch_product_command(&shell, window, "example.dependent", cx);
+    cx.read(|cx| assert!(window.read(cx).contributed_views.is_empty()));
+    let mut execution = dispatch_product_command(&window, native_window, "example.dependent", cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -804,13 +809,13 @@ fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
     );
 
     let mut report_command =
-        dispatch_product_command(&shell, window, SHOW_EXTENSION_REPORT_COMMAND, cx);
+        dispatch_product_command(&window, native_window, SHOW_EXTENSION_REPORT_COMMAND, cx);
     cx.run_until_parked();
     assert_eq!(
         report_command.completion.try_recv().unwrap(),
         CommandOutcome::Completed
     );
-    assert!(cx.read(|cx| shell.read(cx).extension_report_open));
+    assert!(cx.read(|cx| window.read(cx).extension_report_open));
 }
 
 #[gpui::test]
@@ -983,7 +988,7 @@ fn installed_packages_run_through_the_product_command_bridge(cx: &mut TestAppCon
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     host.update(cx, |host, cx| {
         host.start_installed_extensions(root.clone(), cx)
     });
@@ -996,7 +1001,7 @@ fn installed_packages_run_through_the_product_command_bridge(cx: &mut TestAppCon
             .iter()
             .all(|entry| entry.result == super::super::super::extensions::load::LoadResult::Loaded)
     );
-    let mut execution = dispatch_product_command(&shell, window, "example.greet", cx);
+    let mut execution = dispatch_product_command(&window, native_window, "example.greet", cx);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         cx.run_until_parked();
@@ -1027,7 +1032,8 @@ fn installed_packages_run_through_the_product_command_bridge(cx: &mut TestAppCon
                     == super::super::super::extensions::load::LoadResult::Loaded)
             );
         }
-        let execution = dispatch_product_command(&shell, window, "example.storage-report", cx);
+        let execution =
+            dispatch_product_command(&window, native_window, "example.storage-report", cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         let report: serde_json::Value = cx.read(|cx| {
             serde_json::from_str(&cx.read_from_clipboard().unwrap().text().unwrap()).unwrap()

@@ -4,7 +4,7 @@
 //! database. It holds a versioned `snapshots` table with two retention roles:
 //! `automatic` rows are the replaceable protection for a live dirty document
 //! (one row per document UUID), and `retained` rows are immutable checkpoints
-//! owned by a suspended session or another extension owner.
+//! owned by a suspended window or another extension owner.
 //!
 //! Captures copy text on the foreground when a document model notifies and
 //! commit off it. Each document coalesces through a trailing-edge debounce and

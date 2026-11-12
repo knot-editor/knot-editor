@@ -1,7 +1,7 @@
 //! The application-wide registry of workspace file indexes.
 //!
 //! One [`FileIndex`] exists per workspace root URI, shared by every window that
-//! shows the root. Each window's shell holds a [`FileIndexLease`] per root; the
+//! shows the root. Each window holds a [`FileIndexLease`] per root; the
 //! last lease to drop releases the index and its recursive watch.
 
 use std::{

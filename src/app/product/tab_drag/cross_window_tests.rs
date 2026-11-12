@@ -1,5 +1,5 @@
 use super::super::{
-    ApplicationProtectedClosure, ApplicationWindows, ApplicationTerminalSessions, KnotWindow,
+    ApplicationProtectedClosure, ApplicationTerminalSessions, ApplicationWindows, KnotWindow,
     create_untitled_document, open_tab_tear_out_window,
 };
 use super::tests::start_drag;
@@ -56,15 +56,15 @@ fn pair(
                                 }
                                 workbench
                             });
-                            let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
-                            shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
-                            shell
+                            let window = cx.new(|cx| KnotWindow::new(workbench, cx));
+                            window.update(cx, |window, cx| window.focus_active_surface(cx));
+                            window
                         },
                     )
                     .unwrap();
                 (
-                    cx.update_window(handle.into(), |_, window, _| {
-                        window.root::<KnotWindow>().flatten().unwrap()
+                    cx.update_window(handle.into(), |_, native_window, _| {
+                        native_window.root::<KnotWindow>().flatten().unwrap()
                     })
                     .unwrap(),
                     handle.into(),
@@ -87,10 +87,14 @@ fn offset(
     destination: AnyWindowHandle,
 ) -> Point<Pixels> {
     let from = cx
-        .update_window(source, |_, window, _| content_bounds(window).origin)
+        .update_window(source, |_, native_window, _| {
+            content_bounds(native_window).origin
+        })
         .unwrap();
     let to = cx
-        .update_window(destination, |_, window, _| content_bounds(window).origin)
+        .update_window(destination, |_, native_window, _| {
+            content_bounds(native_window).origin
+        })
         .unwrap();
     to - from
 }
@@ -200,14 +204,14 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
             assert!(!*cx.global::<ApplicationProtectedClosure>().0.borrow());
         });
         visual
-            .update_window(destination_window, |_, window, cx| {
-                assert!(editor.focus_handle(cx).is_focused(window))
+            .update_window(destination_window, |_, native_window, cx| {
+                assert!(editor.focus_handle(cx).is_focused(native_window))
             })
             .unwrap();
         drop(visual);
         assert_cleared(cx);
         for window in [source_window, destination_window] {
-            cx.update_window(window, |_, window, _| window.remove_window())
+            cx.update_window(window, |_, native_window, _| native_window.remove_window())
                 .unwrap();
         }
         cx.run_until_parked();
@@ -218,8 +222,8 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
 fn an_empty_center_takes_a_dropped_document(cx: &mut TestAppContext) {
     let (source, source_window, destination, destination_window) = pair(cx, 2);
     // The destination's own document is dirty; drop its tab without closure.
-    destination.update(cx, |shell, cx| {
-        shell
+    destination.update(cx, |window, cx| {
+        window
             .workbench
             .update(cx, |workbench, _| workbench.remove_document_tabs());
         cx.notify();
@@ -365,8 +369,8 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
     let (source, source_window, _, _) = pair(cx, 1);
     let (document, editor, command) = cx
         .update_window(source_window, |_, _, cx| {
-            source.update(cx, |shell, cx| {
-                let workbench = shell.workbench.read(cx);
+            source.update(cx, |window, cx| {
+                let workbench = window.workbench.read(cx);
                 let tab = workbench.focused_pane().unwrap().active_tab();
                 let editor = workbench.editor(tab).unwrap().clone();
                 let document = tab.document_id().unwrap();
@@ -384,7 +388,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                         )
                     })
                 });
-                (document, editor, shell.capture_command_target(cx))
+                (document, editor, window.capture_command_target(cx))
             })
         })
         .unwrap();
@@ -403,11 +407,11 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
         .find(|window| !old_windows.contains(window))
         .unwrap();
     visual
-        .update_window(new_window, |_, window, cx| {
-            let shell = window.root::<KnotWindow>().flatten().unwrap();
-            let workbench = shell.read(cx).workbench.read(cx);
+        .update_window(new_window, |_, native_window, cx| {
+            let window = native_window.root::<KnotWindow>().flatten().unwrap();
+            let workbench = window.read(cx).workbench.read(cx);
             assert_eq!(workbench.focused_editor(), Some(&editor));
-            assert!(editor.focus_handle(cx).is_focused(window));
+            assert!(editor.focus_handle(cx).is_focused(native_window));
             assert_eq!(
                 editor.read(cx).editor().read(cx).view_state(cx),
                 crate::app::editor::EditorViewState {
@@ -474,7 +478,7 @@ fn failed_tear_out_and_stale_or_closed_drop_preserve_source(cx: &mut TestAppCont
                 .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
                 .unwrap();
             let action = DropAction::Target(super::TabRelocationDestination {
-                shell: destination.downgrade(),
+                window: destination.downgrade(),
                 workbench: destination_capture.workbench,
                 tab: TabMoveDestination::At {
                     anchor: destination_capture.tab,
@@ -486,19 +490,19 @@ fn failed_tear_out_and_stale_or_closed_drop_preserve_source(cx: &mut TestAppCont
                 cx.update_window(destination_window, |_, window, _| window.remove_window())
                     .unwrap();
             } else {
-                destination.update(cx, |shell, cx| {
-                    let workbench = shell.workbench.read(cx);
+                destination.update(cx, |window, cx| {
+                    let workbench = window.workbench.read(cx);
                     let tab = workbench.focused_pane().unwrap().active_tab();
                     let document = tab.document_id().unwrap();
                     let tab_id = tab.id();
-                    let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
+                    let pane = window.workbench.read(cx).focused_pane_id().unwrap();
                     let model = KnotWindow::documents(cx)
                         .read(cx)
                         .get(document)
                         .unwrap()
                         .model()
                         .clone();
-                    shell.workbench.update(cx, |workbench, cx| {
+                    window.workbench.update(cx, |workbench, cx| {
                         assert!(workbench.replace_tab_document(pane, tab_id, document, model, cx));
                     });
                 });
@@ -518,10 +522,10 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
 ) {
     let (source, source_window, destination, destination_window) = pair(cx, 1);
     cx.update_window(source_window, |_, _, cx| {
-        source.update(cx, |shell, cx| {
-            let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
+        source.update(cx, |window, cx| {
+            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
             assert!(
-                shell
+                window
                     .new_terminal_in_pane(
                         Some(pane),
                         crate::app::product::operations::TerminalLocation::Center,
@@ -599,9 +603,9 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
         .find(|window| !old_windows.contains(window))
         .unwrap();
     visual
-        .update_window(new_window, |_, window, cx| {
-            let shell = window.root::<KnotWindow>().flatten().unwrap();
-            let view = shell
+        .update_window(new_window, |_, native_window, cx| {
+            let window = native_window.root::<KnotWindow>().flatten().unwrap();
+            let view = window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -611,7 +615,7 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
             assert_ne!(view, moved_view);
             assert!(!moved_view.read(cx).is_attached_to(&session));
             assert!(view.read(cx).is_attached_to(&session));
-            assert!(view.focus_handle(cx).is_focused(window));
+            assert!(view.focus_handle(cx).is_focused(native_window));
             assert_eq!(
                 cx.global::<ApplicationTerminalSessions>()
                     .0
@@ -640,8 +644,10 @@ fn source_window_closure_cancels_shared_drag_and_releases_geometry(cx: &mut Test
     let mut visual = VisualTestContext::from_window(source_window, cx);
     start_drag(&mut visual, 1);
     drop(visual);
-    cx.update_window(source_window, |_, window, _| window.remove_window())
-        .unwrap();
+    cx.update_window(source_window, |_, native_window, _| {
+        native_window.remove_window()
+    })
+    .unwrap();
     cx.run_until_parked();
     assert_cleared(cx);
     cx.read(|cx| {
@@ -650,7 +656,7 @@ fn source_window_closure_cancels_shared_drag_and_releases_geometry(cx: &mut Test
             coordinator
                 .windows
                 .iter()
-                .all(|entry| entry.window != source_window)
+                .all(|entry| entry.native_window != source_window)
         );
         assert_eq!(
             destination
@@ -684,16 +690,16 @@ fn hit_testing_respects_title_bar_occlusion_and_global_content_offsets(cx: &mut 
         size(px(640.), px(552.)),
     );
     cx.read(|cx| {
-        let shell = source.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = source.read(cx);
+        let workbench = window.workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
-        let document_source = shell
+        let document_source = window
             .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
             .unwrap();
         let state = cx.global::<ApplicationTabDrag>().0.borrow();
         let pointer = content.origin + local;
         let geometry = vec![WindowGeometry { window: destination_window, frame, content }];
-        assert!(matches!(state.action_at(pointer, &geometry, &document_source), DropAction::Target(target) if target.shell == destination.downgrade()));
+        assert!(matches!(state.action_at(pointer, &geometry, &document_source), DropAction::Target(target) if target.window == destination.downgrade()));
         let title = frame.origin + point(px(20.), px(10.));
         assert!(matches!(state.action_at(title, &geometry, &document_source), DropAction::Invalid));
         // A front window's non-content frame prevents dropping into the pane behind it.
@@ -712,8 +718,8 @@ fn destination_overlay_and_desktop_escape_do_not_move_or_create_windows(cx: &mut
         .unwrap()
         .center();
     let offset = offset(cx, source_window, destination_window);
-    destination.update(cx, |shell, cx| {
-        shell.extension_report_open = true;
+    destination.update(cx, |window, cx| {
+        window.extension_report_open = true;
         cx.notify();
     });
     cx.run_until_parked();
@@ -752,17 +758,17 @@ fn closing_final_source_window_clears_framework_drag_before_reopening(cx: &mut T
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = crate::app::product::tests::product_window(document, model, cx);
+    let (window, native_window) = crate::app::product::tests::product_window(document, model, cx);
     let target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
-                shell.capture_command_target(cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
     cx.run_until_parked();
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     start_drag(&mut visual, 1);
     drop(visual);
     cx.update(|cx| {
@@ -778,13 +784,13 @@ fn closing_final_source_window_clears_framework_drag_before_reopening(cx: &mut T
     assert_cleared(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = crate::app::product::tests::product_window(document, model, cx);
-    cx.update_window(window, |_, _, cx| {
-        shell.update(cx, |shell, cx| shell.focus_active_surface(cx))
+    let (window, native_window) = crate::app::product::tests::product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_surface(cx))
     })
     .unwrap();
     cx.run_until_parked();
-    let mut visual = VisualTestContext::from_window(window, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
     start_drag(&mut visual, 1);
     visual.simulate_keystrokes("escape");
     visual.run_until_parked();

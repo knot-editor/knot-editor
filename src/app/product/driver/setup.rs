@@ -9,13 +9,12 @@ use gpui::{AppContext, Entity, TestAppContext};
 
 use super::super::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationLaunchGate,
-    ApplicationProductCommands, ApplicationProtectedClosure, ApplicationWindows,
-    ApplicationTerminalSessions, Buffer, DocumentCollection, DocumentId, LaunchGate,
-    ProductCommandDispatcher, KnotWindow, TerminalSessions, Workbench,
-    install_protected_window_close,
+    ApplicationProductCommands, ApplicationProtectedClosure, ApplicationTerminalSessions,
+    ApplicationWindows, Buffer, DocumentCollection, DocumentId, KnotWindow, LaunchGate,
+    ProductCommandDispatcher, TerminalSessions, Workbench, install_protected_window_close,
 };
 
-/// Install the globals a product session needs, each test with its own
+/// Install the globals a window needs, each test with its own
 /// in-memory recovery and state databases.
 pub(crate) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollection> {
     cx.update(crate::app::components::init);
@@ -81,25 +80,25 @@ pub(crate) fn wait_for_product_startup(cx: &mut TestAppContext) -> bool {
     }
 }
 
-/// A product window over `document`, whose text `model` holds.
+/// A window over `document`, whose text `model` holds, and its native window.
 pub(crate) fn product_window(
     document: DocumentId,
     model: Entity<Buffer>,
     cx: &mut TestAppContext,
 ) -> (Entity<KnotWindow>, gpui::AnyWindowHandle) {
-    let mut window = None;
-    let (shell, _) = cx.add_window_view(|native, cx| {
-        window = Some(native.window_handle());
+    let mut native_window = None;
+    let (window, _) = cx.add_window_view(|native, cx| {
+        native_window = Some(native.window_handle());
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
         KnotWindow::new(workbench, cx)
     });
-    let window = window.unwrap();
-    cx.update_window(window, |_, native_window, cx| {
-        shell.update(cx, |shell, cx| {
-            shell.observe_extension_host(native_window, cx)
+    let native_window = native_window.unwrap();
+    cx.update_window(native_window, |_, native_window, cx| {
+        window.update(cx, |window, cx| {
+            window.observe_extension_host(native_window, cx)
         });
-        install_protected_window_close(&shell, native_window, cx);
+        install_protected_window_close(&window, native_window, cx);
     })
     .unwrap();
-    (shell, window)
+    (window, native_window)
 }

@@ -94,8 +94,8 @@ fn load(label: &str, id: u64, cx: &mut TestAppContext) -> ExtensionKey {
 }
 
 struct Fixture {
-    shell: Entity<KnotWindow>,
-    window: gpui::AnyWindowHandle,
+    window: Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
     editor: Entity<Editor>,
     model: Entity<Buffer>,
 }
@@ -108,11 +108,11 @@ impl Fixture {
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
         model.update(cx, |model, _| model.replace(0..0, "text").unwrap());
         cx.update(super::super::super::extensions::host::install);
-        let (shell, window) = product_window(document, model.clone(), cx);
+        let (window, native_window) = product_window(document, model.clone(), cx);
         cx.run_until_parked();
-        let editor = super::editor_api::active_editor(&shell, cx);
+        let editor = super::editor_api::active_editor(&window, cx);
         Self {
-            shell,
+            native_window,
             window,
             editor,
             model,
@@ -120,14 +120,14 @@ impl Fixture {
     }
 
     fn run(&self, name: &'static str, cx: &mut TestAppContext) {
-        let execution = dispatch_product_command(&self.shell, self.window, name, cx);
+        let execution = dispatch_product_command(&self.window, self.native_window, name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         cx.run_until_parked();
     }
 
     fn view(&self, cx: &TestAppContext) -> Entity<EditorView> {
         cx.read(|cx| {
-            self.shell
+            self.window
                 .read(cx)
                 .workbench
                 .read(cx)
@@ -173,8 +173,8 @@ impl Fixture {
                 .map(|input| input.read(cx).focus_handle())
         });
         let window_focus = cx
-            .update_window(self.window, |_, window, _| {
-                handle.is_some_and(|handle| handle.is_focused(window))
+            .update_window(self.native_window, |_, native_window, _| {
+                handle.is_some_and(|handle| handle.is_focused(native_window))
             })
             .unwrap();
         let editor_focus = cx.read(|cx| self.editor.read(cx).bars().focused() == Some(&field));
@@ -184,8 +184,10 @@ impl Fixture {
     fn text_focused(&self, cx: &mut TestAppContext) -> bool {
         let view = self.view(cx);
         let handle = cx.read(|cx| view.read(cx).focus_handle(cx));
-        cx.update_window(self.window, |_, window, _| handle.is_focused(window))
-            .unwrap()
+        cx.update_window(self.native_window, |_, native_window, _| {
+            handle.is_focused(native_window)
+        })
+        .unwrap()
     }
 }
 
@@ -212,7 +214,9 @@ fn bars_from_two_lifecycles_stack_update_and_end_with_their_lifecycle(cx: &mut T
     // The bars paint above the text, which shrinks to fit below them.
     let view = fixture.view(cx);
     let window_height = cx
-        .update_window(fixture.window, |_, window, _| window.viewport_size().height)
+        .update_window(fixture.native_window, |_, native_window, _| {
+            native_window.viewport_size().height
+        })
         .unwrap();
     let text = cx.read(|cx| view.read(cx).interaction_bounds());
     let field = cx.read(|cx| {
@@ -250,7 +254,7 @@ fn typing_in_a_focused_field_reaches_the_listener_and_clicks_move_focus(cx: &mut
     assert_eq!(fixture.field_focus(owner, cx), (true, true));
     assert_eq!(clipboard(cx), None);
 
-    cx.simulate_input(fixture.window, "a");
+    cx.simulate_input(fixture.native_window, "a");
     assert_eq!(fixture.field_text(owner, cx), "a");
     wait_for_api_condition(cx, |cx| {
         cx.read_from_clipboard().and_then(|item| item.text()) == Some("find:find:a:1".to_owned())
@@ -261,10 +265,10 @@ fn typing_in_a_focused_field_reaches_the_listener_and_clicks_move_focus(cx: &mut
     // which reads the final text.
     let host = cx.read(|cx| crate::app::extensions::host::entity(cx).unwrap());
     host.update(cx, |host, _| host.hold_clipboard_writes());
-    cx.simulate_input(fixture.window, "b");
+    cx.simulate_input(fixture.native_window, "b");
     wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
-    cx.simulate_input(fixture.window, "c");
-    cx.simulate_input(fixture.window, "d");
+    cx.simulate_input(fixture.native_window, "c");
+    cx.simulate_input(fixture.native_window, "d");
     cx.run_until_parked();
     host.update(cx, |host, cx| host.release_view_requests(cx));
     wait_for_api_condition(cx, |cx| {
@@ -277,7 +281,7 @@ fn typing_in_a_focused_field_reaches_the_listener_and_clicks_move_focus(cx: &mut
     // the field takes focus back.
     let view = fixture.view(cx);
     let text = cx.read(|cx| view.read(cx).text_bounds());
-    let mut visual = VisualTestContext::from_window(fixture.window, cx);
+    let mut visual = VisualTestContext::from_window(fixture.native_window, cx);
     visual.simulate_click(text.center(), Modifiers::default());
     visual.run_until_parked();
     assert_eq!(fixture.field_focus(owner, cx), (false, false));
@@ -293,7 +297,7 @@ fn typing_in_a_focused_field_reaches_the_listener_and_clicks_move_focus(cx: &mut
             .painted_bounds()
             .unwrap()
     });
-    let mut visual = VisualTestContext::from_window(fixture.window, cx);
+    let mut visual = VisualTestContext::from_window(fixture.native_window, cx);
     visual.simulate_click(field.center(), Modifiers::default());
     visual.run_until_parked();
     assert_eq!(fixture.field_focus(owner, cx), (true, true));
@@ -301,21 +305,21 @@ fn typing_in_a_focused_field_reaches_the_listener_and_clicks_move_focus(cx: &mut
     // Closing the bar returns focus to the text, where the click left the caret.
     fixture.run("find.close", cx);
     assert!(fixture.text_focused(cx));
-    cx.simulate_input(fixture.window, "!");
+    cx.simulate_input(fixture.native_window, "!");
     assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text!");
 }
 
 #[gpui::test]
-fn a_session_without_a_window_types_into_the_focused_field(cx: &mut TestAppContext) {
+fn a_window_without_a_native_window_types_into_the_focused_field(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let shell = cx.update(|cx| {
+    let window = cx.update(|cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
         cx.new(|cx| KnotWindow::new(workbench, cx))
     });
-    let editor = super::editor_api::active_editor(&shell, cx);
+    let editor = super::editor_api::active_editor(&window, cx);
     let owner = ExtensionKey::new(ExtensionId::new(804), ExtensionLifecycleId::new(1));
     let field = BarFieldRef::new(owner, "find", "query");
     editor.update(cx, |editor, cx| {
@@ -331,7 +335,7 @@ fn a_session_without_a_window_types_into_the_focused_field(cx: &mut TestAppConte
     });
     for key in ["x", "y", "z"] {
         let keystroke = Keystroke::parse(key).unwrap();
-        shell.update(cx, |shell, cx| shell.press_key(keystroke, cx));
+        window.update(cx, |window, cx| window.press_key(keystroke, cx));
     }
     let text = |cx: &mut TestAppContext| {
         cx.read(|cx| {
@@ -349,8 +353,8 @@ fn a_session_without_a_window_types_into_the_focused_field(cx: &mut TestAppConte
 
     // With focus back on the text, keys type there.
     editor.update(cx, |editor, cx| editor.focus_text(cx));
-    shell.update(cx, |shell, cx| {
-        shell.press_key(Keystroke::parse("q").unwrap(), cx)
+    window.update(cx, |window, cx| {
+        window.press_key(Keystroke::parse("q").unwrap(), cx)
     });
     assert_eq!(text(cx), "xyz");
     assert_eq!(cx.read(|cx| model.read(cx).text()), "q");
@@ -407,7 +411,7 @@ fn bar_toggles_and_buttons_paint_and_run_their_commands_in_the_bars_editor(
     fixture.run("controls.open", cx);
 
     let bounds = |selector: &'static str, cx: &mut TestAppContext| {
-        VisualTestContext::from_window(fixture.window, cx).debug_bounds(selector)
+        VisualTestContext::from_window(fixture.native_window, cx).debug_bounds(selector)
     };
     let toggle = bounds("bar-control-find-case", cx).expect("the toggle paints");
     let button = bounds("bar-control-find-next", cx).expect("the button paints");
@@ -428,7 +432,7 @@ fn bar_toggles_and_buttons_paint_and_run_their_commands_in_the_bars_editor(
     };
     assert!(!active(cx));
 
-    let mut visual = VisualTestContext::from_window(fixture.window, cx);
+    let mut visual = VisualTestContext::from_window(fixture.native_window, cx);
     visual.simulate_click(button.center(), Modifiers::default());
     visual.run_until_parked();
     wait_for_api_condition(cx, |cx| {
@@ -437,7 +441,7 @@ fn bar_toggles_and_buttons_paint_and_run_their_commands_in_the_bars_editor(
     assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
 
     // A toggle runs its command, which shows the new state.
-    let mut visual = VisualTestContext::from_window(fixture.window, cx);
+    let mut visual = VisualTestContext::from_window(fixture.native_window, cx);
     visual.simulate_click(toggle.center(), Modifiers::default());
     visual.run_until_parked();
     wait_for_api_condition(cx, |cx| {
@@ -513,24 +517,24 @@ fn bar_fields_resolve_keys_against_the_bar_kind_and_cycle_with_tab(cx: &mut Test
 
     // The editor kind stops applying, and a bar's context-bound key runs its
     // command in the bar's editor.
-    cx.simulate_keystrokes(fixture.window, "f7");
+    cx.simulate_keystrokes(fixture.native_window, "f7");
     cx.run_until_parked();
     assert_eq!(clipboard(cx), None);
-    cx.simulate_keystrokes(fixture.window, "enter");
+    cx.simulate_keystrokes(fixture.native_window, "enter");
     wait_for_api_condition(cx, |cx| {
         cx.read_from_clipboard().and_then(|item| item.text()) == Some("enter:text:editor".into())
     });
     assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
 
     // A global binding applies, and unbound keys reach the field.
-    cx.simulate_keystrokes(fixture.window, "f9");
+    cx.simulate_keystrokes(fixture.native_window, "f9");
     wait_for_api_condition(cx, |cx| {
         cx.read_from_clipboard().and_then(|item| item.text()) == Some("global:text:editor".into())
     });
     // Later input waits for the key's command to complete.
-    wait_for_api_condition(cx, |cx| fixture.shell.read(cx).key_hold.is_none());
+    wait_for_api_condition(cx, |cx| fixture.window.read(cx).key_hold.is_none());
     assert_eq!(fixture.field_focus(owner, cx), (true, true));
-    cx.simulate_input(fixture.window, "ab");
+    cx.simulate_input(fixture.native_window, "ab");
     assert_eq!(
         fixture.field_text(owner, cx),
         "ab",
@@ -541,15 +545,15 @@ fn bar_fields_resolve_keys_against_the_bar_kind_and_cycle_with_tab(cx: &mut Test
     // Tab and shift-tab cycle the fields across both bars, wrapping, and
     // never indent; another bar's context does not apply.
     for expected in ["other", "line", "query"] {
-        cx.simulate_keystrokes(fixture.window, "tab");
+        cx.simulate_keystrokes(fixture.native_window, "tab");
         assert_eq!(focused(cx).unwrap().1, expected);
     }
-    cx.simulate_keystrokes(fixture.window, "shift-tab");
+    cx.simulate_keystrokes(fixture.native_window, "shift-tab");
     assert_eq!(focused(cx), Some(("goto".into(), "line".into())));
-    cx.simulate_keystrokes(fixture.window, "shift-tab");
+    cx.simulate_keystrokes(fixture.native_window, "shift-tab");
     assert_eq!(focused(cx), Some(("find".into(), "other".into())));
     assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
-    cx.simulate_keystrokes(fixture.window, "f6");
+    cx.simulate_keystrokes(fixture.native_window, "f6");
     cx.run_until_parked();
     assert_eq!(
         cx.read_from_clipboard().and_then(|item| item.text()),

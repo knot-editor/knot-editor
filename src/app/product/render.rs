@@ -1,4 +1,4 @@
-//! Rendering of the product shell's panes, split layout, dividers, and extension report.
+//! Rendering of the window's panes, split layout, dividers, and extension report.
 
 use super::*;
 use crate::app::convert::ThemePaint as _;
@@ -640,7 +640,7 @@ impl Render for KnotWindow {
 pub(super) fn render_extension_report(
     snapshot: Option<crate::app::extensions::host::StartupReportSnapshot>,
     setting_warnings: Vec<String>,
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     theme: &Theme,
 ) -> AnyElement {
     use crate::app::extensions::host::StartupState;
@@ -733,7 +733,7 @@ pub(super) fn render_extension_report(
                         .child(command_button(
                             "close",
                             "close-extension-report",
-                            shell,
+                            window,
                             SHOW_EXTENSION_REPORT_COMMAND,
                             theme.paint_color(color::TEXT_ACCENT),
                         )),
@@ -762,11 +762,11 @@ pub(super) fn render_extension_report(
 pub(super) fn command_button(
     label: impl Into<SharedString>,
     id: &'static str,
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     command: &'static str,
     accent: Hsla,
 ) -> Stateful<Div> {
-    let shell = shell.clone();
+    let window = window.clone();
     let label = label.into();
     div()
         .id(id)
@@ -774,8 +774,8 @@ pub(super) fn command_button(
         .text_color(accent)
         .child(label)
         .on_click(move |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.dispatch_source(ProductCommandSource::new(command).command(), cx);
+            window.update(cx, |window, cx| {
+                window.dispatch_source(ProductCommandSource::new(command).command(), cx);
             })
         })
 }

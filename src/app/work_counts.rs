@@ -1,6 +1,5 @@
-//! Test-only counts of the work a step causes: product shell draws and
-//! extension host requests by operation, so tests can guard what one key
-//! costs.
+//! Test-only counts of the work a step causes: window draws and extension host
+//! requests by operation, so tests can guard what one key costs.
 
 use std::cell::RefCell;
 

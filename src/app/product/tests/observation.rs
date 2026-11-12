@@ -28,15 +28,15 @@ fn changed_documents(events: &[ApplicationEvent]) -> Vec<&DocumentInfo> {
 }
 
 fn start_open(
-    shell: &Entity<KnotWindow>,
+    window: &Entity<KnotWindow>,
     request: OpenRequest,
     replace: bool,
     cx: &mut TestAppContext,
 ) -> tokio::sync::oneshot::Receiver<CommandOutcome> {
-    let target = cx.read(|cx| current_open_target(shell, cx));
+    let target = cx.read(|cx| current_open_target(window, cx));
     let (completion, receiver) = super::super::CommandCompletion::new();
-    shell.update(cx, |shell, cx| {
-        shell.start_open_request(request, target, replace, Some(completion), cx)
+    window.update(cx, |window, cx| {
+        window.start_open_request(request, target, replace, Some(completion), cx)
     });
     receiver
 }
@@ -88,10 +88,10 @@ fn open_entry_points_share_document_identity_and_publish_only_committed_resource
             .identity()
             .to_string()
     });
-    let (shell, window) = product_window(placeholder, placeholder_model.clone(), cx);
+    let (window, native_window) = product_window(placeholder, placeholder_model.clone(), cx);
     take_events(&host, cx);
     assert_eq!(
-        wait_open(start_open(&shell, cli.clone(), true, cx), cx),
+        wait_open(start_open(&window, cli.clone(), true, cx), cx),
         CommandOutcome::Completed
     );
     let opened = take_events(&host, cx);
@@ -108,20 +108,25 @@ fn open_entry_points_share_document_identity_and_publish_only_committed_resource
     let platform =
         OpenRequest::from_url(url::Url::from_file_path(&path).unwrap().as_str()).unwrap();
     assert_eq!(
-        wait_open(start_open(&shell, platform, false, cx), cx),
+        wait_open(start_open(&window, platform, false, cx), cx),
         CommandOutcome::Completed
     );
     assert!(changed_documents(&take_events(&host, cx)).is_empty());
     let second = cx.update(|cx| create_untitled_document(&documents, cx));
     let second_model = cx.read(|cx| documents.read(cx).get(second).unwrap().model().clone());
-    let (second_shell, second_window) = product_window(second, second_model, cx);
+    let (second_window, second_native_window) = product_window(second, second_model, cx);
     take_events(&host, cx);
     cx.set_global(ApplicationOpenDialog(Arc::new(FixedOpenDialog(
         OpenDialogOutcome::Selected(path),
     ))));
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&second_shell, second_window, super::super::OPEN_COMMAND, cx),
+            dispatch_product_command(
+                &second_window,
+                second_native_window,
+                super::super::OPEN_COMMAND,
+                cx
+            ),
             cx
         ),
         CommandOutcome::Completed
@@ -133,7 +138,7 @@ fn open_entry_points_share_document_identity_and_publish_only_committed_resource
     let missing =
         OpenRequest::from_path(&directory.path().join("missing.txt"), directory.path()).unwrap();
     assert_eq!(
-        wait_open(start_open(&shell, missing, false, cx), cx),
+        wait_open(start_open(&window, missing, false, cx), cx),
         CommandOutcome::Completed
     );
     let missing_events = take_events(&host, cx);
@@ -143,7 +148,7 @@ fn open_entry_points_share_document_identity_and_publish_only_committed_resource
             .any(|document| document.kind == DocumentKind::Destination && document.dirty)
     );
     assert_eq!(
-        wait_open(start_open(&shell, cli, false, cx), cx),
+        wait_open(start_open(&window, cli, false, cx), cx),
         CommandOutcome::Completed
     );
     let activated = take_events(&host, cx);
@@ -156,7 +161,7 @@ fn open_entry_points_share_document_identity_and_publish_only_committed_resource
         OpenRequest::from_uri_for_product(ResourceUri::parse("unknown://provider/file").unwrap()),
     ] {
         assert!(matches!(
-            wait_open(start_open(&shell, request, false, cx), cx),
+            wait_open(start_open(&window, request, false, cx), cx),
             CommandOutcome::HandlerFailure { .. }
         ));
         assert!(changed_documents(&take_events(&host, cx)).is_empty());
@@ -166,7 +171,7 @@ fn open_entry_points_share_document_identity_and_publish_only_committed_resource
     ))));
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, super::super::OPEN_COMMAND, cx),
+            dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx),
             cx
         ),
         CommandOutcome::Cancelled
@@ -190,10 +195,10 @@ async fn stale_open_does_not_publish_or_leak_a_document(cx: &mut TestAppContext)
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (shell, _) = product_window(placeholder, model, cx);
+    let (window, _) = product_window(placeholder, model, cx);
     take_events(&host, cx);
     let pending = start_open(
-        &shell,
+        &window,
         OpenRequest::from_uri_for_product(ResourceUri::parse("mem://product/notes.txt").unwrap()),
         true,
         cx,
@@ -201,7 +206,7 @@ async fn stale_open_does_not_publish_or_leak_a_document(cx: &mut TestAppContext)
     wait_for_api_condition(cx, |_| gated.read_release.lock().unwrap().is_none());
     assert_eq!(
         start_open(
-            &shell,
+            &window,
             OpenRequest::from_uri_for_product(ResourceUri::parse("mem://product/new.txt").unwrap()),
             true,
             cx
@@ -249,7 +254,7 @@ async fn save_as_and_racing_edits_publish_current_metadata_without_changing_iden
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Untitled", model.clone(), cx)
     });
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     let opened = take_events(&host, cx);
     let initial = changed_documents(&opened)
         .into_iter()
@@ -261,7 +266,8 @@ async fn save_as_and_racing_edits_publish_current_metadata_without_changing_iden
         cx.notify();
     });
     take_events(&host, cx);
-    let save_as = dispatch_product_command(&shell, window, super::super::SAVE_AS_COMMAND, cx);
+    let save_as =
+        dispatch_product_command(&window, native_window, super::super::SAVE_AS_COMMAND, cx);
     wait_for_api_condition(cx, |_| gated.replace_release.lock().unwrap().is_none());
     assert!(changed_documents(&take_events(&host, cx)).is_empty());
     model.update(cx, |model, cx| {
@@ -299,7 +305,7 @@ async fn save_as_and_racing_edits_publish_current_metadata_without_changing_iden
         ApplicationChange::DocumentOpened { .. } | ApplicationChange::DocumentClosed { .. }
     )));
     assert_eq!(
-        dispatch_product_command(&shell, window, SAVE_COMMAND, cx)
+        dispatch_product_command(&window, native_window, SAVE_COMMAND, cx)
             .completion
             .await
             .unwrap(),
@@ -322,10 +328,11 @@ async fn save_as_and_racing_edits_publish_current_metadata_without_changing_iden
         ),
     ] {
         cx.set_global(ApplicationSaveDialog(Arc::new(FixedSaveDialog(dialog))));
-        let outcome = dispatch_product_command(&shell, window, super::super::SAVE_AS_COMMAND, cx)
-            .completion
-            .await
-            .unwrap();
+        let outcome =
+            dispatch_product_command(&window, native_window, super::super::SAVE_AS_COMMAND, cx)
+                .completion
+                .await
+                .unwrap();
         if expected_cancelled {
             assert_eq!(outcome, CommandOutcome::Cancelled);
         } else {
@@ -356,14 +363,14 @@ async fn completed_save_remains_observable_when_a_later_close_prompt_is_cancelle
             cx,
         )
     });
-    let (shell, window) = product_window(first, first_model.clone(), cx);
+    let (window, native_window) = product_window(first, first_model.clone(), cx);
     let second_model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
     let second = documents.update(cx, |documents, cx| {
         documents.create_untitled("Second", second_model.clone(), cx)
     });
-    shell.update(cx, |shell, cx| {
-        let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-        shell.workbench.update(cx, |workbench, cx| {
+    window.update(cx, |window, cx| {
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        window.workbench.update(cx, |workbench, cx| {
             workbench
                 .open_tab_for_document(pane, second, second_model.clone(), cx)
                 .unwrap()
@@ -385,7 +392,12 @@ async fn completed_save_remains_observable_when_a_later_close_prompt_is_cancelle
             .to_string()
     });
     take_events(&host, cx);
-    let close = dispatch_product_command(&shell, window, super::super::CLOSE_WINDOW_COMMAND, cx);
+    let close = dispatch_product_command(
+        &window,
+        native_window,
+        super::super::CLOSE_WINDOW_COMMAND,
+        cx,
+    );
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Save");
@@ -406,8 +418,8 @@ async fn completed_save_remains_observable_when_a_later_close_prompt_is_cancelle
     cx.read(|cx| {
         assert!(!documents.read(cx).get(first).unwrap().is_dirty(cx));
         assert!(documents.read(cx).get(second).unwrap().is_dirty(cx));
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(first), 1);
-        assert_eq!(shell.read(cx).workbench.read(cx).view_count(second), 1);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(first), 1);
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(second), 1);
     });
 }
 
@@ -430,9 +442,9 @@ async fn replaced_or_closed_open_presentations_cannot_accept_in_flight_results(
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let document = cx.update(|cx| create_untitled_document(&documents, cx));
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-        let (shell, window) = product_window(document, model.clone(), cx);
+        let (window, native_window) = product_window(document, model.clone(), cx);
         let pending = start_open(
-            &shell,
+            &window,
             OpenRequest::from_uri_for_product(
                 ResourceUri::parse("mem://product/notes.txt").unwrap(),
             ),
@@ -442,18 +454,23 @@ async fn replaced_or_closed_open_presentations_cannot_accept_in_flight_results(
         wait_for_api_condition(cx, |_| gated.read_release.lock().unwrap().is_none());
         if close_window {
             assert_eq!(
-                dispatch_product_command(&shell, window, super::super::CLOSE_WINDOW_COMMAND, cx)
-                    .completion
-                    .await
-                    .unwrap(),
+                dispatch_product_command(
+                    &window,
+                    native_window,
+                    super::super::CLOSE_WINDOW_COMMAND,
+                    cx
+                )
+                .completion
+                .await
+                .unwrap(),
                 CommandOutcome::Completed
             );
         } else {
-            shell.update(cx, |shell, cx| {
-                let workbench = shell.workbench.read(cx);
+            window.update(cx, |window, cx| {
+                let workbench = window.workbench.read(cx);
                 let pane = workbench.focused_pane().unwrap();
                 let (pane, tab) = (pane.id(), pane.active_tab_id());
-                shell.workbench.update(cx, |workbench, cx| {
+                window.workbench.update(cx, |workbench, cx| {
                     assert!(workbench.replace_tab_document(pane, tab, document, model.clone(), cx))
                 });
                 cx.notify();
@@ -499,29 +516,29 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
     let host = cx.update(extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     assert_eq!(
-        dispatch_product_command(&shell, window, super::super::NEW_COMMAND, cx)
+        dispatch_product_command(&window, native_window, super::super::NEW_COMMAND, cx)
             .completion
             .await
             .unwrap(),
         CommandOutcome::Completed
     );
     let initial_events = take_events(&host, cx);
-    let initial = window_state(&initial_events, window);
+    let initial = window_state(&initial_events, native_window);
     let original = initial.panes[0].tabs[0].clone();
-    let session = shell.downgrade();
+    let session = window.downgrade();
     let (source, destination) = cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
         (
-            shell
+            window
                 .capture_tab_relocation(pane.id(), pane.tabs()[0].id(), cx)
                 .unwrap(),
             super::super::relocate::TabRelocationDestination {
-                shell: session.clone(),
-                workbench: shell.workbench.downgrade(),
+                window: session.clone(),
+                workbench: window.workbench.downgrade(),
                 tab: TabMoveDestination::At {
                     anchor: workbench
                         .capture_tab_move(pane.id(), pane.tabs()[1].id())
@@ -532,20 +549,21 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
         )
     });
     assert_eq!(
-        cx.update_window(window, |_, _, cx| shell.update(cx, |shell, cx| shell
-            .relocate_tab_to(&source, &destination, cx)))
-            .unwrap(),
+        cx.update_window(native_window, |_, _, cx| window.update(cx, |window, cx| {
+            window.relocate_tab_to(&source, &destination, cx)
+        }))
+        .unwrap(),
         CommandOutcome::Completed
     );
     let reordered_events = take_events(&host, cx);
-    let reordered = window_state(&reordered_events, window);
+    let reordered = window_state(&reordered_events, native_window);
     assert_eq!(reordered.panes[0].tabs[1].target, original.target);
     assert_eq!(reordered.panes[0].tabs[1].buffer, original.buffer);
     assert!(changed_documents(&reordered_events).is_empty());
-    let before_replacement = cx.read(|cx| current_open_target(&shell, cx));
-    shell.update(cx, |shell, cx| {
-        assert!(before_replacement.matches_presentation(&shell.workbench, cx));
-        shell.workbench.update(cx, |workbench, cx| {
+    let before_replacement = cx.read(|cx| current_open_target(&window, cx));
+    window.update(cx, |window, cx| {
+        assert!(before_replacement.matches_presentation(&window.workbench, cx));
+        window.workbench.update(cx, |workbench, cx| {
             assert!(workbench.replace_tab_document(
                 before_replacement.tab.unwrap().pane,
                 before_replacement.tab.unwrap().tab,
@@ -557,21 +575,26 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
         cx.notify();
     });
     let replaced_events = take_events(&host, cx);
-    let replacement = window_state(&replaced_events, window).panes[0].tabs[1].clone();
+    let replacement = window_state(&replaced_events, native_window).panes[0].tabs[1].clone();
     assert_ne!(replacement.target, original.target);
     assert_eq!(replacement.document, original.document);
     assert_eq!(replacement.buffer, original.buffer);
-    assert!(!cx.read(|cx| before_replacement.matches_presentation(&shell.read(cx).workbench, cx)));
+    assert!(!cx.read(|cx| before_replacement.matches_presentation(&window.read(cx).workbench, cx)));
     assert!(changed_documents(&replaced_events).is_empty());
     assert_eq!(
-        dispatch_product_command(&shell, window, super::super::SPLIT_HORIZONTAL_COMMAND, cx)
-            .completion
-            .await
-            .unwrap(),
+        dispatch_product_command(
+            &window,
+            native_window,
+            super::super::SPLIT_HORIZONTAL_COMMAND,
+            cx
+        )
+        .completion
+        .await
+        .unwrap(),
         CommandOutcome::Completed
     );
     let old_target = cx.read(|cx| {
-        let workbench = &shell.read(cx).workbench;
+        let workbench = &window.read(cx).workbench;
         let first_pane = &workbench.read(cx).panes()[0];
         let tab = first_pane
             .tabs()
@@ -579,7 +602,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
             .find(|tab| tab.document_id() == Some(document))
             .unwrap();
         OpenTarget {
-            shell: shell.downgrade(),
+            window: window.downgrade(),
             workbench: workbench.downgrade(),
             tab: Some(crate::app::commands::dispatch::TargetTab {
                 pane: first_pane.id(),
@@ -589,13 +612,13 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
             }),
         }
     });
-    let session = shell.downgrade();
+    let session = window.downgrade();
     let (source, destination) = cx.read(|cx| {
-        let shell = shell.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = window.read(cx);
+        let workbench = window.workbench.read(cx);
         let target_pane = &workbench.panes()[1];
         (
-            shell
+            window
                 .capture_tab_relocation(
                     old_target.tab.unwrap().pane,
                     old_target.tab.unwrap().tab,
@@ -603,8 +626,8 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
                 )
                 .unwrap(),
             super::super::relocate::TabRelocationDestination {
-                shell: session.clone(),
-                workbench: shell.workbench.downgrade(),
+                window: session.clone(),
+                workbench: window.workbench.downgrade(),
                 tab: TabMoveDestination::At {
                     anchor: workbench
                         .capture_tab_move(target_pane.id(), target_pane.active_tab_id())
@@ -616,13 +639,14 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
     });
     take_events(&host, cx);
     assert_eq!(
-        cx.update_window(window, |_, _, cx| shell.update(cx, |shell, cx| shell
-            .relocate_tab_to(&source, &destination, cx)))
-            .unwrap(),
+        cx.update_window(native_window, |_, _, cx| window.update(cx, |window, cx| {
+            window.relocate_tab_to(&source, &destination, cx)
+        }))
+        .unwrap(),
         CommandOutcome::Completed
     );
     let transferred_events = take_events(&host, cx);
-    let moved = window_state(&transferred_events, window)
+    let moved = window_state(&transferred_events, native_window)
         .panes
         .iter()
         .flat_map(|pane| &pane.tabs)
@@ -630,7 +654,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
         .unwrap();
     assert_eq!(moved.buffer, original.buffer);
     assert_ne!(moved.target.pane, replacement.target.pane);
-    assert!(!cx.read(|cx| old_target.matches_presentation(&shell.read(cx).workbench, cx)));
+    assert!(!cx.read(|cx| old_target.matches_presentation(&window.read(cx).workbench, cx)));
     assert!(changed_documents(&transferred_events).is_empty());
 }
 
@@ -641,24 +665,24 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
     let documents = install_globals(cx);
     let host = cx.update(extensions::host::install);
     let handle = cx.update(open_tab_transfer_window).unwrap();
-    let window = handle.into();
+    let native_window = handle.into();
     let opened = take_events(&host, cx);
     assert!(opened.iter().any(|event| matches!(&event.change, ApplicationChange::WindowOpened { window } if window.panes.is_empty() && window.current_target.is_none())));
     assert!(changed_documents(&opened).is_empty());
-    let shell = cx
-        .update_window(window, |_, window, _| {
-            window.root::<KnotWindow>().flatten().unwrap()
+    let window = cx
+        .update_window(native_window, |_, native_window, _| {
+            native_window.root::<KnotWindow>().flatten().unwrap()
         })
         .unwrap();
     let model = cx.new(|_| Buffer::new(BufferModel::from_text("clean")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Untitled", model.clone(), cx)
     });
-    shell.update(cx, |shell, cx| {
+    window.update(cx, |window, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
         cx.global::<ApplicationWindows>()
             .register(cx.weak_entity(), &workbench);
-        shell.workbench = workbench;
+        window.workbench = workbench;
         cx.notify();
     });
     let filled = take_events(&host, cx);
@@ -678,16 +702,16 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
             _ => None,
         })
         .unwrap();
-    let retained_workbench = cx.read(|cx| shell.read(cx).workbench.clone());
+    let retained_workbench = cx.read(|cx| window.read(cx).workbench.clone());
     let old_command_target = cx
-        .update_window(window, |_, _, cx| {
-            shell.update(cx, |shell, cx| {
-                shell.focus_active_surface(cx);
-                shell.capture_command_target(cx)
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.focus_active_surface(cx);
+                window.capture_command_target(cx)
             })
         })
         .unwrap();
-    let close = dispatch_product_command(&shell, window, CLOSE_TAB_COMMAND, cx);
+    let close = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     let closed = take_events(&host, cx);
     assert!(closed.iter().any(|event| matches!(&event.change, ApplicationChange::DocumentClosed { document } if document == &info.id)));
@@ -698,7 +722,7 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
             if window.panes.is_empty() && window.target == old_target.pane.window)));
     cx.read(|cx| {
         assert_eq!(retained_workbench.read(cx).view_count(document), 0);
-        assert_eq!(&shell.read(cx).workbench, &retained_workbench);
+        assert_eq!(&window.read(cx).workbench, &retained_workbench);
         assert_eq!(
             old_command_target.validate_tab(cx),
             Err(CommandOutcome::InvalidTarget)
@@ -713,17 +737,19 @@ fn deactivation_publishes_null_targets_without_repaint_events(cx: &mut TestAppCo
     let host = cx.update(extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, visual) = cx.add_window_view(|_, cx| {
+    let (window, visual) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
         KnotWindow::new(workbench, cx)
     });
-    visual.update(|window, cx| {
-        shell.update(cx, |shell, cx| shell.observe_extension_host(window, cx))
+    visual.update(|native_window, cx| {
+        window.update(cx, |window, cx| {
+            window.observe_extension_host(native_window, cx)
+        })
     });
     visual.refresh().unwrap();
-    visual.update(|window, cx| {
-        window.activate_window();
-        shell.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    visual.update(|native_window, cx| {
+        native_window.activate_window();
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
     });
     let focused = take_events(&host, visual);
     assert!(focused.iter().any(|event| matches!(
@@ -735,7 +761,7 @@ fn deactivation_publishes_null_targets_without_repaint_events(cx: &mut TestAppCo
     )));
     visual.refresh().unwrap();
     assert!(take_events(&host, visual).is_empty());
-    // Focus is the session's, so the window losing native focus leaves it.
+    // Focus is the window's, so it keeps it when the native window loses focus.
     visual.update(|window, cx| window.blur(cx));
     assert!(take_events(&host, visual).is_empty());
     visual.deactivate_window();
@@ -783,10 +809,10 @@ await commands.register("observation.stream", () => {
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "observation.barrier", cx),
+            dispatch_product_command(&window, native_window, "observation.barrier", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -801,7 +827,7 @@ await commands.register("observation.stream", () => {
     });
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "observation.stream", cx),
+            dispatch_product_command(&window, native_window, "observation.stream", cx),
             cx
         ),
         CommandOutcome::Completed
@@ -814,11 +840,12 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
     cx: &mut TestAppContext,
 ) {
     fn report(
-        shell: &Entity<KnotWindow>,
-        window: gpui::AnyWindowHandle,
+        window: &Entity<KnotWindow>,
+        native_window: gpui::AnyWindowHandle,
         cx: &mut TestAppContext,
     ) -> serde_json::Value {
-        let execution = dispatch_product_command(shell, window, "example.application-state", cx);
+        let execution =
+            dispatch_product_command(window, native_window, "example.application-state", cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         cx.read(|cx| {
             serde_json::from_str(&cx.read_from_clipboard().unwrap().text().unwrap()).unwrap()
@@ -866,9 +893,9 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
             .to_string()
     });
     let (first, first_window) = product_window(document, model.clone(), cx);
-    cx.update_window(first_window, |_, window, cx| {
-        window.activate_window();
-        first.update(cx, |shell, cx| shell.focus_active_editor(cx));
+    cx.update_window(first_window, |_, native_window, cx| {
+        native_window.activate_window();
+        first.update(cx, |window, cx| window.focus_active_editor(cx));
     })
     .unwrap();
     let initial = report(&first, first_window, cx);
@@ -901,15 +928,15 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
     );
     assert_eq!(wait_for_command(split, cx), CommandOutcome::Completed);
     let (second, second_window) = product_window(document, model.clone(), cx);
-    first.update(cx, |shell, cx| {
-        shell.install_workspace(ResourceUri::parse("mem://observer/").unwrap(), cx);
-        shell.ensure_test_tool(false, cx);
+    first.update(cx, |window, cx| {
+        window.install_workspace(ResourceUri::parse("mem://observer/").unwrap(), cx);
+        window.ensure_test_tool(false, cx);
     });
     let source = cx.read(|cx| {
-        let shell = first.read(cx);
-        let workbench = shell.workbench.read(cx);
+        let window = first.read(cx);
+        let workbench = window.workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();
-        shell
+        window
             .capture_tab_relocation(pane.id(), pane.active_tab_id(), cx)
             .unwrap()
     });
@@ -917,7 +944,7 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
         let workbench = &second.read(cx).workbench;
         let pane = workbench.read(cx).focused_pane().unwrap();
         super::super::relocate::TabRelocationDestination {
-            shell: second.downgrade(),
+            window: second.downgrade(),
             workbench: workbench.downgrade(),
             tab: crate::app::workbench::TabMoveDestination::At {
                 anchor: workbench
@@ -929,9 +956,10 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
         }
     });
     assert_eq!(
-        cx.update_window(first_window, |_, _, cx| first.update(cx, |shell, cx| shell
-            .relocate_tab_to(&source, &destination, cx)))
-            .unwrap(),
+        cx.update_window(first_window, |_, _, cx| first.update(cx, |window, cx| {
+            window.relocate_tab_to(&source, &destination, cx)
+        }))
+        .unwrap(),
         CommandOutcome::Completed
     );
     let updated = report(&first, first_window, cx);
@@ -986,8 +1014,8 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
         .find_map(|window| window["roots"].as_array().unwrap().first())
         .unwrap()["id"]
         .clone();
-    first.update(cx, |shell, cx| {
-        shell.install_workspace(ResourceUri::parse("mem://observer/").unwrap(), cx)
+    first.update(cx, |window, cx| {
+        window.install_workspace(ResourceUri::parse("mem://observer/").unwrap(), cx)
     });
     let retained = report(&first, first_window, cx);
     assert!(
@@ -997,8 +1025,8 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
             .iter()
             .any(|window| window["generation"] == 2 && window["roots"][0]["id"] == installed_root)
     );
-    first.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(Vec::new(), cx)
+    first.update(cx, |window, cx| {
+        window.replace_workspace_roots(Vec::new(), cx)
     });
     let cleared = report(&first, first_window, cx);
     assert!(
@@ -1008,8 +1036,8 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
             .iter()
             .all(|window| window["roots"].as_array().unwrap().is_empty())
     );
-    first.update(cx, |shell, cx| {
-        shell.replace_workspace_roots(
+    first.update(cx, |window, cx| {
+        window.replace_workspace_roots(
             vec![
                 ResourceUri::parse("mem://one/").unwrap(),
                 ResourceUri::parse("mem://two/").unwrap(),
@@ -1033,8 +1061,8 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
                         .eq(["mem://one/", "mem://two/"])
             })
     );
-    first.update(cx, |shell, cx| {
-        shell.install_workspace(ResourceUri::parse("mem://observer/").unwrap(), cx)
+    first.update(cx, |window, cx| {
+        window.install_workspace(ResourceUri::parse("mem://observer/").unwrap(), cx)
     });
     let reinstalled = report(&first, first_window, cx);
     assert!(
@@ -1046,16 +1074,21 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
                 && window["roots"][0]["id"] != installed_root
                 && !window["roots"].as_array().unwrap().is_empty())
     );
-    for (shell, window) in [(&second, second_window), (&first, first_window)] {
-        let close = dispatch_product_command(shell, window, super::super::CLOSE_WINDOW_COMMAND, cx);
+    for (window, native_window) in [(&second, second_window), (&first, first_window)] {
+        let close = dispatch_product_command(
+            window,
+            native_window,
+            super::super::CLOSE_WINDOW_COMMAND,
+            cx,
+        );
         assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     }
     let replacement = cx.update(|cx| create_untitled_document(&documents, cx));
     let replacement_model =
         cx.read(|cx| documents.read(cx).get(replacement).unwrap().model().clone());
-    let (replacement_shell, replacement_window) =
+    let (replacement_window, replacement_native_window) =
         product_window(replacement, replacement_model.clone(), cx);
-    let closed = report(&replacement_shell, replacement_window, cx);
+    let closed = report(&replacement_window, replacement_native_window, cx);
     assert!(!cx.read(|cx| model.read(cx).is_open()));
     let events = closed["events"].as_array().unwrap();
     assert!(
@@ -1065,14 +1098,14 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
     );
     assert!(events.iter().any(|event| event["type"] == "windowClosed"));
     let stopped = dispatch_product_command(
-        &replacement_shell,
-        replacement_window,
+        &replacement_window,
+        replacement_native_window,
         "example.stop-application-observer",
         cx,
     );
     assert_eq!(wait_for_command(stopped, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(host.read(cx).application_observer_count(), 0));
-    let stopped_count = report(&replacement_shell, replacement_window, cx)["events"]
+    let stopped_count = report(&replacement_window, replacement_native_window, cx)["events"]
         .as_array()
         .unwrap()
         .len();
@@ -1081,7 +1114,7 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
         cx.notify();
     });
     assert_eq!(
-        report(&replacement_shell, replacement_window, cx)["events"]
+        report(&replacement_window, replacement_native_window, cx)["events"]
             .as_array()
             .unwrap()
             .len(),
@@ -1139,15 +1172,16 @@ await commands.register("observation.install-for-unload", async () => { await wo
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     model.update(cx, |model, cx| {
         model.replace(0..0, "edit").unwrap();
         cx.notify();
     });
-    let verify = dispatch_product_command(&shell, window, "observation.verify", cx);
+    let verify = dispatch_product_command(&window, native_window, "observation.verify", cx);
     assert_eq!(wait_for_command(verify, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(host.read(cx).application_observer_count(), 0));
-    let install = dispatch_product_command(&shell, window, "observation.install-for-unload", cx);
+    let install =
+        dispatch_product_command(&window, native_window, "observation.install-for-unload", cx);
     assert_eq!(wait_for_command(install, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(host.read(cx).application_observer_count(), 1));
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
@@ -1236,7 +1270,7 @@ await commands.register("queries.terminal", async () => {
     let (second, second_window) = product_window(document, model, cx);
     let (_diagnostic, _) =
         cx.add_window_view(|_, cx| crate::app::tree_view::TreeView::new("diagnostic", "1", cx));
-    for (shell, window, command) in [
+    for (window, native_window, command) in [
         (&first, first_window, "queries.catalog"),
         (&first, first_window, CLOSE_TAB_COMMAND),
         (&second, second_window, super::super::CLOSE_WINDOW_COMMAND),
@@ -1244,7 +1278,7 @@ await commands.register("queries.terminal", async () => {
         (&first, first_window, NEW_TERMINAL_COMMAND),
         (&first, first_window, "queries.terminal"),
     ] {
-        let execution = dispatch_product_command(shell, window, command, cx);
+        let execution = dispatch_product_command(window, native_window, command, cx);
         assert_eq!(
             wait_for_command(execution, cx),
             CommandOutcome::Completed,
@@ -1264,7 +1298,7 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     model.update(cx, |model, _| {
         model.replace(0..0, &"line\n".repeat(50)).unwrap()
     });
-    let (shell, window) = product_window(document, model, cx);
+    let (window, native_window) = product_window(document, model, cx);
     let (_, other) = product_window(
         document,
         cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone()),
@@ -1274,7 +1308,7 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
         .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE * 2);
     take_events(&host, cx);
     let editor = cx.read(|cx| {
-        shell
+        window
             .read(cx)
             .workbench
             .read(cx)
@@ -1313,22 +1347,28 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     }
     cx.executor()
         .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE);
-    assert_eq!(settled(cx), [crate::app::product::test_window_id(window)]);
+    assert_eq!(
+        settled(cx),
+        [crate::app::product::test_window_id(native_window)]
+    );
     // An unchanged layout reports nothing, and other windows stay quiet.
-    shell.update(cx, |_, cx| cx.notify());
+    window.update(cx, |_, cx| cx.notify());
     cx.executor()
         .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE * 2);
     assert!(settled(cx).is_empty());
     // A focused-pane or dock-size change is view state too.
-    shell.update(cx, |shell, cx| {
-        shell.workbench.update(cx, |workbench, _| {
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
             workbench.set_dock_size(crate::app::workbench::DockLocation::Bottom, 300.)
         });
         cx.notify();
     });
     cx.executor()
         .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE * 2);
-    assert_eq!(settled(cx), [crate::app::product::test_window_id(window)]);
+    assert_eq!(
+        settled(cx),
+        [crate::app::product::test_window_id(native_window)]
+    );
     let _ = other;
 }
 
@@ -1372,11 +1412,11 @@ await commands.register("indentation.write", async () => {
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (shell, window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = product_window(document, model.clone(), cx);
     take_events(&host, cx);
     assert_eq!(
         wait_for_command(
-            dispatch_product_command(&shell, window, "indentation.write", cx),
+            dispatch_product_command(&window, native_window, "indentation.write", cx),
             cx
         ),
         CommandOutcome::Completed

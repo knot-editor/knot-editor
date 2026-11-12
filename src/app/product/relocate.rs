@@ -12,7 +12,7 @@ pub(super) struct TabRelocationSource {
 
 #[derive(Clone)]
 pub(super) struct TabRelocationDestination {
-    pub(super) shell: WeakEntity<KnotWindow>,
+    pub(super) window: WeakEntity<KnotWindow>,
     pub(super) workbench: WeakEntity<Workbench>,
     pub(super) tab: TabMoveDestination,
 }
@@ -81,7 +81,7 @@ impl KnotWindow {
             return CommandOutcome::InvalidTarget;
         }
         let this = cx.weak_entity();
-        if destination.shell == this {
+        if destination.window == this {
             if destination.workbench.upgrade() != Some(self.workbench.clone()) {
                 return CommandOutcome::InvalidTarget;
             }
@@ -119,21 +119,21 @@ impl KnotWindow {
         if destination.workbench.upgrade() == Some(self.workbench.clone()) {
             return CommandOutcome::InvalidTarget;
         }
-        let Some(destination_shell) = destination.shell.upgrade().filter(|shell| {
+        let Some(destination_window) = destination.window.upgrade().filter(|window| {
             cx.global::<ApplicationWindows>()
-                .is_open(shell.entity_id())
+                .is_open(window.entity_id())
         }) else {
             return CommandOutcome::InvalidTarget;
         };
         let result = {
-            destination_shell.update(cx, |shell, cx| {
-                if destination.workbench.upgrade() != Some(shell.workbench.clone())
+            destination_window.update(cx, |window, cx| {
+                if destination.workbench.upgrade() != Some(window.workbench.clone())
                     || !self.relocation_is_live(source, cx)
                 {
                     return CommandOutcome::InvalidTarget;
                 }
                 let source_workbench = self.workbench.clone();
-                let destination_workbench = shell.workbench.clone();
+                let destination_workbench = window.workbench.clone();
                 let target = destination.tab;
                 let session = match source.tab.tab.surface {
                     TabSurfaceId::Terminal(id) => cx
@@ -170,9 +170,9 @@ impl KnotWindow {
                 if moved.is_none() {
                     return CommandOutcome::InvalidTarget;
                 }
-                shell.focus_relocated_surface(cx);
+                window.focus_relocated_surface(cx);
                 if !matches!(destination.tab, TabMoveDestination::Empty) {
-                    shell.activate_window(cx);
+                    window.activate_window(cx);
                 }
                 cx.notify();
                 CommandOutcome::Completed
@@ -214,13 +214,13 @@ impl KnotWindow {
         if existing.contains(&destination_window) {
             return CommandOutcome::InvalidTarget;
         }
-        let shell = destination.entity(cx).ok();
-        let outcome = if let Some(shell) = shell {
-            let workbench = shell.read(cx).workbench.downgrade();
+        let window = destination.entity(cx).ok();
+        let outcome = if let Some(window) = window {
+            let workbench = window.read(cx).workbench.downgrade();
             self.relocate_tab_to(
                 source,
                 &TabRelocationDestination {
-                    shell: shell.downgrade(),
+                    window: window.downgrade(),
                     workbench,
                     tab: TabMoveDestination::Empty,
                 },
@@ -230,12 +230,14 @@ impl KnotWindow {
             CommandOutcome::InvalidTarget
         };
         if outcome != CommandOutcome::Completed {
-            let _ = cx.update_window(destination_window, |_, window, _| window.remove_window());
+            let _ = cx.update_window(destination_window, |_, native_window, _| {
+                native_window.remove_window()
+            });
         } else {
             #[cfg(target_os = "macos")]
-            let _ = cx.update_window(destination_window, |_, window, cx| {
-                window.draw(cx).clear(cx);
-                window.activate_window();
+            let _ = cx.update_window(destination_window, |_, native_window, cx| {
+                native_window.draw(cx).clear(cx);
+                native_window.activate_window();
             });
         }
         outcome

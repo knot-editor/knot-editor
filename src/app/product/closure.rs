@@ -7,13 +7,13 @@ use knot_model::workbench::closure as model;
 
 impl ProductCommandTarget {
     fn close_origin(&self) -> model::CloseOrigin {
-        let session = self.shell.entity_id().as_u64();
+        let window = self.window.entity_id().as_u64();
         let workbench = self.workbench.entity_id().as_u64();
         model::CloseOrigin {
-            session,
+            window,
             workbench,
             view: self.tab.map(|tab| ProtectedViewKey {
-                session,
+                window,
                 workbench,
                 presentation: tab.presentation,
                 pane: tab.pane,
@@ -59,9 +59,9 @@ impl KnotWindow {
 
     pub(super) fn collect_product_views(cx: &mut App) -> Vec<ProtectedView> {
         let mut views = Vec::new();
-        for shell in cx.global::<ApplicationWindows>().windows() {
-            let session = shell.entity_id();
-            let workbench = shell.read(cx).workbench.clone();
+        for window in cx.global::<ApplicationWindows>().windows() {
+            let window_id = window.entity_id();
+            let workbench = window.read(cx).workbench.clone();
             let snapshots = workbench.read(cx).tab_snapshots();
             views.extend(snapshots.into_iter().map(|snapshot| {
                 let (has_editor, pinned, presentation) = {
@@ -77,7 +77,7 @@ impl KnotWindow {
                 };
                 ProtectedView {
                     key: ProtectedViewKey {
-                        session: session.as_u64(),
+                        window: window_id.as_u64(),
                         workbench: workbench.entity_id().as_u64(),
                         presentation,
                         pane: snapshot.pane_id,
@@ -90,7 +90,7 @@ impl KnotWindow {
                         .pane_area(snapshot.pane_id)
                         .expect("snapshots name live panes"),
                     target: has_editor.then(|| ProductCommandTarget {
-                        shell: shell.downgrade(),
+                        window: window.downgrade(),
                         workbench: workbench.downgrade(),
                         tab: Some(TargetTab {
                             pane: snapshot.pane_id,
@@ -213,7 +213,7 @@ impl KnotWindow {
             return;
         }
         let target = ProductCommandTarget {
-            shell: cx.entity().downgrade(),
+            window: cx.entity().downgrade(),
             workbench: self.workbench.downgrade(),
             tab: Some(TargetTab {
                 pane,
@@ -224,7 +224,7 @@ impl KnotWindow {
             focused: true,
             view: None,
         };
-        // Protected closure updates this shell, so it starts outside the
+        // Protected closure updates this window, so it starts outside the
         // current update.
         cx.defer(move |cx| {
             super::super::commands::dispatch::break_captured_history_group(&target, cx);
@@ -271,14 +271,14 @@ impl KnotWindow {
                 return;
             }
         };
-        let Some(shell) = plan.request.origin.shell.upgrade() else {
+        let Some(window) = plan.request.origin.window.upgrade() else {
             completion(Err(ProtectedCloseFailure::InvalidTarget), cx);
             return;
         };
         Self::set_protected_closure_active(true, cx);
         if kind != ProtectedCloseKind::Quit || plan.prompts.is_empty() {
-            shell.update(cx, |shell, cx| {
-                shell.start_protected_close_plan(plan, completion, cx)
+            window.update(cx, |window, cx| {
+                window.start_protected_close_plan(plan, completion, cx)
             });
             return;
         }
@@ -291,8 +291,8 @@ impl KnotWindow {
                 plan.hot_exit = true;
             }
             cx.update(|cx| {
-                shell.update(cx, |shell, cx| {
-                    shell.start_protected_close_plan(plan, completion, cx)
+                window.update(cx, |window, cx| {
+                    window.start_protected_close_plan(plan, completion, cx)
                 })
             });
         })
@@ -365,12 +365,12 @@ impl KnotWindow {
                             {
                                 return Err(ProtectedCloseFailure::Cancelled);
                             }
-                            let Some(shell) = target.window(cx) else {
+                            let Some(window) = target.window(cx) else {
                                 return Err(ProtectedCloseFailure::InvalidTarget);
                             };
                             let (save_completion, receiver) = CommandCompletion::new();
-                            shell.update(cx, |shell, cx| {
-                                shell.start_save_command(
+                            window.update(cx, |window, cx| {
+                                window.start_save_command(
                                     false,
                                     target.clone(),
                                     save_completion,
@@ -711,19 +711,19 @@ impl KnotWindow {
 }
 
 pub(super) fn install_protected_window_close(
-    shell: &Entity<KnotWindow>,
-    window: &Window,
+    window: &Entity<KnotWindow>,
+    native_window: &Window,
     cx: &App,
 ) {
-    let shell = shell.downgrade();
-    window.on_window_should_close(cx, move |_, cx| {
-        let Some(shell) = shell.upgrade() else {
+    let window = window.downgrade();
+    native_window.on_window_should_close(cx, move |_, cx| {
+        let Some(window) = window.upgrade() else {
             return true;
         };
-        if shell.read(cx).workbench.read(cx).panes().is_empty() {
+        if window.read(cx).workbench.read(cx).panes().is_empty() {
             return true;
         }
-        let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
+        let target = window.update(cx, |window, cx| window.capture_command_target(cx));
         cx.defer(move |cx| {
             KnotWindow::begin_protected_close(ProtectedCloseKind::Window, target, None, cx);
         });
