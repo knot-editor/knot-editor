@@ -532,6 +532,10 @@ declare module "knot" {
     readonly "editor.markedText"?: string;
     /** Selected text. */
     readonly "editor.selection"?: string;
+    /** Background of the other occurrences of the selected text. */
+    readonly "editor.selectionHighlight"?: string;
+    /** Background of the occurrences of the word at the cursor. */
+    readonly "editor.wordHighlight"?: string;
     /** Errors and failures. */
     readonly "error"?: string;
     /** Icons that choose no color. */

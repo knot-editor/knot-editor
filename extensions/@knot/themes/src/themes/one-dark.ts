@@ -39,6 +39,8 @@ export const ONE_DARK: ThemeDefinition = {
     "editor.lineNumber.active": fg,
     "editor.markedText": "#abb2bf99",
     "editor.selection": "#abb2bf33",
+    "editor.selectionHighlight": "#abb2bf1a",
+    "editor.wordHighlight": "#abb2bf29",
     "error": red,
     "icon": "#9da5b4",
     "info": blue,
