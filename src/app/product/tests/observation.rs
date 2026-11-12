@@ -527,7 +527,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
     let initial_events = take_events(&host, cx);
     let initial = window_state(&initial_events, native_window);
     let original = initial.panes[0].tabs[0].clone();
-    let session = window.downgrade();
+    let window_ref = window.downgrade();
     let (source, destination) = cx.read(|cx| {
         let window = window.read(cx);
         let workbench = window.workbench.read(cx);
@@ -537,7 +537,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
                 .capture_tab_relocation(pane.id(), pane.tabs()[0].id(), cx)
                 .unwrap(),
             super::super::relocate::TabRelocationDestination {
-                window: session.clone(),
+                window: window_ref.clone(),
                 workbench: window.workbench.downgrade(),
                 tab: TabMoveDestination::At {
                     anchor: workbench
@@ -612,7 +612,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
             }),
         }
     });
-    let session = window.downgrade();
+    let window_ref = window.downgrade();
     let (source, destination) = cx.read(|cx| {
         let window = window.read(cx);
         let workbench = window.workbench.read(cx);
@@ -626,7 +626,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
                 )
                 .unwrap(),
             super::super::relocate::TabRelocationDestination {
-                window: session.clone(),
+                window: window_ref.clone(),
                 workbench: window.workbench.downgrade(),
                 tab: TabMoveDestination::At {
                     anchor: workbench

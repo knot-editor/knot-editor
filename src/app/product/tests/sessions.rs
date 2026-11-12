@@ -820,7 +820,7 @@ fn missing_changed_and_failed_entries_report_while_the_rest_commits(cx: &mut Tes
         )
         .unwrap();
     let (window, native_window) = created(&suspended, 0, cx);
-    // The file changes on disk while its session is suspended.
+    // The file changes on disk while its window is suspended.
     h.provider
         .seed_file(uri("a/one.txt"), b"changed on disk")
         .unwrap();

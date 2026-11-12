@@ -1,5 +1,4 @@
-//! A product session's workbench: the layout model and the views its tabs
-//! present.
+//! A window's workbench: the layout model and the views its tabs present.
 //!
 //! The layout lives in `knot_model::workbench` and holds only identities.
 //! This entity pairs it with the view entity behind each presentation.
