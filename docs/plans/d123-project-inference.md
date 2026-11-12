@@ -1,6 +1,6 @@
 # D123 — Project inference extension
 
-Status: 🚧 approved, not started. Item D123 of the
+Status: 🚧 checkpoint 1 complete; checkpoints 2–3 remain. Item D123 of the
 [daily-driver plan](daily-driver.md), promoted from the [roadmap](../roadmap.md).
 Depends on ✅ D122 (extension file read, list, and stat API).
 
