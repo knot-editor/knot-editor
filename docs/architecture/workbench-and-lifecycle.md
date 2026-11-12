@@ -308,8 +308,8 @@ from.
 
 The application records every product window's roots and layout in one
 record of the application state database, beside the tool-only snapshot, with
-the same debounce and flush. Recording starts once startup has opened its
-windows, so diagnostic windows and a launch whose config failed never write.
+the same debounce and flush. Recording starts, with a first record of the windows just opened, once
+startup has opened them, so diagnostic windows and a launch whose config failed never write.
 Settled window changes and window closure re-record every product window in
 creation order; closing a window removes it, so quitting with no windows
 restores none. Quit records the windows before closing them and stops
