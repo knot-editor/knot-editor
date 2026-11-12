@@ -151,6 +151,8 @@ jobs:
           mkdir -p "$tap_dir/Casks"
           scripts/render-cask.sh "$VERSION" "$SHA256" "$GITHUB_REPOSITORY" > "$tap_dir/Casks/knot@nightly.rb"
       - name: Audit the cask
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           brew style --cask "$(brew --repository "$TAP")/Casks/knot@nightly.rb"
