@@ -30,6 +30,10 @@ app:
 app-release:
     scripts/build-macos-app.sh --release
 
+# Archive the release app as a nightly (the version defaults to the current UTC time)
+app-package version=`date -u +nightly.%Y%m%d.%H%M`:
+    scripts/package-macos-app.sh {{version}}
+
 # Type-check and test extension packages
 ext:
     scripts/check-extensions.sh

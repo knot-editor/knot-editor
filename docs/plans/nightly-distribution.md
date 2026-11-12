@@ -1,6 +1,6 @@
 # Nightly distribution through Homebrew
 
-Status: 🚧 in progress; checkpoint 1 is complete.
+Status: 🚧 in progress; checkpoint 1 is complete; checkpoint 2 awaits review.
 
 ## Goal
 
@@ -69,10 +69,14 @@ them as picker rows until D180 adds a modal surface. Code: `build.rs`,
 `src/app/build_info.rs`, `entry::is_version_request`,
 `src/app/product/about.rs`.
 
-### 2. Nightly macOS archive
+### 2. Nightly macOS archive ✅
 
 Extend the app bundle script so a build takes a version argument, sets
-`KNOT_VERSION` for the compile, stamps the bundle, ad-hoc signs, and emit `Knot-nightly.YYYYMMDD.HHMM-macos-arm64.zip` and its SHA-256.
+`KNOT_VERSION` for the compile, stamps the bundle, ad-hoc signs, and emits
+`Knot-nightly.YYYYMMDD.HHMM-macos-arm64.zip` and its SHA-256 under `dist/`.
+Done: `build-macos-app.sh --version`, `package-macos-app.sh`, `just app-package`.
+Verified locally: `codesign --verify --deep --strict`, the `CFBundleVersion`
+stamp, `knot --version` from the unzipped app, and the checksum.
 
 - **Implementation context:** `scripts/build-macos-app.sh` (add a version
   argument and stamp via `PlistBuddy` on `packaging/macos/Info.plist`'s copy inside

@@ -6,3 +6,4 @@
 /.cloudflare
 /.claude/worktrees
 /scripts/extensions/.npm-ci.lock
+/dist
