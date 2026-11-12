@@ -1,6 +1,6 @@
 # D123 — Project inference extension
 
-Status: 🚧 checkpoint 1 complete; checkpoints 2–3 remain. Item D123 of the
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 remains. Item D123 of the
 [daily-driver plan](daily-driver.md), promoted from the [roadmap](../roadmap.md).
 Depends on ✅ D122 (extension file read, list, and stat API).
 
@@ -175,7 +175,7 @@ is a `file:` URI or null in the real host and settable in the fake host;
 Review gate: fact shape (`homeUri: string | null`, top-level like
 `platform`) confirmed before package work builds on it.
 
-### 2. Inference core in `@knot/projects` (no UI yet)
+### 2. Inference core in `@knot/projects` (no UI yet) ✅
 
 Pure decision logic and dismissal storage, covered by package tests, with no
 prompt wired up.
