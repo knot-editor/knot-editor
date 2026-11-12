@@ -722,7 +722,13 @@ impl Render for TerminalView {
                                 .flex()
                                 .flex_col()
                                 .items_center()
-                                .gap_2()
+                                .gap_1()
+                                .px_4()
+                                .py_2()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(theme(cx).paint_color(color::BORDER))
+                                .bg(theme(cx).paint_color(color::TAB_BAR_BACKGROUND))
                                 .text_xs()
                                 .text_color(theme(cx).paint_color(color::TEXT_MUTED))
                                 .child(label)
@@ -741,11 +747,13 @@ impl Render for TerminalView {
 }
 
 /// The overlay caption for a non-running session; `None` while running,
-/// where the grid paints alone with no header chrome.
+/// where the grid paints alone with no header chrome. The exit payload is
+/// already a plain description (`exit status: 0`, a signal line), so it is
+/// shown verbatim instead of gaining a redundant prefix.
 fn terminal_overlay_label(status: &TerminalStatus) -> Option<String> {
     match status {
         TerminalStatus::Running => None,
-        TerminalStatus::Exited(status) => Some(format!("exited: {status}")),
+        TerminalStatus::Exited(status) => Some(status.clone()),
         TerminalStatus::Failed(error) => Some(format!("failed: {error}")),
         TerminalStatus::Closed => Some("closed".to_owned()),
     }

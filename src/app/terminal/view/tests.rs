@@ -172,10 +172,13 @@ fn overlay_label_only_shows_for_non_running_sessions() {
         terminal_overlay_label(&TerminalStatus::Closed),
         Some("closed".to_owned())
     );
-    assert!(
-        terminal_overlay_label(&TerminalStatus::Exited("1".into()))
-            .unwrap()
-            .contains("exited")
+    assert_eq!(
+        terminal_overlay_label(&TerminalStatus::Exited("exit status: 0".into())),
+        Some("exit status: 0".to_owned())
+    );
+    assert_eq!(
+        terminal_overlay_label(&TerminalStatus::Exited("signal: 9 (SIGKILL)".into())),
+        Some("signal: 9 (SIGKILL)".to_owned())
     );
     assert!(
         terminal_overlay_label(&TerminalStatus::Failed("boom".into()))
