@@ -60,6 +60,9 @@ touches.
   color-key defaults, selection through settings.
 - [Decoration styles](decisions/semantic-ui.md#decoration-styles): a color key
   plus exactly one required style; backgrounds as quads.
+- [View-owned editor decorations](decisions/semantic-ui.md#view-owned-editor-decorations):
+  sets per editor view and lifecycle; buffer-wide sets keyed by view ID
+  rejected.
 - [Icons](decisions/semantic-ui.md#icons): named icons in override, pack,
   default, fallback layers; associations apart from packs; native Lucide
   defaults; live application; file and folder references resolved natively.
@@ -91,6 +94,8 @@ touches.
 
 - [Extension runtime](decisions/extension-host.md#extension-runtime): direct V8,
   persistent isolates, a bounded worker pool, external UTF-16 snapshots.
+- [Extension timers](decisions/extension-host.md#extension-timers): Node
+  semantics in a host-owned table; a required driver sleeps and calls back.
 - [Handler declarations](decisions/extension-host.md#handler-declarations):
   annotated async handlers generate adapters; no registration tables.
 - [Installed extension directories](decisions/extension-host.md#installed-extension-directories):

@@ -37,7 +37,8 @@ keeps the display cell it started from, counted with `unicode-width` and
 expanded tabs, across shorter lines. Words are Unicode word segments split at VS
 Code's default word separators, so each run of separators such as `.` or `::`
 is its own unit; word movement stops at the edges of words and separator runs,
-and double-click selects one. Dragging after a double- or triple-click keeps
+and double-click selects one. `Buffer.wordAt` returns the segment at an offset,
+preferring a word that ends there, so extensions use the same units. Dragging after a double- or triple-click keeps
 the clicked word or line selected and extends by that unit in either
 direction. Text,
 selection, caret, hit testing, and IME bounds share one shaping projection and

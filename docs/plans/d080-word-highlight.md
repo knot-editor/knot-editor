@@ -1,6 +1,7 @@
 # D080 — Word and selection occurrence highlighting
 
-Status: 📝 proposed. Item of the [daily-driver plan](daily-driver.md#phase-3--editing);
+Status: 🚧 in progress; checkpoints 1 to 3 are complete and checkpoint 4 awaits
+its review gate. Item of the [daily-driver plan](daily-driver.md#phase-3--editing);
 absorbs roadmap item [D179](../roadmap.md) (view-scoped decorations).
 
 ## Outcome
@@ -32,8 +33,10 @@ with a text-only caret highlight:
   only the other occurrences, never the selection itself, so nothing shows
   without another match; IntelliJ has none by default. VS Code and Zed skip
   whitespace-only selections, VS Code skips multi-line ones (unless a
-  setting allows them) and very long ones, and neither matches whole words.
-  Confirm VS Code's case default and length limit during checkpoint 4.
+  setting allows them) and longer ones than 200 characters, and neither
+  matches whole words. VS Code matches occurrences using Find's options by
+  default, so selection highlights are case-insensitive unless Find's match
+  case is on; Knot matches case-insensitively.
 - Delay: closer to Zed (100 ms for selections, 75 ms for language-server
   highlights) than VS Code (250 ms); one setting, default 75 ms, tuned at the
   review gate.
@@ -112,7 +115,8 @@ delay (restarted with `Timeout.refresh()`):
   `editor.wordHighlight`, even when the word occurs only once;
 - for a non-empty single-line selection that is not only whitespace,
   highlights the other occurrences of the selected text in
-  `editor.selectionHighlight`, never the selection itself;
+  `editor.selectionHighlight`, never the selection itself, matching
+  case-insensitively up to 200 characters;
 - otherwise clears. Moving within the highlighted word keeps its highlights
   without searching again; an edit refreshes them; an editor that stops being
   active is cleared.
@@ -156,18 +160,22 @@ exposed as `Editor.setDecorations` in `knot.d.ts` through the
 (`refresh` in `extensions/@knot/find/src/extension.ts`), so splits of one
 buffer keep their own bars and highlights; the D179 roadmap entry is gone.
 
-### 4. Word lookup and the highlight package
+### 4. Word lookup and the highlight package — 🚧 in progress
 
-Deliverables: `buffer.wordAt`; the `editor.wordHighlight` and
-`editor.selectionHighlight` keys with bundled-theme values; the
-`@knot/word-highlight` package and its settings; `docs/settings.md`; the
-decision entry (view-owned decorations, Node timers with a host-owned
-driver); architecture updates.
+Deliverables: `buffer.wordAt` ✅; the `editor.wordHighlight` and
+`editor.selectionHighlight` keys with bundled-theme values ✅; the
+`@knot/word-highlight` package and its settings ✅; `docs/settings.md` ✅; the
+decision entries for view-owned decorations and Node timers with a host-owned
+driver ✅; architecture updates ✅.
 
 Validation: model tests for `wordAt` at word starts, ends, separators, and
-non-ASCII text; package tests for pure logic; product tests through the real
-bundled package for caret highlights after the delay, selection highlights,
-clearing, edits, and the settings. `just check`.
+non-ASCII text ✅; package tests for pure logic ✅; product tests through the
+real bundled package for caret highlights after the delay, selection highlights,
+clearing, edits, and the settings ✅. `just check` ✅.
+
+VS Code's confirmed defaults decided the selection behavior: Find's options,
+which are case-insensitive and not whole-word, and at most 200 characters. The
+package reads those as fixed choices rather than settings.
 
 Review gate: feel and delay in the real app (`Try:` commands).
 

@@ -107,6 +107,21 @@ as blocks.
 
 Reference: [semantic UI](../architecture/semantic-ui.md).
 
+## View-owned editor decorations
+
+Decorations that describe one view's caret or selection belong to that view,
+not to the buffer. Find's matches and word occurrences differ between two
+splits of one buffer, and a per-view set lets the editor merge them where it
+already keeps key contexts and bars, so closing the view and lifecycle teardown
+remove them with the rest of the view's extension state. [Semantic
+UI](../architecture/semantic-ui.md#semantic-extension-ui) states the rules.
+
+Rejected: buffer-wide sets keyed by an optional view ID, which would make the
+buffer own a second catalog of live views and their closure. Gutter markers and
+click actions stay buffer-only because breakpoints, diagnostics, and
+version-control changes describe the document; a view scope can be added later
+as a field if a consumer needs one.
+
 ## Extension tree content and actions
 
 One registration declares a frame's content kind, provider or pushed text, and
@@ -229,8 +244,9 @@ Rendering extension-drawn bars was rejected for the same reason.
 Matching is native (`buffer.find`) rather than JavaScript over snapshots. An
 extension addresses text in UTF-8 byte offsets, and a snapshot would copy the
 whole buffer on every keystroke. The workflow itself stays in the bundled
-`@knot/find` package, and its highlights are per-view decorations, so they
-belong to the editor that owns the bar, a path D080 shares. Regular expressions and replace remain deferred (D001), so
+`@knot/find` package, and its highlights are per-view decorations
+([view-owned editor decorations](#view-owned-editor-decorations)), so they
+belong to the editor that owns the bar. Regular expressions and replace remain deferred (D001), so
 the matcher is a literal one.
 
 References: [editor bars](../architecture/editor-and-languages.md#editor-bars),

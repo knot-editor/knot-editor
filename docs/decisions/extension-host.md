@@ -46,6 +46,26 @@ enough extensions to justify V8 flags, a snapshot, or sharing (D139).
 
 Reference: [extension host](../architecture/extension-host.md#runtime-and-scheduler-flow).
 
+## Extension timers
+
+Node-compatible timers live in a host-owned table per lifecycle, and the host
+waits through a `TimerDriver` rather than sleeping itself. The host then owns
+the IDs, armed waits, clearing, refreshing, and expiry roots, so teardown
+cancels every wait and a cleared timer whose expiry is already queued cannot
+run; JavaScript keeps only callbacks. A driver is required in the pool
+configuration and only sleeps and calls back, which keeps the host free of
+threads and lets every test layer own the clock: the application waits on
+gpui's background executor, whose virtual clock `#[gpui::test]` advances, and
+host and pool tests advance a manual driver.
+
+Rejected: an optional driver with a thread-sleep default, because a production
+misconfiguration would silently keep sleeping threads and tests would have to
+wait on real time; and a JavaScript-side scheduler over a host sleep call,
+because cancellation and lifecycle cleanup would still depend on JavaScript
+running after teardown and would add no semantics the host cannot own.
+
+Reference: [extension host](../architecture/extension-host.md#runtime-and-scheduler-flow).
+
 ## Handler declarations
 
 Annotated async handlers keep argument, result, and error types paired at their

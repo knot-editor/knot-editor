@@ -39,7 +39,10 @@ removes it. Only that editor paints it: projection merges it with the
 buffer's contributions in the same severity order, above buffer decorations
 of equal precedence. Replacement, the view's closing, and lifecycle teardown
 remove the set, as they remove key contexts. Gutter markers and click actions
-stay buffer-wide.
+stay buffer-wide. The bundled `@knot/word-highlight` package uses view sets to
+paint the caret word's whole-word occurrences, or a single-line selection's
+other occurrences, on each window's active editor after a settings-driven
+delay.
 
 Views paint styled text by composing each line's runs from ordered highlight
 layers of line-relative `(byte range, style)` spans; a later layer overrides an
