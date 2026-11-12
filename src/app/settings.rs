@@ -213,7 +213,7 @@ pub(crate) fn text(key: &str, cx: &App) -> String {
     .expect("a native text setting")
 }
 
-/// Where product windows place the bottom dock.
+/// Where windows place the bottom dock.
 pub(crate) fn bottom_dock_layout(cx: &App) -> knot_model::workbench::BottomDockLayout {
     knot_model::workbench::BottomDockLayout::parse(&text(WORKBENCH_BOTTOM_DOCK_LAYOUT, cx))
 }

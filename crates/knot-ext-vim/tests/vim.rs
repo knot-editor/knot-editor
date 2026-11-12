@@ -13,8 +13,8 @@
 //! waiting between them, as fast typing arrives, and the run settles once at
 //! the end. One window shows every case in turn, each in a fresh workbench
 //! over a fresh document, after Vim starts over with an empty clipboard and
-//! no registers, marks, or last find. Pointer input and the work a key costs a window run
-//! in a product window.
+//! no registers, marks, or last find. Pointer input and the work a key costs run
+//! in a window with a native window.
 use std::path::{Path, PathBuf};
 
 use gpui::{TestAppContext, point, px};

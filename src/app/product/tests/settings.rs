@@ -138,7 +138,7 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     };
     assert_eq!(tab_sizes(cx), [8, 3]);
 
-    // Open product windows paint tab stops at those widths: the caret after
+    // Open windows paint tab stops at those widths: the caret after
     // the leading tab sits that many character widths in.
     let painted_tab = |model: Entity<Buffer>, cx: &mut TestAppContext| {
         model.update(cx, |model, _| model.replace(0..0, "\tab").unwrap());

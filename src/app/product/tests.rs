@@ -144,10 +144,7 @@ impl FileSystemProvider for GatedFileSystemProvider {
 /// Focus the surface owning `handle` in the window's session, as a click
 /// in the view would.
 fn focus_view(handle: &gpui::FocusHandle, window: &mut gpui::Window, cx: &mut gpui::App) {
-    let window = window
-        .root::<KnotWindow>()
-        .flatten()
-        .expect("a product window");
+    let window = window.root::<KnotWindow>().flatten().expect("a window");
     window.update(cx, |window, cx| window.focus_view(handle, cx));
 }
 

@@ -68,9 +68,9 @@ pub const KEYMAP_PRESET: &str = "keymap.preset";
 pub const WORKBENCH_PREVIEW_TABS: &str = "workbench.previewTabs";
 /// Where the bottom dock sits: `contained` between the side docks or `full` width.
 pub const WORKBENCH_BOTTOM_DOCK_LAYOUT: &str = "workbench.bottomDockLayout";
-/// Whether product windows show the tool stripes on the left and right edges.
+/// Whether windows show the tool stripes on the left and right edges.
 pub const WORKBENCH_TOOL_STRIPES: &str = "workbench.toolStripes";
-/// Whether product windows show the status bar.
+/// Whether windows show the status bar.
 pub const STATUS_BAR_VISIBLE: &str = "statusBar.visible";
 /// IDs of status items the bar skips.
 pub const STATUS_BAR_HIDDEN_ITEMS: &str = "statusBar.hiddenItems";

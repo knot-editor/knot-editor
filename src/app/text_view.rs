@@ -16,7 +16,7 @@ use super::editor::EditorView;
 use super::model::{Buffer, BufferModel};
 use super::tree_view::NEXT_VIEW_ID;
 
-/// One contributed text frame instance in a product window.
+/// One contributed text frame instance in a window.
 pub(crate) struct TextView {
     view_id: String,
     instance_id: ViewId,

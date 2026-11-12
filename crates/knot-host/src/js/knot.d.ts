@@ -146,10 +146,10 @@ declare module "knot" {
     readonly workspace: WorkspaceInfo;
   }
   /** Current metadata queries do not grant future target validity. Valid during
-   * activation, including before any product window exists. */
+   * activation, including before any window exists. */
   export interface DocumentDestinationOptions {
     /** Captured at request admission. Omission uses the command's window, or the
-     * active product window outside a command; missing context rejects. */
+     * active window outside a command; missing context rejects. */
     readonly target?: WindowTarget | PaneTarget | ViewTarget;
   }
   export interface OpenDocumentOptions extends DocumentDestinationOptions {
@@ -381,7 +381,7 @@ declare module "knot" {
     /** The keymap preset that supplies default bindings. Native default
      * "knot"; an unregistered name selects "knot". */
     "keymap.preset": string;
-    /** Whether product windows show the status bar. Native default true. */
+    /** Whether windows show the status bar. Native default true. */
     "statusBar.visible": boolean;
     /** IDs of status items the bar skips. Hidden items keep running, so a
      * package that registered one is unaffected. Native default empty. */
@@ -748,7 +748,7 @@ declare module "knot" {
     /** Every registered pack name, sorted. */
     listPacks(): Promise<readonly string[]>;
   }>;
-  /** Only product windows; diagnostic and startup-error windows are excluded.
+  /** Only application windows; diagnostic and startup-error windows are excluded.
    * get returns null after closure; fabricated/command targets reject InvalidTarget. */
   export const windows: Readonly<{
     list(): Promise<readonly WindowInfo[]>;
@@ -770,7 +770,7 @@ declare module "knot" {
   }
   /** Window-owned ordered roots; empty roots are valid. Closed windows return null. */
   export interface WorkspaceDestinationOptions {
-    /** Omission captures the command's window or active product window at admission. */
+    /** Omission captures the command's window or the active window at admission. */
     readonly target?: WindowTarget;
   }
   export type FileKind = "file" | "directory";
@@ -956,7 +956,7 @@ declare module "knot" {
      * directory URI, or dismissal. The selected path is normalized through the
      * registered providers, so a missing directory rejects ResourceNotFound and
      * a file rejects ResourceWrongKind. Omission captures the command's window or
-     * active product window at admission.
+     * active window at admission.
      * @throws HostError with OperationInProgress when another extension
      * interaction owns the window, InvalidTarget, ContextUnavailable, Cancelled,
      * InvalidUri, ResourceNotFound, ResourceWrongKind, or ProviderFailure. */
@@ -999,7 +999,7 @@ declare module "knot" {
    */
   export interface CommandTarget {
     readonly [targetAuthority]: true;
-    /** Originating product window identity, captured before palette/focus changes. */
+    /** Originating window identity, captured before palette/focus changes. */
     readonly window: WindowId;
     /** Live target for the same window, accepted by window-targeted operations. */
     readonly windowTarget: WindowTarget;
@@ -1824,17 +1824,17 @@ declare module "knot" {
     /** The icon of the new row. */
     readonly icon?: IconRef;
   }
-  /** Registration owns one contributed view across every live product window. */
+  /** Registration owns one contributed view across every live window. */
   export interface ViewRegistration extends Disposable {
     readonly id: string;
     /**
-     * Show this view in every live product window, or only in one explicit
+     * Show this view in every live window, or only in one explicit
      * window. Programmatic presentation never updates the fresh-window default.
      * @throws HostError with InvalidTarget for a stale window, or Cancelled on
      * teardown.
      */
     show(window?: WindowTarget): Promise<void>;
-    /** Hide this view in every live product window, or only in one window. */
+    /** Hide this view in every live window, or only in one window. */
     hide(window?: WindowTarget): Promise<void>;
     /** Show if hidden, then focus this view in every window or one window. */
     focus(window?: WindowTarget): Promise<void>;
@@ -2321,7 +2321,7 @@ declare module "knot" {
     /**
      * Register a lifecycle-owned native view, even before windows exist. The
      * contribution ID is the native view kind and command/keybinding scope.
-     * Every product window receives at most one live instance. Resolution
+     * Every window receives at most one live instance. Resolution
      * acknowledges native ownership; teardown racing registration rejects
      * instead of publishing a late callable object.
      * @throws HostError with ViewIdInUse, InvalidViewId or Cancelled; TypeError
@@ -2358,7 +2358,7 @@ declare module "knot" {
      */
     showMessage(options: MessageOptions): Promise<void>;
     /**
-     * Add an item to the status bar of every product window. The latest
+     * Add an item to the status bar of every window. The latest
      * registration of an ID defines the item and disposing it reveals the
      * previous one. The `statusBar.hiddenItems` setting hides an ID without
      * stopping its registrant, and teardown removes the item.
