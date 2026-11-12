@@ -1,6 +1,6 @@
 # Nightly distribution through Homebrew
 
-Status: 🚧 in progress; checkpoint 1 is complete; checkpoint 2 awaits review.
+Status: 🚧 in progress; checkpoints 1 and 2 are complete.
 
 ## Goal
 
@@ -71,22 +71,10 @@ them as picker rows until D180 adds a modal surface. Code: `build.rs`,
 
 ### 2. Nightly macOS archive ✅
 
-Extend the app bundle script so a build takes a version argument, sets
-`KNOT_VERSION` for the compile, stamps the bundle, ad-hoc signs, and emits
-`Knot-nightly.YYYYMMDD.HHMM-macos-arm64.zip` and its SHA-256 under `dist/`.
-Done: `build-macos-app.sh --version`, `package-macos-app.sh`, `just app-package`.
-Verified locally: `codesign --verify --deep --strict`, the `CFBundleVersion`
-stamp, `knot --version` from the unzipped app, and the checksum.
-
-- **Implementation context:** `scripts/build-macos-app.sh` (add a version
-  argument and stamp via `PlistBuddy` on `packaging/macos/Info.plist`'s copy inside
-  the bundle, then `codesign --force --deep --sign -`), a new
-  `scripts/package-macos-app.sh` wrapping it, and the `just app-release`
-  recipe in `justfile`. Release builds need the Metal toolchain noted in
-  `docs/development.md`.
-- **Validation:** run the script locally; `codesign --verify --deep`,
-  `plutil -p` shows the stamp, the unzipped app launches.
-- **Review gate:** you open the zip's app on your machine.
+`scripts/build-macos-app.sh --version ID` compiles `ID` in as `KNOT_VERSION`,
+stamps `CFBundleVersion`, and ad-hoc signs. `scripts/package-macos-app.sh ID`
+(`just app-package`) writes `dist/Knot-ID-macos-arm64.zip` and its `.sha256`.
+See [the macOS packaging notes](../../packaging/macos/README.md).
 
 ### 3. Nightly workflow and releases
 
