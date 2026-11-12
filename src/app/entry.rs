@@ -60,6 +60,11 @@ impl OpenRequest {
     }
 }
 
+/// Whether the arguments ask for the build version instead of starting the product.
+pub(crate) fn is_version_request(arguments: impl IntoIterator<Item = String>) -> bool {
+    arguments.into_iter().nth(1).as_deref() == Some("--version")
+}
+
 /// Parse the process arguments into the optional resource the product opens.
 pub(crate) fn parse_launch_arguments(
     arguments: impl IntoIterator<Item = String>,
@@ -79,6 +84,13 @@ pub(crate) fn parse_launch_arguments(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_flag_is_recognized_only_as_the_first_argument() {
+        assert!(is_version_request(["knot".into(), "--version".into()]));
+        assert!(!is_version_request(["knot".into()]));
+        assert!(!is_version_request(["knot".into(), "notes.md".into()]));
+    }
 
     #[test]
     fn launch_defaults_to_the_product_without_a_target() {

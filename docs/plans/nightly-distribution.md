@@ -1,6 +1,6 @@
 # Nightly distribution through Homebrew
 
-Status: 🚧 approved, not started.
+Status: 🚧 in progress; checkpoint 1 awaits review.
 
 ## Goal
 
@@ -61,7 +61,7 @@ trigger and release shape.
 
 ## Checkpoints
 
-### 1. Build identity
+### 1. Build identity ✅ (awaiting review)
 
 Compile the version and commit into the binary, and show them in `knot
 --version` and a `Knot: About` command.
@@ -80,6 +80,10 @@ Compile the version and commit into the binary, and show them in `knot
   with `KNOT_VERSION` set reports it.
 - **Review gate:** you run `knot --version` and `Knot: About` from a local
   build.
+- **Done:** `build.rs`, `src/app/build_info.rs`, `entry::is_version_request`
+  (checked in `run` before the product starts), and `app.about` in
+  `src/app/product/about.rs`, shown as a picker of version and commit. `just
+  check` passes.
 
 ### 2. Nightly macOS archive
 

@@ -1411,3 +1411,33 @@ fn an_unfinished_sequence_delivers_its_keys(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "abcxyz"));
 }
+
+#[gpui::test]
+fn about_shows_the_compiled_build_identity(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let execution =
+        dispatch_product_command(&shell, window, super::super::commands::ABOUT_COMMAND, cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let picker = match shell.read(cx).transient.as_ref().unwrap().surface.as_ref() {
+            Some(crate::app::transient::TransientSurface::Picker(picker)) => picker.read(cx),
+            _ => panic!("the transient is not a picker"),
+        };
+        let descriptions = picker
+            .visible_entries()
+            .into_iter()
+            .map(|entry| picker.entry(entry).description.clone().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            descriptions,
+            [
+                crate::app::build_info::VERSION,
+                crate::app::build_info::COMMIT
+            ]
+        );
+    });
+}

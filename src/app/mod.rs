@@ -7,6 +7,7 @@ use knot_protocol::CommandOutcome;
 use gpui::*;
 
 mod application_observation;
+mod build_info;
 mod command_history;
 mod command_palette;
 mod commands;
@@ -138,6 +139,10 @@ struct CommandExecution {
 /// Runs the product on `application`, created by the binary for its platform,
 /// with the compiled-in `packages` beside installed ones.
 pub fn run(application: Application, packages: &'static [knot_bundled::BundledSource]) {
+    if entry::is_version_request(std::env::args()) {
+        println!("{}", build_info::summary());
+        return;
+    }
     let request = entry::parse_launch_arguments(
         std::env::args(),
         &std::env::current_dir().expect("Knot requires a current working directory"),

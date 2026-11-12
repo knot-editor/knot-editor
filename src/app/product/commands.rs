@@ -571,6 +571,16 @@ pub(crate) async fn restart_extension(
         .await
 }
 
+#[command("app.about", title = "Knot: About", description = "Show the Knot version and commit.", id = ABOUT_COMMAND, participant = Workbench)]
+pub(crate) async fn about(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .shell(|shell, _, cx| {
+            shell.start_about(cx);
+            Ok(())
+        })
+        .await
+}
+
 #[command("keymaps.show", title = "Show Keybindings", description = "List every key binding, who made it, and what it overrides.", id = SHOW_KEYBINDINGS_COMMAND, participant = Workbench)]
 pub(crate) async fn show_keybindings(
     context: CommandContext,
