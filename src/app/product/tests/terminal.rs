@@ -1673,3 +1673,55 @@ async fn toggle_terminal_restores_a_maximized_dock_terminal(cx: &mut TestAppCont
     );
     assert!(both > 1);
 }
+
+#[gpui::test]
+async fn restart_command_and_overlay_restart_the_focused_session(cx: &mut TestAppContext) {
+    use crate::app::terminal::view::RESTART_TERMINAL_COMMAND;
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    let (pane, tab, session, view) = window.update(cx, |window, cx| {
+        let (session_id, view) = window.create_terminal(cx);
+        let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+        let tab = window.workbench.update(cx, |workbench, _| {
+            workbench
+                .open_terminal_tab(pane, session_id, view.clone())
+                .unwrap()
+        });
+        let session = cx
+            .global::<ApplicationTerminalSessions>()
+            .0
+            .borrow()
+            .sessions[&session_id]
+            .clone();
+        window.activate_tab(pane, tab, cx);
+        (pane, tab, session, view)
+    });
+    // The palette command restarts the focused session, even from a closed
+    // one. The generation bump is the environment-independent trace:
+    // sandboxes without PTY spawn observe Failed throughout.
+    session.update(cx, |session, cx| session.close(cx));
+    let before = cx.read(|cx| session.read(cx).generation());
+    assert_eq!(
+        dispatch_product_command(&window, native_window, RESTART_TERMINAL_COMMAND, cx)
+            .completion
+            .await
+            .unwrap(),
+        CommandOutcome::Completed
+    );
+    assert!(cx.read(|cx| session.read(cx).generation()) > before);
+
+    // The overlay's restart affordance calls the same view restart.
+    session.update(cx, |session, cx| session.close(cx));
+    let before = cx.read(|cx| session.read(cx).generation());
+    window.update(cx, |_, cx| {
+        view.update(cx, |view, cx| view.restart(cx));
+    });
+    assert!(cx.read(|cx| session.read(cx).generation()) > before);
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        assert_eq!(workbench.pane(pane).unwrap().active_tab().id(), tab);
+    });
+    session.update(cx, |session, cx| session.close(cx));
+}

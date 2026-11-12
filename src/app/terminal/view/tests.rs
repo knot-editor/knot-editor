@@ -163,6 +163,27 @@ fn terminal_font_size_resizes_the_grid(cx: &mut TestAppContext) {
     assert!(larger_columns < columns && larger_lines < lines);
 }
 
+#[test]
+fn overlay_label_only_shows_for_non_running_sessions() {
+    use super::TerminalStatus;
+    use super::terminal_overlay_label;
+    assert_eq!(terminal_overlay_label(&TerminalStatus::Running), None);
+    assert_eq!(
+        terminal_overlay_label(&TerminalStatus::Closed),
+        Some("closed".to_owned())
+    );
+    assert!(
+        terminal_overlay_label(&TerminalStatus::Exited("1".into()))
+            .unwrap()
+            .contains("exited")
+    );
+    assert!(
+        terminal_overlay_label(&TerminalStatus::Failed("boom".into()))
+            .unwrap()
+            .contains("failed")
+    );
+}
+
 #[cfg(unix)]
 #[gpui::test]
 fn zoom_scales_the_terminal_font_size(cx: &mut TestAppContext) {

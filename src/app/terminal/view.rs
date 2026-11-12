@@ -6,6 +6,7 @@ use alacritty_terminal::{
     term::{TermMode, cell::Flags, point_to_viewport},
     vte::ansi::CursorShape,
 };
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use std::rc::Rc;
 
@@ -85,6 +86,7 @@ pub(crate) enum TerminalCommand {
     Copy,
     Paste,
     ToggleMouseReporting,
+    Restart,
 }
 
 impl TerminalView {
@@ -102,6 +104,10 @@ impl TerminalView {
             self.session
                 .update(cx, |session, cx| session.toggle_mouse_reporting(cx));
             cx.notify();
+            return CommandClaim::Finished(knot_protocol::CommandOutcome::Completed);
+        }
+        if command == TerminalCommand::Restart {
+            self.restart(cx);
             return CommandClaim::Finished(knot_protocol::CommandOutcome::Completed);
         }
         if command == TerminalCommand::Paste {
@@ -190,14 +196,7 @@ impl TerminalView {
         self.attachment.is_some() && &self.session == session
     }
 
-    fn close(&mut self, cx: &mut Context<Self>) {
-        if self.attachment.is_none() {
-            return;
-        }
-        self.session.update(cx, |session, cx| session.close(cx));
-    }
-
-    fn restart(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn restart(&mut self, cx: &mut Context<Self>) {
         if self.attachment.is_none() {
             return;
         }
@@ -696,67 +695,59 @@ impl Render for TerminalView {
             self.sync_focus(window, cx);
         }
         let entity = cx.entity();
+        let status = self.session.read(cx).status();
         div()
             .size_full()
-            .flex()
-            .flex_col()
+            .relative()
             .bg(theme(cx).paint_color(color::TERMINAL_BACKGROUND))
             .occlude()
             .child(
                 div()
-                    .h(crate::app::zoom::rems(22.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_2()
-                    .text_xs()
-                    .text_color(theme(cx).paint_color(color::TEXT_MUTED))
-                    .bg(theme(cx).paint_color(color::TAB_BAR_BACKGROUND))
-                    .child(format!(
-                        "TERMINAL · {} · mouse: {}",
-                        match self.session.read(cx).status() {
-                            TerminalStatus::Running => "running".to_owned(),
-                            TerminalStatus::Exited(status) => format!("exited: {status}"),
-                            TerminalStatus::Failed(error) => format!("failed: {error}"),
-                            TerminalStatus::Closed => "closed".to_owned(),
-                        },
-                        if self.session.read(cx).mouse_reporting_enabled() {
-                            "on"
-                        } else {
-                            "off"
-                        }
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .id("close-terminal")
-                                    .cursor_pointer()
-                                    .text_color(theme(cx).paint_color(color::TEXT_ACCENT))
-                                    .child("close")
-                                    .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
-                            )
-                            .child(
-                                div()
-                                    .id("restart-terminal")
-                                    .cursor_pointer()
-                                    .text_color(theme(cx).paint_color(color::TEXT_ACCENT))
-                                    .child("restart")
-                                    .on_click(cx.listener(|this, _, _, cx| this.restart(cx))),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
+                    .size_full()
                     .track_focus(&self.focus)
                     .key_context(TERMINAL_KEY_CONTEXT)
                     .child(TerminalElement { entity }),
             )
+            .when(terminal_overlay_label(&status).is_some(), |this| {
+                let label = terminal_overlay_label(&status).unwrap_or_default();
+                this.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap_2()
+                                .text_xs()
+                                .text_color(theme(cx).paint_color(color::TEXT_MUTED))
+                                .child(label)
+                                .child(
+                                    div()
+                                        .id("restart-terminal")
+                                        .cursor_pointer()
+                                        .text_color(theme(cx).paint_color(color::TEXT_ACCENT))
+                                        .child("restart")
+                                        .on_click(cx.listener(|this, _, _, cx| this.restart(cx))),
+                                ),
+                        ),
+                )
+            })
+    }
+}
+
+/// The overlay caption for a non-running session; `None` while running,
+/// where the grid paints alone with no header chrome.
+fn terminal_overlay_label(status: &TerminalStatus) -> Option<String> {
+    match status {
+        TerminalStatus::Running => None,
+        TerminalStatus::Exited(status) => Some(format!("exited: {status}")),
+        TerminalStatus::Failed(error) => Some(format!("failed: {error}")),
+        TerminalStatus::Closed => Some("closed".to_owned()),
     }
 }
 
@@ -1148,6 +1139,13 @@ pub(crate) async fn terminal_paste(context: CommandContext, (): ()) -> Result<()
 #[command("terminal.toggle-mouse-reporting", title = "Toggle Terminal Mouse Reporting", description = "Let the terminal program receive mouse input, or select text instead.", id = TOGGLE_TERMINAL_MOUSE_REPORTING_COMMAND, participant = Terminal, claim = claim_terminal)]
 pub(crate) async fn terminal_toggle(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     execute_terminal(context, TerminalCommand::ToggleMouseReporting).await
+}
+#[command("terminal.restart", title = "Restart Terminal", description = "Restart the focused terminal session.", id = RESTART_TERMINAL_COMMAND, participant = Terminal, claim = claim_terminal)]
+pub(crate) async fn terminal_restart(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    execute_terminal(context, TerminalCommand::Restart).await
 }
 async fn execute_terminal(
     context: CommandContext,
