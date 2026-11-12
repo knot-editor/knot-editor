@@ -4,7 +4,7 @@ export const WORD_COLOR = "editor.wordHighlight";
 export const SELECTION_COLOR = "editor.selectionHighlight";
 
 /** The longest selection, in characters, whose other occurrences are
- * highlighted. */
+ * highlighted: VS Code's `selectionHighlightMaxLength` default. */
 export const SELECTION_LIMIT = 200;
 
 /** The text whose other occurrences a selection highlights, or null for a

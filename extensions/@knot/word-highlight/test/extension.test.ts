@@ -14,7 +14,7 @@ beforeEach(() => {
 });
 afterEach(() => mock.timers.reset());
 
-const TEXT = "foo bar foo foobar\nfoo  x\n";
+const TEXT = "foo bar foo foobar\nfoo  x Foo\n";
 
 const settle = async () => {
   for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
@@ -48,7 +48,7 @@ test("the word at the caret is highlighted everywhere as a whole word after the 
   assert.deepEqual(painted(window), [[0, WORD_COLOR], [8, WORD_COLOR], [19, WORD_COLOR]]);
 });
 
-test("a selection highlights its other occurrences, case-sensitively and not as whole words", async () => {
+test("a selection highlights its other occurrences, case-insensitively and not as whole words", async () => {
   const { window, editor } = await setup();
   await editor.setSelection({ anchor: 0, caret: 3 });
   await rest();
@@ -56,6 +56,7 @@ test("a selection highlights its other occurrences, case-sensitively and not as 
     [8, SELECTION_COLOR],
     [12, SELECTION_COLOR],
     [19, SELECTION_COLOR],
+    [26, SELECTION_COLOR],
   ]);
 });
 
@@ -71,7 +72,7 @@ test("a caret off any word, a multi-line selection, and a whitespace selection h
   assert.deepEqual(painted(window), [], "inside a run of spaces");
   await editor.setSelection({ anchor: 0, caret: 3 });
   await rest();
-  assert.equal(painted(window).length, 3);
+  assert.equal(painted(window).length, 4);
   await editor.setSelection({ anchor: 0, caret: 20 });
   await rest();
   assert.deepEqual(painted(window), [], "over two lines");
@@ -98,7 +99,7 @@ test("each kind can be turned off", async () => {
   assert.deepEqual(painted(window), []);
   await editor.setSelection({ anchor: 0, caret: 3 });
   await rest();
-  assert.equal(painted(window).length, 3);
+  assert.equal(painted(window).length, 4);
   await settings.set(SELECTION_ENABLED, false);
   await rest();
   assert.deepEqual(painted(window), []);

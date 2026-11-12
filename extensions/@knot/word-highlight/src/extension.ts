@@ -24,7 +24,13 @@ type Follow = {
 };
 
 /** What the caret or selection asks to highlight. */
-type Wanted = { color: string; text: string; wholeWord: boolean; skip: ByteRange | null };
+type Wanted = {
+  color: string;
+  text: string;
+  wholeWord: boolean;
+  caseSensitive: boolean;
+  skip: ByteRange | null;
+};
 
 let delay = 75;
 
@@ -40,7 +46,7 @@ async function wanted(handle: EditorHandle, buffer: Buffer): Promise<Wanted | nu
     const word = await buffer.wordAt(caret);
     if (word === null || word.kind !== "word") return null;
     const { text } = await buffer.snapshot(word.range);
-    return { color: WORD_COLOR, text, wholeWord: true, skip: null };
+    return { color: WORD_COLOR, text, wholeWord: true, caseSensitive: true, skip: null };
   }
   if (!(await settings.get(SELECTION_ENABLED))) return null;
   const range = {
@@ -50,7 +56,11 @@ async function wanted(handle: EditorHandle, buffer: Buffer): Promise<Wanted | nu
   // A character takes at most four bytes.
   if (range.endByteOffset - range.startByteOffset > SELECTION_LIMIT * 4) return null;
   const text = selectionQuery((await buffer.snapshot(range)).text);
-  return text === null ? null : { color: SELECTION_COLOR, text, wholeWord: false, skip: range };
+  // VS Code's default selected-text match mode follows Find: case-insensitive
+  // and not whole-word.
+  return text === null
+    ? null
+    : { color: SELECTION_COLOR, text, wholeWord: false, caseSensitive: false, skip: range };
 }
 
 /** Paints what the editor asks for, unless that is already painted. */
@@ -65,7 +75,10 @@ async function update(follow: Follow) {
   if (want === null) {
     revision = (await buffer.snapshot({ startByteOffset: 0, endByteOffset: 0 })).revision;
   } else {
-    const found = await buffer.find(want.text, { caseSensitive: true, wholeWord: want.wholeWord });
+    const found = await buffer.find(want.text, {
+      caseSensitive: want.caseSensitive,
+      wholeWord: want.wholeWord,
+    });
     items = decorations(found.matches, want.color, want.skip);
     revision = found.revision;
   }
