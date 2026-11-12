@@ -562,6 +562,8 @@ fn view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle(
     cx.run_until_parked();
     let second = active_editor(&shell, cx);
     assert_ne!(first.entity_id(), second.entity_id());
+    let anchors = |cx: &mut TestAppContext| cx.read(|cx| model.read(cx).anchored_range_count());
+    let before = anchors(cx);
 
     // The focused split's editor paints the set; the other view of the
     // buffer does not, and a stale revision is rejected.
@@ -571,9 +573,14 @@ fn view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle(
     assert_eq!(painted(&second, cx), [(0..3, "word".to_owned())]);
     assert!(painted(&first, cx).is_empty());
 
-    // Closing the tab leaves the other view of the buffer clean.
+    // Closing the tab releases the view, its decoration included, and
+    // leaves the other view of the buffer clean.
+    let closed = second.downgrade();
+    drop(second);
     run(CLOSE_TAB_COMMAND, cx);
     cx.run_until_parked();
+    assert!(closed.upgrade().is_none());
+    assert_eq!(anchors(cx), before - 1);
     assert_eq!(active_editor(&shell, cx).entity_id(), first.entity_id());
     assert!(painted(&first, cx).is_empty());
 
