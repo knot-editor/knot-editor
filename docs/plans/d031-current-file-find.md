@@ -132,28 +132,14 @@ shows through. Review found the dark themes' match colors serviceable but
 subtle, particularly the current match; they may be revisited. End-to-end
 tests are in `crates/knot-ext-workbench/tests/workbench/find.rs`.
 
-### 5. Toggles and buttons
+### 5. Toggles and buttons ✅
 
-- ✅ Bar toggles and buttons: data, painting, tooltips, click handling,
-  toggle-state updates, and command invocation from a button with the bar's
-  editor captured. Toggles and buttons carry an icon, tooltip, and command;
-  a toggle also has `active`, which the extension flips by opening the bar
-  again. They paint between the fields and the message (toggles) and after it
-  (buttons), reusing existing theme colors. A click focuses the view, keeping a
-  field's focus, then runs the command through the shell with the focused
-  editor captured.
-- ✅ `@knot/find` gains case-sensitive and whole-word toggles (⌥⌘C / ⌥⌘W
-  in the bar; Ctrl+Alt elsewhere) and previous, next, and close buttons. The
-  toggles' state shows which options apply, so the message does not repeat
-  them. Toggling searches again from the selection.
-- ✅ Real-editor tests for clicking a toggle and a button (sub-step 1) and
-  for the toggle keys (`find.rs`).
-
-**Implementation context:** extend the checkpoint 2 bar data and rendering.
-Icons through `IconRef` as status items and tree rows use them. Buttons
-invoke commands like status items' `command`.
-
-**Review gate:** bar controls in the real app.
+Approved. Bars carry toggles (icon, tooltip, `active`, command) and buttons
+(icon, tooltip, command), specified in `knot.d.ts` and painted in
+`src/app/editor/bars.rs`. A click runs the command through the shell with the
+bar's editor captured; an extension flips a toggle by opening the bar again.
+`@knot/find` has Match Case and Whole Word toggles (⌥⌘C / ⌥⌘W in the bar;
+Ctrl+Alt elsewhere) and previous, next, and close buttons.
 
 ### 6. Documentation
 
