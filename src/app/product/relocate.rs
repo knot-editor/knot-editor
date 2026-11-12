@@ -120,7 +120,7 @@ impl KnotWindow {
             return CommandOutcome::InvalidTarget;
         }
         let Some(destination_shell) = destination.shell.upgrade().filter(|shell| {
-            cx.global::<ApplicationSessions>()
+            cx.global::<ApplicationWindows>()
                 .is_open(shell.entity_id())
         }) else {
             return CommandOutcome::InvalidTarget;

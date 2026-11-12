@@ -130,19 +130,19 @@ struct CapturedWindow {
 
 impl CapturedWindow {
     fn is_live(&self, cx: &App) -> bool {
-        cx.global::<ApplicationSessions>()
+        cx.global::<ApplicationWindows>()
             .is_open(self.shell.entity_id())
     }
 
     fn target(&self) -> WindowTarget {
         WindowTarget {
-            window: session_id(self.shell.entity_id()),
+            window: window_id(self.shell.entity_id()),
         }
     }
 }
 
 fn capture(window: &str, cx: &mut App) -> Result<CapturedWindow, AccessError> {
-    let shell = operations::capture_session(
+    let shell = operations::capture_window(
         &WindowTarget {
             window: window.to_owned(),
         },
@@ -451,7 +451,7 @@ fn commit(
         .flat_map(|window| &window.entries)
         .filter_map(|entry| live_document(entry, cx))
         .collect::<HashSet<_>>();
-    let workbenches = cx.global::<ApplicationSessions>();
+    let workbenches = cx.global::<ApplicationWindows>();
     for document in &presented {
         let total = workbenches.view_count(*document, cx);
         if kept.contains(document) || source_view_count(&sources, *document, cx) < total {
@@ -486,7 +486,7 @@ fn commit(
             .as_ref()
             .and_then(|layout| layout.as_ref())
             .and_then(|layout| layout.geometry.as_ref());
-        match launch::open_session_window(geometry, cx) {
+        match launch::open_blank_window(geometry, cx) {
             Ok((shell, _)) => destinations.push(CapturedWindow { shell }),
             Err(_) => {
                 for window in destinations {
@@ -552,7 +552,7 @@ fn commit(
             // so restored text is never hidden.
             let mut tabs = Vec::new();
             for document in resolved {
-                tabs.push(document.map(|document| shell.present_session_document(document, cx)));
+                tabs.push(document.map(|document| shell.present_document(document, cx)));
             }
             if outcome != Some(LayoutOutcome::Applied) {
                 let selected = destination
@@ -575,7 +575,7 @@ fn commit(
         });
     }
 
-    let workbenches = cx.global::<ApplicationSessions>();
+    let workbenches = cx.global::<ApplicationWindows>();
     let unpresented = presented
         .into_iter()
         .filter(|document| workbenches.view_count(*document, cx) == 0)
@@ -708,8 +708,8 @@ impl KnotWindow {
     }
 
     /// Capture `shell`'s layout with its window's geometry.
-    pub(crate) fn capture_session_layout(shell: &Entity<Self>, cx: &mut App) -> WindowLayout {
-        let geometry = session_window(shell.entity_id(), cx).and_then(|window| {
+    pub(crate) fn capture_attached_layout(shell: &Entity<Self>, cx: &mut App) -> WindowLayout {
+        let geometry = native_window(shell.entity_id(), cx).and_then(|window| {
             window
                 .update(cx, |_, window, cx| window_geometry(window, cx))
                 .ok()
@@ -816,7 +816,7 @@ impl KnotWindow {
     }
 
     /// Present a document in this window's center, reusing an existing tab.
-    pub(super) fn present_session_document(
+    pub(super) fn present_document(
         &mut self,
         document: DocumentId,
         cx: &mut Context<Self>,
@@ -890,17 +890,17 @@ pub(crate) fn restore_windows(
 pub(crate) fn open_window(cx: &mut App) -> WindowTarget {
     let handle = launch::open_product_window_with(None, None, cx);
     let shell = cx
-        .global::<ApplicationSessions>()
-        .in_window(handle)
+        .global::<ApplicationWindows>()
+        .in_native_window(handle)
         .expect("a product window shows a session");
     WindowTarget {
-        window: session_id(shell.entity_id()),
+        window: window_id(shell.entity_id()),
     }
 }
 
 /// Remove a window from `open_window` whose roots could not be applied.
 pub(crate) fn discard_window(target: &WindowTarget, cx: &mut App) {
-    if let Ok(shell) = operations::capture_session(target, cx) {
+    if let Ok(shell) = operations::capture_window(target, cx) {
         shell.update(cx, |shell, cx| {
             let _ = shell.close_window(cx);
         });
@@ -912,13 +912,13 @@ pub(crate) fn capture_layout(
     target: &WindowTarget,
     cx: &mut App,
 ) -> Result<WindowLayout, AccessError> {
-    let shell = operations::capture_session(target, cx)?;
-    Ok(KnotWindow::capture_session_layout(&shell, cx))
+    let shell = operations::capture_window(target, cx)?;
+    Ok(KnotWindow::capture_attached_layout(&shell, cx))
 }
 
 /// Activate a product window and focus its active surface.
 pub(crate) fn focus_window(target: &WindowTarget, cx: &mut App) -> Result<(), AccessError> {
-    let shell = operations::capture_session(target, cx)?;
+    let shell = operations::capture_window(target, cx)?;
     shell.update(cx, |shell, cx| {
         shell.activate_window(cx);
         shell.focus_active_surface(cx);

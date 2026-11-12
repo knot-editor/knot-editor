@@ -1,5 +1,5 @@
 use super::super::{
-    ApplicationProtectedClosure, ApplicationSessions, ApplicationTerminalSessions, KnotWindow,
+    ApplicationProtectedClosure, ApplicationWindows, ApplicationTerminalSessions, KnotWindow,
     create_untitled_document, open_tab_tear_out_window,
 };
 use super::tests::start_drag;
@@ -187,7 +187,7 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
                 );
             }
             assert_eq!(
-                cx.global::<ApplicationSessions>().view_count(document, cx),
+                cx.global::<ApplicationWindows>().view_count(document, cx),
                 3
             );
             assert!(
@@ -419,7 +419,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                 }
             );
             assert_eq!(
-                cx.global::<ApplicationSessions>().view_count(document, cx),
+                cx.global::<ApplicationWindows>().view_count(document, cx),
                 1
             );
             assert!(

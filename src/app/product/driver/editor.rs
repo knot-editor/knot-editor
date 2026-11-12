@@ -20,7 +20,7 @@ use crate::app::editor::{CaretShape, Editor, EditorView, Reveal};
 use crate::app::keys::Keystroke;
 use crate::app::model::{Buffer, BufferModel};
 use crate::app::product::{
-    ApplicationDocuments, ApplicationProductCommands, ApplicationSessions, DocumentId,
+    ApplicationDocuments, ApplicationProductCommands, ApplicationWindows, DocumentId,
     KnotWindow, Workbench,
 };
 use crate::app::resource::ResourceUri;
@@ -127,7 +127,7 @@ impl TestEditor {
         let (document, model) = new_document(text, language, cx);
         self.shell.update(cx, |shell, cx| {
             let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-            cx.global::<ApplicationSessions>()
+            cx.global::<ApplicationWindows>()
                 .register(cx.weak_entity(), &workbench);
             shell.workbench = workbench;
             cx.notify();
@@ -295,8 +295,8 @@ impl TestEditor {
     pub fn status(&self, cx: &mut TestAppContext) -> (Vec<String>, Vec<String>) {
         cx.read(|cx| {
             let key = match &self.window {
-                Some((window, _)) => crate::app::product::test_session_id(*window),
-                None => crate::app::product::session_id(self.shell.entity_id()),
+                Some((window, _)) => crate::app::product::test_window_id(*window),
+                None => crate::app::product::window_id(self.shell.entity_id()),
             };
             let items = cx.global::<ApplicationStatusBar>().0.items(&key, &[]);
             let texts = |side: Vec<crate::app::status_bar::BarItem>| {

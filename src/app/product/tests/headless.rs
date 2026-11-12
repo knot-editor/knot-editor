@@ -6,7 +6,7 @@ use crate::app::keys::Keystroke;
 use crate::app::transient::{TransientOutcome, TransientOwner};
 use knot_protocol::{ExtensionId, ExtensionLifecycleId, PickerItem};
 
-fn headless_session(
+fn headless_window(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
 ) -> (Entity<KnotWindow>, Entity<Buffer>) {
@@ -44,7 +44,7 @@ fn owner() -> TransientOwner {
 #[gpui::test]
 fn editor_keys_route_and_unclaimed_keys_type(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, model) = headless_session(&documents, cx);
+    let (shell, model) = headless_window(&documents, cx);
     press(&shell, "x y z backspace left", cx);
     type_text(&shell, "é", cx);
     cx.read(|cx| assert_eq!(model.read(cx).text(), "xéy"));
@@ -53,7 +53,7 @@ fn editor_keys_route_and_unclaimed_keys_type(cx: &mut TestAppContext) {
 #[gpui::test]
 fn the_palette_filters_and_runs_a_command(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, model) = headless_session(&documents, cx);
+    let (shell, model) = headless_window(&documents, cx);
     shell.update(cx, |shell, cx| shell.open_command_palette(cx));
     type_text(&shell, "split rightx", cx);
     press(&shell, "backspace enter", cx);
@@ -71,7 +71,7 @@ fn the_palette_filters_and_runs_a_command(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (shell, model) = headless_session(&documents, cx);
+    let (shell, model) = headless_window(&documents, cx);
     let items = ["one", "two", "three"]
         .map(|label| PickerItem {
             id: label.to_uppercase(),
@@ -175,7 +175,7 @@ fn terminal_keys_and_text_reach_the_program(cx: &mut TestAppContext) {
     use alacritty_terminal::{grid::Dimensions, tty};
 
     let documents = install_globals(cx);
-    let (shell, _) = headless_session(&documents, cx);
+    let (shell, _) = headless_window(&documents, cx);
     let temp = tempfile::tempdir().unwrap();
     let destination = temp.path().join("keys.hex");
     let expected = "hi\x1b[Aé\r".as_bytes();

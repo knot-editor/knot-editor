@@ -195,7 +195,7 @@ async fn terminal_tab_has_a_captured_surface_and_document_commands_are_unavailab
     cx.read(|cx| {
         assert_eq!(shell.read(cx).workbench.read(cx).view_count(document), 1);
         assert_eq!(
-            cx.global::<ApplicationSessions>().view_count(document, cx),
+            cx.global::<ApplicationWindows>().view_count(document, cx),
             1
         );
     });

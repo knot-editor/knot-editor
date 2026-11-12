@@ -256,7 +256,7 @@ fn apply(id: DocumentId, snapshot: &Snapshot, text: &str, version: ResourceVersi
     if check == FileCheck::Changed && !reload_now {
         if documents.update(cx, |documents, _| documents.mark_changed(id, version)) {
             application_observation::changed(cx);
-            prompt_sessions(cx);
+            prompt_windows(cx);
         }
         return;
     }
@@ -334,13 +334,13 @@ pub(super) fn reload(id: DocumentId, cx: &mut App) {
 }
 
 /// Ask each session whose focused document was marked changed on disk.
-pub(super) fn prompt_sessions(cx: &mut App) {
+pub(super) fn prompt_windows(cx: &mut App) {
     let sessions: Vec<_> = cx
-        .global::<super::ApplicationSessions>()
+        .global::<super::ApplicationWindows>()
         .0
         .borrow()
         .iter()
-        .map(|open| open.shell.clone())
+        .map(|open| open.window.clone())
         .collect();
     for shell in sessions {
         shell

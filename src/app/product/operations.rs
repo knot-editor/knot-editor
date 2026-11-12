@@ -44,11 +44,11 @@ fn window_target(destination: &DocumentDestination) -> &WindowTarget {
 }
 
 /// The open session a window target names.
-pub(super) fn capture_session(
+pub(super) fn capture_window(
     target: &WindowTarget,
     cx: &App,
 ) -> Result<Entity<KnotWindow>, AccessError> {
-    cx.global::<ApplicationSessions>()
+    cx.global::<ApplicationWindows>()
         .find(&target.window)
         .ok_or(AccessError::InvalidTarget)
 }
@@ -76,7 +76,7 @@ fn capture_destination(
     destination: &DocumentDestination,
     cx: &mut App,
 ) -> Result<(Entity<KnotWindow>, OpenTarget), AccessError> {
-    let shell = capture_session(window_target(destination), cx)?;
+    let shell = capture_window(window_target(destination), cx)?;
     let state = shell.read(cx);
     let workbench = state.workbench.read(cx);
     let (pane, tab) = match destination {
@@ -131,7 +131,7 @@ impl OpenTarget {
         PresentationTarget {
             pane: PaneTarget {
                 window: WindowTarget {
-                    window: session_id(self.shell.entity_id()),
+                    window: window_id(self.shell.entity_id()),
                 },
                 workbench: self.workbench.entity_id().as_u64().to_string(),
                 pane: tab.pane.value().to_string(),
@@ -287,7 +287,7 @@ impl EditorTab {
     pub(crate) fn editor(&self, cx: &App) -> Option<Entity<crate::app::editor::Editor>> {
         let target = &self.0;
         let workbench = target.workbench.upgrade()?;
-        if !session_is_live(&target.shell, &workbench, cx)
+        if !window_is_live(&target.shell, &workbench, cx)
             || !target.matches_presentation(&workbench, cx)
         {
             return None;
@@ -422,7 +422,7 @@ pub(crate) fn replace_roots(
                 .map_err(|_| WorkspaceError::Resource(OpenError::InvalidUri))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let shell = capture_session(&window_target, cx)?;
+    let shell = capture_window(&window_target, cx)?;
     let shell_id = shell.entity_id();
     shell.update(cx, |shell, cx| {
         let generation = shell.next_open_generation();
@@ -462,7 +462,7 @@ pub(crate) fn replace_roots(
                         )))
                     } else if shell.open_generation != generation
                         || !shell.workspace.is_current(&workspace)
-                        || !cx.global::<ApplicationSessions>().is_open(shell_id)
+                        || !cx.global::<ApplicationWindows>().is_open(shell_id)
                     {
                         Err(WorkspaceError::Resource(OpenError::Access(
                             AccessError::InvalidTarget,

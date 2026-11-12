@@ -428,7 +428,7 @@ fn invalid_config_keybinding_batch_rolls_back_before_product_readiness(cx: &mut 
     cx.read(|cx| {
         assert_eq!(keymap_command(cx, "cmd-r", Some("editor")), None);
         assert_eq!(host.read(cx).lifecycle_count(), 0);
-        assert!(cx.global::<ApplicationSessions>().0.borrow().is_empty());
+        assert!(cx.global::<ApplicationWindows>().0.borrow().is_empty());
     });
     assert_eq!(cx.windows().len(), 1);
 }

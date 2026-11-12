@@ -62,7 +62,7 @@ pub(super) fn open_product_window_with(
         }
     });
     let bounds = Bounds::centered(None, size(px(1000.), px(720.)), cx);
-    let window = show_session(
+    let window = show_window(
         shell.clone(),
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -82,7 +82,7 @@ pub(super) fn open_product_window_with(
 
 /// Open a window that shows `shell`; closing the window ends the session,
 /// and a window that fails to open ends it at once.
-pub(super) fn show_session(
+pub(super) fn show_window(
     shell: Entity<KnotWindow>,
     options: WindowOptions,
     cx: &mut App,
@@ -143,7 +143,7 @@ pub(super) fn open_tab_transfer_window_with_bounds(
 ) -> anyhow::Result<WindowHandle<KnotWindow>> {
     let workbench = cx.new(|_| Workbench::empty());
     let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
-    show_session(
+    show_window(
         shell,
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -159,7 +159,7 @@ pub(super) fn open_tab_transfer_window_with_bounds(
 /// Open an empty product window that inherits the fresh-window tool layout;
 /// session replacement presents its documents in the same turn. Saved
 /// geometry is fitted to the connected displays.
-pub(super) fn open_session_window(
+pub(super) fn open_blank_window(
     geometry: Option<&crate::app::window_layout::WindowGeometry>,
     cx: &mut App,
 ) -> anyhow::Result<(Entity<KnotWindow>, AnyWindowHandle)> {
@@ -173,7 +173,7 @@ pub(super) fn open_session_window(
     let workbench = cx.new(|_| Workbench::empty());
     let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
     shell.update(cx, |shell, cx| shell.restore_fresh_window_layout(cx));
-    let handle = show_session(
+    let handle = show_window(
         shell.clone(),
         WindowOptions {
             window_bounds: Some(window_bounds),
@@ -314,12 +314,12 @@ fn open_launch_windows(
         .map(|result| result.windows)
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|window| operations::capture_session(&window.window, cx).ok())
+        .filter_map(|window| operations::capture_window(&window.window, cx).ok())
         .collect::<Vec<_>>();
     let mut recovery = Some(recovery);
     if let Some(shell) = restored.first() {
         let recovery = recovery.take().expect("recovery is unclaimed");
-        let workbenches = cx.global::<ApplicationSessions>();
+        let workbenches = cx.global::<ApplicationWindows>();
         let unpresented = recovery
             .restored
             .iter()
@@ -330,7 +330,7 @@ fn open_launch_windows(
         shell.update(cx, |shell, cx| {
             for document in unpresented {
                 if KnotWindow::documents(cx).read(cx).get(document).is_some() {
-                    shell.present_session_document(document, cx);
+                    shell.present_document(document, cx);
                 }
             }
             if let Some((title, detail)) = notice {
@@ -369,7 +369,7 @@ fn open_report_after_failed_startup(cx: &mut App) {
     if !failed {
         return;
     }
-    for shell in sessions(cx) {
+    for shell in windows(cx) {
         shell.update(cx, |shell, cx| {
             shell.extension_report_open = true;
             cx.notify();
@@ -411,7 +411,7 @@ pub(crate) fn run(
             )),
         ));
         cx.set_global(crate::app::settings::ApplicationSettings::default());
-        cx.set_global(ApplicationSessions(RefCell::new(Vec::new())));
+        cx.set_global(ApplicationWindows(RefCell::new(Vec::new())));
         cx.set_global(ApplicationProtectedClosure(RefCell::new(false)));
         cx.set_global(ApplicationTerminalSessions(RefCell::new(
             TerminalSessions::default(),

@@ -1,5 +1,5 @@
 use super::super::{
-    ApplicationProtectedClosure, ApplicationSessions, ApplicationTerminalSessions, KnotWindow,
+    ApplicationProtectedClosure, ApplicationWindows, ApplicationTerminalSessions, KnotWindow,
     create_untitled_document, open_tab_transfer_window,
 };
 use super::{TabRelocationDestination, TabRelocationSource};
@@ -113,7 +113,7 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
             }
         );
         assert_eq!(
-            cx.global::<ApplicationSessions>().view_count(document, cx),
+            cx.global::<ApplicationWindows>().view_count(document, cx),
             1
         );
         assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
@@ -157,7 +157,7 @@ fn relocation_into_existing_document_pane_keeps_application_view_counts(cx: &mut
     assert_eq!(outcome, CommandOutcome::Completed);
     cx.read(|cx| {
         assert_eq!(
-            cx.global::<ApplicationSessions>().view_count(document, cx),
+            cx.global::<ApplicationWindows>().view_count(document, cx),
             2
         );
         let workbench = destination.read(cx).workbench.read(cx);
@@ -216,7 +216,7 @@ fn abandoning_an_inactive_tab_capture_keeps_focus_and_document_ownership(cx: &mu
         assert_eq!(workbench.tab_snapshots(), before);
         assert_eq!(workbench.focused_pane().unwrap().active_tab_id(), active);
         assert_eq!(
-            cx.global::<ApplicationSessions>().view_count(document, cx),
+            cx.global::<ApplicationWindows>().view_count(document, cx),
             3
         );
         assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
@@ -416,7 +416,7 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
         );
         assert!(source.read(cx).workbench.read(cx).panes().is_empty());
         assert_eq!(
-            cx.global::<ApplicationSessions>().view_count(document, cx),
+            cx.global::<ApplicationWindows>().view_count(document, cx),
             1
         );
     });

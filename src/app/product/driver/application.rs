@@ -20,7 +20,7 @@ use crate::app::filesystem::{
     ResourceEntry, ResourceFile, ResourceStat, ResourceVersion,
 };
 use crate::app::product::{
-    ApplicationDocuments, ApplicationFileSystems, ApplicationOpenDialog, ApplicationSessions,
+    ApplicationDocuments, ApplicationFileSystems, ApplicationOpenDialog, ApplicationWindows,
     DocumentCollection, OpenDialogFuture, OpenDialogOutcome, ProductOpenDialog,
 };
 use crate::app::record_store::StateDatabase;
@@ -277,7 +277,7 @@ impl TestProduct {
 
         let documents = cx.new(|_| DocumentCollection::new());
         cx.set_global(ApplicationDocuments(documents));
-        cx.set_global(ApplicationSessions::default());
+        cx.set_global(ApplicationWindows::default());
         self.install_durable_state(cx);
         cx.update(crate::app::extensions::host::reset_launched_for_test);
         self.reload_packages(cx);

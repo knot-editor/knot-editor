@@ -56,7 +56,7 @@ pub(super) use super::driver::setup::{
 use super::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationOpenDialog,
     ApplicationProductCommands, ApplicationProtectedClosure, ApplicationSaveDialog,
-    ApplicationSessions, ApplicationTerminalSessions, Buffer, BufferModel, CLOSE_TAB_COMMAND,
+    ApplicationWindows, ApplicationTerminalSessions, Buffer, BufferModel, CLOSE_TAB_COMMAND,
     CLOSE_WINDOW_COMMAND, DocumentCollection, Entity, LaunchGate, NEW_COMMAND,
     NEW_TERMINAL_COMMAND, OpenDialogFuture, OpenDialogOutcome, OpenRequest, OpenTarget,
     ProductCommandSource, ProductOpenDialog, ProductSaveDialog, KnotWindow, QUIT_COMMAND,

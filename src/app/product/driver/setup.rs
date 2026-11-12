@@ -9,7 +9,7 @@ use gpui::{AppContext, Entity, TestAppContext};
 
 use super::super::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationLaunchGate,
-    ApplicationProductCommands, ApplicationProtectedClosure, ApplicationSessions,
+    ApplicationProductCommands, ApplicationProtectedClosure, ApplicationWindows,
     ApplicationTerminalSessions, Buffer, DocumentCollection, DocumentId, LaunchGate,
     ProductCommandDispatcher, KnotWindow, TerminalSessions, Workbench,
     install_protected_window_close,
@@ -26,7 +26,7 @@ pub(crate) fn install_globals(cx: &mut TestAppContext) -> Entity<DocumentCollect
             cx.background_executor.clone(),
         )),
     ));
-    cx.set_global(ApplicationSessions::default());
+    cx.set_global(ApplicationWindows::default());
     cx.update(super::super::key_routing::intercept_keys);
     cx.set_global(ApplicationProtectedClosure(RefCell::new(false)));
     cx.set_global(ApplicationTerminalSessions(RefCell::new(

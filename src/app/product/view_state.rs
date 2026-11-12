@@ -115,7 +115,7 @@ impl KnotWindow {
             Some(previous) if previous == settled => Settled::Unchanged,
             Some((_, layout)) if layout == settled.1 => Settled::Roots,
             _ => Settled::Layout(knot_protocol::WindowTarget {
-                window: session_id(cx.entity_id()),
+                window: window_id(cx.entity_id()),
             }),
         }
     }

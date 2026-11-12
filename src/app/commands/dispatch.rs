@@ -101,17 +101,17 @@ pub(crate) struct ProductCommandTarget {
 
 impl ProductCommandTarget {
     /// The session while it is open and still shows the captured workbench.
-    pub(crate) fn session(&self, cx: &App) -> Option<Entity<KnotWindow>> {
+    pub(crate) fn window(&self, cx: &App) -> Option<Entity<KnotWindow>> {
         let workbench = self.workbench.upgrade()?;
-        crate::app::product::session_is_live(&self.shell, &workbench, cx)
+        crate::app::product::window_is_live(&self.shell, &workbench, cx)
             .then(|| self.shell.upgrade())
             .flatten()
     }
 
     /// The window the session is shown in.
-    pub(crate) fn window(&self, cx: &App) -> Option<AnyWindowHandle> {
-        self.session(cx)?;
-        crate::app::product::session_window(self.shell.entity_id(), cx)
+    pub(crate) fn native_window(&self, cx: &App) -> Option<AnyWindowHandle> {
+        self.window(cx)?;
+        crate::app::product::native_window(self.shell.entity_id(), cx)
     }
 
     /// The captured tab; a command captured without one is unavailable.
@@ -132,7 +132,7 @@ impl ProductCommandTarget {
             .workbench
             .upgrade()
             .ok_or(CommandOutcome::InvalidTarget)?;
-        if crate::app::product::session_is_live(&self.shell, &workbench, cx)
+        if crate::app::product::window_is_live(&self.shell, &workbench, cx)
             && tab.is_live(workbench.read(cx))
         {
             Ok(tab)
@@ -181,7 +181,7 @@ impl ProductCommandTarget {
             self.validate_tab(cx)?;
             self.validate_view(cx)
         } else {
-            self.session(cx)
+            self.window(cx)
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         }
@@ -362,7 +362,7 @@ pub(crate) fn dispatch_open_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    let shell = target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
+    let shell = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
     if target.tab.is_some() {
         target.validate_tab(cx)?;
     }
@@ -380,7 +380,7 @@ pub(crate) fn dispatch_save_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    let shell = target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
+    let shell = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
     target.document_id(cx)?;
     break_captured_history_group(target, cx);
     let target = target.clone();
@@ -396,7 +396,7 @@ pub(crate) fn dispatch_close_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> Result<(), CommandOutcome> {
-    target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
+    target.native_window(cx).ok_or(CommandOutcome::InvalidTarget)?;
     target.validate(cx)?;
     break_captured_history_group(target, cx);
     KnotWindow::begin_protected_close(kind, target.clone(), Some(completion), cx);
@@ -409,7 +409,7 @@ pub(crate) fn dispatch_to_captured_target(
     completion: CommandCompletion,
     cx: &mut App,
 ) -> CommandClaim {
-    if target.session(cx).is_none() {
+    if target.native_window(cx).is_none() {
         return CommandClaim::Finished(CommandOutcome::InvalidTarget);
     }
     if let Err(outcome) = target.validate(cx) {

@@ -407,7 +407,7 @@ impl KnotWindow {
         if !settings::boolean(settings::STATUS_BAR_VISIBLE, cx) {
             return None;
         }
-        let window_key = session_id(cx.entity_id());
+        let window_key = window_id(cx.entity_id());
         let hidden = settings::strings(settings::STATUS_BAR_HIDDEN_ITEMS, cx);
         let items = cx
             .try_global::<ApplicationStatusBar>()

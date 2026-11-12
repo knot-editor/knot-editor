@@ -59,7 +59,7 @@ impl KnotWindow {
 
     pub(super) fn collect_product_views(cx: &mut App) -> Vec<ProtectedView> {
         let mut views = Vec::new();
-        for shell in cx.global::<ApplicationSessions>().shells() {
+        for shell in cx.global::<ApplicationWindows>().windows() {
             let session = shell.entity_id();
             let workbench = shell.read(cx).workbench.clone();
             let snapshots = workbench.read(cx).tab_snapshots();
@@ -259,7 +259,7 @@ impl KnotWindow {
         // next launch.
         if request.kind == ProtectedCloseKind::Window
             && cx.has_global::<super::launch::ApplicationQuitsWithLastWindow>()
-            && super::sessions(cx).len() == 1
+            && super::windows(cx).len() == 1
         {
             request.kind = ProtectedCloseKind::Quit;
         }
@@ -330,10 +330,10 @@ impl KnotWindow {
                     let title = document_state.title().to_owned();
                     let prompted_revision = document_state.model().read(cx).revision();
                     target
-                        .session(cx)
+                        .window(cx)
                         .ok_or(ProtectedCloseFailure::InvalidTarget)?;
                     let prompt = super::prompt(
-                        target.window(cx),
+                        target.native_window(cx),
                         PromptLevel::Warning,
                         format!("Do you want to save the changes to “{title}”?"),
                         Some("Your changes will be lost if you don't save them.".into()),
@@ -365,7 +365,7 @@ impl KnotWindow {
                             {
                                 return Err(ProtectedCloseFailure::Cancelled);
                             }
-                            let Some(shell) = target.session(cx) else {
+                            let Some(shell) = target.window(cx) else {
                                 return Err(ProtectedCloseFailure::InvalidTarget);
                             };
                             let (save_completion, receiver) = CommandCompletion::new();
@@ -613,7 +613,7 @@ impl KnotWindow {
         if !self.workbench.read(cx).contains_tab(pane, tab, document) {
             return CommandOutcome::InvalidTarget;
         }
-        let open_view_count = cx.global::<ApplicationSessions>().view_count(document, cx);
+        let open_view_count = cx.global::<ApplicationWindows>().view_count(document, cx);
         let documents = Self::documents(cx);
         let document_is_dirty = documents.read(cx).get(document).unwrap().is_dirty(cx);
         let outcome = self.workbench.update(cx, |workbench, _cx| {
@@ -676,7 +676,7 @@ impl KnotWindow {
             cx.notify();
             return Ok(());
         };
-        let open_view_count = cx.global::<ApplicationSessions>().view_count(document, cx);
+        let open_view_count = cx.global::<ApplicationWindows>().view_count(document, cx);
         let documents = Self::documents(cx);
         let document_is_dirty = documents
             .read(cx)

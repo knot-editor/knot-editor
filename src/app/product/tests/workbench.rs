@@ -188,7 +188,7 @@ fn workbench_registry_counts_views_across_windows(cx: &mut TestAppContext) {
     let (_second, _) = product_window(document, model, cx);
     cx.read(|cx| {
         assert_eq!(
-            cx.global::<ApplicationSessions>().view_count(document, cx),
+            cx.global::<ApplicationWindows>().view_count(document, cx),
             2
         )
     });

@@ -136,7 +136,7 @@ impl CommandContext {
         let target = self.target.clone();
         self.application(move |cx| {
             target.validate(cx)?;
-            let shell = target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
+            let shell = target.window(cx).ok_or(CommandOutcome::InvalidTarget)?;
             shell.update(cx, |shell, cx| access(shell, &target, cx))
         })
         .await?

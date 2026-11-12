@@ -321,7 +321,7 @@ impl KnotWindow {
                     {
                         Err(OpenFailure::Cancelled)
                     } else if this.open_generation != generation
-                        || !session_is_live(&target.shell, &this.workbench, cx)
+                        || !window_is_live(&target.shell, &this.workbench, cx)
                         || !target.matches_presentation(&this.workbench, cx)
                     {
                         Err(OpenFailure::InvalidTarget)
@@ -396,8 +396,8 @@ impl KnotWindow {
         }
         let handle = super::launch::open_product_window_with(None, None, cx);
         let shell = cx
-            .global::<ApplicationSessions>()
-            .in_window(handle)
+            .global::<ApplicationWindows>()
+            .in_native_window(handle)
             .expect("a product window shows a session");
         shell.update(cx, |shell, cx| {
             let workspace = shell.install_workspace(root, cx);
@@ -475,7 +475,7 @@ impl KnotWindow {
                     None => workbench.open_preview_in_center(document, model, cx),
                 });
             if let Some(replaced) = replaced.filter(|replaced| *replaced != document)
-                && cx.global::<ApplicationSessions>().view_count(replaced, cx) == 0
+                && cx.global::<ApplicationWindows>().view_count(replaced, cx) == 0
             {
                 documents.update(cx, |documents, cx| {
                     documents.remove(replaced, cx);
@@ -501,7 +501,7 @@ impl KnotWindow {
                     });
                     if replaced
                         && previous != document
-                        && cx.global::<ApplicationSessions>().view_count(previous, cx) == 0
+                        && cx.global::<ApplicationWindows>().view_count(previous, cx) == 0
                     {
                         documents.update(cx, |documents, cx| {
                             documents.remove(previous, cx);

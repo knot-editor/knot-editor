@@ -38,13 +38,13 @@ impl KnotWindow {
         definition: crate::app::extensions::semantics::ViewDefinition,
         cx: &mut Context<Self>,
     ) {
-        let window_id = session_id(cx.entity_id());
+        let window = window_id(cx.entity_id());
         let (content, event, observer) = match definition.content {
             knot_protocol::ViewContentKind::Tree => {
                 let view = cx.new(|cx| {
                     crate::app::tree_view::TreeView::new(
                         definition.id.clone(),
-                        window_id.clone(),
+                        window.clone(),
                         cx,
                     )
                 });
@@ -64,7 +64,7 @@ impl KnotWindow {
                 let view = cx.new(|cx| {
                     crate::app::text_view::TextView::new(
                         definition.id.clone(),
-                        window_id.clone(),
+                        window.clone(),
                         cx,
                     )
                 });
@@ -78,7 +78,7 @@ impl KnotWindow {
         };
         if !crate::app::extensions::host::attach_view_instance(
             definition.id.clone(),
-            window_id,
+            window,
             content.clone(),
             cx,
         ) {
@@ -365,7 +365,7 @@ impl KnotWindow {
         if self.test_tool_frame(cx).is_some() {
             return;
         }
-        let window = super::session_id(cx.entity_id());
+        let window = super::window_id(cx.entity_id());
         let tree = cx.new(|cx| crate::app::tree_view::TreeView::new(TEST_TOOL_ID, window, cx));
         let stored = Self::stored_tool_layout(cx);
         self.workbench.update(cx, |workbench, _| {

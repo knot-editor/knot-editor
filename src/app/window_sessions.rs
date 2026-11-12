@@ -114,10 +114,10 @@ pub(crate) fn record(cx: &mut App) {
     {
         return;
     }
-    let active = crate::app::product::active_session(cx).map(|shell| shell.entity_id());
+    let active = crate::app::product::active_window(cx).map(|shell| shell.entity_id());
     let mut captured = Vec::new();
-    for shell in crate::app::product::sessions(cx) {
-        let layout = KnotWindow::capture_session_layout(&shell, cx);
+    for shell in crate::app::product::windows(cx) {
+        let layout = KnotWindow::capture_attached_layout(&shell, cx);
         let state = shell.read(cx);
         let recorded = RecordedWindow {
             roots: state.root_uris().iter().map(ToString::to_string).collect(),

@@ -1934,7 +1934,7 @@ impl ProductExtensionHost {
                         invocation.capture = self.command_targets.get(&root).map(|target| {
                             knot_protocol::CommandCapture {
                                 authority: root,
-                                window: crate::app::product::session_id(target.shell.entity_id()),
+                                window: crate::app::product::window_id(target.shell.entity_id()),
                                 view: target.view.map(|view| format!("{view:?}")),
                                 tool: target.extension_tool_id(cx),
                                 editor: matches!(
@@ -2071,7 +2071,7 @@ impl ProductExtensionHost {
                     return;
                 }
                 // The tree must still have focus in its session.
-                let Some(target) = crate::app::product::find_session(window, cx)
+                let Some(target) = crate::app::product::find_window(window, cx)
                     .map(|shell| shell.update(cx, |shell, cx| shell.capture_command_target(cx)))
                 else {
                     return;
@@ -2105,7 +2105,7 @@ impl ProductExtensionHost {
         use knot_protocol::CommandOutcome;
 
         target.validate(cx)?;
-        if target.session(cx).is_none() {
+        if target.native_window(cx).is_none() {
             return Err(CommandOutcome::InvalidTarget);
         }
         let name = command.name.clone();
@@ -2129,7 +2129,7 @@ impl ProductExtensionHost {
                 .await
                 .unwrap_or(CommandOutcome::Cancelled);
             let outcome = cx.update(|cx| {
-                if target.session(cx).is_none() {
+                if target.native_window(cx).is_none() {
                     return CommandOutcome::InvalidTarget;
                 }
                 if let Err(invalid) = target.validate(cx) {
@@ -2398,13 +2398,13 @@ impl ProductExtensionHost {
             .documents()
             .map(|document| application_document_info(document, buffers[&document.id()], cx))
             .collect();
-        let active = crate::app::product::active_session(cx).map(|shell| shell.entity_id());
+        let active = crate::app::product::active_window(cx).map(|shell| shell.entity_id());
         let mut snapshot = ApplicationSnapshot {
             documents: document_infos,
             launched: cx.has_global::<ApplicationLaunched>(),
             ..Default::default()
         };
-        for shell in crate::app::product::sessions(cx) {
+        for shell in crate::app::product::windows(cx) {
             let info = shell
                 .read(cx)
                 .application_window(shell.entity_id(), &buffers, cx);
@@ -2621,12 +2621,12 @@ impl ProductExtensionHost {
                 .shell
                 .entity_id()
         } else {
-            crate::app::product::active_session(cx)
+            crate::app::product::active_window(cx)
                 .ok_or(AccessError::ContextUnavailable)?
                 .entity_id()
         };
         Ok(WindowTarget {
-            window: crate::app::product::session_id(shell),
+            window: crate::app::product::window_id(shell),
         })
     }
 
@@ -2734,7 +2734,7 @@ impl ProductExtensionHost {
             (None, Some(_)) => self.operation_window(request, cx)?.window,
             (None, None) => return Err(handlers::AccessError::ContextUnavailable),
         };
-        crate::app::product::find_session(&window, cx).ok_or(handlers::AccessError::InvalidTarget)
+        crate::app::product::find_window(&window, cx).ok_or(handlers::AccessError::InvalidTarget)
     }
 
     /// Run one transient interaction install against the resolved session.
@@ -2848,7 +2848,7 @@ impl ProductExtensionHost {
             lifecycle,
             invocation,
         };
-        for shell in crate::app::product::sessions(cx) {
+        for shell in crate::app::product::windows(cx) {
             shell.update(cx, |shell, cx| shell.cancel_transient(owner, cx));
         }
     }
@@ -2873,9 +2873,9 @@ impl ProductExtensionHost {
         let id = self.semantics.owned_kind(registration, request)?;
         let shells = match window {
             Some(window) => vec![
-                crate::app::product::find_session(window, cx).ok_or(AccessError::InvalidTarget)?,
+                crate::app::product::find_window(window, cx).ok_or(AccessError::InvalidTarget)?,
             ],
-            None => crate::app::product::sessions(cx),
+            None => crate::app::product::windows(cx),
         };
         for shell in shells {
             shell.update(cx, |shell, cx| match action {
@@ -2912,7 +2912,7 @@ impl ProductExtensionHost {
         let Ok(target) = self.operation_window(request, cx) else {
             return;
         };
-        let Some(shell) = crate::app::product::find_session(&target.window, cx) else {
+        let Some(shell) = crate::app::product::find_window(&target.window, cx) else {
             return;
         };
         shell.update(cx, |shell, cx| shell.publish_tool_layout(cx));

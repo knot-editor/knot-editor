@@ -387,7 +387,7 @@ impl TestWindow {
     /// The window's layout as packages read it.
     pub fn layout(&self, cx: &mut TestAppContext) -> Value {
         let target = knot_protocol::WindowTarget {
-            window: crate::app::product::test_session_id(self.window),
+            window: crate::app::product::test_window_id(self.window),
         };
         let layout = cx
             .update(|cx| crate::app::product::sessions::capture_layout(&target, cx))

@@ -93,22 +93,22 @@ use super::{
     workspace::WorkspaceState,
 };
 
-/// Every open product session. A session opens when it is created and closes
-/// with its window. The registry answers which workbench and window a session
-/// has without reading the session, which may be updating.
+/// Every open window. A window opens when it is created and closes with its
+/// native window. The registry answers which workbench and native window a
+/// window has without reading the window, which may be updating.
 #[derive(Default)]
-struct ApplicationSessions(RefCell<Vec<OpenSession>>);
+struct ApplicationWindows(RefCell<Vec<OpenWindow>>);
 
-struct OpenSession {
-    shell: WeakEntity<KnotWindow>,
+struct OpenWindow {
+    window: WeakEntity<KnotWindow>,
     workbench: WeakEntity<Workbench>,
-    window: Option<AnyWindowHandle>,
-    /// Whether this session was activated last, which makes it the active
-    /// session while it has no window.
+    native_window: Option<AnyWindowHandle>,
+    /// Whether this window was activated last, which makes it the active
+    /// window while it has no native window.
     active: bool,
 }
 
-impl Global for ApplicationSessions {}
+impl Global for ApplicationWindows {}
 
 struct ApplicationProtectedClosure(RefCell<bool>);
 
@@ -274,110 +274,110 @@ struct ApplicationSaveDialog(Arc<dyn ProductSaveDialog>);
 
 impl Global for ApplicationSaveDialog {}
 
-impl ApplicationSessions {
-    /// Open `shell`, or record the workbench an open one now shows.
-    fn register(&self, shell: WeakEntity<KnotWindow>, workbench: &Entity<Workbench>) {
-        let mut sessions = self.0.borrow_mut();
-        match sessions.iter_mut().find(|open| open.shell == shell) {
+impl ApplicationWindows {
+    /// Open `window`, or record the workbench an open one now shows.
+    fn register(&self, window: WeakEntity<KnotWindow>, workbench: &Entity<Workbench>) {
+        let mut windows = self.0.borrow_mut();
+        match windows.iter_mut().find(|open| open.window == window) {
             Some(open) => open.workbench = workbench.downgrade(),
-            None => sessions.push(OpenSession {
-                shell,
+            None => windows.push(OpenWindow {
+                window,
                 workbench: workbench.downgrade(),
-                window: None,
+                native_window: None,
                 active: false,
             }),
         }
     }
 
-    /// Record the window an open session is shown in.
-    fn attach(&self, shell: EntityId, window: AnyWindowHandle) {
+    /// Record the native window an open window is shown in.
+    fn attach(&self, window: EntityId, native_window: AnyWindowHandle) {
         if let Some(open) = self
             .0
             .borrow_mut()
             .iter_mut()
-            .find(|open| open.shell.entity_id() == shell)
+            .find(|open| open.window.entity_id() == window)
         {
-            open.window = Some(window);
+            open.native_window = Some(native_window);
         }
     }
 
-    /// Mark `shell` as the session activated last.
+    /// Mark `window` as the one activated last.
     #[cfg(any(test, feature = "test-support"))]
-    fn activate(&self, shell: EntityId) {
+    fn activate(&self, window: EntityId) {
         for open in self.0.borrow_mut().iter_mut() {
-            open.active = open.shell.entity_id() == shell;
+            open.active = open.window.entity_id() == window;
         }
     }
 
-    /// The activated session, when it has no window.
+    /// The activated window, when it has no native window.
     fn active_without_window(&self) -> Option<Entity<KnotWindow>> {
         self.0
             .borrow()
             .iter()
-            .find(|open| open.active && open.window.is_none())
-            .and_then(|open| open.shell.upgrade())
+            .find(|open| open.active && open.native_window.is_none())
+            .and_then(|open| open.window.upgrade())
     }
 
-    fn close(&self, shell: EntityId) {
+    fn close(&self, window: EntityId) {
         self.0
             .borrow_mut()
-            .retain(|open| open.shell.entity_id() != shell);
+            .retain(|open| open.window.entity_id() != window);
     }
 
-    fn is_open(&self, shell: EntityId) -> bool {
+    fn is_open(&self, window: EntityId) -> bool {
         self.0
             .borrow()
             .iter()
-            .any(|open| open.shell.entity_id() == shell)
+            .any(|open| open.window.entity_id() == window)
     }
 
-    /// The open sessions, in the order they opened.
-    fn shells(&self) -> Vec<Entity<KnotWindow>> {
-        let mut sessions = self.0.borrow_mut();
-        sessions.retain(|open| open.shell.upgrade().is_some());
-        sessions
+    /// The open windows, in the order they opened.
+    fn windows(&self) -> Vec<Entity<KnotWindow>> {
+        let mut windows = self.0.borrow_mut();
+        windows.retain(|open| open.window.upgrade().is_some());
+        windows
             .iter()
-            .filter_map(|open| open.shell.upgrade())
+            .filter_map(|open| open.window.upgrade())
             .collect()
     }
 
-    /// The open session with the given public ID.
+    /// The open window with the given public ID.
     fn find(&self, id: &str) -> Option<Entity<KnotWindow>> {
-        self.shells()
+        self.windows()
             .into_iter()
-            .find(|shell| session_id(shell.entity_id()) == id)
+            .find(|window| window_id(window.entity_id()) == id)
     }
 
-    /// The window an open session is shown in.
-    fn window(&self, shell: EntityId) -> Option<AnyWindowHandle> {
+    /// The native window an open window is shown in.
+    fn native_window(&self, window: EntityId) -> Option<AnyWindowHandle> {
         self.0
             .borrow()
             .iter()
-            .find(|open| open.shell.entity_id() == shell)
-            .and_then(|open| open.window)
+            .find(|open| open.window.entity_id() == window)
+            .and_then(|open| open.native_window)
     }
 
-    /// The open session shown in `window`.
-    fn in_window(&self, window: AnyWindowHandle) -> Option<Entity<KnotWindow>> {
+    /// The open window shown in `native_window`.
+    fn in_native_window(&self, native_window: AnyWindowHandle) -> Option<Entity<KnotWindow>> {
         self.0
             .borrow()
             .iter()
-            .find(|open| open.window == Some(window))
-            .and_then(|open| open.shell.upgrade())
+            .find(|open| open.native_window == Some(native_window))
+            .and_then(|open| open.window.upgrade())
     }
 
-    /// The open session showing `workbench`.
-    fn session_for(&self, workbench: &Entity<Workbench>) -> Option<WeakEntity<KnotWindow>> {
+    /// The open window showing `workbench`.
+    fn window_for(&self, workbench: &Entity<Workbench>) -> Option<WeakEntity<KnotWindow>> {
         self.0.borrow().iter().find_map(|open| {
-            (open.workbench.upgrade().as_ref() == Some(workbench)).then(|| open.shell.clone())
+            (open.workbench.upgrade().as_ref() == Some(workbench)).then(|| open.window.clone())
         })
     }
 
     fn view_count(&self, document: DocumentId, cx: &App) -> usize {
-        let mut sessions = self.0.borrow_mut();
-        sessions
-            .retain(|open| open.shell.upgrade().is_some() && open.workbench.upgrade().is_some());
-        sessions
+        let mut windows = self.0.borrow_mut();
+        windows
+            .retain(|open| open.window.upgrade().is_some() && open.workbench.upgrade().is_some());
+        windows
             .iter()
             .filter_map(|open| open.workbench.upgrade())
             .map(|workbench| workbench.read(cx).view_count(document))
@@ -385,64 +385,65 @@ impl ApplicationSessions {
     }
 }
 
-/// The public ID of the session `shell`: `WindowTarget.window` names it.
-pub(crate) fn session_id(shell: EntityId) -> String {
-    shell.as_u64().to_string()
+/// The public ID of `window`: `WindowTarget.window` names it.
+pub(crate) fn window_id(window: EntityId) -> String {
+    window.as_u64().to_string()
 }
 
-/// Whether `shell` is open and shows `workbench`.
-pub(super) fn session_is_live(
-    shell: &WeakEntity<KnotWindow>,
+/// Whether `window` is open and shows `workbench`.
+pub(super) fn window_is_live(
+    window: &WeakEntity<KnotWindow>,
     workbench: &Entity<Workbench>,
     cx: &App,
 ) -> bool {
-    cx.global::<ApplicationSessions>()
-        .session_for(workbench)
-        .is_some_and(|open| open == *shell)
+    cx.global::<ApplicationWindows>()
+        .window_for(workbench)
+        .is_some_and(|open| open == *window)
 }
 
-/// The open product sessions, in the order they opened.
-pub(crate) fn sessions(cx: &App) -> Vec<Entity<KnotWindow>> {
-    cx.try_global::<ApplicationSessions>()
-        .map(ApplicationSessions::shells)
+/// The open windows, in the order they opened.
+pub(crate) fn windows(cx: &App) -> Vec<Entity<KnotWindow>> {
+    cx.try_global::<ApplicationWindows>()
+        .map(ApplicationWindows::windows)
         .unwrap_or_default()
 }
 
-/// The open session a public ID names.
-pub(crate) fn find_session(id: &str, cx: &App) -> Option<Entity<KnotWindow>> {
-    cx.try_global::<ApplicationSessions>()?.find(id)
+/// The open window a public ID names.
+pub(crate) fn find_window(id: &str, cx: &App) -> Option<Entity<KnotWindow>> {
+    cx.try_global::<ApplicationWindows>()?.find(id)
 }
 
-/// The session shown in `window`.
-pub(crate) fn session_in_window(window: AnyWindowHandle, cx: &App) -> Option<Entity<KnotWindow>> {
-    cx.try_global::<ApplicationSessions>()?.in_window(window)
+/// The window shown in `native_window`.
+pub(crate) fn window_in(native_window: AnyWindowHandle, cx: &App) -> Option<Entity<KnotWindow>> {
+    cx.try_global::<ApplicationWindows>()?
+        .in_native_window(native_window)
 }
 
-/// The session shown in the active window, or without an active window the
-/// session activated last when it has no window.
-pub(crate) fn active_session(cx: &App) -> Option<Entity<KnotWindow>> {
+/// The window shown in the active native window, or without one the window
+/// activated last when it has no native window.
+pub(crate) fn active_window(cx: &App) -> Option<Entity<KnotWindow>> {
     match cx.active_window() {
-        Some(window) => session_in_window(window, cx),
+        Some(native_window) => window_in(native_window, cx),
         None => cx
-            .try_global::<ApplicationSessions>()?
+            .try_global::<ApplicationWindows>()?
             .active_without_window(),
     }
 }
 
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
-    static TEST_SESSION_IDS: RefCell<HashMap<u64, String>> = RefCell::default();
+    static TEST_WINDOW_IDS: RefCell<HashMap<u64, String>> = RefCell::default();
 }
 
-/// The public ID of the session last shown in `window`.
+/// The public ID of the window last shown in `native_window`.
 #[cfg(any(test, feature = "test-support"))]
-pub(crate) fn test_session_id(window: AnyWindowHandle) -> String {
-    TEST_SESSION_IDS.with_borrow(|ids| ids[&window.window_id().as_u64()].clone())
+pub(crate) fn test_window_id(native_window: AnyWindowHandle) -> String {
+    TEST_WINDOW_IDS.with_borrow(|ids| ids[&native_window.window_id().as_u64()].clone())
 }
 
-/// The window an open session is shown in, without reading the session.
-pub(crate) fn session_window(shell: EntityId, cx: &App) -> Option<AnyWindowHandle> {
-    cx.global::<ApplicationSessions>().window(shell)
+/// The native window an open window is shown in, without reading the window.
+pub(crate) fn native_window(window: EntityId, cx: &App) -> Option<AnyWindowHandle> {
+    cx.global::<ApplicationWindows>().native_window(window)
 }
 
 /// Where an open lands: beside the captured tab, or in the center when the
@@ -683,7 +684,7 @@ const MIN_DRAGGED_PANE_SIZE: f32 = 120.;
 impl KnotWindow {
     /// Open a session showing `workbench`, without a window.
     fn new(workbench: Entity<Workbench>, cx: &mut Context<Self>) -> Self {
-        cx.global::<ApplicationSessions>()
+        cx.global::<ApplicationWindows>()
             .register(cx.weak_entity(), &workbench);
         document_watch::install(cx);
         Self {
@@ -774,11 +775,11 @@ impl KnotWindow {
         }
         let handle = window.window_handle();
         self.window = Some(handle);
-        cx.global::<ApplicationSessions>()
+        cx.global::<ApplicationWindows>()
             .attach(cx.entity_id(), handle);
         #[cfg(any(test, feature = "test-support"))]
-        TEST_SESSION_IDS.with_borrow_mut(|ids| {
-            ids.insert(handle.window_id().as_u64(), session_id(cx.entity_id()))
+        TEST_WINDOW_IDS.with_borrow_mut(|ids| {
+            ids.insert(handle.window_id().as_u64(), window_id(cx.entity_id()))
         });
         let shell = cx.weak_entity();
         self._window_closed = Some(cx.on_window_closed(move |cx, _| {
@@ -796,7 +797,7 @@ impl KnotWindow {
 
     /// Close the session without its window.
     fn end(&mut self, cx: &mut Context<Self>) {
-        cx.global::<ApplicationSessions>().close(cx.entity_id());
+        cx.global::<ApplicationWindows>().close(cx.entity_id());
         let ids = self.contributed_views.keys().cloned().collect::<Vec<_>>();
         for id in ids {
             self.detach_contributed_view(&id, cx);
@@ -893,7 +894,7 @@ impl KnotWindow {
     /// focusing its window would.
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn activate(&mut self, cx: &mut Context<Self>) {
-        cx.global::<ApplicationSessions>().activate(cx.entity_id());
+        cx.global::<ApplicationWindows>().activate(cx.entity_id());
         super::extensions::host::application_changed(cx);
     }
 
@@ -1030,7 +1031,7 @@ impl KnotWindow {
             WindowTarget,
         };
         let target = WindowTarget {
-            window: session_id(session),
+            window: window_id(session),
         };
         let workbench = self.workbench.read(cx);
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);

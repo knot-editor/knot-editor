@@ -44,7 +44,7 @@ impl Launch {
             sessions: tempfile::tempdir().unwrap(),
             provider,
         };
-        launch.install_sessions(cx);
+        launch.install_windows(cx);
         launch
     }
 
@@ -52,7 +52,7 @@ impl Launch {
         self.sessions.path().join("state.sqlite3")
     }
 
-    fn install_sessions(&self, cx: &mut TestAppContext) {
+    fn install_windows(&self, cx: &mut TestAppContext) {
         let executor = cx.background_executor.clone();
         let database = crate::app::record_store::StateDatabase::open(self.path(), executor);
         cx.update(|cx| window_sessions::install(&database, cx));
@@ -116,8 +116,8 @@ impl Launch {
                 path, executor,
             )),
         ));
-        cx.set_global(ApplicationSessions::default());
-        self.install_sessions(cx);
+        cx.set_global(ApplicationWindows::default());
+        self.install_windows(cx);
     }
 
     fn open_file(

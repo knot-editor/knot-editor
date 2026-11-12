@@ -487,7 +487,7 @@ async fn reordering_retains_exact_targets_while_replacement_and_transfer_change_
             .find_map(|event| match &event.change {
                 ApplicationChange::WindowOpened { window }
                 | ApplicationChange::PresentationsChanged { window }
-                    if window.target.window == crate::app::product::test_session_id(handle) =>
+                    if window.target.window == crate::app::product::test_window_id(handle) =>
                 {
                     Some(window)
                 }
@@ -656,7 +656,7 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
     });
     shell.update(cx, |shell, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-        cx.global::<ApplicationSessions>()
+        cx.global::<ApplicationWindows>()
             .register(cx.weak_entity(), &workbench);
         shell.workbench = workbench;
         cx.notify();
@@ -1313,7 +1313,7 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     }
     cx.executor()
         .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE);
-    assert_eq!(settled(cx), [crate::app::product::test_session_id(window)]);
+    assert_eq!(settled(cx), [crate::app::product::test_window_id(window)]);
     // An unchanged layout reports nothing, and other windows stay quiet.
     shell.update(cx, |_, cx| cx.notify());
     cx.executor()
@@ -1328,7 +1328,7 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     });
     cx.executor()
         .advance_clock(super::super::view_state::VIEW_STATE_DEBOUNCE * 2);
-    assert_eq!(settled(cx), [crate::app::product::test_session_id(window)]);
+    assert_eq!(settled(cx), [crate::app::product::test_window_id(window)]);
     let _ = other;
 }
 
