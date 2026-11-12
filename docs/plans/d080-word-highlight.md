@@ -132,50 +132,15 @@ package: `wordHighlight.enabled`, `selectionHighlight.enabled` (both on), and
 
 ## Checkpoints
 
-### 1. Node-compatible timers — ✅ implemented, awaiting review
+### 1. Node-compatible timers — ✅ done
 
-Deliverables: the globals and objects above in `bootstrap.js` and declared in
-`knot.d.ts` (compatible with `@types/node` in package test builds); the
-host-side timer table, expiry roots, and lifecycle cancellation; the
-required `TimerDriver` trait, the test-only manual driver, and the gpui
-driver in the application; the extension guide's mention.
-
-Validation: `knot-host` tests with the manual driver for ordering, coercion,
-`refresh`, intervals not stacking, clearing from inside callbacks, failure
-isolation, and teardown cancellation; a product test where a package timer
-fires under `advance_clock` and not before; a package test using
-`mock.timers`. No test at any layer waits on real time. `just check`.
-
-Review gate: timer semantics and the driver boundary. ⏳
-
-Status:
-
-- ✅ `crates/knot-host/src/timers.rs`: the V8-free `TimerTable` (IDs, armings,
-  driver guards whose drop cancels the wait), the `TimerDriver` trait, and the
-  test-only `ManualTimers`, whose `advance` fires only the waits due when
-  called, so a worker re-arming an interval cannot race it. `PoolConfig::new`
-  takes the driver; tests use `single_worker()` or `with_manual_timers(n)`.
-- ✅ Engine: timer expiries enter as `EngineWork::Timer` roots and run only if
-  their arming is current; teardown drops the table. Bootstrap keeps the
-  callbacks and Node's `Timeout`/`Immediate` objects; `knot.d.ts` declares
-  the globals as merges with `@types/node`.
-- ✅ The application's `ExecutorTimers` waits on gpui's background executor.
-- ✅ Tests: table tests and engine tests in `knot-host`, the product test
-  `extension_timers_fire_on_the_executor_clock_and_stop_at_unload`, and
-  `scripts/extensions/testing/timers.test.ts`.
-- ✅ Extension guide and the extension-host runtime flow describe timers.
-- Limitation: Node's `mock.timers` ignores `refresh()` on mocked timeouts, so
-  checkpoint 4's debounce is covered by product tests, not package tests.
-
-**Implementation context:** listener roots enter through `RuntimeCallback`
-(`crates/knot-host/src/engine/mod.rs`) and the `__knotDispatch*` table in
-`crates/knot-host/src/engine/pool.rs`; mirror `__knotDispatchEditorEvent` in
-`crates/knot-host/src/js/bootstrap.js`. Roots are queued by
-`Scheduler::enqueue_root` (`crates/knot-host/src/scheduler.rs`); teardown is in
-`crates/knot-host/src/lifecycle.rs`. `PoolConfig` is built in
-`crates/knot-host/src/pool.rs` and by the application in
-`src/app/extensions/host.rs` (`ExtensionPool::new`). Runtime flow docs:
+Timers live in [`timers.rs`](../../crates/knot-host/src/timers.rs) (table,
+`TimerDriver`, test-only `ManualTimers`), the engine's timer roots, and the
+bootstrap globals declared in `knot.d.ts`; the application's driver is
+`ExecutorTimers` in `src/app/extensions/host.rs`. Runtime flow:
 [extension host](../architecture/extension-host.md#runtime-and-scheduler-flow).
+Node's `mock.timers` ignores `refresh()` on mocked timeouts, so checkpoint 4
+covers debouncing with product tests rather than package tests.
 
 ### 2. Per-view decorations
 
