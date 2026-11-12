@@ -133,3 +133,20 @@ decides whether to tell the user. A failed package startup opens the startup
 report, because nothing else passively shows that a package failed.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#product-application-launch).
+
+## Nightly distribution
+
+Nightly builds ship as unsigned GitHub prereleases installed through a
+versioned Homebrew cask in a separate tap. The app is ad-hoc signed and the
+cask clears its quarantine attribute, which keeps Gatekeeper from refusing it
+until sharing beyond those machines calls for Developer ID signing and
+notarization (D035).
+
+The cask template lives in this repository so its shape goes through review
+here, and the workflow pushes the rendered file to the tap rather than
+submitting to `homebrew/cask`. One build identity, `KNOT_VERSION`, serves
+nightlies and the future stable channel; a second version scheme for one binary
+was rejected. Builds are Apple Silicon only; Intel and universal builds wait
+for a machine that needs them.
+
+Reference: [development](../development.md#nightly-releases).

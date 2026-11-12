@@ -32,7 +32,7 @@ guide, and a feature tour.
   a project switch). The hero appears on the landing page and is the
   `og:image`, upgrading the card from `summary` to `summary_large_image`.
 - **Honest status.** Pages describe what works today and carry the existing
-  "early development, no releases" caveat; no page documents unbuilt features.
+  "early development" caveat; no page documents unbuilt features.
 
 ## Exclusions
 

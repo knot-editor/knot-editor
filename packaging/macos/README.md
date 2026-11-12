@@ -12,4 +12,4 @@ bundle for `ID` and writes `dist/Knot-ID-macos-ARCH.zip` with a `.sha256` file.
 
 Launch the bundle with `open target/debug/Knot.app`. Open a file with
 `open -a target/debug/Knot.app path/to/file.txt`. The bundle is for local use;
-distribution is tracked in D035 of [the roadmap](../../docs/roadmap.md).
+stable distribution is tracked in D035 of [the roadmap](../../docs/roadmap.md).

@@ -986,8 +986,8 @@ Kakoune mode could use it too. The
     placement, so positioning there stays best-effort.
 
 - **D035 — macOS distribution**
-  - Deferred: Local `Knot.app` builds cover dogfooding without release
-    credentials or a distribution channel.
+  - Deferred: Local `Knot.app` builds and the unsigned nightly cask cover
+    dogfooding without release credentials.
   - Reconsider: Knot is ready to run on other Macs; choose a release artifact,
     then add Developer ID signing, hardened runtime validation for V8,
     notarization, and an install/update path.

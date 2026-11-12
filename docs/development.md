@@ -47,6 +47,37 @@ The workflow has read-only repository permissions and pins external actions to
 commits. [Dependabot](../.github/dependabot.yml) checks for action updates
 weekly.
 
+## Nightly releases
+
+The [nightly workflow](../.github/workflows/nightly.yml) publishes an Apple
+Silicon `Knot.app` as a GitHub prerelease and serves it through a Homebrew
+cask. It runs daily at 03:00 UTC and on manual dispatch. A scheduled run
+builds only when `main` has commits since the last nightly tag and CI is
+green on the head commit, waiting for it; a manual run always builds, with an
+input to skip the CI wait. Every build gets a distinct version,
+`nightly.YYYYMMDD.HHMM` in UTC, released under the tag
+`nightly-YYYYMMDD-HHMM`, so `brew upgrade` picks up each run. The last seven
+prereleases are kept; older ones are deleted with their tags. To cut a
+nightly by hand, dispatch the workflow from the Actions tab.
+
+The version is compiled in as `KNOT_VERSION` (`knot --version` and `Knot:
+About` show it with the short commit hash) and stamped as the bundle's
+`CFBundleVersion`. The bundle is built by `scripts/build-macos-app.sh
+--release`, ad-hoc signed, and zipped with a SHA-256 by
+`scripts/package-macos-app.sh` (see the [macOS packaging
+notes](../packaging/macos/README.md)).
+
+The cask is rendered from
+[`packaging/homebrew/knot@nightly.rb.in`](../packaging/homebrew/knot@nightly.rb.in)
+by `scripts/render-cask.sh` (unit-checked by
+`scripts/test-render-cask.sh`) and pushed to the separate
+`knot-editor/homebrew-knot` tap with a deploy key, after `brew style` and
+`brew audit --cask --online` pass on it. It installs `Knot.app`, links the
+`knot` binary onto `PATH`, and clears the quarantine attribute on the
+unsigned app. To install: `brew tap knot-editor/knot`, `brew trust
+knot-editor/knot` (Homebrew 7 refuses casks from an untrusted tap), then
+`brew install --cask knot@nightly`.
+
 Building Knot requires Node.js and npm. Bundled packages are compiled by the
 domain group crates `knot-ext-languages`, `knot-ext-vim`, and
 `knot-ext-workbench`, whose `build.rs` files call the `knot-bundled` helper. It

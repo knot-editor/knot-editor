@@ -9,9 +9,9 @@ it in TypeScript or JavaScript.
 
 Website: <https://knot-editor.com>
 
-> **Status: early development.** There are no releases yet. Knot is being
-> dogfooded on macOS; Windows and Linux build and run but get less attention.
-> Expect rough edges and breaking changes.
+> **Status: early development.** Knot is being dogfooded on macOS; Windows
+> and Linux build and run but get less attention. Expect rough edges and
+> breaking changes.
 
 ## Why Knot
 
@@ -47,6 +47,18 @@ Website: <https://knot-editor.com>
 Not there yet: Find, line numbers, a status bar, and language servers. Work
 toward a daily-driver editor is under way; the [roadmap](docs/roadmap.md) has
 the details.
+
+## Nightly builds
+
+On an Apple Silicon Mac, the latest nightly installs through Homebrew:
+
+```bash
+brew tap knot-editor/knot
+brew trust knot-editor/knot
+brew install --cask knot@nightly
+```
+
+`brew upgrade` follows later nightlies. There are no stable releases yet.
 
 ## Build and run
 
