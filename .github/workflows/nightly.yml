@@ -87,6 +87,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+    outputs:
+      sha256: ${{ steps.package.outputs.sha256 }}
     env:
       VERSION: ${{ needs.decide.outputs.version }}
     steps:
@@ -102,7 +104,10 @@ jobs:
         with:
           save-if: false
       - name: Package
-        run: scripts/package-macos-app.sh "$VERSION"
+        id: package
+        run: |
+          scripts/package-macos-app.sh "$VERSION"
+          echo "sha256=$(cut -d' ' -f1 dist/Knot-"$VERSION"-macos-*.zip.sha256)" >> "$GITHUB_OUTPUT"
       - name: Publish prerelease
         env:
           SHA: ${{ github.sha }}
@@ -122,3 +127,47 @@ jobs:
             while read -r tag; do
               gh release delete "$tag" --cleanup-tag --yes
             done
+
+  publish-cask:
+    needs: [decide, release]
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.decide.outputs.version }}
+      SHA256: ${{ needs.release.outputs.sha256 }}
+      TAP: knot-editor/knot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Render the cask into the tap
+        run: |
+          set -euo pipefail
+          brew tap "$TAP"
+          brew trust "$TAP"
+          tap_dir="$(brew --repository "$TAP")"
+          mkdir -p "$tap_dir/Casks"
+          scripts/render-cask.sh "$VERSION" "$SHA256" "$GITHUB_REPOSITORY" > "$tap_dir/Casks/knot@nightly.rb"
+      - name: Audit the cask
+        run: |
+          set -euo pipefail
+          brew style --cask "$(brew --repository "$TAP")/Casks/knot@nightly.rb"
+          brew audit --cask --online --except github_prerelease_version "$TAP/knot@nightly"
+      - name: Push the cask
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/tap-deploy-key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          cd "$(brew --repository "$TAP")"
+          git remote set-url origin "git@github.com:knot-editor/homebrew-knot.git"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/knot@nightly.rb
+          git commit -m "Knot nightly $VERSION"
+          git push origin HEAD

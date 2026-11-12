@@ -25,7 +25,8 @@ to `main`:
   runs Clippy with warnings as errors, and tests all Rust targets under
   nextest, then doc tests. Clippy and tests use the committed `Cargo.lock`
   through `--locked`.
-- The check-ci-setup job runs actionlint on every workflow file.
+- The check-ci-setup job runs actionlint on every workflow file and tests the
+  nightly cask rendering.
 - The handler-platforms job runs on macOS and Windows. It tests handler
   declarations, linked inventory discovery, and doc tests, then builds the
   product binary. It does not run the full suite on those platforms.

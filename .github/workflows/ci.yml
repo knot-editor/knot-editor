@@ -61,6 +61,8 @@ jobs:
         run: |
           bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint
+      - name: Test cask rendering
+        run: scripts/test-render-cask.sh
 
   handler-platforms:
     strategy:
