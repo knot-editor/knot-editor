@@ -85,18 +85,7 @@ to be rebuilt later:
 - ✅ **D078 — Zoom, font size, and soft wrap**
 - ✅ **D079 — Save hygiene**
 - ✅ **D031 — Current-file Find**
-
-- **D080 — Word occurrence highlighting extension** (depends on D064, D031)
-  - 🚧 [Plan](d080-word-highlight.md)
-  - When the cursor rests on a word, a bundled JavaScript extension highlights
-    every other occurrence in the buffer. It uses the syntax tree or word
-    boundaries, debounced after cursor movement.
-  - Requires a new public observation API for cursor and selection changes.
-    Today only the debounced `viewStateChanged` window event exists. Size
-    the API for other cursor-driven extensions and keep it off the painting
-    path.
-  - Highlights are anchored contributions naming a theme color key, so
-    they follow edits without help from the extension.
+- ✅ **D080 — Word occurrence highlighting**
 
 ## Phase 4 — Files and workspace
 

@@ -80,8 +80,6 @@ What is missing for editing-level extensibility:
   are native and invisible to scripts.
 - No syntax-tree queries (D066).
 - No clipboard read.
-- Cursor and selection changes surface only through the debounced
-  `viewStateChanged` window event. D080 adds a real observation API.
 
 ## What a Vim mode forces
 
@@ -183,7 +181,8 @@ presets, and D068 and D077 surfaces. Then:
 
 1. D110 spike and key contexts, because it decides the shape of everything
    after it.
-2. D109 view, selection, and position API, designed with D080's observation;
+2. D109 view, selection, and position API, designed with the editor-handle
+   observation D080 added;
    D092 before multi-selection edits.
 3. D111 undo groups and D112 visual-line movement, in parallel.
 4. D113 recording, once commands, contexts, and selections are stable.

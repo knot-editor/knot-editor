@@ -273,7 +273,7 @@ complete list for that item.
     unusual identifiers (CSS `-`, Lisp), or a bundled language with two
     block comment styles needs them. Then extend the same registration
     rather than adding a parallel one.
-  - Order: after D074; word characters before D080 if it needs them.
+  - Order: after D074.
 
 - **D059 — Professional typography: ligatures and configurable font features**
   - Deferred: Surfaces use shared fixed typography defaults. Ligatures and
