@@ -30,8 +30,8 @@ function message(window: WindowTarget) {
 }
 
 /** Highlights as [start, current] pairs of byte offsets. */
-function highlights(document: DocumentId) {
-  return host.contributions(document).map((item) => [
+function highlights(window: WindowTarget) {
+  return host.viewDecorations(window).map((item) => [
     item.range.startByteOffset,
     item.decoration?.color === CURRENT_COLOR,
   ]);
@@ -62,14 +62,14 @@ test("typing highlights every match and selects the first from the caret", async
 
   assert.equal(message(window), "1 of 5");
   assert.equal(await selected(editor, TEXT), "foo");
-  assert.deepEqual(highlights(document), [
+  assert.deepEqual(highlights(window), [
     [0, true],
     [offset("foo bar\n"), false],
     [offset("foo bar\nFoo baz "), false],
     [offset("foo bar\nFoo baz foo\n"), false],
     [offset("foo bar\nFoo baz foo\nfoo"), false],
   ]);
-  assert.equal(host.contributions(document)[1]!.decoration?.color, MATCH_COLOR);
+  assert.equal(host.viewDecorations(window)[1]!.decoration?.color, MATCH_COLOR);
   assert.deepEqual(host.editorBars(window).focus, { bar: "find", field: "query" });
 
   await host.typeInBar("find", "query", "baz", window);
@@ -78,7 +78,7 @@ test("typing highlights every match and selects the first from the caret", async
 
   await host.typeInBar("find", "query", "missing", window);
   assert.equal(message(window), "No results");
-  assert.deepEqual(host.contributions(document), []);
+  assert.deepEqual(host.viewDecorations(window), []);
 
   await host.typeInBar("find", "query", "", window);
   assert.equal(message(window), null);
@@ -92,7 +92,7 @@ test("next and previous step through the matches and wrap", async () => {
   await host.run(NEXT, { window });
   assert.equal(await at(), offset("foo bar\n"));
   assert.equal(message(window), "2 of 5");
-  assert.deepEqual(highlights(document).filter(([, current]) => current), [[offset("foo bar\n"), true]]);
+  assert.deepEqual(highlights(window).filter(([, current]) => current), [[offset("foo bar\n"), true]]);
 
   for (let step = 0; step < 4; step += 1) await host.run(NEXT, { window });
   assert.equal(await at(), 0);
@@ -120,7 +120,7 @@ test("more than 1000 matches highlight the first 1000 and stepping still reaches
   const { window, editor, document } = await setup(text);
   await search(window, "x");
   assert.equal(message(window), "1000+");
-  assert.equal(host.contributions(document).length, 1000);
+  assert.equal(host.viewDecorations(window).length, 1000);
 
   await editor.setSelection({ anchor: offset("x\n".repeat(1200)), caret: offset("x\n".repeat(1200)) });
   await host.run(NEXT, { window });
@@ -145,7 +145,7 @@ test("edits search again and the current match follows the selection", async () 
   const { revision } = await buffer.snapshot();
   await buffer.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 0 }, text: "baz " }], { ifRevision: revision });
   assert.equal(message(window), "2 results");
-  assert.equal(host.contributions(document).length, 2);
+  assert.equal(host.viewDecorations(window).length, 2);
 
   const text = host.document(document).text;
   const start = offset(text.slice(0, text.indexOf("baz", 1)));
@@ -161,7 +161,7 @@ test("closing removes the bar and the highlights and keeps the current match sel
   await host.run(CLOSE, { window });
 
   assert.deepEqual(host.editorBars(window).bars, []);
-  assert.deepEqual(host.contributions(document), []);
+  assert.deepEqual(host.viewDecorations(window), []);
   assert.equal(await selected(editor, TEXT), "baz");
 });
 
@@ -176,7 +176,7 @@ test("next and previous with the bar closed use the last query and highlight not
   await host.run(NEXT, { window });
   assert.equal((await editor.selection()).anchor, offset("foo bar\n"));
   assert.deepEqual(host.editorBars(window).bars, []);
-  assert.deepEqual(host.contributions(document), []);
+  assert.deepEqual(host.viewDecorations(window), []);
   await host.run(PREVIOUS, { window });
   assert.equal((await editor.selection()).anchor, 0);
 });
@@ -241,6 +241,6 @@ test("the buttons step and close", async () => {
   assert.equal(message(window), "1 of 5");
   await host.clickBarControl("find", "close", window);
   assert.deepEqual(host.editorBars(window).bars, []);
-  assert.deepEqual(host.contributions(document), []);
+  assert.deepEqual(host.viewDecorations(window), []);
   assert.equal(await selected(editor, TEXT), "foo");
 });

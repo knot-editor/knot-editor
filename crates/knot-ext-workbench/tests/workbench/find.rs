@@ -116,6 +116,34 @@ fn edits_while_the_bar_is_open_search_again(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn two_splits_of_one_buffer_keep_their_own_bars_and_highlights(cx: &mut TestAppContext) {
+    let product = TestProduct::start(PACKAGES, cx);
+    let first = product.windowed_editor("foo bar\nbar baz\n", cx);
+    let second = first.split(cx);
+
+    open_with(&second, "foo", cx);
+    wait_for_message(&second, "1 of 1", cx);
+    assert_eq!(second.decorations(cx).len(), 1);
+    assert!(first.first_bar(cx).is_none());
+    assert!(first.decorations(cx).is_empty());
+
+    first.focus(cx);
+    open_with(&first, "bar", cx);
+    wait_for_message(&first, "1 of 2", cx);
+    assert_eq!(first.decorations(cx).len(), 2);
+    // The other split keeps its own search.
+    assert_eq!(message(&second, cx).as_deref(), Some("1 of 1"));
+    assert_eq!(second.decorations(cx), [(0, 3, CURRENT.to_owned())]);
+
+    // Closing one bar leaves the other split's highlights.
+    first.press_unsettled("<esc>", cx);
+    wait_until(cx, |cx| {
+        first.first_bar(cx).is_none() && first.decorations(cx).is_empty()
+    });
+    assert_eq!(second.decorations(cx).len(), 1);
+}
+
+#[gpui::test]
 fn more_than_a_thousand_matches_highlight_a_thousand(cx: &mut TestAppContext) {
     let product = TestProduct::start(PACKAGES, cx);
     let editor = product.windowed_editor(&"x\n".repeat(1500), cx);

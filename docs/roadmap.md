@@ -762,16 +762,6 @@ Kakoune mode could use it too. The
   - Order: after D079, which defines the save pipeline; before format on
     save in D067.
 
-- **D179 — View-scoped decorations**
-  - Deferred: Editor contributions belong to the buffer, so every view of
-    it paints them. Current-file Find (D031) highlights its matches in
-    other splits of the buffer too, and two find bars over one buffer share
-    one highlight set; word occurrence highlighting (D080) has the same limit.
-  - Reconsider: Soon; it is important for Find and D080. Then
-    let a contribution set target one editor view, painted only there and
-    released with the view, beside the existing buffer-wide sets, and move
-    `@knot/find` and D080 onto it.
-
 - **D147 — Key contexts on non-editor views**
   - Deferred: D110 lets extensions set key contexts on editor views only.
     Terminals, the explorer, and contributed tree and text views resolve

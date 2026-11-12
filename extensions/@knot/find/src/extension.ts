@@ -93,7 +93,7 @@ async function refresh(session: Session, selection: { anchor: number; caret: num
   const selected = selectedRange(selection);
   const current = found.matches.find((match) => sameRange(match, selected)) ?? null;
   try {
-    await session.buffer.contributions.replace(
+    await session.editor.setDecorations(
       found.matches.map((range) => ({
         range,
         decoration: {
@@ -211,7 +211,7 @@ async function close(context: CommandContext) {
     await session.editor.closeBar(BAR);
     // An empty search reports the current revision without reading text.
     const { revision } = await session.buffer.find("", { limit: 1 });
-    await session.buffer.contributions.replace([], { ifRevision: revision });
+    await session.editor.setDecorations([], { ifRevision: revision });
   } catch (error) {
     if (!isInvalid(error)) throw error;
   }

@@ -27,6 +27,7 @@ use crate::app::resource::ResourceUri;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
 use crate::app::status_bar::ApplicationStatusBar;
 use crate::app::transient::TransientSurface;
+use crate::app::workbench::{SplitDirection, SplitPlacement};
 use crate::test_support::cases::{CARET, parse_keys};
 use crate::test_support::wait_until;
 
@@ -321,21 +322,20 @@ impl TestEditor {
         })
     }
 
-    /// The decorated ranges contributed to the text, as start, end, and
-    /// color key.
+    /// The ranges the editor paints with a decoration, as absolute start,
+    /// end, and color key: the buffer's contributions and this view's own.
     pub fn decorations(&self, cx: &mut TestAppContext) -> Vec<(usize, usize, String)> {
         cx.read(|cx| {
-            self.model
+            let text = self.model.read(cx).text();
+            let mut line_starts = vec![0];
+            line_starts.extend(text.match_indices('\n').map(|(at, _)| at + 1));
+            self.editor
                 .read(cx)
-                .resolved_contributions()
-                .into_iter()
-                .filter_map(|item| {
-                    let decoration = item.decoration?;
-                    Some((
-                        item.range.start_byte_offset,
-                        item.range.end_byte_offset,
-                        decoration.color,
-                    ))
+                .decorations()
+                .iter()
+                .map(|item| {
+                    let base = line_starts[item.line];
+                    (base + item.start, base + item.end, item.key.clone())
                 })
                 .collect()
         })
@@ -451,6 +451,49 @@ impl TestEditor {
                 .get(self.document)
                 .is_some()
         })
+    }
+
+    /// Split the focused pane beside itself. The returned editor drives the
+    /// new split, which shows the same buffer and has focus.
+    pub fn split(&self, cx: &mut TestAppContext) -> TestEditor {
+        let window = self.window.as_ref().expect("a split needs a window").0;
+        self.shell.update(cx, |shell, cx| {
+            let pane = shell.workbench.read(cx).center_pane().unwrap();
+            shell.workbench.update(cx, |workbench, cx| {
+                workbench.split_pane(pane, SplitDirection::Horizontal, SplitPlacement::After, cx);
+            });
+            shell.focus_active_editor(cx);
+        });
+        cx.run_until_parked();
+        let view = active_view(&self.shell, cx);
+        let editor = cx.read(|cx| view.read(cx).editor().clone());
+        let split = Self {
+            shell: self.shell.clone(),
+            editor,
+            model: self.model.clone(),
+            document: self.document,
+            window: Some((window, view)),
+        };
+        split.settle(cx);
+        split
+    }
+
+    /// Give this editor's pane focus, and settle.
+    pub fn focus(&self, cx: &mut TestAppContext) {
+        let (_, view) = self.window.as_ref().expect("focus needs a window");
+        self.shell.update(cx, |shell, cx| {
+            let pane = {
+                let workbench = shell.workbench.read(cx);
+                workbench
+                    .panes()
+                    .iter()
+                    .find(|pane| workbench.editor(pane.active_tab()) == Some(view))
+                    .map(|pane| pane.id())
+                    .unwrap()
+            };
+            shell.focus_pane_surface(pane, cx);
+        });
+        self.settle(cx);
     }
 
     /// Open a new untitled tab in the focused pane, and settle.
