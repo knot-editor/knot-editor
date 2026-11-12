@@ -308,6 +308,12 @@ function contribution(value) {
     command: optionalText(value.command),
   };
 }
+function viewDecoration(value) {
+  record(value, "view decoration must be an object");
+  const painted = decoration(value.decoration);
+  if (painted === null) throw new TypeError("view decoration needs a decoration");
+  return { range: byteRange(value.range), decoration: painted, gutter: null, command: null };
+}
 function iterableItems(value, convert) {
   if (value == null || typeof value === "string" || typeof value[Symbol.iterator] !== "function") {
     throw new TypeError("provider result must be an iterable of items");
@@ -614,6 +620,10 @@ function editorFor(authority) {
       }
       if (typeof active !== "boolean") throw new TypeError("active must be a boolean");
       await request("editorSetKeyContext", authority, name, active);
+    },
+    async setDecorations(items, options) {
+      const converted = arrayItems(items, viewDecoration);
+      await request("editorSetDecorations", authority, converted, revision(options));
     },
     async setCursorStyle(style) {
       if (style !== null && style !== "bar" && style !== "block" && style !== "underline") {

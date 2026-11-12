@@ -452,7 +452,7 @@ fn caret_shape_is_the_latest_lifecycles_and_reverts_when_cleared() {
     let first = ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
     let second = ExtensionKey::new(ExtensionId::new(2), ExtensionLifecycleId::new(1));
     let mut f = Fixture::new("abc");
-    let editor = &mut f.editor;
+    let (editor, buffer) = (&mut f.editor, &mut f.buffer);
     assert_eq!(editor.caret_shape(), CaretShape::Bar);
     editor.set_caret_shape(first, Some(CaretShape::Block));
     editor.set_caret_shape(second, Some(CaretShape::Underline));
@@ -460,9 +460,9 @@ fn caret_shape_is_the_latest_lifecycles_and_reverts_when_cleared() {
     editor.set_caret_shape(second, None);
     assert_eq!(editor.caret_shape(), CaretShape::Block);
     editor.set_caret_shape(second, Some(CaretShape::Bar));
-    editor.remove_owner_state(second);
+    editor.remove_owner_state(second, buffer);
     assert_eq!(editor.caret_shape(), CaretShape::Block);
-    editor.remove_owner_state(first);
+    editor.remove_owner_state(first, buffer);
     assert_eq!(editor.caret_shape(), CaretShape::Bar);
 }
 

@@ -138,3 +138,160 @@ fn bands_paint_beneath_backgrounds_and_severity_keys_paint_last() {
         ]
     );
 }
+
+mod view {
+    use knot_protocol::{EditorContribution, ExtensionId, ExtensionKey, ExtensionLifecycleId};
+
+    use super::super::Fixture;
+    use super::*;
+    use crate::buffer::ContributionError;
+    use crate::editor::{EditorSettings, EditorState, ViewDecoration};
+
+    fn owner(extension: u64) -> ExtensionKey {
+        ExtensionKey::new(ExtensionId::new(extension), ExtensionLifecycleId::new(1))
+    }
+
+    fn item(range: Range<usize>, key: &str) -> ViewDecoration {
+        ViewDecoration {
+            range: ByteRange {
+                start_byte_offset: range.start,
+                end_byte_offset: range.end,
+            },
+            decoration: Decoration::new(key, Background),
+        }
+    }
+
+    /// The painted decorations as (line, columns, key), in paint order.
+    fn painted(editor: &EditorState) -> Vec<(usize, Range<usize>, String)> {
+        editor
+            .decorations()
+            .iter()
+            .map(|d| (d.line, d.start..d.end, d.key.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn view_decorations_follow_edits_and_vanish_with_their_text() {
+        let mut f = Fixture::new("foo bar\nbaz");
+        let revision = f.buffer.revision();
+        f.editor
+            .set_decorations(owner(1), &[item(4..7, "match")], revision, &mut f.buffer)
+            .unwrap();
+        assert_eq!(painted(&f.editor), [(0, 4..7, "match".into())]);
+
+        f.buffer.replace(0..0, "xx").unwrap();
+        f.editor.buffer_changed(&mut f.buffer);
+        assert_eq!(painted(&f.editor), [(0, 6..9, "match".into())]);
+
+        f.buffer.replace(5..10, "").unwrap();
+        f.editor.buffer_changed(&mut f.buffer);
+        assert_eq!(painted(&f.editor), []);
+    }
+
+    #[test]
+    fn view_decorations_paint_only_in_their_view_above_equal_buffer_ones() {
+        let mut f = Fixture::new("foo bar");
+        let mut other = EditorState::new("editor", EditorSettings::default(), &mut f.buffer);
+        let revision = f.buffer.revision();
+        let contribution = |range: Range<usize>, key: &str| EditorContribution {
+            range: ByteRange {
+                start_byte_offset: range.start,
+                end_byte_offset: range.end,
+            },
+            decoration: Some(Decoration::new(key, Background)),
+            gutter: None,
+            command: None,
+        };
+        f.buffer
+            .replace_contributions(
+                ContributionSource::fixture(),
+                &[contribution(0..3, "error"), contribution(0..3, "find")],
+                revision,
+            )
+            .unwrap();
+        f.editor
+            .set_decorations(owner(2), &[item(0..3, "word")], revision, &mut f.buffer)
+            .unwrap();
+        f.editor.buffer_changed(&mut f.buffer);
+        other.buffer_changed(&mut f.buffer);
+        assert_eq!(
+            painted(&f.editor),
+            [
+                (0, 0..3, "find".into()),
+                (0, 0..3, "word".into()),
+                (0, 0..3, "error".into()),
+            ]
+        );
+        assert_eq!(
+            painted(&other),
+            [(0, 0..3, "find".into()), (0, 0..3, "error".into())]
+        );
+    }
+
+    #[test]
+    fn a_rejected_replacement_keeps_the_previous_set() {
+        let mut f = Fixture::new("foo bar");
+        let revision = f.buffer.revision();
+        f.editor
+            .set_decorations(owner(1), &[item(0..3, "word")], revision, &mut f.buffer)
+            .unwrap();
+        let stale =
+            f.editor
+                .set_decorations(owner(1), &[item(4..7, "word")], revision + 1, &mut f.buffer);
+        assert_eq!(stale, Err(ContributionError::RevisionConflict));
+        let outside =
+            f.editor
+                .set_decorations(owner(1), &[item(4..70, "word")], revision, &mut f.buffer);
+        assert_eq!(outside, Err(ContributionError::InvalidRange));
+        assert_eq!(painted(&f.editor), [(0, 0..3, "word".into())]);
+
+        f.editor
+            .set_decorations(owner(1), &[], revision, &mut f.buffer)
+            .unwrap();
+        assert_eq!(painted(&f.editor), []);
+    }
+
+    #[test]
+    fn each_lifecycle_owns_its_set_and_teardown_removes_only_its_own() {
+        let mut f = Fixture::new("foo bar");
+        let revision = f.buffer.revision();
+        f.editor
+            .set_decorations(owner(1), &[item(0..3, "one")], revision, &mut f.buffer)
+            .unwrap();
+        f.editor
+            .set_decorations(owner(2), &[item(4..7, "two")], revision, &mut f.buffer)
+            .unwrap();
+        f.editor
+            .set_decorations(owner(1), &[item(4..7, "one")], revision, &mut f.buffer)
+            .unwrap();
+        assert_eq!(
+            painted(&f.editor),
+            [(0, 4..7, "two".into()), (0, 4..7, "one".into())]
+        );
+        f.editor.remove_owner_state(owner(1), &mut f.buffer);
+        assert_eq!(painted(&f.editor), [(0, 4..7, "two".into())]);
+    }
+
+    #[test]
+    fn replacing_teardown_and_closing_the_view_release_the_anchors() {
+        let mut f = Fixture::new("foo bar");
+        let baseline = f.buffer.anchored_range_count();
+        let revision = f.buffer.revision();
+        let two = [item(0..3, "word"), item(4..7, "word")];
+        f.editor
+            .set_decorations(owner(1), &two, revision, &mut f.buffer)
+            .unwrap();
+        f.editor
+            .set_decorations(owner(1), &two, revision, &mut f.buffer)
+            .unwrap();
+        assert_eq!(f.buffer.anchored_range_count(), baseline + 2);
+        f.editor.remove_owner_state(owner(1), &mut f.buffer);
+        assert_eq!(f.buffer.anchored_range_count(), baseline);
+        f.editor
+            .set_decorations(owner(2), &two, revision, &mut f.buffer)
+            .unwrap();
+        // Closing the view also releases its own position.
+        f.editor.release(&mut f.buffer);
+        assert_eq!(f.buffer.anchored_range_count(), baseline - 1);
+    }
+}

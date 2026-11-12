@@ -289,6 +289,14 @@ await commands.register("handle.attach", async () => {
   handle.onDidClose(() => { closed += 1; });
   await handle.setKeyContext("held", true);
 });
+await commands.register("handle.decorate", async ({ editor, buffer }) => {
+  const { revision } = await buffer.snapshot();
+  const word = { range: { startByteOffset: 0, endByteOffset: 3 }, decoration: { color: "word", style: "background" } };
+  await editor.setDecorations([word], { ifRevision: revision });
+  let code = "accepted";
+  try { await editor.setDecorations([], { ifRevision: revision + 1 }); } catch (error) { code = error.code; }
+  await workbench.writeClipboardText(code);
+});
 await commands.register("handle.block", async () => { await handle.setCursorStyle("block"); });
 await commands.register("handle.underline", async () => { await handle.setCursorStyle("underline"); });
 await commands.register("handle.plain", async () => { await handle.setCursorStyle(null); });
@@ -517,6 +525,63 @@ fn editor_handle_cursor_style_follows_the_latest_choice_and_ends_with_its_lifecy
     run("handle.block", cx);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.read(|cx| assert_eq!(editor.read(cx).caret_shape(), CaretShape::Bar));
+}
+
+#[gpui::test]
+fn view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let (host, key) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model.clone(), cx);
+    cx.run_until_parked();
+    cx.update(|cx| {
+        model.update(cx, |model, cx| {
+            model.replace(0..0, "foo bar").unwrap();
+            cx.notify();
+        });
+    });
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(&shell, window, name, cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    };
+    let painted = |editor: &Entity<crate::app::editor::Editor>, cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            editor
+                .read(cx)
+                .decorations()
+                .iter()
+                .map(|d| (d.start..d.end, d.key.clone()))
+                .collect::<Vec<_>>()
+        })
+    };
+    let first = active_editor(&shell, cx);
+    run(SPLIT_HORIZONTAL_COMMAND, cx);
+    cx.run_until_parked();
+    let second = active_editor(&shell, cx);
+    assert_ne!(first.entity_id(), second.entity_id());
+
+    // The focused split's editor paints the set; the other view of the
+    // buffer does not, and a stale revision is rejected.
+    run("handle.decorate", cx);
+    let reported = cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap());
+    assert_eq!(reported, "RevisionConflict");
+    assert_eq!(painted(&second, cx), [(0..3, "word".to_owned())]);
+    assert!(painted(&first, cx).is_empty());
+
+    // Closing the tab leaves the other view of the buffer clean.
+    run(CLOSE_TAB_COMMAND, cx);
+    cx.run_until_parked();
+    assert_eq!(active_editor(&shell, cx).entity_id(), first.entity_id());
+    assert!(painted(&first, cx).is_empty());
+
+    // Teardown clears what the lifecycle set.
+    run("handle.decorate", cx);
+    assert_eq!(painted(&first, cx), [(0..3, "word".to_owned())]);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    assert!(painted(&first, cx).is_empty());
 }
 
 #[gpui::test]

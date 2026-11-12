@@ -39,6 +39,7 @@ type FakeTab = {
   viewportLines: number;
   /** The caret style the extension chose, or null for the default bar. */
   cursorStyle: Knot.CursorStyle | null;
+  decorations: readonly Knot.ViewDecoration[];
   /** Close listeners of the long-lived handles bound to this tab. */
   closeListeners: Set<() => void | Promise<void>>;
   /** Selection listeners of the long-lived handles bound to this tab. The
@@ -583,6 +584,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     keyContexts: new Set(),
     folds: [],
     cursorStyle: null,
+    decorations: [],
     viewportLines: 10,
     closeListeners: new Set(),
     selectionListeners: new Set(),
@@ -1062,6 +1064,11 @@ export function setViewportLines(lines: number, window: Knot.WindowTarget = stat
 }
 
 /** The caret style set on the window's selected document editor, or "bar". */
+/** The decorations the package set on the window's selected editor, in the order it gave them. */
+export function viewDecorations(window: Knot.WindowTarget = state.windows[0]!.target): readonly Knot.ViewDecoration[] {
+  return selectedTab(window).decorations;
+}
+
 export function cursorStyle(window: Knot.WindowTarget = state.windows[0]!.target): Knot.CursorStyle {
   return selectedTab(window).cursorStyle ?? "bar";
 }
@@ -1196,6 +1203,11 @@ function editor(tab: FakeTab): Knot.Editor {
       if (active) keyContexts.add(name);
       else keyContexts.delete(name);
     },
+    setDecorations: async (items, { ifRevision }) => {
+      const tab = live();
+      if (ifRevision !== document(tab.document).revision) throw hostError("RevisionConflict");
+      tab.decorations = structuredClone(items);
+    },
     setCursorStyle: async (style) => {
       if (style !== null && style !== "bar" && style !== "block" && style !== "underline") {
         throw new TypeError("cursor style must be bar, block, underline or null");
@@ -1305,6 +1317,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     cellsBefore: guard(live.cellsBefore),
     columnAtCells: guard(live.columnAtCells),
     setCursorStyle: guard(live.setCursorStyle),
+    setDecorations: guard(live.setDecorations),
     beginUndoGroup: guard(live.beginUndoGroup),
     openBar: guard(live.openBar),
     closeBar: guard(live.closeBar),

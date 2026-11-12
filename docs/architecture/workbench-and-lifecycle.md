@@ -79,7 +79,8 @@ on a window resize.
 An editor is two entities in `src/app/editor/` over plain state in
 `knot-model` (`crates/knot-model/src/editor.rs`). `EditorState` holds one
 presentation's state: cursor and selection, scroll and the viewport in rows,
-wrapping, folds, IME preedit, key contexts, the caret shape, and its
+wrapping, folds, IME preedit, key contexts, the caret shape, its own
+decorations ([semantic UI](semantic-ui.md#semantic-extension-ui)), and its
 completion controller, and it runs the native editing and movement commands
 without a window or runtime. Each operation takes the buffer model it reads
 or edits; the editor follows the settings its owner resolves for it and

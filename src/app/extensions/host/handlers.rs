@@ -2863,6 +2863,8 @@ pub(crate) enum EditorError {
     InvalidRange,
     #[error(code = "OperationInProgress", message = "OperationInProgress")]
     OperationInProgress,
+    #[error(code = "RevisionConflict", message = "RevisionConflict")]
+    RevisionConflict,
 }
 impl From<AccessError> for EditorError {
     fn from(error: AccessError) -> Self {
@@ -2979,6 +2981,62 @@ pub(crate) async fn editor_set_key_context(
         let owner = ExtensionKey::new(request.extension, request.lifecycle);
         host.set_editor_key_context(owner, editor, &arguments.name, arguments.active, cx);
         Ok(())
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SetDecorationsArguments {
+    pub authority: EditorAuthority,
+    pub items: Vec<knot_model::editor::ViewDecoration>,
+    pub if_revision: u64,
+}
+impl HostArguments for SetDecorationsArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let authority = EditorAuthority::decode(reader, 2)?;
+        let items = reader
+            .contributions(3)?
+            .into_iter()
+            .map(|contribution| match contribution {
+                EditorContribution {
+                    range,
+                    decoration: Some(decoration),
+                    gutter: None,
+                    command: None,
+                } => Ok(knot_model::editor::ViewDecoration { range, decoration }),
+                _ => Err(DecodeError::Type(
+                    "view decorations need only a range and a decoration",
+                )),
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(Self {
+            authority,
+            items,
+            if_revision: reader.integer(4)?,
+        })
+    }
+}
+
+/// Replace the caller's decorations on the captured editor, which only that
+/// view paints. They last until replaced, the view closes, or the caller's
+/// lifecycle ends.
+#[host_operation("editorSetDecorations")]
+pub(crate) async fn editor_set_decorations(
+    context: HostContext,
+    arguments: SetDecorationsArguments,
+) -> Result<(), EditorError> {
+    use knot_model::buffer::ContributionError;
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        host.set_editor_decorations(owner, editor, &arguments.items, arguments.if_revision, cx)
+            .map_err(|error| match error {
+                ContributionError::RevisionConflict => EditorError::RevisionConflict,
+                ContributionError::Closed | ContributionError::NotFound => {
+                    AccessError::InvalidTarget.into()
+                }
+                ContributionError::InvalidRange => EditorError::InvalidRange,
+            })
     })?
 }
 

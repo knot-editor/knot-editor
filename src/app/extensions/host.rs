@@ -1814,6 +1814,23 @@ impl ProductExtensionHost {
         self.track_owned_editor(owner, &editor);
     }
 
+    /// Replace the calling lifecycle's decorations on an editor,
+    /// remembering the editor so teardown clears them.
+    pub(super) fn set_editor_decorations(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::Editor>,
+        items: &[knot_model::editor::ViewDecoration],
+        if_revision: u64,
+        cx: &mut App,
+    ) -> Result<(), knot_model::buffer::ContributionError> {
+        editor.update(cx, |editor, cx| {
+            editor.set_decorations(owner, items, if_revision, cx)
+        })?;
+        self.track_owned_editor(owner, &editor);
+        Ok(())
+    }
+
     fn track_owned_editor(
         &mut self,
         owner: ExtensionKey,

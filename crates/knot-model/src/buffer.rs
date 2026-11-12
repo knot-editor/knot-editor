@@ -462,31 +462,21 @@ impl BufferModel {
         contributions: &[EditorContribution],
         if_revision: u64,
     ) -> Result<(), ContributionError> {
-        if !self.open {
-            return Err(ContributionError::Closed);
-        }
-        if if_revision != self.revision {
-            return Err(ContributionError::RevisionConflict);
-        }
-
-        let mut validated = Vec::with_capacity(contributions.len());
-        for contribution in contributions {
-            let range = self
-                .checked_range(contribution.range)
-                .map_err(|error| match error {
-                    BufferAccessError::Closed => ContributionError::Closed,
-                    _ => ContributionError::InvalidRange,
-                })?;
-            if self.buffer.is_empty() {
-                return Err(ContributionError::InvalidRange);
-            }
-            validated.push((
-                range,
-                contribution.decoration.clone(),
-                contribution.gutter.clone(),
-                contribution.command.clone(),
-            ));
-        }
+        let ranges = self.check_contribution_ranges(
+            contributions.iter().map(|contribution| contribution.range),
+            if_revision,
+        )?;
+        let validated = ranges
+            .into_iter()
+            .zip(contributions)
+            .map(|(range, contribution)| {
+                (
+                    range,
+                    contribution.decoration.clone(),
+                    contribution.gutter.clone(),
+                    contribution.command.clone(),
+                )
+            });
 
         if let Some(previous) = self.contributions.sets.remove(&source) {
             for id in previous.anchored_ranges {
@@ -495,7 +485,7 @@ impl BufferModel {
             }
         }
 
-        let mut anchored_range_ids = Vec::with_capacity(validated.len());
+        let mut anchored_range_ids = Vec::with_capacity(contributions.len());
         for (range, decoration, gutter, command) in validated {
             let id = self
                 .anchored_ranges
@@ -518,6 +508,35 @@ impl BufferModel {
             },
         );
         Ok(())
+    }
+
+    /// Check a contribution set's ranges against the current revision: each
+    /// must lie on character boundaries within the text, and a nonempty set
+    /// needs a nonempty buffer.
+    pub fn check_contribution_ranges(
+        &self,
+        ranges: impl IntoIterator<Item = ByteRange>,
+        if_revision: u64,
+    ) -> Result<Vec<Range<usize>>, ContributionError> {
+        if !self.open {
+            return Err(ContributionError::Closed);
+        }
+        if if_revision != self.revision {
+            return Err(ContributionError::RevisionConflict);
+        }
+        ranges
+            .into_iter()
+            .map(|range| {
+                let range = self.checked_range(range).map_err(|error| match error {
+                    BufferAccessError::Closed => ContributionError::Closed,
+                    _ => ContributionError::InvalidRange,
+                })?;
+                if self.buffer.is_empty() {
+                    return Err(ContributionError::InvalidRange);
+                }
+                Ok(range)
+            })
+            .collect()
     }
 
     /// Create a mark at `offset` for `source`. It stays with the character
@@ -831,6 +850,20 @@ impl BufferModel {
             self.anchored_ranges
                 .add_persistent(&self.buffer, range.start, range.end),
         )
+    }
+
+    /// How many anchored ranges the buffer tracks, for a test.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn anchored_range_count(&self) -> usize {
+        self.anchored_ranges.len()
+    }
+
+    /// Anchor a range a view paints, which a deletion consuming its text
+    /// removes, as it removes a contribution; resolve and remove it as a view
+    /// position. The range must lie within the text.
+    pub fn add_view_range(&mut self, range: Range<usize>) -> AnchoredRangeId {
+        self.anchored_ranges
+            .add(&self.buffer, range.start, range.end)
     }
 
     pub fn replace_view_position(

@@ -32,6 +32,15 @@ Built-ins and extensions use the same application-owned contribution registry.
 Editor contributions include anchored decorations, gutter markers, and
 command-backed actions.
 
+Decorations may instead belong to one view. `EditorState` keeps one set per
+extension lifecycle, validated like a contribution set and anchored in the
+same buffer store, so edits move it and a deletion that consumes a range
+removes it. Only that editor paints it: projection merges it with the
+buffer's contributions in the same severity order, above buffer decorations
+of equal precedence. Replacement, the view's closing, and lifecycle teardown
+remove the set, as they remove key contexts. Gutter markers and click actions
+stay buffer-wide.
+
 Views paint styled text by composing each line's runs from ordered highlight
 layers of line-relative `(byte range, style)` spans; a later layer overrides an
 earlier one's color and font and adds its underline. Syntax sources resolve
@@ -49,9 +58,7 @@ the lines it covers, blank ones included, leaving out a final line its range
 only reaches at column 0. Behind the text, the cursor-line highlight paints
 first, then line bands, backgrounds in the same severity order, the
 selection, and the bracket match, so the selection stays readable over match
-highlights. Decorations belong to the buffer, so every view of it shows
-them. Gutter
-markers share one lane, which shows the most severe marker of each line, the
+highlights. Gutter markers share one lane, which shows the most severe marker of each line, the
 latest among equals, and runs that contribution's command when clicked
 ([editor views](workbench-and-lifecycle.md#editor-views)).
 

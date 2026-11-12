@@ -142,7 +142,19 @@ bootstrap globals declared in `knot.d.ts`; the application's driver is
 Node's `mock.timers` ignores `refresh()` on mocked timeouts, so checkpoint 4
 covers debouncing with product tests rather than package tests.
 
-### 2. Per-view decorations
+### 2. Per-view decorations — 🔍 awaiting review
+
+✅ Implemented: `editor/decorations.rs` in `knot-model` (sets, anchoring
+through `BufferModel::add_view_range`, projection merge with view decorations
+above equal-precedence buffer ones), the `editorSetDecorations` handler,
+bootstrap, `knot.d.ts`, the fake host, and the semantic UI, editor views, and
+extension guide docs. ✅ Validated by model tests in
+`editor/tests/decorations.rs` and the product test
+`view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle`;
+`just check` passes. Anchor release on view close is covered at the model
+level: in a product window a closed tab's editor entity outlives the close
+whether or not it has decorations, so the product test checks only that the
+other view stays clean.
 
 Deliverables: the per-lifecycle sets on `EditorState`, anchoring, projection
 merge, cleanup on view close and lifecycle teardown; `Editor.setDecorations`

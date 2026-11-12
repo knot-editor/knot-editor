@@ -14,6 +14,7 @@ mod brackets;
 pub mod commands;
 mod comments;
 mod completion;
+mod decorations;
 mod editing;
 mod folding;
 mod gutter;
@@ -25,6 +26,7 @@ mod save_hygiene;
 mod text;
 mod wrap;
 
+pub use decorations::ViewDecoration;
 pub use input::unit_range;
 pub use rows::{DecorationFill, Row, decoration_fills};
 pub use text::*;
@@ -232,7 +234,10 @@ pub struct EditorState {
     /// wrap width, so a restore before lines first wrap still shows the
     /// same row.
     restored_top: Option<usize>,
-    /// Projection of shared, anchored buffer contributions.
+    /// Decoration sets lifecycles have set on this view, in the order set.
+    view_decorations: Vec<decorations::ViewDecorationSet>,
+    /// Projection of shared, anchored buffer contributions and this view's
+    /// decorations.
     decorations: Vec<RenderedDecoration>,
     gutter_markers: Vec<RenderedGutterMarker>,
     contribution_actions: Vec<RenderedContributionAction>,
@@ -308,6 +313,7 @@ impl EditorState {
             wrap_revision: seen_revision,
             folds: Vec::new(),
             restored_top: None,
+            view_decorations: Vec::new(),
             decorations,
             gutter_markers,
             contribution_actions,
@@ -370,6 +376,7 @@ impl EditorState {
         let pairs = std::mem::take(&mut self.auto_closed);
         self.release_auto_closed(pairs, buffer);
         self.release_folds(buffer);
+        self.release_decorations(buffer);
     }
 
     /// The `view` fact settings resolve for: `editor` for documents, or the
@@ -462,7 +469,7 @@ impl EditorState {
         self.seen_revision
     }
 
-    /// The contributed decorations, by line.
+    /// The contributed decorations, the buffer's and this view's, by line.
     pub fn decorations(&self) -> &[RenderedDecoration] {
         &self.decorations
     }
@@ -619,11 +626,17 @@ impl EditorState {
         self.marked_range_utf16.is_some()
     }
 
-    /// Clear every key context, caret shape, and bar `owner` set.
-    pub fn remove_owner_state(&mut self, owner: knot_protocol::ExtensionKey) {
+    /// Clear every key context, caret shape, bar, and decoration `owner` set.
+    pub fn remove_owner_state(
+        &mut self,
+        owner: knot_protocol::ExtensionKey,
+        buffer: &mut BufferModel,
+    ) {
         self.key_contexts.retain(|(key, _)| *key != owner);
         self.caret_shapes.retain(|(key, _)| *key != owner);
         self.bars.remove_owner(owner);
+        self.remove_decorations(owner, buffer);
+        self.project_contributions(buffer);
     }
 
     /// The bars above the text and the field with the editor's focus.
@@ -799,11 +812,7 @@ impl EditorState {
         self.line_count = model.line_count();
         self.sync_wrap(model);
         self.sync_folds(model);
-        (
-            self.decorations,
-            self.gutter_markers,
-            self.contribution_actions,
-        ) = project_contributions(model, model.resolved_contributions());
+        self.project_contributions(model);
         if let Some(position) = position {
             self.restore_view_position(model, position);
         }

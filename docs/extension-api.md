@@ -637,6 +637,12 @@ await buffer.contributions.replace([
 ], { ifRevision: revision });
 ```
 
+Those belong to the buffer, so every view of it paints them. Highlights that
+follow one view, such as matches around its caret, go through
+`editor.setDecorations(items, { ifRevision })` instead, which takes
+`{ range, decoration }` items and replaces the caller's set on that editor
+alone.
+
 ## Define icons, packs, and associations
 
 Icons are named, such as `file.rust` or `action.refresh`, and trees, tabs,
@@ -953,6 +959,7 @@ when removing the feature; native definitions retain their application ownership
 | Buffer proxy | Live shared model, independent of any one presentation | No |
 | Registration/subscription | Extension-owned until disposal, resource loss or teardown; IDs hidden | No |
 | Contribution set | One set per buffer and extension lifecycle | No |
+| View decoration set | One set per editor and extension lifecycle | No |
 | Revision/generation | Content/request correlation, not reusable authority | No |
 | Tree item ID | Author-defined identity within a provider tree | Provider-defined |
 

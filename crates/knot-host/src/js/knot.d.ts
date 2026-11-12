@@ -1242,6 +1242,12 @@ declare module "knot" {
     readonly gutter?: ColorKey | null;
     readonly command?: string | null;
   }
+  /** A decoration one view paints; see `Editor.setDecorations`. */
+  export interface ViewDecoration {
+    readonly range: ByteRange;
+    /** Paints the range, ordered among overlaps as contributions are. */
+    readonly decoration: Decoration;
+  }
   export interface FindOptions {
     /**
      * Compare characters exactly. The default folds case one character at a
@@ -1540,6 +1546,19 @@ declare module "knot" {
      * empty name or a non-boolean `active`.
      */
     setKeyContext(name: string, active: boolean): Promise<void>;
+    /**
+     * Atomically replace the caller's decorations on this editor at the
+     * required revision; empty items clear them. Only this view paints them,
+     * so other views of the buffer stay clean, and they paint above the
+     * buffer's contributions of equal precedence. Ranges follow the rules of
+     * `EditorContributions.replace` and edits move them the same way. The set
+     * belongs to the caller's lifecycle, as key contexts do: teardown clears
+     * it. It is presentation state, never recorded, and lasts until replaced
+     * or the view closes.
+     * @throws HostError with RevisionConflict, InvalidRange, InvalidTarget, or
+     * Cancelled; TypeError for a malformed item.
+     */
+    setDecorations(items: readonly ViewDecoration[], options: RevisionOptions): Promise<void>;
     /**
      * Draw this editor's caret as a thin "bar" (the default), a "block" over
      * the character under it, or an "underline" beneath it; `null` clears the

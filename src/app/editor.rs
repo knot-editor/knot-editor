@@ -286,14 +286,34 @@ impl Editor {
             .resolve_text(self.state.view_kind(), &self.state.key_contexts())
     }
 
-    /// Clear every key context, caret shape, and bar `owner` set.
+    /// Clear every key context, caret shape, bar, and decoration `owner` set.
     pub(crate) fn remove_owner_state(
         &mut self,
         owner: knot_protocol::ExtensionKey,
         cx: &mut Context<Self>,
     ) {
-        self.state.remove_owner_state(owner);
+        let model = self.model.clone();
+        model.update(cx, |buffer, _| self.state.remove_owner_state(owner, buffer));
         self.sync_bar_inputs(cx);
+        cx.notify();
+    }
+
+    /// Replace `owner`'s decorations on this view at buffer revision
+    /// `if_revision`.
+    pub(crate) fn set_decorations(
+        &mut self,
+        owner: knot_protocol::ExtensionKey,
+        items: &[knot_model::editor::ViewDecoration],
+        if_revision: u64,
+        cx: &mut Context<Self>,
+    ) -> Result<(), knot_model::buffer::ContributionError> {
+        let model = self.model.clone();
+        model.update(cx, |buffer, _| {
+            self.state
+                .set_decorations(owner, items, if_revision, buffer)
+        })?;
+        cx.notify();
+        Ok(())
     }
 
     /// Move the selection to byte offsets on character boundaries within the
