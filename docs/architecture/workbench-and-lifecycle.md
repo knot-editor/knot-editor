@@ -25,8 +25,8 @@ config failure discards the queue and opens a focused diagnostic window with
 Copy and Quit; product windows remain unavailable for that launch, and nothing
 is recorded.
 
-A product window has no status line. A native operation whose failure leaves no
-other visible effect, such as Save, Open, Add Folder, recovery, or creating a
+The status bar carries no operation messages. A native operation whose failure
+leaves no other visible effect, such as Save, Open, Add Folder, recovery, or creating a
 transfer window, reports it through a native warning prompt that needs no
 answer. Successful and in-progress operations show only their effect.
 Extension calls receive the failure as their result instead of a prompt.
