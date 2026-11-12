@@ -50,6 +50,19 @@ jobs:
           cargo nextest run --locked --workspace --all-targets --profile ci
           cargo test --locked --workspace --doc
 
+  check-ci-setup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: actionlint
+      - name: Lint workflows
+        run: actionlint
+
   handler-platforms:
     strategy:
       matrix:

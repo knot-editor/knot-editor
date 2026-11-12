@@ -38,6 +38,10 @@ app-package version=`date -u +nightly.%Y%m%d.%H%M`:
 ext:
     scripts/check-extensions.sh
 
-# Format, lint, and test all Rust targets and extension packages
-check: fmt lint test ext
+# Lint the GitHub Actions workflows
+check-ci-setup:
+    actionlint
+
+# Format, lint, and test all Rust targets, extension packages, and workflows
+check: fmt lint test ext check-ci-setup
 

@@ -6,7 +6,9 @@ local commands and CI, installing it when it is not already available. The
 minimal profile includes the compiler and Cargo; Clippy and rustfmt are added
 explicitly.
 
-Run `just check` for local formatting, Clippy, and Rust and extension tests. Run `just app` to build
+Run `just check` for local formatting, Clippy, Rust and extension tests, and
+[actionlint](https://github.com/rhysd/actionlint) on the workflows (`brew install
+actionlint`). Run `just app` to build
 the macOS app bundle locally.
 
 Rust tests run under [cargo-nextest](https://nexte.st), which runs each test
@@ -23,6 +25,7 @@ to `main`:
   runs Clippy with warnings as errors, and tests all Rust targets under
   nextest, then doc tests. Clippy and tests use the committed `Cargo.lock`
   through `--locked`.
+- The check-ci-setup job runs actionlint on every workflow file.
 - The handler-platforms job runs on macOS and Windows. It tests handler
   declarations, linked inventory discovery, and doc tests, then builds the
   product binary. It does not run the full suite on those platforms.
