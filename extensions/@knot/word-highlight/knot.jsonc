@@ -1,0 +1,11 @@
+{
+  // Bundled occurrence highlighting.
+  "name": "@knot/word-highlight",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "displayName": "Word Highlight",
+  "description": "Highlights the other occurrences of the word at the cursor or of the selected text.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}

@@ -4,6 +4,7 @@ fn main() {
         "status-bar",
         "go-to-line",
         "find",
+        "word-highlight",
         "go-to-file",
         "explorer",
         "themes",
