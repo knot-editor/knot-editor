@@ -220,7 +220,7 @@ Completion providers use the same asynchronous reverse-runtime direction but
 remain completion-specific: the shell snapshots ordered registrations, the
 view-owned controller tracks one-shot provider states and merge policy, and a
 native surface consumes semantic snapshots. Provider objects and request
-machinery never enter surfaces, buffers, or `core`.
+machinery never enter surfaces, buffers, or `knot-core`.
 
 ## Completion ownership and aggregation
 
@@ -497,6 +497,6 @@ uses a `BufferModel` rendered by `EditorView` rather than a second presentation
 model. Contributed [text frames](#extension-trees) are the current generated
 surface; their private buffers stay outside document identity and persistence.
 Feature controllers keep semantic identities beside the buffer instead of
-recovering them from displayed text, so `core` and `BufferModel` carry no
+recovering them from displayed text, so `knot-core` and `BufferModel` carry no
 feature semantics. Every application document is a user document with
 persistence state; interactive generated views remain D027.

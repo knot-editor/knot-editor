@@ -7,15 +7,15 @@ records rationale; public API contracts live in [knot.d.ts](../../crates/knot-ho
 
 | Owner | Responsibility |
 | --- | --- |
-| `host::protocol` | Knot-owned identities, semantic payloads, and failures; no gpui or concrete core models |
-| `host::declarations` | Typed async handler contracts, linked discovery, and response transport |
-| `host::scheduler` | V8-independent lifecycle state and bounded worker scheduling |
-| `host::engine` | V8 initialization, persistent isolates, contexts, bindings, and exact-once runtime teardown |
-| `host::timers` | V8-free timer IDs, armed waits, and the embedder's timer driver |
-| `host::lifecycle` | Extension identity, scheduler-visible state, and failure data |
-| `host::pool` | V8-free application control, awaitable event inbox, diagnostics, and shutdown |
-| `host::module_graph` | Validation of immutable captured sources without V8 or filesystem access |
-| `app::extensions::{package, load}`, `personal_config` | Background source discovery, admission, startup ordering, and outcomes |
+| `knot-protocol` | Knot-owned identities, semantic payloads, and failures; no gpui or concrete core models |
+| `knot-protocol::declarations` | Typed async handler contracts, linked discovery, and response transport |
+| `knot-host::scheduler` | V8-independent lifecycle state and bounded worker scheduling |
+| `knot-host::engine` | V8 initialization, persistent isolates, contexts, bindings, and exact-once runtime teardown |
+| `knot-host::timers` | V8-free timer IDs, armed waits, and the embedder's timer driver |
+| `knot-host::lifecycle` | Extension identity, scheduler-visible state, and failure data |
+| `knot-host::pool` | V8-free application control, awaitable event inbox, diagnostics, and shutdown |
+| `knot-host::module_graph` | Validation of immutable captured sources without V8 or filesystem access |
+| `knot-model::extensions::{package, load}`, `app::personal_config` | Background source discovery, admission, startup ordering, and outcomes |
 | `app::extensions::host` | Foreground routing, resource ownership, observation, and lifecycle cleanup |
 
 ```text

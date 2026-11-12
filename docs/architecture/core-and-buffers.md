@@ -5,7 +5,7 @@ Part of the [architecture](../architecture.md). Design rationale is recorded in
 
 ## Core editor model
 
-`src/core` contains:
+`knot-core` contains:
 
 - `TextBuffer`: UTF-8 text, stable positions, line lookup, and the primitive
   edit log, implemented as a stable-ID piece table.
@@ -45,7 +45,7 @@ Each `BufferModel` owns:
 - open/closed lifecycle and public revision;
 - at most one immutable UTF-16 snapshot cache entry.
 
-Presentation metadata stays in `app` and refers to core range IDs. A model
+Presentation metadata stays in the application and refers to core range IDs. A model
 commit advances the public revision once and invalidates the snapshot cache;
 the caller that committed notifies the `Buffer` entity, which reaches every
 observing view. The model also records the line range each of
@@ -54,7 +54,7 @@ out, such as a wrapping editor, composes the changes since the revision it
 last followed and updates only those lines, or every line when it fell behind
 the retained history. All text mutation paths enforce the model's
 access policy; read-only models still permit snapshots, view anchors,
-contributions, and closure. `core::TextBuffer` remains unconditionally mutable.
+contributions, and closure. `knot-core`'s `TextBuffer` remains unconditionally mutable.
 
 Extension buffer proxies remain usable independently of subscription and
 contribution ownership. Closed models reject transport access even when retained

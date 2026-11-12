@@ -24,7 +24,7 @@ Documents distinguish untitled, destination-associated-but-uncreated, and
 persisted state. Untitled cleanliness compares against initial content;
 associated-but-uncreated documents remain dirty until saved; persisted documents
 compare against their saved content identity. Undo can return to clean content
-without making public revisions non-monotonic. Resource identity and provider state never enter `BufferModel` or `core`.
+without making public revisions non-monotonic. Resource identity and provider state never enter `BufferModel` or `knot-core`.
 
 A document's language is a buffer fact shared by every view. The collection
 detects it from the resource name and first line when a document enters it
