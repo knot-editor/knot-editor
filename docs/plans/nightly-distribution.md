@@ -1,6 +1,6 @@
 # Nightly distribution through Homebrew
 
-Status: 🚧 in progress; checkpoints 1 and 2 are complete.
+Status: 🚧 in progress; checkpoints 1 to 3 are complete.
 
 ## Goal
 
@@ -76,27 +76,16 @@ stamps `CFBundleVersion`, and ad-hoc signs. `scripts/package-macos-app.sh ID`
 (`just app-package`) writes `dist/Knot-ID-macos-arm64.zip` and its `.sha256`.
 See [the macOS packaging notes](../../packaging/macos/README.md).
 
-### 3. Nightly workflow and releases 🚧
+### 3. Nightly workflow and releases ✅
 
-✅ `.github/workflows/nightly.yml` written: a `decide` job (no-new-commits check
-for scheduled runs, wait for green CI unless `skip_ci_wait`), then a `release`
-job on `macos-latest` that packages, publishes the prerelease, and prunes to 7.
-The `gh`/`jq` queries and pruning filter were checked locally; the workflow
-itself can only run once pushed to `main`. Remaining: the review gate.
-
-Add the scheduled workflow: decide whether to build, wait for/verify green CI,
-package, publish the prerelease, prune old ones.
-
-- **Implementation context:** new `.github/workflows/nightly.yml` modeled on
-  `ci.yml` (pinned action SHAs, `persist-credentials: false`, pinned Node 24,
-  `Swatinem/rust-cache`); `permissions: contents: write`; use `gh` for the
-  last-tag lookup, the CI status check
-  (`gh run list --workflow ci.yml --commit <sha>`), release creation, and
-  pruning. Call the checkpoint 2 script.
-- **Validation:** scheduled-path logic with and without new commits; a red-CI
-  commit is skipped; manual dispatch builds regardless and two runs the same
-  day produce distinct releases; pruning keeps 7.
-- **Review gate:** you inspect the first prerelease and its asset.
+[`nightly.yml`](../../.github/workflows/nightly.yml) runs daily at 03:00 UTC
+and on manual dispatch. A `decide` job skips a scheduled run without new
+commits or without green CI, and a `release` job on `macos-latest` packages,
+publishes the prerelease, and prunes to 7. Manual runs were verified to
+publish distinct releases; the scheduled skip paths and pruning have not run
+yet. The first install showed macOS's unsigned-app warning, which checkpoint 4's
+cask removes by clearing quarantine. `just check-ci-setup` and the CI job of
+the same name lint all workflows with actionlint.
 
 ### 4. Homebrew tap and cask publishing
 
