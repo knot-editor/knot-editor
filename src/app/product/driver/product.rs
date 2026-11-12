@@ -201,13 +201,19 @@ impl TestProduct {
         cx.read(crate::app::components::drift)
     }
 
-    /// Set the application-wide value of the setting `key`.
+    /// Set the application-wide value of the setting `key`, notifying the
+    /// packages that observe it.
     pub fn set_setting(&self, key: &str, value: Value, cx: &mut TestAppContext) {
         cx.update(|cx| {
             cx.default_global::<ApplicationSettings>()
                 .0
                 .set(key, value, SettingsScope::default())
                 .unwrap();
+            if let Some(host) = crate::app::extensions::host::entity(cx) {
+                host.update(cx, |host, _| host.setting_changed(key));
+            }
+            crate::app::application_observation::changed(cx);
+            cx.refresh_windows();
         });
         cx.run_until_parked();
     }

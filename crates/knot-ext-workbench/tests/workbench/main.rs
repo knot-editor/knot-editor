@@ -8,6 +8,7 @@ mod project_sessions;
 mod projects;
 mod status_bar_package;
 mod themes;
+mod word_highlight;
 
 mod bundled {
     pub const PACKAGES: &[knot_bundled::BundledSource] = knot_ext_workbench::PACKAGES;
