@@ -99,6 +99,10 @@ them. Menus and palette commands bypass keymaps. gpui holds bindings only for
 menu key equivalents, the config-error window's Quit, and the bindings
 gpui-component installs at startup, which every keymap rebuild restores.
 
+Synchronous JavaScript keybinding calls form an ordered atomic batch per V8 turn.
+Changed effective maps rebuild bindings across windows; host-response ordering is
+specified in [transport](extension-host.md#handler-declarations-and-transport).
+
 ### Editor bars
 
 While a field of an editor bar has Knot-side focus, the router resolves keys
@@ -128,6 +132,8 @@ reveals the previous one, and teardown clears its own. A block or underline
 covers the character under the caret, with a half-line width at the end of a
 line; the shape is presentation state and never recorded.
 
+### Text bindings
+
 A text binding routes committed text that an editor would insert to a command
 with `{ text }` as its arguments, scoped and resolved like key bindings but in
 its own slots. Committed text, after keyboard layout and IME, reaches the
@@ -156,6 +162,8 @@ of a command's input reach it, on the first key after focus leaves the held
 view otherwise, and after one second, so a stuck extension never keeps the
 keyboard. Composition preedit is not queued, since the IME already shows it.
 
+### Menus
+
 Menus show each command's shown global single-keystroke binding through a
 binding to the menu action in a context no element declares, so it labels the
 menu without dispatching. The menus are set again whenever the keymap changes.
@@ -169,10 +177,6 @@ macOS performs a menu's key equivalent only when the window leaves the key
 unhandled, so a key that some view unbinds shows no menu key. Show Keybindings
 lists every slot with its owner and the owner that overrides it, using the same
 winner rule as resolution.
-
-Synchronous JavaScript keybinding calls form an ordered atomic batch per V8 turn.
-Changed effective maps rebuild bindings across windows; host-response ordering is
-specified in [transport](extension-host.md#handler-declarations-and-transport).
 
 ## Extension execution
 

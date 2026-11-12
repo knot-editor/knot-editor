@@ -200,29 +200,13 @@ documents.setLanguage / Set Language Mode --> explicit ID   |
   Detect, in the window's transient picker. Contributed text frames take a
   fixed language at registration.
 
-Tree providers use the reverse path:
+## Completion ownership and aggregation
 
-```text
-extension registration/invalidation
-        |
-native TreeView generation
-        |
-reverse runtime command
-        |
-extension getChildren callback
-        |
-generation and lifecycle validation
-        |
-native cached presentation
-```
-
-Completion providers use the same asynchronous reverse-runtime direction but
-remain completion-specific: the shell snapshots ordered registrations, the
+Completion providers use the same asynchronous reverse-runtime direction as
+[tree providers](#extension-trees) but remain completion-specific: the shell snapshots ordered registrations, the
 view-owned controller tracks one-shot provider states and merge policy, and a
 native surface consumes semantic snapshots. Provider objects and request
 machinery never enter surfaces, buffers, or `knot-core`.
-
-## Completion ownership and aggregation
 
 The shell-owned `CompletionProviderRegistry` assigns monotonic registration
 identities and order to lifecycle-owned, shell-wide providers. An editor
@@ -316,6 +300,23 @@ tree actions, and status items.
 
 ## Extension trees
 
+Tree providers run the opposite way to editor contributions: the native view
+asks and the extension answers.
+
+```text
+extension registration/invalidation
+        |
+native TreeView generation
+        |
+reverse runtime command
+        |
+extension getChildren callback
+        |
+generation and lifecycle validation
+        |
+native cached presentation
+```
+
 `TreeView` owns cached semantic items, expansion, selection, focus, scroll, and
 per-parent loading/error generations. It renders and handles input from cached
 foreground state only.
@@ -380,15 +381,6 @@ commits, Escape dismisses, and a `validate` message shows under the field and
 blocks the commit. Validation is asked through the host's input pull loop, so a
 commit waits for the answer to the current text; focus loss while a message
 shows dismisses. An empty commit of a new item dismisses.
-
-Contributed text frames are a separate content kind. Each instance owns a
-private read-only `BufferModel` rendered by the ordinary `EditorView`; it is not
-registered with the document collection and has no resource or persistence.
-The extension replaces the whole text through a foreground request, and the
-bridge keeps the last text so a window created later presents current content.
-A frame's editor has no gutter unless its registration asks for one.
-Wrapping the editor surface is provisional; the [roadmap](../roadmap.md) tracks a
-dedicated read-only presentation (D054).
 
 Semantic tree state retains accessibility information. gpui exposes an
 AccessKit bridge, but Knot's surfaces do not publish to it yet (D030 in the
@@ -494,9 +486,18 @@ when the overlay closes and that surface is still live.
 
 Generated output that benefits from ordinary selection, scrolling, and copying
 uses a `BufferModel` rendered by `EditorView` rather than a second presentation
-model. Contributed [text frames](#extension-trees) are the current generated
+model. Contributed text frames are the current generated
 surface; their private buffers stay outside document identity and persistence.
 Feature controllers keep semantic identities beside the buffer instead of
 recovering them from displayed text, so `knot-core` and `BufferModel` carry no
 feature semantics. Every application document is a user document with
 persistence state; interactive generated views remain D027.
+
+Contributed text frames are a separate content kind. Each instance owns a
+private read-only `BufferModel` rendered by the ordinary `EditorView`; it is not
+registered with the document collection and has no resource or persistence.
+The extension replaces the whole text through a foreground request, and the
+bridge keeps the last text so a window created later presents current content.
+A frame's editor has no gutter unless its registration asks for one.
+Wrapping the editor surface is provisional; the [roadmap](../roadmap.md) tracks a
+dedicated read-only presentation (D054).
