@@ -70,6 +70,9 @@ touches.
   typed results, complete lists filtered natively or rows supplied per query,
   pulled rather than pushed updates; whole-value completion items with menu accept; one native matcher
   with user-ordered styles; recency owned by extensions.
+- [Editor bars](decisions/semantic-ui.md#editor-bars): non-modal data-described
+  strips rather than the modal input; native literal matching, Find in a
+  bundled package.
 - [Status bar](decisions/semantic-ui.md#status-bar): native bar, extension
   items with per-window values.
 - [Generated text surfaces](decisions/semantic-ui.md#generated-text-surfaces):

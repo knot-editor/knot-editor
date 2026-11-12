@@ -87,6 +87,17 @@ by stale views. Disposal, cancellation, and host release follow the shared
   its anchored-range store and syntax state have consumed them, so the
   retained log holds at most one commit.
 
+## Text search
+
+`BufferModel::find` (`crates/knot-model/src/buffer/find.rs`) matches a literal
+query over the buffer text, optionally within a byte range, in order and
+without overlap. Matching compares simple case folds unless `caseSensitive`;
+`wholeWord` requires non-word characters, in the editor's word classes, on both
+sides of a match. The result carries the searched revision, the byte ranges, and
+whether more matches follow a limit that defaults to 1,000 and is capped at
+100,000. There is no reverse search: a caller wanting the matches before a
+point searches the range before it. Regular expressions are not supported.
+
 ## Anchored ranges
 
 - `AnchoredRangeStore` owns stable range geometry only. Each endpoint is a

@@ -856,6 +856,33 @@ may be open at the same time. Window closure, extension unload, and caller
 cancellation settle a pending interaction as cancellation; focus returns to the
 surface that was focused before it opened.
 
+## Show an editor bar
+
+A bar is a non-modal strip above an editor's text, for workflows that keep the
+editor usable, such as Find. Open it on an editor handle; opening the same ID
+again replaces what it shows, and fields that remain keep their text.
+
+```js
+const editor = await workbench.editor(target);
+await editor.openBar("find", {
+  fields: [{ id: "query", placeholder: "Find" }],
+  toggles: [{ id: "case", icon: "find.case", tooltip: "Match Case", active: false,
+              command: { name: "editor.find-toggle-case" } }],
+  message: "3 of 17",
+  buttons: [{ id: "close", icon: "find.close", command: { name: "editor.find-close" } }],
+});
+await editor.focusBarField("find", "query", { text: "foo" });
+await editor.onDidEditBar(({ bar, fields }) => search(bar, fields.query));
+```
+
+Icons are names from `icons.define`. A click runs the command with the bar's
+editor captured; flip a toggle by opening the bar again with the new `active`.
+While a field has focus, bind keys with `keymaps.bind(key, command, { view:
+"bar", context: "<bar id>" })`; Tab moves between fields. `buffer.find` supplies
+native literal matching for highlights and navigation. The bundled
+[`@knot/find`](../extensions/@knot/find/) package is a complete example; the
+precise contracts are in `knot.d.ts`.
+
 ## Show status items
 
 Every product window shows a status bar below the workbench. A package fills

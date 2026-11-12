@@ -36,7 +36,7 @@ captured focused view, then workbench, then application. Commands, native editin
 included, run against a session without a window.
 Participants synchronously claim/decline before starting typed async work; all
 declining produces unavailable. Raw text, IME, pointer, scroll, and terminal bytes
-remain view input protocols. Find commands currently report unavailable.
+remain view input protocols.
 
 Focus changes cannot redirect an admitted command. Pending work revalidates the
 captured session and presentation before foreground access: the session must

@@ -273,6 +273,33 @@ and dropped once they span fewer than two lines. The editor handle's view state
 carries no folds and leaves them as they are. Zoom is application state and
 wrapping follows settings, so neither is recorded.
 
+### Editor bars
+
+An editor can show non-modal strips above its text, such as Find. An extension
+describes a bar as data: text fields with placeholders, toggles and buttons
+(an icon, a tooltip, and a command; a toggle also an `active` state), and a
+message line. A bar belongs to its opening lifecycle and an extension-chosen
+ID per editor; opening the same ID again replaces what it shows, keeping the
+text of fields that remain, and bars stack in the order they were opened. Bar
+state and field focus are `EditorState` data in
+`crates/knot-model/src/editor/bars.rs`; the `Editor` entity keeps a
+`TextInput` per field, and `EditorView` paints the bars and moves the window's
+focus between a field and the text. Bars are presentation state: layouts never
+record them, and they close with their editor or their lifecycle. Clicking the
+text focuses it and leaves the bars open.
+
+A user edit of a field reaches the owner through `onDidEditBar`, coalesced
+like selection notifications, and text the extension sets through
+`focusBarField` is not reported. A toggle or button click dispatches its
+command through the product shell with the bar's editor captured, deferred
+until the click has finished with its views; an extension flips a toggle by
+opening the bar again. [Commands](commands.md#editor-bars) covers key routing
+while a field has focus. The bundled `@knot/find` package is the first user.
+Its highlights are buffer contributions in `editor.findMatch` and
+`editor.findMatchCurrent`, capped at 1,000 matches, and it finds matches with
+the buffer's native `find` ([core and buffers](core-and-buffers.md#text-search)).
+Because contributions belong to the buffer, other views of it show them too.
+
 ## Status bar
 
 Each product window renders a fixed-height bar below the workbench from the

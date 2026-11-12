@@ -215,6 +215,28 @@ palette query, so typing, IME, and clipboard have one native path.
 
 Reference: [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions).
 
+## Editor bars
+
+Find is a non-modal bar docked to the editor and described as data, not the
+modal transient input. The editor must stay editable while the bar is open,
+matches follow edits, and several bars may stack; a modal input holds the
+window's single interaction slot and blocks all of that. Bars are native
+presentation with extension-supplied content, like the status bar, because
+painting and field editing must never wait on JavaScript: edits reach the
+extension through a coalescing subscription rather than a synchronous callback.
+Rendering extension-drawn bars was rejected for the same reason.
+
+Matching is native (`buffer.find`) rather than JavaScript over snapshots. An
+extension addresses text in UTF-8 byte offsets, and a snapshot would copy the
+whole buffer on every keystroke. The workflow itself stays in the bundled
+`@knot/find` package, and its highlights reuse the buffer contribution path,
+which D080 shares. Regular expressions and replace remain deferred (D001), so
+the matcher is a literal one.
+
+References: [editor bars](../architecture/workbench-and-lifecycle.md#editor-bars),
+[key routing](../architecture/commands.md#editor-bars), and
+[text search](../architecture/core-and-buffers.md#text-search).
+
 ## Status bar
 
 The bar is native and its items are extension registrations, so the shell owns

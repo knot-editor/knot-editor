@@ -141,17 +141,9 @@ bar's editor captured; an extension flips a toggle by opening the bar again.
 `@knot/find` has Match Case and Whole Word toggles (⌥⌘C / ⌥⌘W in the bar;
 Ctrl+Alt elsewhere) and previous, next, and close buttons.
 
-### 6. Documentation
+### 6. Documentation ✅
 
-- [Semantic UI](../architecture/semantic-ui.md) or
-  [editor views](../architecture/workbench-and-lifecycle.md#editor-views):
-  editor bars and their ownership.
-- [Commands](../architecture/commands.md): the `bar` view kind. Remove "Find
-  commands currently report unavailable".
-- A decision entry: a non-modal editor bar instead of the modal transient input,
-  and native matching instead of JS matching over snapshots.
-- [Extension guide](../extension-api.md) and [settings](../settings.md) where
-  affected. Roadmap: narrow D001 to replace and regex, and update D140.
-- Mark D031 ✅ in the daily-driver plan and remove this plan.
+Editor bars, the `bar` view kind, native text search, the extension guide, the
+decision entry, and the roadmap (D001 narrowed, D140 updated) are documented.
 
 **Review gate:** documentation review.

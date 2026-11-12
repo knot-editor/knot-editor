@@ -84,17 +84,7 @@ to be rebuilt later:
 - ✅ **D077 — Status bar**
 - ✅ **D078 — Zoom, font size, and soft wrap**
 - ✅ **D079 — Save hygiene**
-
-- **D031 — Current-file Find** (depends on D064)
-  - 🚧 [Plan](d031-current-file-find.md).
-  - Bound to ⌘F. The query field takes focus. Matching is live and highlights
-    every match. Enter and ⇧Enter (and ⌘G / ⌘⇧G) move between matches, and the
-    current match follows edits. Esc closes the bar.
-  - Use selection as the find string (⌘E).
-  - Match highlighting uses a layer that D080 can reuse.
-  - Replace and the advanced modes (D001) stay deferred. Revisit D001 in this
-    item's session, because case and whole-word options are cheap once
-    matching exists.
+- ✅ **D031 — Current-file Find**
 
 - **D080 — Word occurrence highlighting extension** (depends on D064, D031)
   - When the cursor rests on a word, a bundled JavaScript extension highlights

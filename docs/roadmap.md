@@ -98,7 +98,7 @@ complete list for that item.
   - D077 → D117 → D067
   - D071 → D067, D082
   - D034 → D119
-- **Find:** D031 → D001, with or after D092; D031 → D150; D031 → D179.
+- **Find:** D001 with or after D092.
 - **Package manager:** D087 → D101 → D102 → D103 → D104 → D106;
   D064, D071, D103 → D105 → D106; D106 → D107, D108; D103 → D116.
 - **Settings:** D070 → D089 → D090; D008 → D090;
@@ -130,12 +130,13 @@ complete list for that item.
     window.
   - Order: after D164; uses the projects of D120.
 
-- **D001 — Replace and advanced Find modes**
-  - Deferred: These modes depend on current-file Find (D031, in the
-    [daily-driver plan](plans/daily-driver.md)).
-  - Reconsider: Daily use identifies required replacement, regular-expression,
-    case, or whole-word behavior.
-  - Order: after D031; replace-all is a bulk edit, so with or after D092.
+- **D001 — Replace and regular-expression Find**
+  - Deferred: Current-file Find matches literal text, with case and whole-word
+    toggles. Replace and regular expressions are missing.
+  - Reconsider: Daily use identifies required replacement or
+    regular-expression behavior. Then add them to the `@knot/find` bar and
+    `buffer.find`.
+  - Order: replace-all is a bulk edit, so with or after D092.
 
 - **D157 — Indent width separate from tab width**
   - Priority: low.
@@ -603,13 +604,13 @@ complete list for that item.
   - Order: after D077; before D067.
 
 - **D140 — Placeholder text in input fields**
-  - Deferred: The shared `TextInput` behind `workbench.showInput` and the
-    palette query shows nothing while empty, so an input can only explain
-    itself through its title or message line.
+  - Deferred: `TextInput` renders placeholder text, which editor bars use, but
+    `workbench.showInput` and the palette query have no way to set one, so
+    those inputs can only explain themselves through their title or message
+    line.
   - Reconsider: Before the next bundled input that would benefit from a
-    hint. Then render placeholder text in `TextInput` and add a
-    `placeholder` option to `showInput`, and let Tab accept it into an empty
-    field, as Zed's Go to Line does. Update `@knot/go-to-line` to show the
+    hint. Then add a `placeholder` option to `showInput`, and let Tab accept
+    it into an empty field, as Zed's Go to Line does. Update `@knot/go-to-line` to show the
     current position as `line:column` there.
 
 - **D119 — Extension menu and context-menu items**
@@ -697,11 +698,11 @@ Kakoune mode could use it too. The
     second engine, and without substitution, a whole-buffer edit.
     Missing: `/`, `?`, `n`, `N`, `*`, `#` with match highlights, `:noh`,
     and `:s` and `:%s` with ranges and flags.
-  - Reconsider: D031 lands, or daily Vim use misses search. Then build
+  - Reconsider: Daily Vim use misses search. Then build
     search inside the Vim package on Find's matching and highlights, decide
     how Vim's regex syntax maps onto the engine Find uses, and add
     substitution as one batch in one undo step.
-  - Order: after D058 and D031; substitution after D092, as bulk edits are.
+  - Order: after D058; substitution after D092, as bulk edits are.
 
 - **D151 — Smaller Vim commands**
   - Deferred: The first Vim mode (D058) covers the commands of its scope.
@@ -757,11 +758,10 @@ Kakoune mode could use it too. The
     it paints them. Current-file Find (D031) highlights its matches in
     other splits of the buffer too, and two find bars over one buffer share
     one highlight set; word occurrence highlighting (D080) has the same limit.
-  - Reconsider: Soon after D031; it is important for Find and D080. Then
+  - Reconsider: Soon; it is important for Find and D080. Then
     let a contribution set target one editor view, painted only there and
     released with the view, beside the existing buffer-wide sets, and move
     `@knot/find` and D080 onto it.
-  - Order: after D031.
 
 - **D147 — Key contexts on non-editor views**
   - Deferred: D110 lets extensions set key contexts on editor views only.
