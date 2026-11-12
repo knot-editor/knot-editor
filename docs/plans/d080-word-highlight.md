@@ -142,37 +142,13 @@ bootstrap globals declared in `knot.d.ts`; the application's driver is
 Node's `mock.timers` ignores `refresh()` on mocked timeouts, so checkpoint 4
 covers debouncing with product tests rather than package tests.
 
-### 2. Per-view decorations — 🔍 awaiting review
+### 2. Per-view decorations — ✅ done
 
-✅ Implemented: `editor/decorations.rs` in `knot-model` (sets, anchoring
-through `BufferModel::add_view_range`, projection merge with view decorations
-above equal-precedence buffer ones), the `editorSetDecorations` handler,
-bootstrap, `knot.d.ts`, the fake host, and the semantic UI, editor views, and
-extension guide docs. ✅ Validated by model tests in
-`editor/tests/decorations.rs` and the product test
-`view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle`;
-`just check` passes.
-
-Deliverables: the per-lifecycle sets on `EditorState`, anchoring, projection
-merge, cleanup on view close and lifecycle teardown; `Editor.setDecorations`
-through an annotated handler; `knot.d.ts`, bootstrap, and the fake host
-(`scripts/extensions/testing/host.ts`); semantic UI and editor-view docs say
-decorations may belong to a view.
-
-Validation: model tests for anchoring through edits, merge order, revision
-conflicts, and removal by lifecycle; product tests that two views of one
-buffer paint only their own set and that teardown and tab close clear it.
-`just check`.
-
-Review gate: API shape and paint behavior.
-
-**Implementation context:** `EditorState` and `project_contributions` in
-`crates/knot-model/src/editor.rs`; the buffer-wide path is
-`BufferModel::replace_contributions` (`crates/knot-model/src/buffer.rs`);
-fold anchors in `crates/knot-model/src/editor/folding.rs`; lifecycle-owned
-view state follows `key_contexts`/`caret_shapes`/`bars`. The handler sits
-beside `setKeyContext` and `openBar` in `src/app/extensions/host/handlers.rs`;
-buffer-wide handling is in `src/app/extensions/buffers.rs`.
+View decoration sets live in
+[`editor/decorations.rs`](../../crates/knot-model/src/editor/decorations.rs),
+exposed as `Editor.setDecorations` in `knot.d.ts` through the
+`editorSetDecorations` handler. Behavior:
+[semantic UI](../architecture/semantic-ui.md#semantic-extension-ui).
 
 ### 3. Find on per-view decorations
 
