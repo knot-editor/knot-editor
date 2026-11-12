@@ -1,6 +1,6 @@
 # Nightly distribution through Homebrew
 
-Status: 🚧 in progress; checkpoints 1 to 3 are complete.
+Status: 🚧 in progress; checkpoints 1 to 4 are complete.
 
 ## Goal
 
@@ -87,41 +87,21 @@ yet. The first install showed macOS's unsigned-app warning, which checkpoint 4's
 cask removes by clearing quarantine. `just check-ci-setup` and the CI job of
 the same name lint all workflows with actionlint.
 
-### 4. Homebrew tap and cask publishing 🚧
+### 4. Homebrew tap and cask publishing ✅
 
-Create the tap, the cask template, and the publish step.
+The `publish-cask` job in [`nightly.yml`](../../.github/workflows/nightly.yml)
+renders `packaging/homebrew/knot@nightly.rb.in` and pushes it to the
+`knot-editor/homebrew-knot` tap with the `TAP_DEPLOY_KEY` deploy key. Verified
+end to end on the work machine: tap, install, launch of `Knot` and the `knot`
+command, then a manual run followed by `brew upgrade` picking it up. The
+template render is unit-checked by `scripts/test-render-cask.sh`, and the
+workflow runs `brew style` and `brew audit --cask --online` on the rendered
+cask. The scheduled no-new-commits skip and pruning past seven releases have
+not been observed yet. Install steps live in the
+[README](../../README.md#nightly-builds) and the
+[release section](../development.md#nightly-releases).
 
-- **Implementation context:** `packaging/homebrew/knot@nightly.rb.in`
-  (`version`, `sha256`, `url` to the release asset, `app "Knot.app"`,
-  `binary "#{appdir}/Knot.app/Contents/MacOS/knot", target: "knot"`,
-  `postflight` with `xattr -dr com.apple.quarantine`, `zap` for the config
-  and state directories chosen by `user_config_root` in
-  `src/app/personal_config.rs`); a final job in `nightly.yml` that renders the
-  template and pushes to the tap with the deploy key. The repository and the
-  secret are created by you (outward-facing, so not done without your say).
-- **Progress:** ✅ template `packaging/homebrew/knot@nightly.rb.in`,
-  `scripts/render-cask.sh` and `scripts/test-render-cask.sh` (run by
-  `just check-ci-setup` and CI). ✅ `publish-cask` job in `nightly.yml`
-  (tap, trust, render, `brew style`, `brew audit --cask --online`, push with the
-  deploy key). Style and audit were run locally against the published
-  `nightly-20261112-0952`. Brew 7 needs `postflight_steps` and `depends_on
-  :macos`, a `livecheck` skip, and `--except github_prerelease_version` since
-  nightlies are prereleases. ⏳ The job has not run: it needs the tap and the
-  `TAP_DEPLOY_KEY` secret below.
-- **Install steps:** `brew tap knot-editor/knot`, `brew trust knot-editor/knot`
-  (Homebrew 7 refuses casks from an untrusted tap), then `brew install --cask
-  knot@nightly`. Checkpoint 5 documents them.
-- **To create (you):** the empty repo `knot-editor/homebrew-knot` (default
-  branch `main`, public so `brew tap` needs no auth), a deploy key with write
-  access on it, and its private half as the secret `TAP_DEPLOY_KEY` in
-  `knot-editor/knot-editor`.
-- **Validation:** `brew audit --cask --online` and `brew style` on the
-  rendered cask in the workflow; the template render is unit-checked by a
-  small script test with fixed inputs.
-- **Review gate:** on your work machine, tap, install, launch `Knot` and the
-  `knot` command, then trigger a manual run and `brew upgrade` to receive it.
-
-### 5. Documentation
+### 5. Documentation 🚧
 
 Record the nightly pipeline and install steps, and the rationale for the
 choices above.
