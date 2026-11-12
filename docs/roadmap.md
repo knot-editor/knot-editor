@@ -39,6 +39,19 @@ the deferred register.
     the bundled packages for state assumed stable across an await.
   - Order: before D067 and D117.
 
+- **D183 — Deterministic indentation after Enter and closing tokens**
+  - Deferred: Enter and a typed closing token such as `}` or `else` leave a
+    request for the indent query that waits for a syntax tree of that exact
+    revision, and any later edit drops it. When the parse exceeds the 1 ms
+    foreground budget and finishes in the background, a key typed first
+    leaves the line at the wrong indentation, so the result depends on
+    timing in large files. Enter between an auto-closed pair is unaffected.
+  - Reconsider: Now. Then let these two commands parse in the foreground up
+    to a larger budget, chosen from a benchmark of incremental reparses on a
+    large file, and keep the deferred request only beyond it. Rebasing the
+    request over later typing was rejected: the line would shift after the
+    typed text and needs rules for when to give up.
+
 ## Selected work
 
 The production extension APIs and JavaScript projects initiative (D046–D053,
