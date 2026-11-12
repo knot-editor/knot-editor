@@ -18,8 +18,8 @@ gpui matches the contexts of the last rendered frame, so bindings had been
 registered by key and view kind alone, and a sequence bound in one package's
 context then held its first key in every editor and resolved to nothing where
 the context was off; an installed package's `z b` swallowed Vim's `zb`. Matching
-outside gpui also keeps key handling free of windows, so sessions without one
-and package cases need none.
+outside gpui also keeps key handling free of windows, so windows without one and
+package cases need none.
 
 Writers are not ranked by owner. Configuration is code that runs in order, as in
 Emacs and Neovim, so the latest write wins and personal overrides belong in
@@ -68,7 +68,7 @@ palette lists commands by title because names are an addressing scheme. Low-leve
 commands opt out of it with one flag rather than the palette gaining context
 rules like VS Code's `when` clauses, since a command that does not apply to its
 target already reports so. Recently used commands rank first, as in VS Code, and
-persist because rebuilding the list each session would lose the ranking that
+persist because rebuilding the list each run would lose the ranking that
 makes the palette fast.
 
 Reference: [commands](../architecture/commands.md).

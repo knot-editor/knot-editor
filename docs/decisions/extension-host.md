@@ -104,8 +104,8 @@ check failure, and `not faked` failures keep its surface demand-driven. The fake
 is not a second host: product tests remain the authority across the native
 boundary.
 
-Package behavior cases run in a windowless session with the same key router,
-native commands, and ordered key delivery as a window. A window's drawing had
+Package behavior cases run in a window without a native window, with the same
+key router, native commands, and ordered key delivery as a window. A window's drawing had
 been most of a case's cost: on Apple M1 Pro debug builds, 364 Vim cases took
 94 s in a window and 1.7 s headless. A fake host that stubs native commands was
 rejected, because the cases exist to exercise them.

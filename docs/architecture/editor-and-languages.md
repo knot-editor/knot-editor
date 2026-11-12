@@ -228,7 +228,7 @@ text focuses it and leaves the bars open.
 A user edit of a field reaches the owner through `onDidEditBar`, coalesced
 like selection notifications, and text the extension sets through
 `focusBarField` is not reported. A toggle or button click dispatches its
-command through the product shell with the bar's editor captured, deferred
+command through the window with the bar's editor captured, deferred
 until the click has finished with its views; an extension flips a toggle by
 opening the bar again. [Commands](commands.md#editor-bars) covers key routing
 while a field has focus. The bundled `@knot/find` package is the first user.

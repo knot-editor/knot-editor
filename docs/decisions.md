@@ -99,7 +99,7 @@ touches.
 - [Bundled extension packages](decisions/extension-host.md#bundled-extension-packages):
   compiled into the binary under the reserved `@knot` scope.
 - [Extension authoring and tests](decisions/extension-host.md#extension-authoring-and-tests):
-  TypeScript per file in `build.rs`; behavior cases in a windowless session.
+  TypeScript per file in `build.rs`; behavior cases without a native window.
 - [Editor handles](decisions/extension-host.md#editor-handles): bound to one tab
   presentation; payload-free coalesced notifications; open/close undo groups.
 - [Extension restart](decisions/extension-host.md#extension-restart): a minimal

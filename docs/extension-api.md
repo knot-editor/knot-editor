@@ -217,8 +217,7 @@ when handling failures. See the API reference for precise rules.
 
 ## Contribute a dockable view
 
-Register one lifecycle-owned view definition before or after product windows
-exist. The contribution ID is stable, namespaced, and doubles as the native view
+Register one lifecycle-owned view definition before or after windows exist. The contribution ID is stable, namespaced, and doubles as the native view
 kind for commands and keybindings:
 
 ```js
@@ -244,7 +243,7 @@ await view.focus();
 await view.dispose();
 ```
 
-Each product window owns at most one native instance. Views are tools and live
+Each window owns at most one native instance. Views are tools and live
 in the left, right, or bottom dock, never among documents, with a stripe button
 on the window edge unless the user turned stripes off. Users can drag them
 between docks and hide them, and remembered user layout overrides registration
@@ -898,7 +897,7 @@ precise contracts are in `knot.d.ts`.
 
 ## Show status items
 
-Every product window shows a status bar below the workbench. A package fills
+Every window shows a status bar below the workbench. A package fills
 it with `workbench.registerStatusItem`, which returns a handle; disposing it,
 or unloading the package, removes the item.
 
@@ -971,9 +970,9 @@ requiring the extension to await cleanup or receive a final callback.
 
 ## Inspect and change application state
 
-Use `documents` for metadata and shared buffers, `windows` for live product
+Use `documents` for metadata and shared buffers, `windows` for live
 presentations, and `workspaces` for window-owned roots. Queries work during
-activation and callbacks, including before product windows exist. Document IDs
+activation and callbacks, including before windows exist. Document IDs
 survive Save As; across restart only a document restored from automatic recovery
 keeps its ID. Retain returned live target objects rather than serializing or
 reconstructing them. `windows.focus(target)` activates a window, and
@@ -1021,7 +1020,7 @@ the last focused center pane.
 
 Pass an explicit live target when acting on a previously selected window, pane,
 or presentation. Omitting it captures the command's originating window, or the
-active product window outside a command, at admission. It never waits for a
+active window outside a command, at admission. It never waits for a
 future window or follows later focus. Stale targets reject before commit.
 Discoverable targets and invocation-scoped command targets are different objects;
 consult the declarations for accepted target types.
@@ -1230,8 +1229,8 @@ Files load and captures restore before the commit, which then rechecks that
 nothing changed since your captures: an edit after retain, an unexpected tab, or
 a closed window rejects with `SessionConflict` and leaves every window intact, so
 retain again and retry. Each entry reports its outcome. A live document matching
-the entry's identity or file always wins over its capture, so a session never
-opens a second copy of an open document. Missing clean files and entries that
+the entry's identity or file always wins over its capture, so a replacement
+never opens a second copy of an open document. Missing clean files and entries that
 fail to load are skipped and reported while the rest commits. When `protected`
 is true, restored dirty text is already covered by automatic recovery and the
 captures you restored from can be released once your new record is durable.

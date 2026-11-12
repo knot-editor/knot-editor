@@ -12,7 +12,7 @@ presentations preserve it; closure/reopening allocates another. A document
 restored from automatic recovery keeps its UUID across restart, which is the one
 restart guarantee: session records may reference it, and other identities are
 restart-local. `BufferRegistry` only maps monotonic transport handles to weak
-model references; shell selection remains presentation state.
+model references; view selection remains presentation state.
 
 Final document removal explicitly closes the model, invalidates transport access,
 and releases contributions and pending changes even if a stale view retains the
@@ -62,7 +62,7 @@ resolving application focus again.
 
 `ResourceUri` identifies resources through normalized hierarchical URIs. Providers
 own scheme-specific normalization and opaque versions. Only the local provider
-converts file URIs to paths; generic workspace, tree, document, and shell state
+converts file URIs to paths; generic workspace, tree, document, and window state
 remains path-independent.
 
 The application registry routes normalization, enumeration, versioned read,
@@ -143,8 +143,7 @@ visible and ignored entries, built with the same classifier as the disk
 entries are not stored, and the contents of an ignored directory are never
 scanned. An entry holds a name, kind, and flags; URIs are built when a query
 returns them. An application global holds one index per root URI, shared by every
-window that shows the root. Each product shell leases its roots whenever they
-change, and the last lease to drop releases the index and its recursive watch.
+window that shows the root. Each window leases its roots whenever they change, and the last lease to drop releases the index and its recursive watch.
 A root whose provider cannot be watched is left unindexed.
 
 The index scans in the background, and queries wait for that first scan. It
@@ -255,7 +254,7 @@ store. The database opens lazily off the foreground. One versioned `snapshots`
 table holds two retention roles keyed by `(kind, capture_key)`: `automatic` is
 the replaceable protection for a live dirty document (one row per document
 UUID), and `retained` is an immutable opaque-key checkpoint owned by a suspended
-session or another extension owner. Retained rows are never overwritten by
+window or another extension owner. Retained rows are never overwritten by
 later automatic captures.
 
 Every document is observed through its model from creation, so a commit copies

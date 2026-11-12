@@ -26,7 +26,7 @@ was a JavaScript adapter that exceeded the isolate heap (see
 line in Rust.
 
 Contiguous typing extends the trailing add piece and the consumed edit log is
-discarded, so long sessions do not degrade every buffer operation. Inserted
+discarded, so long editing runs do not degrade every buffer operation. Inserted
 newlines follow the buffer's first line terminator rather than a dominant one,
 which would need a whole-document scan for a rare mixed-ending case.
 

@@ -87,8 +87,8 @@ internals. `test_support::cases` holds what every case runner shares:
 discovery, parsing, the `KNOT_CASES` name filter, caret markers, generated
 numbered texts, the key notation, and failure reports that name the file and
 line of the case. `TestProduct` starts the packages without a window, and a
-`TestEditor` session shows each case in a fresh workbench and types its keys
-through the session's router; a run settles once the session holds no keys
+`TestEditor` shows each case in a fresh workbench and types its keys through
+the window's router; a run settles once the window holds no keys
 and the extension pool is quiet, so keys that leave a command waiting on a
 picker or prompt go in unsettled. `TestProduct::launch` starts the whole
 application instead, with its launch window, which `TestWindow` drives

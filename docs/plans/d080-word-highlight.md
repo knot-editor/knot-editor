@@ -152,7 +152,7 @@ exposed as `Editor.setDecorations` in `knot.d.ts` through the
 
 ### 3. Find on per-view decorations — ✅ done
 
-`@knot/find` paints through its session's `EditorHandle.setDecorations`
+`@knot/find` paints through its window's `EditorHandle.setDecorations`
 (`refresh` in `extensions/@knot/find/src/extension.ts`), so splits of one
 buffer keep their own bars and highlights; the D179 roadmap entry is gone.
 

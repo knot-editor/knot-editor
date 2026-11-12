@@ -15,7 +15,7 @@ fn uri(path: &str) -> ResourceUri {
 
 /// A launch environment whose stores survive simulated restarts.
 struct Launch {
-    sessions: tempfile::TempDir,
+    state: tempfile::TempDir,
     provider: Arc<MemoryFileSystemProvider>,
 }
 
@@ -41,7 +41,7 @@ impl Launch {
         provider.seed_file(uri("b/two.txt"), b"two").unwrap();
         cx.set_global(ApplicationFileSystems(filesystems));
         let launch = Self {
-            sessions: tempfile::tempdir().unwrap(),
+            state: tempfile::tempdir().unwrap(),
             provider,
         };
         launch.install_windows(cx);
@@ -49,7 +49,7 @@ impl Launch {
     }
 
     fn path(&self) -> std::path::PathBuf {
-        self.sessions.path().join("state.sqlite3")
+        self.state.path().join("state.sqlite3")
     }
 
     fn install_windows(&self, cx: &mut TestAppContext) {

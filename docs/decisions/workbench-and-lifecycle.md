@@ -10,7 +10,7 @@ A binary split tree with tabbed leaves and stable pane and tab identities keeps
 layout transitions typed and targets exact. One protected closure flow defers
 every presentation change until all decisions and saves succeed, because
 closing as each prompt is answered would leave a partial closure on Cancel.
-Empty-workbench replacement is shell policy rather than a layout invariant.
+Empty-workbench replacement is window policy rather than a layout invariant.
 Application-wide drag coordination exists because macOS delivers a pressed drag
 to the window it started in, so no single window can hit-test the destination.
 
@@ -44,12 +44,12 @@ so nothing the user did not arrange, such as a restore or an extension's
 automatic presentation, becomes what new windows inherit. Profiles and layered
 preferences were left out; Reset Layout is the single escape.
 
-A window renders a product session rather than owning the workbench, focus, and
-key routing, so commands, focus, and keys run without a window and package
-behavior tests need none. Focus is kept as Knot identities because gpui reports
-focus only for an active window, while a session without one still needs a
-focused pane. The type keeps the name `ProductShell` because "session" already
-names project and terminal sessions.
+A native window renders a window rather than owning the workbench, focus, and
+key routing, so commands, focus, and keys run without a native window and
+package behavior tests need none. Focus is kept as Knot identities because gpui
+reports focus only for an active native window, while a window without one still
+needs a focused pane. The type is `KnotWindow`, not `Window`, because gpui
+already exports `Window`.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
 
@@ -89,8 +89,8 @@ pre-1.0 FFI, Zig packaging, integration size, and poor debug parsing performance
 (D063 revisits it). The Alacritty adapter met the required behavior without
 copying Zed code; Zed remains an attributed reference for compatibility gaps.
 
-Sessions are application-owned and outlive their presentation, so tab moves and
-window transfers keep the shell. One attachment at a time keeps resize and
+Windows are application-owned and outlive their presentation, so tab moves and
+native window transfers keep the window. One attachment at a time keeps resize and
 input authority unambiguous. Gesture ownership from press through release keeps
 a modifier change mid-drag from leaving a reported button pressed. Link opening
 is limited to HTTP(S) to bound link policy, and validating on release keeps
@@ -172,7 +172,7 @@ launch if restoration itself crashes.
 Recovered documents restore first, so restored windows present them in place
 and requests deduplicate against everything restored. The last request window
 takes focus because it is what the user just asked for. A launch whose config
-failed records nothing, so the next good launch restores the last good session.
+failed records nothing, so the next good launch restores the last good record.
 
 References: [native window hot exit](../architecture/workbench-and-lifecycle.md#native-window-hot-exit)
 and [product launch](../architecture/workbench-and-lifecycle.md#product-application-launch).

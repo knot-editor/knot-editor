@@ -1,7 +1,6 @@
 # Platform and UI decisions
 
-The UI framework, platform targets, headless view state, and product window
-chrome. The [decisions index](../decisions.md) lists every topic, and the
+The UI framework, platform targets, headless view state, and window chrome. The [decisions index](../decisions.md) lists every topic, and the
 [documentation guide](../README.md#decisions) sets the entry rules.
 
 ## Platform and UI
@@ -19,8 +18,8 @@ product bar, so iced and floem were not evaluated.
 
 macOS is the initial dogfooding platform. Windows 11 passed local startup,
 config, editing, persistence, commands, terminal, and protected-closure checks
-on one desktop session. Linux passed limited framework and native product smoke
-checks on Omarchy/Hyprland Wayland. These establish bounded local evidence, not
+on one desktop session. Linux passed limited framework and native smoke checks
+on Omarchy/Hyprland Wayland. These establish bounded local evidence, not
 broad platform certification. Local macOS packaging stays independent of signing
 and distribution credentials.
 
@@ -36,7 +35,7 @@ convention inside one crate. `knot-protocol` sits below both `knot-model` and
 its tests are plain `#[test]`s and double as the second consumer of every API;
 an API that a plain test cannot call without imitating gpui is redesigned. Knot
 owns key, color, and string vocabulary and converts at the view edge only, and
-workbench tabs hold identities with the product session owning the views. No
+workbench tabs hold identities with the window owning the views. No
 Knot runtime abstraction over spawn, notify, observe, or globals was added:
 nothing measured needed one, and it would duplicate gpui's own. The gpui
 application is instead a thin shell: with one framework and one
@@ -86,7 +85,8 @@ presentational, such as tooltips, popup menus, and `Icon`, each when a feature
 needs it. Its dock, code editor, `Input`, and theme registry are rejected: Knot's
 workbench, editor, terminal, pickers, and key routing are product state that
 runs without a window, and its single-line `TextInput` stays native because
-windowless sessions and package tests drive it, which `Input` cannot provide.
+windows without a native window and package tests drive it, which `Input`
+cannot provide.
 A component that takes focus is adopted only for a surface with no windowless
 path.
 
@@ -124,7 +124,7 @@ References: [semantic UI](../architecture/semantic-ui.md) and
 
 ## Product window chrome and failure notices
 
-A product window shows only product surfaces. The prototype toolbar duplicated
+A window shows only Knot's own surfaces. The prototype toolbar duplicated
 commands, menus, and keys, and its free-form status string was the only place
 some failures appeared, so native failures with no other visible effect use the
 native warning prompt instead. Success and progress notices were dropped because

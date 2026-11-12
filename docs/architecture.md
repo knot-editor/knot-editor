@@ -21,8 +21,9 @@ gpui application and native views
 ```
 
 - `knot-core` owns UI-, platform-, and scripting-independent text and edit primitives.
-- The root `knot` package (`src/app`) owns the gpui shell, foreground editor
-  state as gpui entities and globals, native views, command dispatch, startup,
+- The root `knot` package (`src/app`) owns the gpui application, foreground
+  editor state as gpui entities and globals, native views, command dispatch,
+  startup,
   extension storage, and the language registry. Native views use
   gpui-component (`src/app/components.rs`) for presentational leaf widgets,
   such as tooltips and popup menus; Knot keeps its own workbench, editor,
@@ -32,7 +33,7 @@ gpui application and native views
   operation declarations, and depends on neither V8 nor gpui.
 - `knot-model` owns editor state and policy that need no gpui, V8, or host:
   the buffer model, editor state and the native editing commands, completion
-  sessions, the candidate matcher, the document collection, the workspace file index, the settings store, the language and
+  provider registries, the candidate matcher, the document collection, the workspace file index, the settings store, the language and
   theme registries, syntax and the compiled-in grammars, edit history, indentation and language
   editing configuration, key notation, the command catalog, keymap registries
   and matching, theme values, resource URIs and providers, package
@@ -66,27 +67,28 @@ extension pool. Native views resolve settings for their own scope while laying
 out, so a write needs no per-view push.
 
 A document owns persistence identity and a shared `BufferModel`. The model owns
-text, session-local history, anchored geometry, semantic contributions, and
+text, its own linear history, anchored geometry, semantic contributions, and
 its language and syntax state. Extensions contribute language definitions and
 themes; native code owns grammars, parsing, and the defaults of the color keys
 it paints with, and the application theme maps color keys and highlight names
 to styles.
-Each product session owns a workbench of areas, a center of document and
-terminal tabs surrounded by docks of native tool tabs, each split into panes,
-along with Knot-side focus and key routing; tabs hold identities, and the session's workbench entity owns the
-view behind each one; the application keeps the registry of open sessions, and a window
-renders one session and forwards raw input to it.
+Each window owns a workbench of areas, a center of document and terminal tabs
+surrounded by docks of native tool tabs, each split into panes, along with
+Knot-side focus and key routing; tabs hold identities, and the window's
+workbench entity owns the view behind each one; the application keeps the
+registry of open windows, and a native window renders one window and forwards
+raw input to it.
 The workbench retains native tool definitions independently of visible tab
 attachments, including dock placement and hide/reopen state. The application
 owns one SQLite state database of UI-state records: a versioned tool-only
 layout snapshot, which fresh windows inherit while already-open windows stay
-independent; one record of every product window's roots and layout that
+independent; one record of every window's roots and layout that
 startup restores before extensions see `launched`; the palette's recently
 used commands; and the zoom level. It also owns a separate recovery database that protects dirty
 document text independently of extension health. Views own presentation and interaction; terminal sessions own
 PTYs, processes, and emulator state independently of their sole attached view.
-The workbench owns layout transitions; product sessions coordinate tab
-transfers, application-wide protected closure, and session replacement.
+The workbench owns layout transitions; windows coordinate tab transfers,
+application-wide protected closure, and session replacement.
 
 Extension runtimes retain JavaScript state in persistent isolates. Host workers
 enter one turn at a time and yield while awaiting native work. The application
@@ -94,9 +96,9 @@ owns foreground protocol routing and resource cleanup; the host owns scheduling
 and runtime disposal. Lifecycle teardown and host release share foreground
 cleanup so registrations and contributions cannot outlive their host.
 
-Application queries derive metadata from existing document and session owners.
+Application queries derive metadata from existing document and window owners.
 Observation retains a comparison baseline and lifecycle-scoped subscriptions,
-not a second ownership catalog. Each session owns its native semantic surfaces;
+not a second ownership catalog. Each window owns its native semantic surfaces;
 extensions supply asynchronous content rather than rendering callbacks.
 
 ## Invariants
@@ -107,8 +109,8 @@ extensions supply asynchronous content rather than rendering callbacks.
   parse jobs, prompts, saves, closes), and notifies. What an operation means
   (validation, protocol and model conversion, scope, and revalidation checks)
   is model code with plain tests. Awaiting, revalidating after an await, and
-  scheduling stay in the shell; views, painting, and platform input stay in
-  views.
+  scheduling stay in the application; views, painting, and platform input stay
+  in views.
 
 - Text and history are shared buffer state. Cursor, selection, folding,
   scroll, and wrapping are per-editor state that runs without a window, and
@@ -138,8 +140,7 @@ extensions supply asynchronous content rather than rendering callbacks.
 - [Documents and persistence](architecture/documents-and-persistence.md):
   identity, dirty state, resource providers, workspaces, Open, and Save.
 - [Workbench and lifecycle](architecture/workbench-and-lifecycle.md): startup,
-  sessions, windows, panes, tabs, protected closure, relocation, and terminal
-  ownership.
+  windows, panes, tabs, protected closure, relocation, and terminal ownership.
 - [Editor and languages](architecture/editor-and-languages.md): editor state
   and views, native editing behavior, editor bars, syntax highlighting,
   language registration, and language-driven editing.

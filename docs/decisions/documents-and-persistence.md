@@ -206,7 +206,7 @@ Reference: [detecting external changes](../architecture/documents-and-persistenc
 Unsaved text is protected in an application-owned database, independent of
 extension health and separate from extension record stores, so a broken package
 can never lose text. Retained captures are immutable rows that automatic
-protection never overwrites, so a suspended session's text survives later edits
+protection never overwrites, so a suspended window's text survives later edits
 of the live document.
 
 Each capture commits with FULL synchronization before it is accepted, so the

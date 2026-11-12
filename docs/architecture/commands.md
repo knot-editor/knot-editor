@@ -26,21 +26,21 @@ participant entries or conflicting metadata. Dynamic extension ownership remains
 application catalog. Declaration contracts live in
 [commands/declarations.rs](../../src/app/commands/declarations.rs).
 
-An invocation captures the [product
-session](workbench-and-lifecycle.md#product-sessions), its focus by identity
-(layer, pane, and tab), workbench, tab, surface, and exact presentation, with
-no window or focus handle. A window with no focused pane, such as one with an
+An invocation captures the
+[window](workbench-and-lifecycle.md#windows), its focus by identity (layer,
+pane, and tab), workbench, tab, surface, and exact presentation, with no native
+window or focus handle. A window with no focused pane, such as one with an
 empty center, captures no tab: commands that need one report unavailable, and
 New, Open, and terminal commands open in the center. Routing offers it to the
 captured focused view, then workbench, then application. Commands, native editing and movement
-included, run against a session without a window.
+included, run against a window without a native window.
 Participants synchronously claim/decline before starting typed async work; all
 declining produces unavailable. Raw text, IME, pointer, scroll, and terminal bytes
 remain view input protocols.
 
 Focus changes cannot redirect an admitted command. Pending work revalidates the
-captured session and presentation before foreground access: the session must
-be open and still show the captured workbench. Same-pane reorder
+captured window and presentation before foreground access: the window must be
+open and still show the captured workbench. Same-pane reorder
 preserves authority; replacement or transfer invalidates it even under unchanged
 document identity. No foreground borrow crosses an await.
 
@@ -78,10 +78,10 @@ setting changes; an unregistered name selects Knot, and installing a preset
 replaces the whole slot. A preset binding for an undeclared view kind is
 skipped.
 
-Knot matches keys itself. Every key-down in a product window passes one
-interceptor, ahead of gpui's key handling and text input, which hands it to
-the session; a session without a window takes keys directly. While the
-workbench has focus, the session's key router
+Knot matches keys itself. Every key-down in a window passes one interceptor,
+ahead of gpui's key handling and text input, which hands it to the window; a
+window without a native window takes keys directly. While the workbench has
+focus, the window's key router
 (`crates/knot-model/src/commands/key_router.rs`) matches the key with the focused view's
 kind and live key contexts. A key that begins a binding resolving to a command
 there waits for the rest of its sequence; a completed binding enters command
@@ -131,22 +131,22 @@ context unbinds shows no menu key.
 A text binding routes committed text that an editor would insert to a command
 with `{ text }` as its arguments, scoped and resolved like key bindings but in
 its own slots. Committed text, after keyboard layout and IME, reaches the
-session before the editor inserts it: a window's editor offers it from its
-text input handler through a router the product shell installs, and a
-session without a window types into the editor itself. Where the editor's
-text binding applies, the session starts the key hold at once and dispatches
+window before the editor inserts it: an editor offers it from its text input
+handler through a router the window installs, and a window without a native
+window types into the editor itself. Where the editor's text binding applies,
+the window starts the key hold at once and dispatches
 the command once the caller is done with the editor, since capturing a
 command target reads it. Where a text binding applies, composition never
 touches the buffer and the IME's commit routes as text.
 
 ### Ordered delivery
 
-A key that dispatches an extension command holds its session's later input
-until that command finishes, with or without a window: the session queues
-later key-downs before matching them, and committed text for the held
-editor, in one queue. Release replays the queue in order, a key through the
-window's keystroke dispatch when the session has one and otherwise through
-the session's own key path, so each key sees the state its predecessor
+A key that dispatches an extension command holds its window's later input
+until that command finishes, with or without a native window: the window queues
+later key-downs before matching them, and committed text for the held editor,
+in one queue. Release replays the queue in order, a key through the native
+window's keystroke dispatch when the window has one and otherwise through the
+window's own key path, so each key sees the state its predecessor
 committed, as native commands already do by finishing in the dispatch turn.
 Release replays one input per deferred step, letting a replayed Enter or
 Backspace commit before the text typed after it. A replayed key or text that
@@ -177,14 +177,14 @@ winner rule as resolution.
 The foreground bridge owns one serial invocation tree, admitted presentation
 authority, buffer capture, cancellation, and completion channels. The pooled
 runtime schedules JavaScript. Nested invocation first selects a participant in
-the parent's captured session; session-handled outcomes return to the bridge
+the parent's captured window; window-handled outcomes return to the bridge
 without dispatching twice. Same-lifecycle children run inline under the parent's
 scheduler root; cross-lifecycle children await foreground completion. Each parent
 has at most one unfinished child, and ancestry cycles are unavailable.
 
 View-scoped extension handlers bind to live instances of a contributed view
 registration. The focused instance claims before global extension handlers reach
-the application participant. Disposal, lifecycle teardown, and session end
+the application participant. Disposal, lifecycle teardown, and window end
 remove bindings; late results validate instance and lifecycle.
 
 Contextual buffer/selection access validates the live invocation, caller lifecycle,
@@ -196,7 +196,7 @@ receives an editor handle whose selection and view-state operations resolve the
 captured presentation on every call, so they reject once the tab closes, moves,
 or the invocation tree ends. `workbench.editor(target)` instead binds a
 long-lived handle to the exact document tab a `ViewTarget` names: the host
-keeps the tab's identity (session, pane, tab, surface, presentation) per
+keeps the tab's identity (window, pane, tab, surface, presentation) per
 lifecycle, and each call resolves it, rejecting `InvalidTarget` once the tab
 closes, moves to another pane or window, or is replaced, and never following a
 replacement. A handle is the same editor interface under another authority,

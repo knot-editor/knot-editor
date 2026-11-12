@@ -395,7 +395,7 @@ complete list for that item.
     compaction (D013) and line-start index (D014) items.
   - Reconsider: Before or together with the first bulk-edit feature, such as
     Replace (D001), multi-cursor editing, formatting, or language-server edit
-    lists (D067), or when long sessions show measured latency, memory, or
+    lists (D067), or when long editing runs show measured latency, memory, or
     stabilization problems. Then follow the
     [text buffer analysis](reports/text-buffer-structure.md): benchmark the
     current buffer, store the pieces in a copy-on-write B-tree that summarizes
@@ -518,7 +518,7 @@ complete list for that item.
 
 - **D138 — Extension startup report as an untitled document**
   - Deferred: Developer: Show Extension Startup Report toggles a custom
-    overlay that the product shell renders, and launch opens it when a
+    overlay that the window renders, and launch opens it when a
     package failed. Developer: Show Extension Memory already presents its
     report as a clean untitled document, which can be selected, copied,
     searched, and compared across runs without a bespoke surface.
@@ -794,7 +794,7 @@ Kakoune mode could use it too. The
     when it closes. Vim's viminfo and Neovim's shada keep them across
     restarts and for files no longer open, with the registers.
   - Reconsider: Daily Vim use reaches for a global mark set in an earlier
-    session or in a closed file. Then keep each mark's URI and offset in
+    project session or in a closed file. Then keep each mark's URI and offset in
     the package's storage beside the registers, recreate the native mark
     when its document opens, open the file for a mark whose document is
     closed, and clamp an offset past a changed file's end, as view state

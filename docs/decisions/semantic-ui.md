@@ -239,7 +239,7 @@ References: [editor bars](../architecture/editor-and-languages.md#editor-bars),
 
 ## Status bar
 
-The bar is native and its items are extension registrations, so the shell owns
+The bar is native and its items are extension registrations, so the window owns
 layout and painting while packages, including the bundled `@knot/status-bar`,
 decide what it says, and personal config replaces a bundled item by registering
 its ID again. Values can be per window because the position and indentation an

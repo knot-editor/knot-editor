@@ -10,7 +10,7 @@ and reopen callbacks. CLI and platform requests join a launch queue while
 [personal config and extensions](extension-host.md#package-admission-and-startup)
 start. Successful startup first restores
 [unsaved documents](documents-and-persistence.md#durable-unsaved-document-recovery),
-then the [recorded product windows](#native-window-hot-exit), then opens each
+then the [recorded windows](#native-window-hot-exit), then opens each
 queued request in its own window. Recovered documents that no restored window
 presents go to the first opened window, so text is never hidden. With nothing
 restored or requested one empty window opens. The last request window is
@@ -22,7 +22,7 @@ extensions that startup windows exist; extensions activate before any window
 does. A reopen after launch opens an empty window and restores nothing. The
 [zoom level](#zoom) is read before the first window opens. Fatal
 config failure discards the queue and opens a focused diagnostic window with
-Copy and Quit; product windows remain unavailable for that launch, and nothing
+Copy and Quit; windows remain unavailable for that launch, and nothing
 is recorded.
 
 The status bar carries no operation messages. A native operation whose failure
@@ -31,37 +31,38 @@ transfer window, reports it through a native warning prompt that needs no
 answer. Successful and in-progress operations show only their effect.
 Extension calls receive the failure as their result instead of a prompt.
 
-## Product sessions
+## Windows
 
-A product session (`ProductShell`) is what a window shows: it owns the
-workbench, Knot-side focus, the transient interaction and palette, the key
-hold, and the key router, and runs without a window. Every product window
-renders one session. The application keeps a registry of open sessions in
-`src/app/product.rs` that records each session's workbench and, once
-attached, its window, so command targets and other sessions can ask without
-reading a session that may be updating. A session opens when it is created
-and ends when its window closes. Launch, restoration, tab transfer to a new
-window, and [session replacement](#session-replacement) build the session
-first and then open a window for it. Extensions see a session's ID as
-`WindowTarget.window`. "Session" alone in the rest of this reference may also
-mean a project's or a terminal's session; the context says which.
+A window (`KnotWindow` in `src/app/product.rs`) is what a native window
+renders: it owns the workbench, Knot-side focus, the transient interaction and
+palette, the key hold, and the key router. It runs with or without a native
+window; only tests run it without one. A native window is the platform object
+that renders a window, holds its bounds, activation, displays, and close
+requests, owns the gpui focus handles, and forwards raw input to the window.
+The application keeps a registry of open windows in `src/app/product.rs` that
+records each window's workbench and, once attached, its native window, so
+command targets and other windows can ask without reading a window that may be
+updating. A window opens when it is created and ends when its native window
+closes. Launch, restoration, tab transfer to a new window, and
+[session replacement](#session-replacement) build the window first and then open
+a native window for it. Extensions see a window's ID as `WindowTarget.window`.
 
-Focus is session state, by identity: the focused pane's active surface, the
+Focus is window state, by identity: the focused pane's active surface, the
 palette, or the transient interaction, over the workbench's focused pane. An
-attached window focuses the matching gpui handle once the current update
-ends, and reports a click that moves gpui focus back to the session. A blur
-leaves the session's focus alone.
+attached native window focuses the matching gpui handle once the current update
+ends, and reports a click that moves gpui focus back to the window. A blur
+leaves the window's focus alone.
 
-Native prompts go through the session, which asks its window; a session
-without a window answers nothing, which callers treat as cancellation.
-The window stays an adapter for raw input: key-downs and typed text reach the
-session through it (see [keymaps](commands.md#keymaps)), and tab drags and
-dock resizing are pointer input. Every surface's state, the editor, trees,
-terminals, the palette, pickers, and text fields, runs without a window, so a
-session without one takes keys and text and gives each to the surface with
+Native prompts go through the window, which asks its native window; a window
+without a native window answers nothing, which callers treat as cancellation.
+The native window stays an adapter for raw input: key-downs and typed text
+reach the window through it (see [keymaps](commands.md#keymaps)), and tab drags
+and dock resizing are pointer input. Every surface's state, the editor, trees,
+terminals, the palette, pickers, and text fields, runs without a native window,
+so a window without one takes keys and text and gives each to the surface with
 Knot-side focus, and keys after an extension command wait for it there too.
-Extensions see a session without a window as active once it is activated,
-while no window is active, which only tests do.
+Extensions see a window without a native window as active once it is activated,
+while no native window is active, which only tests do.
 
 ## Zoom
 
@@ -76,9 +77,9 @@ on a window resize.
 
 ## Status bar
 
-Each product window renders a fixed-height bar below the workbench from the
+Each window renders a fixed-height bar below the workbench from the
 application-owned status registry in `src/app/status_bar.rs`; extensions fill it
-through `workbench.registerStatusItem` and own nothing else about it. The shell
+through `workbench.registerStatusItem` and own nothing else about it. The window
 repaints it when the registry or any setting changes; an update that repeats
 an item's value changes nothing, so packages may resend a value per key. A click captures the
 window's command target and dispatches the item's command as a key or a tree
@@ -105,12 +106,12 @@ drives it through the real host.
 
 ## Workbench and protected closure
 
-The layout model (`knot_model::workbench`) owns a session's areas: a center of
+The layout model (`knot_model::workbench`) owns a window's areas: a center of
 documents and terminals surrounded by left, right, and bottom docks of tools,
 each a binary split tree of panes; stable pane/tab identities, ordered tabs,
 and the focused pane. A tab holds the
 identity of what it shows (a document, a terminal session, or a tool) and a
-presentation identity, which captured targets compare. The session's workbench
+presentation identity, which captured targets compare. The window's workbench
 entity pairs the layout with the view behind each presentation: it creates a
 view when a transition opens a tab and drops it once no tab or tool presents
 it. A document tab presents one `EditorView` of an application-owned document,
@@ -176,20 +177,20 @@ and with none splits the pane on that side. Focus commands given
 commands walk the focused pane's area in layout order, and the workbench
 remembers the previously focused pane. Resizing can be limited to the width or
 the height, which changes the nearest split along that axis, or, along a
-dock's axis, its size. Maximize is shell render state that lasts while its pane stays focused, in a
+dock's axis, its size. Maximize is window render state that lasts while its pane stays focused, in a
 dock as in the center; hiding a dock keeps its maximized pane, and showing the
 dock with that pane focused maximizes it again.
 
 One application-level coordinator protects tab, pane, window, and quit
-closure. The product session collects its open views and the documents' state
+closure. The window collects its open views and the documents' state
 and runs the prompts, saves, and closes; which views a close covers, which
 dirty documents need a prompt, and whether a plan still holds at commit are
 decided by `knot_model::workbench::closure`. A close covers a tab; Close Other
 Tabs a pane's unpinned tabs but the origin; Close Pane every tab of the pane, hiding tools in a dock, and Close Other
-Panes every tab of the session's other panes in the origin's area. Window and
+Panes every tab of the window's other panes in the origin's area. Window and
 quit closes need no origin tab. The
-coordinator captures exact session, workbench, tab, surface, and presentation identities,
-counts live document views across sessions, and deduplicates dirty documents
+coordinator captures exact window, workbench, tab, surface, and presentation identities,
+counts live document views across windows, and deduplicates dirty documents
 losing their final view. Native Save / Don't Save / Cancel prompts run serially;
 Save reuses the ordinary persistence path. Quit is a hot exit: it first commits
 every dirty document to [durable
@@ -208,7 +209,7 @@ Terminal sessions stop only after the scope transition succeeds. Native close
 requests are vetoed until authorized; Quit uses the same flow.
 
 Workbench transitions remain independent of dialogs and document removal. The weak
-session registry counts views in open sessions without retaining sessions or
+window registry counts views in open windows without retaining windows or
 workbenches. Final application document removal explicitly closes its model,
 invalidating transport access even if a stale view retains the entity. Nonfinal
 view closure leaves the shared document open. Closing the final document or
@@ -266,10 +267,11 @@ their title bar lies on a connected display; otherwise the window is sized to
 fit and centered on its saved display if connected, else on the primary one.
 
 Cursor, selection, and scroll changes, focus, dock resizing, window bounds, and
-shell changes restart a per-window trailing-edge debounce of about a second.
-When it settles the window captures its layout: a layout that differs from the
-last one it reported sends a `viewStateChanged` observation event, and a
-changed layout or root set re-records the native window session.
+other window changes restart a per-window trailing-edge debounce of about a
+second. When it settles the window captures its layout: a layout that differs
+from the last one it reported sends a `viewStateChanged` observation event, and
+a changed layout or root set re-records the window for
+[hot exit](#native-window-hot-exit).
 
 ## Session replacement
 
@@ -297,7 +299,7 @@ removed through the ordinary path, which retires their automatic recovery. Each
 window's result reports whether its layout was applied or ignored.
 
 Each entry presents a live document matching its identity or resource before
-considering staged content, so a session never duplicates an open document;
+considering staged content, so a replacement never duplicates an open document;
 otherwise its capture is restored or its file opened. A missing clean file is
 reported and skipped, and a failed entry is skipped with its error code while the
 rest commits. Restored dirty documents are drained to durable automatic recovery
@@ -306,11 +308,11 @@ from.
 
 ## Native window hot exit
 
-The application records every product window's roots and layout in one
-record of the application state database, beside the tool-only snapshot, with
+The application records every window's roots and layout in one record of the
+application state database, beside the tool-only snapshot, with
 the same debounce and flush. Recording starts, with a first record of the windows just opened, once
 startup has opened them, so diagnostic windows and a launch whose config failed never write.
-Settled window changes and window closure re-record every product window in
+Settled window changes and window closure re-record every window in
 creation order; closing a window removes it, so quitting with no windows
 restores none. Quit records the windows before closing them and stops
 recording, and the quit path flushes the record before exit. Except on macOS,
@@ -319,7 +321,7 @@ Quit, so it restores like one; a window closed without protected closure,
 such as one with no panes, quits through the same storage drain.
 
 Startup marks the record consumed durably before restoring it through the
-session commit, so a crash during restoration loses only the arrangement and
+replacement commit, so a crash during restoration loses only the arrangement and
 the next launch opens the default window. Documents resolve live by identity
 first, so restored recovery documents are presented in place, then by opening
 their file; untitled documents nobody recovered are pruned, and roots that no
@@ -327,10 +329,10 @@ longer exist are dropped. Unsaved text keeps its own recovery path.
 
 ## Tab relocation
 
-`Workbench` owns typed reorder, insertion, and edge-split transitions. Product
-sessions coordinate transfers across workbenches on the foreground. Captures
-include pane, tab, surface, and exact presentation; destinations retain a live
-insertion/split anchor. Both endpoints and document/session ownership are checked
+`Workbench` owns typed reorder, insertion, and edge-split transitions. Windows
+coordinate transfers across workbenches on the foreground. Captures include
+pane, tab, surface, and exact presentation; destinations retain a live
+insertion/split anchor. Both endpoints and document/window ownership are checked
 before mutation. Capturing or abandoning a move changes neither ownership nor
 focus.
 
@@ -342,7 +344,7 @@ reveals still apply. Terminal cross-window moves hand off the sole attachment to
 a destination view of the same session; same-window moves retain their view.
 Replacement or pane/window transfer invalidates old exact command targets.
 
-Native tools stay in their owning product window and in the docks. A drag
+Native tools stay in their owning window and in the docks. A drag
 offers targets only in areas its tab's kind allows: dropping near a workbench
 left/right/bottom edge moves a dock-capable tab to the end of that dock, while
 other kinds keep the pane-local edge split there, and panes or an empty center
@@ -351,10 +353,10 @@ outside all Knot frames cancels without creating a window. Dock-adjacent divider
 window-local dock size within usable limits; other dividers drag the split's
 ratio, leaving each side a minimum size.
 
-Transfers do not enter protected closure or remove documents/sessions. An emptied
-source keeps an empty center. New-window transfer creates and
-validates an empty destination session and its window before removing the source; failure preserves the
-source and removes an unused new destination. The destination activates and
+Transfers do not enter protected closure or remove documents or windows. An
+emptied source keeps an empty center. New-window transfer creates and validates
+an empty destination window and its native window before removing the source;
+failure preserves the source and removes an unused new destination. The destination activates and
 focuses the moved tab. On macOS a new terminal window is laid out before showing.
 
 A transient application-wide drag coordinator holds weak endpoints and painted
@@ -448,7 +450,7 @@ rejects old events. Shutdown and child reaping run off the foreground.
 A new session's working directory is chosen when it is created and kept across
 restart. New Terminal, splitting a terminal pane, and `terminals.open` without
 a directory start in the focused (or split) terminal's current directory.
-Otherwise the window's shell picks the innermost root containing the window's
+Otherwise the window picks the innermost root containing the window's
 most recently focused document, otherwise the first root, otherwise the home
 directory, skipping roots that are not existing local directories. A terminal
 tab restored in place starts in its recorded directory, or by this rule when
@@ -507,7 +509,7 @@ links. Link recognition lives in [terminal/links.rs](../../src/app/terminal/link
 
 ## Observing product state
 
-Snapshots derive associations and focus from live shells/workbenches rather than
+Snapshots derive associations and focus from live windows/workbenches rather than
 replicating ownership. Committed layout, relocation, focus, activation, and closure
 transitions signal the [application observer](extension-host.md#application-observation).
 Diagnostic windows are excluded; terminals and tools remain explicit

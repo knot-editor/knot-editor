@@ -97,16 +97,18 @@ storage and writes them again at start, as any settings UI does, so personal
 ## Completion ownership and aggregation
 
 Completion providers use the same asynchronous reverse-runtime direction as
-[tree providers](#extension-trees) but remain completion-specific: the shell snapshots ordered registrations, the
+[tree providers](#extension-trees) but remain completion-specific: the
+application snapshots ordered registrations, the
 view-owned controller tracks one-shot provider states and merge policy, and a
 native surface consumes semantic snapshots. Provider objects and request
 machinery never enter surfaces, buffers, or `knot-core`.
 
-The shell-owned `CompletionProviderRegistry` assigns monotonic registration
-identities and order to lifecycle-owned, shell-wide providers. An editor
-completion invocation snapshots registry membership, buffer identity and
-revision, cursor and prefix range, and a view-local generation before the shell
-fans requests out to independent extension runtimes.
+The application-owned `CompletionProviderRegistry` assigns monotonic
+registration identities and order to lifecycle-owned, application-wide
+providers. An editor completion invocation snapshots registry membership,
+buffer identity and revision, cursor and prefix range, and a view-local
+generation before the application fans requests out to independent extension
+runtimes.
 
 ```text
 CompletionProviderRegistry snapshot
@@ -214,13 +216,12 @@ native cached presentation
 `TreeView` owns cached semantic items, expansion, selection, focus, scroll, and
 per-parent loading/error generations. It renders and handles input from cached
 foreground state only.
-Each product window owns at most one instance of a contributed view. The
+Each window owns at most one instance of a contributed view. The
 foreground semantic bridge retains weak references to live instances, accepts
 view registration before windows open, and routes invalidations and responses
 to each instance. Its generation rejects responses from a replaced request.
-Clicking an item focuses its tree before emitting its command. The product
-shell routes that event after the tree update through the captured window
-command path.
+Clicking an item focuses its tree before emitting its command. The window
+routes that event after the tree update through the captured command path.
 
 Items are ordinary content or `group` headers. A group is neither activatable
 nor disclosable: its children are fetched when it first appears and remain
@@ -233,7 +234,7 @@ button that shows its label as a tooltip.
 Frame, group, and row actions are semantic command references with JSON
 arguments, never drawing callbacks. The native view renders them as controls
 and emits the same captured-window command event as activation, with the action
-arguments instead of null; the event names the session and the tree, which
+arguments instead of null; the event names the window and the tree, which
 must still have focus there when it runs. Action clicks stop propagation so
 they cannot also activate the row. The same actions are reachable from the
 keyboard by entering
@@ -251,7 +252,7 @@ without actions. Items emit the same captured-window command event as the
 row's controls. The menu takes focus, receives the keys the keymap leaves
 ([keymaps](commands.md#keymaps)), closes when dismissed or when it loses
 focus, and returns focus to the tree on dismissal. The menu and an edit field
-render inside the tree's focus subtree, and the session follows focus entering
+render inside the tree's focus subtree, and the window follows focus entering
 a view, so an action runs when another view held focus before the right click.
 An action marked `menuOnly` appears in the menu and not as a row button.
 
@@ -289,7 +290,7 @@ from later fetch/paint. Invalid provider results fail only their request.
 
 ## Extension transient interactions
 
-Pickers and text prompts are window-local overlays owned by the product shell,
+Pickers and text prompts are window-local overlays owned by the window,
 not by the extension runtime. The host operation resolves the originating
 window from an explicit target or the admitted command capture, installs the
 overlay on the foreground, and awaits its settled outcome. A window owns at most
@@ -305,7 +306,7 @@ extension host request (showPicker/showInput/...)
 window resolution (explicit target or command capture)
         |
         v
-shell-owned overlay + shared TextInput
+window-owned overlay + shared TextInput
         |
         v
 one settled outcome (selection, acceptance, dismissal, cancellation)
@@ -316,7 +317,7 @@ preedit, and clipboard flow through gpui, while the field owns caret, selection,
 keyboard movement, and pointer selection. It backs both transient fields and
 the command palette query, so text entry has one native path. Trees, pickers,
 prompts, and the field handle keys the keymap leaves unclaimed in their own
-state, which the session calls whether or not a window shows it (see
+state, which the window calls whether or not a native window shows it (see
 [keymaps](commands.md#keymaps)): the field's keys first, then the picker's or
 prompt's.
 

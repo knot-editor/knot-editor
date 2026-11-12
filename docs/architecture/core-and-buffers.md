@@ -38,7 +38,7 @@ Each `BufferModel` owns:
 - one `TextBuffer`;
 - an application-level editable or read-only access policy;
 - one shared `AnchoredRangeStore`;
-- one session-local linear undo and redo history;
+- one document-local linear undo and redo history;
 - source-owned semantic editor contributions;
 - an optional language ID, explicit or detected, and the `SyntaxState` it
   resolves to;
