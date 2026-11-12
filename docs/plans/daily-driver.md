@@ -140,7 +140,7 @@ to be rebuilt later:
 
 - ✅ **D120 — Remembered projects**
 
-- **D123 — Project inference extension** (depends on D122)
+- 🚧 **D123 — Project inference extension** (depends on D122) — [plan](d123-project-inference.md)
   - A bundled extension that finds the version-control root above an opened
     document outside the window's roots and offers to open it as a project,
     as Emacs's project.el infers projects. Decide which markers count
