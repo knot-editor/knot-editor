@@ -270,11 +270,35 @@ impl Workbench {
     /// Set the ratio of the split identified by `boundary`, clamped so
     /// neither side drops below the minimum share.
     pub fn set_split_ratio(&mut self, boundary: PaneId, value: f32) -> bool {
+        self.set_split_ratio_bounded(
+            boundary,
+            value,
+            WorkbenchLayout::MIN_RATIO,
+            1. - WorkbenchLayout::MIN_RATIO,
+        )
+    }
+
+    /// Set the ratio of the split identified by `boundary`, clamped to
+    /// `[min, max]` instead of [`WorkbenchLayout::clamp_ratio`]. Pointer
+    /// drags use this with a pixel-derived floor so the growing pane can
+    /// pass the minimum share until the shrinking side hits its own
+    /// minimum.
+    pub fn set_split_ratio_bounded(
+        &mut self,
+        boundary: PaneId,
+        value: f32,
+        min: f32,
+        max: f32,
+    ) -> bool {
         let Some(WorkbenchLayout::Split { ratio, .. }) = self.split_with_boundary_mut(boundary)
         else {
             return false;
         };
-        *ratio = WorkbenchLayout::clamp_ratio(value);
+        *ratio = if value.is_finite() {
+            value.clamp(min, max)
+        } else {
+            0.5
+        };
         true
     }
 
@@ -394,6 +418,37 @@ mod tests {
                 WorkbenchLayout::MIN_RATIO
             ));
             assert!(!workbench.set_split_ratio(left, 0.3));
+        }
+    }
+
+    #[test]
+    fn bounded_split_ratio_passes_point_nine_down_to_the_pixel_floor() {
+        let document = DocumentId::new(5);
+        let workbench = &mut Workbench::new_for_document(document);
+
+        {
+            let _left = workbench.focused_pane_id().unwrap();
+            let right = workbench
+                .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
+                .unwrap();
+
+            // The share-based setter keeps both minimums: the growing pane
+            // stops at ninety percent.
+            assert!(workbench.set_split_ratio(right, 0.97));
+            assert!(close(
+                workbench.split_ratio(right).unwrap(),
+                1. - WorkbenchLayout::MIN_RATIO
+            ));
+
+            // A drag across 2000px floors the shrinking side at 120px, so
+            // the growing pane passes 0.9 and stops at 0.94.
+            let limit = 120. / 2000.;
+            assert!(workbench.set_split_ratio_bounded(right, 0.97, limit, 1. - limit));
+            assert!(close(workbench.split_ratio(right).unwrap(), 0.94));
+
+            // Dragging back floors the other side at the same minimum.
+            assert!(workbench.set_split_ratio_bounded(right, 0.01, limit, 1. - limit));
+            assert!(close(workbench.split_ratio(right).unwrap(), limit));
         }
     }
 

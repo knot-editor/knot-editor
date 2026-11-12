@@ -646,7 +646,9 @@ impl KnotWindow {
             && let Some(resize) = self.split_resize.take()
         {
             self.workbench.update(cx, |workbench, _| {
-                workbench.set_split_ratio(resize.boundary, resize.start_ratio);
+                // Restore exactly: the ratio may sit past the minimum share
+                // after an extreme drag.
+                workbench.set_split_ratio_bounded(resize.boundary, resize.start_ratio, 0., 1.);
             });
             cx.stop_propagation();
             cx.notify();
@@ -709,11 +711,15 @@ impl KnotWindow {
                                 let delta = if resize.horizontal { delta.x } else { delta.y };
                                 let extent = resize.extent.max(1.);
                                 let limit = (MIN_DRAGGED_PANE_SIZE / extent).min(0.5);
-                                let ratio = (resize.start_ratio + f32::from(delta) / extent)
-                                    .clamp(limit, 1. - limit);
+                                let ratio = resize.start_ratio + f32::from(delta) / extent;
                                 window.update(cx, |window, cx| {
                                     window.workbench.update(cx, |workbench, _| {
-                                        workbench.set_split_ratio(resize.boundary, ratio);
+                                        workbench.set_split_ratio_bounded(
+                                            resize.boundary,
+                                            ratio,
+                                            limit,
+                                            1. - limit,
+                                        );
                                     });
                                     cx.notify();
                                 });

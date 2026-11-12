@@ -27,10 +27,11 @@ pub enum DockLocation {
 impl DockLocation {
     pub const ALL: [Self; 3] = [Self::Left, Self::Right, Self::Bottom];
 
-    /// Usable dock extents in logical pixels. Dividers clamp to this range so
-    /// a dragged dock stays visible without squeezing the center shut.
+    /// Smallest usable dock extent in logical pixels. Dividers floor to this
+    /// minimum so a dragged dock stays visible without squeezing the center
+    /// shut; the window edge is the effective maximum (`area_rects` clamps
+    /// painted dock sizes to the available bounds).
     pub const MIN_SIZE: f32 = 80.;
-    pub const MAX_SIZE: f32 = 480.;
 
     pub fn index(self) -> usize {
         match self {
@@ -324,7 +325,7 @@ impl Workbench {
     }
 
     pub fn set_dock_size(&mut self, dock: DockLocation, size: f32) {
-        self.docks[dock.index()].size = size.clamp(DockLocation::MIN_SIZE, DockLocation::MAX_SIZE);
+        self.docks[dock.index()].size = size.max(DockLocation::MIN_SIZE);
     }
 
     pub fn set_dock_sizes(&mut self, sizes: [f32; 3]) {
@@ -1052,7 +1053,7 @@ mod tests {
     }
 
     #[test]
-    fn dock_sizes_clamp_and_survive_hide_reopen() {
+    fn dock_sizes_floor_and_survive_hide_reopen() {
         let workbench = &mut Workbench::empty();
         let id = explorer(workbench);
         workbench.show_tool(id).unwrap();
@@ -1061,11 +1062,9 @@ mod tests {
             workbench.dock_size(DockLocation::Left),
             DockLocation::MIN_SIZE
         );
-        workbench.set_dock_size(DockLocation::Left, 10_000.);
-        assert_eq!(
-            workbench.dock_size(DockLocation::Left),
-            DockLocation::MAX_SIZE
-        );
+        // No upper cap: a dock drags out to the window edge.
+        workbench.set_dock_size(DockLocation::Left, 600.);
+        assert_eq!(workbench.dock_size(DockLocation::Left), 600.);
         workbench.set_dock_size(DockLocation::Bottom, 133.);
         workbench.place_tool(id, DockLocation::Bottom);
         assert_eq!(workbench.dock_size(DockLocation::Bottom), 133.);
