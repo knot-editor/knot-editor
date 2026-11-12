@@ -31,6 +31,7 @@ use super::{
         CompletionOutcome, CompletionReceiver, PoolConfig, RootId, SchedulerError, SchedulerHandle,
         SchedulerPool, Turn, TurnOutcome,
     },
+    timers::{TimerDriver, TimerExpiry, TimerTable},
 };
 use knot_protocol::ExtensionKey;
 use knot_protocol::declarations::{HostError, HostFailure, TransportError};
@@ -259,6 +260,7 @@ enum RuntimeCallback {
     SettingChange,
     WatchChange,
     EditorEvent,
+    Timer,
     Command,
     CancelCommand,
     Tree,
@@ -284,6 +286,8 @@ pub struct RuntimeLocalState {
     keybinding_mutations: Mutex<Vec<KeybindingMutation>>,
     keybinding_batch_pending: Mutex<Option<RequestId>>,
     deferred_responses: Mutex<Vec<HostResponse>>,
+    /// Set once the capsule joins a pool, and dropped at teardown.
+    timers: Mutex<Option<TimerTable>>,
     #[cfg(any(test, feature = "test-support"))]
     host_error: Mutex<Option<HostFailure>>,
     #[cfg(any(test, feature = "test-support"))]
@@ -318,6 +322,7 @@ impl RuntimeLocalState {
             keybinding_mutations: Mutex::new(Vec::new()),
             keybinding_batch_pending: Mutex::new(None),
             deferred_responses: Mutex::new(Vec::new()),
+            timers: Mutex::new(None),
             #[cfg(any(test, feature = "test-support"))]
             host_error: Mutex::new(None),
             #[cfg(any(test, feature = "test-support"))]

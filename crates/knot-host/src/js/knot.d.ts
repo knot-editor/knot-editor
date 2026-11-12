@@ -23,6 +23,45 @@ interface Console {
 }
 declare var console: Console;
 
+/**
+ * Node-compatible timers. Each callback runs as its own turn once its delay
+ * has passed and every earlier queued callback has run, so a delay is a
+ * minimum. A delay below 1 or above 2^31 - 1 ms becomes 1 ms; extra
+ * arguments pass to the callback. An interval waits again only after its
+ * callback returns. Unloading the extension cancels every timer. `ref()`
+ * and `unref()` only change `hasRef()`: there is no process to keep alive.
+ * These declarations merge with `@types/node` in package tests.
+ */
+declare namespace NodeJS {
+  interface Timeout {
+    /** Cancels the timeout. */
+    close(): this;
+    hasRef(): boolean;
+    ref(): this;
+    unref(): this;
+    /** Restarts the delay, reactivating a timeout that already fired;
+     * a cleared timer stays cleared. */
+    refresh(): this;
+    /** The numeric ID, which `clearTimeout` and `clearInterval` accept. */
+    [Symbol.toPrimitive](): number;
+  }
+  interface Immediate {
+    hasRef(): boolean;
+    ref(): this;
+    unref(): this;
+  }
+}
+declare function setTimeout<TArgs extends any[]>(
+  callback: (...args: TArgs) => void, delay?: number, ...args: TArgs): NodeJS.Timeout;
+declare function setInterval<TArgs extends any[]>(
+  callback: (...args: TArgs) => void, delay?: number, ...args: TArgs): NodeJS.Timeout;
+/** Runs the callback in a later turn, without waiting for time to pass. */
+declare function setImmediate<TArgs extends any[]>(
+  callback: (...args: TArgs) => void, ...args: TArgs): NodeJS.Immediate;
+declare function clearTimeout(timeout: NodeJS.Timeout | string | number | undefined): void;
+declare function clearInterval(timeout: NodeJS.Timeout | string | number | undefined): void;
+declare function clearImmediate(immediate: NodeJS.Immediate | undefined): void;
+
 declare module "knot" {
   const windowIdentity: unique symbol;
   const viewIdentity: unique symbol;

@@ -183,6 +183,46 @@ pub(super) fn cancellation_listener_failure_callback<'s, 'i>(
     }
 }
 
+/// `timer("start", delay)` returns a new timer's ID, `timer("restart", id,
+/// delay)` arms it again, and `timer("cancel", id)` disarms it. A delay is in
+/// milliseconds; an undefined one expires immediately.
+pub(super) fn timer_callback<'s, 'i>(
+    scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
+    arguments: v8::FunctionCallbackArguments<'s>,
+    mut result: v8::ReturnValue,
+) {
+    let Some(state) = scope.get_slot::<Arc<RuntimeLocalState>>().cloned() else {
+        return;
+    };
+    let delay = |value: v8::Local<v8::Value>| {
+        value
+            .is_number()
+            .then(|| value.number_value(scope))
+            .flatten()
+            .map(|milliseconds| Duration::from_secs_f64(milliseconds.max(0.0) / 1000.0))
+    };
+    let operation = arguments.get(0).to_rust_string_lossy(scope);
+    let id = arguments
+        .get(1)
+        .is_number()
+        .then(|| arguments.get(1).integer_value(scope))
+        .flatten()
+        .and_then(|id| u64::try_from(id).ok());
+    let mut timers = state.timers.lock().unwrap();
+    let Some(timers) = timers.as_mut() else {
+        return;
+    };
+    match (operation.as_str(), id) {
+        ("start", _) => {
+            let delay = delay(arguments.get(1));
+            result.set_double(timers.start(delay) as f64);
+        }
+        ("restart", Some(id)) => timers.restart(id, delay(arguments.get(2))),
+        ("cancel", Some(id)) => timers.cancel(id),
+        _ => {}
+    }
+}
+
 pub(super) fn keybinding_callback<'s, 'i>(
     scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
     arguments: v8::FunctionCallbackArguments<'s>,

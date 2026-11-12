@@ -14,37 +14,49 @@ use std::{
 use std::sync::mpsc;
 
 use super::lifecycle::{ExtensionState, Failure};
+use super::timers::TimerDriver;
 use knot_protocol::ExtensionKey;
 use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
-/// Fixed worker count for one scheduler pool lifetime.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Fixed worker count and timer driver for one pool lifetime.
+#[derive(Clone)]
 pub struct PoolConfig {
     workers: NonZeroUsize,
+    timers: Arc<dyn TimerDriver>,
 }
 
 impl PoolConfig {
-    pub const fn new(workers: NonZeroUsize) -> Self {
-        Self { workers }
+    pub fn new(workers: NonZeroUsize, timers: Arc<dyn TimerDriver>) -> Self {
+        Self { workers, timers }
     }
 
+    /// One worker and a fresh manual timer driver.
     #[cfg(any(test, feature = "test-support"))]
-    pub const fn single_worker() -> Self {
-        Self::new(NonZeroUsize::MIN)
+    pub fn single_worker() -> Self {
+        Self::with_manual_timers(NonZeroUsize::MIN)
     }
 
-    pub const fn workers(self) -> NonZeroUsize {
-        self.workers
+    /// A fresh manual timer driver that nothing advances.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_manual_timers(workers: NonZeroUsize) -> Self {
+        Self::new(workers, Arc::new(crate::timers::ManualTimers::new()))
     }
-}
 
-impl Default for PoolConfig {
-    fn default() -> Self {
+    /// The worker count for this machine.
+    pub fn default_workers() -> NonZeroUsize {
         let workers = std::thread::available_parallelism()
             .unwrap_or(NonZeroUsize::MIN)
             .get()
             .min(4);
-        Self::new(NonZeroUsize::new(workers).expect("the pool size is at least one"))
+        NonZeroUsize::new(workers).expect("the pool size is at least one")
+    }
+
+    pub fn workers(&self) -> NonZeroUsize {
+        self.workers
+    }
+
+    pub fn timers(&self) -> Arc<dyn TimerDriver> {
+        Arc::clone(&self.timers)
     }
 }
 

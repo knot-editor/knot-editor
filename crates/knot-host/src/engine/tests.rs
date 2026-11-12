@@ -785,7 +785,7 @@ fn pooled_capsule_moves_between_workers_and_retains_state() {
 
     initialize();
     let pool = SchedulerPool::new(
-        PoolConfig::new(NonZeroUsize::new(2).unwrap()),
+        PoolConfig::with_manual_timers(NonZeroUsize::new(2).unwrap()),
         |turn: Turn<Work>| match turn.work {
             Work::Execute {
                 capsule,
@@ -944,7 +944,9 @@ fn movement_stress_alternates_workers_before_disposal() {
 
 #[test]
 fn independent_isolates_execute_javascript_concurrently() {
-    let pool = RuntimePool::new(PoolConfig::new(NonZeroUsize::new(2).unwrap()));
+    let pool = RuntimePool::new(PoolConfig::with_manual_timers(
+        NonZeroUsize::new(2).unwrap(),
+    ));
     let first = key(1);
     let second = key(2);
     pool.load(first, IsolateConfig::default()).unwrap();
@@ -1006,7 +1008,9 @@ fn command_arguments_reject_non_json_values_before_dispatch() {
 
 #[test]
 fn forced_termination_is_fatal_and_does_not_poison_a_neighbor() {
-    let pool = RuntimePool::new(PoolConfig::new(NonZeroUsize::new(2).unwrap()));
+    let pool = RuntimePool::new(PoolConfig::with_manual_timers(
+        NonZeroUsize::new(2).unwrap(),
+    ));
     let runaway = key(1);
     let neighbor = key(2);
     pool.load(runaway, IsolateConfig::default()).unwrap();
@@ -1128,7 +1132,9 @@ fn heap_exhaustion_probe_child() {
     if std::env::var_os("KNOT_RUN_HEAP_EXHAUSTION_PROBE").is_none() {
         return;
     }
-    let pool = RuntimePool::new(PoolConfig::new(NonZeroUsize::new(2).unwrap()));
+    let pool = RuntimePool::new(PoolConfig::with_manual_timers(
+        NonZeroUsize::new(2).unwrap(),
+    ));
     let exhausted = key(1);
     let neighbor = key(2);
     // A limit near V8's minimum working set can fail a background compiler's
@@ -1229,5 +1235,197 @@ fn a_long_allocating_turn_runs_normally_and_its_garbage_is_released() {
             .value,
         "true"
     );
+    pool.shutdown();
+}
+
+fn timer_pool() -> (RuntimePool, crate::timers::ManualTimers, ExtensionKey) {
+    let timers = crate::timers::ManualTimers::new();
+    let pool = RuntimePool::new(PoolConfig::new(NonZeroUsize::MIN, Arc::new(timers.clone())));
+    let runtime = key(300);
+    pool.load(runtime, IsolateConfig::default()).unwrap();
+    pool.execute(runtime, "file:///timers/log.js", "globalThis.log = [];")
+        .unwrap()
+        .wait()
+        .unwrap();
+    (pool, timers, runtime)
+}
+
+/// Runs `source` as a root queued after every expiry delivered so far.
+fn run(pool: &RuntimePool, runtime: ExtensionKey, source: &str) -> String {
+    pool.execute(runtime, "file:///timers/run.js", source)
+        .unwrap()
+        .wait()
+        .unwrap()
+        .value
+        .to_string()
+}
+
+fn take_log(pool: &RuntimePool, runtime: ExtensionKey) -> String {
+    run(pool, runtime, "log.splice(0).join(' ')")
+}
+
+#[test]
+fn timers_fire_in_deadline_order_with_node_delay_coercion() {
+    let (pool, timers, runtime) = timer_pool();
+    run(
+        &pool,
+        runtime,
+        "function note(label) { log.push(label); }
+         setTimeout(note, 20, 'late');
+         setTimeout(note, 10, 'first');
+         setTimeout(note, 10, 'second');
+         setTimeout(note, -5, 'negative');
+         setTimeout(note, 2 ** 31, 'huge');
+         setTimeout(note, 'soon', 'nan');
+         globalThis.self = setTimeout(function () { log.push(this === self); }, 1);",
+    );
+    assert_eq!(take_log(&pool, runtime), "");
+    timers.advance(Duration::from_millis(1));
+    assert_eq!(take_log(&pool, runtime), "negative huge nan true");
+    timers.advance(Duration::from_millis(9));
+    assert_eq!(take_log(&pool, runtime), "first second");
+    timers.advance(Duration::from_millis(10));
+    assert_eq!(take_log(&pool, runtime), "late");
+    pool.shutdown();
+}
+
+#[test]
+fn refresh_restarts_the_delay_and_reactivates_a_fired_timeout() {
+    let (pool, timers, runtime) = timer_pool();
+    run(
+        &pool,
+        runtime,
+        "globalThis.timeout = setTimeout(() => log.push('fired'), 10);",
+    );
+    timers.advance(Duration::from_millis(6));
+    run(&pool, runtime, "timeout.refresh() === timeout");
+    timers.advance(Duration::from_millis(6));
+    assert_eq!(take_log(&pool, runtime), "");
+    timers.advance(Duration::from_millis(4));
+    assert_eq!(take_log(&pool, runtime), "fired");
+
+    run(&pool, runtime, "timeout.refresh();");
+    timers.advance(Duration::from_millis(10));
+    assert_eq!(take_log(&pool, runtime), "fired");
+
+    run(&pool, runtime, "clearTimeout(timeout); timeout.refresh();");
+    timers.advance(Duration::from_millis(10));
+    assert_eq!(take_log(&pool, runtime), "");
+    assert_eq!(timers.pending(), 0);
+    pool.shutdown();
+}
+
+#[test]
+fn numeric_ids_clear_timeouts_and_intervals_interchangeably() {
+    let (pool, timers, runtime) = timer_pool();
+    assert_eq!(
+        run(
+            &pool,
+            runtime,
+            "var a = setTimeout(() => log.push('a'), 1);
+             var b = setInterval(() => log.push('b'), 1);
+             var c = setTimeout(() => log.push('c'), 1);
+             clearInterval(+a);
+             clearTimeout(String(+b));
+             c.close();
+             typeof +a === 'number' && +a !== +b && a.hasRef() && !a.unref().hasRef()",
+        ),
+        "true"
+    );
+    timers.advance(Duration::from_millis(1));
+    assert_eq!(take_log(&pool, runtime), "");
+    assert_eq!(timers.pending(), 0);
+    pool.shutdown();
+}
+
+#[test]
+fn intervals_wait_again_after_their_callback_so_ticks_never_stack() {
+    let (pool, timers, runtime) = timer_pool();
+    run(
+        &pool,
+        runtime,
+        "var ticks = 0;
+         globalThis.interval = setInterval(() => {
+           log.push(++ticks);
+           if (ticks === 3) clearInterval(interval);
+         }, 10);",
+    );
+    timers.advance(Duration::from_millis(35));
+    assert_eq!(take_log(&pool, runtime), "1");
+    timers.advance(Duration::from_millis(9));
+    assert_eq!(take_log(&pool, runtime), "");
+    timers.advance(Duration::from_millis(1));
+    assert_eq!(take_log(&pool, runtime), "2");
+    timers.advance(Duration::from_millis(10));
+    assert_eq!(take_log(&pool, runtime), "3");
+    assert_eq!(timers.pending(), 0);
+    pool.shutdown();
+}
+
+#[test]
+fn a_callback_clears_a_timer_whose_expiry_is_already_queued() {
+    let (pool, timers, runtime) = timer_pool();
+    run(
+        &pool,
+        runtime,
+        "setTimeout(() => { log.push('first'); clearTimeout(second); }, 5);
+         var second = setTimeout(() => log.push('second'), 5);",
+    );
+    timers.advance(Duration::from_millis(5));
+    assert_eq!(take_log(&pool, runtime), "first");
+    pool.shutdown();
+}
+
+#[test]
+fn immediates_run_as_later_roots_without_time_passing() {
+    let (pool, _timers, runtime) = timer_pool();
+    run(
+        &pool,
+        runtime,
+        "setImmediate((a, b) => log.push(a + b), 'im', 'mediate');
+         var cancelled = setImmediate(() => log.push('cancelled'));
+         clearTimeout(cancelled);
+         clearImmediate(cancelled);
+         log.push('sync');",
+    );
+    assert_eq!(take_log(&pool, runtime), "sync immediate");
+    pool.shutdown();
+}
+
+#[test]
+fn timer_failures_are_isolated_from_later_callbacks() {
+    let (pool, timers, runtime) = timer_pool();
+    run(
+        &pool,
+        runtime,
+        "setTimeout(() => { throw new Error('sync boom'); }, 1);
+         setTimeout(async () => { await null; throw new Error('async boom'); }, 1);
+         setTimeout(() => log.push('survived'), 1);",
+    );
+    timers.advance(Duration::from_millis(1));
+    assert_eq!(take_log(&pool, runtime), "survived");
+    assert_eq!(
+        run(
+            &pool,
+            runtime,
+            "try { setTimeout(42); } catch (error) { error instanceof TypeError && error.code }"
+        ),
+        "ERR_INVALID_ARG_TYPE"
+    );
+    pool.shutdown();
+}
+
+#[test]
+fn unloading_cancels_every_timer() {
+    let (pool, timers, runtime) = timer_pool();
+    run(
+        &pool,
+        runtime,
+        "setTimeout(() => {}, 10); setInterval(() => {}, 10);",
+    );
+    assert_eq!(timers.pending(), 2);
+    pool.unload(runtime).unwrap();
+    assert_eq!(timers.pending(), 0);
+    timers.advance(Duration::from_millis(10));
     pool.shutdown();
 }

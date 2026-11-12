@@ -342,6 +342,7 @@ impl RuntimeCapsule {
                 "knot:editor-event",
                 "editor listener",
             ),
+            ListenerNotification::Timer => (RuntimeCallback::Timer, "knot:timer", "timer callback"),
         };
         if subscription > MAX_JS_INTEGER
             || matches!(&notification, ListenerNotification::Buffer(change) if change.buffer.value() > MAX_JS_INTEGER)
@@ -387,6 +388,7 @@ impl RuntimeCapsule {
                 ListenerNotification::Editor(event) => v8::String::new(try_catch, event.name())
                     .map(Into::into)
                     .ok_or("UnsupportedOperation"),
+                ListenerNotification::Timer => Ok(v8::undefined(try_catch).into()),
             }
             .ok()?;
             function.call(
@@ -1461,6 +1463,13 @@ impl RuntimeCapsule {
             self.status
                 .compare_exchange(ACTIVE, TERMINATED, Ordering::AcqRel, Ordering::Acquire);
         let _ = self.heap_state.isolate.terminate_execution();
+        let timers = self
+            .local_state
+            .timers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        drop(timers);
         let Some(data) = self
             .data
             .lock()
@@ -1639,6 +1648,25 @@ pub(super) fn execute_engine_turn(
             ListenerNotification::Editor(event),
             Instant::now(),
         ),
+        EngineWork::Timer(expiry) => {
+            let current = capsule
+                .local_state
+                .timers
+                .lock()
+                .unwrap()
+                .as_mut()
+                .is_some_and(|timers| timers.take(expiry));
+            if current {
+                capsule.start_notification_turn(
+                    root,
+                    expiry.id,
+                    ListenerNotification::Timer,
+                    Instant::now(),
+                )
+            } else {
+                TurnOutcome::Completed
+            }
+        }
         EngineWork::SettingChange { subscription, key } => capsule.start_notification_turn(
             root,
             subscription.value(),

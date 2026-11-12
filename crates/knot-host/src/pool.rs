@@ -359,7 +359,9 @@ mod tests {
 
     #[test]
     fn pool_owner_exposes_async_events_diagnostics_and_exact_once_unload() {
-        let (pool, mut inbox) = ExtensionPool::new(PoolConfig::new(NonZeroUsize::new(2).unwrap()));
+        let (pool, mut inbox) = ExtensionPool::new(PoolConfig::with_manual_timers(
+            NonZeroUsize::new(2).unwrap(),
+        ));
         let first = key(1, 1);
         let second = key(2, 1);
         pool.load(first, ExtensionConfig::default()).unwrap();

@@ -65,6 +65,7 @@ pub(super) enum ListenerNotification {
     /// The URIs one file watch reports.
     Watch(Vec<String>),
     Editor(EditorEvent),
+    Timer,
 }
 
 pub(super) enum EngineWork {
@@ -84,6 +85,7 @@ pub(super) enum EngineWork {
         handle: u64,
         event: EditorEvent,
     },
+    Timer(TimerExpiry),
     #[cfg(any(test, feature = "test-support"))]
     Script {
         source_name: Arc<str>,

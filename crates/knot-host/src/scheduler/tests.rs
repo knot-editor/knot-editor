@@ -403,7 +403,7 @@ fn one_worker_serializes_independent_extensions() {
 
 #[test]
 fn two_workers_run_independent_extensions_concurrently() {
-    let config = PoolConfig::new(NonZeroUsize::new(2).unwrap());
+    let config = PoolConfig::with_manual_timers(NonZeroUsize::new(2).unwrap());
     let pool = SchedulerPool::new(config, blocking_executor);
     assert_eq!(pool.worker_count(), 2);
     let handle = pool.handle();
@@ -441,7 +441,7 @@ fn two_workers_run_independent_extensions_concurrently() {
 #[test]
 fn two_workers_never_run_one_extension_concurrently() {
     let pool = SchedulerPool::new(
-        PoolConfig::new(NonZeroUsize::new(2).unwrap()),
+        PoolConfig::with_manual_timers(NonZeroUsize::new(2).unwrap()),
         |turn: Turn<BlockingWork>| {
             let outcome = if turn.work.label == "root" {
                 TurnOutcome::ReadyForContinuation
@@ -483,7 +483,7 @@ fn two_workers_never_run_one_extension_concurrently() {
 #[test]
 fn configured_worker_count_stays_constant_as_extensions_grow() {
     let pool = SchedulerPool::new(
-        PoolConfig::new(NonZeroUsize::new(2).unwrap()),
+        PoolConfig::with_manual_timers(NonZeroUsize::new(2).unwrap()),
         |_: Turn<()>| TurnOutcome::Completed,
     );
     let handle = pool.handle();
@@ -589,7 +589,7 @@ fn yielding_turn_frees_a_worker_for_queued_extensions() {
         release: mpsc::Receiver<()>,
     }
     let pool = SchedulerPool::new(
-        PoolConfig::new(NonZeroUsize::new(2).unwrap()),
+        PoolConfig::with_manual_timers(NonZeroUsize::new(2).unwrap()),
         |turn: Turn<GatedWork>| {
             turn.work.started.send(turn.work.key).unwrap();
             turn.work.release.recv_timeout(TEST_WAIT).unwrap();

@@ -53,6 +53,13 @@ of the process running Knot, as `[knot] <package> console.<level>: ...` (`person
 config); start Knot from a
 terminal to read them. Use them to inspect events while writing a package.
 
+Node's timer globals work as in Node: `setTimeout`, `setInterval`,
+`setImmediate`, their `clear*` counterparts, and `Timeout.refresh()`, which
+suits debouncing. Each callback runs as its own turn behind work already queued,
+so a delay is a minimum, and unloading the package cancels its timers. Package
+tests get Node's own timers, which `mock.timers` drives, though its mocked
+timeouts ignore `refresh()`.
+
 Keep policy in plain functions over plain data and keep mutable state out of
 module scope: export `start()` to create state and register contributions, and
 make `main.ts` only `await start()`. Tests then exercise policy directly and run

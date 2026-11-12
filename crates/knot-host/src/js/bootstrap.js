@@ -20,6 +20,111 @@ for (const level of ["debug", "log", "info", "warn", "error"]) {
   };
 }
 
+// Node-compatible timer globals. The host owns IDs and waits; each expiry
+// runs as its own root, and lifecycle teardown cancels every timer.
+const TIMEOUT_MAX = 2 ** 31 - 1;
+const armedTimers = new Map();
+const timerEntries = new WeakMap();
+
+function timerDelay(after) {
+  after *= 1;
+  return after >= 1 && after <= TIMEOUT_MAX ? after : 1;
+}
+
+function timerCallback(callback) {
+  if (typeof callback === "function") return callback;
+  const error = new TypeError(`The "callback" argument must be of type function. Received ${typeof callback}`);
+  error.code = "ERR_INVALID_ARG_TYPE";
+  throw error;
+}
+
+function cancelTimer(entry) {
+  if (entry.cleared) return;
+  entry.cleared = true;
+  armedTimers.delete(entry.id);
+  nativeBindings.timer("cancel", entry.id);
+}
+
+class Timeout {
+  #refed = true;
+  constructor(callback, delay, args, repeat) {
+    const entry = { owner: this, callback, args, delay, repeat, cleared: false };
+    entry.id = nativeBindings.timer("start", delay);
+    timerEntries.set(this, entry);
+    armedTimers.set(entry.id, entry);
+  }
+  refresh() {
+    const entry = timerEntries.get(this);
+    if (!entry.cleared) {
+      nativeBindings.timer("restart", entry.id, entry.delay);
+      armedTimers.set(entry.id, entry);
+    }
+    return this;
+  }
+  close() { clearTimeout(this); return this; }
+  ref() { this.#refed = true; return this; }
+  unref() { this.#refed = false; return this; }
+  hasRef() { return this.#refed; }
+  [Symbol.toPrimitive]() { return timerEntries.get(this).id; }
+}
+
+class Immediate {
+  #refed = true;
+  constructor(callback, args) {
+    const entry = { owner: this, callback, args, immediate: true, cleared: false };
+    entry.id = nativeBindings.timer("start");
+    timerEntries.set(this, entry);
+    armedTimers.set(entry.id, entry);
+  }
+  ref() { this.#refed = true; return this; }
+  unref() { this.#refed = false; return this; }
+  hasRef() { return this.#refed; }
+}
+
+if (Symbol.dispose) {
+  Timeout.prototype[Symbol.dispose] = function () { clearTimeout(this); };
+  Immediate.prototype[Symbol.dispose] = function () { clearImmediate(this); };
+}
+
+function clearTimeout(timer) {
+  const entry = typeof timer === "number" || typeof timer === "string"
+    ? armedTimers.get(Number(timer))
+    : timer !== null && typeof timer === "object" ? timerEntries.get(timer) : undefined;
+  if (entry && !entry.immediate) cancelTimer(entry);
+}
+
+function clearImmediate(immediate) {
+  const entry = immediate !== null && typeof immediate === "object" ? timerEntries.get(immediate) : undefined;
+  if (entry?.immediate) cancelTimer(entry);
+}
+
+Object.assign(globalThis, {
+  setTimeout: (callback, delay, ...args) => new Timeout(timerCallback(callback), timerDelay(delay), args, false),
+  setInterval: (callback, delay, ...args) => new Timeout(timerCallback(callback), timerDelay(delay), args, true),
+  setImmediate: (callback, ...args) => new Immediate(timerCallback(callback), args),
+  clearTimeout,
+  clearInterval: clearTimeout,
+  clearImmediate,
+});
+
+globalThis.__knotDispatchTimer = async (id) => {
+  const entry = armedTimers.get(id);
+  if (!entry) return;
+  if (!entry.repeat) {
+    armedTimers.delete(id);
+    if (entry.immediate) entry.cleared = true;
+  }
+  let result;
+  try {
+    result = entry.callback.apply(entry.owner, entry.args);
+  } finally {
+    // An interval waits again only once its callback has returned, so slow
+    // callbacks never stack missed ticks.
+    if (entry.repeat && !entry.cleared) nativeBindings.timer("restart", id, entry.delay);
+  }
+  await result;
+};
+
 export function keybinding(key, command, options) {
   if (command !== null && typeof command === "object" && !Array.isArray(command)) {
     try {

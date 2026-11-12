@@ -27,6 +27,7 @@ use knot_host::{
         ExtensionConfig, ExtensionEvent, ExtensionEventInbox, ExtensionExecution, ExtensionPool,
     },
     scheduler::PoolConfig,
+    timers::{TimerDriver, TimerGuard},
 };
 use knot_protocol::ExtensionKey;
 use knot_protocol::{
@@ -313,12 +314,27 @@ pub(crate) fn quit_after_storage(cx: &mut App) {
     .detach();
 }
 
+/// Extension timers wait on gpui's background executor, whose test clock
+/// `advance_clock` drives.
+struct ExecutorTimers(gpui::BackgroundExecutor);
+
+impl TimerDriver for ExecutorTimers {
+    fn start(&self, delay: std::time::Duration, expire: Box<dyn FnOnce() + Send>) -> TimerGuard {
+        let timer = self.0.timer(delay);
+        TimerGuard::new(self.0.spawn(async move {
+            timer.await;
+            expire();
+        }))
+    }
+}
+
 pub(crate) fn install(cx: &mut App) -> Entity<ProductExtensionHost> {
     knot_protocol::declarations::registry()
         .validate_context::<handlers::HostContext>()
         .expect("valid application handler contexts");
     crate::app::allow_thread_wakeups(cx);
-    let (pool, inbox) = ExtensionPool::new(PoolConfig::default());
+    let timers = Arc::new(ExecutorTimers(cx.background_executor().clone()));
+    let (pool, inbox) = ExtensionPool::new(PoolConfig::new(PoolConfig::default_workers(), timers));
     let host = cx.new(|cx| ProductExtensionHost::new(pool, inbox, cx));
     cx.set_global(ApplicationExtensionHost {
         _host: host.clone(),
@@ -3123,7 +3139,7 @@ mod tests {
                 assert_eq!(host.lifecycles.len(), 2);
                 assert_eq!(
                     host.pool.diagnostics().worker_count,
-                    PoolConfig::default().workers().get()
+                    PoolConfig::default_workers().get()
                 );
             });
 

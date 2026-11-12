@@ -1475,3 +1475,64 @@ await commands.register("test.missing", async () => {
     assert_eq!(wait_for_command(missing, cx), CommandOutcome::Completed);
     clipboard(r#"{"error":"TreeItemNotFound"}"#, cx);
 }
+
+#[gpui::test]
+fn extension_timers_fire_on_the_executor_clock_and_stop_at_unload(cx: &mut TestAppContext) {
+    use knot_protocol::ExtensionKey;
+    const SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+const fired = [];
+setTimeout(() => fired.push("timeout"), 75);
+await commands.register("timers.report", async () => {
+  await workbench.writeClipboardText(fired.join(" ") || "none");
+});
+await commands.register("timers.arm", async () => {
+  setTimeout(() => workbench.writeClipboardText("after unload"), 10);
+});
+"#;
+    let documents = install_globals(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (shell, window) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(971), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(None));
+    let result = loaded.clone();
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            *result.lock().unwrap() = Some(execution.await.map(|_| ()));
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
+    loaded.lock().unwrap().take().unwrap().unwrap();
+
+    // A command queues behind every expiry delivered before it, so its report
+    // shows whether the timer has fired.
+    let report = |cx: &mut TestAppContext| {
+        cx.run_until_parked();
+        let execution = dispatch_product_command(&shell, window, "timers.report", cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+        cx.read_from_clipboard().and_then(|item| item.text())
+    };
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(74));
+    assert_eq!(report(cx).as_deref(), Some("none"));
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(1));
+    assert_eq!(report(cx).as_deref(), Some("timeout"));
+
+    let execution = dispatch_product_command(&shell, window, "timers.arm", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    host.update(cx, |host, cx| host.unload(key, cx)).unwrap();
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(10));
+    cx.run_until_parked();
+    assert_eq!(
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .as_deref(),
+        Some("timeout")
+    );
+}

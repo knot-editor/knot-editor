@@ -11,6 +11,7 @@ records rationale; public API contracts live in [knot.d.ts](../../crates/knot-ho
 | `host::declarations` | Typed async handler contracts, linked discovery, and response transport |
 | `host::scheduler` | V8-independent lifecycle state and bounded worker scheduling |
 | `host::engine` | V8 initialization, persistent isolates, contexts, bindings, and exact-once runtime teardown |
+| `host::timers` | V8-free timer IDs, armed waits, and the embedder's timer driver |
 | `host::lifecycle` | Extension identity, scheduler-visible state, and failure data |
 | `host::pool` | V8-free application control, awaitable event inbox, diagnostics, and shutdown |
 | `host::module_graph` | Validation of immutable captured sources without V8 or filesystem access |
@@ -133,12 +134,21 @@ a running turn are retained for the next continuation; request and turn identiti
 reject stale or duplicate delivery. Forced termination also wakes an awaiting
 root, so it does not depend on a later host response.
 
-Buffer listeners, application listeners, and semantic providers enter as unrelated
-FIFO roots. They may await host work without retaining a worker. Callback failure
+Buffer listeners, application listeners, semantic providers, and timer
+callbacks enter as unrelated FIFO roots. They may await host work without retaining a worker. Callback failure
 is isolated so later roots still run. Dropping a native provider receiver cancels
 queued work or wakes active work to release retained promises. Diagnostics measure
 queue depth, lag, and worker movement; quotas, dropping, coalescing, deadlines,
 and backpressure remain [D019](../roadmap.md).
+
+Each lifecycle's timer table in the host owns timer IDs and their armed waits;
+JavaScript keeps only the callbacks. A `TimerDriver`, required in the pool
+configuration, does the waiting off any thread: the application's waits on
+gpui's background executor, whose test clock `advance_clock` drives, and
+`knot-host` tests advance a manual one. An expiry queues a root that runs only
+if the arming it belongs to is still current, so clearing or refreshing a
+timer whose root is already queued suppresses it. Teardown drops the table,
+cancelling every wait.
 
 The foreground command bridge owns admitted invocation trees and completion
 channels; the host schedules their JavaScript. Routing, inherited presentation

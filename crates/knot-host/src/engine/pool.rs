@@ -8,6 +8,7 @@ pub struct RuntimePool {
     pub scheduler_handle: SchedulerHandle<EngineTurn>,
     finalizer: LifecycleFinalizer,
     events: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<EngineEvent>>>,
+    timers: Arc<dyn TimerDriver>,
 }
 
 #[derive(Clone)]
@@ -105,6 +106,7 @@ impl EngineEventInbox {
 impl RuntimePool {
     pub fn new(config: PoolConfig) -> Self {
         initialize();
+        let timers = config.timers();
         let runtimes = Arc::new(Mutex::new(HashMap::new()));
         let (event_sender, events) = tokio::sync::mpsc::unbounded_channel();
         let finalizer = LifecycleFinalizer {
@@ -121,6 +123,7 @@ impl RuntimePool {
             scheduler_handle,
             finalizer,
             events: Mutex::new(Some(events)),
+            timers,
         }
     }
 
@@ -150,7 +153,9 @@ impl RuntimePool {
             Ok(capsule) => {
                 *capsule.local_state.event_sender.lock().unwrap() =
                     Some(self.finalizer.events.clone());
-                Arc::new(capsule)
+                let capsule = Arc::new(capsule);
+                *capsule.local_state.timers.lock().unwrap() = Some(self.timer_table(key, &capsule));
+                capsule
             }
             Err(error) => {
                 let _ = handle.finish_loading(key, Err(Failure::new(error.to_string())));
@@ -174,6 +179,23 @@ impl RuntimePool {
             return Err(error.into());
         }
         Ok(())
+    }
+
+    /// Expired timers enter as roots of the capsule while it lives.
+    fn timer_table(&self, key: ExtensionKey, capsule: &Arc<RuntimeCapsule>) -> TimerTable {
+        let capsule = Arc::downgrade(capsule);
+        let scheduler = self.scheduler_handle.clone();
+        TimerTable::new(Arc::clone(&self.timers), move |expiry| {
+            if let Some(capsule) = capsule.upgrade() {
+                let _ = scheduler.enqueue_root(
+                    key,
+                    EngineTurn {
+                        capsule,
+                        work: EngineWork::Timer(expiry),
+                    },
+                );
+            }
+        })
     }
 
     pub fn load_package(
@@ -807,6 +829,8 @@ pub(super) fn initialize_extension_context(
         },
     )
     .ok_or_else(RuntimeError::disposed)?;
+    let timer_name = v8::String::new(scope, "timer").ok_or_else(RuntimeError::disposed)?;
+    let timer = v8::Function::new(scope, timer_callback).ok_or_else(RuntimeError::disposed)?;
     let listener_failure_name = v8::String::new(scope, "reportCancellationListenerFailure")
         .ok_or_else(RuntimeError::disposed)?;
     let listener_failure = v8::Function::new(scope, cancellation_listener_failure_callback)
@@ -815,6 +839,7 @@ pub(super) fn initialize_extension_context(
         || bindings.set(scope, keybinding_name.into(), keybinding.into()) != Some(true)
         || bindings.set(scope, log_name.into(), log.into()) != Some(true)
         || bindings.set(scope, platform_name.into(), platform.into()) != Some(true)
+        || bindings.set(scope, timer_name.into(), timer.into()) != Some(true)
         || bindings.set(scope, listener_failure_name.into(), listener_failure.into()) != Some(true)
         || scope.get_current_context().global(scope).set(
             scope,
@@ -843,6 +868,7 @@ pub(super) fn initialize_extension_context(
         ),
         (RuntimeCallback::WatchChange, "__knotDispatchWatchChange"),
         (RuntimeCallback::EditorEvent, "__knotDispatchEditorEvent"),
+        (RuntimeCallback::Timer, "__knotDispatchTimer"),
         (RuntimeCallback::Command, "__knotInvokeCommand"),
         (RuntimeCallback::CancelCommand, "__knotCancelCommand"),
         (RuntimeCallback::Tree, "__knotRequestTreeChildren"),

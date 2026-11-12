@@ -9,3 +9,4 @@ pub mod lifecycle;
 pub mod module_graph;
 pub mod pool;
 pub mod scheduler;
+pub mod timers;

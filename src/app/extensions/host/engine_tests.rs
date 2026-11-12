@@ -3924,7 +3924,9 @@ fn command_handlers_classify_invalid_arguments_and_failures() {
 
 #[test]
 fn command_forced_termination_is_fatal_and_does_not_poison_a_neighbor() {
-    let pool = RuntimePool::new(PoolConfig::new(NonZeroUsize::new(2).unwrap()));
+    let pool = RuntimePool::new(PoolConfig::with_manual_timers(
+        NonZeroUsize::new(2).unwrap(),
+    ));
     let runaway = key(56);
     let neighbor = key(57);
     pool.load(runaway, IsolateConfig::default()).unwrap();
