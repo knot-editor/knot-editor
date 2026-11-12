@@ -1,7 +1,9 @@
 // The package's in-memory state and its durable writes. Records are the
 // source of truth; the state mirrors the last committed registry and sessions.
 import { recovery, storage } from "knot";
-import type { CaptureId, ViewRegistration, WindowInfo, WindowTarget } from "knot";
+import type { CaptureId, JsonValue, ViewRegistration, WindowInfo, WindowTarget } from "knot";
+import { normalizeRoot } from "./inference.js";
+import { object } from "./json.js";
 import {
   RECORD_KEY,
   displayName,
@@ -16,10 +18,15 @@ import { describe, report } from "./report.js";
 import { capturesOf, sessionFromJson, sessionKey, type Session } from "./session.js";
 import { windowRoots } from "./layout.js";
 
+export const INFERENCE_DISMISSED_KEY = "inference:dismissed";
+const INFERENCE_DISMISSED_SCHEMA = 1;
+
 export type ProjectsState = {
   registry: Registry;
   /** Why the registry could not be read, while the last good state is kept. */
   loadFailure: string | null;
+  /** Normalized roots the user dismissed an inference offer for. */
+  dismissed: Set<string>;
   view: ViewRegistration | null;
   /** Last durable session record per project ID. */
   sessions: Map<string, Session>;
@@ -39,6 +46,7 @@ export function createState(): ProjectsState {
   return {
     registry: emptyRegistry(),
     loadFailure: null,
+    dismissed: new Set(),
     view: null,
     sessions: new Map(),
     unreadable: new Set(),
@@ -69,6 +77,45 @@ export async function commit(state: ProjectsState, next: Registry) {
   state.registry = next;
   state.loadFailure = null;
   await refreshTree(state);
+}
+
+/** Parses a stored dismissal record into normalized roots, throwing on any unsupported shape. */
+export function dismissedFromJson(value: JsonValue): Set<string> {
+  const record = object(value);
+  if (record === null || record.schema !== INFERENCE_DISMISSED_SCHEMA || !Array.isArray(record.roots)) {
+    throw new Error(`unsupported inference dismissal record schema: ${String(record?.schema)}`);
+  }
+  const roots = new Set<string>();
+  for (const entry of record.roots) {
+    if (typeof entry !== "string" || entry.length === 0) {
+      throw new Error("stored inference dismissal record contains an invalid entry");
+    }
+    roots.add(normalizeRoot(entry));
+  }
+  return roots;
+}
+
+/** Reloads the dismissal record, keeping the last good set on failure. */
+export async function loadDismissed(state: ProjectsState) {
+  try {
+    const result = await storage.read(INFERENCE_DISMISSED_KEY);
+    state.dismissed = result.found ? dismissedFromJson(result.value) : new Set();
+  } catch {
+    // A dismissal without durable memory still suppresses for this session.
+  }
+}
+
+/** Remembers a dismissed root durably; a write failure is reported only. */
+export async function rememberDismissed(state: ProjectsState, root: string) {
+  state.dismissed.add(normalizeRoot(root));
+  try {
+    await storage.write(INFERENCE_DISMISSED_KEY, {
+      schema: INFERENCE_DISMISSED_SCHEMA,
+      roots: [...state.dismissed],
+    });
+  } catch (error) {
+    await report(`dismissed ${root}, but recording it failed: ${describe(error)}`);
+  }
 }
 
 /** Records the project as the recent selection; failure is reported only. */
