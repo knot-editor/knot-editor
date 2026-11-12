@@ -4,7 +4,7 @@ Status: 🚧 in progress; checkpoints 1 to 3 are complete.
 
 ## Goal
 
-`brew tap knot-editor/knot && brew install --cask knot@nightly` installs the
+`brew tap knot-editor/knot && brew trust knot-editor/knot && brew install --cask knot@nightly` installs the
 latest nightly Knot on an Apple Silicon Mac, and `brew upgrade` follows later
 nightlies. Windows and Linux packaging come later and reuse the nightly
 trigger and release shape.
@@ -108,6 +108,9 @@ Create the tap, the cask template, and the publish step.
   :macos`, a `livecheck` skip, and `--except github_prerelease_version` since
   nightlies are prereleases. ⏳ The job has not run: it needs the tap and the
   `TAP_DEPLOY_KEY` secret below.
+- **Install steps:** `brew tap knot-editor/knot`, `brew trust knot-editor/knot`
+  (Homebrew 7 refuses casks from an untrusted tap), then `brew install --cask
+  knot@nightly`. Checkpoint 5 documents them.
 - **To create (you):** the empty repo `knot-editor/homebrew-knot` (default
   branch `main`, public so `brew tap` needs no auth), a deploy key with write
   access on it, and its private half as the secret `TAP_DEPLOY_KEY` in
