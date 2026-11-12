@@ -197,10 +197,14 @@ let state = emptyState();
 // group only records that one is open.
 let undoGroups = new Set<Knot.DocumentId>();
 
+/** The fake home directory URI extension code sees through `homeUri`. */
+export let homeUri: string | null = null;
+
 /** Clears every record, window, registration, and scripted answer. */
 export function reset() {
   state = emptyState();
   undoGroups = new Set();
+  homeUri = null;
 }
 
 function nextId(prefix: string) {
@@ -999,6 +1003,11 @@ export function clipboard() {
 /** The `documents.open` calls so far. */
 export function opens(): readonly { uri: string; options: Knot.OpenDocumentOptions }[] {
   return state.opens;
+}
+
+/** Sets the fake `homeUri` seen by extension code; `reset()` restores null. */
+export function setHomeUri(uri: string | null) {
+  homeUri = uri;
 }
 
 export function setSelectedText(text: string | null) {
@@ -2395,4 +2404,8 @@ export const api: KnotApi = {
     },
   },
   platform: "macos",
+  /** The fake home directory URI; tests set it with `setHomeUri`. */
+  get homeUri(): string | null {
+    return homeUri;
+  },
 };

@@ -3858,6 +3858,7 @@ dependencies = [
 name = "knot-host"
 version = "0.1.0"
 dependencies = [
+ "directories",
  "knot-protocol",
  "libc",
  "pollster 1.0.1",

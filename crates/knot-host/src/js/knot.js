@@ -36,9 +36,10 @@ import {
   defineSetting, setSettings, getSetting, resetSetting, observeSetting,
   registerTheme, getTheme, listThemes, defineColor,
   defineIcon, overrideIcon, associateIcons, registerIconPack, listIconPacks,
+  homeUri,
 } from "knot:bootstrap";
 
-export { platform };
+export { platform, homeUri };
 
 export const keymaps = Object.freeze({
   bind: keybinding,

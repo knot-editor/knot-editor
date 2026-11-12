@@ -4176,7 +4176,7 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (typeof globalThis.__knotNativeBindings !== "undefined") {
                 throw new Error("private native bindings are exposed");
             }
-            if (Object.keys(knot).sort().join(",") !== "commands,completion,documents,editor,files,history,icons,keymaps,languages,platform,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
+            if (Object.keys(knot).sort().join(",") !== "commands,completion,documents,editor,files,history,homeUri,icons,keymaps,languages,platform,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
                 throw new Error("unexpected public exports");
             }
             if (!Object.isFrozen(knot.editor) || !Object.isFrozen(knot.commands) || !Object.isFrozen(knot.workbench) || !Object.isFrozen(knot.storage)) {
@@ -4205,6 +4205,9 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             }
             if (!["macos", "windows", "linux"].includes(knot.platform)) {
                 throw new Error("platform is missing");
+            }
+            if (knot.homeUri !== null && !(typeof knot.homeUri === "string" && knot.homeUri.startsWith("file:"))) {
+                throw new Error("homeUri is neither a file URI nor null");
             }
             if (typeof knot.editor.activeBuffer !== "function"
                 || typeof knot.editor.registerCompletionProvider !== "function"

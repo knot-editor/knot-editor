@@ -2454,6 +2454,10 @@ declare module "knot" {
   export interface KeymapPresetInfo { readonly name: string; readonly title: string; }
   /** The operating system Knot runs on, for platform-specific configuration. */
   export const platform: "macos" | "windows" | "linux";
+  /** The user's home directory as a normalized `file:` URI, in the same form
+   * document and resource URIs use, so plain string comparison applies; null
+   * when no home directory is known. */
+  export const homeUri: string | null;
   /**
    * Key bindings and keymap presets. The selected preset supplies default
    * bindings beneath every `bind`; the `keymap.preset` setting selects it,

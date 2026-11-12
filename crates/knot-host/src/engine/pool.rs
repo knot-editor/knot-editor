@@ -829,6 +829,12 @@ pub(super) fn initialize_extension_context(
         },
     )
     .ok_or_else(RuntimeError::disposed)?;
+    let home_uri_name = v8::String::new(scope, "homeUri").ok_or_else(RuntimeError::disposed)?;
+    let home_uri: v8::Local<'_, v8::Value> = directories::BaseDirs::new()
+        .and_then(|base| Url::from_directory_path(base.home_dir()).ok())
+        .and_then(|url| v8::String::new(scope, url.as_str()))
+        .map(|uri| uri.into())
+        .unwrap_or_else(|| v8::null(scope).into());
     let timer_name = v8::String::new(scope, "timer").ok_or_else(RuntimeError::disposed)?;
     let timer = v8::Function::new(scope, timer_callback).ok_or_else(RuntimeError::disposed)?;
     let listener_failure_name = v8::String::new(scope, "reportCancellationListenerFailure")
@@ -839,6 +845,7 @@ pub(super) fn initialize_extension_context(
         || bindings.set(scope, keybinding_name.into(), keybinding.into()) != Some(true)
         || bindings.set(scope, log_name.into(), log.into()) != Some(true)
         || bindings.set(scope, platform_name.into(), platform.into()) != Some(true)
+        || bindings.set(scope, home_uri_name.into(), home_uri) != Some(true)
         || bindings.set(scope, timer_name.into(), timer.into()) != Some(true)
         || bindings.set(scope, listener_failure_name.into(), listener_failure.into()) != Some(true)
         || scope.get_current_context().global(scope).set(

@@ -142,7 +142,7 @@ an unrooted window and no explorer, file index, or project session for it.
 
 ## Checkpoints
 
-### 1. `homeUri` host fact
+### 1. `homeUri` host fact ✅
 
 Expose the user's home directory to extensions as a normalized `file:` URI
 (or null), beside the existing `platform` export.

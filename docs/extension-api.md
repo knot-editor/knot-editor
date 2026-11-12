@@ -741,6 +741,13 @@ when startup completes and again whenever the setting changes, so registering
 the selected preset later takes effect at the next change, and an unregistered
 name selects Knot.
 
+Two top-level facts describe the environment beside the namespaces above.
+`platform` is `"macos"`, `"windows"`, or `"linux"`, for OS-specific
+configuration like the preset example. `homeUri` is the user's home directory
+as a normalized `file:` URI, in the same form document and resource URIs use,
+so plain string comparison applies; it is `null` when no home directory is
+known.
+
 ## Ask the user transiently
 
 `workbench` exposes window-local pickers, text input, and native confirmation or

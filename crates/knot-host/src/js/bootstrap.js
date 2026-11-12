@@ -2,6 +2,7 @@ const nativeBindings = globalThis.__knotNativeBindings;
 delete globalThis.__knotNativeBindings;
 
 export const platform = nativeBindings.platform;
+export const homeUri = nativeBindings.homeUri;
 
 function formatLogArgument(value) {
   if (typeof value === "string") return value;
