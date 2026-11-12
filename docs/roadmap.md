@@ -1,6 +1,7 @@
 # Product Roadmap and Deferred Work
 
-The selected work below has an explicit implementation order. The deferred
+The [architecture review](#architecture-review) lists the most urgent
+findings first. The selected work below it has an explicit implementation order. The deferred
 register that follows is grouped by area, not by priority, but its items are
 not independent: [dependency order](#dependency-order) lists the chains, and
 each item's **Order** line names what must come before and after it.
@@ -16,6 +17,27 @@ item is promoted, its slice plan retains the ID and the item is removed from
 this register. Items of the active [daily-driver](plans/daily-driver.md) and
 [package manager](plans/package-manager.md) plans are referenced here by ID
 and ordered in their plans.
+
+## Architecture review
+
+The most urgent findings of the November 2026 review of the
+[architecture](architecture.md), most urgent first. They take priority over
+the deferred register.
+
+- **D182 — Interleave extension roots at awaits**
+  - Deferred: A package runs one root (command, listener, timer, or provider
+    call) at a time to completion, and extension commands are serial across
+    all packages. An awaiting command freezes its package's listeners and
+    providers; a command that awaits a timer or an event of its own package
+    deadlocks it until restart; and a language client cannot handle
+    out-of-order responses or server requests. The
+    [scheduling report](reports/extension-task-scheduling.md) has the
+    analysis and proposed checkpoints.
+  - Reconsider: Now. Then carry each root's identity through its
+    continuations instead of global state, let the scheduler keep several
+    live roots per package, make the command queue per package, and audit
+    the bundled packages for state assumed stable across an await.
+  - Order: before D067 and D117.
 
 ## Selected work
 
@@ -96,6 +118,7 @@ complete list for that item.
   - D145 before D021, which is reconsidered only if D145 falls short.
   - D114 → D027
   - D077 → D117 → D067
+  - D182 → D067, D117
   - D117 → D181
   - D071 → D067, D082
   - D034 → D119
@@ -453,8 +476,8 @@ complete list for that item.
     extension, define a whole-range semantic-token contribution that scales
     to file-sized token counts unlike per-item anchored contributions, and
     connect diagnostics to decorations and completion to D022.
-  - Order: after D087 if the client is an extension that spawns servers,
-    D092 for server edit lists, and D145 for hover, inlay hints, and
+  - Order: after D182, D087 if the client is an extension that spawns
+    servers, D092 for server edit lists, and D145 for hover, inlay hints, and
     diagnostic text; before D022's language-server completion. Format on
     save builds on D115.
 
@@ -611,7 +634,7 @@ complete list for that item.
     takes seconds. Then add a transient notice and a progress handle with
     a title, optional percentage, and cancellation, shown through the D077
     status bar rather than a new surface.
-  - Order: after D077; before D067.
+  - Order: after D077 and D182; before D067.
 
 - **D181 — Native operation failures in the status bar**
   - Deferred: A native operation whose failure leaves no other visible
