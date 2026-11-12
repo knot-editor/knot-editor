@@ -1,5 +1,5 @@
 use super::super::{
-    ApplicationProtectedClosure, ApplicationSessions, ApplicationTerminalSessions, ProductShell,
+    ApplicationProtectedClosure, ApplicationSessions, ApplicationTerminalSessions, KnotWindow,
     create_untitled_document, open_tab_tear_out_window,
 };
 use super::tests::start_drag;
@@ -18,9 +18,9 @@ fn pair(
     cx: &mut TestAppContext,
     source_tabs: usize,
 ) -> (
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     AnyWindowHandle,
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     AnyWindowHandle,
 ) {
     let documents = install_globals(cx);
@@ -56,7 +56,7 @@ fn pair(
                                 }
                                 workbench
                             });
-                            let shell = cx.new(|cx| ProductShell::new(workbench, cx));
+                            let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
                             shell.update(cx, |shell, cx| shell.focus_active_surface(cx));
                             shell
                         },
@@ -64,7 +64,7 @@ fn pair(
                     .unwrap();
                 (
                     cx.update_window(handle.into(), |_, window, _| {
-                        window.root::<ProductShell>().flatten().unwrap()
+                        window.root::<KnotWindow>().flatten().unwrap()
                     })
                     .unwrap(),
                     handle.into(),
@@ -191,7 +191,7 @@ fn source_delivery_moves_dirty_documents_to_every_destination_target(cx: &mut Te
                 3
             );
             assert!(
-                ProductShell::documents(cx)
+                KnotWindow::documents(cx)
                     .read(cx)
                     .get(document)
                     .unwrap()
@@ -404,7 +404,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
         .unwrap();
     visual
         .update_window(new_window, |_, window, cx| {
-            let shell = window.root::<ProductShell>().flatten().unwrap();
+            let shell = window.root::<KnotWindow>().flatten().unwrap();
             let workbench = shell.read(cx).workbench.read(cx);
             assert_eq!(workbench.focused_editor(), Some(&editor));
             assert!(editor.focus_handle(cx).is_focused(window));
@@ -423,7 +423,7 @@ fn desktop_release_moves_dirty_last_view_and_replaces_source(cx: &mut TestAppCon
                 1
             );
             assert!(
-                ProductShell::documents(cx)
+                KnotWindow::documents(cx)
                     .read(cx)
                     .get(document)
                     .unwrap()
@@ -492,7 +492,7 @@ fn failed_tear_out_and_stale_or_closed_drop_preserve_source(cx: &mut TestAppCont
                     let document = tab.document_id().unwrap();
                     let tab_id = tab.id();
                     let pane = shell.workbench.read(cx).focused_pane_id().unwrap();
-                    let model = ProductShell::documents(cx)
+                    let model = KnotWindow::documents(cx)
                         .read(cx)
                         .get(document)
                         .unwrap()
@@ -600,7 +600,7 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
         .unwrap();
     visual
         .update_window(new_window, |_, window, cx| {
-            let shell = window.root::<ProductShell>().flatten().unwrap();
+            let shell = window.root::<KnotWindow>().flatten().unwrap();
             let view = shell
                 .read(cx)
                 .workbench
@@ -766,7 +766,7 @@ fn closing_final_source_window_clears_framework_drag_before_reopening(cx: &mut T
     start_drag(&mut visual, 1);
     drop(visual);
     cx.update(|cx| {
-        ProductShell::begin_protected_close(
+        KnotWindow::begin_protected_close(
             super::super::ProtectedCloseKind::Window,
             target,
             None,

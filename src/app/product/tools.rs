@@ -6,7 +6,7 @@ use crate::app::workbench::TabMoveDestination;
 use crate::app::workbench::ToolFrameId;
 use knot_protocol::CommandOutcome;
 
-impl ProductShell {
+impl KnotWindow {
     /// Reconcile this window's contributed frames with the application-owned
     /// definitions. Attaching applies remembered placement or registration
     /// defaults once; later host notifications never override a window-local

@@ -122,7 +122,7 @@ impl Launch {
 
     fn open_file(
         &self,
-        shell: &Entity<ProductShell>,
+        shell: &Entity<KnotWindow>,
         path: &str,
         cx: &mut TestAppContext,
     ) -> DocumentId {
@@ -154,12 +154,12 @@ fn documents(cx: &gpui::App) -> Entity<DocumentCollection> {
 }
 
 /// Product windows in creation order.
-fn shells(cx: &TestAppContext) -> Vec<(gpui::AnyWindowHandle, Entity<ProductShell>)> {
+fn shells(cx: &TestAppContext) -> Vec<(gpui::AnyWindowHandle, Entity<KnotWindow>)> {
     let mut windows = cx
         .read(|cx| cx.windows())
         .into_iter()
         .filter_map(|window| {
-            let shell = window.downcast::<ProductShell>()?;
+            let shell = window.downcast::<KnotWindow>()?;
             Some((window, cx.read(|cx| shell.entity(cx).unwrap())))
         })
         .collect::<Vec<_>>();
@@ -167,7 +167,7 @@ fn shells(cx: &TestAppContext) -> Vec<(gpui::AnyWindowHandle, Entity<ProductShel
     windows
 }
 
-fn texts(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<String> {
+fn texts(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
     cx.read(|cx| {
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
         shell
@@ -186,7 +186,7 @@ fn texts(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<String> {
     })
 }
 
-fn first_document(shell: &Entity<ProductShell>, cx: &TestAppContext) -> DocumentId {
+fn first_document(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> DocumentId {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         let pane = workbench.area_panes(crate::app::workbench::Area::Center)[0];
@@ -213,7 +213,7 @@ fn edit(document: DocumentId, text: &str, cx: &mut TestAppContext) {
 }
 
 fn editors(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<Entity<crate::app::editor::Editor>> {
     cx.read(|cx| {
@@ -320,7 +320,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     let second = cx.update(|cx| {
         let handle = super::super::launch::open_product_window_with(None, None, cx);
         handle
-            .downcast::<ProductShell>()
+            .downcast::<KnotWindow>()
             .unwrap()
             .entity(cx)
             .unwrap()
@@ -661,7 +661,7 @@ await languages.register({
     let created = Rc::new(RefCell::new(Vec::new()));
     let sink = created.clone();
     let _observer = cx.update(|cx| {
-        cx.observe_new(move |shell: &mut ProductShell, _, cx| {
+        cx.observe_new(move |shell: &mut KnotWindow, _, cx| {
             let documents = cx.global::<ApplicationDocuments>().0.read(cx);
             sink.borrow_mut().extend(
                 shell

@@ -49,7 +49,7 @@ fn load_source(
 }
 
 struct Fixture {
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     tree: Entity<TreeView>,
     editor: gpui::FocusHandle,
@@ -241,7 +241,7 @@ fn a_session_without_a_window_opens_no_menu(cx: &mut TestAppContext) {
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let shell = cx.update(|cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        cx.new(|cx| ProductShell::new(workbench, cx))
+        cx.new(|cx| KnotWindow::new(workbench, cx))
     });
     load_source(&host, cx);
     shell.update(cx, |shell, cx| shell.observe_application(cx));

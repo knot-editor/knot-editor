@@ -47,7 +47,7 @@ fn window_target(destination: &DocumentDestination) -> &WindowTarget {
 pub(super) fn capture_session(
     target: &WindowTarget,
     cx: &App,
-) -> Result<Entity<ProductShell>, AccessError> {
+) -> Result<Entity<KnotWindow>, AccessError> {
     cx.global::<ApplicationSessions>()
         .find(&target.window)
         .ok_or(AccessError::InvalidTarget)
@@ -75,7 +75,7 @@ pub(super) fn workspace_info(
 fn capture_destination(
     destination: &DocumentDestination,
     cx: &mut App,
-) -> Result<(Entity<ProductShell>, OpenTarget), AccessError> {
+) -> Result<(Entity<KnotWindow>, OpenTarget), AccessError> {
     let shell = capture_session(window_target(destination), cx)?;
     let state = shell.read(cx);
     let workbench = state.workbench.read(cx);
@@ -190,7 +190,7 @@ pub(crate) fn resolve_directory(
     completion: impl FnOnce(Result<super::super::resource::ResourceUri, WorkspaceError>) + 'static,
     cx: &mut App,
 ) {
-    let providers = ProductShell::filesystems(cx);
+    let providers = KnotWindow::filesystems(cx);
     cx.spawn(async move |_| {
         let result = async {
             let request = OpenRequest::from_path(&path, Path::new("/"))
@@ -227,7 +227,7 @@ pub(crate) fn resolve_terminal_directory(
     if uri.scheme() != "file" {
         return Err(OpenError::InvalidUri);
     }
-    let providers = ProductShell::filesystems(cx);
+    let providers = KnotWindow::filesystems(cx);
     cx.spawn(async move |_| {
         let result = match super::super::open::load_resource_kind(
             providers,
@@ -381,7 +381,7 @@ pub(crate) fn present_document(
     cx: &mut App,
 ) -> Result<(DocumentId, PresentationTarget), OpenError> {
     let (shell, target) = capture_destination(&destination, cx)?;
-    let document = ProductShell::documents(cx)
+    let document = KnotWindow::documents(cx)
         .read(cx)
         .documents()
         .find(|document| document.identity().to_string() == id)
@@ -404,7 +404,7 @@ pub(crate) fn restore_retained(
     capture_key: String,
     cx: &mut App,
 ) -> Task<Result<super::super::recovery::RestoreOutcome, super::super::recovery::RestoreError>> {
-    let providers = ProductShell::filesystems(cx);
+    let providers = KnotWindow::filesystems(cx);
     super::super::recovery::restore_retained(owner, capture_key, providers, cx)
 }
 
@@ -427,7 +427,7 @@ pub(crate) fn replace_roots(
     shell.update(cx, |shell, cx| {
         let generation = shell.next_open_generation();
         let workspace = shell.workspace.snapshot();
-        let providers = ProductShell::filesystems(cx);
+        let providers = KnotWindow::filesystems(cx);
         let task = cx.spawn(async move |this, cx| {
             let validated = async {
                 let mut validated = Vec::new();
@@ -513,7 +513,7 @@ pub(crate) fn close_presentation(
         view: None,
     };
     super::super::commands::dispatch::break_captured_history_group(&origin, cx);
-    ProductShell::begin_protected_operation(
+    KnotWindow::begin_protected_operation(
         ProtectedCloseRequest {
             kind: ProtectedCloseKind::Tab,
             origin,

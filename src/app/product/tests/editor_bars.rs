@@ -94,7 +94,7 @@ fn load(label: &str, id: u64, cx: &mut TestAppContext) -> ExtensionKey {
 }
 
 struct Fixture {
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     editor: Entity<Editor>,
     model: Entity<Buffer>,
@@ -313,7 +313,7 @@ fn a_session_without_a_window_types_into_the_focused_field(cx: &mut TestAppConte
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let shell = cx.update(|cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-        cx.new(|cx| ProductShell::new(workbench, cx))
+        cx.new(|cx| KnotWindow::new(workbench, cx))
     });
     let editor = super::editor_api::active_editor(&shell, cx);
     let owner = ExtensionKey::new(ExtensionId::new(804), ExtensionLifecycleId::new(1));

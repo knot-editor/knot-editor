@@ -3,7 +3,7 @@ use super::*;
 use crate::app::workbench::TabId;
 
 /// A window whose one pane holds four views of one document, the last active.
-fn four_tabs(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
+fn four_tabs(cx: &mut TestAppContext) -> (Entity<KnotWindow>, gpui::AnyWindowHandle) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
@@ -22,7 +22,7 @@ fn four_tabs(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyWindowH
     (shell, window)
 }
 
-fn tabs(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<TabId> {
+fn tabs(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<TabId> {
     cx.read(|cx| {
         shell
             .read(cx)
@@ -37,7 +37,7 @@ fn tabs(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<TabId> {
     })
 }
 
-fn active(shell: &Entity<ProductShell>, cx: &TestAppContext) -> TabId {
+fn active(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> TabId {
     cx.read(|cx| {
         shell
             .read(cx)
@@ -49,7 +49,7 @@ fn active(shell: &Entity<ProductShell>, cx: &TestAppContext) -> TabId {
     })
 }
 
-fn recent(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<TabId> {
+fn recent(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<TabId> {
     cx.read(|cx| {
         shell
             .read(cx)
@@ -62,7 +62,7 @@ fn recent(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<TabId> {
 }
 
 fn run(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     name: &'static str,
     cx: &mut TestAppContext,
@@ -138,7 +138,7 @@ fn a_recent_tab_walk_commits_one_activation_when_ctrl_is_released(cx: &mut TestA
 }
 
 fn pane_ids(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<crate::app::workbench::PaneId> {
     cx.read(|cx| {
@@ -153,12 +153,12 @@ fn pane_ids(
     })
 }
 
-fn focused(shell: &Entity<ProductShell>, cx: &TestAppContext) -> crate::app::workbench::PaneId {
+fn focused(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> crate::app::workbench::PaneId {
     cx.read(|cx| shell.read(cx).workbench.read(cx).focused_pane_id().unwrap())
 }
 
 fn focus(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     pane: crate::app::workbench::PaneId,
     cx: &mut TestAppContext,
@@ -177,7 +177,7 @@ fn focus(
 
 /// Whether the last frame painted `pane`.
 fn painted(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     pane: crate::app::workbench::PaneId,
     cx: &mut TestAppContext,
 ) -> bool {
@@ -193,7 +193,7 @@ fn painted(
 }
 
 /// A document pane with the explorer docked on its left and two tabs.
-fn docked_window(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
+fn docked_window(cx: &mut TestAppContext) -> (Entity<KnotWindow>, gpui::AnyWindowHandle) {
     let (shell, window) = four_tabs(cx);
     shell.update(cx, |shell, cx| {
         shell.ensure_test_tool(true, cx);
@@ -208,7 +208,7 @@ fn docked_window(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyWin
 }
 
 fn dock_and_main(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> (crate::app::workbench::PaneId, crate::app::workbench::PaneId) {
     cx.read(|cx| {

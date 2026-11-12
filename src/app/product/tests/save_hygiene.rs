@@ -12,7 +12,7 @@ const CLEAN: &str = "x\na\nb\nc\n";
 struct Saved {
     document: crate::app::documents::DocumentId,
     model: Entity<Buffer>,
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     provider: Arc<MemoryFileSystemProvider>,
     uri: ResourceUri,

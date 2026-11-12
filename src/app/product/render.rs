@@ -17,7 +17,7 @@ pub(super) enum Divider {
     Split(PaneId),
 }
 
-impl ProductShell {
+impl KnotWindow {
     /// The workbench's areas, arranged as `workbench.bottomDockLayout`
     /// places the bottom dock; a maximized pane fills it alone.
     pub(super) fn render_workbench(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -400,7 +400,7 @@ impl ProductShell {
     }
 }
 
-impl ProductShell {
+impl KnotWindow {
     /// The status bar below the workbench, unless the setting hides it.
     fn render_status_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         use crate::app::{settings, status_bar::ApplicationStatusBar};
@@ -509,7 +509,7 @@ impl ProductShell {
     }
 }
 
-impl Render for ProductShell {
+impl Render for KnotWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(any(test, feature = "test-support"))]
         crate::app::work_counts::draw();
@@ -640,7 +640,7 @@ impl Render for ProductShell {
 pub(super) fn render_extension_report(
     snapshot: Option<crate::app::extensions::host::StartupReportSnapshot>,
     setting_warnings: Vec<String>,
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     theme: &Theme,
 ) -> AnyElement {
     use crate::app::extensions::host::StartupState;
@@ -762,7 +762,7 @@ pub(super) fn render_extension_report(
 pub(super) fn command_button(
     label: impl Into<SharedString>,
     id: &'static str,
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     command: &'static str,
     accent: Hsla,
 ) -> Stateful<Div> {

@@ -11,7 +11,7 @@ use knot_protocol::PickerItem;
 
 pub(super) const RESTART_TITLE: &str = "Restart Extension";
 
-impl ProductShell {
+impl KnotWindow {
     /// List restartable packages in the captured window and restart the selection.
     pub(crate) fn start_extension_restart(&mut self, cx: &mut Context<Self>) {
         let Some(report) = super::super::extensions::host::startup_report(cx) else {

@@ -23,7 +23,7 @@ pub(super) struct ViewStateTracking {
     bounds: Option<Subscription>,
 }
 
-impl ProductShell {
+impl KnotWindow {
     pub(super) fn observe_window_bounds(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.view_state.bounds = Some(cx.observe_window_bounds(window, |this, _, cx| {
             this.schedule_view_state(cx);

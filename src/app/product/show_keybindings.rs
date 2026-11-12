@@ -13,7 +13,7 @@ use knot_protocol::PickerItem;
 
 pub(super) const SHOW_KEYBINDINGS_TITLE: &str = "Show Keybindings";
 
-impl ProductShell {
+impl KnotWindow {
     /// List the keymap and dispatch the accepted row's command to `target`.
     pub(crate) fn start_show_keybindings(
         &mut self,

@@ -366,7 +366,7 @@ fn bar_control(
             // The command captures its target from the shell, after the
             // click's own handlers have finished with their views.
             window.defer(cx, move |window, cx| {
-                if let Some(Some(shell)) = window.root::<crate::app::product::ProductShell>() {
+                if let Some(Some(shell)) = window.root::<crate::app::product::KnotWindow>() {
                     shell.update(cx, |shell, cx| shell.dispatch_source(command, cx));
                 }
             });

@@ -30,7 +30,7 @@ use std::{
 use crate::app::commands::dispatch::{
     ApplicationProductCommands, CommandClaim, ProductCommandTarget,
 };
-use crate::app::product::ProductShell;
+use crate::app::product::KnotWindow;
 use gpui::{App, Context};
 use knot_protocol::declarations::{AsyncHandler, HandlerFuture};
 use knot_protocol::{Command, CommandArgumentValue, CommandOutcome};
@@ -127,9 +127,9 @@ impl CommandContext {
     pub(crate) async fn shell<R: 'static>(
         &self,
         access: impl FnOnce(
-            &mut ProductShell,
+            &mut KnotWindow,
             &ProductCommandTarget,
-            &mut Context<ProductShell>,
+            &mut Context<KnotWindow>,
         ) -> Result<R, CommandOutcome>
         + 'static,
     ) -> Result<R, CommandOutcome> {

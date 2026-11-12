@@ -18,7 +18,7 @@ pub(super) struct ClosedTab {
     index: usize,
 }
 
-impl ProductShell {
+impl KnotWindow {
     /// Remember a tab that is about to close.
     pub(super) fn remember_closed_tab(&mut self, pane: PaneId, tab: TabId, cx: &App) {
         let workbench = self.workbench.read(cx);

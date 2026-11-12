@@ -9,18 +9,18 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId, PickerItem};
 fn headless_session(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
-) -> (Entity<ProductShell>, Entity<Buffer>) {
+) -> (Entity<KnotWindow>, Entity<Buffer>) {
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let shell = cx.update(|cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-        cx.new(|cx| ProductShell::new(workbench, cx))
+        cx.new(|cx| KnotWindow::new(workbench, cx))
     });
     (shell, model)
 }
 
-fn press(shell: &Entity<ProductShell>, keys: &str, cx: &mut TestAppContext) {
+fn press(shell: &Entity<KnotWindow>, keys: &str, cx: &mut TestAppContext) {
     for key in keys.split_whitespace() {
         let keystroke = Keystroke::parse(key).unwrap();
         shell.update(cx, |shell, cx| shell.press_key(keystroke, cx));
@@ -28,7 +28,7 @@ fn press(shell: &Entity<ProductShell>, keys: &str, cx: &mut TestAppContext) {
     }
 }
 
-fn type_text(shell: &Entity<ProductShell>, text: &str, cx: &mut TestAppContext) {
+fn type_text(shell: &Entity<KnotWindow>, text: &str, cx: &mut TestAppContext) {
     shell.update(cx, |shell, cx| shell.type_text(text, cx));
     cx.run_until_parked();
 }

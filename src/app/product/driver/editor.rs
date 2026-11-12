@@ -21,7 +21,7 @@ use crate::app::keys::Keystroke;
 use crate::app::model::{Buffer, BufferModel};
 use crate::app::product::{
     ApplicationDocuments, ApplicationProductCommands, ApplicationSessions, DocumentId,
-    ProductShell, Workbench,
+    KnotWindow, Workbench,
 };
 use crate::app::resource::ResourceUri;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
@@ -38,7 +38,7 @@ const COLUMNS: usize = 100;
 
 /// An editor session over one document.
 pub struct TestEditor {
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     editor: Entity<Editor>,
     model: Entity<Buffer>,
     document: DocumentId,
@@ -71,7 +71,7 @@ impl TestEditor {
     ) -> Self {
         let shell = cx.update(|cx| {
             let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-            cx.new(|cx| ProductShell::new(workbench, cx))
+            cx.new(|cx| KnotWindow::new(workbench, cx))
         });
         shell.update(cx, |shell, cx| {
             shell.observe_application(cx);
@@ -623,7 +623,7 @@ fn new_document(
     (document, model)
 }
 
-fn active_view(shell: &Entity<ProductShell>, cx: &mut TestAppContext) -> Entity<EditorView> {
+fn active_view(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) -> Entity<EditorView> {
     cx.read(|cx| {
         shell
             .read(cx)
@@ -635,7 +635,7 @@ fn active_view(shell: &Entity<ProductShell>, cx: &mut TestAppContext) -> Entity<
     })
 }
 
-fn active_editor(shell: &Entity<ProductShell>, cx: &mut TestAppContext) -> Entity<Editor> {
+fn active_editor(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) -> Entity<Editor> {
     let view = active_view(shell, cx);
     cx.read(|cx| view.read(cx).editor().clone())
 }

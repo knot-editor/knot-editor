@@ -1,4 +1,4 @@
-use super::super::{ProductShell, create_untitled_document};
+use super::super::{KnotWindow, create_untitled_document};
 use crate::app::{
     product::tests::{install_globals, product_window},
     workbench::{
@@ -10,7 +10,7 @@ use gpui::{
     VisualTestContext, point, px,
 };
 
-fn fixture(cx: &mut TestAppContext) -> (Entity<ProductShell>, AnyWindowHandle) {
+fn fixture(cx: &mut TestAppContext) -> (Entity<KnotWindow>, AnyWindowHandle) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
@@ -205,7 +205,7 @@ fn escape_and_stale_source_leave_model_unchanged(cx: &mut TestAppContext) {
             .active_tab()
             .document_id()
             .unwrap();
-        let model = ProductShell::documents(cx)
+        let model = KnotWindow::documents(cx)
             .read(cx)
             .get(document)
             .unwrap()
@@ -279,7 +279,7 @@ fn terminal_drag_preserves_live_view_session_and_attachment(cx: &mut TestAppCont
     visual.update(|window, cx| assert!(view.focus_handle(cx).is_focused(window)));
 }
 
-fn tool_fixture(cx: &mut TestAppContext) -> (Entity<ProductShell>, AnyWindowHandle) {
+fn tool_fixture(cx: &mut TestAppContext) -> (Entity<KnotWindow>, AnyWindowHandle) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
@@ -296,7 +296,7 @@ fn tool_fixture(cx: &mut TestAppContext) -> (Entity<ProductShell>, AnyWindowHand
     (shell, window)
 }
 
-fn tool_tab_id(shell: &Entity<ProductShell>, cx: &TestAppContext) -> u64 {
+fn tool_tab_id(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> u64 {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         let id = shell.read(cx).test_tool_frame(cx).unwrap();
@@ -305,7 +305,7 @@ fn tool_tab_id(shell: &Entity<ProductShell>, cx: &TestAppContext) -> u64 {
 }
 
 fn tool_presentation(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> crate::app::workbench::PresentationId {
     cx.read(|cx| {
@@ -315,7 +315,7 @@ fn tool_presentation(
     })
 }
 
-fn assert_tool_focused(shell: &Entity<ProductShell>, visual: &mut VisualTestContext) {
+fn assert_tool_focused(shell: &Entity<KnotWindow>, visual: &mut VisualTestContext) {
     let tree = visual.read(|cx| shell.read(cx).test_tool_tree(cx));
     visual.update(|window, cx| assert!(tree.focus_handle(cx).is_focused(window)));
 }

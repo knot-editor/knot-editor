@@ -338,7 +338,7 @@ fn public_close_cancellation_before_commit_keeps_the_presentation(cx: &mut TestA
         });
         cx.simulate_prompt_answer(answer);
         assert_eq!(wait_for_command(pending, cx), CommandOutcome::Cancelled);
-        wait_for_api_condition(cx, |cx| !ProductShell::protected_closure_is_active(cx));
+        wait_for_api_condition(cx, |cx| !KnotWindow::protected_closure_is_active(cx));
         cx.read(|cx| {
             assert!(model.read(cx).is_open());
             assert!(documents.read(cx).get(document).unwrap().is_dirty(cx));
@@ -1182,7 +1182,7 @@ async fn native_window_close_is_vetoed_until_protected_closure_finishes(cx: &mut
     model.update(cx, |model, _| model.replace(0..0, "unsaved").unwrap());
     let (shell, window_cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        ProductShell::new(workbench, cx)
+        KnotWindow::new(workbench, cx)
     });
     window_cx.update(|window, cx| {
         install_protected_window_close(&shell, window, cx);
@@ -1207,7 +1207,7 @@ fn bulk_close_fixture(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
 ) -> (
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     gpui::AnyWindowHandle,
     [super::super::DocumentId; 4],
 ) {
@@ -1239,7 +1239,7 @@ fn bulk_close_fixture(
 }
 
 fn tab_documents(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<super::super::DocumentId> {
     cx.read(|cx| {
@@ -1445,7 +1445,7 @@ fn clicking_a_tab_close_button_closes_that_tab_after_its_save_decision(cx: &mut 
 /// Close the shell's active tab with its changes discarded, running
 /// `between` after the close starts and before it commits.
 fn close_discarding(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     between: impl FnOnce(&mut gpui::App),
     cx: &mut TestAppContext,
 ) -> Result<knot_protocol::PresentationCloseOutcome, ProtectedCloseFailure> {
@@ -1453,7 +1453,7 @@ fn close_discarding(
     let sink = result.clone();
     cx.update(|cx| {
         let origin = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
-        ProductShell::begin_protected_operation(
+        KnotWindow::begin_protected_operation(
             ProtectedCloseRequest {
                 kind: ProtectedCloseKind::Tab,
                 origin,

@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl ProductShell {
+impl KnotWindow {
     pub(super) fn finish_save_command(
         &mut self,
         completion: CommandCompletion,

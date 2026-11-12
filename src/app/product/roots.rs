@@ -6,7 +6,7 @@
 use super::*;
 use crate::app::resource::ResourceUri;
 
-impl ProductShell {
+impl KnotWindow {
     /// Choose a directory in the session's transient slot and append it.
     pub(super) fn start_add_folder(&mut self, cx: &mut Context<Self>) {
         let Ok(receiver) = self.begin_folder_picker(None, cx) else {

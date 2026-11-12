@@ -58,7 +58,7 @@ fn texts(window: gpui::AnyWindowHandle, cx: &mut TestAppContext) -> (Vec<String>
 }
 
 fn run(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     command: &'static str,
     cx: &mut TestAppContext,

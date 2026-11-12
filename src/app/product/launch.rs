@@ -41,7 +41,7 @@ pub(super) fn open_product_window_with(
         .collect::<Vec<_>>();
     let notice = recovery.as_ref().and_then(recovery_listing::startup_notice);
     let workbench = cx.new(|_| Workbench::empty());
-    let shell = cx.new(|cx| ProductShell::new(workbench, cx));
+    let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
     shell.update(cx, |shell, cx| {
         shell.restore_fresh_window_layout(cx);
         shell.workbench.update(cx, |workbench, cx| {
@@ -83,10 +83,10 @@ pub(super) fn open_product_window_with(
 /// Open a window that shows `shell`; closing the window ends the session,
 /// and a window that fails to open ends it at once.
 pub(super) fn show_session(
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     options: WindowOptions,
     cx: &mut App,
-) -> anyhow::Result<WindowHandle<ProductShell>> {
+) -> anyhow::Result<WindowHandle<KnotWindow>> {
     let window = cx.open_window(options, {
         let shell = shell.clone();
         move |window, cx| {
@@ -102,7 +102,7 @@ pub(super) fn show_session(
 }
 
 #[cfg(test)]
-pub(super) fn open_tab_transfer_window(cx: &mut App) -> anyhow::Result<WindowHandle<ProductShell>> {
+pub(super) fn open_tab_transfer_window(cx: &mut App) -> anyhow::Result<WindowHandle<KnotWindow>> {
     let bounds = Bounds::centered(None, size(px(1000.), px(720.)), cx);
     open_tab_transfer_window_with_bounds(bounds, cx)
 }
@@ -110,7 +110,7 @@ pub(super) fn open_tab_transfer_window(cx: &mut App) -> anyhow::Result<WindowHan
 pub(super) fn open_tab_tear_out_window(
     pointer: Point<Pixels>,
     cx: &mut App,
-) -> anyhow::Result<WindowHandle<ProductShell>> {
+) -> anyhow::Result<WindowHandle<KnotWindow>> {
     let mut bounds = Bounds::new(
         pointer - point(px(140.), px(40.)),
         size(px(1000.), px(720.)),
@@ -140,9 +140,9 @@ pub(super) fn open_tab_tear_out_window(
 pub(super) fn open_tab_transfer_window_with_bounds(
     bounds: Bounds<Pixels>,
     cx: &mut App,
-) -> anyhow::Result<WindowHandle<ProductShell>> {
+) -> anyhow::Result<WindowHandle<KnotWindow>> {
     let workbench = cx.new(|_| Workbench::empty());
-    let shell = cx.new(|cx| ProductShell::new(workbench, cx));
+    let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
     show_session(
         shell,
         WindowOptions {
@@ -162,7 +162,7 @@ pub(super) fn open_tab_transfer_window_with_bounds(
 pub(super) fn open_session_window(
     geometry: Option<&crate::app::window_layout::WindowGeometry>,
     cx: &mut App,
-) -> anyhow::Result<(Entity<ProductShell>, AnyWindowHandle)> {
+) -> anyhow::Result<(Entity<KnotWindow>, AnyWindowHandle)> {
     let (window_bounds, display_id) = match geometry {
         Some(geometry) => restored_bounds(geometry, cx),
         None => (
@@ -171,7 +171,7 @@ pub(super) fn open_session_window(
         ),
     };
     let workbench = cx.new(|_| Workbench::empty());
-    let shell = cx.new(|cx| ProductShell::new(workbench, cx));
+    let shell = cx.new(|cx| KnotWindow::new(workbench, cx));
     shell.update(cx, |shell, cx| shell.restore_fresh_window_layout(cx));
     let handle = show_session(
         shell.clone(),
@@ -254,7 +254,7 @@ pub(in crate::app) fn finish_product_startup(
             // launch gate opens, so restored windows present recovered
             // documents and queued requests deduplicate against both.
             let recovery =
-                crate::app::recovery::restore_at_startup(ProductShell::filesystems(cx), cx);
+                crate::app::recovery::restore_at_startup(KnotWindow::filesystems(cx), cx);
             cx.spawn(async move |cx| {
                 let recovery = recovery.await;
                 let record = cx
@@ -329,7 +329,7 @@ fn open_launch_windows(
         let notice = recovery_listing::startup_notice(&recovery);
         shell.update(cx, |shell, cx| {
             for document in unpresented {
-                if ProductShell::documents(cx).read(cx).get(document).is_some() {
+                if KnotWindow::documents(cx).read(cx).get(document).is_some() {
                     shell.present_session_document(document, cx);
                 }
             }
@@ -584,7 +584,7 @@ fn run_without_window(source: &ApplicationCommandSource, cx: &mut App) {
         return;
     }
     let command = source.command();
-    if let Some(window) = window.downcast::<ProductShell>() {
+    if let Some(window) = window.downcast::<KnotWindow>() {
         let _ = window.update(cx, |shell, _, cx| shell.dispatch_source(command, cx));
     }
 }

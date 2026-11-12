@@ -349,7 +349,7 @@ pub(super) fn prompt_sessions(cx: &mut App) {
     }
 }
 
-impl super::ProductShell {
+impl super::KnotWindow {
     /// Offer Reload or Keep for the focused document when its file changed
     /// outside Knot and it has not been asked about that version.
     pub(super) fn prompt_external_change(&mut self, cx: &mut gpui::Context<Self>) {

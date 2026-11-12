@@ -13,7 +13,7 @@ use serde_json::Value;
 use crate::app::CommandExecution;
 use crate::app::editor::EditorViewState;
 use crate::app::product::{
-    ApplicationDocuments, ApplicationProductCommands, OpenRequest, OpenTarget, ProductShell,
+    ApplicationDocuments, ApplicationProductCommands, OpenRequest, OpenTarget, KnotWindow,
 };
 use crate::app::resource::ResourceUri;
 use crate::app::transient::TransientSurface;
@@ -24,7 +24,7 @@ use crate::test_support::wait_until;
 /// A product window.
 #[derive(Clone)]
 pub struct TestWindow {
-    pub(super) shell: Entity<ProductShell>,
+    pub(super) shell: Entity<KnotWindow>,
     pub(super) window: AnyWindowHandle,
 }
 
@@ -70,7 +70,7 @@ pub struct EditorTab {
 
 /// A tree a package contributes to a window.
 pub struct TestTree {
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     window: AnyWindowHandle,
     tree: Entity<TreeView>,
 }
@@ -78,7 +78,7 @@ pub struct TestTree {
 impl TestWindow {
     pub(super) fn of(window: AnyWindowHandle, cx: &mut TestAppContext) -> Option<Self> {
         let shell = cx
-            .update_window(window, |root, _, _| root.downcast::<ProductShell>().ok())
+            .update_window(window, |root, _, _| root.downcast::<KnotWindow>().ok())
             .ok()
             .flatten()?;
         Some(Self { shell, window })
@@ -632,7 +632,7 @@ impl TestTree {
     }
 }
 
-fn open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarget {
+fn open_target(shell: &Entity<KnotWindow>, cx: &gpui::App) -> OpenTarget {
     let session = shell.downgrade();
     let shell = shell.read(cx);
     let workbench = shell.workbench.read(cx);

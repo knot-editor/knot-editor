@@ -37,7 +37,7 @@ const KEY: ExtensionKey = ExtensionKey::new(ExtensionId::new(732), ExtensionLife
 
 struct Fixture {
     host: Entity<crate::app::extensions::host::ProductExtensionHost>,
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     model: Entity<Buffer>,
     editor: Entity<EditorView>,
@@ -74,7 +74,7 @@ fn fixture(text: &str, cx: &mut TestAppContext) -> Fixture {
     }
 }
 
-fn focused_editor(shell: &Entity<ProductShell>, cx: &mut TestAppContext) -> Entity<EditorView> {
+fn focused_editor(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) -> Entity<EditorView> {
     cx.read(|cx| {
         shell
             .read(cx)

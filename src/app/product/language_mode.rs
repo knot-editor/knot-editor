@@ -9,7 +9,7 @@ use knot_protocol::{CommandOutcome, PickerItem};
 
 pub(super) const LANGUAGE_MODE_TITLE: &str = "Set Language Mode";
 
-impl ProductShell {
+impl KnotWindow {
     /// Offer the registered languages for the captured document and make the
     /// selection its explicit language.
     pub(crate) fn start_language_mode(

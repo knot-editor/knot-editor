@@ -6,7 +6,7 @@ use gpui::{Modifiers, MouseButton, VisualTestContext, point, px};
 
 const EXPLORER_BUTTON: &str = "stripe-button-test.tool";
 
-fn explorer_shown(shell: &Entity<ProductShell>, cx: &TestAppContext) -> bool {
+fn explorer_shown(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         let explorer = workbench

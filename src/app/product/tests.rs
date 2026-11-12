@@ -59,7 +59,7 @@ use super::{
     ApplicationSessions, ApplicationTerminalSessions, Buffer, BufferModel, CLOSE_TAB_COMMAND,
     CLOSE_WINDOW_COMMAND, DocumentCollection, Entity, LaunchGate, NEW_COMMAND,
     NEW_TERMINAL_COMMAND, OpenDialogFuture, OpenDialogOutcome, OpenRequest, OpenTarget,
-    ProductCommandSource, ProductOpenDialog, ProductSaveDialog, ProductShell, QUIT_COMMAND,
+    ProductCommandSource, ProductOpenDialog, ProductSaveDialog, KnotWindow, QUIT_COMMAND,
     REDO_COMMAND, RefCell, SAVE_AS_COMMAND, SAVE_COMMAND, SHOW_EXTENSION_REPORT_COMMAND,
     SPLIT_HORIZONTAL_COMMAND, SaveDialogFuture, SaveDialogOutcome, SplitDirection, UNDO_COMMAND,
     Workbench, WorkbenchLayout, create_untitled_document, install_protected_window_close,
@@ -145,7 +145,7 @@ impl FileSystemProvider for GatedFileSystemProvider {
 /// in the view would.
 fn focus_view(handle: &gpui::FocusHandle, window: &mut gpui::Window, cx: &mut gpui::App) {
     let shell = window
-        .root::<ProductShell>()
+        .root::<KnotWindow>()
         .flatten()
         .expect("a product window");
     shell.update(cx, |shell, cx| shell.focus_view(handle, cx));
@@ -228,7 +228,7 @@ fn two_dirty_untitled_documents_in_one_window(
 ) -> (
     super::DocumentId,
     super::DocumentId,
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     gpui::AnyWindowHandle,
 ) {
     let first = cx.update(|cx| create_untitled_document(documents, cx));
@@ -281,7 +281,7 @@ fn memory_filesystems_with_provider() -> (
     (Arc::new(providers), provider)
 }
 
-fn current_open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarget {
+fn current_open_target(shell: &Entity<KnotWindow>, cx: &gpui::App) -> OpenTarget {
     let session = shell.downgrade();
     let shell = shell.read(cx);
     let workbench = shell.workbench.read(cx);
@@ -300,7 +300,7 @@ fn current_open_target(shell: &Entity<ProductShell>, cx: &gpui::App) -> OpenTarg
 }
 
 fn place_explorer(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window_handle: gpui::AnyWindowHandle,
     dock: crate::app::workbench::DockLocation,
     cx: &mut TestAppContext,
@@ -320,7 +320,7 @@ fn place_explorer(
 }
 
 fn dispatch_product_command(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window_handle: gpui::AnyWindowHandle,
     name: &'static str,
     cx: &mut TestAppContext,
@@ -329,7 +329,7 @@ fn dispatch_product_command(
 }
 
 fn dispatch_product_command_with(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window_handle: gpui::AnyWindowHandle,
     name: &'static str,
     arguments: CommandArgumentValue,
@@ -441,7 +441,7 @@ fn wait_for_command(
 }
 
 fn wait_for_contributed_view(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     id: &str,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::tree_view::TreeView> {
@@ -466,7 +466,7 @@ fn wait_for_contributed_view(
 }
 
 fn dispatch_tree_command(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     name: &'static str,
     cx: &mut TestAppContext,
@@ -490,7 +490,7 @@ fn dispatch_tree_command(
 }
 
 fn dispatch_tree_copy(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) -> crate::app::CommandExecution {
@@ -514,7 +514,7 @@ fn wait_for_api_condition(cx: &mut TestAppContext, mut ready: impl FnMut(&gpui::
 
 /// Toggle the left test tool as the explorer's toggle command did, registering
 /// it first.
-fn toggle_test_tool(shell: &Entity<ProductShell>, cx: &mut TestAppContext) {
+fn toggle_test_tool(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) {
     shell.update(cx, |shell, cx| {
         shell.ensure_test_tool(false, cx);
         shell.toggle_tool(crate::app::product::tools::TEST_TOOL_ID, cx);

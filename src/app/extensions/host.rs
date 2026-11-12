@@ -45,7 +45,7 @@ use crate::app::{
     extensions::package::InstalledPackage,
     extensions::semantics::ExtensionSemanticBridge,
     personal_config::{self, ConfigDiagnostic, ConfigPhase},
-    product::{self, ProductShell},
+    product::{self, KnotWindow},
     transient::TransientOwner,
     tree_view::TreeViewEvent,
     workbench::ExtensionView,
@@ -2726,7 +2726,7 @@ impl ProductExtensionHost {
         request: &knot_protocol::RequestContext,
         explicit: Option<&str>,
         cx: &App,
-    ) -> Result<gpui::Entity<ProductShell>, handlers::AccessError> {
+    ) -> Result<gpui::Entity<KnotWindow>, handlers::AccessError> {
         let window = match (explicit, request.invocation) {
             (Some(window), _) => window.to_owned(),
             // An explicit target or an admitted command capture is required;
@@ -2743,8 +2743,8 @@ impl ProductExtensionHost {
         request: &knot_protocol::RequestContext,
         explicit: Option<&str>,
         access: impl FnOnce(
-            &mut ProductShell,
-            &mut gpui::Context<ProductShell>,
+            &mut KnotWindow,
+            &mut gpui::Context<KnotWindow>,
         ) -> Result<R, handlers::TransientError>,
         cx: &mut Context<Self>,
     ) -> Result<R, handlers::TransientError> {

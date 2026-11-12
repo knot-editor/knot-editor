@@ -6,7 +6,7 @@ use knot_protocol::PickerItem;
 
 pub(super) const TOGGLE_TOOL_TITLE: &str = "Toggle Tool";
 
-impl ProductShell {
+impl KnotWindow {
     /// Offer every tool of this window and toggle the choice.
     pub(super) fn start_toggle_tool(&mut self, cx: &mut Context<Self>) {
         let workbench = self.workbench.read(cx);

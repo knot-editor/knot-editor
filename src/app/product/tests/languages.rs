@@ -125,7 +125,7 @@ fn reported(model: &Entity<Buffer>, cx: &TestAppContext) -> String {
     cx.read(|cx| crate::app::languages::effective_language(model.read(cx), cx))
 }
 
-fn active_model(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Entity<Buffer> {
+fn active_model(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Entity<Buffer> {
     cx.read(|cx| {
         let workbench = shell.read(cx).workbench.read(cx);
         let pane = workbench.focused_pane().unwrap();

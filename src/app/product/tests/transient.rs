@@ -399,7 +399,7 @@ await commands.register("transient.context-free-ok", () => {});
 }
 
 fn transient_picker(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::picker::Picker> {
     cx.read(
@@ -439,7 +439,7 @@ fn start_preview(
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
     knot_protocol::ExtensionKey,
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     gpui::AnyWindowHandle,
     crate::app::CommandExecution,
 ) {
@@ -549,7 +549,7 @@ fn picker_previews_settle_on_dismissal_and_unload(cx: &mut TestAppContext) {
 }
 
 fn transient_input(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::transient::InputView> {
     cx.read(
@@ -738,7 +738,7 @@ fn start_live_input(
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
     knot_protocol::ExtensionKey,
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     gpui::AnyWindowHandle,
     crate::app::CommandExecution,
 ) {
@@ -757,7 +757,7 @@ fn live_shell(
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
     knot_protocol::ExtensionKey,
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     gpui::AnyWindowHandle,
 ) {
     use knot_protocol::ExtensionKey;

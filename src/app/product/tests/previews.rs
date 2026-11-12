@@ -3,7 +3,7 @@ use super::operations::empty_product_window;
 use super::*;
 use crate::app::settings::{ApplicationSettings, SettingsStore, WORKBENCH_PREVIEW_TABS};
 
-fn explorer_window(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
+fn explorer_window(cx: &mut TestAppContext) -> (Entity<KnotWindow>, gpui::AnyWindowHandle) {
     let documents = install_globals(cx);
     let (filesystems, provider) = memory_filesystems_with_provider();
     provider
@@ -24,7 +24,7 @@ fn explorer_window(cx: &mut TestAppContext) -> (Entity<ProductShell>, gpui::AnyW
 
 /// Open a file from the test tool: a preview, or a tab.
 fn click(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     name: &str,
     preview: bool,
@@ -43,7 +43,7 @@ fn click(
 }
 
 /// The normal group's file tabs as names with whether each is a preview.
-fn file_tabs(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<(String, bool)> {
+fn file_tabs(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<(String, bool)> {
     cx.read(|cx| {
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
         let workbench = shell.read(cx).workbench.read(cx);

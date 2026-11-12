@@ -28,7 +28,7 @@ fn changed_documents(events: &[ApplicationEvent]) -> Vec<&DocumentInfo> {
 }
 
 fn start_open(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     request: OpenRequest,
     replace: bool,
     cx: &mut TestAppContext,
@@ -647,7 +647,7 @@ fn empty_workbench_and_clean_untitled_documents_keep_their_actual_metadata(
     assert!(changed_documents(&opened).is_empty());
     let shell = cx
         .update_window(window, |_, window, _| {
-            window.root::<ProductShell>().flatten().unwrap()
+            window.root::<KnotWindow>().flatten().unwrap()
         })
         .unwrap();
     let model = cx.new(|_| Buffer::new(BufferModel::from_text("clean")));
@@ -715,7 +715,7 @@ fn deactivation_publishes_null_targets_without_repaint_events(cx: &mut TestAppCo
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, visual) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        ProductShell::new(workbench, cx)
+        KnotWindow::new(workbench, cx)
     });
     visual.update(|window, cx| {
         shell.update(cx, |shell, cx| shell.observe_extension_host(window, cx))
@@ -814,7 +814,7 @@ fn installed_application_observer_tracks_zero_window_activation_and_native_commi
     cx: &mut TestAppContext,
 ) {
     fn report(
-        shell: &Entity<ProductShell>,
+        shell: &Entity<KnotWindow>,
         window: gpui::AnyWindowHandle,
         cx: &mut TestAppContext,
     ) -> serde_json::Value {

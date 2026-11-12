@@ -6,7 +6,7 @@ use crate::app::documents::DocumentDirty;
 use crate::app::open::OpenResourceError;
 
 fn begin_open(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     uri: &str,
     cx: &mut TestAppContext,
 ) -> tokio::sync::oneshot::Receiver<Result<OpenCommit, OpenFailure>> {
@@ -234,7 +234,7 @@ pub(super) fn install_operation_fixture(
 pub(super) fn empty_product_window(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
-) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
+) -> (Entity<KnotWindow>, gpui::AnyWindowHandle) {
     let document = cx.update(|cx| create_untitled_document(documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     product_window(document, model, cx)

@@ -125,7 +125,7 @@ enum Staged {
 }
 
 struct CapturedWindow {
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
 }
 
 impl CapturedWindow {
@@ -163,7 +163,7 @@ pub(crate) fn replace_windows(
     completion: impl FnOnce(Result<ReplaceWindowsResult, ReplaceError>) + 'static,
     cx: &mut App,
 ) -> Result<(), ReplaceError> {
-    if ProductShell::protected_closure_is_active(cx) {
+    if KnotWindow::protected_closure_is_active(cx) {
         return Err(ReplaceError::OperationInProgress);
     }
     let mut roots = Vec::new();
@@ -195,13 +195,13 @@ pub(crate) fn replace_windows(
     {
         return Err(AccessError::InvalidTarget.into());
     }
-    ProductShell::set_protected_closure_active(true, cx);
-    let providers = ProductShell::filesystems(cx);
+    KnotWindow::set_protected_closure_active(true, cx);
+    let providers = KnotWindow::filesystems(cx);
     let live = live_entries(&request, cx);
     cx.spawn(async move |cx| {
         let staged = stage(&request, roots, live, &owner, providers, cx).await;
         let committed = cx.update(|cx| {
-            ProductShell::set_protected_closure_active(false, cx);
+            KnotWindow::set_protected_closure_active(false, cx);
             let (roots, entries) = staged?;
             commit(
                 &request,
@@ -238,7 +238,7 @@ pub(crate) fn replace_windows(
 
 /// The live document an entry refers to, by identity or resource.
 fn live_document(entry: &SessionEntry, cx: &App) -> Option<DocumentId> {
-    let documents = ProductShell::documents(cx);
+    let documents = KnotWindow::documents(cx);
     let documents = documents.read(cx);
     entry
         .document
@@ -428,7 +428,7 @@ fn commit(
     if sources.iter().any(|window| !window.is_live(cx)) {
         return Err(AccessError::InvalidTarget.into());
     }
-    let documents = ProductShell::documents(cx);
+    let documents = KnotWindow::documents(cx);
     let presented = source_documents(&sources, cx);
     let identities = presented
         .iter()
@@ -517,7 +517,7 @@ fn commit(
                 })
                 .collect::<Vec<_>>()
         });
-        ProductShell::close_terminal_ids(terminals, cx);
+        KnotWindow::close_terminal_ids(terminals, cx);
         window.shell.update(cx, |shell, cx| {
             let _ = shell.close_window(cx);
         });
@@ -612,7 +612,7 @@ fn resolve(
     cx: &mut App,
 ) -> (EntryOutcome, Option<DocumentId>) {
     let identity = |document: DocumentId, cx: &App| {
-        ProductShell::documents(cx)
+        KnotWindow::documents(cx)
             .read(cx)
             .get(document)
             .map(|document| document.identity().to_string())
@@ -671,7 +671,7 @@ fn resolve(
             ),
         },
         Staged::Open(OpenResource::File { uri, text, version }) => {
-            let documents = ProductShell::documents(cx);
+            let documents = KnotWindow::documents(cx);
             let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
             let document = documents.update(cx, |documents, cx| {
                 documents.create_persisted(resource_title(&uri), model, uri, 0, version, cx)
@@ -694,7 +694,7 @@ fn resolve(
     }
 }
 
-impl ProductShell {
+impl KnotWindow {
     /// Capture this session's layout with the geometry of `window`, the
     /// window it is shown in.
     pub(crate) fn capture_layout(&self, window: Option<&Window>, cx: &App) -> WindowLayout {
@@ -913,7 +913,7 @@ pub(crate) fn capture_layout(
     cx: &mut App,
 ) -> Result<WindowLayout, AccessError> {
     let shell = operations::capture_session(target, cx)?;
-    Ok(ProductShell::capture_session_layout(&shell, cx))
+    Ok(KnotWindow::capture_session_layout(&shell, cx))
 }
 
 /// Activate a product window and focus its active surface.

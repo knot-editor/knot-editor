@@ -3,7 +3,7 @@ use super::*;
 use crate::app::documents::DocumentDirty;
 use crate::app::product::relocate::TabRelocationSource;
 
-fn capture_active_tab(shell: &Entity<ProductShell>, cx: &TestAppContext) -> TabRelocationSource {
+fn capture_active_tab(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> TabRelocationSource {
     cx.read(|cx| {
         let shell = shell.read(cx);
         let workbench = shell.workbench.read(cx);
@@ -15,11 +15,11 @@ fn capture_active_tab(shell: &Entity<ProductShell>, cx: &TestAppContext) -> TabR
 }
 
 fn relocate_to_new_window(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     source: &TabRelocationSource,
     cx: &mut TestAppContext,
-    create_destination: impl FnOnce(&mut gpui::App) -> anyhow::Result<gpui::WindowHandle<ProductShell>>,
+    create_destination: impl FnOnce(&mut gpui::App) -> anyhow::Result<gpui::WindowHandle<KnotWindow>>,
 ) -> CommandOutcome {
     cx.update_window(window, |_, _, cx| {
         shell.update(cx, |shell, cx| {
@@ -836,7 +836,7 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
     });
     let destination = cx
         .update_window(destination_window, |_, window, _| {
-            window.root::<ProductShell>().flatten().unwrap()
+            window.root::<KnotWindow>().flatten().unwrap()
         })
         .unwrap();
     let destination_view = cx.read(|cx| {
@@ -1145,7 +1145,7 @@ async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppC
 }
 
 fn focused_terminal_directory(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Option<std::path::PathBuf> {
     cx.read(|cx| {
@@ -1179,7 +1179,7 @@ fn home() -> Option<std::path::PathBuf> {
 }
 
 fn focus_document(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     document: crate::app::documents::DocumentId,
     cx: &mut TestAppContext,
@@ -1343,7 +1343,7 @@ async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_
 
 /// The area and kind of the focused tab, and how many terminal sessions live.
 fn focused_area(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Option<crate::app::workbench::Area> {
     cx.read(|cx| {
@@ -1363,7 +1363,7 @@ fn session_count(cx: &TestAppContext) -> usize {
 }
 
 fn terminal_panes(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<(crate::app::workbench::Area, usize)> {
     cx.read(|cx| {
@@ -1539,7 +1539,7 @@ async fn moving_a_terminal_to_a_dock_rehomes_terminals_for_fresh_windows(cx: &mu
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, window) = product_window(document, model, cx);
     let right = Area::Dock(DockLocation::Right);
-    let home = |shell: &Entity<ProductShell>, cx: &TestAppContext| {
+    let home = |shell: &Entity<KnotWindow>, cx: &TestAppContext| {
         cx.read(|cx| shell.read(cx).workbench.read(cx).terminal_home())
     };
     assert_eq!(home(&shell, cx), DockLocation::Bottom);

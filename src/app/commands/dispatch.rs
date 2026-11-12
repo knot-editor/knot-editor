@@ -3,7 +3,7 @@
 use gpui::*;
 
 use super::catalog::{CommandCatalog, CommandDefinition, CommandMetadata, SharedCommandCatalog};
-use crate::app::product::ProductShell;
+use crate::app::product::KnotWindow;
 use crate::app::workbench::CommandView;
 use crate::app::{CommandCompletion, CommandExecution};
 use knot_protocol::{Command, CommandArgumentValue, CommandOutcome, ViewId};
@@ -88,7 +88,7 @@ impl TargetTab {
 #[derive(Clone, PartialEq)]
 pub(crate) struct ProductCommandTarget {
     /// The session the command runs in.
-    pub(crate) shell: WeakEntity<ProductShell>,
+    pub(crate) shell: WeakEntity<KnotWindow>,
     pub(crate) workbench: WeakEntity<crate::app::workbench::Workbench>,
     /// The focused tab, absent while no pane has focus, as in an empty
     /// window.
@@ -101,7 +101,7 @@ pub(crate) struct ProductCommandTarget {
 
 impl ProductCommandTarget {
     /// The session while it is open and still shows the captured workbench.
-    pub(crate) fn session(&self, cx: &App) -> Option<Entity<ProductShell>> {
+    pub(crate) fn session(&self, cx: &App) -> Option<Entity<KnotWindow>> {
         let workbench = self.workbench.upgrade()?;
         crate::app::product::session_is_live(&self.shell, &workbench, cx)
             .then(|| self.shell.upgrade())
@@ -399,7 +399,7 @@ pub(crate) fn dispatch_close_to_captured_target(
     target.session(cx).ok_or(CommandOutcome::InvalidTarget)?;
     target.validate(cx)?;
     break_captured_history_group(target, cx);
-    ProductShell::begin_protected_close(kind, target.clone(), Some(completion), cx);
+    KnotWindow::begin_protected_close(kind, target.clone(), Some(completion), cx);
     Ok(())
 }
 

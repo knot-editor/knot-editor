@@ -8,7 +8,7 @@ fn shell_actions_render_tabs_and_both_split_directions(cx: &mut TestAppContext) 
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        ProductShell::new(workbench, cx)
+        KnotWindow::new(workbench, cx)
     });
 
     cx.update(|_, cx| {
@@ -53,7 +53,7 @@ fn new_tab_targets_the_pane_whose_editor_has_focus(cx: &mut TestAppContext) {
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (shell, cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        ProductShell::new(workbench, cx)
+        KnotWindow::new(workbench, cx)
     });
 
     cx.update(|_, cx| {
@@ -117,7 +117,7 @@ fn closing_the_final_clean_tab_leaves_an_empty_center_that_takes_new_documents(
     let model = cx.read(|cx| documents.read(cx).get(original).unwrap().model().clone());
     let (shell, cx) = cx.add_window_view(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(original, model, cx));
-        ProductShell::new(workbench, cx)
+        KnotWindow::new(workbench, cx)
     });
 
     cx.update(|window, cx| {

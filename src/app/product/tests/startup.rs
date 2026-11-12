@@ -93,7 +93,7 @@ fn personal_config_gates_product_windows_and_keeps_extension_failures_independen
     }
     let report_open = |window: gpui::AnyWindowHandle, cx: &TestAppContext| {
         cx.read(|cx| {
-            let shell = window.downcast::<ProductShell>().unwrap();
+            let shell = window.downcast::<KnotWindow>().unwrap();
             shell.entity(cx).unwrap().read(cx).extension_report_open
         })
     };
@@ -155,7 +155,7 @@ fn queued_file_open_runs_only_after_configured_startup(cx: &mut TestAppContext) 
     }
     // A clean startup leaves the report closed.
     cx.read(|cx| {
-        let shell = cx.windows()[0].downcast::<ProductShell>().unwrap();
+        let shell = cx.windows()[0].downcast::<KnotWindow>().unwrap();
         assert!(!shell.entity(cx).unwrap().read(cx).extension_report_open);
     });
 }

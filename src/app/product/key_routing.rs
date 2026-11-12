@@ -48,7 +48,7 @@ pub(in crate::app) fn intercept_keys(cx: &mut App) {
     cx.set_global(KeyInterception);
     super::key_hold::install_text_router(cx);
     cx.intercept_keystrokes(|event, window, cx| {
-        let Some(Some(shell)) = window.root::<ProductShell>() else {
+        let Some(Some(shell)) = window.root::<KnotWindow>() else {
             return;
         };
         // An unhandled key propagates to the window's text input.
@@ -62,7 +62,7 @@ pub(in crate::app) fn intercept_keys(cx: &mut App) {
     .detach();
 }
 
-impl ProductShell {
+impl KnotWindow {
     /// Take a key-down: held behind a running extension command, routed
     /// through the keymap, or given to the surface with Knot-side focus.
     /// False when nothing took it, so it becomes typed text.
@@ -398,7 +398,7 @@ impl ProductShell {
 
 /// Deliver `keystroke` as if no binding existed, then perform `rest`.
 fn deliver_natively(
-    shell: &WeakEntity<ProductShell>,
+    shell: &WeakEntity<KnotWindow>,
     keystroke: Keystroke,
     rest: VecDeque<KeyAction>,
     window: &mut Window,

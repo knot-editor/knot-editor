@@ -239,7 +239,7 @@ fn explicit_workspace_operations_work_in_an_empty_product_workbench(cx: &mut Tes
     let window = cx.update(|cx| open_tab_transfer_window(cx).unwrap());
     let shell = cx
         .update_window(*window, |root, _, _| {
-            root.downcast::<ProductShell>().unwrap()
+            root.downcast::<KnotWindow>().unwrap()
         })
         .unwrap();
     let host = cx.update(extensions::host::install);

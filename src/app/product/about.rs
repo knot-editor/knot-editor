@@ -7,7 +7,7 @@ use knot_protocol::PickerItem;
 
 pub(super) const ABOUT_TITLE: &str = "About Knot";
 
-impl ProductShell {
+impl KnotWindow {
     pub(crate) fn start_about(&mut self, cx: &mut Context<Self>) {
         let row = |id: &str, label: &str, description: &str| PickerItem {
             icon: None,

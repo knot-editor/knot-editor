@@ -17,7 +17,7 @@ use crate::app::workbench::{SplitEdge, TabMoveDestination, TabMovePlacement};
 use knot_model::workbench::RecentWalk;
 use knot_protocol::CommandOutcome;
 
-impl ProductShell {
+impl KnotWindow {
     /// Activate the next or previous tab of a pane in tab order, wrapping.
     pub(super) fn cycle_tab(
         &mut self,
@@ -125,7 +125,7 @@ impl ProductShell {
     }
 }
 
-impl ProductShell {
+impl KnotWindow {
     /// The pane beside `pane` toward `edge`, among panes `accepts` admits.
     fn neighbor(
         &self,

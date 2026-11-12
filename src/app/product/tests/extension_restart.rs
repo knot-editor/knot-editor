@@ -48,7 +48,7 @@ await commands.register("switch.go", async () => {
 struct Fixture {
     host: Entity<crate::app::extensions::host::ProductExtensionHost>,
     documents: Entity<DocumentCollection>,
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     extensions: tempfile::TempDir,
     _storage: tempfile::TempDir,
@@ -326,7 +326,7 @@ fn a_switch_hung_before_its_commit_leaves_the_source_and_recovers_after_restart(
     assert_eq!(title, "Restarted @example/switcher");
     assert_eq!(wait_for_command(hung, cx), CommandOutcome::Cancelled);
     assert_eq!(fixture.texts(cx), ["unsaved"]);
-    assert!(!cx.read(ProductShell::protected_closure_is_active));
+    assert!(!cx.read(KnotWindow::protected_closure_is_active));
 
     // The restarted package can complete a replacement.
     let go = fixture.command("switch.go", cx);

@@ -218,7 +218,7 @@ pub(super) struct TabDragCoordinator {
 
 struct DragWindow {
     window: AnyWindowHandle,
-    shell: WeakEntity<ProductShell>,
+    shell: WeakEntity<KnotWindow>,
     workbench: WeakEntity<Workbench>,
     state: Rc<RefCell<TabDragState>>,
     accepts_drop: bool,
@@ -226,7 +226,7 @@ struct DragWindow {
 
 #[derive(Clone)]
 struct ActiveTabDrag {
-    shell: WeakEntity<ProductShell>,
+    shell: WeakEntity<KnotWindow>,
     window: AnyWindowHandle,
     source: TabRelocationSource,
 }
@@ -427,11 +427,11 @@ fn commit_drop_with(
     active: ActiveTabDrag,
     action: DropAction,
     cx: &mut App,
-    create: impl FnOnce(Point<Pixels>, &mut App) -> anyhow::Result<WindowHandle<ProductShell>>,
+    create: impl FnOnce(Point<Pixels>, &mut App) -> anyhow::Result<WindowHandle<KnotWindow>>,
 ) {
     let _ = cx.update_window(active.window, |_, window, cx| {
         if window
-            .root::<ProductShell>()
+            .root::<KnotWindow>()
             .flatten()
             .map(|shell| shell.downgrade())
             != Some(active.shell.clone())
@@ -493,7 +493,7 @@ impl Render for TabDragLabel {
     }
 }
 
-impl ProductShell {
+impl KnotWindow {
     pub(super) fn tab_drag_label(
         &self,
         title: SharedString,

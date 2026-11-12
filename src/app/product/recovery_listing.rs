@@ -15,7 +15,7 @@ use knot_protocol::PickerItem;
 
 pub(super) const LISTING_TITLE: &str = "Recover Unsaved Documents";
 
-impl ProductShell {
+impl KnotWindow {
     /// List recoverable snapshots in this session and act on the selection.
     pub(crate) fn start_recovery_listing(&mut self, cx: &mut Context<Self>) {
         if self.transient.is_some() {

@@ -223,7 +223,7 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
     let window = cx.windows()[0];
     let shell = cx
         .update_window(window, |_, window, _| {
-            window.root::<ProductShell>().flatten()
+            window.root::<KnotWindow>().flatten()
         })
         .unwrap()
         .unwrap();
@@ -329,7 +329,7 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
     let window = cx.windows()[0];
     let shell = cx
         .update_window(window, |_, window, _| {
-            window.root::<ProductShell>().flatten()
+            window.root::<KnotWindow>().flatten()
         })
         .unwrap()
         .unwrap();
@@ -785,7 +785,7 @@ fn personal_config_ctrl_shift_p_opens_command_palette(cx: &mut TestAppContext) {
     let window = cx.windows()[0];
     let shell = cx
         .update_window(window, |_, window, _| {
-            window.root::<ProductShell>().flatten()
+            window.root::<KnotWindow>().flatten()
         })
         .unwrap()
         .unwrap();
@@ -894,7 +894,7 @@ fn selected_contributed_preset_replaces_knot_beneath_extension_bindings(cx: &mut
     let window = cx.windows()[0];
     let shell = cx
         .update_window(window, |_, window, _| {
-            window.root::<ProductShell>().flatten()
+            window.root::<KnotWindow>().flatten()
         })
         .unwrap()
         .unwrap();
@@ -1298,7 +1298,7 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
 fn focused_editor_window(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
-) -> (Entity<ProductShell>, gpui::AnyWindowHandle, Entity<Buffer>) {
+) -> (Entity<KnotWindow>, gpui::AnyWindowHandle, Entity<Buffer>) {
     let model = cx.new(|_| Buffer::new(BufferModel::from_text("abc")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Keys", model.clone(), cx)

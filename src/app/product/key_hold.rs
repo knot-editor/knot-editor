@@ -31,7 +31,7 @@ pub(super) struct KeyHold {
     editor: Option<WeakEntity<Editor>>,
 }
 
-impl ProductShell {
+impl KnotWindow {
     /// Hold the session's later input until `completion` settles.
     pub(super) fn hold_keys_until(
         &mut self,
@@ -151,7 +151,7 @@ impl ProductShell {
             };
             let dispatched = entity.update(cx, |this, cx| {
                 let target = this.capture_command_target(cx);
-                let execution = ProductShell::command_dispatcher(cx)
+                let execution = KnotWindow::command_dispatcher(cx)
                     .update(cx, |dispatcher, cx| {
                         dispatcher.dispatch(command, target, cx)
                     });
@@ -205,7 +205,7 @@ fn route_typed_text(
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
-    let Some(Some(shell)) = window.root::<ProductShell>() else {
+    let Some(Some(shell)) = window.root::<KnotWindow>() else {
         return false;
     };
     shell.update(cx, |shell, cx| shell.take_typed_text(editor, text, cx))
@@ -217,7 +217,7 @@ pub(super) fn install_text_router(cx: &mut App) {
 
 /// End the hold `generation` and replay its input. A replayed key that
 /// starts another extension command holds whatever is still queued.
-fn release_key_hold(shell: &WeakEntity<ProductShell>, generation: u64, cx: &mut App) {
+fn release_key_hold(shell: &WeakEntity<KnotWindow>, generation: u64, cx: &mut App) {
     let Some(shell) = shell.upgrade() else {
         return;
     };
@@ -238,7 +238,7 @@ fn release_key_hold(shell: &WeakEntity<ProductShell>, generation: u64, cx: &mut 
 /// still queued. Keys go through the session's window when it has one, so
 /// they reach its text input as typed keys do.
 fn replay(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     editor: Option<Entity<Editor>>,
     mut pending: VecDeque<HeldInput>,
     cx: &mut App,

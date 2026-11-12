@@ -12,12 +12,12 @@ pub(super) struct TabRelocationSource {
 
 #[derive(Clone)]
 pub(super) struct TabRelocationDestination {
-    pub(super) shell: WeakEntity<ProductShell>,
+    pub(super) shell: WeakEntity<KnotWindow>,
     pub(super) workbench: WeakEntity<Workbench>,
     pub(super) tab: TabMoveDestination,
 }
 
-impl ProductShell {
+impl KnotWindow {
     pub(super) fn capture_tab_relocation(
         &self,
         pane: PaneId,
@@ -190,7 +190,7 @@ impl ProductShell {
         &mut self,
         source: &TabRelocationSource,
         cx: &mut Context<Self>,
-        create_destination: impl FnOnce(&mut App) -> anyhow::Result<WindowHandle<ProductShell>>,
+        create_destination: impl FnOnce(&mut App) -> anyhow::Result<WindowHandle<KnotWindow>>,
     ) -> CommandOutcome {
         if !self.relocation_is_live(source, cx) {
             return CommandOutcome::InvalidTarget;

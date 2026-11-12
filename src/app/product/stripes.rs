@@ -51,7 +51,7 @@ fn stripe_face(icon: Option<IconDefinition>, title: &str) -> Div {
     }
 }
 
-impl ProductShell {
+impl KnotWindow {
     /// Both stripes, as the left and right elements; none when
     /// `workbench.toolStripes` is off.
     pub(super) fn render_stripes(

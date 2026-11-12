@@ -121,7 +121,7 @@ fn load(cx: &mut TestAppContext) -> Entity<crate::app::extensions::host::Product
 }
 
 pub(super) fn active_editor(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::editor::Editor> {
     cx.read(|cx| {
@@ -403,7 +403,7 @@ fn load_handle_extension(
 }
 
 fn handle_report(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) -> String {
@@ -956,7 +956,7 @@ fn undo_group_fixture(
 ) -> (
     Entity<crate::app::extensions::host::ProductExtensionHost>,
     knot_protocol::ExtensionKey,
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     gpui::AnyWindowHandle,
     Entity<crate::app::editor::Editor>,
     Entity<Buffer>,
@@ -990,7 +990,7 @@ fn undo_group_fixture(
 }
 
 fn run_group_command(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     name: &'static str,
     cx: &mut TestAppContext,

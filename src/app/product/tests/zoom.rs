@@ -5,7 +5,7 @@ use crate::app::workbench::CommandView;
 use crate::app::zoom;
 
 fn active_editor(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &gpui::App,
 ) -> Entity<crate::app::editor::EditorView> {
     let workbench = shell.read(cx).workbench.read(cx);

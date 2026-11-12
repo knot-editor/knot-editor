@@ -13,7 +13,7 @@ struct Fixture {
     model: Entity<Buffer>,
     document: super::super::DocumentId,
     documents: Entity<DocumentCollection>,
-    shell: Entity<ProductShell>,
+    shell: Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
 }
 

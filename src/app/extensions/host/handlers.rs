@@ -2050,7 +2050,7 @@ async fn read_file_text(
     context: HostContext,
     arguments: FileUriArguments,
 ) -> Result<String, OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     knot_model::files::read_text(providers, &arguments.uri)
         .await
         .map_err(product::operations::resource_error)
@@ -2063,7 +2063,7 @@ async fn list_files(
 ) -> Result<Vec<knot_protocol::FileEntry>, OpenError> {
     let (providers, policy) = context.foreground(|_, cx| {
         (
-            ProductShell::filesystems(cx),
+            KnotWindow::filesystems(cx),
             crate::app::settings::files_ignore_policy(cx),
         )
     })?;
@@ -2119,7 +2119,7 @@ async fn search_files(
 
     let (providers, policy, styles) = context.foreground(|_, cx| {
         (
-            ProductShell::filesystems(cx),
+            KnotWindow::filesystems(cx),
             crate::app::settings::files_ignore_policy(cx),
             crate::app::settings::strings(crate::app::settings::COMPLETION_STYLES, cx),
         )
@@ -2165,7 +2165,7 @@ async fn is_file_ignored(
 ) -> Result<bool, OpenError> {
     let (providers, policy) = context.foreground(|_, cx| {
         (
-            ProductShell::filesystems(cx),
+            KnotWindow::filesystems(cx),
             crate::app::settings::files_ignore_policy(cx),
         )
     })?;
@@ -2220,7 +2220,7 @@ async fn watch_files(
     context: HostContext,
     arguments: WatchFilesArguments,
 ) -> Result<knot_protocol::WatchSubscriptionId, OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     let uri = knot_model::files::normalize(&providers, &arguments.uri)
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
@@ -2263,7 +2263,7 @@ async fn stat_file(
     context: HostContext,
     arguments: FileUriArguments,
 ) -> Result<Option<knot_protocol::FileKind>, OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     knot_model::files::stat(providers, &arguments.uri)
         .await
         .map(|kind| kind.map(file_kind))
@@ -2275,7 +2275,7 @@ async fn create_file(
     context: HostContext,
     arguments: FileUriArguments,
 ) -> Result<String, OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     let uri = knot_model::files::create_file(providers, &arguments.uri)
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
@@ -2304,7 +2304,7 @@ async fn create_directory(
     context: HostContext,
     arguments: FileUriArguments,
 ) -> Result<String, OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     let uri = knot_model::files::create_directory(providers, &arguments.uri)
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
@@ -2332,7 +2332,7 @@ async fn rename_file(
     context: HostContext,
     arguments: RenameFileArguments,
 ) -> Result<String, OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     let (from, to) = knot_model::files::rename(providers, &arguments.from, &arguments.to)
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
@@ -2346,7 +2346,7 @@ async fn copy_file(
     context: HostContext,
     arguments: RenameFileArguments,
 ) -> Result<String, OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     let to = knot_model::files::copy(providers, &arguments.from, &arguments.to)
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
@@ -2356,7 +2356,7 @@ async fn copy_file(
 
 #[host_operation("revealFile")]
 async fn reveal_file(context: HostContext, arguments: FileUriArguments) -> Result<(), OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     let uri = providers
         .normalize(
             crate::app::resource::ResourceUri::parse(&arguments.uri)
@@ -2394,7 +2394,7 @@ async fn delete_file(
     context: HostContext,
     arguments: DeleteFileArguments,
 ) -> Result<(), OpenError> {
-    let providers = context.foreground(|_, cx| ProductShell::filesystems(cx))?;
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
     let uri = knot_model::files::delete(providers, &arguments.uri, arguments.permanent)
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;

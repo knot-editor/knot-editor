@@ -104,7 +104,7 @@ impl Harness {
         cx: &mut TestAppContext,
     ) -> (
         crate::app::documents::DocumentId,
-        Entity<ProductShell>,
+        Entity<KnotWindow>,
         gpui::AnyWindowHandle,
     ) {
         let document = self.open_file(path, cx);
@@ -205,7 +205,7 @@ impl Harness {
     }
 
     /// Document identities in a window's tabs, in layout order.
-    fn tab_identities(&self, shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<String> {
+    fn tab_identities(&self, shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
         cx.read(|cx| {
             let workbench = shell.read(cx).workbench.read(cx);
             workbench
@@ -223,7 +223,7 @@ impl Harness {
         })
     }
 
-    fn texts(&self, shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<String> {
+    fn texts(&self, shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<String> {
         cx.read(|cx| {
             let workbench = shell.read(cx).workbench.read(cx);
             workbench
@@ -243,7 +243,7 @@ impl Harness {
 
     fn present(
         &self,
-        shell: &Entity<ProductShell>,
+        shell: &Entity<KnotWindow>,
         document: crate::app::documents::DocumentId,
         cx: &mut TestAppContext,
     ) {
@@ -293,7 +293,7 @@ fn created(
     result: &ReplaceWindowsResult,
     index: usize,
     cx: &TestAppContext,
-) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
+) -> (Entity<KnotWindow>, gpui::AnyWindowHandle) {
     let id = &result.windows[index].window.window;
     cx.read(|cx| {
         let window = cx
@@ -303,7 +303,7 @@ fn created(
             .expect("created window is open");
         (
             window
-                .downcast::<ProductShell>()
+                .downcast::<KnotWindow>()
                 .unwrap()
                 .entity(cx)
                 .unwrap(),
@@ -312,7 +312,7 @@ fn created(
     })
 }
 
-fn root(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Option<String> {
+fn root(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<String> {
     cx.read(|cx| {
         shell
             .read(cx)
@@ -327,7 +327,7 @@ fn product_windows(cx: &TestAppContext) -> usize {
     cx.read(|cx| {
         cx.windows()
             .into_iter()
-            .filter(|window| window.downcast::<ProductShell>().is_some())
+            .filter(|window| window.downcast::<KnotWindow>().is_some())
             .count()
     })
 }
@@ -725,7 +725,7 @@ fn concurrent_operations_and_caller_unload_during_staging_leave_the_source(
         .unwrap();
     let (completion, mut closed) = crate::app::CommandCompletion::new();
     cx.update(|cx| {
-        ProductShell::begin_protected_close(
+        KnotWindow::begin_protected_close(
             super::super::ProtectedCloseKind::Window,
             target,
             Some(completion),
@@ -749,7 +749,7 @@ fn concurrent_operations_and_caller_unload_during_staging_leave_the_source(
     assert_eq!(h.texts(&shell, cx), ["one"]);
     assert_eq!(root(&shell, cx), None);
     // The protected slot is free again.
-    assert!(!cx.read(ProductShell::protected_closure_is_active));
+    assert!(!cx.read(KnotWindow::protected_closure_is_active));
 }
 
 #[gpui::test]
@@ -927,7 +927,7 @@ fn interrupted_switch_restores_every_text_exactly_once(cx: &mut TestAppContext) 
     let fresh = cx.new(|_| DocumentCollection::new());
     cx.set_global(ApplicationDocuments(fresh.clone()));
     let restore =
-        cx.update(|cx| crate::app::recovery::restore_at_startup(ProductShell::filesystems(cx), cx));
+        cx.update(|cx| crate::app::recovery::restore_at_startup(KnotWindow::filesystems(cx), cx));
     let restored = wait(restore, cx).restored;
     assert_eq!(restored.len(), 2);
     let placeholder = cx.update(|cx| create_untitled_document(&fresh, cx));
@@ -992,7 +992,7 @@ fn arrangement(layout: &serde_json::Value) -> serde_json::Value {
 }
 
 fn editors(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Vec<Entity<crate::app::editor::Editor>> {
     cx.read(|cx| {
@@ -1007,7 +1007,7 @@ fn editors(
     })
 }
 
-fn terminal_sessions(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<TabSurfaceId> {
+fn terminal_sessions(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<TabSurfaceId> {
     cx.read(|cx| {
         shell
             .read(cx)
@@ -1163,7 +1163,7 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
 }
 
 fn terminal_start_directory(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     cx: &TestAppContext,
 ) -> Option<std::path::PathBuf> {
     let [TabSurfaceId::Terminal(id)] = terminal_sessions(shell, cx)[..] else {

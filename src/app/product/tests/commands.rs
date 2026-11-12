@@ -535,12 +535,12 @@ fn commands_run_in_a_session_without_a_window(cx: &mut TestAppContext) {
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let shell = cx.update(|cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-        cx.new(|cx| ProductShell::new(workbench, cx))
+        cx.new(|cx| KnotWindow::new(workbench, cx))
     });
     let run = |name: &'static str, cx: &mut TestAppContext| {
         let execution = cx.update(|cx| {
             let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
-            ProductShell::command_dispatcher(cx).update(cx, |dispatcher, cx| {
+            KnotWindow::command_dispatcher(cx).update(cx, |dispatcher, cx| {
                 dispatcher.dispatch(
                     Command {
                         name: name.into(),
@@ -679,7 +679,7 @@ async fn windowless_menu_commands_run_after_the_last_window_closes(cx: &mut Test
 
     cx.update(|cx| cx.dispatch_action(&menu(NEW_COMMAND)));
     cx.run_until_parked();
-    let window = cx.windows()[0].downcast::<ProductShell>().unwrap();
+    let window = cx.windows()[0].downcast::<KnotWindow>().unwrap();
     cx.read(|cx| {
         let shell = window.entity(cx).unwrap();
         let workbench = shell.read(cx).workbench.read(cx);

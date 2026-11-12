@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl ProductShell {
+impl KnotWindow {
     pub(super) fn next_open_generation(&mut self) -> u64 {
         self.open_generation = self
             .open_generation

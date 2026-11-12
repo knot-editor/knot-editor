@@ -10,7 +10,7 @@ use crate::app::workbench::PaneId;
 fn files_window(
     cx: &mut TestAppContext,
 ) -> (
-    Entity<ProductShell>,
+    Entity<KnotWindow>,
     gpui::AnyWindowHandle,
     [ResourceUri; 3],
 ) {
@@ -56,7 +56,7 @@ fn files_window(
 }
 
 /// The focused pane's tabs as resource URIs, `None` for other tabs.
-fn tab_uris(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<Option<String>> {
+fn tab_uris(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<Option<String>> {
     cx.read(|cx| {
         let documents = cx.global::<ApplicationDocuments>().0.read(cx);
         shell
@@ -77,7 +77,7 @@ fn tab_uris(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Vec<Option<Str
     })
 }
 
-fn activate(shell: &Entity<ProductShell>, index: usize, cx: &mut TestAppContext) -> PaneId {
+fn activate(shell: &Entity<KnotWindow>, index: usize, cx: &mut TestAppContext) -> PaneId {
     shell.update(cx, |shell, cx| {
         shell.workbench.update(cx, |workbench, _| {
             let pane = workbench.focused_pane_id().unwrap();
@@ -89,7 +89,7 @@ fn activate(shell: &Entity<ProductShell>, index: usize, cx: &mut TestAppContext)
 }
 
 fn run(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     name: &'static str,
     cx: &mut TestAppContext,
@@ -100,7 +100,7 @@ fn run(
     outcome
 }
 
-fn active_document(shell: &Entity<ProductShell>, cx: &TestAppContext) -> Option<DocumentId> {
+fn active_document(shell: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<DocumentId> {
     cx.read(|cx| {
         shell
             .read(cx)
@@ -147,7 +147,7 @@ fn a_closed_document_reopens_at_its_position_with_its_view(cx: &mut TestAppConte
         )
     });
     let others =
-        |shell: &Entity<ProductShell>, cx: &TestAppContext| tab_uris(shell, cx)[1..].to_vec();
+        |shell: &Entity<KnotWindow>, cx: &TestAppContext| tab_uris(shell, cx)[1..].to_vec();
     assert_eq!(
         others(&shell, cx),
         [Some(a.to_string()), Some(c.to_string())]

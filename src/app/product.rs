@@ -100,7 +100,7 @@ use super::{
 struct ApplicationSessions(RefCell<Vec<OpenSession>>);
 
 struct OpenSession {
-    shell: WeakEntity<ProductShell>,
+    shell: WeakEntity<KnotWindow>,
     workbench: WeakEntity<Workbench>,
     window: Option<AnyWindowHandle>,
     /// Whether this session was activated last, which makes it the active
@@ -276,7 +276,7 @@ impl Global for ApplicationSaveDialog {}
 
 impl ApplicationSessions {
     /// Open `shell`, or record the workbench an open one now shows.
-    fn register(&self, shell: WeakEntity<ProductShell>, workbench: &Entity<Workbench>) {
+    fn register(&self, shell: WeakEntity<KnotWindow>, workbench: &Entity<Workbench>) {
         let mut sessions = self.0.borrow_mut();
         match sessions.iter_mut().find(|open| open.shell == shell) {
             Some(open) => open.workbench = workbench.downgrade(),
@@ -310,7 +310,7 @@ impl ApplicationSessions {
     }
 
     /// The activated session, when it has no window.
-    fn active_without_window(&self) -> Option<Entity<ProductShell>> {
+    fn active_without_window(&self) -> Option<Entity<KnotWindow>> {
         self.0
             .borrow()
             .iter()
@@ -332,7 +332,7 @@ impl ApplicationSessions {
     }
 
     /// The open sessions, in the order they opened.
-    fn shells(&self) -> Vec<Entity<ProductShell>> {
+    fn shells(&self) -> Vec<Entity<KnotWindow>> {
         let mut sessions = self.0.borrow_mut();
         sessions.retain(|open| open.shell.upgrade().is_some());
         sessions
@@ -342,7 +342,7 @@ impl ApplicationSessions {
     }
 
     /// The open session with the given public ID.
-    fn find(&self, id: &str) -> Option<Entity<ProductShell>> {
+    fn find(&self, id: &str) -> Option<Entity<KnotWindow>> {
         self.shells()
             .into_iter()
             .find(|shell| session_id(shell.entity_id()) == id)
@@ -358,7 +358,7 @@ impl ApplicationSessions {
     }
 
     /// The open session shown in `window`.
-    fn in_window(&self, window: AnyWindowHandle) -> Option<Entity<ProductShell>> {
+    fn in_window(&self, window: AnyWindowHandle) -> Option<Entity<KnotWindow>> {
         self.0
             .borrow()
             .iter()
@@ -367,7 +367,7 @@ impl ApplicationSessions {
     }
 
     /// The open session showing `workbench`.
-    fn session_for(&self, workbench: &Entity<Workbench>) -> Option<WeakEntity<ProductShell>> {
+    fn session_for(&self, workbench: &Entity<Workbench>) -> Option<WeakEntity<KnotWindow>> {
         self.0.borrow().iter().find_map(|open| {
             (open.workbench.upgrade().as_ref() == Some(workbench)).then(|| open.shell.clone())
         })
@@ -392,7 +392,7 @@ pub(crate) fn session_id(shell: EntityId) -> String {
 
 /// Whether `shell` is open and shows `workbench`.
 pub(super) fn session_is_live(
-    shell: &WeakEntity<ProductShell>,
+    shell: &WeakEntity<KnotWindow>,
     workbench: &Entity<Workbench>,
     cx: &App,
 ) -> bool {
@@ -402,25 +402,25 @@ pub(super) fn session_is_live(
 }
 
 /// The open product sessions, in the order they opened.
-pub(crate) fn sessions(cx: &App) -> Vec<Entity<ProductShell>> {
+pub(crate) fn sessions(cx: &App) -> Vec<Entity<KnotWindow>> {
     cx.try_global::<ApplicationSessions>()
         .map(ApplicationSessions::shells)
         .unwrap_or_default()
 }
 
 /// The open session a public ID names.
-pub(crate) fn find_session(id: &str, cx: &App) -> Option<Entity<ProductShell>> {
+pub(crate) fn find_session(id: &str, cx: &App) -> Option<Entity<KnotWindow>> {
     cx.try_global::<ApplicationSessions>()?.find(id)
 }
 
 /// The session shown in `window`.
-pub(crate) fn session_in_window(window: AnyWindowHandle, cx: &App) -> Option<Entity<ProductShell>> {
+pub(crate) fn session_in_window(window: AnyWindowHandle, cx: &App) -> Option<Entity<KnotWindow>> {
     cx.try_global::<ApplicationSessions>()?.in_window(window)
 }
 
 /// The session shown in the active window, or without an active window the
 /// session activated last when it has no window.
-pub(crate) fn active_session(cx: &App) -> Option<Entity<ProductShell>> {
+pub(crate) fn active_session(cx: &App) -> Option<Entity<KnotWindow>> {
     match cx.active_window() {
         Some(window) => session_in_window(window, cx),
         None => cx
@@ -449,7 +449,7 @@ pub(crate) fn session_window(shell: EntityId, cx: &App) -> Option<AnyWindowHandl
 /// open was captured without one.
 #[derive(Clone)]
 struct OpenTarget {
-    shell: WeakEntity<ProductShell>,
+    shell: WeakEntity<KnotWindow>,
     workbench: WeakEntity<Workbench>,
     tab: Option<TargetTab>,
 }
@@ -465,7 +465,7 @@ impl OpenTarget {
 
     /// A target at a live tab of `workbench`.
     fn at(
-        shell: WeakEntity<ProductShell>,
+        shell: WeakEntity<KnotWindow>,
         workbench: &Entity<Workbench>,
         pane: PaneId,
         tab: TabId,
@@ -536,7 +536,7 @@ fn target_document(target: &ProductCommandTarget) -> Option<DocumentId> {
     }
 }
 
-pub(crate) struct ProductShell {
+pub(crate) struct KnotWindow {
     workbench: Entity<Workbench>,
     window: Option<AnyWindowHandle>,
     tab_drag: std::rc::Rc<RefCell<tab_drag::TabDragState>>,
@@ -680,7 +680,7 @@ struct SplitResizeDrag {
 /// The smallest extent, in logical pixels, a divider drag leaves either side.
 const MIN_DRAGGED_PANE_SIZE: f32 = 120.;
 
-impl ProductShell {
+impl KnotWindow {
     /// Open a session showing `workbench`, without a window.
     fn new(workbench: Entity<Workbench>, cx: &mut Context<Self>) -> Self {
         cx.global::<ApplicationSessions>()

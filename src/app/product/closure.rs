@@ -37,7 +37,7 @@ fn closure_views(views: &[ProtectedView]) -> Vec<model::ClosureView> {
 
 /// Every open document's state for the closure decisions.
 fn document_statuses(cx: &App) -> Vec<model::DocumentStatus> {
-    ProductShell::documents(cx)
+    KnotWindow::documents(cx)
         .read(cx)
         .documents()
         .map(|document| model::DocumentStatus {
@@ -48,7 +48,7 @@ fn document_statuses(cx: &App) -> Vec<model::DocumentStatus> {
         .collect()
 }
 
-impl ProductShell {
+impl KnotWindow {
     pub(super) fn protected_closure_is_active(cx: &App) -> bool {
         *cx.global::<ApplicationProtectedClosure>().0.borrow()
     }
@@ -711,7 +711,7 @@ impl ProductShell {
 }
 
 pub(super) fn install_protected_window_close(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: &Window,
     cx: &App,
 ) {
@@ -725,7 +725,7 @@ pub(super) fn install_protected_window_close(
         }
         let target = shell.update(cx, |shell, cx| shell.capture_command_target(cx));
         cx.defer(move |cx| {
-            ProductShell::begin_protected_close(ProtectedCloseKind::Window, target, None, cx);
+            KnotWindow::begin_protected_close(ProtectedCloseKind::Window, target, None, cx);
         });
         false
     });

@@ -15,7 +15,7 @@ use gpui::{App, Global, Subscription, Task};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    product::ProductShell,
+    product::KnotWindow,
     record_store::{RecordStore, StateDatabase},
     window_layout::WindowLayout,
 };
@@ -117,7 +117,7 @@ pub(crate) fn record(cx: &mut App) {
     let active = crate::app::product::active_session(cx).map(|shell| shell.entity_id());
     let mut captured = Vec::new();
     for shell in crate::app::product::sessions(cx) {
-        let layout = ProductShell::capture_session_layout(&shell, cx);
+        let layout = KnotWindow::capture_session_layout(&shell, cx);
         let state = shell.read(cx);
         let recorded = RecordedWindow {
             roots: state.root_uris().iter().map(ToString::to_string).collect(),

@@ -1,5 +1,5 @@
 use super::super::{
-    ApplicationProtectedClosure, ApplicationSessions, ApplicationTerminalSessions, ProductShell,
+    ApplicationProtectedClosure, ApplicationSessions, ApplicationTerminalSessions, KnotWindow,
     create_untitled_document, open_tab_transfer_window,
 };
 use super::{TabRelocationDestination, TabRelocationSource};
@@ -12,7 +12,7 @@ use gpui::{App, AppContext, Entity, Focusable, TestAppContext};
 use knot_protocol::CommandOutcome;
 use std::sync::Arc;
 
-fn capture(shell: &Entity<ProductShell>, cx: &App) -> TabRelocationSource {
+fn capture(shell: &Entity<KnotWindow>, cx: &App) -> TabRelocationSource {
     let shell = shell.read(cx);
     let workbench = shell.workbench.read(cx);
     let pane = workbench.focused_pane().unwrap();
@@ -22,7 +22,7 @@ fn capture(shell: &Entity<ProductShell>, cx: &App) -> TabRelocationSource {
 }
 
 fn target(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     placement: TabMovePlacement,
     cx: &App,
 ) -> TabRelocationDestination {
@@ -94,7 +94,7 @@ fn dirty_last_document_view_moves_to_new_window_without_closure(cx: &mut TestApp
         .unwrap();
     let destination = cx
         .update_window(destination_window, |_, window, _| {
-            window.root::<ProductShell>().flatten().unwrap()
+            window.root::<KnotWindow>().flatten().unwrap()
         })
         .unwrap();
     cx.read(|cx| {

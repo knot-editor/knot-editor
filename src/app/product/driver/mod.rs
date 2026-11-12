@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{Entity, TestAppContext};
 
-use super::ProductShell;
+use super::KnotWindow;
 
 /// How long a run may take to settle before the test fails.
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -20,7 +20,7 @@ const SETTLE_TIMEOUT: Duration = Duration::from_secs(10);
 /// Run until `shell` holds no keys and the extension pool is quiet: no
 /// package has work in progress, and none finished a turn while the
 /// foreground ran what it had.
-pub(super) fn settle(shell: &Entity<ProductShell>, cx: &mut TestAppContext) {
+pub(super) fn settle(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) {
     let pool = cx.read(crate::app::extensions::host::pool);
     let Some(pool) = pool else {
         cx.run_until_parked();

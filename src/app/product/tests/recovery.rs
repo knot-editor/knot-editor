@@ -698,7 +698,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
 }
 
 fn open_listing_empty(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) {
@@ -742,7 +742,7 @@ async fn startup_restores_into_the_launch_window_without_any_extension_host(
     assert!(wait_for_product_startup(cx));
     assert_eq!(cx.windows().len(), 1);
     let document = document_by_identity(&documents, draft.document_id, cx);
-    let shell = cx.windows()[0].downcast::<ProductShell>().unwrap();
+    let shell = cx.windows()[0].downcast::<KnotWindow>().unwrap();
     let shell = cx.update(|cx| shell.entity(cx).unwrap());
     cx.read(|cx| {
         let shell = shell.read(cx);
@@ -991,7 +991,7 @@ fn object(fields: &[(&str, &str)]) -> CommandArgumentValue {
 }
 
 fn run_reporting(
-    shell: &Entity<ProductShell>,
+    shell: &Entity<KnotWindow>,
     window: gpui::AnyWindowHandle,
     name: &'static str,
     arguments: CommandArgumentValue,

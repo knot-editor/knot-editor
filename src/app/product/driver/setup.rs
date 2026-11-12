@@ -11,7 +11,7 @@ use super::super::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationLaunchGate,
     ApplicationProductCommands, ApplicationProtectedClosure, ApplicationSessions,
     ApplicationTerminalSessions, Buffer, DocumentCollection, DocumentId, LaunchGate,
-    ProductCommandDispatcher, ProductShell, TerminalSessions, Workbench,
+    ProductCommandDispatcher, KnotWindow, TerminalSessions, Workbench,
     install_protected_window_close,
 };
 
@@ -86,12 +86,12 @@ pub(crate) fn product_window(
     document: DocumentId,
     model: Entity<Buffer>,
     cx: &mut TestAppContext,
-) -> (Entity<ProductShell>, gpui::AnyWindowHandle) {
+) -> (Entity<KnotWindow>, gpui::AnyWindowHandle) {
     let mut window = None;
     let (shell, _) = cx.add_window_view(|native, cx| {
         window = Some(native.window_handle());
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
-        ProductShell::new(workbench, cx)
+        KnotWindow::new(workbench, cx)
     });
     let window = window.unwrap();
     cx.update_window(window, |_, native_window, cx| {

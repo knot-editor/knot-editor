@@ -13,7 +13,7 @@ fn explorer_placement(cx: &TestAppContext) -> Option<StoredPlacement> {
     stored(cx).placement(crate::app::product::tools::TEST_TOOL_ID)
 }
 
-fn explorer_id(shell: &Entity<ProductShell>, cx: &gpui::App) -> ToolFrameId {
+fn explorer_id(shell: &Entity<KnotWindow>, cx: &gpui::App) -> ToolFrameId {
     shell
         .read(cx)
         .workbench
@@ -22,7 +22,7 @@ fn explorer_id(shell: &Entity<ProductShell>, cx: &gpui::App) -> ToolFrameId {
         .unwrap()
 }
 
-fn open_workspace(shell: &Entity<ProductShell>, cx: &mut TestAppContext) {
+fn open_workspace(shell: &Entity<KnotWindow>, cx: &mut TestAppContext) {
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     shell.update(cx, |shell, cx| {
         shell.install_workspace(ResourceUri::parse("mem://product/").unwrap(), cx);
