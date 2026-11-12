@@ -309,6 +309,15 @@ complete list for that item.
   - Reconsider: Daily use shows that moving tabs one at a time or creating edge
     splits is too cumbersome for a common layout change.
 
+- **D180 — Modal surface for informational views**
+  - Deferred: transient surfaces are only a picker and a text input, so
+    `Knot: About` shows its version and commit as picker rows. A modal surface
+    needs its own view, focus handling, and key routing, and the abort command
+    must learn to dismiss it.
+  - Reconsider: a second informational view is needed (a changelog or a
+    "what's new" panel), or the picker About proves confusing. Then add the
+    modal surface, adjust abort, and move About onto it.
+
 ## Documents, storage, and history
 
 - **D009 — Binary buffers and encoding detection**
