@@ -1,7 +1,8 @@
 # Terminal chrome and resize limits
 
 Status: 🔨 checkpoint 1 implemented, awaiting its review gate; checkpoint 2
-not started. Implements the terminal usability report (2026-11-12): drop
+not started; checkpoint 3 (restart keeps output) added, not started.
+Implements the terminal usability report (2026-11-12): drop
 the dev mini-header, lift arbitrary resize caps.
 
 ## Goal
@@ -86,6 +87,28 @@ down to the sibling's minimum.
 
 Review gate: drag a bottom-dock terminal and a side-by-side doc pair to
 their new extremes; confirm minimums still hold and layouts restore.
+
+## Checkpoint 3 — Restart keeps prior output visible
+
+Deliverable: pressing restart (overlay or `terminal.restart`) starts a
+fresh shell without wiping what was there. The exited session's grid
+content remains readable — carried into the new session's scrollback —
+so `ls`, Ctrl-D, restart still shows the `ls` output above the new
+prompt. New shell output continues below it.
+
+Implementation context: `TerminalSession::restart` (`src/app/terminal/session.rs`
+~L467) replaces the grid with a fresh `Term`; `TerminalState::Stopped`
+still holds the old grid at that point. Move its visible lines plus
+scrollback into the new terminal as scrollback before (or as part of)
+the swap. Open design point, settle at implementation: exact carry-over
+mechanics (replay lines into the fresh `Term` vs. snapshot handoff).
+
+Validation: a session that prints a marker then exits still contains
+the marker in its scrollback after restart; new output appends below.
+Existing session/view/mouse tests stay green.
+
+Review gate: run `ls`, Ctrl-D, restart; the `ls` output is still
+visible and scrollable above the fresh prompt.
 
 ## Verification
 
