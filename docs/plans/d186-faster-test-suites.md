@@ -148,7 +148,15 @@ One commit per area; split an area further if it grows.
    `sessions`, `recovery`, `extension_api`, `startup`, `document_watch`,
    `window_restore`, `tool_layout`, `tools`, `files`, `workbench`, and
    `src/app/product/tab_drag/` (which keeps windows where it tests
-   cross-window delivery).
+   cross-window delivery). 🔍 Ready for review. Windowed on purpose: tests
+   that identify a window by its native handle (observation, public API
+   capture, replacement sessions), answer native prompts or press keys through
+   gpui (`simulate_keystrokes`, IME, tree rows), or draw (`tools` geometry),
+   the native close and failed-launch paths of `window_restore`
+   (`Launch::windowed`), and all of `tab_drag`, which is pointer-driven.
+   Run serially, the 135 tests of the twelve modules went from 8.58 s to
+   7.95 s: these modules mostly wait on stores, the watcher, and V8 rather
+   than draw, so the gain is small. No test needed moving to `knot-model`.
 5. Terminal: `src/app/terminal/session_tests.rs`, `view/tests.rs`,
    `mouse_tests.rs`. Session behavior goes headless; paint and mouse stay
    windowed.
