@@ -109,7 +109,10 @@ commands; `indents.jsonc`, `brackets.jsonc`, and `folds.jsonc` list
 indentation, bracket, and fold cases, which `indents.rs`,
 `brackets.rs`, and `folds.rs` beside it run through an
 editor without a window. `@knot/vim` keeps one file per topic, each its own
-parallel test in `crates/knot-ext-vim/tests/vim.rs`, which loads the language packages too.
+parallel test in `crates/knot-ext-vim/tests/vim.rs`. Instead of the language
+packages, the topics whose cases are syntax-aware register a minimal Rust
+fixture language (indent, fold, highlight, and bracket configuration) from
+`post-init.js`; the others start with no languages.
 
 Tests of bundled packages use only `knot::test_support` (feature
 `test-support`), a driver that starts the real product with chosen packages
@@ -118,8 +121,11 @@ internals. `test_support::cases` holds what every case runner shares:
 discovery, parsing, the `KNOT_CASES` name filter, caret markers, generated
 numbered texts, the key notation, and failure reports that name the file and
 line of the case. `TestProduct` starts the packages without a window, and a
-`TestEditor` shows each case in a fresh workbench and types its keys through
-the window's router; a run settles once the window holds no keys
+`TestEditor` types keys through the window's router. `TestEditor::load` shows
+the next case in the same window, document, buffer, and editor, reset as fresh
+ones would start: no history, anchors, dirty state, document settings,
+scroll, folds, or completion survive, while extension key contexts and caret
+shapes stay until the extension resets its own state; a run settles once the window holds no keys
 and the extension pool is quiet, so keys that leave a command waiting on a
 picker or prompt go in unsettled. `TestProduct::launch` starts the whole
 application instead, with its launch window, which `TestWindow` drives
@@ -128,7 +134,8 @@ the window record in files of its own, so a relaunch in the same process
 restores what the previous run recorded. Each
 Vim case starts from an empty clipboard and the package's hidden
 `vim.reset`, which clears registers, their record, marks, and the last find,
-so case order does not matter. A case may collapse `folds` before its keys
+and follows every editor afresh in normal mode, so case order does not
+matter. A case may collapse `folds` before its keys
 and expect them afterwards. Windowed product tests remain for rendering, IME,
 pointer input, and the window adapter. Product tests keep extension storage,
 recovery, and the state database in memory, so each test starts empty; tests

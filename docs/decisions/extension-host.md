@@ -130,6 +130,16 @@ been most of a case's cost: on Apple M1 Pro debug builds, 364 Vim cases took
 94 s in a window and 1.7 s headless. A fake host that stubs native commands was
 rejected, because the cases exist to exercise them.
 
+The Vim cases run on an inline fixture language rather than the bundled
+language packages, so a language package edit does not rerun them; native
+language behavior is tested in `knot-ext-languages`. Consecutive cases reuse
+one editor, reset at each owning layer (buffer, document baseline, editor
+state, the package's own state) rather than by replacing the text, which
+would carry undo history, anchors, dirty state, and stale view rows into the
+next case. On Apple Silicon debug builds the fixture took the suite from
+3.6 s to 1.1 s; reuse cut summed per-topic time from 3.7 s to 2.9 s, but not
+the parallel wall time, which is CPU-bound (D186).
+
 References: [extension guide](../extension-api.md#write-and-test-in-typescript)
 and [development](../development.md).
 

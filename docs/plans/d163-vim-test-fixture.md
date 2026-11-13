@@ -52,7 +52,7 @@ A fresh workbench implicitly resets state owned by five layers; a plain text
 replacement via `BufferModel::replace` resets none of it, and by construction
 leaks undo history, anchors, and dirty state. The earlier attempt panicked in
 the `scrolling` topic (`line 13 out of range (3)`, see
-[stale editor queries](../reports/stale-editor-queries.md)): the retained
+the D185 report): the retained
 viewport row survived the text replacement and Vim queried it.
 
 | Layer | Stale state if only the text is replaced |
@@ -106,6 +106,9 @@ in-place reuse makes stale view rows reachable by construction, so
 instead of panicking, with the regression test the report specifies. Once this
 checkpoint lands, update or remove the deferred D185 entry and its report as
 part of close-out.
+
+✅ Done; approved with the serial saving (parallel wall time is CPU-bound,
+now D186).
 
 #### Execution order
 
@@ -161,7 +164,7 @@ Implementation context:
 - `extensions/@knot/vim/src/extension.ts` (`vim.reset`)
 - `src/app/product/driver/editor.rs` (`TestEditor::load`)
 
-### 3. Close-out
+### 3. Close-out ✅
 Deliverable:
 - Update `docs/roadmap.md` for D163.
 - Run `just check` and `cargo fmt`.

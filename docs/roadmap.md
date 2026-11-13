@@ -55,20 +55,7 @@ the deferred register.
 ## Bugs
 
 Known defects with their analysis, separate from deferred work. Each item
-links the report that owns the evidence.
-
-- **D185 — Stale editor view queries panic the host**
-  - Deferred: An extension query naming an editor row the buffer no longer
-    has, such as `editor_row_at` after the text shrank, panics the host
-    thread instead of failing the query. The
-    [stale queries report](reports/stale-editor-queries.md) has the observed
-    backtrace and the proposed hardening.
-  - Reconsider: An extension races a host query against an edit outside
-    tests, or the next extension-host hardening pass. Then return a query
-    error from out-of-range row, line, and offset queries, audit the
-    sibling `editor_*` handlers for the same direct indexing, and cover a
-    stale-row query with a regression test.
-  - Order: independent.
+links the report that owns the evidence. None are open.
 
 ## Selected work
 
@@ -966,14 +953,18 @@ Kakoune mode could use it too. The
 
 ## Platforms and accessibility
 
-- **D163 — Vim tests on a minimal language fixture**
-  - Deferred: `knot-ext-vim`'s tests load the real language packages,
-    because Vim's indentation, key-context, and `o`/`O` cases need language
-    configuration, so an edit to a language package reruns the Vim tests.
-  - Reconsider: now. Give the Vim tests an inline fixture language
-    (the simplest that supplies the configuration they use) instead of
-    `knot-ext-languages`, and drop that dev-dependency.
-  - 🚧 Planned: [vim test fixture plan](plans/d163-vim-test-fixture.md)
+- **D186 — Much faster Rust test suites**
+  - Deferred: Product-driven suites are CPU-bound. `knot-ext-vim` takes
+    ~1.1 s wall time in parallel on 10 cores but ~4.5 s serially, and
+    neither lower nor higher thread counts help; the workspace takes ~12 s.
+    Every test boots a full product (V8 pool, gpui, stores), the 21 general
+    Vim tests each boot their own, and every key settles the extension pool.
+    Cutting per-case work by ~0.8 s CPU moved the parallel wall time by only
+    ~0.1 s, so only less total CPU work helps.
+  - Reconsider: now. Profile where a product test's CPU goes (startup,
+    settling, V8 turns), then share one started product across the tests of
+    a binary where isolation allows, and make settling after each key cheaper.
+  - Order: independent.
 
 - **D168 — Website screenshots and documentation**
   - Deferred: The landing page has no screenshot, and the user-facing docs
