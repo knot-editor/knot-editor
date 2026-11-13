@@ -90,9 +90,10 @@ hold the analyses that support some items.
     piece locators, and keep the piece semantics, edit log, and `TextBuffer`
     API unchanged.
 
-- **D186 — Much faster Rust test suites**
+- **D186 — Much faster Rust test suites** 🚧
   - Depends on: none
-  - Description: Product-driven suites are CPU-bound. `knot-ext-vim` takes
+  - Description: Follow its [plan](plans/d186-faster-test-suites.md).
+    Product-driven suites are CPU-bound. `knot-ext-vim` takes
     ~1.1 s wall time in parallel on 10 cores but ~4.5 s serially, and neither
     lower nor higher thread counts help; the workspace takes ~12 s. Every test
     boots a full product (V8 pool, gpui, stores), the 21 general Vim tests
