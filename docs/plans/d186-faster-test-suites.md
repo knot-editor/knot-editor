@@ -110,45 +110,22 @@ wait frees a core but does not shorten a test, so the gain is CPU only; the
 large costs (drawing test windows, product startup) belong to the later
 checkpoints.
 
-### 2. Headless driver and launch 🔎 awaiting review
+### 2. Headless driver and launch ✅
 
-- ✅ `launch::show_window` opens no native window under the test-only
-  `HeadlessWindows` global, which owns each window until it ends.
-  `TestProduct::launch` and `start` set it; `TestProduct::launch_windowed`
-  does not.
-- ✅ `TestWindow` holds an optional native window: keys go through
-  `KnotWindow::press_key`, text through `type_text`, and window identity is
-  `window_id(entity)`. `windows`, `active_window`, and `new_window` read the
-  window registry, and `headless_window` in `driver/setup.rs` is the
-  counterpart of `product_window` (`TestEditor::over` uses it too).
-- ✅ Without a native window, `follow_focus` records the focused editor tab,
-  `activate_window` activates the window, and closing the activated window
-  activates the one opened last, as the platform's focus events and window
-  manager do.
-- ✅ `knot-ext-workbench`: 43 of 53 tests are headless. The ten that stay
-  windowed answer native prompts or edit a tree row in place (the edit takes
-  the native window's focus), through `Projects::start_windowed` and
-  `Explorer::start_windowed`. The library's own tests keep `product_window`
-  and move in the sweep.
-- ✅ [development](../development.md) records the three tiers.
-
-Results, `cargo nextest run -p knot-ext-workbench` on a warm build: CPU (user +
-system) 13.6 s → 12.0 s, wall 6.3 s → 6.0 s, summed per-test time 51.3 s →
-49.8 s. Drawing was a smaller share of these tests than the profile of the
-serial run suggested; product startup and V8 turns dominate, which checkpoint
-7 addresses.
-
-Validation: `just check`.
-
-Review gate: the driver API shape before the library sweep copies it
-(`launch` against `launch_windowed`, `TestWindow` over an optional native
-window, `headless_window`).
-
-**Implementation context:** `src/app/product/launch.rs` (`show_window`,
-`show_native_window`); `src/app/product.rs` (`HeadlessWindows`,
-`ApplicationWindows::close`, `follow_focus`, `activate_window`);
-`src/app/product/driver/{application,window,setup,editor}.rs`;
-`crates/knot-ext-workbench/tests/workbench/`.
+Done and approved. `TestProduct::launch` opens windows with no native window
+(`HeadlessWindows`, honored at `launch::show_window`), and
+`TestProduct::launch_windowed` opens native ones. `TestWindow` holds an
+optional native window and takes keys and text through `KnotWindow::press_key`
+and `type_text`; `driver/setup.rs::headless_window` is the counterpart of
+`product_window`. Without a native window the window records its focused tab,
+activates itself, and hands activation to the last opened window when it
+closes. The [development](../development.md) guide records the three tiers.
+43 of 53 `knot-ext-workbench` tests are headless; the ten that answer native
+prompts or edit a tree row in place (which takes the native window's focus)
+use `Projects::start_windowed` and `Explorer::start_windowed`. Workbench run,
+warm build: CPU 13.6 s → 12.0 s, wall 6.3 s → 6.0 s. Drawing was a smaller
+share than the serial profile suggested; startup and V8 turns dominate
+(checkpoint 7).
 
 ### 3–6. Library sweep, one area at a time
 
