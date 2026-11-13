@@ -7,8 +7,15 @@ publish = false
 links = "ghostty-vt"
 
 [dependencies]
+portable-pty = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
 
 [build-dependencies]
 flate2 = { workspace = true }
 sha2 = { workspace = true }
 tar = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -183,6 +183,12 @@ impl Terminal {
         unsafe { ffi::ghostty_terminal_vt_write(self.raw, bytes.as_ptr(), bytes.len()) };
     }
 
+    /// The geometry of the last resize, with the grid raised to one cell.
+    pub fn size(&self) -> TerminalSize {
+        // SAFETY: no terminal call is running, so no callback holds the pointer.
+        unsafe { (*self.callbacks).size }
+    }
+
     /// Resizes the grid, reflowing the primary screen.
     pub fn resize(&mut self, size: TerminalSize) {
         let (columns, rows) = grid(size);

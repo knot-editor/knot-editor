@@ -2,10 +2,12 @@
 //!
 //! [`Terminal`] parses program output into screens and scrollback, reports
 //! its effects as [`TerminalEvent`]s, and answers mode, selection, text, and
-//! hyperlink queries; [`RenderState`] reads frames from it for painting. [`ffi`] is generated
-//! from `ghostty/vt.h` by `scripts/libghostty-bindings.sh`
-//! (`just libghostty-bindings`); the library itself creates no threads, and
-//! every handle it returns belongs to the caller.
+//! hyperlink queries; [`RenderState`] reads frames from it for painting.
+//! [`Pty`] runs a program on a pseudo-terminal and feeds its output to a
+//! terminal from its own threads. [`ffi`] is generated from `ghostty/vt.h`
+//! by `scripts/libghostty-bindings.sh` (`just libghostty-bindings`); the
+//! library itself creates no threads, and every handle it returns belongs
+//! to the caller.
 
 mod events;
 #[allow(
@@ -18,11 +20,13 @@ mod events;
 )]
 pub mod ffi;
 mod grid;
+mod pty;
 mod render;
 mod terminal;
 
 pub use events::TerminalEvent;
 pub use grid::Point;
+pub use pty::{ExitStatus, Pty, PtyEvent, PtyOptions, Shell};
 pub use render::{
     Cell, CellWidth, Cells, Colors, Cursor, CursorStyle, Dirty, RenderState, Row, Rows, Style,
     Underline,
