@@ -135,18 +135,15 @@ it still lives in `src/app`), keep windowed only the tier-3 tests, and measure.
 One commit per area; split an area further if it grows.
 
 3. ✅ `src/app/product/tests/` part one: `closure`, `transient`, `keybindings`,
-   `editor_api`, `commands`, `operations`, `editing`, `key_hold`.
-   Tests reach a window through `WindowHandle` (`tests.rs`): `Headless` for a
-   window with no native window, so `dispatch_product_command` and
-   `place_explorer` take either; `press_keys` and `type_text` stand in for
-   `simulate_keystrokes` and `simulate_input`. `operations` is fully headless
-   and `key_hold` is headless but for its platform-text test. Windowed on
-   purpose: the native prompt tests in `closure` and `transient`, the menu
-   action and native-keybinding adapter tests in `keybindings` and `commands`,
-   IME, mouse, and focus-through-`Window` tests in `editing` and `key_hold`,
-   the viewport tests in `editor_api`, and anything starting from a native
-   startup. Summed time of the 145 tests: 9.95 s → 8.19 s. No test needed
-   moving to `knot-model`.
+   `editor_api`, `commands`, `operations`, `editing`, `key_hold`. Done and
+   approved. Tests reach a window through `WindowHandle` (`tests.rs`), with
+   `Headless` for a window that has no native window, and `press_keys` and
+   `type_text` stand in for `simulate_keystrokes` and `simulate_input`.
+   Windowed on purpose: native prompts (`closure`, `transient`), the menu
+   action and native-keybinding adapters (`commands`, `keybindings`), IME,
+   mouse, and focus through `Window` (`editing`, `key_hold`), viewports
+   (`editor_api`), and anything starting from a native startup. Summed time of
+   the 145 tests: 9.95 s → 8.19 s. No test needed moving to `knot-model`.
 4. `src/app/product/tests/` part two: `persistence`, `observation`,
    `sessions`, `recovery`, `extension_api`, `startup`, `document_watch`,
    `window_restore`, `tool_layout`, `tools`, `files`, `workbench`, and
