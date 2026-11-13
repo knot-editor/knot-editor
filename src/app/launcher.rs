@@ -14,10 +14,13 @@ use knot_model::entry::LaunchBatch;
 const STARTED_BY_LAUNCHER: &str = "KNOT_STARTED_BY_LAUNCHER";
 
 /// Start the app bundle that holds this executable for `batch`; whether it did.
-/// Only macOS, only from a shell: a start LaunchServices made, a loose binary,
-/// and every other platform return false.
+/// Only macOS, only from a shell: a start LaunchServices made (Finder, Dock,
+/// `open`), a loose binary, and every other platform return false.
 pub(crate) fn start_bundle(batch: &LaunchBatch) -> bool {
-    if !cfg!(target_os = "macos") || std::env::var_os(STARTED_BY_LAUNCHER).is_some() {
+    if !cfg!(target_os = "macos")
+        || std::env::var_os(STARTED_BY_LAUNCHER).is_some()
+        || started_by_launchd(parent_process())
+    {
         return false;
     }
     let Some(bundle) = std::env::current_exe()
@@ -31,6 +34,18 @@ pub(crate) fn start_bundle(batch: &LaunchBatch) -> bool {
         .args(open_arguments(&bundle, batch))
         .status()
         .is_ok_and(|status| status.success())
+}
+
+/// The process that started this one.
+fn parent_process() -> u32 {
+    // SAFETY: getppid has no preconditions and cannot fail.
+    unsafe { libc::getppid() }.cast_unsigned()
+}
+
+/// LaunchServices parents the apps it starts to launchd, process 1; a shell
+/// parents the `knot` it runs.
+fn started_by_launchd(parent: u32) -> bool {
+    parent == 1
 }
 
 /// The `.app` directory an executable at `Contents/MacOS/<name>` belongs to.
@@ -75,6 +90,12 @@ mod tests {
             bundle_of(Path::new("/Applications/Knot.app/Contents/MacOS/knot")),
             Some(Path::new("/Applications/Knot.app"))
         );
+    }
+
+    #[test]
+    fn only_launchd_children_are_launches_from_the_system() {
+        assert!(started_by_launchd(1));
+        assert!(!started_by_launchd(4242));
     }
 
     #[test]
