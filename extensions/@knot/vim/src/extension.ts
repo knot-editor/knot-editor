@@ -119,9 +119,11 @@ export async function start() {
     palette: false,
   });
   // Starts over from what a fresh start without saved registers has: empty
-  // registers and their record, no marks, and no last find. Package
-  // behavior tests run it between cases.
+  // registers and their record, no marks, no last find, and every editor
+  // followed afresh in normal mode. Package behavior tests run it between
+  // cases.
   await commands.register("vim.reset", async () => {
+    await vim.followAfresh();
     registers.clear();
     shared.lastFind = null;
     for (const buffer of shared.marks.values()) {
@@ -192,6 +194,15 @@ class Vim {
     for (const state of [...this.states.values()]) {
       if (!(await enabledFor(state.document, state.language))) await this.detach(state);
     }
+    for (const active of this.active.values()) await this.attach(active);
+    for (const window of this.active.keys()) await this.showStatus(window);
+  }
+
+  /** Stops following every editor and follows each window's active tab
+   * again, as if just activated: normal mode, nothing pending, and no
+   * per-editor marks, jumps, or scroll and fold memory. */
+  async followAfresh() {
+    for (const state of [...this.states.values()]) await this.detach(state);
     for (const active of this.active.values()) await this.attach(active);
     for (const window of this.active.keys()) await this.showStatus(window);
   }

@@ -577,6 +577,35 @@ fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
     assert_eq!(test_editor.marked(cx), "one ‸athree\nfour five six\n");
 }
 
+/// A case reusing the editor starts in normal mode with nothing pending and
+/// none of the editor's earlier jumps or visual area.
+#[gpui::test]
+fn a_reset_follows_the_editor_afresh(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "one\ntwo\nthree", 0, cx);
+    test_editor.press("vj<esc>Gi", cx);
+    assert_eq!(mode(&test_editor, cx), "insert");
+
+    start_over(&test_editor, cx);
+    assert_eq!(mode(&test_editor, cx), "normal");
+    test_editor.press("2", cx);
+    start_over(&test_editor, cx);
+    test_editor.press("k", cx);
+    assert_eq!(
+        test_editor.marked(cx),
+        "one\n‸two\nthree",
+        "no count survives"
+    );
+    test_editor.press("gv", cx);
+    assert_eq!(mode(&test_editor, cx), "normal", "no previous visual area");
+    test_editor.press("<c-o>", cx);
+    assert_eq!(
+        test_editor.marked(cx),
+        "one\n‸two\nthree",
+        "no jumps survive"
+    );
+}
+
 /// What one case leaves in the package, the next case starts without:
 /// registers, the clipboard, the last find, marks, and the persisted
 /// register record a restart would read back.

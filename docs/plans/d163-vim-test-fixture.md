@@ -122,7 +122,9 @@ Each step is committed separately once verified.
 3. ✅ Editor-state swap (`Editor::reset_state`), with an editor test
    asserting scroll, folds, and selection are gone after a reset; the
    driver-level check lands with the rewire in step 5.
-4. Extend `vim.reset` to per-editor state, keeping existing shared clearing.
+4. ✅ Extend `vim.reset` to per-editor state, keeping existing shared
+   clearing: it drops every followed editor and follows each window's
+   active tab afresh, which resets every per-editor field at once.
 5. Rewire `TestEditor::load`. Run topics individually with `scrolling` first
    (canary for the original panic), then the full suite. A leaked sixth owner
    of per-case state shows up as an order-dependent case failure; isolate it
