@@ -160,15 +160,19 @@ impl Editor {
     }
 
     /// Replace the state with a fresh one over the same buffer, as a new
-    /// editor would start: no selection, scroll, folds, completion, or
-    /// lifecycle presentation survives. For reusing an editor in tests.
-    #[cfg(test)]
+    /// editor would start: no selection, scroll, folds, completion, bars,
+    /// or decorations survive. Lifecycle key contexts and caret shapes are
+    /// kept, so extension presentation stays with the extension state until
+    /// the extension resets it. For reusing an editor in tests.
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn reset_state(&mut self, cx: &mut Context<Self>) {
         let model = self.model.clone();
         model.update(cx, |buffer, _| self.state.release(buffer));
         let kind: Arc<str> = Arc::from(self.state.view_kind());
         let settings = editor_settings(&kind, model.read(cx), cx);
-        self.state = model.update(cx, |buffer, _| EditorState::new(kind, settings, buffer));
+        let mut state = model.update(cx, |buffer, _| EditorState::new(kind, settings, buffer));
+        state.keep_presentation_from(&mut self.state);
+        self.state = state;
         self.completion_tasks.clear();
         self.bar_inputs.clear();
         cx.notify();

@@ -626,6 +626,15 @@ impl EditorState {
         self.marked_range_utf16.is_some()
     }
 
+    /// Take the key contexts and caret shapes lifecycles set on `previous`,
+    /// which hold no buffer positions, for a state that replaces it over the
+    /// same buffer.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn keep_presentation_from(&mut self, previous: &mut EditorState) {
+        self.key_contexts = std::mem::take(&mut previous.key_contexts);
+        self.caret_shapes = std::mem::take(&mut previous.caret_shapes);
+    }
+
     /// Clear every key context, caret shape, bar, and decoration `owner` set.
     pub fn remove_owner_state(
         &mut self,

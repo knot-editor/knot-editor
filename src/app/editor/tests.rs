@@ -1205,7 +1205,9 @@ fn reset_state_starts_over_on_the_same_buffer(cx: &mut TestAppContext) {
         .to_owned();
     let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    let owner = knot_protocol::ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1));
     editor.update(cx, |editor, cx| {
+        editor.set_key_context(owner, "vim.normal", true);
         editor.lay_out_for_test(5., 100, cx);
         assert!(editor.fold(2..5, cx));
         editor.set_selection(10, 15, Reveal::Nearest, cx);
@@ -1220,7 +1222,11 @@ fn reset_state_starts_over_on_the_same_buffer(cx: &mut TestAppContext) {
         assert!(editor.folds().is_empty(), "folds do not survive a reset");
         assert_eq!(editor.selection(cx), (0, 0), "selection starts over");
         assert_eq!(editor.viewport().0, 0, "scroll starts over");
-        assert!(editor.key_contexts().is_empty());
+        assert_eq!(
+            editor.key_contexts(),
+            ["vim.normal"],
+            "lifecycle presentation stays with the extension"
+        );
         assert_eq!(editor.model(), &model, "the buffer entity is kept");
     });
 }

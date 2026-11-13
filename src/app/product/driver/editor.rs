@@ -20,8 +20,7 @@ use crate::app::editor::{CaretShape, Editor, EditorView, Reveal};
 use crate::app::keys::Keystroke;
 use crate::app::model::{Buffer, BufferModel};
 use crate::app::product::{
-    ApplicationDocuments, ApplicationProductCommands, ApplicationWindows, DocumentId, KnotWindow,
-    Workbench,
+    ApplicationDocuments, ApplicationProductCommands, DocumentId, KnotWindow, Workbench,
 };
 use crate::app::resource::ResourceUri;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
@@ -113,9 +112,11 @@ impl TestEditor {
         test_editor
     }
 
-    /// Show `text` in `language`, or detected, in a fresh workbench in place
-    /// of the previous document, which is released, with the selection from
-    /// `anchor` to `caret`, and settle.
+    /// Show `text` in `language`, or detected, in place of the current
+    /// text, with the selection from `anchor` to `caret`, and settle. The
+    /// window, document, buffer, and editor are reused, but start over as
+    /// fresh ones would: no history, anchors, dirty state, document
+    /// settings, scroll, folds, or completion survive.
     pub fn load(
         &mut self,
         text: &str,
@@ -123,19 +124,23 @@ impl TestEditor {
         selection: (usize, usize),
         cx: &mut TestAppContext,
     ) {
-        let (document, model) = new_document(text, language, cx);
-        self.window.update(cx, |window, cx| {
-            let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-            cx.global::<ApplicationWindows>()
-                .register(cx.weak_entity(), &workbench);
-            window.workbench = workbench;
+        let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
+        self.model.update(cx, |model, cx| {
+            model.reset_to_text(text);
             cx.notify();
         });
-        let previous = std::mem::replace(&mut self.document, document);
-        let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
-        documents.update(cx, |documents, cx| documents.remove(previous, cx));
-        self.model = model;
-        self.editor = active_editor(&self.window, cx);
+        cx.update(|cx| {
+            crate::app::languages::set_document_language(
+                &self.model,
+                None,
+                language.map(str::to_owned),
+                cx,
+            );
+            let identity = self.model.read(cx).document().expect("a stamped document");
+            crate::app::settings::release_document(identity, cx);
+        });
+        documents.update(cx, |documents, cx| documents.mark_clean(self.document, cx));
+        self.editor.update(cx, |editor, cx| editor.reset_state(cx));
         self.show(selection, cx);
     }
 
@@ -658,4 +663,39 @@ fn editor_contexts(editor: &Entity<Editor>, cx: &gpui::App) -> Vec<String> {
         .into_iter()
         .map(str::to_owned)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::TestAppContext;
+
+    use crate::app::product::driver::product::TestProduct;
+
+    #[gpui::test]
+    fn a_load_starts_the_reused_editor_over(cx: &mut TestAppContext) {
+        let product = TestProduct::start(&[], cx);
+        let text = (0..100)
+            .map(|line| format!("line {line}\n"))
+            .collect::<String>();
+        let mut test_editor = product.editor(&text, None, (0, 0), cx);
+        test_editor.press("x<d-z>", cx);
+        assert!(!test_editor.is_dirty(cx), "undo is bound");
+        test_editor.press("x", cx);
+        assert!(test_editor.fold(2, 4, cx));
+        test_editor.scroll_rows(20, cx);
+        assert!(test_editor.is_dirty(cx));
+        assert_ne!(test_editor.viewport(cx).0, 0);
+
+        test_editor.load("one\ntwo\nthree", None, (5, 6), cx);
+        assert_eq!(test_editor.marked(cx), "one\nt‸w‸o\nthree");
+        assert!(test_editor.folds(cx).is_empty(), "no folds survive");
+        assert_eq!(test_editor.viewport(cx).0, 0, "no scroll survives");
+        assert!(!test_editor.is_dirty(cx), "the loaded text is clean");
+        test_editor.press("<d-z>", cx);
+        assert_eq!(
+            test_editor.marked(cx),
+            "one\nt‸w‸o\nthree",
+            "undo cannot cross a load"
+        );
+    }
 }

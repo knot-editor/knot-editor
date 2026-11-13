@@ -153,7 +153,7 @@ impl DocumentCollection {
     /// Record the model's current revision as the document's clean
     /// baseline, as a save does, and tell recovery and observation. For a
     /// buffer reset in place in tests.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn mark_clean(&mut self, id: DocumentId, cx: &mut App) -> bool {
         let Some(document) = self.0.get(id) else {
             return false;

@@ -125,14 +125,34 @@ Each step is committed separately once verified.
 4. ✅ Extend `vim.reset` to per-editor state, keeping existing shared
    clearing: it drops every followed editor and follows each window's
    active tab afresh, which resets every per-editor field at once.
-5. Rewire `TestEditor::load`. Run topics individually with `scrolling` first
-   (canary for the original panic), then the full suite. A leaked sixth owner
-   of per-case state shows up as an order-dependent case failure; isolate it
-   with `KNOT_CASES` filtering.
+5. ✅ Rewire `TestEditor::load`: reset the buffer, set the document
+   language, release document settings, re-baseline, swap the editor state,
+   then `show`. `reset_state` keeps lifecycle key contexts and caret shapes
+   (plain values, no buffer positions), so extension presentation stays with
+   the extension's state until it resets itself; without that, a `load`
+   with no `vim.reset` left Vim's state alive but its keys unbound. Driver
+   test `a_load_starts_the_reused_editor_over` covers scroll, folds,
+   selection, dirty state, and undo across a load. `scrolling` passed first
+   time; the full suite showed no order-dependent failures over repeated
+   runs.
 
 Review gate: Run `cargo nextest run -p knot-ext-vim`. All tests pass cleanly,
 and total suite execution time drops by an additional ~500 ms against the
 checkpoint-1 baseline (~1.1s).
+
+Measured (3 runs each, same machine):
+
+| | Before rewire | After rewire |
+| --- | --- | --- |
+| Summed topic time, serial (`-j1`) | 3.72 s | 2.93 s (−21%) |
+| Suite wall time, serial (`-j1`) | ~5.46 s | ~4.54 s |
+| Suite wall time, parallel | ~1.14 s | ~1.05–1.15 s |
+
+Serially the saving is ~0.8–0.9 s, past the target. The parallel wall time
+barely moves: it is set by the slowest topic (`operators`, ~0.8 s under
+contention) plus startup, and CPU contention between topics hides the
+per-case saving. ⚠️ The gate's wall-time target is therefore met for serial
+runs, not for the default parallel run.
 Implementation context:
 - `src/app/extensions/host/handlers.rs` (stale `editor_*` queries, step 5)
 - `crates/knot-model/src/buffer.rs` (`BufferModel::reset_to_text`)
