@@ -157,9 +157,9 @@ One commit per area; split an area further if it grows.
    Run serially, the 135 tests of the twelve modules went from 8.58 s to
    7.95 s: these modules mostly wait on stores, the watcher, and V8 rather
    than draw, so the gain is small. No test needed moving to `knot-model`.
-5. Terminal: `src/app/terminal/session_tests.rs`, `view/tests.rs`,
+5. ✅ Terminal: `src/app/terminal/session_tests.rs`, `view/tests.rs`,
    `mouse_tests.rs`. Session behavior goes headless; paint and mouse stay
-   windowed. 🔍 Ready for review. The session tests already run without a
+   windowed. Done and approved. The session tests already run without a
    window, apart from the two focus tests, which depend on gpui focus. The
    mouse and view tests are pointer and layout driven, so all stay windowed. The one change
    is the sustained output test, whose shell stream went from 20000 to 4000
