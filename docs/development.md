@@ -31,8 +31,9 @@ to `main`:
 - The check-ci-setup job runs actionlint on every workflow file and tests the
   nightly cask rendering.
 - The handler-platforms job runs on macOS and Windows. It tests handler
-  declarations, linked inventory discovery, and doc tests, then builds the
-  product binary. It does not run the full suite on those platforms.
+  declarations, linked inventory discovery, the `knot-terminal` crate, and doc
+  tests, then builds the product binary. It does not run the full suite on
+  those platforms.
 
 The [audit workflow](../.github/workflows/audit.yml) scans `Cargo.lock` with
 `cargo-audit` for known RustSec advisories. It runs on pull requests and pushes
@@ -149,6 +150,27 @@ the window adapter. Product tests keep extension storage,
 recovery, and the state database in memory, so each test starts empty; tests
 that reopen a store as a restart would, and the stores' own tests, use
 files.
+
+## libghostty-vt
+
+`knot-terminal` links libghostty-vt statically. Its build script downloads the
+prebuilt archive for the target from this repository's
+`libghostty-vt-<version>` release with `curl`, checks it against the SHA-256
+pinned in `crates/knot-terminal/build.rs`, and extracts it into Cargo's
+output directory, so no build needs Zig. To build offline, or to try another
+libghostty build, set `KNOT_LIBGHOSTTY_DIR` to an install prefix holding
+`include/` and `lib/` (`zig build --prefix`).
+
+The [libghostty workflow](../.github/workflows/libghostty.yml), dispatched by
+hand with the libghostty-vt version and the Zig version its `build.zig.zon`
+requires, builds the archives from the signed release tarballs and publishes
+the release. To upgrade:
+
+1. Dispatch the workflow with the new versions.
+2. Update `VERSION` and the archive checksums in `build.rs` from the
+   release's `.sha256` files.
+3. Run `just libghostty-bindings` to regenerate `src/ffi.rs` (needs
+   `cargo install bindgen-cli` and libclang), and commit the three together.
 
 ## Website
 

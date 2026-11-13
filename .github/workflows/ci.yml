@@ -82,10 +82,11 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           save-if: ${{ github.event_name != 'pull_request' }}
-      - name: Check handler declarations and linked discovery
+      - name: Check handler declarations, linked discovery, and the terminal engine
         run: |
           cargo test --locked -p knot-handler-macros
           cargo test --locked -p knot-protocol
+          cargo test --locked -p knot-terminal
           cargo test --locked --lib extensions::host::declaration_tests
           cargo test --locked --lib app::command_declarations
           cargo test --locked --test handler_linking
