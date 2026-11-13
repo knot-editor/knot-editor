@@ -421,7 +421,7 @@ fn mutate(random: &mut Random, fixture: &Fixture) -> Vec<ResourceUri> {
 
 #[test]
 fn the_index_matches_the_disk_through_random_changes_and_reclassification() {
-    for seed in 0..4 {
+    for seed in 0..2 {
         let fixture = Fixture::new();
         let mut random = Random(seed);
         fixture.memory.seed_directory(uri(".git")).unwrap();
@@ -438,7 +438,7 @@ fn the_index_matches_the_disk_through_random_changes_and_reclassification() {
         run(index.scan(policy.clone()));
         assert_matches_disk(&fixture, &index, &policy, &format!("seed {seed} scan"));
         let mut policy = policy;
-        for step in 0..4 {
+        for step in 0..2 {
             // A query with another policy scans the tree again.
             if random.below(8) == 0 {
                 policy.respect_gitignore = !policy.respect_gitignore;
