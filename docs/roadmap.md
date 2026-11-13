@@ -298,13 +298,9 @@ hold the analyses that support some items.
     no `knot <file>...` helper on the `PATH` like VS Code's `code`. Do it for
     daily use from a terminal: add a small `knot` helper that passes the paths
     to the running instance, or starts one, and an install command for the
-    `PATH` entry. See its [plan](plans/d164-command-line-launcher.md).
-
-- **D165 — Launcher files open in a new window unless in an open project**
-  - Depends on: D164
-  - Description: Files given on the command line need a placement rule. Decide
-    it together with D164: open them in a new window, except that a file inside
-    the roots of an already-open project opens in that project's window.
+    `PATH` entry. Paths open in a new window, except that a file inside the
+    roots of an already-open project opens in that project's window. See its
+    [plan](plans/d164-command-line-launcher.md).
 
 - **D166 — Guided personal configuration**
   - Depends on: none
@@ -945,6 +941,30 @@ Kakoune mode could use them too. The
     other Macs: choose a release artifact, then add Developer ID signing,
     hardened runtime validation for V8, notarization, and an install/update
     path.
+
+- **D188 — Good Windows citizen**
+  - Depends on: none
+  - Description: `knot.exe` is a console-subsystem program so that the command
+    line launcher can print `--help`, errors, and exit codes, but starting it
+    from Explorer or the Start menu also opens a console window. Do it before
+    Knot is offered to Windows users: keep a console entry for the terminal (as
+    VS Code's `code.cmd` wrapper does) and launch the editor itself without a
+    console.
+
+- **D189 — Windows installer**
+  - Depends on: D188
+  - Description: Windows has no release artifact; users run a built `knot.exe`
+    and put it on the `PATH` with the palette install command. Do it when Knot
+    is ready to run on other Windows machines: choose an installer format with
+    a per-user install location, an "Add to PATH" option, file associations,
+    and an update path.
+
+- **D190 — Linux installer**
+  - Depends on: none
+  - Description: Linux has no release artifact; users run a built binary and
+    link it into `~/.local/bin` with the palette install command. Do it when
+    Knot is ready to run on other Linux machines: choose the package formats,
+    ship `knot` on the `PATH`, a desktop entry and icon, and an update path.
 
 - **D168 — Website screenshots and documentation** 🚧
   - Depends on: none
