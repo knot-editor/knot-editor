@@ -579,8 +579,8 @@ async fn multiple_views_of_a_restored_document_keep_one_record(cx: &mut TestAppC
     startup_recovery(filesystems, cx).await;
     let document = document_by_identity(&documents, draft.document_id, cx);
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    product_window(document, model.clone(), cx);
-    product_window(document, model.clone(), cx);
+    headless_window(document, model.clone(), cx);
+    headless_window(document, model.clone(), cx);
     model.update(cx, |model, cx| {
         model.replace(0..0, "more ").unwrap();
         cx.notify();
@@ -878,7 +878,8 @@ async fn quit_is_a_hot_exit_that_restores_dirty_documents_on_relaunch(cx: &mut T
     });
     let untitled = cx.update(|cx| create_untitled_document(&documents, cx));
     let untitled_model = cx.read(|cx| documents.read(cx).get(untitled).unwrap().model().clone());
-    let (window, native_window) = product_window(saved, saved_model.clone(), cx);
+    let window = headless_window(saved, saved_model.clone(), cx);
+    let native_window = Headless;
     window.update(cx, |window, cx| {
         let pane = window.workbench.read(cx).focused_pane_id().unwrap();
         window.workbench.update(cx, |workbench, cx| {

@@ -199,7 +199,7 @@ async fn an_edit_racing_the_read_wins(cx: &mut TestAppContext) {
     let document = documents.update(cx, |documents, cx| {
         documents.create_persisted("notes.txt", model.clone(), uri, 0, opened.version, cx)
     });
-    let _window = product_window(document, model.clone(), cx);
+    let _window = headless_window(document, model.clone(), cx);
 
     cx.update(document_watch::recheck_all);
     cx.run_until_parked();
