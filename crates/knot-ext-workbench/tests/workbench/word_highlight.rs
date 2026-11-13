@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use gpui::TestAppContext;
 
-use super::bundled::PACKAGES;
+use super::bundled::only;
 use knot::test_support::{TestEditor, TestProduct, wait_until};
 
 const WORD: &str = "editor.wordHighlight";
@@ -27,7 +27,7 @@ fn painted(editor: &TestEditor, cx: &mut TestAppContext) -> Vec<(usize, usize, S
 
 #[gpui::test]
 fn the_caret_word_is_highlighted_after_the_delay(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
     let editor = product.windowed_editor("foo bar\nFoo baz foo\n", cx);
 
     advance(cx, DELAY - Duration::from_millis(1));
@@ -59,7 +59,7 @@ fn the_caret_word_is_highlighted_after_the_delay(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_selection_highlights_its_other_occurrences_case_insensitively(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
     let editor = product.windowed_editor("foo bar Foo foo\n", cx);
 
     editor.select(0, 3, cx);
@@ -77,7 +77,7 @@ fn a_selection_highlights_its_other_occurrences_case_insensitively(cx: &mut Test
 
 #[gpui::test]
 fn leaving_the_word_clears_the_highlights_after_the_delay(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
     let editor = product.windowed_editor("foo   bar\n", cx);
     rest(cx);
     wait_until(cx, |cx| painted(&editor, cx) == [(0, 3, WORD.to_owned())]);
@@ -96,7 +96,7 @@ fn leaving_the_word_clears_the_highlights_after_the_delay(cx: &mut TestAppContex
 
 #[gpui::test]
 fn an_edit_repaints_the_highlights(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
     let editor = product.windowed_editor("aa bb aa\n", cx);
     rest(cx);
     wait_until(cx, |cx| painted(&editor, cx).len() == 2);
@@ -115,7 +115,7 @@ fn an_edit_repaints_the_highlights(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_settings_turn_each_kind_off(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
     let editor = product.windowed_editor("foo bar foo\n", cx);
     rest(cx);
     wait_until(cx, |cx| painted(&editor, cx).len() == 2);
@@ -141,7 +141,7 @@ fn the_settings_turn_each_kind_off(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_delay_setting_governs_the_wait(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
     let editor = product.windowed_editor("foo bar foo\n", cx);
     product.set_setting("wordHighlight.delay", 200.into(), cx);
     editor.settle(cx);
@@ -157,7 +157,7 @@ fn the_delay_setting_governs_the_wait(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn only_the_active_view_paints_the_highlights(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
     let editor = product.windowed_editor("foo bar foo\n", cx);
     rest(cx);
     wait_until(cx, |cx| painted(&editor, cx).len() == 2);

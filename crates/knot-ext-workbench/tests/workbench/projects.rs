@@ -5,7 +5,7 @@ use std::path::Path;
 use gpui::TestAppContext;
 use serde_json::Value;
 
-use super::bundled::PACKAGES;
+use super::bundled::only;
 use knot::test_support::{CommandOutcome, TestProduct, TestWindow, wait_until};
 
 pub(super) const TREE: &str = "builtin.projects";
@@ -27,13 +27,16 @@ pub(super) struct Projects {
 
 impl Projects {
     pub(super) fn start(cx: &mut TestAppContext) -> Self {
-        Self::over(TestProduct::launch(PACKAGES, cx), cx)
+        Self::over(TestProduct::launch(only(&["@knot/projects"]), cx), cx)
     }
 
     /// Start with native windows, for a test that answers native prompts or
     /// edits a tree row in place.
     pub(super) fn start_windowed(cx: &mut TestAppContext) -> Self {
-        Self::over(TestProduct::launch_windowed(PACKAGES, cx), cx)
+        Self::over(
+            TestProduct::launch_windowed(only(&["@knot/projects"]), cx),
+            cx,
+        )
     }
 
     fn over(product: TestProduct, cx: &mut TestAppContext) -> Self {

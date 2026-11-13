@@ -2,7 +2,7 @@
 //! temporary tree.
 use gpui::TestAppContext;
 
-use super::bundled::PACKAGES;
+use super::bundled::only;
 use super::projects::file_uri;
 use knot::test_support::{TestProduct, wait_until};
 
@@ -20,7 +20,7 @@ fn the_key_lists_matching_files_and_enter_opens_the_highlighted_one(cx: &mut Tes
     std::fs::write(directory.path().join("src/ui/button.rs"), "struct Button;").unwrap();
     std::fs::write(directory.path().join("README.md"), "# readme").unwrap();
 
-    let product = TestProduct::launch(PACKAGES, cx);
+    let product = TestProduct::launch(only(&["@knot/go-to-file"]), cx);
     let window = product.active_window(cx);
     window.set_roots(&[&file_uri(directory.path())], cx);
 
@@ -42,7 +42,7 @@ fn files_of_every_root_are_ranked_as_one_list(cx: &mut TestAppContext) {
     let second = tempfile::tempdir().unwrap();
     std::fs::write(second.path().join("button.rs"), "struct Button;").unwrap();
 
-    let product = TestProduct::launch(PACKAGES, cx);
+    let product = TestProduct::launch(only(&["@knot/go-to-file"]), cx);
     let window = product.active_window(cx);
     window.set_roots(&[&file_uri(first.path()), &file_uri(second.path())], cx);
 
@@ -66,7 +66,7 @@ fn the_key_then_enter_returns_to_the_previous_file(cx: &mut TestAppContext) {
     std::fs::write(directory.path().join("first.rs"), "first").unwrap();
     std::fs::write(directory.path().join("second.rs"), "second").unwrap();
 
-    let product = TestProduct::launch(PACKAGES, cx);
+    let product = TestProduct::launch(only(&["@knot/go-to-file"]), cx);
     let window = product.active_window(cx);
     window.set_roots(&[&file_uri(directory.path())], cx);
     window.open_path(&directory.path().join("first.rs"), cx);
@@ -101,7 +101,7 @@ fn open_recent_lists_active_files_newest_first_and_drops_deleted_ones(cx: &mut T
         std::fs::write(directory.path().join(name), name).unwrap();
     }
 
-    let product = TestProduct::launch(PACKAGES, cx);
+    let product = TestProduct::launch(only(&["@knot/go-to-file"]), cx);
     product.watch_files(cx);
     let window = product.active_window(cx);
     window.set_roots(&[&file_uri(directory.path())], cx);

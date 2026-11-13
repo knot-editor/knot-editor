@@ -1,7 +1,7 @@
 //! The bundled Find package, driven from its keys in an editor.
 use gpui::TestAppContext;
 
-use super::bundled::PACKAGES;
+use super::bundled::only;
 use knot::test_support::{TestEditor, TestProduct, wait_until};
 
 const FIND: &str = if cfg!(target_os = "macos") {
@@ -38,7 +38,7 @@ fn open_with(editor: &TestEditor, query: &str, cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn typing_highlights_matches_and_the_keys_step_between_them(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
     let editor = product.windowed_editor("foo bar\nFoo baz foo\n", cx);
 
     open_with(&editor, "foo", cx);
@@ -82,7 +82,7 @@ fn typing_highlights_matches_and_the_keys_step_between_them(cx: &mut TestAppCont
 
 #[gpui::test]
 fn escape_closes_the_bar_and_clears_the_highlights(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
     let editor = product.windowed_editor("foo bar\nbaz\n", cx);
 
     open_with(&editor, "baz", cx);
@@ -104,7 +104,7 @@ fn escape_closes_the_bar_and_clears_the_highlights(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn edits_while_the_bar_is_open_search_again(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
     let editor = product.windowed_editor("ab\nab\n", cx);
 
     open_with(&editor, "ab", cx);
@@ -117,7 +117,7 @@ fn edits_while_the_bar_is_open_search_again(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn two_splits_of_one_buffer_keep_their_own_bars_and_highlights(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
     let first = product.windowed_editor("foo bar\nbar baz\n", cx);
     let second = first.split(cx);
 
@@ -145,7 +145,7 @@ fn two_splits_of_one_buffer_keep_their_own_bars_and_highlights(cx: &mut TestAppC
 
 #[gpui::test]
 fn more_than_a_thousand_matches_highlight_a_thousand(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
     let editor = product.windowed_editor(&"x\n".repeat(1500), cx);
 
     open_with(&editor, "x", cx);
@@ -159,7 +159,7 @@ fn more_than_a_thousand_matches_highlight_a_thousand(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_key_fills_the_field_from_a_selection_or_the_last_query(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
     let editor = product.windowed_editor("one two\nthree\n", cx);
 
     editor.select(4, 7, cx);
@@ -180,7 +180,7 @@ fn the_key_fills_the_field_from_a_selection_or_the_last_query(cx: &mut TestAppCo
 
 #[gpui::test]
 fn the_toggle_keys_switch_case_and_whole_word_in_the_bar(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
     let editor = product.windowed_editor("foo foobar Foo\n", cx);
     let (case, word) = if cfg!(target_os = "macos") {
         ("<a-d-c>", "<a-d-w>")

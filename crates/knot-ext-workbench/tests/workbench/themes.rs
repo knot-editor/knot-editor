@@ -1,12 +1,12 @@
 //! The bundled themes, painting gpui-component as well as native surfaces.
 use gpui::TestAppContext;
 
-use super::bundled::PACKAGES;
+use super::bundled::only;
 use knot::test_support::TestProduct;
 
 #[gpui::test]
 fn components_take_the_bundled_theme_colors_and_follow_a_switch(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/themes"]), cx);
     product.apply_startup_theme(cx);
     assert!(product.theme_is_dark(cx));
     assert_eq!(product.component_theme_drift(cx), Vec::<String>::new());

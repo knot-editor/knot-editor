@@ -1,12 +1,12 @@
 //! The bundled Go to Line package, driven from its key in an editor.
 use gpui::TestAppContext;
 
-use super::bundled::PACKAGES;
+use super::bundled::only;
 use knot::test_support::{TestProduct, wait_until};
 
 #[gpui::test]
 fn ctrl_g_previews_and_keeps_a_typed_line_in_the_editor(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+    let product = TestProduct::start(only(&["@knot/go-to-line"]), cx);
     let editor = product.windowed_editor("one\ntwo\nthree é\nfour\n", cx);
     let target = "one\ntwo\nthree ".len();
     // The picker keeps the package's command waiting, so keys go in unsettled

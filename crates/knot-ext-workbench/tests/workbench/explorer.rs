@@ -3,7 +3,7 @@ use std::path::Path;
 
 use gpui::TestAppContext;
 
-use super::bundled::PACKAGES;
+use super::bundled::only;
 use super::projects::file_uri;
 use knot::test_support::{CommandOutcome, TestProduct, TestTree, TestWindow, wait_until};
 
@@ -35,13 +35,21 @@ struct Explorer {
 
 impl Explorer {
     fn start(roots: &[&Path], cx: &mut TestAppContext) -> Self {
-        Self::over(TestProduct::launch(PACKAGES, cx), roots, cx)
+        Self::over(
+            TestProduct::launch(only(&["@knot/explorer"]), cx),
+            roots,
+            cx,
+        )
     }
 
     /// Start with a native window, for a test that edits a row in place or
     /// answers a native prompt.
     fn start_windowed(roots: &[&Path], cx: &mut TestAppContext) -> Self {
-        Self::over(TestProduct::launch_windowed(PACKAGES, cx), roots, cx)
+        Self::over(
+            TestProduct::launch_windowed(only(&["@knot/explorer"]), cx),
+            roots,
+            cx,
+        )
     }
 
     fn over(product: TestProduct, roots: &[&Path], cx: &mut TestAppContext) -> Self {
@@ -89,7 +97,7 @@ fn every_root_is_a_row_with_folders_before_files_in_natural_order(cx: &mut TestA
 
 #[gpui::test]
 fn a_window_without_roots_shows_an_open_folder_row(cx: &mut TestAppContext) {
-    let product = TestProduct::launch(PACKAGES, cx);
+    let product = TestProduct::launch(only(&["@knot/explorer"]), cx);
     let window = product.active_window(cx);
     let tree = window.tree(VIEW, cx);
     wait_until(cx, |cx| tree.labels(cx) == ["Open Folder…"]);
@@ -160,7 +168,7 @@ fn click_previews_and_double_click_or_enter_open_tabs_and_middle_click_keeps_foc
 #[gpui::test]
 fn files_created_outside_the_editor_appear_in_loaded_folders(cx: &mut TestAppContext) {
     let directory = fixture();
-    let product = TestProduct::launch(PACKAGES, cx);
+    let product = TestProduct::launch(only(&["@knot/explorer"]), cx);
     product.watch_files(cx);
     let explorer = Explorer::over(product, &[&directory.path().join("app")], cx);
     explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);

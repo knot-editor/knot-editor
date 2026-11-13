@@ -212,12 +212,16 @@ largest remaining costs are the Vim topics (7.4 s for 11 tests),
 `knot-ext-workbench` (13.8 s for 53), and the `knot-ext-languages` fixture
 tests (0.7 s each). Checkpoints 8–10 take them in that order.
 
-### 8. Package subsets for the workbench tests
+### 8. Package subsets for the workbench tests ✅
 
-- Let end-to-end tests start only the packages they exercise, resolving
-  `requires`; apply it to `knot-ext-workbench` and `knot-app`.
-- Re-profile `project_sessions` and decide whether to merge its repeated
-  switch scenarios.
+- ✅ Each `knot-ext-workbench` test starts only the packages it exercises,
+  through `bundled::only` in the test crate (no test needed `requires`
+  resolution, since the bundled workbench packages are independent). A
+  trivial test halves (0.14 s → 0.06 s). Workbench summed time 13.8 s → 9.1 s;
+  whole workspace 79.7 s → 73.0 s. `knot-app` keeps every package on purpose:
+  its test checks product discovery of all of them.
+- ✅ `project_sessions` (14 tests, 4.1 s) is not merged: its scenarios differ,
+  no test exceeds 0.8 s, and merging would trade clear failures for little.
 
 Validation: `just check`; workbench totals.
 
