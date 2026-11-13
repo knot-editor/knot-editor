@@ -57,18 +57,7 @@ await commands.register("close.invalid", async ({ target }) => {
 "#;
 
 fn wait_prompt(cx: &mut TestAppContext) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.has_pending_prompt() {
-            return;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "protected close did not prompt"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| cx.has_pending_prompt());
 }
 
 fn clipboard(cx: &TestAppContext) -> String {

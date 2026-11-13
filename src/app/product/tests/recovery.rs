@@ -637,12 +637,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
             cx,
         );
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while cx.read(|cx| window.read(cx).transient.is_none()) {
-            assert!(std::time::Instant::now() < deadline, "listing did not open");
-            cx.run_until_parked();
-            std::thread::yield_now();
-        }
+        crate::test_support::wait_until(cx, |cx| cx.read(|cx| window.read(cx).transient.is_some()));
     };
 
     // The newest snapshot is first; Enter selects it and the prompt restores it.
@@ -651,20 +646,14 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     cx.run_until_parked();
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Restore");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while cx.read(|cx| {
-        documents
-            .read(cx)
-            .document_by_identity(restored.document_id)
-            .is_none()
-    }) {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "restore did not commit"
-        );
-        cx.run_until_parked();
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
+            documents
+                .read(cx)
+                .document_by_identity(restored.document_id)
+                .is_some()
+        })
+    });
     let document = document_by_identity(&documents, restored.document_id, cx);
     cx.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
@@ -690,7 +679,7 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
             "discard did not commit"
         );
         cx.run_until_parked();
-        std::thread::yield_now();
+        std::thread::sleep(std::time::Duration::from_millis(1));
     }
     assert!(
         cx.update(crate::app::recovery::recoverable)
@@ -713,12 +702,7 @@ fn open_listing_empty(
         cx,
     );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while !cx.has_pending_prompt() {
-        assert!(std::time::Instant::now() < deadline, "no notice appeared");
-        cx.run_until_parked();
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| cx.has_pending_prompt());
     cx.read(|cx| assert!(window.read(cx).transient.is_none()));
     assert_eq!(
         cx.pending_prompt().unwrap().0,
@@ -845,9 +829,7 @@ async fn launch_requests_open_alongside_recovery_when_an_extension_fails(cx: &mu
     });
     assert!(wait_for_product_startup(cx));
     assert_eq!(cx.windows().len(), 2);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
+    crate::test_support::wait_until(cx, |cx| {
         let opened = cx.read(|cx| {
             documents
                 .read(cx)
@@ -855,15 +837,8 @@ async fn launch_requests_open_alongside_recovery_when_an_extension_fails(cx: &mu
                 .filter(|document| matches!(document.state(), DocumentState::Destination { .. }))
                 .count()
         });
-        if opened == 1 {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the second launch request did not open"
-        );
-        std::thread::yield_now();
-    }
+        opened == 1
+    });
     cx.read(|cx| {
         let documents = documents.read(cx);
         // The launch request for the edited file deduplicates to the restored

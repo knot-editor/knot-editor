@@ -109,15 +109,7 @@ impl Fixture {
         wait_for_api_condition(cx, |cx| self.window.read(cx).transient.is_some());
         cx.simulate_input(self.native_window, name);
         cx.simulate_keystrokes(self.native_window, "enter");
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while !cx.has_pending_prompt() {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "restart did not report"
-            );
-            cx.run_until_parked();
-            std::thread::yield_now();
-        }
+        crate::test_support::wait_until(cx, |cx| cx.has_pending_prompt());
         let prompt = cx.pending_prompt().unwrap();
         cx.simulate_prompt_answer("OK");
         cx.run_until_parked();

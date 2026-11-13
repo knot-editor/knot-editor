@@ -715,10 +715,8 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     });
 
     let tree = wait_for_contributed_view(&window, "example.outline", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             tree.read(cx).root_labels().len() == 2
                 && cx
                     .global::<ApplicationProductCommands>()
@@ -728,15 +726,8 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
                     .borrow()
                     .resolve_view(tree.read(cx).instance_id(), "copy")
                     .is_some()
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "tree provider did not settle"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
 
     cx.update_window(native_window, |_, native_window, cx| {
         focus_view(&tree.focus_handle(cx), native_window, cx);
@@ -756,21 +747,12 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     cx.refresh().unwrap();
     cx.simulate_keystrokes(native_window, "enter");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             cx.read_from_clipboard()
                 .is_some_and(|item| item.text().as_deref() == Some("tree item"))
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "tree item command did not run"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
     cx.update_window(native_window, |_, _, cx| {
         window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
@@ -786,21 +768,12 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         window_cx.simulate_mouse_down(row, MouseButton::Left, Modifiers::default());
         window_cx.simulate_mouse_up(row, MouseButton::Left, Modifiers::default());
     }
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             cx.read_from_clipboard()
                 .is_some_and(|item| item.text().as_deref() == Some("tree item"))
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "tree click command did not run"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
     cx.update(|cx| tree.update(cx, |tree, cx| assert!(tree.select_item("first", cx))));
     let copy = dispatch_tree_copy(&window, native_window, cx);
     assert_eq!(wait_for_command(copy, cx), CommandOutcome::Completed);
@@ -824,21 +797,12 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
     });
     cx.refresh().unwrap();
     cx.simulate_keystrokes(native_window, "cmd-alt-y");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             cx.read_from_clipboard()
                 .is_some_and(|item| item.text().as_deref() == Some("first"))
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "view keybinding did not dispatch"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
     let nested = dispatch_tree_command(&window, native_window, "test.nested-view-copy", cx);
     assert_eq!(wait_for_command(nested, cx), CommandOutcome::Completed);
     let nested_native = dispatch_tree_command(&window, native_window, "test.nested-new", cx);
@@ -871,18 +835,9 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
         cx.read(|cx| tree.read(cx).instance_id()),
         cx.read(|cx| second_tree.read(cx).instance_id())
     );
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| second_tree.read(cx).root_labels().len() == 2) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "second tree did not receive provider data"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| second_tree.read(cx).root_labels().len() == 2)
+    });
     cx.update_window(second_native_window, |_, native_window, cx| {
         second_tree.update(cx, |tree, cx| assert!(tree.select_item("first", cx)));
         focus_view(&second_tree.focus_handle(cx), native_window, cx);
@@ -908,10 +863,8 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
 
     let dispose = dispatch_product_command(&window, native_window, "test.dispose-view-copy", cx);
     assert_eq!(wait_for_command(dispose, cx), CommandOutcome::Completed);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             cx.global::<ApplicationProductCommands>()
                 .0
                 .read(cx)
@@ -919,15 +872,8 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
                 .borrow()
                 .resolve_view(tree.read(cx).instance_id(), "copy")
                 .is_none()
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "disposed view handler remained registered"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
     let disposed = dispatch_tree_copy(&second_window, second_native_window, cx);
     assert_eq!(wait_for_command(disposed, cx), CommandOutcome::Unavailable);
 
@@ -987,24 +933,16 @@ if (!rejected) throw new Error("startup borrowed focus");
         })
         .detach();
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
+    let mut script = None;
+    crate::test_support::wait_until(cx, |_| {
         match result.try_recv() {
-            Ok(outcome) => {
-                outcome.unwrap();
-                break;
-            }
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "script command did not settle"
-                );
-                std::thread::yield_now();
-            }
+            Ok(outcome) => script = Some(outcome),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
             Err(error) => panic!("script completion closed: {error}"),
         }
-    }
+        script.is_some()
+    });
+    script.unwrap().unwrap();
     cx.read(|cx| {
         assert_eq!(
             window
@@ -1047,10 +985,8 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
         })
         .detach();
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             cx.global::<ApplicationProductCommands>()
                 .0
                 .read(cx)
@@ -1058,15 +994,8 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
                 .borrow()
                 .resolve("editor.custom")
                 .is_ok()
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "command did not register"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
     let target = cx
         .update_window(native_window, |_, _, cx| {
             window.update(cx, |window, cx| window.focus_active_editor(cx));
@@ -1121,10 +1050,8 @@ await commands.register("test.nested-open", async () => {
         })
         .detach();
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             cx.global::<ApplicationProductCommands>()
                 .0
                 .read(cx)
@@ -1132,15 +1059,8 @@ await commands.register("test.nested-open", async () => {
                 .borrow()
                 .resolve("test.nested-open")
                 .is_ok()
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "nested command did not register"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
     let execution = dispatch_product_command(&window, native_window, "test.nested-open", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(documents.read(cx).documents().count(), 1));
@@ -1183,10 +1103,8 @@ await commands.registerForView("example.outline", "copy", async () => {
         .detach();
     });
     let tree = wait_for_contributed_view(&window, "example.outline", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             tree.read(cx).root_labels().len() == 1
                 && cx
                     .global::<ApplicationProductCommands>()
@@ -1196,15 +1114,8 @@ await commands.registerForView("example.outline", "copy", async () => {
                     .borrow()
                     .resolve_view(tree.read(cx).instance_id(), "copy")
                     .is_some()
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "view handler did not register"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
     cx.update_window(native_window, |_, native_window, cx| {
         tree.update(cx, |tree, cx| assert!(tree.select_item("held", cx)));
         focus_view(&tree.focus_handle(cx), native_window, cx);
@@ -1213,18 +1124,9 @@ await commands.registerForView("example.outline", "copy", async () => {
     host.update(cx, |host, _| host.hold_clipboard_writes());
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     let execution = dispatch_tree_copy(&window, native_window, cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| host.read(cx).pending_view_request_count() == 1) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "view request was not held"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| host.read(cx).pending_view_request_count() == 1)
+    });
     cx.update_window(native_window, |_, native_window, _| {
         native_window.remove_window()
     })
@@ -1252,18 +1154,9 @@ await commands.registerForView("example.outline", "copy", async () => {
 
     let (second_window, second_native_window) = product_window(document, model, cx);
     let second_tree = wait_for_contributed_view(&second_window, "example.outline", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| second_tree.read(cx).root_labels().len() == 1) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "second tree did not load"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| second_tree.read(cx).root_labels().len() == 1)
+    });
     cx.update_window(second_native_window, |_, native_window, cx| {
         second_tree.update(cx, |tree, cx| assert!(tree.select_item("held", cx)));
         focus_view(&second_tree.focus_handle(cx), native_window, cx);
@@ -1271,18 +1164,9 @@ await commands.registerForView("example.outline", "copy", async () => {
     .unwrap();
     host.update(cx, |host, _| host.hold_clipboard_writes());
     let interrupted = dispatch_tree_copy(&second_window, second_native_window, cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| host.read(cx).pending_view_request_count() == 1) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "second clipboard write was not held"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| host.read(cx).pending_view_request_count() == 1)
+    });
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     host.update(cx, |host, cx| host.release_view_requests(cx));
     assert_eq!(wait_for_command(interrupted, cx), CommandOutcome::Cancelled);

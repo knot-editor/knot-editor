@@ -17,6 +17,33 @@ use super::KnotWindow;
 /// How long a run may take to settle before the test fails.
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Run until `ready` holds, failing after ten seconds.
+///
+/// Between checks the thread blocks instead of spinning: on the extension
+/// pool's next finished turn while a package works, and otherwise briefly on
+/// the clock for events the pool does not report, such as the file watcher
+/// and PTYs.
+#[track_caller]
+pub fn wait_until(cx: &mut TestAppContext, mut ready: impl FnMut(&mut TestAppContext) -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        // The pool can appear while a test waits, so look it up each time.
+        let pool = cx.read(crate::app::extensions::host::pool);
+        let finished = pool.as_ref().map(|pool| pool.activity().finished_turns);
+        cx.run_until_parked();
+        if ready(cx) {
+            return;
+        }
+        assert!(Instant::now() < deadline, "the condition never held");
+        match (&pool, finished) {
+            (Some(pool), Some(finished)) if pool.activity().busy => {
+                pool.wait_for_turn(finished, Duration::from_millis(5));
+            }
+            _ => std::thread::sleep(Duration::from_millis(1)),
+        }
+    }
+}
+
 /// Run until `window` holds no keys and the extension pool is quiet: no
 /// package has work in progress, and none finished a turn while the
 /// foreground ran what it had.

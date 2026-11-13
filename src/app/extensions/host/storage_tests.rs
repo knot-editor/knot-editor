@@ -1,10 +1,6 @@
 use super::*;
 use gpui::TestAppContext;
-use std::{
-    future::Future,
-    path::Path,
-    time::{Duration, Instant},
-};
+use std::{future::Future, path::Path};
 
 fn host(root: &Path, cx: &mut TestAppContext) -> Entity<ProductExtensionHost> {
     cx.update(|cx| {
@@ -24,17 +20,16 @@ fn finish<F: Future + 'static>(future: F, cx: &mut TestAppContext) -> F::Output 
         let _ = sender.send(future.await);
     })
     .detach();
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        cx.run_until_parked();
+    let mut value = None;
+    crate::test_support::wait_until(cx, |_| {
         match receiver.try_recv() {
-            Ok(value) => return value,
+            Ok(done) => value = Some(done),
             Err(std::sync::mpsc::TryRecvError::Empty) => {}
             Err(error) => panic!("completion dropped: {error}"),
         }
-        assert!(Instant::now() < deadline, "storage JS did not finish");
-        std::thread::yield_now();
-    }
+        value.is_some()
+    });
+    value.unwrap()
 }
 
 fn write_package(root: &Path, name: &str, source: &str) {
@@ -198,18 +193,9 @@ fn storage_json_validation_and_failed_writes_cross_the_product_host(cx: &mut Tes
         host.start_installed_extensions_with_completion(packages, cx)
             .unwrap()
     });
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| !host.read(cx).deferred_view_requests.is_empty()) {
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "fixture did not reach transaction boundary"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| !host.read(cx).deferred_view_requests.is_empty())
+    });
     let database = data.join("packages/@example/validation.sqlite3");
     let connection = rusqlite::Connection::open(&database).unwrap();
     connection.execute_batch("CREATE TRIGGER reject_write BEFORE INSERT ON records WHEN NEW.key = 'a' BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END").unwrap();

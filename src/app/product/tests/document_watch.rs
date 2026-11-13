@@ -4,6 +4,7 @@ use super::*;
 use crate::app::documents::{DocumentDirty, ExternalChange};
 use crate::app::product::document_watch;
 use crate::app::settings::{FILES_WATCH_DOCUMENTS, set_boolean};
+use crate::test_support::wait_until;
 
 const TEXT: &str = "one\ntwo\n    three\n    four\nfive\n";
 
@@ -245,19 +246,6 @@ fn external_change(f: &Fixture, cx: &mut TestAppContext) -> Option<ExternalChang
             .external_change()
             .cloned()
     })
-}
-
-/// Run the foreground until `ready` holds, giving other threads time.
-fn wait_until(cx: &mut TestAppContext, mut ready: impl FnMut(&mut TestAppContext) -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if ready(cx) {
-            return;
-        }
-        assert!(std::time::Instant::now() < deadline, "did not settle");
-        std::thread::yield_now();
-    }
 }
 
 fn wait_for_prompt(cx: &mut TestAppContext) {

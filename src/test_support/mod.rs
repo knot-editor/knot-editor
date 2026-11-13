@@ -11,10 +11,6 @@
 
 pub mod cases;
 
-use std::time::{Duration, Instant};
-
-use gpui::TestAppContext;
-
 pub use crate::app::driver::application::{HeldReads, Retained};
 pub use crate::app::driver::editor::{TestEditor, Work};
 pub use crate::app::driver::product::{Language, LoadEntry, ServedFiles, TestProduct};
@@ -26,16 +22,4 @@ pub mod editing {
     pub use crate::app::driver::editing::{Action, BACKSPACE, Outcome, run};
 }
 
-/// Run until `ready` holds, failing after ten seconds.
-#[track_caller]
-pub fn wait_until(cx: &mut TestAppContext, mut ready: impl FnMut(&mut TestAppContext) -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if ready(cx) {
-            return;
-        }
-        assert!(Instant::now() < deadline, "the condition never held");
-        std::thread::yield_now();
-    }
-}
+pub use crate::app::driver::wait_until;

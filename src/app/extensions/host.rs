@@ -3186,22 +3186,13 @@ mod tests {
             host
         });
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        loop {
-            cx.run_until_parked();
-            if cx.update(|cx| {
+        crate::test_support::wait_until(cx, |cx| {
+            cx.update(|cx| {
                 let host = host.read(cx);
                 host.semantics.completion_snapshot().len() == 2
                     && host.semantics.has_definition("@fixture/primary.outline")
-            }) {
-                break;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "fixture registrations did not cross the product transport"
-            );
-            std::thread::yield_now();
-        }
+            })
+        });
         cx.update(|cx| {
             let host = host.read(cx);
             assert_eq!(host.lifecycles.len(), 2);

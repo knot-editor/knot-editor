@@ -98,15 +98,30 @@ Each checkpoint, and each area within a sweep, is its own commit. Each one
 measures before and after with the command from checkpoint 1 and records the
 result here.
 
-### 1. Measurement and the quick wins
+### 1. Measurement and the quick wins ✅ (awaiting review)
 
-- A `just test-timings` recipe (backed by a small script under `scripts/`)
-  that runs nextest with per-test timings and prints the sorted log and the
-  totals per binary and per module, in the format of `test.log`.
-- Cache built-in glyph bytes in `icons.rs`.
-- One blocking `wait_until`; route `wait_for_product_startup` and every local
-  copy through it.
-- Record the baseline and the new totals in this plan.
+- ✅ A `just test-timings` recipe (`scripts/test-timings.py`, reading the
+  `timings` nextest profile's JUnit report) that runs nextest with per-test
+  timings and prints the sorted log and the totals per binary and per module,
+  in the format of `test.log`, plus wall and CPU time of the run.
+- ✅ Cache built-in glyph bytes in `icons.rs`.
+- ✅ One blocking `wait_until` (`app::driver::wait_until`, exported by
+  `test_support`); `wait_for_product_startup` and every local copy in
+  `src/app` go through it. The loops that poll an async store
+  (`recovery` discard) and the pool-only `engine_tests::wait_for_state`
+  sleep 1 ms instead of spinning.
+- ✅ Baseline and new totals (warm build, same machine, whole workspace run):
+
+  | | Before | After |
+  | --- | ---: | ---: |
+  | Summed per-test time | 123.3 s | 125.1 s |
+  | Wall time | 13.3 s | 13.5 s |
+  | CPU (user + system) | 71.4 s | 67.3 s |
+
+  The quick wins save about 6% CPU and leave wall time unchanged: per-test
+  durations are wall time, so a blocking wait does not shorten a test, it
+  frees a core for the others. The big costs (windows drawn, product startup)
+  are for the later checkpoints.
 
 Validation: `just check`; the timing totals before and after.
 

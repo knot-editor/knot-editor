@@ -41,23 +41,18 @@ fn settle(
     receiver: &mut tokio::sync::oneshot::Receiver<TransientOutcome>,
     cx: &mut TestAppContext,
 ) -> TransientOutcome {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
+    let mut outcome = None;
+    crate::test_support::wait_until(cx, |_| {
         match receiver.try_recv() {
-            Ok(outcome) => return outcome,
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "transient interaction did not settle"
-                );
-                std::thread::yield_now();
-            }
+            Ok(done) => outcome = Some(done),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
             Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
                 panic!("transient sender dropped without an outcome")
             }
         }
-    }
+        outcome.is_some()
+    });
+    outcome.unwrap()
 }
 
 #[gpui::test]

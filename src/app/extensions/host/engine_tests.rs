@@ -475,7 +475,7 @@ fn wait_for_state(pool: &RuntimePool, key: ExtensionKey, expected: ExtensionStat
             return;
         }
         assert!(Instant::now() < deadline, "state remained {state:?}");
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_millis(1));
     }
 }
 

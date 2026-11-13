@@ -45,21 +45,16 @@ fn wait_open(
     mut receiver: tokio::sync::oneshot::Receiver<CommandOutcome>,
     cx: &mut TestAppContext,
 ) -> CommandOutcome {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
+    let mut outcome = None;
+    crate::test_support::wait_until(cx, |_| {
         match receiver.try_recv() {
-            Ok(outcome) => return outcome,
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "native Open did not finish"
-                );
-                std::thread::yield_now();
-            }
+            Ok(done) => outcome = Some(done),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
             Err(error) => panic!("native Open completion closed: {error}"),
         }
-    }
+        outcome.is_some()
+    });
+    outcome.unwrap()
 }
 
 #[gpui::test]

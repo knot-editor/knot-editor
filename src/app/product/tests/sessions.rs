@@ -270,18 +270,12 @@ fn settle(
     settled: &Rc<RefCell<Option<Result<ReplaceWindowsResult, ReplaceError>>>>,
     cx: &mut TestAppContext,
 ) -> Result<ReplaceWindowsResult, ReplaceError> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if let Some(result) = settled.borrow_mut().take() {
-            return result;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "replacement did not settle"
-        );
-        std::thread::yield_now();
-    }
+    let mut result = None;
+    crate::test_support::wait_until(cx, |_| {
+        result = settled.borrow_mut().take();
+        result.is_some()
+    });
+    result.unwrap()
 }
 
 fn window_id(native_window: gpui::AnyWindowHandle) -> String {

@@ -59,25 +59,18 @@ pub(crate) fn install_launch_gate(cx: &mut TestAppContext) {
 
 /// Wait until product startup finishes; whether it succeeded.
 pub(crate) fn wait_for_product_startup(cx: &mut TestAppContext) -> bool {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        let state = cx.read(
+    let mut outcome = None;
+    crate::test_support::wait_until(cx, |cx| {
+        outcome = cx.read(
             |cx| match &*cx.global::<ApplicationLaunchGate>().0.borrow() {
                 LaunchGate::Pending(_) => None,
                 LaunchGate::Ready => Some(true),
                 LaunchGate::Failed => Some(false),
             },
         );
-        if let Some(ready) = state {
-            return ready;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "product startup did not finish"
-        );
-        std::thread::yield_now();
-    }
+        outcome.is_some()
+    });
+    outcome.unwrap()
 }
 
 /// A window over `document`, whose text `model` holds, and its native window.

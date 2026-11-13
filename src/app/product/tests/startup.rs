@@ -133,26 +133,18 @@ fn queued_file_open_runs_only_after_configured_startup(cx: &mut TestAppContext) 
         )
     });
     assert!(wait_for_product_startup(cx));
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        let text = cx.read(|cx| {
+    let mut text = None;
+    crate::test_support::wait_until(cx, |cx| {
+        text = cx.read(|cx| {
             let documents = documents.read(cx);
             documents
                 .document_for_resource(&uri)
                 .and_then(|id| documents.get(id))
                 .map(|document| document.model().read(cx).text().to_owned())
         });
-        if let Some(text) = text {
-            assert_eq!(text, "queued contents");
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "queued file did not open"
-        );
-        std::thread::yield_now();
-    }
+        text.is_some()
+    });
+    assert_eq!(text.unwrap(), "queued contents");
     // A clean startup leaves the report closed.
     cx.read(|cx| {
         let window = cx.windows()[0].downcast::<KnotWindow>().unwrap();
@@ -783,25 +775,8 @@ fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
         1
     );
     cx.read(|cx| assert!(window.read(cx).contributed_views.is_empty()));
-    let mut execution = dispatch_product_command(&window, native_window, "example.dependent", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        match execution.completion.try_recv() {
-            Ok(outcome) => {
-                assert_eq!(outcome, CommandOutcome::Completed);
-                break;
-            }
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "dependent command did not finish"
-                );
-                std::thread::yield_now();
-            }
-            Err(error) => panic!("dependent command completion closed: {error}"),
-        }
-    }
+    let execution = dispatch_product_command(&window, native_window, "example.dependent", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     assert_eq!(cx.read(|cx| model.read(cx).text()), "base ");
     assert_eq!(
         cx.read(super::super::super::extensions::host::completion_provider_count),
@@ -842,39 +817,35 @@ fn extension_startup_shows_known_outcomes_while_a_later_entry_is_pending(cx: &mu
     host.update(cx, |host, cx| {
         host.start_installed_extensions(root.path().to_path_buf(), cx)
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
+    let mut published = None;
+    crate::test_support::wait_until(cx, |cx| {
         let report = cx
             .read(super::super::super::extensions::host::startup_report)
             .unwrap();
         if report.report.entries.len() == 2 {
-            assert_eq!(
-                report.state,
-                super::super::super::extensions::host::StartupState::Loading
-            );
-            assert_eq!(report.report.entries[0].directory, invalid);
-            assert!(matches!(
-                &report.report.entries[0].result,
-                super::super::super::extensions::load::LoadResult::Failed(cause)
-                    if cause.contains("invalid knot.jsonc")
-            ));
-            assert_eq!(
-                report.report.entries[1].name.as_deref(),
-                Some("@example/a-ready")
-            );
-            assert_eq!(
-                report.report.entries[1].result,
-                super::super::super::extensions::load::LoadResult::Loaded
-            );
-            break;
+            published = Some(report);
         }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "startup outcomes were not published"
-        );
-        std::thread::yield_now();
-    }
+        published.is_some()
+    });
+    let report = published.unwrap();
+    assert_eq!(
+        report.state,
+        super::super::super::extensions::host::StartupState::Loading
+    );
+    assert_eq!(report.report.entries[0].directory, invalid);
+    assert!(matches!(
+        &report.report.entries[0].result,
+        super::super::super::extensions::load::LoadResult::Failed(cause)
+            if cause.contains("invalid knot.jsonc")
+    ));
+    assert_eq!(
+        report.report.entries[1].name.as_deref(),
+        Some("@example/a-ready")
+    );
+    assert_eq!(
+        report.report.entries[1].result,
+        super::super::super::extensions::load::LoadResult::Loaded
+    );
 }
 
 #[gpui::test]
@@ -1001,25 +972,8 @@ fn installed_packages_run_through_the_product_command_bridge(cx: &mut TestAppCon
             .iter()
             .all(|entry| entry.result == super::super::super::extensions::load::LoadResult::Loaded)
     );
-    let mut execution = dispatch_product_command(&window, native_window, "example.greet", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        match execution.completion.try_recv() {
-            Ok(outcome) => {
-                assert_eq!(outcome, CommandOutcome::Completed);
-                break;
-            }
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "example command did not finish"
-                );
-                std::thread::yield_now();
-            }
-            Err(error) => panic!("example command completion closed: {error}"),
-        }
-    }
+    let execution = dispatch_product_command(&window, native_window, "example.greet", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     assert_eq!(cx.read(|cx| model.read(cx).text()), "Hello ");
     for activations in 1..=2 {
         if activations == 2 {

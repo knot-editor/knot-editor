@@ -381,20 +381,16 @@ fn wait_for_extension_report(
     _host: &Entity<super::super::extensions::host::ProductExtensionHost>,
     cx: &mut TestAppContext,
 ) -> super::super::extensions::host::StartupReportSnapshot {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if let Some(report) = cx.read(super::super::extensions::host::startup_report)
-            && report.state == super::super::extensions::host::StartupState::Complete
-        {
-            return report;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "extension startup did not finish"
-        );
-        std::thread::yield_now();
-    }
+    let mut complete = None;
+    crate::test_support::wait_until(cx, |cx| {
+        complete = cx
+            .read(super::super::extensions::host::startup_report)
+            .filter(|report| {
+                report.state == super::super::extensions::host::StartupState::Complete
+            });
+        complete.is_some()
+    });
+    complete.unwrap()
 }
 
 struct FixedOpenDialog(OpenDialogOutcome);
@@ -419,22 +415,16 @@ fn wait_for_command(
     mut execution: crate::app::CommandExecution,
     cx: &mut TestAppContext,
 ) -> CommandOutcome {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
+    let mut outcome = None;
+    crate::test_support::wait_until(cx, |_| {
         match execution.completion.try_recv() {
-            Ok(outcome) => return outcome,
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "command did not settle; pending prompt: {:?}",
-                    cx.pending_prompt()
-                );
-                std::thread::yield_now();
-            }
+            Ok(done) => outcome = Some(done),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
             Err(error) => panic!("command completion closed: {error}"),
         }
-    }
+        outcome.is_some()
+    });
+    outcome.unwrap()
 }
 
 fn wait_for_contributed_view(
@@ -442,24 +432,18 @@ fn wait_for_contributed_view(
     id: &str,
     cx: &mut TestAppContext,
 ) -> Entity<crate::app::tree_view::TreeView> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if let Some(view) = cx.read(|cx| {
+    let mut attached = None;
+    crate::test_support::wait_until(cx, |cx| {
+        attached = cx.read(|cx| {
             window
                 .read(cx)
                 .contributed_views
                 .get(id)
                 .map(|view| view.tree().clone())
-        }) {
-            return view;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "contributed view did not attach"
-        );
-        std::thread::yield_now();
-    }
+        });
+        attached.is_some()
+    });
+    attached.unwrap()
 }
 
 fn dispatch_tree_command(
@@ -495,18 +479,7 @@ fn dispatch_tree_copy(
 }
 
 fn wait_for_api_condition(cx: &mut TestAppContext, mut ready: impl FnMut(&gpui::App) -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(&mut ready) {
-            return;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "public API fixture did not settle"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| cx.read(&mut ready));
 }
 
 /// Toggle the left test tool as the explorer's toggle command did, registering

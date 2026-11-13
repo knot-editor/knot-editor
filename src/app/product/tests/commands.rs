@@ -31,40 +31,18 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
         host
     });
 
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        let registered = cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             cx.global::<ApplicationProductCommands>()
                 .0
                 .read(cx)
                 .definitions()
                 .any(|definition| definition.name.as_ref() == "knot.fixture.primary")
-        });
-        if registered {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "fixture command did not enter the product catalog"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
 
-    let mut execution =
-        dispatch_product_command(&window, native_window, "knot.fixture.primary", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    let outcome = loop {
-        cx.run_until_parked();
-        match execution.completion.try_recv() {
-            Ok(outcome) => break outcome,
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                assert!(std::time::Instant::now() < deadline);
-                std::thread::yield_now();
-            }
-            Err(error) => panic!("fixture command completion closed: {error}"),
-        }
-    };
+    let execution = dispatch_product_command(&window, native_window, "knot.fixture.primary", cx);
+    let outcome = wait_for_command(execution, cx);
     assert_eq!(outcome, CommandOutcome::Completed);
     assert_eq!(cx.read(|cx| model.read(cx).text()), "fixture ");
 
@@ -89,10 +67,8 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
             .unwrap()
             .clone()
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             editor
                 .read(cx)
                 .editor()
@@ -101,15 +77,8 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
                 .is_some_and(|(items, pending, failures, _)| {
                     items == 2 && pending == 0 && failures == 0
                 })
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "fixture completion items did not reach the product editor"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
 
     drop(host);
     cx.update(|cx| {

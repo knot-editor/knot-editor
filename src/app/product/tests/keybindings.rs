@@ -241,19 +241,9 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
     cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 1));
 
     cx.simulate_keystrokes(native_window, "cmd-r");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| keymap_command(cx, "cmd-y", Some("editor")).as_deref() == Some("file.new"))
-        {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "config binding did not invoke the extension command"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| keymap_command(cx, "cmd-y", Some("editor")).as_deref() == Some("file.new"))
+    });
 
     cx.dispatch_action(native_window, ProductCommandSource::new(NEW_COMMAND));
     cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 2));
@@ -334,15 +324,9 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
         .unwrap()
         .unwrap();
     let tree = wait_for_contributed_view(&window, "example.outline", cx);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| tree.read(cx).root_labels() == ["Tree item"]) {
-            break;
-        }
-        assert!(std::time::Instant::now() < deadline, "outline did not load");
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| tree.read(cx).root_labels() == ["Tree item"])
+    });
     // The launched window starts empty; a new document gives it an editor.
     cx.dispatch_action(native_window, ProductCommandSource::new(NEW_COMMAND));
     cx.run_until_parked();
@@ -384,23 +368,14 @@ fn config_global_copy_binding_routes_to_editor_and_extension_view(cx: &mut TestA
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
     cx.refresh().unwrap();
     cx.simulate_keystrokes(native_window, "cmd-j");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| {
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
             cx.read_from_clipboard()
                 .and_then(|item| item.text())
                 .as_deref()
                 == Some("first")
-        }) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "global copy binding did not route to the outline"
-        );
-        std::thread::yield_now();
-    }
+        })
+    });
     cx.read(|cx| assert_eq!(documents.read(cx).documents().count(), 1));
 }
 
@@ -510,15 +485,7 @@ fn unloading_a_script_lifecycle_removes_its_keybindings(cx: &mut TestAppContext)
         })
         .detach();
     });
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while !*loaded.lock().unwrap() {
-        cx.run_until_parked();
-        assert!(
-            std::time::Instant::now() < deadline,
-            "extension keybinding did not load"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |_| *loaded.lock().unwrap());
     cx.read(|cx| {
         assert_eq!(
             keymap_command(cx, "cmd-r", None).as_deref(),
@@ -934,18 +901,9 @@ fn selected_contributed_preset_replaces_knot_beneath_extension_bindings(cx: &mut
         "test.knot",
         cx,
     ));
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        cx.run_until_parked();
-        if cx.read(|cx| keymap_command(cx, "cmd-s", None).is_some()) {
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "selecting knot did not restore its bindings"
-        );
-        std::thread::yield_now();
-    }
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| keymap_command(cx, "cmd-s", None).is_some())
+    });
     cx.read(|cx| {
         assert_eq!(keymap_command(cx, "cmd-r", None), None);
         assert_eq!(
@@ -1126,15 +1084,7 @@ fn measure_extension_key_latency(cx: &mut TestAppContext) {
             .clone()
     });
     let wait = |cx: &mut TestAppContext, mut done: Box<dyn FnMut(&gpui::App) -> bool>| {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            cx.run_until_parked();
-            if cx.read(|cx| done(cx)) {
-                return;
-            }
-            assert!(Instant::now() < deadline, "probe did not settle");
-            std::thread::yield_now();
-        }
+        crate::test_support::wait_until(cx, |cx| cx.read(|cx| done(cx)));
     };
     let report = |name: &str, mut samples: Vec<Duration>| {
         samples.sort_unstable();
