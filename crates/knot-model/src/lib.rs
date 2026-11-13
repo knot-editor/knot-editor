@@ -41,6 +41,7 @@ pub mod syntax;
 pub mod terminal_directory;
 pub mod theme;
 pub mod themes;
+pub mod typography;
 pub mod watch;
 pub mod workbench;
 pub mod workspace;

@@ -22,6 +22,16 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Base text size in pixels of editors, text frames, and terminals.
 pub const FONT_SIZE: &str = "font.size";
+/// Primary font family of editors, text frames, text inputs, and terminals.
+pub const FONT_FAMILY: &str = "font.family";
+/// Families tried for glyphs the primary family lacks.
+pub const FONT_FALLBACKS: &str = "font.fallbacks";
+/// Base font weight, 100 to 900.
+pub const FONT_WEIGHT: &str = "font.weight";
+/// Whether the `calt` and `liga` OpenType features are on.
+pub const FONT_LIGATURES: &str = "font.ligatures";
+/// OpenType features applied after `font.ligatures`.
+pub const FONT_FEATURES: &str = "font.features";
 /// Columns per tab stop in editor views.
 pub const EDITOR_TAB_SIZE: &str = "editor.tabSize";
 /// Whether indenting inserts spaces rather than a tab, unless the document's
@@ -244,6 +254,35 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Number,
             default: 14.into(),
             description: "Text size in pixels; scope it to { view: \"terminal\" } to size terminals separately".into(),
+        },
+        text(
+            FONT_FAMILY,
+            "Menlo",
+            "Primary font family of editors, text inputs, and terminals; scope it to { view: \"terminal\" } or a language to vary it",
+        ),
+        SettingDefinition {
+            key: FONT_FALLBACKS.into(),
+            value_type: SettingType::Strings,
+            default: serde_json::json!(["Geeza Pro", "PingFang SC", "Apple Color Emoji"]),
+            description: "Font families tried for glyphs the primary family lacks".into(),
+        },
+        SettingDefinition {
+            key: FONT_WEIGHT.into(),
+            value_type: SettingType::Number,
+            default: 400.into(),
+            description: "Base font weight from 100 to 900; bold text stays at 700".into(),
+        },
+        SettingDefinition {
+            key: FONT_LIGATURES.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Form ligatures; false turns off the calt and liga OpenType features".into(),
+        },
+        SettingDefinition {
+            key: FONT_FEATURES.into(),
+            value_type: SettingType::Strings,
+            default: Value::Array(Vec::new()),
+            description: "OpenType features applied after font.ligatures: \"ss01\" turns one on, \"-calt\" off, \"cv05=2\" sets a value".into(),
         },
         SettingDefinition {
             key: EDITOR_TAB_SIZE.into(),
