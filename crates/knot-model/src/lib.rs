@@ -27,6 +27,7 @@ pub mod icons;
 pub mod indentation;
 pub mod keys;
 pub mod languages;
+pub mod launch;
 pub mod matching;
 pub mod observation;
 pub mod open;
