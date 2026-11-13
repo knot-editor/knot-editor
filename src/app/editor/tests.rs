@@ -116,7 +116,12 @@ fn font_settings_reach_the_editor_font(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
     let model = cx.new(|_| Buffer::new(BufferModel::from_text("a -> b")));
     let view = cx.new(|cx| EditorView::new(model, cx));
-    cx.read(|cx| assert_eq!(view.read(cx).font.family.as_ref(), "Menlo"));
+    cx.read(|cx| {
+        assert_eq!(
+            view.read(cx).font.family.as_ref(),
+            knot_model::typography::DEFAULT_FAMILY
+        )
+    });
     cx.update(|cx| {
         let store = &mut cx.global_mut::<ApplicationSettings>().0;
         store

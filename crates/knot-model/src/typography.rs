@@ -7,6 +7,43 @@ use crate::settings::{
     SettingsStore,
 };
 
+/// The default primary family: the platform's standard code font, as in
+/// VS Code.
+pub const DEFAULT_FAMILY: &str = if cfg!(target_os = "macos") {
+    "Menlo"
+} else if cfg!(target_os = "windows") {
+    "Consolas"
+} else {
+    "DejaVu Sans Mono"
+};
+
+/// The default fallbacks: other common code fonts, then the platform fonts
+/// for Arabic and Hebrew, CJK, and emoji.
+pub const DEFAULT_FALLBACKS: &[&str] = if cfg!(target_os = "macos") {
+    &[
+        "Monaco",
+        "Courier New",
+        "Geeza Pro",
+        "PingFang SC",
+        "Apple Color Emoji",
+    ]
+} else if cfg!(target_os = "windows") {
+    &[
+        "Courier New",
+        "Segoe UI",
+        "Microsoft YaHei",
+        "Segoe UI Emoji",
+    ]
+} else {
+    &[
+        "Droid Sans Mono",
+        "Liberation Mono",
+        "Noto Sans Arabic",
+        "Noto Sans CJK SC",
+        "Noto Color Emoji",
+    ]
+};
+
 /// The resolved font choice of one settings scope.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FontSettings {
@@ -47,7 +84,7 @@ impl FontSettings {
             family: store
                 .get(FONT_FAMILY, scope)
                 .and_then(Value::as_str)
-                .unwrap_or("Menlo")
+                .unwrap_or(DEFAULT_FAMILY)
                 .to_owned(),
             fallbacks: strings(FONT_FALLBACKS),
             weight: store
@@ -113,11 +150,8 @@ mod tests {
     #[test]
     fn defaults() {
         let font = FontSettings::resolve(&SettingsStore::default(), &SettingsScope::default());
-        assert_eq!(font.family, "Menlo");
-        assert_eq!(
-            font.fallbacks,
-            ["Geeza Pro", "PingFang SC", "Apple Color Emoji"]
-        );
+        assert_eq!(font.family, DEFAULT_FAMILY);
+        assert_eq!(font.fallbacks, DEFAULT_FALLBACKS);
         assert_eq!(font.weight, 400.);
         assert!(font.features.is_empty());
     }

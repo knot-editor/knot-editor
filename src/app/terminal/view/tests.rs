@@ -189,7 +189,7 @@ fn terminal_font_family_follows_the_terminal_scope(cx: &mut TestAppContext) {
     let family = |cx: &mut VisualTestContext| cx.read(|cx| base_font(cx).family.to_string());
     let cell_width =
         |cx: &mut VisualTestContext| cx.read(|cx| view.read(cx).layout.unwrap().cell_width);
-    assert_eq!(family(cx), "Menlo");
+    assert_eq!(family(cx), knot_model::typography::DEFAULT_FAMILY);
     let set_family = |cx: &mut VisualTestContext, family: &str, view: Option<&str>| {
         let family = family.to_owned();
         let view = view.map(str::to_owned);
@@ -212,7 +212,7 @@ fn terminal_font_family_follows_the_terminal_scope(cx: &mut TestAppContext) {
 
     // An editor-scoped family leaves terminals alone.
     set_family(cx, "Times New Roman", Some("editor"));
-    assert_eq!(family(cx), "Menlo");
+    assert_eq!(family(cx), knot_model::typography::DEFAULT_FAMILY);
 
     set_family(cx, "Times New Roman", Some("terminal"));
     assert_eq!(family(cx), "Times New Roman");

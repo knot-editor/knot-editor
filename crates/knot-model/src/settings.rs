@@ -257,13 +257,13 @@ fn native_definitions() -> Vec<SettingDefinition> {
         },
         text(
             FONT_FAMILY,
-            "Menlo",
+            crate::typography::DEFAULT_FAMILY,
             "Primary font family of editors, text inputs, and terminals; scope it to { view: \"terminal\" } or a language to vary it",
         ),
         SettingDefinition {
             key: FONT_FALLBACKS.into(),
             value_type: SettingType::Strings,
-            default: serde_json::json!(["Geeza Pro", "PingFang SC", "Apple Color Emoji"]),
+            default: serde_json::json!(crate::typography::DEFAULT_FALLBACKS),
             description: "Font families tried for glyphs the primary family lacks".into(),
         },
         SettingDefinition {
