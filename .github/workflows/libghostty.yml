@@ -126,9 +126,7 @@ jobs:
           fi
           test -f "$out/include/ghostty/vt.h"
           tar -czf "dist/$NAME.tar.gz" -C "$RUNNER_TEMP" "$NAME"
-          (cd dist && shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
           tar -tzf "dist/$NAME.tar.gz"
-          cat "dist/$NAME.tar.gz.sha256"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.NAME }}
@@ -157,8 +155,11 @@ jobs:
         run: |
           set -euo pipefail
           tag="libghostty-vt-$VERSION"
-          cat dist/*.sha256
-          gh release create "$tag" dist/* \
+          cd dist
+          for archive in *.tar.gz; do
+            sha256sum "$archive" | tee "$archive.sha256"
+          done
+          gh release create "$tag" ./* \
             --repo "$REPO" --target "$SHA" --latest=false \
             --title "libghostty-vt $VERSION" \
             --notes "Static libghostty-vt $VERSION for knot-terminal, built with Zig $ZIG (ReleaseFast, baseline CPU, without Kitty graphics) from the signed release tarballs."
