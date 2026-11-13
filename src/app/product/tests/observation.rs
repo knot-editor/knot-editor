@@ -83,7 +83,8 @@ fn open_entry_points_share_document_identity_and_publish_only_committed_resource
             .identity()
             .to_string()
     });
-    let (window, native_window) = product_window(placeholder, placeholder_model.clone(), cx);
+    let window = headless_window(placeholder, placeholder_model.clone(), cx);
+    let native_window = Headless;
     take_events(&host, cx);
     assert_eq!(
         wait_open(start_open(&window, cli.clone(), true, cx), cx),
@@ -109,7 +110,8 @@ fn open_entry_points_share_document_identity_and_publish_only_committed_resource
     assert!(changed_documents(&take_events(&host, cx)).is_empty());
     let second = cx.update(|cx| create_untitled_document(&documents, cx));
     let second_model = cx.read(|cx| documents.read(cx).get(second).unwrap().model().clone());
-    let (second_window, second_native_window) = product_window(second, second_model, cx);
+    let second_window = headless_window(second, second_model, cx);
+    let second_native_window = Headless;
     take_events(&host, cx);
     cx.set_global(ApplicationOpenDialog(Arc::new(FixedOpenDialog(
         OpenDialogOutcome::Selected(path),
@@ -190,7 +192,7 @@ async fn stale_open_does_not_publish_or_leak_a_document(cx: &mut TestAppContext)
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (window, _) = product_window(placeholder, model, cx);
+    let window = headless_window(placeholder, model, cx);
     take_events(&host, cx);
     let pending = start_open(
         &window,
@@ -249,7 +251,8 @@ async fn save_as_and_racing_edits_publish_current_metadata_without_changing_iden
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Untitled", model.clone(), cx)
     });
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
     let opened = take_events(&host, cx);
     let initial = changed_documents(&opened)
         .into_iter()
@@ -437,7 +440,8 @@ async fn replaced_or_closed_open_presentations_cannot_accept_in_flight_results(
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let document = cx.update(|cx| create_untitled_document(&documents, cx));
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-        let (window, native_window) = product_window(document, model.clone(), cx);
+        let window = headless_window(document, model.clone(), cx);
+        let native_window = Headless;
         let pending = start_open(
             &window,
             OpenRequest::from_uri_for_product(
@@ -804,7 +808,8 @@ await commands.register("observation.stream", () => {
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&window, native_window, "observation.barrier", cx),
@@ -1167,7 +1172,8 @@ await commands.register("observation.install-for-unload", async () => { await wo
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
     model.update(cx, |model, cx| {
         model.replace(0..0, "edit").unwrap();
         cx.notify();
@@ -1407,7 +1413,8 @@ await commands.register("indentation.write", async () => {
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
     take_events(&host, cx);
     assert_eq!(
         wait_for_command(
