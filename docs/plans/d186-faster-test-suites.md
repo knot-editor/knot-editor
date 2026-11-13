@@ -193,36 +193,57 @@ same behavior, and what stayed windowed is justified.
 `knot-model` modules named in the [repository map](../../AGENTS.md#repository-map)
 for moved logic; grep `product_window(` and `add_window` for the call sites.
 
-### 7. Package subsets and the remaining end-to-end cost
+### 7. Test file watches ✅
 
-- ✅ Test file watches. The end-to-end tests spent most of their wall time
-  idle: starting an operating system file watch (`FSEventStreamStart`) blocks
-  for about 100 ms, `project_sessions` starts nine per test, and the starts
-  of parallel test processes queue behind each other, which also inflated the
-  summed per-test times. Test providers
-  (`LocalFileSystemProvider::unrestricted_with_scratch_trash`) now report no
-  file events, and `TestProduct::watch_files` turns them on for the two
-  tests that wait for an external change (`explorer` and `go_to_file`).
-  Warm build, whole workspace: wall 13.4 s → 7.8 s, summed per-test time
-  about 130 s → 77 s, CPU unchanged at about 61 s. The product-side cost is
-  roadmap item D187.
+Test file watches. The end-to-end tests spent most of their wall time idle:
+starting an operating system file watch (`FSEventStreamStart`) blocks for
+about 100 ms, `project_sessions` starts nine per test, and the starts of
+parallel test processes queue behind each other, which also inflated the
+summed per-test times. Test providers
+(`LocalFileSystemProvider::unrestricted_with_scratch_trash`) now report no
+file events, and `TestProduct::watch_files` turns them on for the two tests
+that wait for an external change (`explorer` and `go_to_file`). Warm build,
+whole workspace: wall 13.4 s → 7.8 s, summed per-test time about 130 s →
+77 s, CPU unchanged at about 61 s. The product-side cost is roadmap item
+D187.
+
+The second profile (wall 8.0 s, summed 79.7 s) shows no test above 2 s; the
+largest remaining costs are the Vim topics (7.4 s for 11 tests),
+`knot-ext-workbench` (13.8 s for 53), and the `knot-ext-languages` fixture
+tests (0.7 s each). Checkpoints 8–10 take them in that order.
+
+### 8. Package subsets for the workbench tests
+
 - Let end-to-end tests start only the packages they exercise, resolving
-  `requires`; apply it to `knot-ext-workbench`.
+  `requires`; apply it to `knot-ext-workbench` and `knot-app`.
 - Re-profile `project_sessions` and decide whether to merge its repeated
   switch scenarios.
-- Re-profile a Vim topic and decide whether settling after each key needs
-  work.
 
-Validation: `just check`; workbench and Vim totals.
-
-Review gate: whether any remaining cost justifies more work in D186.
+Validation: `just check`; workbench totals.
 
 **Implementation context:** `crates/knot-ext-workbench/src` (`PACKAGES`);
 `TestProduct::start` and `launch` in `src/app/product/driver/`;
 `host.set_bundled_packages` in `src/app/extensions/host.rs`; package
 discovery in `crates/knot-model/src/extensions/package.rs`.
 
-### 8. Close
+### 9. Language fixture tests
+
+- Profile one `knot-ext-languages` fixture test and cut its startup or
+  per-case cost (for example, start only the language packages a table
+  needs).
+
+Validation: `just check`; `knot-ext-languages` totals.
+
+### 10. Vim topics
+
+- Re-profile `topics::operators` and `topics::visual` and decide whether
+  settling after each key needs work.
+
+Validation: `just check`; Vim totals.
+
+Review gate: whether any remaining cost justifies more work in D186.
+
+### 11. Close
 
 - Final measurements in the
   [extension authoring and tests](../decisions/extension-host.md#extension-authoring-and-tests)
