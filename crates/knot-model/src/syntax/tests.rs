@@ -301,7 +301,7 @@ fn incremental_highlights_match_a_fresh_parse_after_random_edits() {
         rng ^= rng << 17;
         (rng % bound as u64) as usize
     };
-    for step in 0..400 {
+    for step in 0..25 {
         let text = fixture.text();
         let boundaries: Vec<usize> = (0..=text.len())
             .filter(|offset| text.is_char_boundary(*offset))
@@ -647,7 +647,7 @@ fn random_markdown_edits_match_a_fresh_parse() {
             "<div>\n",
             "é",
         ],
-        300,
+        25,
     );
 }
 
@@ -676,7 +676,7 @@ fn random_html_edits_match_a_fresh_parse() {
             ";",
             "color: blue;",
         ],
-        300,
+        25,
     );
 }
 

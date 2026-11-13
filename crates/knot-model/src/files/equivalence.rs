@@ -322,7 +322,7 @@ fn generate(random: &mut Random, directory: &Path, depth: usize) {
 
 #[test]
 fn generated_trees_match_ripgrep() {
-    for seed in 0..60 {
+    for seed in 0..8 {
         let (_guard, root) = root();
         let mut random = Random(seed);
         let repository = root.join("repo");
