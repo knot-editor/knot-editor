@@ -350,8 +350,8 @@ left/right/bottom edge moves a dock-capable tab to the end of that dock, while
 other kinds keep the pane-local edge split there, and panes or an empty center
 of a disallowed area show no target and refuse the release. Releasing a tool
 outside all Knot frames cancels without creating a window. Dock-adjacent dividers drag to resize the
-window-local dock size within usable limits; other dividers drag the split's
-ratio, leaving each side a minimum size.
+window-local dock size up to the window edge, keeping only the dock minimum;
+other dividers drag the split's ratio, leaving each side a minimum size.
 
 Transfers do not enter protected closure or remove documents or windows. An
 emptied source keeps an empty center. New-window transfer creates and validates
@@ -445,7 +445,9 @@ Alacritty grid, process status, authoritative size, session preferences, and eve
 delivery. Alacritty reads, parses, and writes on its background event loop.
 Repaint wakeups coalesce; protocol requests, replies, and child exit retain order
 in a process-generation-scoped queue. Restart replaces the process/grid and
-rejects old events. Shutdown and child reaping run off the foreground.
+rejects old events, carrying the prior grid's lines into the new session
+above a `--- terminal restarted ---` divider with new output continuing
+below. Shutdown and child reaping run off the foreground.
 
 A new session's working directory is chosen when it is created and kept across
 restart. New Terminal, splitting a terminal pane, and `terminals.open` without
