@@ -581,6 +581,60 @@ pub(crate) async fn about(context: CommandContext, (): ()) -> Result<(), Command
         .await
 }
 
+#[command("shell.install-command", title = "Shell Command: Install 'knot' command in PATH", description = "Link the knot command into a folder on the shell PATH.", id = INSTALL_SHELL_COMMAND, participant = Workbench)]
+pub(crate) async fn install_shell_command(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    run_shell_command(
+        context,
+        "Install failed",
+        crate::app::shell_command::install,
+    )
+    .await
+}
+
+#[command("shell.uninstall-command", title = "Shell Command: Uninstall 'knot' command from PATH", description = "Remove the knot command from the shell PATH.", id = UNINSTALL_SHELL_COMMAND, participant = Workbench)]
+pub(crate) async fn uninstall_shell_command(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    run_shell_command(
+        context,
+        "Uninstall failed",
+        crate::app::shell_command::uninstall,
+    )
+    .await
+}
+
+/// Run `work` off the foreground and report only its failure.
+async fn run_shell_command(
+    context: CommandContext,
+    failure: &'static str,
+    work: fn() -> Result<(), String>,
+) -> Result<(), CommandOutcome> {
+    context
+        .window(move |window, _, cx| {
+            let native_window = window.native_window;
+            cx.spawn(async move |_, cx| {
+                if let Err(message) = cx.background_spawn(async move { work() }).await {
+                    cx.update(|cx| {
+                        show_notice(
+                            native_window,
+                            PromptLevel::Warning,
+                            failure.into(),
+                            Some(message),
+                            cx,
+                        );
+                    });
+                }
+            })
+            .detach();
+            Ok(())
+        })
+        .await
+}
+
 #[command("keymaps.show", title = "Show Keybindings", description = "List every key binding, who made it, and what it overrides.", id = SHOW_KEYBINDINGS_COMMAND, participant = Workbench)]
 pub(crate) async fn show_keybindings(
     context: CommandContext,

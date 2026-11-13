@@ -143,7 +143,10 @@ opens each window's resources one after another. `ApplicationWindows` tracks act
 order. A window whose folder is still loading has no roots yet, so a batch arriving in
 that instant can open the folder again.
 
-### 5. Install command on macOS
+### 5. Install command on macOS 🔍
+Implemented in `src/app/shell_command.rs` and `src/app/product/commands.rs`; the link
+targets the running executable, so `/Applications` and `~/Applications` both work.
+Awaiting the review gate.
 Deliverable: install and uninstall palette commands as designed. On other
 platforms they come in checkpoint 6.
 Validation: tests for the built shell command and for translocation refusal.

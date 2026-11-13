@@ -34,7 +34,7 @@ pub(crate) fn start_bundle(batch: &LaunchBatch) -> bool {
 }
 
 /// The `.app` directory an executable at `Contents/MacOS/<name>` belongs to.
-fn bundle_of(executable: &Path) -> Option<&Path> {
+pub(crate) fn bundle_of(executable: &Path) -> Option<&Path> {
     let macos = executable.parent()?;
     let contents = macos.parent()?;
     let bundle = contents.parent()?;

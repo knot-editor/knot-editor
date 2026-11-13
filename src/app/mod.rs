@@ -31,6 +31,7 @@ mod personal_config;
 mod personal_config_error;
 mod picker;
 mod product;
+mod shell_command;
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) use product::driver;
 mod record_store;
