@@ -40,12 +40,99 @@ Implementation context:
 - `extensions/@knot/vim/test/cases/operators.jsonc` (case #87)
 
 ### 2. In-place buffer reuse in `TestEditor::load`
-Deliverable:
-- In `src/app/product/driver/editor.rs`, update `TestEditor::load` so that when called on an existing test editor, it replaces the buffer text (`model.update(cx, |model, cx| ...)`), adjusts the language if needed, resets selection, and settles, avoiding full `Workbench` and document teardown/recreation on all 436 cases.
 
-Review gate: Run `cargo nextest run -p knot-ext-vim`. All tests pass cleanly, and total suite execution time drops by an additional ~500 ms.
+Reuse the window, workbench, document, buffer, and editor across all 436 cases
+instead of destroying and recreating them, without leaking state between cases.
+`TestEditor::load` is the shared product driver, so this saving compounds for
+every current and future extension suite built on it, not just Vim.
+
+#### Why the naive reload fails
+
+A fresh workbench implicitly resets state owned by five layers; a plain text
+replacement via `BufferModel::replace` resets none of it, and by construction
+leaks undo history, anchors, and dirty state. The earlier attempt panicked in
+the `scrolling` topic (`line 13 out of range (3)`, see
+[stale editor queries](../reports/stale-editor-queries.md)): the retained
+viewport row survived the text replacement and Vim queried it.
+
+| Layer | Stale state if only the text is replaced |
+| --- | --- |
+| `BufferModel` (`crates/knot-model/src/buffer.rs`) | Undo history (undo crosses cases), anchored ranges, contributions, marks, pending changes, fold-region/snapshot caches, syntax tree. `replace` advances the revision off the document's clean baseline, so every case starts dirty. No wholesale reset API exists; `replace_generated_text` asserts read-only and keeps history. |
+| `EditorState` (`crates/knot-model/src/editor.rs`) | Scroll offset and viewport row (the panic), folds, wrap map, completion, auto-closed pairs, pending indent, decorations, lifecycle-owned key contexts/caret shapes/bars. |
+| `Editor`/`EditorView` (`src/app/editor.rs`, `src/app/editor/view.rs`) | Syntax cache and caret-blink key — both generation/revision-keyed, so expected to self-invalidate; verify, do not add code speculatively. |
+| Vim `Followed` (`extensions/@knot/vim/src/extension.ts`, `normal.ts`) | Keyed by `ViewTarget`, which a reused tab keeps: mode, pending keys, `want`/`caret`, visual and previous-visual marks, jump list, context mark, `scroll` option, `foldsOff`. `vim.reset` today clears only shared registers, marks, and last-find. |
+| Document/driver (`crates/knot-model/src/documents.rs`, `src/app/languages.rs`, `src/app/documents.rs`) | Language/syntax attachment per case, per-document setting scopes, dirty baseline. |
+
+#### Approach: reuse identity, reset content at the owning layer
+
+Never reset via a committed text replacement.
+
+1. **`BufferModel::reset_to_text`** (new, `crates/knot-model/src/buffer.rs`):
+   swap text; clear history, anchored ranges, contributions and marks, pending
+   changes, and derived caches; keep language, document identity, and access
+   policy; reparse syntax. Keep the revision monotonic and re-baseline the
+   document through a new `mark_clean` on the document collection (the same
+   operation a save performs). Do not reset the revision to 0: a stale
+   extension-side revision could then alias the new text.
+2. **Editor-state swap** (`src/app/editor.rs`): `release` the old state's
+   anchors, then install a fresh `EditorState::new` over the same buffer. This
+   resets scroll, folds, wrap, and completion at once instead of field-by-field
+   clearing. Lifecycle-owned presentation (key contexts, caret shape) drops
+   with it and is re-applied by Vim in step 3. Order is: load, Vim reset,
+   selection/layout, settle — with no settle in between, so no extension query
+   observes the intermediate state.
+3. **Extend `vim.reset`** (`extensions/@knot/vim/src/extension.ts`): also reset
+   every followed editor — mode to normal via `setMode`, pending cleared,
+   jump/context/previous marks disposed, `scroll` and `foldsOff` cleared. This
+   amends the plan's "no production Vim runtime logic" exclusion above:
+   `vim.reset` already exists solely for these tests (`palette: false`), so
+   extending it stays within intent; the exclusion now covers only Vim behavior
+   logic. Marks must be disposed before the buffer's anchored store is cleared
+   in step 1 (disposing afterwards is a silent no-op leak); pin that ordering
+   in the driver.
+4. **`TestEditor::load` orchestration** (`src/app/product/driver/editor.rs`):
+   keep `document`, `model`, `window`, and `editor`; reset the buffer, swap
+   the editor state, apply the language through the existing `set_language`
+   path (`src/app/languages.rs`) when it changes, then `show(selection)` as
+   today. Language-change notification follows the buffer notify, so Vim's
+   `languageMayHaveChanged` recheck runs against the new state.
+
+#### Step 5 (approved): stale-row hardening first
+
+Pull [D185](../roadmap.md#bugs) forward as its own commit before the rewire:
+in-place reuse makes stale view rows reachable by construction, so
+`editor_row_at` and its sibling `editor_*` handlers in
+`src/app/extensions/host/handlers.rs` return their existing `AccessError`
+instead of panicking, with the regression test the report specifies. Once this
+checkpoint lands, update or remove the deferred D185 entry and its report as
+part of close-out.
+
+#### Execution order
+
+Each step is committed separately once verified.
+
+1. D185 stale-row hardening (handlers + regression test).
+2. `BufferModel::reset_to_text` + document re-baseline, with `knot-model`
+   tests: undo empty after reset, no anchored ranges survive, clean after
+   re-baseline.
+3. Editor-state swap in the `Editor` entity, with a driver test asserting
+   scroll, folds, and selection from a first `load` are gone after a second.
+4. Extend `vim.reset` to per-editor state, keeping existing shared clearing.
+5. Rewire `TestEditor::load`. Run topics individually with `scrolling` first
+   (canary for the original panic), then the full suite. A leaked sixth owner
+   of per-case state shows up as an order-dependent case failure; isolate it
+   with `KNOT_CASES` filtering.
+
+Review gate: Run `cargo nextest run -p knot-ext-vim`. All tests pass cleanly,
+and total suite execution time drops by an additional ~500 ms against the
+checkpoint-1 baseline (~1.1s).
 Implementation context:
-- `src/app/product/driver/editor.rs` (`TestEditor::load`, `new_document`, `BufferModel`)
+- `src/app/extensions/host/handlers.rs` (stale `editor_*` queries, step 5)
+- `crates/knot-model/src/buffer.rs` (`BufferModel::reset_to_text`)
+- `crates/knot-model/src/documents.rs`, `src/app/documents.rs` (re-baseline)
+- `src/app/editor.rs` (editor-state swap)
+- `extensions/@knot/vim/src/extension.ts` (`vim.reset`)
+- `src/app/product/driver/editor.rs` (`TestEditor::load`)
 
 ### 3. Close-out
 Deliverable:
