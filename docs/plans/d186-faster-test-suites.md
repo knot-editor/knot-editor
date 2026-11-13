@@ -98,44 +98,17 @@ Each checkpoint, and each area within a sweep, is its own commit. Each one
 measures before and after with the command from checkpoint 1 and records the
 result here.
 
-### 1. Measurement and the quick wins ✅ (awaiting review)
+### 1. Measurement and the quick wins ✅
 
-- ✅ A `just test-timings` recipe (`scripts/test-timings.py`, reading the
-  `timings` nextest profile's JUnit report) that runs nextest with per-test
-  timings and prints the sorted log and the totals per binary and per module,
-  in the format of `test.log`, plus wall and CPU time of the run.
-- ✅ Cache built-in glyph bytes in `icons.rs`.
-- ✅ One blocking `wait_until` (`app::driver::wait_until`, exported by
-  `test_support`); `wait_for_product_startup` and every local copy in
-  `src/app` go through it. The loops that poll an async store
-  (`recovery` discard) and the pool-only `engine_tests::wait_for_state`
-  sleep 1 ms instead of spinning.
-- ✅ Baseline and new totals (warm build, same machine, whole workspace run):
-
-  | | Before | After |
-  | --- | ---: | ---: |
-  | Summed per-test time | 123.3 s | 125.1 s |
-  | Wall time | 13.3 s | 13.5 s |
-  | CPU (user + system) | 71.4 s | 67.3 s |
-
-  The quick wins save about 6% CPU and leave wall time unchanged: per-test
-  durations are wall time, so a blocking wait does not shorten a test, it
-  frees a core for the others. The big costs (windows drawn, product startup)
-  are for the later checkpoints.
-
-Validation: `just check`; the timing totals before and after.
-
-Review gate: measured effect of the quick wins; whether the wait strategy
-holds without flakiness over several full runs.
-
-**Implementation context:** `src/app/icons.rs` (`svg_bytes`, `glyph_exists`,
-`AllAssets`); `src/test_support/mod.rs` (`wait_until`);
-`src/app/product/driver/setup.rs` (`wait_for_product_startup`);
-`src/app/product/driver/mod.rs` (`settle`, the pattern to mirror with
-`pool.activity()` and `pool.wait_for_turn`); local copies such as
-`src/app/product/tests/document_watch.rs::wait_until` and
-`src/app/product/tests.rs::wait_for_api_condition` (grep `yield_now` in
-`src/`). nextest config in `.config/nextest.toml`; recipes in `justfile`.
+Done and approved. `just test-timings` (`scripts/test-timings.py`) produces
+the per-test log and the per-binary and per-module totals with wall and CPU
+time; built-in glyph bytes are cached in `src/app/icons.rs`; and every wait in
+`src/app` goes through the blocking `app::driver::wait_until`, exported by
+`test_support`. Baseline, warm build, whole workspace: summed per-test time
+123.3 s, wall 13.3 s, CPU 71.4 s. After: 125.1 s, 13.5 s, 67.3 s. A blocking
+wait frees a core but does not shorten a test, so the gain is CPU only; the
+large costs (drawing test windows, product startup) belong to the later
+checkpoints.
 
 ### 2. Headless driver and launch
 
