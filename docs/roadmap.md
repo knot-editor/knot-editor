@@ -955,6 +955,7 @@ Kakoune mode could use it too. The
   - Reconsider: now. Give the Vim tests an inline fixture language
     (the simplest that supplies the configuration they use) instead of
     `knot-ext-languages`, and drop that dev-dependency.
+  - 🚧 Planned: [vim test fixture plan](plans/d163-vim-test-fixture.md)
 
 - **D168 — Website screenshots and documentation**
   - Deferred: The landing page has no screenshot, and the user-facing docs
