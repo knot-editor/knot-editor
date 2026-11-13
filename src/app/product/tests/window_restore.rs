@@ -18,8 +18,6 @@ fn uri(path: &str) -> ResourceUri {
 struct Launch {
     state: tempfile::TempDir,
     provider: Arc<MemoryFileSystemProvider>,
-    /// Whether windows open without a native window.
-    headless: bool,
 }
 
 fn wait<T: 'static>(task: gpui::Task<T>, cx: &mut TestAppContext) -> T {
@@ -58,7 +56,6 @@ impl Launch {
         let launch = Self {
             state: tempfile::tempdir().unwrap(),
             provider,
-            headless,
         };
         launch.install_windows(cx);
         launch
@@ -133,9 +130,6 @@ impl Launch {
             )),
         ));
         cx.set_global(ApplicationWindows::default());
-        if self.headless {
-            cx.set_global(HeadlessWindows::default());
-        }
         self.install_windows(cx);
     }
 
