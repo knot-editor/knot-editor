@@ -24,7 +24,8 @@ fn pooled_fixture_commands_and_completions_use_the_product_target(cx: &mut TestA
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
     let host = cx.update(|cx| {
         let host = super::super::super::extensions::host::install(cx);
         host.update(cx, |host, cx| host.start_test_fixture("product", cx));
@@ -280,13 +281,12 @@ async fn native_participants_reject_arguments_before_mutation(cx: &mut TestAppCo
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model.clone(), cx);
-    let target = cx
-        .update_window(native_window, |_, _, cx| {
-            window.update(cx, |window, cx| window.focus_active_editor(cx));
-            window.update(cx, |window, cx| window.capture_command_target(cx))
-        })
-        .unwrap();
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
+    let target = native_window.run(cx, |cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
+        window.update(cx, |window, cx| window.capture_command_target(cx))
+    });
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("ignored".into())));
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
     for name in [
@@ -327,7 +327,7 @@ async fn native_participants_reject_arguments_before_mutation(cx: &mut TestAppCo
                 .len(),
             1
         );
-        assert_eq!(cx.windows().len(), 1);
+        assert_eq!(cx.global::<ApplicationWindows>().windows().len(), 1);
     });
 }
 
@@ -375,14 +375,14 @@ keymaps.bind("ctrl-alt-f", "fixture.described");
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
-    cx.update_window(native_window, |_, _, cx| {
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
+    native_window.run(cx, |cx| {
         window.update(cx, |window, cx| {
             window.focus_active_surface(cx);
             window.open_command_palette(cx);
         });
-    })
-    .unwrap();
+    });
     cx.update(|cx| {
         let picker = window
             .read(cx)
@@ -426,9 +426,10 @@ fn confirming_a_palette_command_ranks_it_first_next_time(cx: &mut TestAppContext
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
     let first_command = |cx: &mut TestAppContext| {
-        cx.update_window(native_window, |_, _, cx| {
+        native_window.run(cx, |cx| {
             window.update(cx, |window, cx| {
                 window.focus_active_surface(cx);
                 window.open_command_palette(cx);
@@ -437,11 +438,9 @@ fn confirming_a_palette_command_ranks_it_first_next_time(cx: &mut TestAppContext
                 palette.command(entry).name.to_string()
             })
         })
-        .unwrap()
     };
     assert_ne!(first_command(cx), "workbench.split-horizontal");
-    cx.refresh().unwrap();
-    cx.simulate_keystrokes(native_window, "s p l i t r i g h t enter");
+    press(&window, "s p l i t r i g h t enter", cx);
     cx.run_until_parked();
     cx.read(|cx| assert!(window.read(cx).command_palette.is_none()));
     assert_eq!(first_command(cx), "workbench.split-horizontal");
