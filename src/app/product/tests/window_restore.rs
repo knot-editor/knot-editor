@@ -427,12 +427,13 @@ fn queued_requests_open_after_restoration_without_duplicating_documents(cx: &mut
     let folder = OpenRequest::from_uri_for_product(uri("b"));
     launch.restart(vec![file, folder], cx);
     let windows = windows_by_creation(cx);
-    assert_eq!(windows.len(), 3);
-    // The restored window comes first and the last request window is focused.
+    // The file reaches the restored window that holds its project, which
+    // shows it once; the folder opens a window and takes focus.
+    assert_eq!(windows.len(), 2);
     assert_eq!(texts(&windows[0].1, cx), ["one"]);
-    assert!(active(cx).as_ref() == Some(&windows[2].1));
+    assert!(active(cx).as_ref() == Some(&windows[1].1));
     assert_eq!(
-        cx.read(|cx| windows[2]
+        cx.read(|cx| windows[1]
             .1
             .read(cx)
             .workspace
@@ -457,8 +458,70 @@ fn queued_requests_open_after_restoration_without_duplicating_documents(cx: &mut
     cx.update(|cx| super::super::dispatch_launch_request(None, cx));
     cx.run_until_parked();
     let windows = windows_by_creation(cx);
-    assert_eq!(windows.len(), 4);
-    assert!(texts(&windows[3].1, cx).is_empty());
+    assert_eq!(windows.len(), 3);
+    assert!(texts(&windows[2].1, cx).is_empty());
+}
+
+#[gpui::test]
+fn a_launch_batch_goes_to_the_windows_that_hold_its_paths(cx: &mut TestAppContext) {
+    let launch = Launch::new(cx);
+    launch.provider.seed_directory(uri("n")).unwrap();
+    launch.provider.seed_file(uri("n/x.txt"), b"x").unwrap();
+    launch.provider.seed_file(uri("n/y.txt"), b"y").unwrap();
+    launch.start(Vec::new(), cx);
+    let (_, window_a) = windows_by_creation(cx).remove(0);
+    window_a.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![uri("a")], cx);
+    });
+    let dispatch = |paths: &[&str], cx: &mut TestAppContext| {
+        let requests = paths
+            .iter()
+            .map(|path| OpenRequest::from_uri_for_product(uri(path)))
+            .collect::<Vec<_>>();
+        cx.update(|cx| super::super::dispatch_launch_request(Some(LaunchBatch::new(requests)), cx));
+        cx.run_until_parked();
+    };
+
+    // A file of a project opens in its window; the files nothing holds share
+    // one new window, which takes focus.
+    dispatch(&["n/x.txt", "a/one.txt", "n/y.txt"], cx);
+    let windows = windows_by_creation(cx);
+    assert_eq!(windows.len(), 2);
+    assert_eq!(texts(&windows[0].1, cx), ["one"]);
+    assert_eq!(texts(&windows[1].1, cx), ["x", "y"]);
+    assert!(active(cx).as_ref() == Some(&windows[1].1));
+
+    // A folder that is open focuses its window instead of opening another.
+    dispatch(&["a"], cx);
+    assert_eq!(windows_by_creation(cx).len(), 2);
+    assert!(active(cx).as_ref() == Some(&windows_by_creation(cx)[0].1));
+
+    // A file beside a new folder opens in the folder's window.
+    dispatch(&["b/two.txt", "b"], cx);
+    let windows = windows_by_creation(cx);
+    assert_eq!(windows.len(), 3);
+    assert_eq!(texts(&windows[2].1, cx), ["two"]);
+    assert!(active(cx).as_ref() == Some(&windows[2].1));
+}
+
+#[gpui::test]
+fn a_file_of_two_windows_projects_goes_to_the_most_recently_focused(cx: &mut TestAppContext) {
+    let launch = Launch::new(cx);
+    launch.start(Vec::new(), cx);
+    let (_, first) = windows_by_creation(cx).remove(0);
+    let second = cx.update(|cx| super::super::launch::open_product_window_with(None, None, cx));
+    for window in [&first, &second] {
+        window.update(cx, |window, cx| {
+            window.replace_workspace_roots(vec![uri("a")], cx);
+        });
+    }
+    // The window opened last is the newer, until the first is focused.
+    first.update(cx, |window, cx| window.activate(cx));
+    let request = OpenRequest::from_uri_for_product(uri("a/one.txt"));
+    cx.update(|cx| super::super::dispatch_launch_request(Some(request.into()), cx));
+    cx.run_until_parked();
+    assert_eq!(texts(&first, cx), ["one"]);
+    assert!(texts(&second, cx).is_empty());
 }
 
 #[gpui::test]

@@ -46,6 +46,7 @@ mod view_state;
 #[cfg(test)]
 use super::commands::dispatch::SHOW_COMPLETIONS_COMMAND;
 use closure::install_protected_window_close;
+use knot_model::launch::{Destination, PlacedRequest, PlacementWindow, place};
 #[cfg(test)]
 pub(super) use launch::bind_product_keys;
 pub(super) use launch::finish_product_startup;
@@ -101,6 +102,9 @@ use super::{
 struct ApplicationWindows(RefCell<Vec<OpenWindow>>);
 
 struct OpenWindow {
+    /// When the window was last activated, from a count over all windows;
+    /// zero while it never was.
+    activated: u64,
     window: WeakEntity<KnotWindow>,
     workbench: WeakEntity<Workbench>,
     native_window: Option<AnyWindowHandle>,
@@ -161,6 +165,14 @@ impl LaunchGate {
                 *self = Self::Failed;
                 Vec::new()
             }
+        }
+    }
+
+    /// The batches queued so far, which stay pending.
+    fn take_queued(&mut self) -> Vec<LaunchBatch> {
+        match self {
+            Self::Pending(requests) => std::mem::take(requests).into_iter().flatten().collect(),
+            Self::Ready | Self::Failed => Vec::new(),
         }
     }
 
@@ -292,6 +304,7 @@ impl ApplicationWindows {
         match windows.iter_mut().find(|open| open.window == window) {
             Some(open) => open.workbench = workbench.downgrade(),
             None => windows.push(OpenWindow {
+                activated: 0,
                 window,
                 workbench: workbench.downgrade(),
                 native_window: None,
@@ -313,11 +326,28 @@ impl ApplicationWindows {
     }
 
     /// Mark `window` as the one activated last.
-    #[cfg(any(test, feature = "test-support"))]
     fn activate(&self, window: EntityId) {
-        for open in self.0.borrow_mut().iter_mut() {
+        let mut windows = self.0.borrow_mut();
+        let stamp = windows.iter().map(|open| open.activated).max().unwrap_or(0) + 1;
+        for open in windows.iter_mut() {
             open.active = open.window.entity_id() == window;
+            if open.active {
+                open.activated = stamp;
+            }
         }
+    }
+
+    /// The open windows, the most recently activated first; windows never
+    /// activated follow, the most recently opened first.
+    fn by_activation(&self) -> Vec<Entity<KnotWindow>> {
+        let mut windows = self.0.borrow_mut();
+        windows.retain(|open| open.window.upgrade().is_some());
+        let mut order = windows.iter().enumerate().collect::<Vec<_>>();
+        order.sort_by_key(|(index, open)| std::cmp::Reverse((open.activated, *index)));
+        order
+            .into_iter()
+            .filter_map(|(_, open)| open.window.upgrade())
+            .collect()
     }
 
     /// The activated window, when it has no native window.
@@ -429,6 +459,13 @@ pub(crate) fn windows(cx: &App) -> Vec<Entity<KnotWindow>> {
 /// The open window a public ID names.
 pub(crate) fn find_window(id: &str, cx: &App) -> Option<Entity<KnotWindow>> {
     cx.try_global::<ApplicationWindows>()?.find(id)
+}
+
+/// The open windows, the most recently activated first.
+pub(super) fn windows_by_activation(cx: &App) -> Vec<Entity<KnotWindow>> {
+    cx.try_global::<ApplicationWindows>()
+        .map(ApplicationWindows::by_activation)
+        .unwrap_or_default()
 }
 
 /// The window shown in `native_window`.
@@ -865,6 +902,7 @@ impl KnotWindow {
             |_, window, cx| {
                 super::extensions::host::application_changed(cx);
                 if window.is_window_active() {
+                    cx.global::<ApplicationWindows>().activate(cx.entity_id());
                     document_watch::recheck_all(cx);
                 }
             },

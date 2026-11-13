@@ -265,11 +265,120 @@ pub(super) fn dispatch_launch_request(batch: Option<LaunchBatch>, cx: &mut App) 
             cx.activate(true);
         }
         Some(Some(batch)) => {
-            for request in batch.into_requests() {
-                open_product_window(Some(request), cx);
-            }
-            cx.activate(true);
+            let providers = KnotWindow::filesystems(cx);
+            cx.spawn(async move |cx| {
+                let items = resolve_batch(providers, batch).await;
+                cx.update(|cx| {
+                    place_batch(items, &mut None, cx);
+                    cx.activate(true);
+                });
+            })
+            .detach();
         }
+    }
+}
+
+/// The kind of each resource of `batch`, with its URI normalized the way a
+/// window's roots are. A resource that cannot be examined counts as a file,
+/// whose open reports the failure.
+async fn resolve_batch(
+    providers: Arc<FileSystemProviderRegistry>,
+    batch: LaunchBatch,
+) -> Vec<PlacedRequest> {
+    let mut items = Vec::new();
+    for request in batch.into_requests() {
+        let uri = request.uri().clone();
+        let item = match examine(&providers, uri).await {
+            Some((uri, directory)) => PlacedRequest {
+                request: OpenRequest::from_uri_for_product(uri),
+                directory,
+            },
+            None => PlacedRequest {
+                request,
+                directory: false,
+            },
+        };
+        items.push(item);
+    }
+    items
+}
+
+async fn examine(
+    providers: &FileSystemProviderRegistry,
+    uri: crate::app::resource::ResourceUri,
+) -> Option<(crate::app::resource::ResourceUri, bool)> {
+    let uri = providers.normalize(uri).await.ok()?;
+    let stat = providers
+        .provider(&uri)
+        .ok()?
+        .stat(uri.clone())
+        .await
+        .ok()?;
+    Some((uri, matches!(stat, ResourceStat::Directory)))
+}
+
+/// Open the resources of one batch where [`knot_model::launch::place`] puts
+/// them and focus the window it names. A window the batch creates presents
+/// the startup `recovery`, which the first one takes.
+fn place_batch(
+    items: Vec<PlacedRequest>,
+    recovery: &mut Option<crate::app::recovery::StartupRecovery>,
+    cx: &mut App,
+) {
+    let open = windows_by_activation(cx)
+        .into_iter()
+        .map(|window| PlacementWindow {
+            roots: window
+                .read(cx)
+                .workspace
+                .snapshot()
+                .roots()
+                .iter()
+                .map(|root| root.uri.clone())
+                .collect(),
+            window,
+        })
+        .collect::<Vec<_>>();
+    let placement = place(&open, &items);
+    let created = placement
+        .new_windows
+        .iter()
+        .map(|_| open_product_window_with(None, recovery.take(), cx))
+        .collect::<Vec<_>>();
+    let window_of = |destination: Destination<Entity<KnotWindow>>| match destination {
+        Destination::Existing(window) => window,
+        Destination::New(index) => created[index].clone(),
+    };
+    // A window opens its resources one after another, since a later open
+    // supersedes an earlier one that is still loading. A folder comes first.
+    let mut queues: Vec<(Entity<KnotWindow>, Vec<OpenRequest>)> = Vec::new();
+    let opens = placement
+        .new_windows
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, folder)| Some((Destination::New(index), folder?)))
+        .chain(placement.files);
+    for (destination, request) in opens {
+        let window = window_of(destination);
+        match queues.iter_mut().find(|(queued, _)| *queued == window) {
+            Some((_, requests)) => requests.push(request),
+            None => queues.push((window, vec![request])),
+        }
+    }
+    for (window, requests) in queues {
+        cx.spawn(async move |cx| {
+            for request in requests {
+                let finished = window.update(cx, |window, cx| {
+                    let target = OpenTarget::from_command(&window.capture_command_target(cx));
+                    window.start_open_operation(request, target, false, cx)
+                });
+                drop(finished.await);
+            }
+        })
+        .detach();
+    }
+    if let Some(focus) = placement.focus {
+        activate_shown_window(&window_of(focus), cx);
     }
 }
 
@@ -314,7 +423,25 @@ pub(in crate::app) fn finish_product_startup(
                     }
                     None => None,
                 };
-                cx.update(|cx| open_launch_windows(restored, recovery, cx));
+                // Resolve every batch queued during startup, and those that
+                // arrive meanwhile, before the gate opens.
+                let providers = cx.update(|cx| KnotWindow::filesystems(cx));
+                let mut batches = Vec::new();
+                loop {
+                    let queued = cx.update(|cx| {
+                        cx.global::<ApplicationLaunchGate>()
+                            .0
+                            .borrow_mut()
+                            .take_queued()
+                    });
+                    if queued.is_empty() {
+                        break;
+                    }
+                    for batch in queued {
+                        batches.push(resolve_batch(providers.clone(), batch).await);
+                    }
+                }
+                cx.update(|cx| open_launch_windows(restored, recovery, batches, cx));
             })
             .detach();
         }
@@ -326,26 +453,22 @@ pub(in crate::app) fn finish_product_startup(
     }
 }
 
-/// Open each queued request in its own window after restoration. Recovered
-/// documents no window presents go to the first restored window, else to the
-/// first opened one; with nothing restored or requested one window opens.
-/// The last request window ends up focused, else the previously active
-/// restored window. Then window recording starts and extensions learn that
-/// launch finished.
+/// Place each queued batch after restoration, so a restored window can take
+/// its files. Recovered documents no window presents go to the first restored
+/// window, else to the first opened one; with nothing restored or requested
+/// one window opens. A batch focuses the window it names, else the previously
+/// active restored window stays. Then window recording starts and extensions
+/// learn that launch finished.
 fn open_launch_windows(
     restored: Option<sessions::ReplaceWindowsResult>,
     recovery: crate::app::recovery::StartupRecovery,
+    batches: Vec<Vec<PlacedRequest>>,
     cx: &mut App,
 ) {
-    let requests = cx
-        .global::<ApplicationLaunchGate>()
+    cx.global::<ApplicationLaunchGate>()
         .0
         .borrow_mut()
-        .complete()
-        .into_iter()
-        .flatten()
-        .flat_map(LaunchBatch::into_requests)
-        .collect::<Vec<_>>();
+        .complete();
     let restored = restored
         .map(|result| result.windows)
         .unwrap_or_default()
@@ -375,15 +498,11 @@ fn open_launch_windows(
             cx.notify();
         });
     }
-    if restored.is_empty() && requests.is_empty() {
+    if restored.is_empty() && batches.iter().all(Vec::is_empty) {
         open_product_window_with(None, recovery.take(), cx);
     }
-    let mut last = None;
-    for request in requests {
-        last = Some(open_product_window_with(Some(request), recovery.take(), cx));
-    }
-    if let Some(last) = last {
-        activate_shown_window(&last, cx);
+    for items in batches {
+        place_batch(items, &mut recovery, cx);
     }
     open_report_after_failed_startup(cx);
     crate::app::window_record::start_recording(cx);
