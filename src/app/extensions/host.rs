@@ -2496,7 +2496,7 @@ impl ProductExtensionHost {
         let (sender, mut batches) = futures::channel::mpsc::unbounded();
         let subscription = registry.watch(
             providers,
-            uri,
+            uri.clone(),
             recursive,
             std::sync::Arc::new(move |batch| {
                 let _ = sender.unbounded_send(batch);
@@ -2506,6 +2506,14 @@ impl ProductExtensionHost {
         let id = knot_protocol::WatchSubscriptionId::new(self.next_file_watch);
         let task = cx.spawn(async move |this, cx| {
             while let Some(batch) = batches.next().await {
+                // The workspace index learns of the same changes from its own
+                // subscription, and a listener that lists what changed reads
+                // the index, so the batch reaches the index first.
+                let index = cx
+                    .update(|cx| crate::app::file_index::ApplicationFileIndex::covering(cx, &uri));
+                if let Some(index) = index {
+                    index.apply(&batch).await;
+                }
                 if this
                     .update(cx, |host, cx| host.file_watch_batch(id, batch, cx))
                     .is_err()

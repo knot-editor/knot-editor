@@ -133,7 +133,10 @@ listener.
 
 `files.watch` subscriptions are owned by the calling lifecycle: disposal and
 unload or restart drop them, which releases the provider watch once no other
-subscription uses it.
+subscription uses it. Before a batch reaches an extension, the foreground
+applies it to the [workspace file index](#workspace-file-index) that covers the
+watched URI, so a listener that lists the changed directories never reads
+entries the batch already replaced.
 
 ### Workspace file index
 
