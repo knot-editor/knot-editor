@@ -341,7 +341,13 @@ mod tests {
             sorted(batch),
             ["mem://workspace/src/a.txt", "mem://workspace/src/b.txt"]
         );
-        assert!(batches.recv_timeout(WINDOW * 4).is_err());
+        // Events are delivered in order, so a later change arriving alone
+        // proves the burst left no second batch behind.
+        fixture.provider.seed_file(uri("/src/c.txt"), "z").unwrap();
+        assert_eq!(
+            sorted(batches.recv_timeout(WAIT).unwrap()),
+            ["mem://workspace/src/c.txt"]
+        );
     }
 
     #[test]
@@ -356,11 +362,12 @@ mod tests {
             .provider
             .seed_file(uri("/src/deep/inner.txt"), "x")
             .unwrap();
-        assert!(batches.recv_timeout(WINDOW * 4).is_err());
         fixture
             .provider
             .seed_file(uri("/src/top.txt"), "x")
             .unwrap();
+        // The deeper entry was reported first, so it would precede or join
+        // the batch carrying the direct child.
         assert_eq!(
             sorted(batches.recv_timeout(WAIT).unwrap()),
             ["mem://workspace/src/top.txt"]
@@ -398,8 +405,16 @@ mod tests {
                 ["mem://workspace/src/deep/inner.txt"]
             );
         }
-        // The narrower subscriber never sees what lies outside its scope.
-        assert!(file_batches.recv_timeout(WINDOW * 4).is_err());
+        // The narrower subscriber never sees what lies outside its scope: its
+        // first batch is the later change inside it.
+        fixture
+            .provider
+            .seed_file(uri("/src/top.txt"), "x")
+            .unwrap();
+        assert_eq!(
+            sorted(file_batches.recv_timeout(WAIT).unwrap()),
+            ["mem://workspace/src/top.txt"]
+        );
 
         drop((root, twin));
         assert_eq!(fixture.provider.watch_count(), 1);
@@ -419,7 +434,8 @@ mod tests {
         drop(watch);
         assert_eq!(fixture.provider.watch_count(), 0);
         fixture.provider.seed_file(uri("/src/a.txt"), "x").unwrap();
-        assert!(batches.recv_timeout(WINDOW * 4).is_err());
+        // Disposal dropped the listener, so its channel is closed and empty.
+        assert!(batches.recv().is_err());
     }
 
     #[test]
