@@ -241,10 +241,17 @@ discovery in `crates/knot-model/src/extensions/package.rs`.
 
 Validation: `just check`; `knot-ext-languages` totals.
 
-### 10. Vim topics
+### 10. Vim topics ✅
 
-- Re-profile `topics::operators` and `topics::visual` and decide whether
-  settling after each key needs work.
+- ✅ `topics::operators` and `topics::visual` run alone in about 0.5 s of
+  mostly CPU: startup is 40 ms and the rest is about 5 ms per case (100 and
+  73 cases), the V8 turns of each key. The 1.5–1.8 s in a full run is
+  contention among parallel processes. Settling after each key is a real
+  round trip rather than avoidable waiting, so no change.
+
+Whole workspace after checkpoints 8–10, warm build: wall 7.2–7.7 s, summed
+per-test time 72.7 s, CPU about 58 s (from 13.4 s, about 130 s, and 61 s
+before checkpoint 7). No test runs over 1.6 s.
 
 Validation: `just check`; Vim totals.
 
