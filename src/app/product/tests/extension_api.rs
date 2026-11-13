@@ -389,8 +389,10 @@ throw new Error("closed buffer accepted operation");
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Clean", model.clone(), cx)
     });
-    let (first, first_window) = product_window(document, model.clone(), cx);
-    let (second, second_window) = product_window(document, model.clone(), cx);
+    let first = headless_window(document, model.clone(), cx);
+    let first_window = Headless;
+    let second = headless_window(document, model.clone(), cx);
+    let second_window = Headless;
     let retained_editor = cx.read(|cx| {
         first
             .read(cx)
@@ -477,7 +479,8 @@ await commands.register("api.owned-cleanup", async () => {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "owned").unwrap());
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
     let editor = cx.read(|cx| {
         window
             .read(cx)
@@ -649,7 +652,8 @@ getChildren() { return [{ id: "root", label: "Deferred", collapsibleState: "none
 
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, _window) = product_window(document, model, cx);
+    let window = headless_window(document, model, cx);
+    let _window = Headless;
     let tree = wait_for_contributed_view(&window, "example.deferred", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["Deferred"]);
 }
@@ -907,11 +911,11 @@ fn startup_script_command_cannot_borrow_the_focused_product_window(cx: &mut Test
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
-    cx.update_window(native_window, |_, _, cx| {
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
+    native_window.run(cx, |cx| {
         window.update(cx, |window, cx| window.focus_active_editor(cx));
-    })
-    .unwrap();
+    });
 
     let key = ExtensionKey::new(ExtensionId::new(89), ExtensionLifecycleId::new(1));
     let (done, mut result) = tokio::sync::oneshot::channel();
@@ -966,7 +970,8 @@ fn extension_command_with_editor_prefix_keeps_its_arguments(cx: &mut TestAppCont
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
     let key = ExtensionKey::new(ExtensionId::new(91), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host
@@ -996,12 +1001,10 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
                 .is_ok()
         })
     });
-    let target = cx
-        .update_window(native_window, |_, _, cx| {
-            window.update(cx, |window, cx| window.focus_active_editor(cx));
-            window.update(cx, |window, cx| window.capture_command_target(cx))
-        })
-        .unwrap();
+    let target = native_window.run(cx, |cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
+        window.update(cx, |window, cx| window.capture_command_target(cx))
+    });
     let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
     let execution = dispatcher.update(cx, |dispatcher, cx| {
         dispatcher.dispatch(
@@ -1030,7 +1033,8 @@ fn nested_script_waits_for_a_pending_native_command(cx: &mut TestAppContext) {
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
     let key = ExtensionKey::new(ExtensionId::new(90), ExtensionLifecycleId::new(1));
     host.update(cx, |host, cx| {
         let execution = host
@@ -1393,7 +1397,8 @@ await commands.register("timers.arm", async () => {
     let host = cx.update(crate::app::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
     let key = ExtensionKey::new(ExtensionId::new(971), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(None));
     let result = loaded.clone();
