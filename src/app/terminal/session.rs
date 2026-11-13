@@ -11,9 +11,11 @@ use alacritty_terminal::{
     event::{Event, EventListener, WindowSize},
     event_loop::{EventLoop, EventLoopSender, Msg, State},
     grid::Dimensions,
+    index::{Column, Line},
     sync::FairMutex,
-    term::{Config, MIN_COLUMNS, MIN_SCREEN_LINES, Term},
+    term::{Config, MIN_COLUMNS, MIN_SCREEN_LINES, Term, cell::Flags},
     tty::{self, Options},
+    vte::ansi::Processor,
 };
 use gpui::{Context, Task};
 
@@ -216,6 +218,58 @@ impl Drop for TerminalAttachment {
             .active
             .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire);
     }
+}
+
+/// Visible lines plus scrollback as plain text, oldest first, without
+/// trailing blank rows. Each line reports whether it wrapped onto the next
+/// row, so replay can let the fresh terminal wrap it again.
+fn snapshot_lines<T>(terminal: &Term<T>) -> Vec<(String, bool)> {
+    let grid = terminal.grid();
+    let columns = grid.columns();
+    if columns == 0 {
+        return Vec::new();
+    }
+    let mut lines = Vec::new();
+    let mut line = grid.topmost_line().0;
+    let bottom = grid.bottommost_line().0;
+    while line <= bottom {
+        let row = &grid[Line(line)];
+        let mut text = String::new();
+        for column in 0..columns {
+            let cell = &row[Column(column)];
+            if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
+                continue;
+            }
+            text.push(cell.c);
+        }
+        while text.ends_with(' ') {
+            text.pop();
+        }
+        let wrapped = row[Column(columns - 1)].flags.contains(Flags::WRAPLINE);
+        lines.push((text, wrapped));
+        line += 1;
+    }
+    while lines.last().is_some_and(|(text, _)| text.is_empty()) {
+        lines.pop();
+    }
+    lines
+}
+
+/// Feed carried lines into a fresh terminal as scrollback. The cursor ends
+/// on the row below them, so new shell output continues underneath.
+fn replay_lines(terminal: &Arc<FairMutex<Term<TerminalEventListener>>>, lines: &[(String, bool)]) {
+    if lines.is_empty() {
+        return;
+    }
+    let mut bytes = Vec::new();
+    for (text, wrapped) in lines {
+        bytes.extend_from_slice(text.as_bytes());
+        if !wrapped {
+            bytes.extend_from_slice(b"\r\n");
+        }
+    }
+    let mut parser: Processor = Processor::new();
+    parser.advance(&mut *terminal.lock(), &bytes);
 }
 
 impl TerminalSession {
@@ -465,8 +519,15 @@ impl TerminalSession {
     }
 
     pub(crate) fn restart(&mut self, cx: &mut Context<Self>) {
+        let carried = self
+            .terminal()
+            .map(|terminal| snapshot_lines(&terminal.lock()));
         self.close(cx);
         self.start(cx);
+        if let (Some(lines), Some(terminal)) = (carried, self.terminal()) {
+            replay_lines(terminal, &lines);
+            cx.notify();
+        }
     }
 }
 

@@ -8,7 +8,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use alacritty_terminal::{grid::Dimensions, tty};
+use alacritty_terminal::{
+    grid::Dimensions,
+    index::{Column, Line},
+    tty,
+};
 use gpui::{AppContext, Entity, TestAppContext};
 
 use crate::app::{
@@ -38,6 +42,23 @@ fn output(session: &TerminalSession) -> String {
         .display_iter
         .map(|cell| cell.cell.c)
         .collect()
+}
+
+fn full_output(session: &TerminalSession) -> String {
+    let Some(terminal) = session.terminal() else {
+        return String::new();
+    };
+    let terminal = terminal.lock();
+    let grid = terminal.grid();
+    let mut text = String::new();
+    let mut line = grid.topmost_line().0;
+    while line <= grid.bottommost_line().0 {
+        for column in 0..grid.columns() {
+            text.push(grid[Line(line)][Column(column)].c);
+        }
+        line += 1;
+    }
+    text
 }
 
 fn wait_for(
@@ -330,6 +351,44 @@ fn restart_ignores_prior_process_exit(cx: &mut TestAppContext) {
     assert!(session.read_with(cx, |session, _| {
         matches!(session.status(), TerminalStatus::Running)
     }));
+    session.update(cx, |session, cx| session.close(cx));
+}
+
+#[gpui::test]
+fn restart_carries_prior_output_into_the_new_session(cx: &mut TestAppContext) {
+    let temp = tempfile::tempdir().unwrap();
+    let counter = temp.path().join("run");
+    fs::write(&counter, "1").unwrap();
+    let session = cx.new(|cx| {
+        TerminalSession::new_with_options(
+            shell(&format!(
+                "printf 'run-%s-done\\n' \"$(cat '{}')\"; exit 0",
+                counter.display()
+            )),
+            cx,
+        )
+    });
+    wait_for(cx, &session, |session| {
+        matches!(session.status(), TerminalStatus::Exited(_))
+            && output(session).contains("run-1-done")
+    });
+    fs::write(&counter, "2").unwrap();
+    session.update(cx, |session, cx| session.restart(cx));
+    wait_for(cx, &session, |session| {
+        matches!(session.status(), TerminalStatus::Exited(_))
+            && full_output(session).contains("run-2-done")
+    });
+    session.read_with(cx, |session, _| {
+        let text = full_output(session);
+        let first = text
+            .find("run-1-done")
+            .expect("prior output survives restart");
+        let second = text.find("run-2-done").expect("new output follows restart");
+        assert!(
+            first < second,
+            "restarted output continues below carried output"
+        );
+    });
     session.update(cx, |session, cx| session.close(cx));
 }
 
