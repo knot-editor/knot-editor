@@ -91,15 +91,14 @@ fn script_keybindings_follow_config_phases_and_runtime_replacement(cx: &mut Test
     let documents = cx.read(|cx| cx.global::<ApplicationDocuments>().0.clone());
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
-    let target = cx
-        .update_window(native_window, |_, _, cx| {
-            window.update(cx, |window, cx| {
-                window.focus_active_surface(cx);
-                window.capture_command_target(cx)
-            })
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
+    let target = native_window.run(cx, |cx| {
+        window.update(cx, |window, cx| {
+            window.focus_active_surface(cx);
+            window.capture_command_target(cx)
         })
-        .unwrap();
+    });
     let command = cx.read(|cx| {
         let Some(BindingResolution::Command(command)) =
             cx.global::<ApplicationKeymaps>().0.resolve(
@@ -583,11 +582,11 @@ fn unbinding_an_unmapped_letter_preserves_editor_input(cx: &mut TestAppContext) 
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model.clone(), cx);
-    cx.update_window(native_window, |_, _, cx| {
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
+    native_window.run(cx, |cx| {
         window.update(cx, |window, cx| window.focus_active_editor(cx))
-    })
-    .unwrap();
+    });
     cx.update(|cx| {
         let owner = BindingOwner::Extension(ExtensionId::new(0), ExtensionLifecycleId::new(1));
         assert!(
@@ -598,8 +597,7 @@ fn unbinding_an_unmapped_letter_preserves_editor_input(cx: &mut TestAppContext) 
         );
         super::super::super::commands::keymaps::rebuild(cx);
     });
-    cx.refresh().unwrap();
-    cx.simulate_keystrokes(native_window, "a");
+    press(&window, "a", cx);
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "a"));
 }
@@ -788,15 +786,15 @@ fn macos_emacs_keys_edit_through_the_knot_preset(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     model.update(cx, |model, _| model.replace(0..0, "hello world").unwrap());
-    let (window, native_window) = product_window(document, model.clone(), cx);
-    cx.update_window(native_window, |_, _, cx| {
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
+    native_window.run(cx, |cx| {
         window.update(cx, |window, cx| window.focus_active_editor(cx))
-    })
-    .unwrap();
-    cx.refresh().unwrap();
-    cx.simulate_keystrokes(
-        native_window,
+    });
+    press(
+        &window,
         "ctrl-e ctrl-b ctrl-b ctrl-h ctrl-a ctrl-f ctrl-k",
+        cx,
     );
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "h"));
@@ -1219,11 +1217,11 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Modal", model.clone(), cx)
     });
-    let (window, native_window) = product_window(document, model.clone(), cx);
-    cx.update_window(native_window, |_, _, cx| {
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
+    native_window.run(cx, |cx| {
         window.update(cx, |window, cx| window.focus_active_editor(cx))
-    })
-    .unwrap();
+    });
     let editor = cx.read(|cx| {
         window
             .read(cx)
@@ -1238,31 +1236,30 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
             editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
         })
     });
-    cx.refresh().unwrap();
     let in_modal = |cx: &gpui::App| editor.read(cx).editor().read(cx).key_contexts() == ["modal"];
 
-    cx.simulate_keystrokes(native_window, "f8");
+    press(&window, "f8", cx);
     wait_for_api_condition(cx, in_modal);
     // No refresh: the context is not in any painted frame yet.
-    cx.simulate_keystrokes(native_window, "h");
+    press(&window, "h", cx);
     wait_for_api_condition(cx, |cx| {
         editor.read(cx).editor().read(cx).selection(cx) == (2, 2)
     });
-    cx.simulate_keystrokes(native_window, "x");
+    press(&window, "x", cx);
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxc");
 
-    cx.simulate_keystrokes(native_window, "escape");
+    press(&window, "escape", cx);
     wait_for_api_condition(cx, |cx| {
         editor.read(cx).editor().read(cx).key_contexts().is_empty()
     });
-    cx.simulate_keystrokes(native_window, "h");
+    press(&window, "h", cx);
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhc");
 
-    cx.simulate_keystrokes(native_window, "f8");
+    press(&window, "f8", cx);
     wait_for_api_condition(cx, in_modal);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.read(|cx| assert!(editor.read(cx).editor().read(cx).key_contexts().is_empty()));
-    cx.simulate_keystrokes(native_window, "h");
+    press(&window, "h", cx);
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhhc");
 }
 
@@ -1270,13 +1267,13 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
 fn focused_editor_window(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
-) -> (Entity<KnotWindow>, gpui::AnyWindowHandle, Entity<Buffer>) {
+) -> (Entity<KnotWindow>, Entity<Buffer>) {
     let model = cx.new(|_| Buffer::new(BufferModel::from_text("abc")));
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Keys", model.clone(), cx)
     });
-    let (window, native_window) = product_window(document, model.clone(), cx);
-    cx.update_window(native_window, |_, _, cx| {
+    let window = headless_window(document, model.clone(), cx);
+    Headless.run(cx, |cx| {
         let editor = window
             .read(cx)
             .workbench
@@ -1290,10 +1287,8 @@ fn focused_editor_window(
             })
         });
         window.update(cx, |window, cx| window.focus_active_editor(cx))
-    })
-    .unwrap();
-    cx.refresh().unwrap();
-    (window, native_window, model)
+    });
+    (window, model)
 }
 
 /// A sequence another package binds in a context that is off holds no key:
@@ -1336,24 +1331,24 @@ fn a_sequence_bound_in_another_context_leaves_keys_to_a_modal_package(cx: &mut T
         keymap_command(cx, "f7", None).as_deref() == Some("b.enter")
             && keymap_command(cx, "f9", None).as_deref() == Some("a.report")
     });
-    let (window, native_window, model) = focused_editor_window(&documents, cx);
+    let (window, model) = focused_editor_window(&documents, cx);
     let clipboard = |cx: &gpui::App| cx.read_from_clipboard().and_then(|item| item.text());
 
-    cx.simulate_keystrokes(native_window, "f8");
+    press(&window, "f8", cx);
     wait_for_api_condition(cx, |cx| !window.read(cx).holds_keys());
-    cx.simulate_keystrokes(native_window, "z b");
-    cx.simulate_keystrokes(native_window, "f9");
+    press(&window, "z b", cx);
+    press(&window, "f9", cx);
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("zb"));
     cx.read(|cx| {
         assert!(!window.read(cx).has_pending_keys());
         assert_eq!(model.read(cx).text(), "abc");
     });
 
-    cx.simulate_keystrokes(native_window, "f7");
+    press(&window, "f7", cx);
     wait_for_api_condition(cx, |cx| !window.read(cx).holds_keys());
-    cx.simulate_keystrokes(native_window, "z t");
+    press(&window, "z t", cx);
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("top"));
-    cx.simulate_keystrokes(native_window, "f9");
+    press(&window, "f9", cx);
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("zb"));
 }
 
@@ -1363,23 +1358,23 @@ fn a_sequence_bound_in_another_context_leaves_keys_to_a_modal_package(cx: &mut T
 fn an_unfinished_sequence_delivers_its_keys(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.update(super::super::bind_product_keys);
-    let (window, native_window, model) = focused_editor_window(&documents, cx);
+    let (window, model) = focused_editor_window(&documents, cx);
 
-    cx.simulate_keystrokes(native_window, "secondary-k");
+    press(&window, "secondary-k", cx);
     cx.read(|cx| assert!(window.read(cx).has_pending_keys()));
-    cx.simulate_keystrokes(native_window, "x y");
+    press(&window, "x y", cx);
     cx.run_until_parked();
     cx.read(|cx| {
         assert!(!window.read(cx).has_pending_keys());
         assert_eq!(model.read(cx).text(), "abcxy");
     });
 
-    cx.simulate_keystrokes(native_window, "secondary-k");
+    press(&window, "secondary-k", cx);
     cx.executor()
         .advance_clock(crate::app::commands::key_router::SEQUENCE_TIMEOUT);
     cx.run_until_parked();
     cx.read(|cx| assert!(!window.read(cx).has_pending_keys()));
-    cx.simulate_keystrokes(native_window, "z");
+    press(&window, "z", cx);
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "abcxyz"));
 }
