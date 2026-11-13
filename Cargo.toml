@@ -12,6 +12,7 @@ default-members = [
     "crates/knot-host",
     "crates/knot-model",
     "crates/knot-protocol",
+    "crates/knot-terminal",
 ]
 resolver = "3"
 
@@ -25,6 +26,7 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11", default-fe
 alacritty_terminal = { version = "0.26", default-features = false }
 anyhow = "1"
 directories = "6"
+flate2 = "1"
 interprocess = "2.4"
 inventory = "0.3"
 jsonc-parser = { version = "0.34", features = ["serde", "serde_json"] }
@@ -40,9 +42,11 @@ quote = "1"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 futures = "0.3"
 semver = "1"
+sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 syn = { version = "2", features = ["full"] }
+tar = "0.4"
 tempfile = "3"
 tokio = { version = "1.53", features = ["sync"] }
 trash = "5"

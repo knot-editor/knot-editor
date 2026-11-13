@@ -22,6 +22,10 @@ test-timings log="test.log":
 walk-bench directory runs="5":
     cargo run --release -p knot-model --example walk_bench -- {{directory}} {{runs}}
 
+# Regenerate the libghostty-vt bindings in knot-terminal (needs bindgen-cli and libclang)
+libghostty-bindings:
+    scripts/libghostty-bindings.sh
+
 # Run Knot
 run:
     cargo run -p knot-app
