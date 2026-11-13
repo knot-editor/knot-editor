@@ -730,12 +730,12 @@ fn windows_native_ctrl_shift_p_opens_command_palette(cx: &mut TestAppContext) {
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (window, native_window) = product_window(document, model, cx);
-    cx.update_window(window, |_, native_window, cx| {
-        window.update(cx, |window, cx| window.focus_active_editor(cx));
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
     })
     .unwrap();
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(window, "ctrl-shift-p");
+    cx.simulate_keystrokes(native_window, "ctrl-shift-p");
     cx.run_until_parked();
     cx.read(|cx| assert!(window.read(cx).command_palette.is_some()));
 }

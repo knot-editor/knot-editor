@@ -37,9 +37,15 @@ pub(crate) fn start_bundle(batch: &LaunchBatch) -> bool {
 }
 
 /// The process that started this one.
+#[cfg(unix)]
 fn parent_process() -> u32 {
-    // SAFETY: getppid has no preconditions and cannot fail.
-    unsafe { libc::getppid() }.cast_unsigned()
+    std::os::unix::process::parent_id()
+}
+
+/// The launcher runs only on macOS, so nothing asks for the parent elsewhere.
+#[cfg(not(unix))]
+fn parent_process() -> u32 {
+    unreachable!("the launcher starts app bundles only on macOS")
 }
 
 /// LaunchServices parents the apps it starts to launchd, process 1; a shell
