@@ -375,6 +375,29 @@ impl Row<'_> {
         dirty
     }
 
+    /// The first and last selected columns of the row, if the selection
+    /// reaches it.
+    pub fn selection(&self) -> Option<(u16, u16)> {
+        // SAFETY: all zeroes is a valid value; the leading size is set as
+        // the sized-struct ABI requires.
+        let mut selection = unsafe { mem::zeroed::<ffi::GhosttyRenderStateRowSelection>() };
+        selection.size = mem::size_of::<ffi::GhosttyRenderStateRowSelection>();
+        // SAFETY: the iterator is positioned on this row; the kind writes one
+        // row selection.
+        let result = unsafe {
+            ffi::ghostty_render_state_row_get(
+                self.state.rows,
+                ffi::GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION,
+                (&mut selection as *mut ffi::GhosttyRenderStateRowSelection).cast(),
+            )
+        };
+        if result == ffi::GHOSTTY_NO_VALUE {
+            return None;
+        }
+        check(result, "reading a row's selection");
+        Some((selection.start_x, selection.end_x))
+    }
+
     /// The row's cells, left to right.
     pub fn cells(&mut self) -> Cells<'_> {
         // SAFETY: the iterator is positioned on this row; the kind fills the

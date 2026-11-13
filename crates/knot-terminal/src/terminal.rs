@@ -1,8 +1,11 @@
 //! The terminal screen: parsing, geometry, colors, and the viewport.
 
-use std::ptr;
+use std::{mem, ptr};
 
-use crate::ffi;
+use crate::{
+    events::{self, Callbacks, TerminalEvent},
+    ffi,
+};
 
 /// An sRGB color.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -95,17 +98,48 @@ impl Scrollbar {
     }
 }
 
+/// A terminal mode that changes what input encodes to or how the program
+/// wants to be told about events. All are DEC private modes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u16)]
+pub enum Mode {
+    /// Application cursor keys (DECCKM).
+    CursorKeys = 1,
+    /// X10 mouse reporting: presses only.
+    MouseX10 = 9,
+    /// Application keypad (DECNKM).
+    KeypadKeys = 66,
+    /// Presses and releases.
+    MouseNormal = 1000,
+    /// Presses, releases, and motion while a button is held.
+    MouseButton = 1002,
+    /// Presses, releases, and all motion.
+    MouseAny = 1003,
+    FocusEvents = 1004,
+    MouseFormatUtf8 = 1005,
+    MouseFormatSgr = 1006,
+    /// Wheel events become cursor keys on the alternate screen.
+    AlternateScroll = 1007,
+    MouseFormatUrxvt = 1015,
+    MouseFormatSgrPixels = 1016,
+    BracketedPaste = 2004,
+}
+
 /// A libghostty terminal: the VT parser, screens, scrollback, and modes.
 ///
 /// The terminal is not thread-safe. It is [`Send`], so one owner can keep
 /// it behind a mutex shared by the PTY reader and the foreground.
 pub struct Terminal {
     pub(crate) raw: ffi::GhosttyTerminal,
+    /// Owned; freed after `raw`. Accessed only through this pointer, and
+    /// never during a terminal call, since callbacks reach it then.
+    callbacks: *mut Callbacks,
 }
 
 // SAFETY: the library creates no threads and keeps no thread-local state for
 // a terminal, so moving the handle between threads is sound; `&mut self` on
-// every mutating call, or the caller's mutex, serializes access.
+// every mutating call, or the caller's mutex, serializes access. The
+// callbacks' handler is `Send`.
 unsafe impl Send for Terminal {}
 
 impl Terminal {
@@ -119,20 +153,28 @@ impl Terminal {
             unsafe { ffi::ghostty_terminal_new(ptr::null(), &mut raw, columns, rows) },
             "ghostty_terminal_new",
         );
-        let mut terminal = Self { raw };
-        // SAFETY: the option takes a `size_t*` that only needs to live for the call.
-        check(
-            unsafe {
-                ffi::ghostty_terminal_set(
-                    terminal.raw,
-                    ffi::GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_LINES,
-                    (&scrollback_lines as *const usize).cast(),
-                )
-            },
+        let callbacks = Box::into_raw(Box::new(Callbacks {
+            size,
+            handler: None,
+        }));
+        let mut terminal = Self { raw, callbacks };
+        // SAFETY: the callbacks live until `drop` frees them after the terminal.
+        unsafe { events::register(raw, callbacks) };
+        terminal.set(
+            ffi::GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_LINES,
+            &scrollback_lines,
             "setting the scrollback limit",
         );
         terminal.resize(size);
         terminal
+    }
+
+    /// Delivers the effects of later output to `handler`, in stream order,
+    /// while [`Self::write`] runs. Without a handler, effects are dropped
+    /// and queries go unanswered.
+    pub fn set_event_handler(&mut self, handler: impl FnMut(TerminalEvent) + Send + 'static) {
+        // SAFETY: no terminal call is running, so no callback holds the pointer.
+        unsafe { (*self.callbacks).handler = Some(Box::new(handler)) };
     }
 
     /// Parses `bytes` of program output.
@@ -144,6 +186,16 @@ impl Terminal {
     /// Resizes the grid, reflowing the primary screen.
     pub fn resize(&mut self, size: TerminalSize) {
         let (columns, rows) = grid(size);
+        // Updated first: resizing reports the new size to a program that
+        // asked for in-band size reports.
+        // SAFETY: no terminal call is running, so no callback holds the pointer.
+        unsafe {
+            (*self.callbacks).size = TerminalSize {
+                columns,
+                rows,
+                ..size
+            }
+        };
         // SAFETY: the handle is live and the grid is at least one cell.
         check(
             unsafe {
@@ -169,16 +221,9 @@ impl Terminal {
     /// Sets the default 256-color palette, which programs may override
     /// entry by entry with OSC 4.
     pub fn set_palette(&mut self, palette: &[Rgb; 256]) {
-        let palette = palette.map(ffi::GhosttyColorRgb::from);
-        // SAFETY: the option copies exactly 256 colors during the call.
-        check(
-            unsafe {
-                ffi::ghostty_terminal_set(
-                    self.raw,
-                    ffi::GHOSTTY_TERMINAL_OPT_COLOR_PALETTE,
-                    palette.as_ptr().cast(),
-                )
-            },
+        self.set(
+            ffi::GHOSTTY_TERMINAL_OPT_COLOR_PALETTE,
+            &palette.map(ffi::GhosttyColorRgb::from),
             "setting the palette",
         );
     }
@@ -203,22 +248,8 @@ impl Terminal {
 
     /// Where the viewport sits in the scrollback.
     pub fn scrollbar(&self) -> Scrollbar {
-        let mut scrollbar = ffi::GhosttyTerminalScrollbar {
-            total: 0,
-            offset: 0,
-            len: 0,
-        };
-        // SAFETY: the data kind writes one `GhosttyTerminalScrollbar`.
-        check(
-            unsafe {
-                ffi::ghostty_terminal_get(
-                    self.raw,
-                    ffi::GHOSTTY_TERMINAL_DATA_SCROLLBAR,
-                    (&mut scrollbar as *mut ffi::GhosttyTerminalScrollbar).cast(),
-                )
-            },
-            "reading the scrollbar",
-        );
+        let scrollbar: ffi::GhosttyTerminalScrollbar =
+            self.get(ffi::GHOSTTY_TERMINAL_DATA_SCROLLBAR, "the scrollbar");
         Scrollbar {
             total: scrollbar.total,
             offset: scrollbar.offset,
@@ -226,26 +257,80 @@ impl Terminal {
         }
     }
 
-    fn set_color(&mut self, option: ffi::GhosttyTerminalOption, color: Rgb) {
-        let color = ffi::GhosttyColorRgb::from(color);
-        // SAFETY: the option copies one color during the call.
+    /// Whether the program has set `mode`.
+    pub fn mode(&self, mode: Mode) -> bool {
+        let mut config = ffi::GhosttyTerminalModeConfig {
+            mode: mode as ffi::GhosttyMode,
+            value: false,
+        };
+        // SAFETY: the kind reads `mode` and writes `value` of one config.
         check(
             unsafe {
-                ffi::ghostty_terminal_set(
+                ffi::ghostty_terminal_get(
                     self.raw,
-                    option,
-                    (&color as *const ffi::GhosttyColorRgb).cast(),
+                    ffi::GHOSTTY_TERMINAL_DATA_MODE,
+                    (&mut config as *mut ffi::GhosttyTerminalModeConfig).cast(),
                 )
             },
+            "reading a mode",
+        );
+        config.value
+    }
+
+    /// Whether any mouse tracking mode is set.
+    pub fn mouse_tracking(&self) -> bool {
+        self.get(ffi::GHOSTTY_TERMINAL_DATA_MOUSE_TRACKING, "mouse tracking")
+    }
+
+    /// Whether the alternate screen is active.
+    pub fn alternate_screen(&self) -> bool {
+        let screen: ffi::GhosttyTerminalScreen = self.get(
+            ffi::GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN,
+            "the active screen",
+        );
+        screen == ffi::GHOSTTY_TERMINAL_SCREEN_ALTERNATE
+    }
+
+    fn set_color(&mut self, option: ffi::GhosttyTerminalOption, color: Rgb) {
+        self.set(
+            option,
+            &ffi::GhosttyColorRgb::from(color),
             "setting a default color",
         );
+    }
+
+    /// Sets an option whose input is a pointer to a `T`.
+    fn set<T>(&mut self, option: ffi::GhosttyTerminalOption, value: &T, what: &str) {
+        // SAFETY: callers pair each option with its documented input type;
+        // the library copies the value during the call.
+        check(
+            unsafe { ffi::ghostty_terminal_set(self.raw, option, (value as *const T).cast()) },
+            what,
+        );
+    }
+
+    /// Reads a data kind whose output is one `T`.
+    pub(crate) fn get<T: Copy>(&self, data: ffi::GhosttyTerminalData, what: &str) -> T {
+        let mut value = mem::MaybeUninit::<T>::uninit();
+        // SAFETY: callers pair each data kind with its documented output type.
+        unsafe {
+            check(
+                ffi::ghostty_terminal_get(self.raw, data, value.as_mut_ptr().cast()),
+                &format!("reading {what}"),
+            );
+            value.assume_init()
+        }
     }
 }
 
 impl Drop for Terminal {
     fn drop(&mut self) {
-        // SAFETY: the handle is owned and never used again.
-        unsafe { ffi::ghostty_terminal_free(self.raw) };
+        // SAFETY: both are owned and never used again; the terminal goes
+        // first, so no callback can reach the callbacks afterwards.
+        unsafe {
+            ffi::ghostty_terminal_free(self.raw);
+            drop(Box::from_raw(self.callbacks));
+        }
     }
 }
 
