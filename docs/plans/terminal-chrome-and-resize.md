@@ -1,7 +1,7 @@
 # Terminal chrome and resize limits
 
-Status: ✅ checkpoints 1 and 2 complete; checkpoint 3 (restart
-keeps output) not started.
+Status: ✅ checkpoints 1 and 2 complete; checkpoint 3 implemented,
+pending its review gate.
 Implements the terminal usability report (2026-11-12): drop
 the dev mini-header, lift arbitrary resize caps.
 
@@ -63,7 +63,7 @@ workbench/resize and product drag/restore suites green; the terminal pty
 and sandbox filesystem/watch failures seen during validation reproduce
 on the untouched base and are unrelated.
 
-## Checkpoint 3 — Restart keeps prior output visible
+## Checkpoint 3 — Restart keeps prior output visible (implemented, pending review gate)
 
 Deliverable: pressing restart (overlay or `terminal.restart`) starts a
 fresh shell without wiping what was there. The exited session's grid
@@ -81,6 +81,12 @@ mechanics (replay lines into the fresh `Term` vs. snapshot handoff).
 Validation: a session that prints a marker then exits still contains
 the marker in its scrollback after restart; new output appends below.
 Existing session/view/mouse tests stay green.
+Implemented: `TerminalSession::restart` snapshots visible lines plus
+scrollback as plain text (wrapped rows re-wrap on replay) and feeds them
+into the fresh terminal via the VTE parser, leaving the cursor below the
+carried output. New `restart_carries_prior_output_into_the_new_session`
+test proves the pre-restart marker survives with new output below it;
+`just check` clean, all 94 terminal tests green. Manual gate below still open.
 
 Review gate: run `ls`, Ctrl-D, restart; the `ls` output is still
 visible and scrollable above the fresh prompt.
