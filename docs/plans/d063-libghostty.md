@@ -169,52 +169,26 @@ Consequences for later checkpoints:
 - libghostty answers the Kitty keyboard query. Until checkpoint 4, programs
   that turn the protocol on still receive legacy keys.
 
-### 2c. PTY engine 🔍
+### 2c. PTY engine ✅
 
-Deliverables: an engine that spawns the shell through `portable-pty` with the
-session options (shell, directory, environment, drain on exit), runs the
-reader thread that feeds the terminal, writes input, resizes the PTY and the
-terminal together, reports exit status, and shuts down off-thread, keeping
-the macOS `killpg` behavior.
+`Pty` ([`pty.rs`](../../crates/knot-terminal/src/pty.rs)) runs the program
+on portable-pty with reader, writer, and waiter threads. Tests are in
+[`tests/pty.rs`](../../crates/knot-terminal/tests/pty.rs); only macOS ran
+locally, so CI first compiles the Linux and Windows paths.
 
-Validation: Unix integration tests that run real shell commands through the
-engine: output reaches the screen, input round-trips, resize reaches the
-child (`stty size`), exit status, and shutdown of a shell that is still
-starting.
-
-Review gate: the engine API before the app depends on it.
-
-**Status:** 🔍 awaiting review. `Pty`
-([`pty.rs`](../../crates/knot-terminal/src/pty.rs)) is implemented, with
-tests in [`tests/pty.rs`](../../crates/knot-terminal/tests/pty.rs). Points
-for review:
-- The engine owns the terminal's event handler. It writes replies to the
-  PTY from the reader thread, in stream order, and reports everything else
-  as a `PtyEvent`. This departs from the [ownership](#ownership) design: 3a's
-  session queue carries no replies, and a reply can't reach the wrong process
-  generation.
-- A writer thread delivers input and replies, so a program that stops
-  reading blocks neither the foreground nor the reader.
-- A waiter thread reports the exit once the reader drains, or after 200 ms.
-  Output never ends while a background job holds the PTY, and never ends at
-  all on ConPTY.
-- Draining is always on, and the `drain_on_exit` option is gone.
-- The default shell matches Alacritty's: `login` with zsh `exec -a` on
-  macOS, plain `$SHELL` on Linux, and `powershell` on Windows. An invalid
-  working directory falls back to home (portable-pty) instead of the
-  editor's directory.
+Consequences for later checkpoints:
+- The engine owns the terminal's event handler and writes replies to the
+  PTY itself, in stream order. In 3a, the session queue carries only
+  `PtyEvent`s (title, bell, directory, exit), and generation checks no
+  longer guard replies.
+- The exit is reported after the output drains, or after 200 ms, since a
+  background job or ConPTY can keep output open. Draining is always on.
+- The default shell matches Alacritty's. An invalid working directory
+  falls back to home.
 - Writes go through a duplicated descriptor, because portable-pty's writer
-  sends a newline and EOF when dropped, which can run a half-typed command
-  at shutdown. Tests can't reproduce this race.
-- After shutdown, the reader thread keeps a duplicated master open until
-  the program exits. A program that ignores SIGHUP therefore gets no EOF.
-- Only macOS was run locally. The Linux and Windows code paths first
-  compile in CI.
-
-**Implementation context:** mirror `RunningTerminal` in
-`src/app/terminal/session.rs`, including the `killpg` comment in
-`shutdown`. Add `portable-pty` to the workspace dependencies; the
-`cargo audit` job in `audit.yml` covers it.
+  sends a newline and EOF when dropped.
+- After shutdown, the reader keeps a duplicated master open until the
+  program exits, so a program that ignores SIGHUP gets no EOF.
 
 ### 3a. Session and drawing on libghostty
 
