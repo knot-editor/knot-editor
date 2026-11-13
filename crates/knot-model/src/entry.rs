@@ -1,18 +1,18 @@
-//! Platform entry requests for the product application.
+//! Platform entry requests: the resource a launch or a platform open event asks for.
 
 use std::path::{Path, PathBuf};
 
 use url::Url;
 
-use super::{filesystem::normalize_file_uri, resource::ResourceUri};
+use crate::{filesystem::normalize_file_uri, resource::ResourceUri};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct OpenRequest {
+pub struct OpenRequest {
     uri: ResourceUri,
 }
 
 impl OpenRequest {
-    pub(crate) fn from_path(path: &Path, current_dir: &Path) -> Result<Self, String> {
+    pub fn from_path(path: &Path, current_dir: &Path) -> Result<Self, String> {
         let path = if path.is_absolute() {
             path.to_path_buf()
         } else {
@@ -27,7 +27,7 @@ impl OpenRequest {
         Self::from_uri(ResourceUri::from_url(url))
     }
 
-    pub(crate) fn from_url(url: &str) -> Result<Self, String> {
+    pub fn from_url(url: &str) -> Result<Self, String> {
         let uri = ResourceUri::parse(url).map_err(|error| error.to_string())?;
         Self::from_uri(uri)
     }
@@ -38,16 +38,15 @@ impl OpenRequest {
             .map_err(|error| error.to_string())
     }
 
-    pub(crate) fn from_uri_for_product(uri: ResourceUri) -> Self {
+    pub fn from_uri_for_product(uri: ResourceUri) -> Self {
         Self { uri }
     }
 
-    pub(crate) fn uri(&self) -> &ResourceUri {
+    pub fn uri(&self) -> &ResourceUri {
         &self.uri
     }
 
-    #[cfg(test)]
-    pub(crate) fn title(&self) -> String {
+    pub fn title(&self) -> String {
         self.uri
             .as_url()
             .path_segments()
@@ -61,12 +60,12 @@ impl OpenRequest {
 }
 
 /// Whether the arguments ask for the build version instead of starting the product.
-pub(crate) fn is_version_request(arguments: impl IntoIterator<Item = String>) -> bool {
+pub fn is_version_request(arguments: impl IntoIterator<Item = String>) -> bool {
     arguments.into_iter().nth(1).as_deref() == Some("--version")
 }
 
 /// Parse the process arguments into the optional resource the product opens.
-pub(crate) fn parse_launch_arguments(
+pub fn parse_launch_arguments(
     arguments: impl IntoIterator<Item = String>,
     current_dir: &Path,
 ) -> Result<Option<OpenRequest>, String> {

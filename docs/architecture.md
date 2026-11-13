@@ -37,7 +37,8 @@ gpui application and native views
   theme registries, syntax and the compiled-in grammars, edit history, indentation and language
   editing configuration, key notation, the command catalog, keymap registries
   and matching, theme values, resource URIs and providers, package
-  discovery, the workbench layout over tab identities, extension-API
+  discovery, launch and open requests, where a new terminal starts, the
+  workbench layout over tab identities, extension-API
   semantics such as checked ranges and atomic setting writes, and the
   protected-closure decisions. Its functions take plain data and the models
   they change and return results or effects as data; application globals and

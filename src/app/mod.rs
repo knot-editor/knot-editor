@@ -16,13 +16,12 @@ mod components;
 mod convert;
 mod documents;
 mod editor;
-mod entry;
 #[cfg(test)]
 pub(crate) use extensions::host::handlers as declared_host;
 mod extensions;
 mod file_index;
 mod file_watch;
-use knot_model::{filesystem, indentation, keys, open, resource, style, syntax, workspace};
+use knot_model::{entry, filesystem, indentation, keys, open, resource, style, syntax, workspace};
 mod icons;
 mod languages;
 pub mod model;

@@ -1050,7 +1050,7 @@ impl KnotWindow {
             .iter()
             .map(|root| root.uri.clone())
             .collect::<Vec<_>>();
-        super::terminal::directory::working_directory(
+        knot_model::terminal_directory::working_directory(
             &roots,
             uri,
             directories::BaseDirs::new().map(|base| base.home_dir().to_owned()),

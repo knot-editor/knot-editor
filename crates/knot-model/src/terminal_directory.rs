@@ -1,11 +1,13 @@
+//! Where a new terminal starts.
+
 use std::path::PathBuf;
 
-use super::super::resource::ResourceUri;
+use crate::resource::ResourceUri;
 
 /// The directory a new terminal starts in: the innermost root containing
 /// `document`, otherwise the first root, otherwise `home`. Only roots that are
 /// existing local directories count.
-pub(crate) fn working_directory(
+pub fn working_directory(
     roots: &[ResourceUri],
     document: Option<&ResourceUri>,
     home: Option<PathBuf>,
