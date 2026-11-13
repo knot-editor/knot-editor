@@ -104,6 +104,16 @@ hold the analyses that support some items.
     product across the tests of a binary where isolation allows, and make
     settling after each key cheaper.
 
+- **D187 — File watches start off the foreground**
+  - Depends on: none
+  - Description: Starting an operating system file watch blocks for about
+    100 ms on macOS (`FSEventStreamStart` waits on `fseventsd`), and the
+    workspace file index starts one per root on the foreground thread, so
+    switching to a project with several roots freezes the window for that
+    long per root. Start the stream on a background thread and cover the gap
+    until it runs, for example with a rescan of the watched tree, so no change
+    is missed. Found while profiling the workbench tests (see D186).
+
 - **D156 — Fewer host round trips per key**
   - Depends on: none
   - Description: Found by the headless package tests. A key bound to an

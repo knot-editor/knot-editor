@@ -195,6 +195,17 @@ for moved logic; grep `product_window(` and `add_window` for the call sites.
 
 ### 7. Package subsets and the remaining end-to-end cost
 
+- ✅ Test file watches. The end-to-end tests spent most of their wall time
+  idle: starting an operating system file watch (`FSEventStreamStart`) blocks
+  for about 100 ms, `project_sessions` starts nine per test, and the starts
+  of parallel test processes queue behind each other, which also inflated the
+  summed per-test times. Test providers
+  (`LocalFileSystemProvider::unrestricted_with_scratch_trash`) now report no
+  file events, and `TestProduct::watch_files` turns them on for the two
+  tests that wait for an external change (`explorer` and `go_to_file`).
+  Warm build, whole workspace: wall 13.4 s → 7.8 s, summed per-test time
+  about 130 s → 77 s, CPU unchanged at about 61 s. The product-side cost is
+  roadmap item D187.
 - Let end-to-end tests start only the packages they exercise, resolving
   `requires`; apply it to `knot-ext-workbench`.
 - Re-profile `project_sessions` and decide whether to merge its repeated
