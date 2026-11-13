@@ -255,19 +255,24 @@ fn snapshot_lines<T>(terminal: &Term<T>) -> Vec<(String, bool)> {
     lines
 }
 
-/// Feed carried lines into a fresh terminal as scrollback. The cursor ends
-/// on the row below them, so new shell output continues underneath.
+/// Divider marking where carried output ends and the new session begins.
+const RESTART_DIVIDER: &str = "--- terminal restarted ---";
+
+/// Feed carried lines into a fresh terminal, followed by a divider. The
+/// cursor ends below the divider, so new shell output continues underneath.
 fn replay_lines(terminal: &Arc<FairMutex<Term<TerminalEventListener>>>, lines: &[(String, bool)]) {
     if lines.is_empty() {
         return;
     }
     let mut bytes = Vec::new();
-    for (text, wrapped) in lines {
+    for (index, (text, wrapped)) in lines.iter().enumerate() {
         bytes.extend_from_slice(text.as_bytes());
-        if !wrapped {
+        if !wrapped || index + 1 == lines.len() {
             bytes.extend_from_slice(b"\r\n");
         }
     }
+    bytes.extend_from_slice(RESTART_DIVIDER.as_bytes());
+    bytes.extend_from_slice(b"\r\n");
     let mut parser: Processor = Processor::new();
     parser.advance(&mut *terminal.lock(), &bytes);
 }

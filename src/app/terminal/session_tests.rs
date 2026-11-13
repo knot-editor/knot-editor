@@ -383,10 +383,13 @@ fn restart_carries_prior_output_into_the_new_session(cx: &mut TestAppContext) {
         let first = text
             .find("run-1-done")
             .expect("prior output survives restart");
+        let divider = text
+            .find("--- terminal restarted ---")
+            .expect("restart divider separates the sessions");
         let second = text.find("run-2-done").expect("new output follows restart");
         assert!(
-            first < second,
-            "restarted output continues below carried output"
+            first < divider && divider < second,
+            "divider sits between carried and new output"
         );
     });
     session.update(cx, |session, cx| session.close(cx));
