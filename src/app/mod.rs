@@ -25,6 +25,7 @@ use knot_model::{entry, filesystem, indentation, keys, open, resource, style, sy
 mod icons;
 mod languages;
 mod launch_socket;
+mod launcher;
 pub mod model;
 mod personal_config;
 mod personal_config_error;
@@ -136,9 +137,13 @@ struct CommandExecution {
     completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
 }
 
-/// Runs the product on `application`, created by the binary for its platform,
+/// Runs the product on the application `create_application` makes for the
+/// binary's platform, once no running Knot took the launch,
 /// with the compiled-in `packages` beside installed ones.
-pub fn run(application: Application, packages: &'static [knot_bundled::BundledSource]) {
+pub fn run(
+    create_application: impl FnOnce() -> Application,
+    packages: &'static [knot_bundled::BundledSource],
+) {
     let command = entry::parse_launch_arguments(
         std::env::args(),
         &std::env::current_dir().expect("Knot requires a current working directory"),
@@ -158,11 +163,11 @@ pub fn run(application: Application, packages: &'static [knot_bundled::BundledSo
         }
         entry::LaunchCommand::Open(batch) => batch,
     };
-    if launch_socket::forward(&batch) {
+    if launch_socket::forward(&batch) || launcher::start_bundle(&batch) {
         return;
     }
     let listener = launch_socket::bind()
         .map_err(|error| eprintln!("[knot] launch socket unavailable: {error}"))
         .ok();
-    product::run(application, batch, listener, packages);
+    product::run(create_application(), batch, listener, packages);
 }
