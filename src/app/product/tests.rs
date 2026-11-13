@@ -385,7 +385,7 @@ fn dispatch_product_command_with(
 
 /// Press each of the space-separated `keys` in a window with no native
 /// window.
-fn press(window: &Entity<KnotWindow>, keys: &str, cx: &mut TestAppContext) {
+fn press_keys(window: &Entity<KnotWindow>, keys: &str, cx: &mut TestAppContext) {
     for key in keys.split_whitespace() {
         let keystroke = crate::app::keys::Keystroke::parse(key).unwrap();
         window.update(cx, |window, cx| window.press_key(keystroke, cx));

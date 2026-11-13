@@ -411,7 +411,7 @@ fn editing_keybindings_use_semantic_commands(cx: &mut TestAppContext) {
     native_window.run(cx, |cx| {
         window.update(cx, |window, cx| window.focus_active_editor(cx))
     });
-    press(&window, "enter", cx);
+    press_keys(&window, "enter", cx);
     cx.run_until_parked();
     cx.read(|cx| {
         assert_eq!(model.read(cx).text(), "\n");
@@ -423,20 +423,20 @@ fn editing_keybindings_use_semantic_commands(cx: &mut TestAppContext) {
             Some(&CommandOutcome::Completed)
         );
     });
-    press(&window, "shift-up backspace tab", cx);
+    press_keys(&window, "shift-up backspace tab", cx);
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "    "));
     type_text(&window, "café👩‍💻", cx);
-    press(&window, "enter", cx);
+    press_keys(&window, "enter", cx);
     type_text(&window, "tail", cx);
-    press(&window, "home", cx);
+    press_keys(&window, "home", cx);
     type_text(&window, ">", cx);
-    press(&window, "end", cx);
+    press_keys(&window, "end", cx);
     type_text(&window, "<", cx);
-    press(&window, "shift-home secondary-c", cx);
+    press_keys(&window, "shift-home secondary-c", cx);
     cx.run_until_parked();
     cx.update(|cx| assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap(), ">tail<"));
-    press(&window, "secondary-a secondary-c", cx);
+    press_keys(&window, "secondary-a secondary-c", cx);
     cx.run_until_parked();
     cx.update(|cx| {
         assert_eq!(
@@ -444,7 +444,7 @@ fn editing_keybindings_use_semantic_commands(cx: &mut TestAppContext) {
             "    café👩‍💻\n    >tail<"
         )
     });
-    press(&window, "secondary-x secondary-v", cx);
+    press_keys(&window, "secondary-x secondary-v", cx);
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "    café👩‍💻\n    >tail<"));
 }

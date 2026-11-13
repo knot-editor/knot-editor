@@ -31,7 +31,7 @@ fn owner() -> TransientOwner {
 fn editor_keys_route_and_unclaimed_keys_type(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (window, model) = headless_window(&documents, cx);
-    press(&window, "x y z backspace left", cx);
+    press_keys(&window, "x y z backspace left", cx);
     type_text(&window, "é", cx);
     cx.read(|cx| assert_eq!(model.read(cx).text(), "xéy"));
 }
@@ -42,7 +42,7 @@ fn the_palette_filters_and_runs_a_command(cx: &mut TestAppContext) {
     let (window, model) = headless_window(&documents, cx);
     window.update(cx, |window, cx| window.open_command_palette(cx));
     type_text(&window, "split rightx", cx);
-    press(&window, "backspace enter", cx);
+    press_keys(&window, "backspace enter", cx);
     cx.read(|cx| {
         let window = window.read(cx);
         assert!(window.command_palette.is_none());
@@ -50,7 +50,7 @@ fn the_palette_filters_and_runs_a_command(cx: &mut TestAppContext) {
         assert_eq!(window.workbench.read(cx).panes().len(), 2);
     });
     // Focus is back in an editor, so typing edits the document.
-    press(&window, "a", cx);
+    press_keys(&window, "a", cx);
     cx.read(|cx| assert_eq!(model.read(cx).text(), "a"));
 }
 
@@ -77,14 +77,14 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     };
 
     let mut picked = pick(items.clone(), cx);
-    press(&window, "down down up enter", cx);
+    press_keys(&window, "down down up enter", cx);
     assert_eq!(
         picked.try_recv(),
         Ok(TransientOutcome::Picker("TWO".into()))
     );
     let mut picked = pick(items, cx);
     type_text(&window, "thr", cx);
-    press(&window, "enter", cx);
+    press_keys(&window, "enter", cx);
     assert_eq!(
         picked.try_recv(),
         Ok(TransientOutcome::Picker("THREE".into()))
@@ -95,10 +95,10 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
             window.begin_input(owner(), "Name".into(), "ab".into(), None, None, cx)
         })
         .unwrap();
-    press(&window, "backspace", cx);
+    press_keys(&window, "backspace", cx);
     type_text(&window, "c", cx);
-    press(&window, "left x", cx);
-    press(&window, "enter", cx);
+    press_keys(&window, "left x", cx);
+    press_keys(&window, "enter", cx);
     assert_eq!(input.try_recv(), Ok(TransientOutcome::Input("axc".into())));
 
     let (mut input, _) = window
@@ -106,7 +106,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
             window.begin_input(owner(), "Name".into(), String::new(), None, None, cx)
         })
         .unwrap();
-    press(&window, "escape", cx);
+    press_keys(&window, "escape", cx);
     assert_eq!(input.try_recv(), Ok(TransientOutcome::Dismissed));
     // A prompt stays outside the value; Backspace deletes text, then
     // dismisses on an empty field.
@@ -115,13 +115,13 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
             window.begin_input(owner(), "Ex".into(), "a".into(), Some(":".into()), None, cx)
         })
         .unwrap();
-    press(&window, "backspace", cx);
+    press_keys(&window, "backspace", cx);
     assert_eq!(
         input.try_recv(),
         Err(tokio::sync::oneshot::error::TryRecvError::Empty)
     );
     type_text(&window, "b", cx);
-    press(&window, "enter", cx);
+    press_keys(&window, "enter", cx);
     assert_eq!(input.try_recv(), Ok(TransientOutcome::Input("b".into())));
     let (mut input, _) = window
         .update(cx, |window, cx| {
@@ -135,7 +135,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
             )
         })
         .unwrap();
-    press(&window, "backspace", cx);
+    press_keys(&window, "backspace", cx);
     assert_eq!(input.try_recv(), Ok(TransientOutcome::Dismissed));
     // An input without a prompt keeps Backspace as a plain edit.
     let (mut input, _) = window
@@ -143,14 +143,14 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
             window.begin_input(owner(), "Name".into(), String::new(), None, None, cx)
         })
         .unwrap();
-    press(&window, "backspace", cx);
+    press_keys(&window, "backspace", cx);
     assert_eq!(
         input.try_recv(),
         Err(tokio::sync::oneshot::error::TryRecvError::Empty)
     );
-    press(&window, "escape", cx);
+    press_keys(&window, "escape", cx);
     // None of those keys reached the editor behind the interactions.
-    press(&window, "q", cx);
+    press_keys(&window, "q", cx);
     cx.read(|cx| assert_eq!(model.read(cx).text(), "q"));
 }
 
@@ -215,9 +215,9 @@ fn terminal_keys_and_text_reach_the_program(cx: &mut TestAppContext) {
             window.activate_tab(pane, tab, cx);
         });
     });
-    press(&window, "h i up", cx);
+    press_keys(&window, "h i up", cx);
     type_text(&window, "é", cx);
-    press(&window, "enter", cx);
+    press_keys(&window, "enter", cx);
     wait_for_api_condition(cx, |cx| {
         matches!(
             session.read(cx).status(),

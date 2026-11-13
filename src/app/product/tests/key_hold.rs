@@ -121,7 +121,7 @@ impl Fixture {
     fn keys(&self, keys: &str, cx: &mut TestAppContext) {
         match self.native_window {
             Some(native_window) => cx.simulate_keystrokes(native_window, keys),
-            None => press(&self.window, keys, cx),
+            None => press_keys(&self.window, keys, cx),
         }
     }
 

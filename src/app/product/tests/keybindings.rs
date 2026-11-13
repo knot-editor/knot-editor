@@ -597,7 +597,7 @@ fn unbinding_an_unmapped_letter_preserves_editor_input(cx: &mut TestAppContext) 
         );
         super::super::super::commands::keymaps::rebuild(cx);
     });
-    press(&window, "a", cx);
+    press_keys(&window, "a", cx);
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "a"));
 }
@@ -791,7 +791,7 @@ fn macos_emacs_keys_edit_through_the_knot_preset(cx: &mut TestAppContext) {
     native_window.run(cx, |cx| {
         window.update(cx, |window, cx| window.focus_active_editor(cx))
     });
-    press(
+    press_keys(
         &window,
         "ctrl-e ctrl-b ctrl-b ctrl-h ctrl-a ctrl-f ctrl-k",
         cx,
@@ -1238,28 +1238,28 @@ fn editor_key_contexts_resolve_live_and_end_with_their_lifecycle(cx: &mut TestAp
     });
     let in_modal = |cx: &gpui::App| editor.read(cx).editor().read(cx).key_contexts() == ["modal"];
 
-    press(&window, "f8", cx);
+    press_keys(&window, "f8", cx);
     wait_for_api_condition(cx, in_modal);
     // No refresh: the context is not in any painted frame yet.
-    press(&window, "h", cx);
+    press_keys(&window, "h", cx);
     wait_for_api_condition(cx, |cx| {
         editor.read(cx).editor().read(cx).selection(cx) == (2, 2)
     });
-    press(&window, "x", cx);
+    press_keys(&window, "x", cx);
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxc");
 
-    press(&window, "escape", cx);
+    press_keys(&window, "escape", cx);
     wait_for_api_condition(cx, |cx| {
         editor.read(cx).editor().read(cx).key_contexts().is_empty()
     });
-    press(&window, "h", cx);
+    press_keys(&window, "h", cx);
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhc");
 
-    press(&window, "f8", cx);
+    press_keys(&window, "f8", cx);
     wait_for_api_condition(cx, in_modal);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.read(|cx| assert!(editor.read(cx).editor().read(cx).key_contexts().is_empty()));
-    press(&window, "h", cx);
+    press_keys(&window, "h", cx);
     wait_for_api_condition(cx, |cx| model.read(cx).text() == "abxhhc");
 }
 
@@ -1334,21 +1334,21 @@ fn a_sequence_bound_in_another_context_leaves_keys_to_a_modal_package(cx: &mut T
     let (window, model) = focused_editor_window(&documents, cx);
     let clipboard = |cx: &gpui::App| cx.read_from_clipboard().and_then(|item| item.text());
 
-    press(&window, "f8", cx);
+    press_keys(&window, "f8", cx);
     wait_for_api_condition(cx, |cx| !window.read(cx).holds_keys());
-    press(&window, "z b", cx);
-    press(&window, "f9", cx);
+    press_keys(&window, "z b", cx);
+    press_keys(&window, "f9", cx);
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("zb"));
     cx.read(|cx| {
         assert!(!window.read(cx).has_pending_keys());
         assert_eq!(model.read(cx).text(), "abc");
     });
 
-    press(&window, "f7", cx);
+    press_keys(&window, "f7", cx);
     wait_for_api_condition(cx, |cx| !window.read(cx).holds_keys());
-    press(&window, "z t", cx);
+    press_keys(&window, "z t", cx);
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("top"));
-    press(&window, "f9", cx);
+    press_keys(&window, "f9", cx);
     wait_for_api_condition(cx, |cx| clipboard(cx).as_deref() == Some("zb"));
 }
 
@@ -1360,21 +1360,21 @@ fn an_unfinished_sequence_delivers_its_keys(cx: &mut TestAppContext) {
     cx.update(super::super::bind_product_keys);
     let (window, model) = focused_editor_window(&documents, cx);
 
-    press(&window, "secondary-k", cx);
+    press_keys(&window, "secondary-k", cx);
     cx.read(|cx| assert!(window.read(cx).has_pending_keys()));
-    press(&window, "x y", cx);
+    press_keys(&window, "x y", cx);
     cx.run_until_parked();
     cx.read(|cx| {
         assert!(!window.read(cx).has_pending_keys());
         assert_eq!(model.read(cx).text(), "abcxy");
     });
 
-    press(&window, "secondary-k", cx);
+    press_keys(&window, "secondary-k", cx);
     cx.executor()
         .advance_clock(crate::app::commands::key_router::SEQUENCE_TIMEOUT);
     cx.run_until_parked();
     cx.read(|cx| assert!(!window.read(cx).has_pending_keys()));
-    press(&window, "z", cx);
+    press_keys(&window, "z", cx);
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(model.read(cx).text(), "abcxyz"));
 }

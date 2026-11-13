@@ -440,7 +440,7 @@ fn confirming_a_palette_command_ranks_it_first_next_time(cx: &mut TestAppContext
         })
     };
     assert_ne!(first_command(cx), "workbench.split-horizontal");
-    press(&window, "s p l i t r i g h t enter", cx);
+    press_keys(&window, "s p l i t r i g h t enter", cx);
     cx.run_until_parked();
     cx.read(|cx| assert!(window.read(cx).command_palette.is_none()));
     assert_eq!(first_command(cx), "workbench.split-horizontal");
