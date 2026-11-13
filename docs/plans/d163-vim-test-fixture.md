@@ -33,7 +33,7 @@ Deliverable:
 - Remove `knot-ext-languages` from `crates/knot-ext-vim/Cargo.toml`.
 
 Review gate: Run `cargo test -p knot-ext-vim`. All 32 tests pass; tests without languages start in ~60 ms without any language registrations, and tests with languages register only the minimal Rust fixture.
-Status: implemented, 32/32 passing, ready for review. Scope note: the fixture also registers the `{`/`[`/`(` bracket pairs — native `%` matching pairs only registered brackets (`crates/knot-model/src/syntax/brackets.rs`), so the highlight query alone could not skip brackets in strings.
+✅ Done. Fixture covers the 6 syntax-aware topics; `cargo test -p knot-ext-vim` 32/32. Bracket pairs ride along because native `%` pairs only registered brackets. Measured suite time ~3.6s → ~1.1s.
 Implementation context:
 - `crates/knot-ext-vim/Cargo.toml`
 - `crates/knot-ext-vim/tests/vim.rs` (`ENABLE`, `start`, `packages()`)
