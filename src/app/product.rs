@@ -111,6 +111,16 @@ struct OpenWindow {
 
 impl Global for ApplicationWindows {}
 
+/// Present in tests that open windows without a native window, which the
+/// application's own launch and window commands then create. It owns each
+/// window until it ends, as its native window would.
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Default)]
+pub(crate) struct HeadlessWindows(RefCell<Vec<Entity<KnotWindow>>>);
+
+#[cfg(any(test, feature = "test-support"))]
+impl Global for HeadlessWindows {}
+
 struct ApplicationProtectedClosure(RefCell<bool>);
 
 impl Global for ApplicationProtectedClosure {}
@@ -319,10 +329,17 @@ impl ApplicationWindows {
             .and_then(|open| open.window.upgrade())
     }
 
+    /// Close `window`. When it was the activated one, the window opened last
+    /// takes over, as the platform activates another native window.
     fn close(&self, window: EntityId) {
-        self.0
-            .borrow_mut()
-            .retain(|open| open.window.entity_id() != window);
+        let mut windows = self.0.borrow_mut();
+        let was_active = windows
+            .iter()
+            .any(|open| open.active && open.window.entity_id() == window);
+        windows.retain(|open| open.window.entity_id() != window);
+        if was_active && let Some(last) = windows.last_mut() {
+            last.active = true;
+        }
     }
 
     fn is_open(&self, window: EntityId) -> bool {
@@ -733,8 +750,13 @@ impl KnotWindow {
     }
 
     /// Bring the native window to the front once the current update ends.
-    fn activate_window(&self, cx: &mut App) {
+    fn activate_window(&self, cx: &mut Context<Self>) {
         let Some(native_window) = self.native_window else {
+            #[cfg(any(test, feature = "test-support"))]
+            {
+                cx.global::<ApplicationWindows>().activate(cx.entity_id());
+                super::extensions::host::application_changed(cx);
+            }
             return;
         };
         cx.defer(move |cx| {
@@ -805,6 +827,14 @@ impl KnotWindow {
     /// Close the window without its native window.
     fn end(&mut self, cx: &mut Context<Self>) {
         cx.global::<ApplicationWindows>().close(cx.entity_id());
+        #[cfg(any(test, feature = "test-support"))]
+        if let Some(headless) = cx.try_global::<HeadlessWindows>() {
+            let id = cx.entity_id();
+            headless
+                .0
+                .borrow_mut()
+                .retain(|window| window.entity_id() != id);
+        }
         let ids = self.contributed_views.keys().cloned().collect::<Vec<_>>();
         for id in ids {
             self.detach_contributed_view(&id, cx);
@@ -1242,8 +1272,11 @@ impl KnotWindow {
 
     /// Have the attached native window focus what has Knot-side focus once the
     /// current update ends, so a caller may hold the window.
-    fn follow_focus(&self, cx: &mut Context<Self>) {
+    fn follow_focus(&mut self, cx: &mut Context<Self>) {
         let Some(native_window) = self.native_window else {
+            // Without a native window nothing reports the focus change back.
+            #[cfg(any(test, feature = "test-support"))]
+            self.record_focused_tab(cx);
             return;
         };
         let window = cx.weak_entity();
@@ -1261,6 +1294,21 @@ impl KnotWindow {
                 }
             });
         });
+    }
+
+    /// Remember the focused editor tab, as a native window's focus event does.
+    #[cfg(any(test, feature = "test-support"))]
+    fn record_focused_tab(&mut self, cx: &App) {
+        if self.focus != Focus::Workbench {
+            return;
+        }
+        let Some(pane) = self.workbench.read(cx).focused_pane() else {
+            return;
+        };
+        if let Some(document) = pane.active_tab().document_id() {
+            self.last_focused_document = Some(document);
+            self.last_focused_editor_tab = Some(pane.active_tab_id());
+        }
     }
 
     /// The focused pane's active tab, with whether its view has focus.

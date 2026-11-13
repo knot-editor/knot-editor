@@ -14,13 +14,13 @@ use knot_protocol::{Command, CommandArgumentValue, CommandOutcome};
 use serde_json::Value;
 
 use super::settle;
-use super::setup::product_window;
+use super::setup::{headless_window, product_window};
 use crate::app::convert::keystroke_to_gpui;
 use crate::app::editor::{CaretShape, Editor, EditorView, Reveal};
 use crate::app::keys::Keystroke;
 use crate::app::model::{Buffer, BufferModel};
 use crate::app::product::{
-    ApplicationDocuments, ApplicationProductCommands, DocumentId, KnotWindow, Workbench,
+    ApplicationDocuments, ApplicationProductCommands, DocumentId, KnotWindow,
 };
 use crate::app::resource::ResourceUri;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
@@ -67,14 +67,7 @@ impl TestEditor {
         selection: (usize, usize),
         cx: &mut TestAppContext,
     ) -> Self {
-        let window = cx.update(|cx| {
-            let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
-            cx.new(|cx| KnotWindow::new(workbench, cx))
-        });
-        window.update(cx, |window, cx| {
-            window.observe_application(cx);
-            window.activate(cx);
-        });
+        let window = headless_window(document, model.clone(), cx);
         let editor = active_editor(&window, cx);
         let test_editor = Self {
             window,

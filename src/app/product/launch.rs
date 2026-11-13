@@ -25,7 +25,7 @@ pub(super) fn open_product_window_with(
     request: Option<OpenRequest>,
     recovery: Option<crate::app::recovery::StartupRecovery>,
     cx: &mut App,
-) -> AnyWindowHandle {
+) -> Entity<KnotWindow> {
     let documents = cx.global::<ApplicationDocuments>().0.clone();
     let restored = recovery
         .as_ref()
@@ -62,7 +62,7 @@ pub(super) fn open_product_window_with(
         }
     });
     let bounds = Bounds::centered(None, size(px(1000.), px(720.)), cx);
-    let native_window = show_window(
+    show_window(
         window.clone(),
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -77,12 +77,35 @@ pub(super) fn open_product_window_with(
             window.show_notice(PromptLevel::Warning, title, detail, cx)
         });
     }
-    native_window.into()
+    window
+}
+
+/// Show `window`: in a native window, or, under [`HeadlessWindows`], in none,
+/// which still reports it to extensions and activates it as a focused native
+/// window would be. This is the single place startup and the window commands
+/// open a window.
+pub(super) fn show_window(
+    window: Entity<KnotWindow>,
+    options: WindowOptions,
+    cx: &mut App,
+) -> anyhow::Result<()> {
+    #[cfg(any(test, feature = "test-support"))]
+    if let Some(headless) = cx.try_global::<HeadlessWindows>() {
+        headless.0.borrow_mut().push(window.clone());
+        window.update(cx, |window, cx| {
+            window.observe_application(cx);
+            if options.focus {
+                window.activate(cx);
+            }
+        });
+        return Ok(());
+    }
+    show_native_window(window, options, cx).map(drop)
 }
 
 /// Open a native window that shows `window`; closing it ends the window, and
 /// one that fails to open ends it at once.
-pub(super) fn show_window(
+pub(super) fn show_native_window(
     window: Entity<KnotWindow>,
     options: WindowOptions,
     cx: &mut App,
@@ -145,7 +168,7 @@ pub(super) fn open_tab_transfer_window_with_bounds(
 ) -> anyhow::Result<WindowHandle<KnotWindow>> {
     let workbench = cx.new(|_| Workbench::empty());
     let window = cx.new(|cx| KnotWindow::new(workbench, cx));
-    show_window(
+    show_native_window(
         window,
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -164,7 +187,7 @@ pub(super) fn open_tab_transfer_window_with_bounds(
 pub(super) fn open_blank_window(
     geometry: Option<&crate::app::window_layout::WindowGeometry>,
     cx: &mut App,
-) -> anyhow::Result<(Entity<KnotWindow>, AnyWindowHandle)> {
+) -> anyhow::Result<Entity<KnotWindow>> {
     let (window_bounds, display_id) = match geometry {
         Some(geometry) => restored_bounds(geometry, cx),
         None => (
@@ -175,7 +198,7 @@ pub(super) fn open_blank_window(
     let workbench = cx.new(|_| Workbench::empty());
     let window = cx.new(|cx| KnotWindow::new(workbench, cx));
     window.update(cx, |window, cx| window.restore_fresh_window_layout(cx));
-    let handle = show_window(
+    show_window(
         window.clone(),
         WindowOptions {
             window_bounds: Some(window_bounds),
@@ -186,7 +209,7 @@ pub(super) fn open_blank_window(
         },
         cx,
     )?;
-    Ok((window, handle.into()))
+    Ok(window)
 }
 
 /// Saved geometry fitted to the connected displays, as window options.
@@ -349,12 +372,28 @@ fn open_launch_windows(
         last = Some(open_product_window_with(Some(request), recovery.take(), cx));
     }
     if let Some(last) = last {
-        let _ = cx.update_window(last, |_, native_window, _| native_window.activate_window());
+        activate_shown_window(&last, cx);
     }
     open_report_after_failed_startup(cx);
     crate::app::window_record::start_recording(cx);
     crate::app::extensions::host::launched(cx);
     cx.activate(true);
+}
+
+/// Activate a window the way the platform does one it opens: its native
+/// window, or, without one, the window itself.
+fn activate_shown_window(window: &Entity<KnotWindow>, cx: &mut App) {
+    match native_window(window.entity_id(), cx) {
+        Some(native_window) => {
+            let _ = cx.update_window(native_window, |_, native_window, _| {
+                native_window.activate_window()
+            });
+        }
+        #[cfg(any(test, feature = "test-support"))]
+        None => window.update(cx, |window, cx| window.activate(cx)),
+        #[cfg(not(any(test, feature = "test-support")))]
+        None => {}
+    }
 }
 
 /// A package that failed at startup has no other passive sign, so each launch
@@ -586,9 +625,7 @@ fn run_without_window(source: &ApplicationCommandSource, cx: &mut App) {
         return;
     }
     let command = source.command();
-    if let Some(window) = window.downcast::<KnotWindow>() {
-        let _ = window.update(cx, |window, _, cx| window.dispatch_source(command, cx));
-    }
+    window.update(cx, |window, cx| window.dispatch_source(command, cx));
 }
 
 pub(in crate::app) fn bind_product_keys(cx: &mut App) {

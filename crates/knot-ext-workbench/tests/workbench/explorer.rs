@@ -35,7 +35,16 @@ struct Explorer {
 
 impl Explorer {
     fn start(roots: &[&Path], cx: &mut TestAppContext) -> Self {
-        let product = TestProduct::launch(PACKAGES, cx);
+        Self::over(TestProduct::launch(PACKAGES, cx), roots, cx)
+    }
+
+    /// Start with a native window, for a test that edits a row in place or
+    /// answers a native prompt.
+    fn start_windowed(roots: &[&Path], cx: &mut TestAppContext) -> Self {
+        Self::over(TestProduct::launch_windowed(PACKAGES, cx), roots, cx)
+    }
+
+    fn over(product: TestProduct, roots: &[&Path], cx: &mut TestAppContext) -> Self {
         let window = product.active_window(cx);
         let uris = roots.iter().map(|root| file_uri(root)).collect::<Vec<_>>();
         window.set_roots(&uris.iter().map(String::as_str).collect::<Vec<_>>(), cx);
@@ -320,7 +329,7 @@ fn start_edit(
 #[gpui::test]
 fn new_file_creates_missing_folders_opens_a_tab_and_validates_the_name(cx: &mut TestAppContext) {
     let directory = fixture();
-    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    let explorer = Explorer::start_windowed(&[&directory.path().join("app")], cx);
     explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
     let (window, tree) = (&explorer.window, &explorer.tree);
     tree.gesture("docs", "click", cx);
@@ -356,7 +365,7 @@ fn new_file_creates_missing_folders_opens_a_tab_and_validates_the_name(cx: &mut 
 #[gpui::test]
 fn new_folder_in_a_root_selects_the_folder(cx: &mut TestAppContext) {
     let directory = fixture();
-    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    let explorer = Explorer::start_windowed(&[&directory.path().join("app")], cx);
     explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
     explorer.tree.gesture("app", "click", cx);
     let command = start_edit(&explorer, "explorer.new-folder", cx);
@@ -373,7 +382,7 @@ fn new_folder_in_a_root_selects_the_folder(cx: &mut TestAppContext) {
 #[gpui::test]
 fn rename_selects_the_stem_and_open_documents_follow(cx: &mut TestAppContext) {
     let directory = fixture();
-    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    let explorer = Explorer::start_windowed(&[&directory.path().join("app")], cx);
     explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
     let (window, tree) = (&explorer.window, &explorer.tree);
     window.open_path(&directory.path().join("app/README.md"), cx);
@@ -412,7 +421,7 @@ fn rename_selects_the_stem_and_open_documents_follow(cx: &mut TestAppContext) {
 #[gpui::test]
 fn delete_asks_first_then_moves_the_entry_to_the_trash(cx: &mut TestAppContext) {
     let directory = fixture();
-    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    let explorer = Explorer::start_windowed(&[&directory.path().join("app")], cx);
     explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
     let (window, tree) = (&explorer.window, &explorer.tree);
     tree.gesture("README.md", "rightClick", cx);

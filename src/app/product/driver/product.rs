@@ -15,7 +15,7 @@ use crate::app::filesystem::{
     FileSystemProvider, FileSystemProviderRegistry, MemoryFileSystemProvider,
 };
 use crate::app::model::{Buffer, BufferModel};
-use crate::app::product::{ApplicationDocuments, ApplicationFileSystems};
+use crate::app::product::{ApplicationDocuments, ApplicationFileSystems, HeadlessWindows};
 use crate::app::resource::ResourceUri;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
 
@@ -86,6 +86,7 @@ impl TestProduct {
         if let Some(source) = post_init {
             std::fs::write(product.config.path().join("post-init.js"), source).unwrap();
         }
+        cx.set_global(HeadlessWindows::default());
         install_globals(cx);
         // Product startup binds keys before packages start, so they can bind theirs.
         cx.update(super::super::launch::bind_product_keys);
@@ -107,12 +108,8 @@ impl TestProduct {
             .collect();
         assert!(failures.is_empty(), "{failures:?}");
         // Launch opens a window when nothing else does; close it, since a
-        // window redraws on every change it sees.
-        for window in cx.windows() {
-            cx.update_window(window, |_, native_window, _| native_window.remove_window())
-                .unwrap();
-        }
-        cx.run_until_parked();
+        // window reports every change it sees.
+        super::application::close_all_windows(cx);
         product
     }
 

@@ -21,7 +21,8 @@ use crate::app::filesystem::{
 };
 use crate::app::product::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationOpenDialog, ApplicationWindows,
-    DocumentCollection, OpenDialogFuture, OpenDialogOutcome, ProductOpenDialog,
+    DocumentCollection, HeadlessWindows, OpenDialogFuture, OpenDialogOutcome, ProductOpenDialog,
+    active_window, native_window, windows,
 };
 use crate::app::record_store::StateDatabase;
 use crate::app::recovery::{ApplicationRecovery, RecoveryService, RecoveryStore};
@@ -47,10 +48,27 @@ impl HeldReads {
 }
 
 impl TestProduct {
-    /// Launch the application with `packages`, as the binary does, and
-    /// require that each one loaded. Startup opens its window when nothing
-    /// is recorded to restore.
+    /// Launch the application with `packages`, as the binary does but with
+    /// windows that have no native window, and require that each one loaded.
+    /// Startup opens its window when nothing is recorded to restore.
     pub fn launch(
+        packages: &'static [knot_bundled::BundledSource],
+        cx: &mut TestAppContext,
+    ) -> Self {
+        cx.set_global(HeadlessWindows::default());
+        Self::launch_windows(packages, cx)
+    }
+
+    /// [Launch](Self::launch) with native windows, for tests of painting,
+    /// pointer input, typed platform input, and native prompts.
+    pub fn launch_windowed(
+        packages: &'static [knot_bundled::BundledSource],
+        cx: &mut TestAppContext,
+    ) -> Self {
+        Self::launch_windows(packages, cx)
+    }
+
+    fn launch_windows(
         packages: &'static [knot_bundled::BundledSource],
         cx: &mut TestAppContext,
     ) -> Self {
@@ -78,17 +96,22 @@ impl TestProduct {
 
     /// Every window, in the order they opened.
     pub fn windows(&self, cx: &mut TestAppContext) -> Vec<TestWindow> {
-        let windows = cx.read(|cx| cx.windows());
+        let windows = cx.read(windows);
         windows
             .into_iter()
-            .filter_map(|window| TestWindow::of(window, cx))
+            .map(|window| TestWindow::of(window, cx))
             .collect()
+    }
+
+    /// Whether a window is focused.
+    pub fn has_active_window(&self, cx: &mut TestAppContext) -> bool {
+        cx.read(active_window).is_some()
     }
 
     /// The focused window.
     pub fn active_window(&self, cx: &mut TestAppContext) -> TestWindow {
-        let window = cx.read(|cx| cx.active_window()).expect("an active window");
-        TestWindow::of(window, cx).expect("a window")
+        let window = cx.read(active_window).expect("an active window");
+        TestWindow::of(window, cx)
     }
 
     /// Open a window with an untitled document and no roots.
@@ -97,12 +120,13 @@ impl TestProduct {
         let document =
             cx.update(|cx| crate::app::product::create_untitled_document(&documents, cx));
         let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-        let (window, native_window) = super::setup::product_window(document, model, cx);
+        let window = if cx.has_global::<HeadlessWindows>() {
+            super::setup::headless_window(document, model, cx)
+        } else {
+            super::setup::product_window(document, model, cx).0
+        };
         cx.run_until_parked();
-        TestWindow {
-            window,
-            native_window,
-        }
+        TestWindow::of(window, cx)
     }
 
     /// Answer every folder or file dialog with `path`.
@@ -273,10 +297,7 @@ impl TestProduct {
                 self.stop_package(&name, cx);
             }
         }
-        for window in cx.read(|cx| cx.windows()) {
-            let _ = cx.update_window(window, |_, native_window, _| native_window.remove_window());
-        }
-        cx.run_until_parked();
+        close_all_windows(cx);
 
         let documents = cx.new(|_| DocumentCollection::new());
         cx.set_global(ApplicationDocuments(documents));
@@ -323,13 +344,25 @@ impl TestProduct {
 /// Activate the window opened last, as the platform does with a window it
 /// opens at launch.
 fn activate_last_window(cx: &mut TestAppContext) {
-    let window = cx
-        .read(|cx| cx.windows().last().copied())
-        .expect("a window");
-    cx.update_window(window, |_, native_window, _| {
-        native_window.activate_window()
-    })
-    .unwrap();
+    let window = cx.read(windows).pop().expect("a window");
+    match cx.read(|cx| native_window(window.entity_id(), cx)) {
+        Some(native_window) => cx
+            .update_window(native_window, |_, native_window, _| {
+                native_window.activate_window()
+            })
+            .unwrap(),
+        None => window.update(cx, |window, cx| window.activate(cx)),
+    }
+    cx.run_until_parked();
+}
+
+/// Close every window, native or not.
+pub(super) fn close_all_windows(cx: &mut TestAppContext) {
+    for window in cx.read(windows) {
+        window.update(cx, |window, cx| {
+            let _ = window.close_window(cx);
+        });
+    }
     cx.run_until_parked();
 }
 
@@ -408,5 +441,34 @@ impl FileSystemProvider for HeldReadProvider {
 
     fn delete(&self, uri: ResourceUri, permanent: bool) -> ProviderFuture<'_, ()> {
         self.inner.delete(uri, permanent)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::TestAppContext;
+
+    use super::TestProduct;
+
+    #[gpui::test]
+    fn a_launch_opens_windows_without_native_ones_unless_asked(cx: &mut TestAppContext) {
+        let product = TestProduct::launch(&[], cx);
+        assert!(cx.windows().is_empty(), "no native window opened");
+        let window = product.active_window(cx);
+        assert!(window.is_open(cx));
+        let second = product.new_window(cx);
+        assert_eq!(product.windows(cx), [window.clone(), second.clone()]);
+        assert_eq!(product.active_window(cx), second);
+        second.run_command("window.close", cx);
+        assert!(!second.is_open(cx));
+        assert_eq!(product.active_window(cx), window);
+    }
+
+    #[gpui::test]
+    fn a_windowed_launch_opens_native_windows(cx: &mut TestAppContext) {
+        let product = TestProduct::launch_windowed(&[], cx);
+        assert_eq!(cx.windows().len(), 1);
+        assert!(product.active_window(cx).is_open(cx));
+        assert_eq!(cx.windows().len(), product.windows(cx).len());
     }
 }

@@ -27,7 +27,16 @@ pub(super) struct Projects {
 
 impl Projects {
     pub(super) fn start(cx: &mut TestAppContext) -> Self {
-        let product = TestProduct::launch(PACKAGES, cx);
+        Self::over(TestProduct::launch(PACKAGES, cx), cx)
+    }
+
+    /// Start with native windows, for a test that answers native prompts or
+    /// edits a tree row in place.
+    pub(super) fn start_windowed(cx: &mut TestAppContext) -> Self {
+        Self::over(TestProduct::launch_windowed(PACKAGES, cx), cx)
+    }
+
+    fn over(product: TestProduct, cx: &mut TestAppContext) -> Self {
         let window = product.active_window(cx);
         // Showing the tool through a command is an explicit user arrangement.
         assert_eq!(
@@ -127,8 +136,7 @@ pub(super) fn create_project(
         );
         tree.activate_row(&id, cx);
         wait_until(cx, |cx| {
-            cx.read(|cx| cx.active_window()).is_some()
-                && product.active_window(cx).roots(cx) == [uri.clone()]
+            product.has_active_window(cx) && product.active_window(cx).roots(cx) == [uri.clone()]
         });
     }
     cx.run_until_parked();
@@ -145,7 +153,7 @@ fn shows(labels: Vec<String>, label: &str) -> bool {
 
 #[gpui::test]
 fn bundled_projects_registry_manages_roots_and_persists(cx: &mut TestAppContext) {
-    let mut projects = Projects::start(cx);
+    let mut projects = Projects::start_windowed(cx);
 
     let project_dir = tempfile::tempdir().unwrap();
     let uri = file_uri(project_dir.path());
@@ -190,7 +198,7 @@ fn bundled_projects_registry_manages_roots_and_persists(cx: &mut TestAppContext)
 fn switching_to_a_project_with_a_missing_root_is_actionable_and_keeps_the_source(
     cx: &mut TestAppContext,
 ) {
-    let mut projects = Projects::start(cx);
+    let mut projects = Projects::start_windowed(cx);
 
     let gone_dir = tempfile::tempdir().unwrap();
     let path = gone_dir.path().to_path_buf();

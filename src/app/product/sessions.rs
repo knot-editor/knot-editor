@@ -487,7 +487,7 @@ fn commit(
             .and_then(|layout| layout.as_ref())
             .and_then(|layout| layout.geometry.as_ref());
         match launch::open_blank_window(geometry, cx) {
-            Ok((window, _)) => destinations.push(CapturedWindow { window }),
+            Ok(window) => destinations.push(CapturedWindow { window }),
             Err(_) => {
                 for window in destinations {
                     window.window.update(cx, |window, cx| {
@@ -890,11 +890,7 @@ pub(crate) fn restore_windows(
 
 /// Open a blank window, as New Blank Window does.
 pub(crate) fn open_window(cx: &mut App) -> WindowTarget {
-    let handle = launch::open_product_window_with(None, None, cx);
-    let window = cx
-        .global::<ApplicationWindows>()
-        .in_native_window(handle)
-        .expect("the native window shows a window");
+    let window = launch::open_product_window_with(None, None, cx);
     WindowTarget {
         window: window_id(window.entity_id()),
     }

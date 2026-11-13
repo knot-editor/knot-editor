@@ -394,11 +394,7 @@ impl KnotWindow {
         if self.workspace.snapshot().roots().is_empty() {
             return self.install_workspace(root, cx);
         }
-        let handle = super::launch::open_product_window_with(None, None, cx);
-        let window = cx
-            .global::<ApplicationWindows>()
-            .in_native_window(handle)
-            .expect("the native window shows a window");
+        let window = super::launch::open_product_window_with(None, None, cx);
         window.update(cx, |window, cx| {
             let workspace = window.install_workspace(root, cx);
             // The window exists now, so the focus can follow.

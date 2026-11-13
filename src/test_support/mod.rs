@@ -3,8 +3,9 @@
 //! [`TestProduct`] starts the application with the packages a test chooses,
 //! and [`TestEditor`] drives one editor session through keys, commands, and
 //! documents. A [launched](TestProduct::launch) product has windows, which
-//! [`TestWindow`] drives through native input, and durable state that a
-//! relaunch reads back. Both report what the product shows as plain data, so tests
+//! [`TestWindow`] drives through keys and commands without a native window
+//! unless the test [asks for one](TestProduct::launch_windowed), and durable
+//! state that a relaunch reads back. Both report what the product shows as plain data, so tests
 //! exercise the real editor and packages without reaching into the
 //! library's internals. [`cases`] reads the case files packages keep beside
 //! their sources, and [`editing`] runs one editing action in a bare editor.

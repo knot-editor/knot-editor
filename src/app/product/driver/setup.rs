@@ -95,3 +95,23 @@ pub(crate) fn product_window(
     .unwrap();
     (window, native_window)
 }
+
+/// A window over `document`, whose text `model` holds, without a native
+/// window, as the application opens one under [`HeadlessWindows`].
+///
+/// [`HeadlessWindows`]: crate::app::product::HeadlessWindows
+pub(crate) fn headless_window(
+    document: DocumentId,
+    model: Entity<Buffer>,
+    cx: &mut TestAppContext,
+) -> Entity<KnotWindow> {
+    let window = cx.update(|cx| {
+        let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
+        cx.new(|cx| KnotWindow::new(workbench, cx))
+    });
+    window.update(cx, |window, cx| {
+        window.observe_application(cx);
+        window.activate(cx);
+    });
+    window
+}

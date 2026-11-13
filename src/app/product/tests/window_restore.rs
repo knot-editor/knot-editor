@@ -317,10 +317,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
         editor.restore_view_state(state.clone(), cx)
     });
 
-    let second = cx.update(|cx| {
-        let handle = super::super::launch::open_product_window_with(None, None, cx);
-        handle.downcast::<KnotWindow>().unwrap().entity(cx).unwrap()
-    });
+    let second = cx.update(|cx| super::super::launch::open_product_window_with(None, None, cx));
     second.update(cx, |window, cx| {
         window.replace_workspace_roots(vec![uri("b")], cx);
     });

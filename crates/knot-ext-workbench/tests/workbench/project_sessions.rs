@@ -60,7 +60,7 @@ impl Projects {
     /// Wait until the focused window shows exactly these roots, then follow it.
     fn follow_roots(&mut self, expected: &[&str], cx: &mut TestAppContext) {
         wait_until(cx, |cx| {
-            cx.read(|cx| cx.active_window()).is_some()
+            self.product.has_active_window(cx)
                 && self.product.active_window(cx).roots(cx) == expected
         });
         self.follow(cx);
@@ -193,7 +193,7 @@ fn a_switch_racing_an_edit_retries_with_fresh_captures(cx: &mut TestAppContext) 
 
 #[gpui::test]
 fn closing_the_last_window_suspends_without_captures(cx: &mut TestAppContext) {
-    let mut projects = Projects::start(cx);
+    let mut projects = Projects::start_windowed(cx);
     let a = project_dir("one.txt", "one");
     std::fs::write(a.path().join("two.txt"), "two").unwrap();
     projects.create(a.path(), "A", cx);
@@ -297,7 +297,7 @@ fn quit_records_no_window_closure(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_partial_restore_commits_and_reports_what_was_skipped(cx: &mut TestAppContext) {
-    let mut projects = Projects::start(cx);
+    let mut projects = Projects::start_windowed(cx);
     let a = project_dir("one.txt", "one");
     std::fs::write(a.path().join("gone.txt"), "soon gone").unwrap();
     let b = project_dir("b.txt", "bee");
@@ -319,7 +319,7 @@ fn a_partial_restore_commits_and_reports_what_was_skipped(cx: &mut TestAppContex
 
 #[gpui::test]
 fn restarting_the_registry_keeps_bound_sessions_active(cx: &mut TestAppContext) {
-    let mut projects = Projects::start(cx);
+    let mut projects = Projects::start_windowed(cx);
     let a = project_dir("one.txt", "one");
     projects.create(a.path(), "A", cx);
     let a_id = projects.id("A", cx);
@@ -422,7 +422,7 @@ fn a_multi_root_project_restores_every_root_across_switches_and_restarts(cx: &mu
 
 #[gpui::test]
 fn a_new_project_window_opens_with_the_project_roots_and_joins_it(cx: &mut TestAppContext) {
-    let mut projects = Projects::start(cx);
+    let mut projects = Projects::start_windowed(cx);
     let a = project_dir("one.txt", "one");
     let c = project_dir("c.txt", "see");
     let (a_uri, c_uri) = (file_uri(a.path()), file_uri(c.path()));
