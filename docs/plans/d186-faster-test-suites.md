@@ -159,7 +159,13 @@ One commit per area; split an area further if it grows.
    than draw, so the gain is small. No test needed moving to `knot-model`.
 5. Terminal: `src/app/terminal/session_tests.rs`, `view/tests.rs`,
    `mouse_tests.rs`. Session behavior goes headless; paint and mouse stay
-   windowed.
+   windowed. 🔍 Ready for review. The session tests already run without a
+   window, apart from the two focus tests, which depend on gpui focus. The
+   mouse and view tests are pointer and layout driven, so all stay windowed. The one change
+   is the sustained output test, whose shell stream went from 20000 to 4000
+   lines: 1.2 s → 0.12 s, keeping the check that foreground updates stay
+   responsive during output. The 70 terminal-module tests now sum to 4.1 s
+   serially. No test needed moving to `knot-model`.
 6. Views and the rest: `src/app/editor/tests*`, `tree_view/tests.rs`,
    `picker.rs`, `text_input.rs`, `icons/tests.rs`, `theme.rs`,
    `recovery/tests.rs`, `extensions/`. Also move the plain `#[test]`s in
