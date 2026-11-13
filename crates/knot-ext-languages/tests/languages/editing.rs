@@ -3,7 +3,7 @@
 //! the registered language, in the [case](knot::test_support::cases) format.
 use serde::Deserialize;
 
-use super::bundled::{PACKAGES, language_packages};
+use super::bundled::language_packages;
 use gpui::TestAppContext;
 use knot::test_support::TestProduct;
 use knot::test_support::cases::{Failures, read_groups, topic_files};
@@ -25,9 +25,8 @@ struct BlockCase {
     after: String,
 }
 
-#[gpui::test]
-fn bundled_comment_cases_toggle_on_their_registered_languages(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+/// Run every case of this topic on the started `product`.
+pub fn check(product: &TestProduct, cx: &mut TestAppContext) {
     let languages = product.languages(cx);
 
     let mut tested = Vec::new();

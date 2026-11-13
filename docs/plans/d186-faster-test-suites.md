@@ -230,11 +230,14 @@ Validation: `just check`; workbench totals.
 `host.set_bundled_packages` in `src/app/extensions/host.rs`; package
 discovery in `crates/knot-model/src/extensions/package.rs`.
 
-### 9. Language fixture tests
+### 9. Language fixture tests ✅
 
-- Profile one `knot-ext-languages` fixture test and cut its startup or
-  per-case cost (for example, start only the language packages a table
-  needs).
+- ✅ Profile showed the 0.6–0.7 s of each of the five fixture tests is
+  starting the language packages, almost all of it tree-sitter query analysis
+  (`ts_query__perform_analysis`, already optimized); the cases take
+  milliseconds. The five tables now run on one product in one test
+  (`bundled_language_cases_run_on_their_registered_languages`), each topic
+  exposing `check`. `knot-ext-languages` summed time 3.6 s → 0.7 s.
 
 Validation: `just check`; `knot-ext-languages` totals.
 

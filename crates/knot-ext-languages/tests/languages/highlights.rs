@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 use gpui::TestAppContext;
 
-use super::bundled::{PACKAGES, language_packages};
+use super::bundled::language_packages;
 use knot::test_support::TestProduct;
 
 const COMMENTS: &[&str] = &["//", "#", "--", "<!--"];
@@ -91,9 +91,8 @@ fn fixtures() -> Vec<PathBuf> {
     paths
 }
 
-#[gpui::test]
-fn bundled_languages_highlight_their_fixtures(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
+/// Run every case of this topic on the started `product`.
+pub fn check(product: &TestProduct, cx: &mut TestAppContext) {
     let mut failures = Vec::new();
     let mut checked = 0;
     for path in fixtures() {

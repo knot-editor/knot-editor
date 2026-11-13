@@ -8,7 +8,7 @@
 //! case expects `after` to be the text with `«` and `»` around the brackets
 //! the view highlights at the caret, or without markers when none match.
 
-use super::bundled::{PACKAGES, language_packages};
+use super::bundled::language_packages;
 use super::indents::{IndentCase, TypeCase};
 use gpui::TestAppContext;
 use knot::test_support::TestProduct;
@@ -27,10 +27,8 @@ fn mark_brackets(text: &str, brackets: Option<[std::ops::Range<usize>; 2]>) -> S
     marked
 }
 
-#[gpui::test]
-fn bundled_bracket_cases_run_on_their_registered_languages(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
-
+/// Run every case of this topic on the started `product`.
+pub fn check(product: &TestProduct, cx: &mut TestAppContext) {
     let mut tested = Vec::new();
     let mut failures = Failures::default();
     for path in topic_files(&language_packages(), "brackets") {

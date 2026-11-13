@@ -10,7 +10,7 @@
 //! without a window.
 use serde::Deserialize;
 
-use super::bundled::{PACKAGES, language_packages};
+use super::bundled::language_packages;
 use gpui::TestAppContext;
 use knot::test_support::TestProduct;
 use knot::test_support::cases::{Failures, read_groups, topic_files, unmark};
@@ -33,10 +33,8 @@ pub(super) struct TypeCase {
     pub(super) after: Vec<String>,
 }
 
-#[gpui::test]
-fn bundled_indent_cases_indent_on_their_registered_languages(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
-
+/// Run every case of this topic on the started `product`.
+pub fn check(product: &TestProduct, cx: &mut TestAppContext) {
     let mut tested = Vec::new();
     let mut failures = Failures::default();
     for path in topic_files(&language_packages(), "indents") {

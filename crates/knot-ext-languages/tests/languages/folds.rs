@@ -6,17 +6,15 @@
 //! `after` to list the fold regions of `before`, one `first-last` pair of
 //! 0-based lines, both included, per entry, ordered by first line and then
 //! outermost first.
-use super::bundled::{PACKAGES, language_packages};
+use super::bundled::language_packages;
 use super::indents::IndentCase;
 use gpui::TestAppContext;
 use knot::test_support::TestProduct;
 use knot::test_support::cases::{Failures, read_groups, topic_files, unmark};
 use knot::test_support::editing::{Action, run};
 
-#[gpui::test]
-fn bundled_fold_cases_find_regions_on_their_registered_languages(cx: &mut TestAppContext) {
-    let product = TestProduct::start(PACKAGES, cx);
-
+/// Run every case of this topic on the started `product`.
+pub fn check(product: &TestProduct, cx: &mut TestAppContext) {
     let mut tested = Vec::new();
     let mut failures = Failures::default();
     for path in topic_files(&language_packages(), "folds") {

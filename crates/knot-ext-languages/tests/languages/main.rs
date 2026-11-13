@@ -6,6 +6,18 @@ mod folds;
 mod highlights;
 mod indents;
 
+/// One product runs every topic: starting the language packages compiles
+/// every query, which costs more than all the cases together.
+#[gpui::test]
+fn bundled_language_cases_run_on_their_registered_languages(cx: &mut gpui::TestAppContext) {
+    let product = knot::test_support::TestProduct::start(bundled::PACKAGES, cx);
+    brackets::check(&product, cx);
+    editing::check(&product, cx);
+    folds::check(&product, cx);
+    highlights::check(&product, cx);
+    indents::check(&product, cx);
+}
+
 mod bundled {
     use std::path::{Path, PathBuf};
 
