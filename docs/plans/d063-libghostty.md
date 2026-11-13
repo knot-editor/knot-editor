@@ -118,34 +118,16 @@ and fish emit it by default only in some setups, so the fallback stays.
 Mouse selection and links are off between 3a and 3b; nobody uses the product
 yet, and the gap keeps each step reviewable.
 
-### 1a. Prebuilt library workflow and release
+### 1a. Prebuilt library workflow and release ✅
 
-Deliverables:
-- ✅ `.github/workflows/libghostty.yml`, dispatched manually with the
-  libghostty-vt and Zig versions: tarball download and minisign check,
-  builds for the five targets, and one archive per target (static library,
-  headers, license) with its sha256. Darwin targets build on macOS, because
-  libghostty's archive step runs Apple's `libtool`, `xcrun`, and `nmedit`;
-  MSVC builds on Windows for the Windows SDK; Linux cross-compiles both
-  architectures. Darwin targets macOS 13, libghostty's minimum. The Windows
-  archive also carries `ghostty-vt.dll` and its import library until 1b
-  settles linking. Both macOS builds were tried locally with Zig 0.17.1;
-  the static archive needs no extra link libraries.
-- ✅ The [`libghostty-vt-1.0.1`](https://github.com/knot-editor/knot-editor/releases/tag/libghostty-vt-1.0.1)
-  release, built with Zig 0.17.1 (1.0.1 requires 0.17.x); checksums verified
-  and every archive holds the library and `ghostty/vt.h`.
-
-Validation: the workflow run; the archives contain the library and
-`ghostty/vt.h` for each target; actionlint in CI passes.
-
-Review gate: the workflow and the release assets.
-
-**Implementation context:** mirror the pinned-action style (commit SHAs) and
-`persist-credentials: false` from `.github/workflows/ci.yml`. The build
-command and options come from `PACKAGING-LIBGHOSTTY.md`: the source and
-dependency tarballs side by side, `zig build --system <deps>`, an empty
-`ZIG_GLOBAL_CACHE_DIR`, `-Dtarget=<zig triple>`. Confirm the Zig version from
-the 1.0.1 `build.zig.zon`.
+[`libghostty.yml`](../../.github/workflows/libghostty.yml) published the
+[`libghostty-vt-1.0.1`](https://github.com/knot-editor/knot-editor/releases/tag/libghostty-vt-1.0.1)
+release with Zig 0.17.1 (1.0.1 requires 0.17.x). Darwin targets build on
+macOS, because libghostty's archive step runs Apple's tools, and MSVC on
+Windows; Linux cross-compiles both architectures. Darwin targets macOS 13.
+The static archive needs no extra link libraries. The Windows archive also
+carries `ghostty-vt.dll` and its import library for 1b's linking decision.
+`-Dcpu=baseline` could be raised later for a faster build.
 
 ### 1b. Linked binding
 
