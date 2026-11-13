@@ -1,8 +1,8 @@
 //! Measured terminal cells in logical pixels, with integral physical PTY cells.
 
-use gpui::{Bounds, Pixels, Point, Window, point, px};
+use gpui::{Bounds, Font, Pixels, Point, Window, point, px};
 
-use crate::app::{terminal::session::TerminalSize, typography::text_font};
+use crate::app::terminal::session::TerminalSize;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct TerminalLayout {
@@ -15,13 +15,12 @@ pub(crate) struct TerminalLayout {
 }
 
 impl TerminalLayout {
-    pub(crate) fn measure(window: &Window, font_size: Pixels) -> Self {
+    pub(crate) fn measure(window: &Window, font: &Font, font_size: Pixels) -> Self {
         let text = window.text_system();
-        let font = text.resolve_font(&text_font(false, false));
+        let font = text.resolve_font(font);
         let width = text
             .advance(font, font_size, 'M')
-            .expect("resolved terminal font must contain M")
-            .width;
+            .map_or(font_size * 0.6, |advance| advance.width);
         Self::from_metrics(
             font_size,
             width,

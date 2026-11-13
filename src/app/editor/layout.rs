@@ -44,8 +44,13 @@ impl EditorView {
         let editor = self.editor.read(cx);
         let font_size = settings::font_size(&editor.settings_scope(self.model.read(cx), cx), cx);
         let metrics = EditorMetrics::new(font_size * crate::app::zoom::factor(cx));
-        if metrics != self.metrics {
+        let font = crate::app::typography::font(&settings::font_settings(
+            &editor.settings_scope(self.model.read(cx), cx),
+            cx,
+        ));
+        if metrics != self.metrics || font != self.font {
             self.metrics = metrics;
+            self.font = font;
             self.max_line_width = 0.;
         }
     }
@@ -58,11 +63,7 @@ impl EditorView {
         let font_size = self.metrics.font_size;
         let text = window.text_system();
         self.cell_width = text
-            .advance(
-                text.resolve_font(&make_font(false, false)),
-                px(font_size),
-                '0',
-            )
+            .advance(text.resolve_font(&self.font), px(font_size), '0')
             .map_or(font_size * 0.6, |advance| f32::from(advance.width));
         let wrap = settings::editor_soft_wrap(&scope, cx).then(|| WrapWidth {
             columns: ((f32::from(width) - WRAP_MARGIN) / self.cell_width).max(1.) as usize,
@@ -139,7 +140,7 @@ impl EditorView {
         let decorations = decoration_layers(editor, line, theme);
         let mut layers = vec![syntax.as_slice()];
         layers.extend(decorations.iter().map(Vec::as_slice));
-        runs_for(text, &layers, theme)
+        runs_for(text, &layers, theme, &self.font)
     }
 
     /// Shape `line`, whose content is `text`, with its highlight runs.
@@ -424,7 +425,12 @@ pub(super) struct HighlightSpan {
 /// may extend past the line, which clips them. Layers apply in order, so a
 /// later layer's color and font override an earlier one's and its underline
 /// joins them. Bytes no span covers use the theme's foreground.
-pub(super) fn runs_for(line: &str, layers: &[&[HighlightSpan]], theme: &Theme) -> Vec<TextRun> {
+pub(super) fn runs_for(
+    line: &str,
+    layers: &[&[HighlightSpan]],
+    theme: &Theme,
+    base: &Font,
+) -> Vec<TextRun> {
     if line.is_empty() {
         return Vec::new();
     }
@@ -463,7 +469,7 @@ pub(super) fn runs_for(line: &str, layers: &[&[HighlightSpan]], theme: &Theme) -
     }
     runs.into_iter()
         .map(|(len, style)| {
-            let mut font = make_font(false, false);
+            let mut font = base.clone();
             font.weight = style.font_weight.unwrap_or(font.weight);
             font.style = style.font_style.unwrap_or(font.style);
             TextRun {

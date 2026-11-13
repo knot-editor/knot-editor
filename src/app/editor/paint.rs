@@ -216,12 +216,13 @@ impl Element for EditorElement {
                 release_listener(event, window, cx);
             }
         });
-        let (scroll_x, metrics, cell_width) = {
+        let (scroll_x, metrics, cell_width, base_font) = {
             let view = self.entity.read(cx);
             (
                 view.editor.read(cx).scroll_x(),
                 view.metrics,
                 view.cell_width,
+                view.font.clone(),
             )
         };
         // Read the view state, compute the visible rows, then read just the
@@ -540,7 +541,7 @@ impl Element for EditorElement {
                 let label = SharedString::from("…");
                 let run = TextRun {
                     len: label.len(),
-                    font: make_font(false, false),
+                    font: base_font.clone(),
                     color: colors.fold_placeholder,
                     background_color: None,
                     underline: None,
@@ -696,7 +697,7 @@ impl Element for EditorElement {
                     for (row, label, active) in &gutter.numbers {
                         let run = TextRun {
                             len: label.len(),
-                            font: make_font(false, false),
+                            font: base_font.clone(),
                             color: if *active {
                                 gutter.active_number
                             } else {

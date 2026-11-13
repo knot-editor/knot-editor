@@ -11,6 +11,8 @@ pub struct EditorView {
     pub(super) model: Entity<Buffer>,
     /// Text size and line height from the settings in the editor's scope.
     pub(super) metrics: EditorMetrics,
+    /// The regular-style font the view draws with, from `font.*` in its scope.
+    pub(super) font: Font,
     /// Width of one monospace cell, which wrapping measures rows in.
     pub(super) cell_width: f32,
     /// Widest line width shaped since the text last changed. Bounds horizontal
@@ -121,6 +123,7 @@ impl EditorView {
             editor,
             model,
             metrics: EditorMetrics::new(crate::app::typography::TEXT_SIZE),
+            font: crate::app::typography::font(&Default::default()),
             cell_width: 0.,
             max_line_width: 0.,
             measured_revision,

@@ -475,8 +475,9 @@ stops their sessions after document decisions succeed.
 
 Measured view geometry supplies drawing, baseline, cell hit testing, viewport
 size, and PTY pixel dimensions at the destination window's scale. Cells are
-measured for `font.size` resolved under `{ view: "terminal" }` times the zoom
-factor, so a change resizes the PTY grid. Fallback glyphs
+measured for `font.size` and the `font.*` family settings resolved under
+`{ view: "terminal" }`, with the size times the zoom factor, so a change
+resizes the PTY grid. Fallback glyphs
 stay within emulator cell allocations. Selection uses scrollback grid coordinates;
 application mouse reports use viewport cells. Geometry is remeasured after resize
 or attachment handoff. Typography, bootstrap metrics, and encoding rules live in

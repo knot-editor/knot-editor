@@ -25,19 +25,27 @@ use crate::app::{
     },
     terminal::session::{TerminalAttachment, TerminalSession, TerminalSize, TerminalStatus},
     theme::{color, theme},
-    typography::text_font,
+    typography::{self, bold, italic},
 };
+
+/// The settings scope of terminals.
+fn terminal_scope() -> SettingsScope {
+    SettingsScope {
+        view: Some(TERMINAL_KEY_CONTEXT.into()),
+        ..Default::default()
+    }
+}
 
 /// The terminal's text size, from `font.size` in the `terminal` view scope
 /// and the application zoom.
 fn font_size(cx: &App) -> f32 {
-    settings::font_size(
-        &SettingsScope {
-            view: Some(TERMINAL_KEY_CONTEXT.into()),
-            ..Default::default()
-        },
-        cx,
-    ) * crate::app::zoom::factor(cx)
+    settings::font_size(&terminal_scope(), cx) * crate::app::zoom::factor(cx)
+}
+
+/// The terminal's regular-style font, from `font.*` in the `terminal` view
+/// scope.
+fn base_font(cx: &App) -> Font {
+    typography::font(&settings::font_settings(&terminal_scope(), cx))
 }
 
 type LinkOpener = Rc<dyn Fn(&str, &mut App)>;
@@ -886,7 +894,8 @@ impl Element for TerminalElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
-        let layout = TerminalLayout::measure(window, px(font_size(cx)));
+        let font = base_font(cx);
+        let layout = TerminalLayout::measure(window, &font, px(font_size(cx)));
         let size = layout.grid_size(bounds);
         self.entity.update(cx, |terminal, cx| {
             if terminal.interaction_bounds != bounds || terminal.layout != Some(layout) {
@@ -1047,14 +1056,18 @@ impl Element for TerminalElement {
                 }
             }
 
+            let base = base_font(cx);
             for cell in &snapshot.cells {
                 if cell.flags.contains(Flags::HIDDEN) || cell.text == " " {
                     continue;
                 }
-                let font = text_font(
-                    cell.flags.contains(Flags::BOLD),
-                    cell.flags.contains(Flags::ITALIC),
-                );
+                let mut font = base.clone();
+                if cell.flags.contains(Flags::BOLD) {
+                    font = bold(&font);
+                }
+                if cell.flags.contains(Flags::ITALIC) {
+                    font = italic(&font);
+                }
                 let run = TextRun {
                     len: cell.text.len(),
                     font,

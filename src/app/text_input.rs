@@ -15,7 +15,7 @@ use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::theme::{color, theme};
-use super::typography::{TEXT_SIZE as FONT_SIZE, text_font};
+use super::typography::{self, TEXT_SIZE as FONT_SIZE};
 use super::zoom;
 
 const INPUT_LINE_HEIGHT: f32 = 22.;
@@ -258,7 +258,7 @@ impl TextInput {
     fn shape(&self, window: &Window, cx: &App) -> ShapedLine {
         let run = TextRun {
             len: self.text.len(),
-            font: text_font(false, false),
+            font: input_font(cx),
             // Only measured, never painted.
             color: Hsla::default(),
             background_color: None,
@@ -523,7 +523,7 @@ impl Render for TextInput {
         let selection = self.selection();
         let caret = self.caret;
         let marked = self.marked.clone();
-        let font = text_font(false, false);
+        let font = input_font(cx);
         let foreground = theme(cx).paint_color(color::TEXT);
         let placeholder = (text.is_empty() && !self.placeholder.is_empty()).then(|| {
             (
@@ -646,6 +646,14 @@ impl Render for TextInput {
                 .size_full(),
             )
     }
+}
+
+/// The font of text inputs: the unscoped `font.*` settings.
+fn input_font(cx: &App) -> Font {
+    typography::font(&super::settings::font_settings(
+        &super::settings::SettingsScope::default(),
+        cx,
+    ))
 }
 
 #[cfg(test)]

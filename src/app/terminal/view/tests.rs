@@ -43,7 +43,7 @@ fn measured_layout_drives_grid_and_unicode_selection(cx: &mut TestAppContext) {
     let (layout, bounds) = cx.update(|window, cx| {
         let view = view.read(cx);
         let layout = view.layout.unwrap();
-        let measured = TerminalLayout::measure(window, px(14.));
+        let measured = TerminalLayout::measure(window, &base_font(cx), px(14.));
         assert_eq!(layout.cell_width, measured.cell_width);
         assert_eq!(layout.cell_height, measured.cell_height);
         assert_eq!(
@@ -161,6 +161,66 @@ fn terminal_font_size_resizes_the_grid(cx: &mut TestAppContext) {
     let (font_size, larger_columns, larger_lines) = grid(cx);
     assert_eq!(font_size, px(28.));
     assert!(larger_columns < columns && larger_lines < lines);
+}
+
+#[cfg(unix)]
+#[gpui::test]
+fn terminal_font_family_follows_the_terminal_scope(cx: &mut TestAppContext) {
+    use super::*;
+    use crate::app::settings::FONT_FAMILY;
+    use alacritty_terminal::tty;
+
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let session = cx.new(|cx| {
+        TerminalSession::new_with_options(
+            tty::Options {
+                shell: Some(tty::Shell::new(
+                    "/bin/sh".into(),
+                    vec!["-c".into(), "read line".into()],
+                )),
+                ..Default::default()
+            },
+            cx,
+        )
+    });
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
+    cx.simulate_resize(size(px(600.), px(400.)));
+    cx.refresh().unwrap();
+    let family = |cx: &mut VisualTestContext| cx.read(|cx| base_font(cx).family.to_string());
+    let cell_width =
+        |cx: &mut VisualTestContext| cx.read(|cx| view.read(cx).layout.unwrap().cell_width);
+    assert_eq!(family(cx), "Menlo");
+    let set_family = |cx: &mut VisualTestContext, family: &str, view: Option<&str>| {
+        let family = family.to_owned();
+        let view = view.map(str::to_owned);
+        cx.update(|_, cx| {
+            cx.global_mut::<ApplicationSettings>()
+                .0
+                .set(
+                    FONT_FAMILY,
+                    family.into(),
+                    SettingsScope {
+                        view,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        });
+        cx.run_until_parked();
+        cx.refresh().unwrap();
+    };
+
+    // An editor-scoped family leaves terminals alone.
+    set_family(cx, "Times New Roman", Some("editor"));
+    assert_eq!(family(cx), "Menlo");
+
+    set_family(cx, "Times New Roman", Some("terminal"));
+    assert_eq!(family(cx), "Times New Roman");
+    assert!(cell_width(cx) > px(0.));
+
+    // An uninstalled family still measures.
+    set_family(cx, "No Such Family 7f3a", Some("terminal"));
+    assert!(cell_width(cx) > px(0.));
 }
 
 #[test]

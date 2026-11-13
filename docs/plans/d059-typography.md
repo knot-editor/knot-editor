@@ -83,17 +83,17 @@ terminal scope, every cell is shaped alone as today.
 
 ## Checkpoints
 
-### 1. Font settings drive every text surface — ⬜
+### 1. Font settings drive every text surface — 🚧 implemented ✅, review gate pending
 
 Deliverables:
 
-- `font.family`, `font.fallbacks`, `font.weight`, `font.ligatures`, and
+- ✅ `font.family`, `font.fallbacks`, `font.weight`, `font.ligatures`, and
   `font.features` defined and resolved into `FontSettings`.
-- Editors, gutters, terminals (cells and measurement), and text inputs draw
+- ✅ Editors, gutters, terminals (cells and measurement), and text inputs draw
   with the resolved font. Terminal cell width follows the configured family.
   Ligatures appear in editors with a ligature font.
-- An uninstalled family neither panics nor breaks terminal measurement.
-- `docs/settings.md` rows; architecture updates for editor and terminal
+- ✅ An uninstalled family neither panics nor breaks terminal measurement.
+- ✅ `docs/settings.md` rows; architecture updates for editor and terminal
   typography.
 
 Validation:

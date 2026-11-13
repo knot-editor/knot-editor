@@ -53,6 +53,11 @@ values take effect.
 | Key | Type | Default | Scope | Owner | Description |
 | --- | --- | --- | --- | --- | --- |
 | `font.size` | number | `14` | Any; scope `{ view: "terminal" }` to size terminals separately; clamped to 6-72 | native | Text size in pixels of editors, text frames, and terminals. |
+| `font.family` | string | `"Menlo"` | Any; scope `{ view: "terminal" }` or a language to vary it | native | Primary font family of editors, text frames, text inputs, and terminals. Text inputs read the unscoped value. |
+| `font.fallbacks` | strings | `["Geeza Pro", "PingFang SC", "Apple Color Emoji"]` | Same as `font.family` | native | Families tried for glyphs the primary family lacks. |
+| `font.weight` | number | `400` | Same as `font.family`; clamped to 100-900 | native | Base weight; bold syntax styles and bold terminal cells stay at 700. |
+| `font.ligatures` | boolean | `true` | Same as `font.family` | native | Form ligatures; `false` turns off the `calt` and `liga` OpenType features. |
+| `font.features` | strings | `[]` | Same as `font.family` | native | OpenType features applied after `font.ligatures`: `"ss01"` turns one on, `"-calt"` off, `"cv05=2"` sets a value. Malformed entries are ignored. |
 | `theme.mode` | string: `dark`, `light`, `system` | `"dark"` | Global; other text means `dark` | native | Which theme applies; `system` follows the system appearance. |
 | `theme.dark` | string | `"One Dark"` | Global | native | Theme name used in dark mode. |
 | `theme.light` | string | `"One Light"` | Global | native | Theme name used in light mode. |

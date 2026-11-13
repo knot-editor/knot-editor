@@ -52,7 +52,11 @@ document's effective language and the `editor` view kind, or a contributed
 text frame's view ID. Views observe the settings store and repaint on any
 change. Text size is `font.size` in the same scope times the zoom factor, and
 line height follows it at 20/14, rounded to whole pixels; a size change keeps
-the top line in place.
+the top line in place. The font (`font.family`, `font.fallbacks`, `font.weight`,
+`font.ligatures`, `font.features`) resolves in the same scope into
+[`FontSettings`](../../crates/knot-model/src/typography.rs), which
+[typography](../../src/app/typography.rs) turns into a gpui font; the gutter and
+text inputs use it too, and text inputs read the unscoped values.
 
 With `editor.softWrap` resolved true for its scope, a view lays each line out
 as rows that fit the text area, measured in monospace cells rather than shaped

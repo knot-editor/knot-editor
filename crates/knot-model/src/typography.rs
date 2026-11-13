@@ -18,6 +18,12 @@ pub struct FontSettings {
     pub features: Vec<(String, u32)>,
 }
 
+impl Default for FontSettings {
+    fn default() -> Self {
+        Self::resolve(&SettingsStore::default(), &SettingsScope::default())
+    }
+}
+
 impl FontSettings {
     /// The font settings that apply to `scope`.
     pub fn resolve(store: &SettingsStore, scope: &SettingsScope) -> Self {

@@ -14,7 +14,9 @@ use std::sync::Arc;
 
 use crate::app::{
     languages::{self, LanguageDefinition, LanguageOwner},
-    settings::{ApplicationSettings, EDITOR_TAB_SIZE, FONT_SIZE, SettingsScope},
+    settings::{
+        ApplicationSettings, EDITOR_TAB_SIZE, FONT_FAMILY, FONT_FEATURES, FONT_SIZE, SettingsScope,
+    },
     syntax::{SyntaxLanguage, SyntaxState},
     theme::{Appearance, Highlight, Theme, color, native_color_definitions, theme},
 };
@@ -106,6 +108,36 @@ fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
     cx.read(|cx| {
         assert_eq!(view.read(cx).metrics.line_height, 30.);
         assert_eq!(editor.read(cx).scroll_top(), 30.);
+    });
+}
+
+#[gpui::test]
+fn font_settings_reach_the_editor_font(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("a -> b")));
+    let view = cx.new(|cx| EditorView::new(model, cx));
+    cx.read(|cx| assert_eq!(view.read(cx).font.family.as_ref(), "Menlo"));
+    cx.update(|cx| {
+        let store = &mut cx.global_mut::<ApplicationSettings>().0;
+        store
+            .set(FONT_FAMILY, "Monaco".into(), SettingsScope::default())
+            .unwrap();
+        store
+            .set(
+                FONT_FEATURES,
+                serde_json::json!(["ss01"]),
+                SettingsScope {
+                    view: Some("editor".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    });
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let font = &view.read(cx).font;
+        assert_eq!(font.family.as_ref(), "Monaco");
+        assert_eq!(font.features.tag_value_list(), [("ss01".to_owned(), 1)]);
     });
 }
 
@@ -682,7 +714,12 @@ fn layered_runs_apply_layers_in_order_and_fill_gaps() {
         style: theme.decoration_style(color::ERROR, DecorationStyle::Wavy),
     }];
 
-    let runs = runs_for(text, &[&syntax, &semantic, &decorations], &theme);
+    let runs = runs_for(
+        text,
+        &[&syntax, &semantic, &decorations],
+        &theme,
+        &test_font(),
+    );
     assert_eq!(
         run_styles(&runs),
         [
@@ -712,21 +749,21 @@ fn layered_runs_merge_equal_styles_and_clip_to_the_line() {
         span(5..99, "keyword"),
     ];
     assert_eq!(
-        run_styles(&runs_for("abcd e", &[&layer], &theme)),
+        run_styles(&runs_for("abcd e", &[&layer], &theme, &test_font())),
         [
             (4, keyword, None),
             (1, theme.paint_color(color::EDITOR_FOREGROUND), None),
             (1, keyword, None)
         ]
     );
-    assert!(runs_for("", &[&layer], &theme).is_empty());
+    assert!(runs_for("", &[&layer], &theme, &test_font()).is_empty());
     assert_eq!(
-        run_styles(&runs_for("plain", &[], &theme)),
+        run_styles(&runs_for("plain", &[], &theme, &test_font())),
         [(5, theme.paint_color(color::EDITOR_FOREGROUND), None)]
     );
 
     let comment = [span(0..5, "comment")];
-    let runs = runs_for("plain", &[&comment], &theme);
+    let runs = runs_for("plain", &[&comment], &theme, &test_font());
     assert_eq!(runs[0].font.style, gpui::FontStyle::Italic);
 }
 
@@ -745,14 +782,14 @@ fn layered_runs_keep_tab_and_rtl_geometry(cx: &mut TestAppContext) {
                 window,
                 text.into(),
                 px(14.),
-                &runs_for(text, &[], &theme),
+                &runs_for(text, &[], &theme, &test_font()),
                 4,
             );
             let layered = shape_editor_line(
                 window,
                 text.into(),
                 px(14.),
-                &runs_for(text, &[&layer], &theme),
+                &runs_for(text, &[&layer], &theme, &test_font()),
                 4,
             );
             assert_eq!(layered.width, plain.width, "{text:?}");
@@ -1229,4 +1266,8 @@ fn reset_state_starts_over_on_the_same_buffer(cx: &mut TestAppContext) {
         );
         assert_eq!(editor.model(), &model, "the buffer entity is kept");
     });
+}
+
+fn test_font() -> gpui::Font {
+    crate::app::typography::font(&Default::default())
 }

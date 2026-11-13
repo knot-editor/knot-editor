@@ -116,11 +116,7 @@ impl EditorView {
         let text = window.text_system();
         let font_size = self.metrics.font_size;
         let digit_width = text
-            .advance(
-                text.resolve_font(&make_font(false, false)),
-                px(font_size),
-                '0',
-            )
+            .advance(text.resolve_font(&self.font), px(font_size), '0')
             .map_or(font_size * 0.6, |advance| f32::from(advance.width));
         self.gutter = GutterLayout::new(
             line_numbers,

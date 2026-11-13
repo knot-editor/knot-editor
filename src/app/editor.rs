@@ -38,7 +38,6 @@ use knot_protocol::{
 pub(crate) use knot_model::editor::*;
 
 use super::commands::dispatch as commands;
-use super::typography::text_font as make_font;
 
 use super::{
     CompletionAccept, CompletionDismiss, CompletionNext, CompletionPrevious, EDITOR_KEY_CONTEXT,

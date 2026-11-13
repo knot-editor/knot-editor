@@ -92,6 +92,17 @@ pub(crate) fn font_size(context: &SettingsScope, cx: &App) -> f32 {
         .clamp(6., 72.) as f32
 }
 
+/// The font a view in `context` draws text with.
+pub(crate) fn font_settings(
+    context: &SettingsScope,
+    cx: &App,
+) -> knot_model::typography::FontSettings {
+    match cx.try_global::<ApplicationSettings>() {
+        Some(settings) => knot_model::typography::FontSettings::resolve(&settings.0, context),
+        None => knot_model::typography::FontSettings::resolve(&SettingsStore::default(), context),
+    }
+}
+
 /// Columns per tab stop for an editor in `context`, within a sane range.
 pub(crate) fn editor_tab_size(context: &SettingsScope, cx: &App) -> usize {
     resolve(EDITOR_TAB_SIZE, context, cx, Value::as_i64)
