@@ -175,11 +175,13 @@ fn files_created_outside_the_editor_appear_in_loaded_folders(cx: &mut TestAppCon
     explorer.tree.gesture("docs", "click", cx);
     explorer.wait_for_labels(&["app", "docs", "guide.md", "src", "README.md"], cx);
 
-    write(directory.path(), "app/docs/new.md", "new");
-    explorer.wait_for_labels(
-        &["app", "docs", "guide.md", "new.md", "src", "README.md"],
-        cx,
-    );
+    // The operating system watch of the expanded folder starts in the
+    // background and reports nothing before it exists, so rewrite the file
+    // until the explorer notices it.
+    wait_until(cx, |cx| {
+        write(directory.path(), "app/docs/new.md", "new");
+        explorer.tree.labels(cx) == ["app", "docs", "guide.md", "new.md", "src", "README.md"]
+    });
     std::fs::remove_file(directory.path().join("app/docs/guide.md")).unwrap();
     explorer.wait_for_labels(&["app", "docs", "new.md", "src", "README.md"], cx);
     write(directory.path(), "app/top.txt", "top");
