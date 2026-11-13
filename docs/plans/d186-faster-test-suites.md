@@ -176,7 +176,7 @@ One commit per area; split an area further if it grows.
    93 tests) spend their time in V8, which checkpoint 7 covers. Moved to
    `knot-model`: launch and open requests (`entry`), the terminal start
    directory (`terminal_directory`), and the status bar registry
-   (`status_bar`). Still in `src/app` because they need gpui or alacritty:
+   (`status_bar`). Still in `src/app` because they need gpui, alacritty, or `knot-host`:
    `convert`, `window_layout`, the terminal `links`, `input`, `layout`, and
    `mouse`, and `personal_config`. No time changed measurably; the moved
    tests now build and run with `knot-model`.
