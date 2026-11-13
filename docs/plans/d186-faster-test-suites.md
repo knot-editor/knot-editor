@@ -144,11 +144,11 @@ One commit per area; split an area further if it grows.
    mouse, and focus through `Window` (`editing`, `key_hold`), viewports
    (`editor_api`), and anything starting from a native startup. Summed time of
    the 145 tests: 9.95 s → 8.19 s. No test needed moving to `knot-model`.
-4. `src/app/product/tests/` part two: `persistence`, `observation`,
+4. ✅ `src/app/product/tests/` part two: `persistence`, `observation`,
    `sessions`, `recovery`, `extension_api`, `startup`, `document_watch`,
    `window_restore`, `tool_layout`, `tools`, `files`, `workbench`, and
    `src/app/product/tab_drag/` (which keeps windows where it tests
-   cross-window delivery). 🔍 Ready for review. Windowed on purpose: tests
+   cross-window delivery). Done and approved. Windowed on purpose: tests
    that identify a window by its native handle (observation, public API
    capture, replacement sessions), answer native prompts or press keys through
    gpui (`simulate_keystrokes`, IME, tree rows), or draw (`tools` geometry),
