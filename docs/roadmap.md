@@ -739,17 +739,13 @@ hold the analyses that support some items.
     allow several contexts, or negated ones, per binding, still resolved by
     counting matching facts rather than by an expression language.
 
-- **D059 — Professional typography: ligatures and configurable font features**
+- **D059 — Professional typography: ligatures and configurable font features** 🚧
   - Depends on: none
-  - Description: Surfaces use shared fixed typography defaults. Ligatures and
-    font features need shaping options per surface, and the terminal assumes
-    fallback glyphs stay within emulator cell allocations, so enablement rules
-    differ between the editor and the PTY grid. Do it when daily readability or
-    a font choice requires ligatures, stylistic sets, variable-font settings,
-    or configurable terminal typography, together with D045: define font
-    selection, fallback, and feature toggles as `font.*` settings scoped per
-    surface, such as `{ view: "terminal" }`, and terminal cell metrics for
-    fonts whose shaped advance differs from the default.
+  - Description: Surfaces use shared fixed typography defaults, and only
+    `font.size` is a setting. Define font family, fallbacks, weight, line
+    height, ligatures, and OpenType features as `font.*` settings scoped per
+    surface, such as `{ view: "terminal" }`, including the terminal's font
+    settings from D045. Follow its [plan](plans/d059-typography.md).
 
 ### Vim mode
 
@@ -864,11 +860,11 @@ Kakoune mode could use them too. The
 
 - **D045 — General terminal settings**
   - Depends on: D059
-  - Description: Shared typography and the session-local mouse toggle are the
-    only terminal preferences; no terminal keys are defined in the settings
-    store. Do it with D059 when daily use needs configurable fonts or terminal
-    preferences: define them as settings, with fonts as `font.*` keys scoped
-    `{ view: "terminal" }` so the editor keeps its own values.
+  - Description: Apart from `font.*` keys scoped `{ view: "terminal" }`, the
+    session-local mouse toggle is the only terminal preference; no `terminal.*`
+    keys are defined in the settings store. Do it when daily use needs terminal
+    preferences such as the default mouse mode, cursor style, or scrollback
+    length: define them as settings.
 
 - **D043 — Persistent terminal sessions**
   - Depends on: none
