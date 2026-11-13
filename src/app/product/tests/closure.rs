@@ -1,6 +1,6 @@
 //! Protected closure of tabs, windows, and quit: native prompts and the public host.
 
-use super::operations::{empty_product_window, install_operation_fixture};
+use super::operations::{empty_headless_window, empty_product_window, install_operation_fixture};
 use super::*;
 use crate::app::documents::DocumentDirty;
 use crate::app::extensions;
@@ -404,7 +404,7 @@ fn an_edit_racing_a_public_close_save_preserves_the_live_dirty_document(cx: &mut
 #[gpui::test]
 fn activation_can_close_the_final_tab_and_observe_an_empty_window(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, _) = empty_product_window(&documents, cx);
+    let (window, _) = empty_headless_window(&documents, cx);
     let old_workbench = cx.read(|cx| window.read(cx).workbench.clone());
     let host = cx.update(extensions::host::install);
     let key = install_operation_fixture(
@@ -454,7 +454,7 @@ await commands.register("close.listener-trigger", async () => { id = (await docu
         "close.listener-trigger",
         cx,
     );
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&window, native_window, "close.listener-trigger", cx),
@@ -487,8 +487,8 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
     let documents = install_globals(cx);
     let host = cx.update(extensions::host::install);
     let key = install_operation_fixture(&host, SOURCE, "close.invalid", cx);
-    let (first, first_window) = empty_product_window(&documents, cx);
-    let (control, _) = empty_product_window(&documents, cx);
+    let (first, first_window) = empty_headless_window(&documents, cx);
+    let (control, _) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&first, first_window, "close.prepare", cx),
@@ -520,10 +520,11 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
         }
     });
     assert_eq!(
-        cx.update_window(first_window, |_, _, cx| first.update(cx, |window, cx| {
-            window.relocate_tab_to(&source, &destination, cx)
-        }))
-        .unwrap(),
+        first.update(cx, |window, cx| window.relocate_tab_to(
+            &source,
+            &destination,
+            cx
+        )),
         CommandOutcome::Completed
     );
     assert_eq!(
@@ -545,7 +546,7 @@ fn a_transferred_presentation_cannot_be_closed_through_its_old_target(cx: &mut T
 #[gpui::test]
 fn public_close_removes_a_terminal_without_closing_document_models(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx),
