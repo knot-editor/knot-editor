@@ -115,94 +115,166 @@ and fish emit it by default only in some setups, so the fallback stays.
 
 ## Checkpoints
 
-### 1. Prebuilt libraries and a linked binding
+Mouse selection and links are off between 3a and 3b; nobody uses the product
+yet, and the gap keeps each step reviewable.
+
+### 1a. Prebuilt library workflow and release
 
 Deliverables:
-- `libghostty.yml` workflow and a published `libghostty-vt-1.0.1` release with
-  the five target archives and checksums.
+- `.github/workflows/libghostty.yml`, dispatched manually with the
+  libghostty-vt version: Zig setup, tarball download and minisign check,
+  cross-compiled builds for the five targets, and one archive per target
+  (static library, headers, license) with its sha256.
+- A published `libghostty-vt-1.0.1` release in this repository.
+
+Validation: the workflow run; the archives contain the library and
+`ghostty/vt.h` for each target; actionlint in CI passes.
+
+Review gate: the workflow and the release assets.
+
+**Implementation context:** mirror the pinned-action style (commit SHAs) and
+`persist-credentials: false` from `.github/workflows/ci.yml`. The build
+command and options come from `PACKAGING-LIBGHOSTTY.md`: the source and
+dependency tarballs side by side, `zig build --system <deps>`, an empty
+`ZIG_GLOBAL_CACHE_DIR`, `-Dtarget=<zig triple>`. Confirm the Zig version from
+the 1.0.1 `build.zig.zon`.
+
+### 1b. Linked binding
+
+Deliverables:
 - `crates/knot-terminal` with `build.rs` (download, verify, cache,
-  `KNOT_LIBGHOSTTY_DIR`), checked-in bindings, the `just` regeneration
-  recipe, and a smoke test that creates a terminal, writes styled output, and
-  reads cells back.
+  `KNOT_LIBGHOSTTY_DIR`), checked-in bindings, a `just` recipe that
+  regenerates them, and a smoke test that creates a terminal, writes styled
+  output, and reads it back.
 - The crate builds and its tests pass in every CI job (Linux, and the macOS
   and Windows matrix), with no Zig installed.
 - The Windows linking decision is made and recorded in this plan.
 
 Validation: the smoke test on all three platforms; `just check`.
 
-Review gate: the workflow, the release assets, the build script, and CI
-results on all platforms.
+Review gate: the build script and CI results on all platforms.
 
 **Implementation context:** add `crates/knot-terminal` to the workspace
-`default-members` in `Cargo.toml`. Mirror existing pinned-action style
-(commit SHAs) from `.github/workflows/ci.yml`. Add the crate test to the
-`handler-platforms` job so it runs on macOS and Windows. The `cargo audit`
-job in `audit.yml` covers `portable-pty` once it is added (checkpoint 2).
-Document `KNOT_LIBGHOSTTY_DIR` and the upgrade steps in
-`docs/development.md`.
+`default-members` in `Cargo.toml`. Add its tests to the `handler-platforms`
+job in `ci.yml` so they run on macOS and Windows. Document
+`KNOT_LIBGHOSTTY_DIR` and the upgrade steps in `docs/development.md`.
 
-### 2. The engine in `knot-terminal`
+### 2a. Screen wrapper
+
+Deliverables: a safe wrapper for terminal creation with size and scrollback,
+`vt_write`, resize with cell pixels, palette and default colors, viewport
+scrolling, and a render-state reader for rows, cells (graphemes, styles,
+resolved colors, width), cursor (shape, visibility, position), and dirty
+state.
+
+Validation: plain tests that feed bytes and assert the screen: SGR styles and
+colors, wide characters, scrollback and viewport scrolling, reflow on resize,
+cursor shape changes, dirty tracking.
+
+Review gate: the wrapper surface.
+
+**Implementation context:** `crates/knot-terminal/src/`. The terminal lives
+behind `Arc<Mutex<_>>`, with an unsafe `Send` on the wrapper justified by the
+library creating no threads and every access going through the mutex. The
+render-state reader holds the lock only for `render_state_begin_update`.
+
+### 2b. Modes, replies, and grid queries
 
 Deliverables:
-- A safe wrapper: terminal creation with size and scrollback, `vt_write`,
-  resize with cell pixels, palette and default colors, mode queries, viewport
-  scrolling, selection over tracked grid refs, text extraction for copy and
-  restart replay, and a render-state reader for rows, cells, styles, cursor,
-  and dirty state.
 - Callback registration that forwards PTY replies, OSC 7, title, and bell to
-  a sink, and refuses clipboard reads.
-- Key and mouse encoder wrappers.
-- An engine that spawns the shell through `portable-pty` with the session
-  options (shell, directory, environment, `drain_on_exit`), runs the reader
-  thread, writes input, resizes, reports exit status, and shuts down
-  off-thread, keeping the macOS `killpg` behavior of
-  `RunningTerminal::shutdown`.
+  a sink, and refuses OSC 52 reads and writes.
+- Mode queries (focus reports, bracketed paste, mouse tracking and format,
+  cursor keys, alternate screen).
+- Selection over tracked grid refs, text extraction for copy and restart
+  replay, and OSC 8 hyperlink lookup per cell.
 
-Validation: plain tests for parsing, styles, wide characters, scrollback,
-reflow, selection text, mode changes, OSC 8 lookup, ordered replies (DA, DSR,
-color queries answered from the configured palette), and refused OSC 52; Unix
-integration tests that run a real shell command through the engine.
+Validation: plain tests for ordered replies (DA, DSR, DECRQM), color queries
+answered from the configured palette, refused OSC 52, mode changes,
+selection text across soft wraps and scrolling, and OSC 8 identity.
 
-Review gate: the wrapper surface and engine API before the app depends on it.
+Review gate: the event and query surface.
 
 **Implementation context:** port the reply-ordering and color-query cases
-from `src/app/terminal/session.rs` tests and `session_tests.rs` to this
-crate. Keep gpui out of it: the app adapts its event sink to the existing
-coalesced wakeup. Expose the terminal behind `Arc<Mutex<_>>`, with an unsafe
-`Send` on the wrapper justified by the library creating no threads and all
-access going through the mutex.
+from the tests in `src/app/terminal/session.rs` and from `session_tests.rs`.
+The sink is a plain trait or closure; gpui stays out of the crate.
 
-### 3. The app on libghostty
+### 2c. PTY engine
+
+Deliverables: an engine that spawns the shell through `portable-pty` with the
+session options (shell, directory, environment, drain on exit), runs the
+reader thread that feeds the terminal, writes input, resizes the PTY and the
+terminal together, reports exit status, and shuts down off-thread, keeping
+the macOS `killpg` behavior.
+
+Validation: Unix integration tests that run real shell commands through the
+engine: output reaches the screen, input round-trips, resize reaches the
+child (`stty size`), exit status, and shutdown of a shell that is still
+starting.
+
+Review gate: the engine API before the app depends on it.
+
+**Implementation context:** mirror `RunningTerminal` in
+`src/app/terminal/session.rs`, including the `killpg` comment in
+`shutdown`. Add `portable-pty` to the workspace dependencies; the
+`cargo audit` job in `audit.yml` covers it.
+
+### 3a. Session and drawing on libghostty
 
 Deliverables:
-- `session.rs`, `view.rs`, `colors.rs`, `links.rs`, `layout.rs`, and the
-  product tests use `knot-terminal`; `alacritty_terminal` leaves the
-  workspace.
-- Drawing reads the render state: cells, styles, selection, and cursor shape
-  and visibility, with the D059 typography and punctuation-run ligatures
-  unchanged.
-- Restart replays the old screen above the divider through text extraction.
-- Links use OSC 8 grid-ref hyperlinks plus the existing HTTP(S) text
-  detection over displayed cells.
-- Keyboard and mouse still use Knot's own wire formats, reading modes from
-  libghostty, so this checkpoint changes only the engine.
+- `TerminalSession` runs on the engine: events, process generations,
+  coalesced wakeups, restart with the old screen replayed above the divider,
+  focus reports, paste, and the process query for the directory.
+- `TerminalView` paints from the render state: cells, styles, colors, cursor
+  shape and visibility, with D059 typography and punctuation-run ligatures
+  unchanged. `colors.rs` configures the palette instead of answering color
+  queries.
+- Keyboard and mouse reporting keep Knot's own wire formats, reading modes
+  from the engine. Mouse selection and links are off.
 
-Validation: ported `session_tests.rs`, `mouse_tests.rs`,
-`view/tests.rs`, `links.rs` tests, and `product/tests/terminal.rs`;
-`just check`. Manual: `try.*` commands that open terminals running a TUI (vim
-or htop), `scripts/terminal-mouse-fixture.py`, a long scrollback, OSC 8
-output, a restart, and a color-query script.
+Validation: ported session, view, and product terminal tests for lifecycle,
+restart, attachment, focus, paste, and drawing; `just check`. Manual: `try.*`
+commands that open terminals running a TUI (vim or htop), a long output, a
+restart, and a color-query script.
 
-Review gate: parity in daily use.
+Review gate: daily shell and TUI use, minus selection and links.
 
-**Implementation context:** `src/app/terminal/mod.rs` module docs name the
-engine. Tests that build `Term` with `VoidListener` and `Processor` become
-`knot-terminal` terminals fed bytes. Update the
+**Implementation context:** `src/app/terminal/{session,view,colors,layout,input,mouse}.rs`,
+`session_tests.rs`, `view/tests.rs`, `src/app/product/tests/terminal.rs`.
+Tests that build `Term` with `VoidListener` and `Processor` become
+`knot-terminal` terminals fed bytes. `alacritty_terminal` may remain only
+where selection and links still reference it.
+
+### 3b. Selection, copy, and links
+
+Deliverables: local mouse selection and copy over tracked grid refs, the
+scroll interaction during selection, OSC 8 links and HTTP(S) text detection
+over displayed cells with release-time revalidation, and the
+gesture-ownership rules between reporting and selection.
+
+Validation: ported `links.rs` and `mouse_tests.rs` selection cases, and the
+product test for plain drag copy. Manual: `try.*` commands with OSC 8 output,
+URLs across soft wraps, and `scripts/terminal-mouse-fixture.py`.
+
+Review gate: selection and links in daily use.
+
+**Implementation context:** `src/app/terminal/{links,mouse,view}.rs`. Link
+detection keeps its algorithm and reads cells and hyperlinks from the engine.
+
+### 3c. Remove Alacritty and update the docs
+
+Deliverables: `alacritty_terminal` leaves the workspace and the remaining
+tests are ported. The
 [terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views)
-reference, the knot-terminal line in `docs/architecture.md` and the
-repository map in `AGENTS.md`, and rewrite the
-[terminal decision](../decisions/workbench-and-lifecycle.md#terminal) with
-its index line.
+reference, the crate list in `docs/architecture.md`, the repository map in
+`AGENTS.md`, and the [terminal decision](../decisions/workbench-and-lifecycle.md#terminal)
+with its index line describe libghostty.
+
+Validation: `just check`; `cargo tree` shows no `alacritty_terminal`.
+
+Review gate: the documentation.
+
+**Implementation context:** `Cargo.toml` (workspace and root dependencies),
+`src/app/terminal/mod.rs` module docs, `docs/decisions.md`.
 
 ### 4. libghostty encoders
 
@@ -224,8 +296,9 @@ the Kitty keyboard protocol, plus the mouse fixture.
 Review gate: typing, shortcuts, and mouse reporting in shells and TUIs.
 
 **Implementation context:** `src/app/terminal/input.rs` and `mouse.rs` with
-`mouse_tests.rs`. Named keys that stay global on Windows and Linux (the
-terminal decision) are routing, not encoding, and stay in `view.rs`.
+`mouse_tests.rs`; the key and mouse encoder wrappers go in `knot-terminal`.
+Named keys that stay global on Windows and Linux (the terminal decision) are
+routing, not encoding, and stay in `view.rs`.
 
 ### 5. Working directory from OSC 7 (D128)
 
