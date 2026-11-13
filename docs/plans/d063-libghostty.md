@@ -146,15 +146,40 @@ until `RenderState::clean`. Inverse and faint stay with the painter.
 [`tests/screen.rs`](../../crates/knot-terminal/tests/screen.rs) replaced the
 1b smoke test.
 
-### 2b. Modes, replies, and grid queries
+### 2b. Modes, replies, and grid queries 🔍
 
 Deliverables:
-- Callback registration that forwards PTY replies, OSC 7, title, and bell to
+- ✅ Callback registration that forwards PTY replies, OSC 7, title, and bell to
   a sink, and refuses OSC 52 reads and writes.
-- Mode queries (focus reports, bracketed paste, mouse tracking and format,
+- ✅ Mode queries (focus reports, bracketed paste, mouse tracking and format,
   cursor keys, alternate screen).
-- Selection over tracked grid refs, text extraction for copy and restart
+- ✅ Selection over tracked grid refs, text extraction for copy and restart
   replay, and OSC 8 hyperlink lookup per cell.
+
+Status: ready for review. The sink is a closure passed to
+`Terminal::set_event_handler`
+([`events.rs`](../../crates/knot-terminal/src/events.rs)). A size callback
+answers XTWINOPS and in-band size reports from the last resize. The selection
+API ([`grid.rs`](../../crates/knot-terminal/src/grid.rs)) covers only the
+plain drag selection the view uses today. The terminal tracks the selection
+itself, so a drag keeps its anchor through scrolling, and frames carry each
+row's selected columns. Tests are in
+[`tests/queries.rs`](../../crates/knot-terminal/tests/queries.rs).
+
+Findings for later checkpoints:
+- **OSC 52.** No callback is registered, so libghostty ignores reads and
+  writes, as Alacritty does today. Registering a read callback would also turn
+  on Kitty paste events (mode 5522).
+- **OSC 8.** libghostty exposes a cell's URI but not the link's `id`. In 3b,
+  links are grouped by URI, so two links with the same URI and different
+  `id`s can no longer be told apart.
+- **Restart replay.** `Terminal::text` returns logical lines with soft wraps
+  already joined, so replay no longer needs per-row wrap flags.
+- **Reply bytes.** DA1 answers `CSI ? 62 ; 22 c` where Alacritty answered
+  `CSI ? 6 c`. In 3a, `session_tests.rs` takes libghostty's bytes.
+- **Kitty keyboard.** libghostty answers the Kitty keyboard query
+  (`CSI ? u`). From 3a until checkpoint 4 replaces Knot's key encoding, a
+  program that turns the protocol on still receives legacy keys.
 
 Validation: plain tests for ordered replies (DA, DSR, DECRQM), color queries
 answered from the configured palette, refused OSC 52, mode changes,
