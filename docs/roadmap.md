@@ -52,6 +52,24 @@ the deferred register.
     request over later typing was rejected: the line would shift after the
     typed text and needs rules for when to give up.
 
+## Bugs
+
+Known defects with their analysis, separate from deferred work. Each item
+links the report that owns the evidence.
+
+- **D185 — Stale editor view queries panic the host**
+  - Deferred: An extension query naming an editor row the buffer no longer
+    has, such as `editor_row_at` after the text shrank, panics the host
+    thread instead of failing the query. The
+    [stale queries report](reports/stale-editor-queries.md) has the observed
+    backtrace and the proposed hardening.
+  - Reconsider: An extension races a host query against an edit outside
+    tests, or the next extension-host hardening pass. Then return a query
+    error from out-of-range row, line, and offset queries, audit the
+    sibling `editor_*` handlers for the same direct indexing, and cover a
+    stale-row query with a regression test.
+  - Order: independent.
+
 ## Selected work
 
 The production extension APIs and JavaScript projects initiative (D046–D053,
