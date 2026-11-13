@@ -1,5 +1,5 @@
 //! Transient extension interactions own one window-local overlay.
-use super::operations::empty_product_window;
+use super::operations::{empty_headless_window, empty_product_window};
 use super::*;
 use crate::app::extensions::host::handlers::TransientError;
 use crate::app::transient::{PromptText, TransientOutcome, TransientOwner};
@@ -260,24 +260,22 @@ fn folder_picker_settles_selected_dismissed_and_failed(cx: &mut TestAppContext) 
 #[gpui::test]
 fn cancellation_matches_the_owner_and_two_windows_stay_independent(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (first_window, first_native_window) = empty_product_window(&documents, cx);
-    let (second_window, second_native_window) = empty_product_window(&documents, cx);
+    let (first_window, first_native_window) = empty_headless_window(&documents, cx);
+    let (second_window, second_native_window) = empty_headless_window(&documents, cx);
 
-    let mut first = cx
-        .update_window(first_native_window, |_, _, cx| {
+    let mut first = first_native_window
+        .run(cx, |cx| {
             first_window.update(cx, |window, cx| {
                 window.begin_picker(owner(None), "First".into(), picker_items(), None, cx)
             })
         })
-        .unwrap()
         .unwrap();
-    let mut second = cx
-        .update_window(second_native_window, |_, _, cx| {
+    let mut second = second_native_window
+        .run(cx, |cx| {
             second_window.update(cx, |window, cx| {
                 window.begin_picker(owner(None), "Second".into(), picker_items(), None, cx)
             })
         })
-        .unwrap()
         .unwrap();
 
     // Another lifecycle cannot cancel this window's interaction.
@@ -294,8 +292,8 @@ fn cancellation_matches_the_owner_and_two_windows_stay_independent(cx: &mut Test
     assert_eq!(settle(&mut first, cx), TransientOutcome::Cancelled);
 
     // The second window still owns its own interaction.
-    cx.simulate_input(second_native_window, "alpha");
-    cx.simulate_keystrokes(second_native_window, "enter");
+    type_text(&second_window, "alpha", cx);
+    press_keys(&second_window, "enter", cx);
     assert_eq!(
         settle(&mut second, cx),
         TransientOutcome::Picker("alpha".into())
@@ -305,19 +303,15 @@ fn cancellation_matches_the_owner_and_two_windows_stay_independent(cx: &mut Test
 #[gpui::test]
 fn window_closure_releases_the_pending_interaction(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
-    let mut receiver = cx
-        .update_window(native_window, |_, _, cx| {
+    let (window, native_window) = empty_headless_window(&documents, cx);
+    let mut receiver = native_window
+        .run(cx, |cx| {
             window.update(cx, |window, cx| {
                 window.begin_picker(owner(None), "Pick".into(), picker_items(), None, cx)
             })
         })
-        .unwrap()
         .unwrap();
-    cx.update_window(native_window, |_, native_window, _| {
-        native_window.remove_window()
-    })
-    .unwrap();
+    window.update(cx, |window, cx| window.end(cx));
     cx.run_until_parked();
     assert_eq!(settle(&mut receiver, cx), TransientOutcome::Cancelled);
 }
@@ -353,7 +347,8 @@ await commands.register("transient.await-picker", async () => {
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
     let pending = dispatch_product_command(&window, native_window, "transient.await-picker", cx);
     wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
