@@ -6,6 +6,7 @@ use std::rc::Rc;
 use super::*;
 use crate::app::documents::DocumentId;
 use crate::app::editor::EditorViewState;
+use crate::app::product::HeadlessWindows;
 use crate::app::window_record::{self, WindowRecord};
 use crate::app::workbench::{DockLocation, SplitPlacement};
 
@@ -17,6 +18,8 @@ fn uri(path: &str) -> ResourceUri {
 struct Launch {
     state: tempfile::TempDir,
     provider: Arc<MemoryFileSystemProvider>,
+    /// Whether windows open without a native window.
+    headless: bool,
 }
 
 fn wait<T: 'static>(task: gpui::Task<T>, cx: &mut TestAppContext) -> T {
@@ -30,6 +33,15 @@ fn wait<T: 'static>(task: gpui::Task<T>, cx: &mut TestAppContext) -> T {
 
 impl Launch {
     fn new(cx: &mut TestAppContext) -> Self {
+        Self::with_windows(true, cx)
+    }
+
+    /// A launch whose windows are native, for tests of what a native window does.
+    fn windowed(cx: &mut TestAppContext) -> Self {
+        Self::with_windows(false, cx)
+    }
+
+    fn with_windows(headless: bool, cx: &mut TestAppContext) -> Self {
         install_globals(cx);
         // Restarts reopen recovery from its file.
         install_file_recovery(cx);
@@ -40,9 +52,13 @@ impl Launch {
         provider.seed_file(uri("a/one.txt"), b"one").unwrap();
         provider.seed_file(uri("b/two.txt"), b"two").unwrap();
         cx.set_global(ApplicationFileSystems(filesystems));
+        if headless {
+            cx.set_global(HeadlessWindows::default());
+        }
         let launch = Self {
             state: tempfile::tempdir().unwrap(),
             provider,
+            headless,
         };
         launch.install_windows(cx);
         launch
@@ -98,8 +114,8 @@ impl Launch {
                 .flush()
         });
         wait(recovery, cx).unwrap();
-        for window in cx.read(|cx| cx.windows()) {
-            let _ = cx.update_window(window, |_, native_window, _| native_window.remove_window());
+        for window in cx.read(crate::app::product::windows) {
+            let _ = window.update(cx, |window, cx| window.close_window(cx));
         }
         cx.run_until_parked();
         let documents = cx.new(|_| DocumentCollection::new());
@@ -117,6 +133,9 @@ impl Launch {
             )),
         ));
         cx.set_global(ApplicationWindows::default());
+        if self.headless {
+            cx.set_global(HeadlessWindows::default());
+        }
         self.install_windows(cx);
     }
 
@@ -154,14 +173,11 @@ fn documents(cx: &gpui::App) -> Entity<DocumentCollection> {
 }
 
 /// Product windows in creation order.
-fn windows_by_creation(cx: &TestAppContext) -> Vec<(gpui::AnyWindowHandle, Entity<KnotWindow>)> {
+fn windows_by_creation(cx: &TestAppContext) -> Vec<(Headless, Entity<KnotWindow>)> {
     let mut windows = cx
-        .read(|cx| cx.windows())
+        .read(crate::app::product::windows)
         .into_iter()
-        .filter_map(|window| {
-            let knot_window = window.downcast::<KnotWindow>()?;
-            Some((window, cx.read(|cx| knot_window.entity(cx).unwrap())))
-        })
+        .map(|window| (Headless, window))
         .collect::<Vec<_>>();
     windows.sort_by_key(|(_, window)| cx.read(|cx| window.read(cx).creation_order()));
     windows
@@ -264,8 +280,8 @@ fn forget_file_identities(node: &mut serde_json::Value) {
     }
 }
 
-fn active(cx: &TestAppContext) -> Option<gpui::AnyWindowHandle> {
-    cx.read(|cx| cx.active_window())
+fn active(cx: &TestAppContext) -> Option<Entity<KnotWindow>> {
+    cx.read(crate::app::product::active_window)
 }
 
 #[gpui::test]
@@ -280,7 +296,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
         .seed_file(uri("a/long.txt"), text.as_bytes())
         .unwrap();
     launch.start(Vec::new(), cx);
-    let (first_window, first) = windows_by_creation(cx).remove(0);
+    let (_, first) = windows_by_creation(cx).remove(0);
     first.update(cx, |window, cx| {
         window.replace_workspace_roots(vec![uri("a"), uri("b")], cx);
     });
@@ -331,10 +347,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     });
     edit(first_document(&second, cx), "notes", cx);
     launch.open_file(&second, "b/two.txt", cx);
-    cx.update_window(first_window, |_, native_window, _| {
-        native_window.activate_window()
-    })
-    .unwrap();
+    first.update(cx, |window, cx| window.activate(cx));
     cx.run_until_parked();
     let before = record(cx);
     assert_eq!(before.windows.len(), 2);
@@ -359,8 +372,8 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     assert_eq!(after.active, Some(0));
     let restored = windows_by_creation(cx);
     assert_eq!(restored.len(), 2);
-    let (restored_window, first) = &restored[0];
-    assert!(active(cx) == Some(*restored_window));
+    let (_, first) = &restored[0];
+    assert!(active(cx).as_ref() == Some(first));
     // The dirty document keeps its identity, its text, and one shared model.
     cx.read(|cx| {
         let documents = documents(cx);
@@ -423,7 +436,7 @@ fn queued_requests_open_after_restoration_without_duplicating_documents(cx: &mut
     assert_eq!(windows.len(), 3);
     // The restored window comes first and the last request window is focused.
     assert_eq!(texts(&windows[0].1, cx), ["one"]);
-    assert!(active(cx) == Some(windows[2].0));
+    assert!(active(cx).as_ref() == Some(&windows[2].1));
     assert_eq!(
         cx.read(|cx| windows[2]
             .1
@@ -540,9 +553,9 @@ fn lost_unsupported_and_consumed_records_open_the_default_window(cx: &mut TestAp
 
 #[gpui::test]
 fn closing_a_window_removes_it_and_quitting_without_windows_restores_none(cx: &mut TestAppContext) {
-    let launch = Launch::new(cx);
+    let launch = Launch::windowed(cx);
     launch.start(Vec::new(), cx);
-    let (window, _) = windows_by_creation(cx).remove(0);
+    let window = cx.read(|cx| cx.windows())[0];
     cx.update_window(window, |_, native_window, _| native_window.remove_window())
         .unwrap();
     cx.run_until_parked();
@@ -561,7 +574,7 @@ fn a_failed_config_launch_never_records_windows(cx: &mut TestAppContext) {
         "throw new Error('pre failed');",
     )
     .unwrap();
-    let launch = Launch::new(cx);
+    let launch = Launch::windowed(cx);
     install_launch_gate(cx);
     let host = cx.update(super::super::super::extensions::host::install);
     host.update(cx, |host, cx| {
