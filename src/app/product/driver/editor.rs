@@ -670,8 +670,13 @@ mod tests {
         let text = (0..100)
             .map(|line| format!("line {line}\n"))
             .collect::<String>();
+        let undo = if cfg!(target_os = "macos") {
+            "<d-z>"
+        } else {
+            "<c-z>"
+        };
         let mut test_editor = product.editor(&text, None, (0, 0), cx);
-        test_editor.press("x<d-z>", cx);
+        test_editor.press(&format!("x{undo}"), cx);
         assert!(!test_editor.is_dirty(cx), "undo is bound");
         test_editor.press("x", cx);
         assert!(test_editor.fold(2, 4, cx));
@@ -684,7 +689,7 @@ mod tests {
         assert!(test_editor.folds(cx).is_empty(), "no folds survive");
         assert_eq!(test_editor.viewport(cx).0, 0, "no scroll survives");
         assert!(!test_editor.is_dirty(cx), "the loaded text is clean");
-        test_editor.press("<d-z>", cx);
+        test_editor.press(undo, cx);
         assert_eq!(
             test_editor.marked(cx),
             "one\nt‸w‸o\nthree",
