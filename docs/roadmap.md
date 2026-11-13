@@ -173,7 +173,7 @@ hold the analyses that support some items.
     commands conflict: extract a dedicated read-only presentation over the same
     buffer layer.
 
-- **D063 — Migrate the terminal engine to libghostty**
+- **D063 — Migrate the terminal engine to libghostty** 🚧
   - Depends on: none
   - Description: The `alacritty_terminal` adapter meets current terminal
     behavior. Ghostty VT was rejected earlier for its separate PTY
@@ -183,7 +183,8 @@ hold the analyses that support some items.
     Alacritty lacks (such as D041 protocols), and with or before D041 if it
     covers those protocols. Replace the emulator behind the existing
     application-owned session without changing its PTY ownership or
-    single-attachment contract.
+    single-attachment contract. Follow its
+    [plan](plans/d063-libghostty.md).
 
 ## Features
 

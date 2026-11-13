@@ -1,0 +1,250 @@
+# D063 — Migrate the terminal engine to libghostty
+
+Status: 🚧 planned. Source: [roadmap D063](../roadmap.md). Covers
+[D128](../roadmap.md) (working directory from OSC 7). Current behavior:
+[terminal sessions and views](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views);
+current rationale: [terminal decision](../decisions/workbench-and-lifecycle.md#terminal).
+
+## Outcome
+
+Terminals run on libghostty-vt 1.0 instead of `alacritty_terminal`, and
+existing behavior is unchanged: the same sessions, attachment, restart,
+selection, links, mouse reporting, focus reports, paste, theme colors, and
+typography. Keys and the mouse are encoded by libghostty, so apps that request
+the Kitty keyboard protocol or modifyOtherKeys get it. A restored terminal and
+a terminal opened from a terminal follow the shell's OSC 7 directory, which
+also works on Windows and over remote shells that report it.
+
+No contributor, CI job, or release build needs Zig.
+
+## Why now
+
+libghostty-vt 1.0 (November 2026) removes the reasons D063 was deferred: it
+has a stable, semver C ABI, which CI checks for compatibility. Building it
+ReleaseFast in Zig also removes the debug-build parsing cost. It covers the
+protocols D041 and D128 wait for: a render-state API with dirty rows,
+mode-aware key and mouse encoders (legacy, Kitty keyboard, modifyOtherKeys,
+SGR, URxvt, SGR-pixels), and callbacks for PTY replies, title, bell, OSC 7,
+OSC 52, notifications, and semantic prompts. Docs:
+[lib.ghostty.org/vt/1.0.1](https://lib.ghostty.org/vt/1.0.1/),
+[packaging](https://github.com/ghostty-org/ghostty/blob/main/PACKAGING-LIBGHOSTTY.md).
+
+## Design
+
+### Prebuilt libraries, no Zig in ordinary builds
+
+- A manually dispatched workflow, `.github/workflows/libghostty.yml`, installs
+  the Zig version that libghostty pins (0.17.x for 1.0). It downloads the
+  official source and dependency tarballs for a pinned libghostty-vt version
+  and checks their minisign signatures. It builds `-Doptimize=ReleaseFast
+  -Dcpu=baseline` for every target we build, cross-compiling from one Linux
+  runner. Then it publishes one archive per target (static library, headers,
+  license) with its sha256 to a GitHub release in this repository, named
+  `libghostty-vt-<version>`. Kitty graphics are compiled out until D041 picks
+  them up.
+- Targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`,
+  `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`,
+  `x86_64-pc-windows-msvc`.
+- `crates/knot-terminal/build.rs` holds the release URL and the sha256 for each
+  target. It downloads the archive once, caches it under the Cargo target
+  directory, verifies it, and links it statically. `KNOT_LIBGHOSTTY_DIR`
+  points at a locally built install tree instead, for offline builds or to
+  try a new version.
+- The bindgen output from `ghostty/vt.h` is checked in, so building needs
+  neither bindgen nor libclang. A `just` recipe regenerates it from the
+  downloaded headers.
+- Upgrading libghostty means rerunning the workflow and updating the version,
+  checksums, and bindings in one commit. The stable ABI makes this rare.
+
+### Ownership
+
+- New gpui-free crate `crates/knot-terminal`:
+  - the raw FFI and a small safe wrapper over the parts we use: terminal,
+    render state, key and mouse encoders, grid refs, selection, and callbacks;
+  - the PTY, from `portable-pty` (Unix PTYs, Windows ConPTY), and its reader
+    thread;
+  - the engine, which feeds PTY output to the terminal and turns callbacks into
+    ordered events;
+  - plain tests that feed bytes and read the screen back.
+- The libghostty terminal is not thread-safe; it lives behind a mutex, as
+  Alacritty's `Term` does now. The reader thread calls `vt_write`; the
+  callbacks that fire during it (PTY replies, OSC 7, bell, title) push into
+  the session's existing process-generation-scoped event queue, and repaint
+  wakeups coalesce as they do today. The foreground holds the lock only for
+  `render_state_begin_update` and paints from the render state afterwards.
+- `TerminalSession` (`src/app/terminal/session.rs`) keeps ownership of the
+  session, generations, restart, the attachment lease, status, and the event
+  delivery contract. `TerminalView` keeps geometry, drawing, gestures, and
+  focus. The PTY ownership and the single-attachment contract do not change.
+- Product events stay as today: no title, bell, notification, or graphics
+  behavior, and OSC 52 read and write are refused. D041 owns them.
+
+### Encoding
+
+libghostty's key and mouse encoders, configured from the terminal's modes,
+replace Knot's wire-format code in `input.rs` and `mouse.rs`. Knot keeps the
+decisions about which key reaches the terminal (command and keymap precedence)
+and who owns a mouse gesture (reporting or local selection, the reporting
+toggle, Shift, balanced releases). It translates gpui events into libghostty
+key and mouse events.
+
+### Working directory (D128)
+
+The session records the OSC 7/9/1337 directory from the `PWD_CHANGED`
+callback. It accepts local `file://` URIs and paths only. A directory from
+another host, such as an SSH session, is not a local path and is ignored.
+`current_directory` prefers that directory, falls back to querying the shell
+process (`process.rs`) when the shell never reported one, and then to the
+start directory. Shell integration that emits OSC 7 stays D039; zsh on macOS
+and fish emit it by default only in some setups, so the fallback stays.
+
+## Exclusions
+
+- D041 product events and protocols that need a product contract: OSC 52,
+  titles, bells, notifications, Kitty graphics, semantic prompts.
+- Terminal preferences (D045), including scrollback length; keep the current
+  10,000 lines.
+- Using the system libghostty through pkg-config. Revisit when distributions
+  and Homebrew package it.
+- Search inside terminals.
+
+## Deferred decisions
+
+- Windows linking: static library into MSVC, or `ghostty-vt.dll` beside the
+  executable through its import library. Checkpoint 1 decides it.
+
+## Checkpoints
+
+### 1. Prebuilt libraries and a linked binding
+
+Deliverables:
+- `libghostty.yml` workflow and a published `libghostty-vt-1.0.1` release with
+  the five target archives and checksums.
+- `crates/knot-terminal` with `build.rs` (download, verify, cache,
+  `KNOT_LIBGHOSTTY_DIR`), checked-in bindings, the `just` regeneration
+  recipe, and a smoke test that creates a terminal, writes styled output, and
+  reads cells back.
+- The crate builds and its tests pass in every CI job (Linux, and the macOS
+  and Windows matrix), with no Zig installed.
+- The Windows linking decision is made and recorded in this plan.
+
+Validation: the smoke test on all three platforms; `just check`.
+
+Review gate: the workflow, the release assets, the build script, and CI
+results on all platforms.
+
+**Implementation context:** add `crates/knot-terminal` to the workspace
+`default-members` in `Cargo.toml`. Mirror existing pinned-action style
+(commit SHAs) from `.github/workflows/ci.yml`. Add the crate test to the
+`handler-platforms` job so it runs on macOS and Windows. The `cargo audit`
+job in `audit.yml` covers `portable-pty` once it is added (checkpoint 2).
+Document `KNOT_LIBGHOSTTY_DIR` and the upgrade steps in
+`docs/development.md`.
+
+### 2. The engine in `knot-terminal`
+
+Deliverables:
+- A safe wrapper: terminal creation with size and scrollback, `vt_write`,
+  resize with cell pixels, palette and default colors, mode queries, viewport
+  scrolling, selection over tracked grid refs, text extraction for copy and
+  restart replay, and a render-state reader for rows, cells, styles, cursor,
+  and dirty state.
+- Callback registration that forwards PTY replies, OSC 7, title, and bell to
+  a sink, and refuses clipboard reads.
+- Key and mouse encoder wrappers.
+- An engine that spawns the shell through `portable-pty` with the session
+  options (shell, directory, environment, `drain_on_exit`), runs the reader
+  thread, writes input, resizes, reports exit status, and shuts down
+  off-thread, keeping the macOS `killpg` behavior of
+  `RunningTerminal::shutdown`.
+
+Validation: plain tests for parsing, styles, wide characters, scrollback,
+reflow, selection text, mode changes, OSC 8 lookup, ordered replies (DA, DSR,
+color queries answered from the configured palette), and refused OSC 52; Unix
+integration tests that run a real shell command through the engine.
+
+Review gate: the wrapper surface and engine API before the app depends on it.
+
+**Implementation context:** port the reply-ordering and color-query cases
+from `src/app/terminal/session.rs` tests and `session_tests.rs` to this
+crate. Keep gpui out of it: the app adapts its event sink to the existing
+coalesced wakeup. Expose the terminal behind `Arc<Mutex<_>>`, with an unsafe
+`Send` on the wrapper justified by the library creating no threads and all
+access going through the mutex.
+
+### 3. The app on libghostty
+
+Deliverables:
+- `session.rs`, `view.rs`, `colors.rs`, `links.rs`, `layout.rs`, and the
+  product tests use `knot-terminal`; `alacritty_terminal` leaves the
+  workspace.
+- Drawing reads the render state: cells, styles, selection, and cursor shape
+  and visibility, with the D059 typography and punctuation-run ligatures
+  unchanged.
+- Restart replays the old screen above the divider through text extraction.
+- Links use OSC 8 grid-ref hyperlinks plus the existing HTTP(S) text
+  detection over displayed cells.
+- Keyboard and mouse still use Knot's own wire formats, reading modes from
+  libghostty, so this checkpoint changes only the engine.
+
+Validation: ported `session_tests.rs`, `mouse_tests.rs`,
+`view/tests.rs`, `links.rs` tests, and `product/tests/terminal.rs`;
+`just check`. Manual: `try.*` commands that open terminals running a TUI (vim
+or htop), `scripts/terminal-mouse-fixture.py`, a long scrollback, OSC 8
+output, a restart, and a color-query script.
+
+Review gate: parity in daily use.
+
+**Implementation context:** `src/app/terminal/mod.rs` module docs name the
+engine. Tests that build `Term` with `VoidListener` and `Processor` become
+`knot-terminal` terminals fed bytes. Update the
+[terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views)
+reference, the knot-terminal line in `docs/architecture.md` and the
+repository map in `AGENTS.md`, and rewrite the
+[terminal decision](../decisions/workbench-and-lifecycle.md#terminal) with
+its index line.
+
+### 4. libghostty encoders
+
+Deliverables:
+- `input.rs` translates gpui keystrokes into libghostty key events (action,
+  key, mods, consumed mods, UTF-8, unshifted codepoint, composing) and encodes
+  them with an encoder set from the terminal. macOS Option-as-Alt keeps the
+  current behavior.
+- `mouse.rs` keeps gesture ownership and encodes through the mouse encoder
+  with the session's pixel geometry; the reporting toggle and balanced
+  releases are unchanged.
+- Knot's own escape-sequence tables are removed.
+
+Validation: the existing input and mouse tests assert the same bytes for
+legacy modes; new tests cover Kitty keyboard flags and modifyOtherKeys
+requested by the app. Manual: `try.*` commands running an app that enables
+the Kitty keyboard protocol, plus the mouse fixture.
+
+Review gate: typing, shortcuts, and mouse reporting in shells and TUIs.
+
+**Implementation context:** `src/app/terminal/input.rs` and `mouse.rs` with
+`mouse_tests.rs`. Named keys that stay global on Windows and Linux (the
+terminal decision) are routing, not encoding, and stay in `view.rs`.
+
+### 5. Working directory from OSC 7 (D128)
+
+Deliverables:
+- The session records the reported directory per process generation.
+  `current_directory` prefers it and falls back to the process query, then
+  the start directory.
+- Remove D128 from the roadmap, update D041's description now that
+  libghostty covers its protocols, and mark D063 complete.
+
+Validation: engine tests for `file://` parsing, remote-host rejection, and
+percent-encoding; a session test where a shell's `printf '\e]7;…'` changes the
+directory reported to layout capture. Manual: a `try.*` command that opens a
+terminal from a terminal after `cd` in a shell that emits OSC 7.
+
+Review gate: restoration and the new-terminal directory in daily use.
+
+**Implementation context:** `TerminalSession::current_directory` in
+`src/app/terminal/session.rs`, `src/app/terminal/process.rs`, and the rule in
+`crates/knot-model/src/terminal_directory.rs` (unchanged). Update the
+restored-terminal paragraph of the terminal decision and the working
+directory paragraph of the terminal sessions reference.
