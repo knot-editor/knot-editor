@@ -160,7 +160,9 @@ fn click_previews_and_double_click_or_enter_open_tabs_and_middle_click_keeps_foc
 #[gpui::test]
 fn files_created_outside_the_editor_appear_in_loaded_folders(cx: &mut TestAppContext) {
     let directory = fixture();
-    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    let product = TestProduct::launch(PACKAGES, cx);
+    product.watch_files(cx);
+    let explorer = Explorer::over(product, &[&directory.path().join("app")], cx);
     explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
     explorer.tree.gesture("docs", "click", cx);
     explorer.wait_for_labels(&["app", "docs", "guide.md", "src", "README.md"], cx);

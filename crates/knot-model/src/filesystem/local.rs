@@ -22,6 +22,10 @@ pub struct LocalFileSystemProvider {
     root: Option<ResourceUri>,
     mutation_lock: Arc<Mutex<()>>,
     trash: Trash,
+    /// Whether a watch listens to the operating system. Starting an OS watch
+    /// takes about 100 ms on macOS, so test providers leave it off unless a
+    /// test needs real file events.
+    os_events: bool,
 }
 
 /// Where a delete that is not permanent puts the entry.
@@ -70,6 +74,7 @@ impl LocalFileSystemProvider {
             root: Some(root),
             mutation_lock: Arc::default(),
             trash: Self::scratch_trash()?,
+            os_events: true,
         })
     }
 
@@ -80,17 +85,30 @@ impl LocalFileSystemProvider {
             root: None,
             mutation_lock: Arc::default(),
             trash: Trash::System,
+            os_events: true,
         }
     }
 
     /// Like [`unrestricted`](Self::unrestricted), but a delete that is not
     /// permanent moves the entry to a scratch directory that lives as long as
     /// the provider.
+    ///
+    /// Its watches report nothing until [`with_os_events`](Self::with_os_events).
     #[cfg(any(test, feature = "test-support"))]
     pub fn unrestricted_with_scratch_trash() -> Self {
         Self {
             trash: Self::scratch_trash().expect("a scratch trash directory"),
+            os_events: false,
             ..Self::unrestricted()
+        }
+    }
+
+    /// Make watches listen to the operating system.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_os_events(self) -> Self {
+        Self {
+            os_events: true,
+            ..self
         }
     }
 
@@ -496,6 +514,9 @@ impl FileSystemProvider for LocalFileSystemProvider {
         // the path that was asked for.
         let resolved =
             std::fs::canonicalize(&path).map_err(|error| map_io("watch", &uri, error))?;
+        if !self.os_events {
+            return Ok(Box::new(()));
+        }
         let requested = path.clone();
         let mut watcher = notify::recommended_watcher(
             move |result: notify::Result<notify::Event>| match result {

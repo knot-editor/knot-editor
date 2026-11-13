@@ -129,6 +129,23 @@ impl TestProduct {
         TestWindow::of(window, cx)
     }
 
+    /// Make watches on local files listen to the operating system, for a test
+    /// that changes files outside the product and waits for the product to
+    /// notice. Starting an operating system watch takes about 100 ms, so
+    /// watches report nothing by default.
+    pub fn watch_files(&self, cx: &mut TestAppContext) {
+        let mut providers = FileSystemProviderRegistry::default();
+        providers
+            .register(
+                "file",
+                Arc::new(
+                    LocalFileSystemProvider::unrestricted_with_scratch_trash().with_os_events(),
+                ),
+            )
+            .unwrap();
+        cx.set_global(ApplicationFileSystems(Arc::new(providers)));
+    }
+
     /// Answer every folder or file dialog with `path`.
     pub fn choose_in_open_dialog(&self, path: &Path, cx: &mut TestAppContext) {
         cx.set_global(ApplicationOpenDialog(Arc::new(ChosenPath(
@@ -144,7 +161,7 @@ impl TestProduct {
             .register(
                 "file",
                 Arc::new(HeldReadProvider {
-                    inner: Arc::new(LocalFileSystemProvider::unrestricted()),
+                    inner: Arc::new(LocalFileSystemProvider::unrestricted_with_scratch_trash()),
                     held: Mutex::new(Some(held)),
                 }),
             )

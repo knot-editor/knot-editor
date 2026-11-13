@@ -102,6 +102,7 @@ fn open_recent_lists_active_files_newest_first_and_drops_deleted_ones(cx: &mut T
     }
 
     let product = TestProduct::launch(PACKAGES, cx);
+    product.watch_files(cx);
     let window = product.active_window(cx);
     window.set_roots(&[&file_uri(directory.path())], cx);
     for name in ["first.rs", "second.rs", "third.rs"] {
