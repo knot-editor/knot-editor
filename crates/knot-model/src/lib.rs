@@ -34,6 +34,7 @@ pub mod reload;
 pub mod resource;
 pub mod settings;
 pub mod state_database;
+pub mod status_bar;
 pub mod style;
 pub mod syntax;
 pub mod terminal_directory;

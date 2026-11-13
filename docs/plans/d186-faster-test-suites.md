@@ -169,7 +169,17 @@ One commit per area; split an area further if it grows.
 6. Views and the rest: `src/app/editor/tests*`, `tree_view/tests.rs`,
    `picker.rs`, `text_input.rs`, `icons/tests.rs`, `theme.rs`,
    `recovery/tests.rs`, `extensions/`. Also move the plain `#[test]`s in
-   `src/app` that need no gpui to `knot-model`.
+   `src/app` that need no gpui to `knot-model`. 🔍 Ready for review. The
+   editor, `text_input`, `icons`, and `theme` tests that open a window test
+   layout, painting, pointer input, or IME, so they stay windowed; the other
+   modules already run without a window, and the extension host tests (2.7 s,
+   93 tests) spend their time in V8, which checkpoint 7 covers. Moved to
+   `knot-model`: launch and open requests (`entry`), the terminal start
+   directory (`terminal_directory`), and the status bar registry
+   (`status_bar`). Still in `src/app` because they need gpui or alacritty:
+   `convert`, `window_layout`, the terminal `links`, `input`, `layout`, and
+   `mouse`, and `personal_config`. No time changed measurably; the moved
+   tests now build and run with `knot-model`.
 
 Validation per area: `just check`; that area's module totals before and
 after.
