@@ -166,10 +166,10 @@ One commit per area; split an area further if it grows.
    lines: 1.2 s → 0.12 s, keeping the check that foreground updates stay
    responsive during output. The 70 terminal-module tests now sum to 4.1 s
    serially. No test needed moving to `knot-model`.
-6. Views and the rest: `src/app/editor/tests*`, `tree_view/tests.rs`,
+6. ✅ Views and the rest: `src/app/editor/tests*`, `tree_view/tests.rs`,
    `picker.rs`, `text_input.rs`, `icons/tests.rs`, `theme.rs`,
    `recovery/tests.rs`, `extensions/`. Also move the plain `#[test]`s in
-   `src/app` that need no gpui to `knot-model`. 🔍 Ready for review. The
+   `src/app` that need no gpui to `knot-model`. Done and approved. The
    editor, `text_input`, `icons`, and `theme` tests that open a window test
    layout, painting, pointer input, or IME, so they stay windowed; the other
    modules already run without a window, and the extension host tests (2.7 s,
