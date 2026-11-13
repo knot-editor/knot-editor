@@ -1,7 +1,7 @@
 # D123 — Project inference extension
 
 Status: 🚧 checkpoints 1–2 complete; checkpoint 3 remains. Item D123 of the
-[daily-driver plan](daily-driver.md), promoted from the [roadmap](../roadmap.md).
+[roadmap](../roadmap.md).
 Depends on ✅ D122 (extension file read, list, and stat API).
 
 ## Goal
@@ -264,7 +264,7 @@ index line in `docs/decisions.md`), fold durable behavior into
 
 ## Cross-check
 
-- Source item: [daily-driver D123](daily-driver.md); dependencies D122 ✅.
+- Source item: [D123](../roadmap.md); dependencies D122 ✅.
 - No new crate, no new package, no registry schema change; the only native
   change is the additive `homeUri` facade fact (checkpoint 1).
 - Nothing here revisits D084 (project selector), D089 (project-local

@@ -2,7 +2,7 @@
 
 November 2026. Examines why a package's callbacks run one at a time to
 completion, what that costs, and what moving to JavaScript's ordinary task
-semantics would take. Supports [D182](../roadmap.md#architecture-review).
+semantics would take. Supports [D182](../roadmap.md#architecture-and-technical-debt).
 Current behavior is owned by
 [extension host](../architecture/extension-host.md#runtime-and-scheduler-flow)
 and [commands](../architecture/commands.md#extension-execution).

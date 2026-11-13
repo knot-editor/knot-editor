@@ -1,6 +1,6 @@
 # D164 — Command-line launcher
 
-Source: [D164](../roadmap.md) (deferred register; order: before D165).
+Source: [D164](../roadmap.md) (before D165).
 Scope: `knot <file>...` forwards paths to the running instance or starts one,
 plus a palette command that installs the `PATH` entry. Mirrors VS Code's `code`
 CLI and its `Shell Command: Install … in PATH` behavior; no new inventions.

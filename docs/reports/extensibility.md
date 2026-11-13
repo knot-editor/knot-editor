@@ -4,7 +4,7 @@ October 2026. Compares how far Knot's extension API reaches with Emacs,
 Neovim, VS Code, and Zed, and tests the proposal that building a complete Vim
 mode in JavaScript (D058) is a good way to bring Knot to Neovim-level
 extensibility. The new and reordered items are in the
-[roadmap](../roadmap.md#editor-extensibility). The current contract is
+[roadmap](../roadmap.md#editing-and-languages). The current contract is
 `crates/knot-host/src/js/knot.d.ts`; extension runtime behavior is owned by
 [extension host](../architecture/extension-host.md) and
 [commands](../architecture/commands.md).
@@ -175,7 +175,7 @@ and avoid a second input queue.
 
 ## Proposed order
 
-The daily-driver plan comes first: it supplies D070 settings, D074 native
+The daily-driver work comes first: it supplied D070 settings, D074 native
 undo grouping, D078 visual lines, D080 cursor observation, D086 keymap
 presets, and D068 and D077 surfaces. Then:
 
