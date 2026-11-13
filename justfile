@@ -14,6 +14,10 @@ test:
     cargo nextest run --workspace --all-targets
     cargo test --workspace --doc
 
+# Run the Rust tests and report per-test, per-binary, and per-module timings
+test-timings log="test.log":
+    scripts/test-timings.py {{log}}
+
 # Time a file walk over a directory in release mode
 walk-bench directory runs="5":
     cargo run --release -p knot-model --example walk_bench -- {{directory}} {{runs}}
