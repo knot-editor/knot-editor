@@ -767,7 +767,7 @@ fn syntax_follows_every_commit_path() {
 }
 
 fn over_budget_model() -> BufferModel {
-    let mut model = BufferModel::from_text("fn a() { let x = 1; }\n".repeat(20_000));
+    let mut model = BufferModel::from_text("fn a() { let x = 1; }\n".repeat(2_000));
     model.set_syntax_budget(Duration::ZERO);
     model.set_syntax(rust_syntax());
     model

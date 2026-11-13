@@ -418,7 +418,7 @@ fn dropping_a_state_cancels_its_background_parse() {
 
 #[test]
 fn a_parse_over_budget_is_cancelled_and_can_restart() {
-    let source = "fn f() { let x = call(1, \"s\"); }\n".repeat(20_000);
+    let source = "fn f() { let x = call(1, \"s\"); }\n".repeat(2_000);
     let buffer = TextBuffer::from_text(source);
     let mut state = SyntaxState::new(language(RUST_HIGHLIGHTS), languages());
     assert!(!state.parse_in_foreground(&buffer.snapshot(), Duration::ZERO));

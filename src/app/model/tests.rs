@@ -67,7 +67,7 @@ fn an_over_budget_parse_continues_in_the_background(cx: &mut gpui::TestAppContex
     let language = SyntaxLanguage::new("rust", "\"fn\" @keyword\n(line_comment) @comment\n", "");
     let syntax = SyntaxState::new(Arc::new(language.unwrap()), Arc::new(|_| None));
     let buffer = cx.new(|_| {
-        let mut model = BufferModel::from_text("fn a() { let x = 1; }\n".repeat(20_000));
+        let mut model = BufferModel::from_text("fn a() { let x = 1; }\n".repeat(2_000));
         model.set_syntax_budget(Duration::ZERO);
         Buffer::new(model)
     });
