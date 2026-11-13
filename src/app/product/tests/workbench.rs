@@ -154,10 +154,11 @@ fn replacing_a_shared_blank_tab_preserves_the_other_windows_document(cx: &mut Te
     let documents = install_globals(cx);
     let blank = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(blank).unwrap().model().clone());
-    let (first, first_window) = product_window(blank, model.clone(), cx);
-    let (second, _) = product_window(blank, model.clone(), cx);
+    let first = headless_window(blank, model.clone(), cx);
+    let first_window = Headless;
+    let second = headless_window(blank, model.clone(), cx);
     let replacement = cx.update(|cx| create_untitled_document(&documents, cx));
-    cx.update_window(first_window, |_, _window, cx| {
+    first_window.run(cx, |cx| {
         first.update(cx, |window, cx| {
             let workbench = window.workbench.read(cx);
             let pane = workbench.focused_pane().unwrap();
@@ -173,8 +174,7 @@ fn replacing_a_shared_blank_tab_preserves_the_other_windows_document(cx: &mut Te
             };
             window.present_open_document(replacement, &target, true, false, cx);
         });
-    })
-    .unwrap();
+    });
     cx.read(|cx| {
         assert!(documents.read(cx).get(blank).is_some());
         assert!(model.read(cx).is_open());
@@ -188,8 +188,8 @@ fn workbench_registry_counts_views_across_windows(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (_first, _) = product_window(document, model.clone(), cx);
-    let (_second, _) = product_window(document, model, cx);
+    let _first = headless_window(document, model.clone(), cx);
+    let _second = headless_window(document, model, cx);
     cx.read(|cx| {
         assert_eq!(
             cx.global::<ApplicationWindows>().view_count(document, cx),
@@ -203,8 +203,10 @@ async fn retained_closed_window_does_not_keep_the_last_live_document_open(cx: &m
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (closed_window, closed_native_window) = product_window(document, model.clone(), cx);
-    let (live_window, live_native_window) = product_window(document, model.clone(), cx);
+    let closed_window = headless_window(document, model.clone(), cx);
+    let closed_native_window = Headless;
+    let live_window = headless_window(document, model.clone(), cx);
+    let live_native_window = Headless;
     assert_eq!(
         dispatch_product_command(
             &closed_window,

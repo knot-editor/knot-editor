@@ -392,7 +392,8 @@ fn installed_api_version_rejection_prevents_evaluation_and_preserves_dependency_
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (_shell, _window) = product_window(document, model, cx);
+    let _shell = headless_window(document, model, cx);
+    let _window = Headless;
     cx.update(|cx| {
         cx.write_to_clipboard(gpui::ClipboardItem::new_string("admission sentinel".into()))
     });
@@ -721,7 +722,8 @@ fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
     host.update(cx, |host, cx| {
         host.start_installed_extensions(root.path().to_path_buf(), cx)
     });
@@ -959,7 +961,8 @@ fn installed_packages_run_through_the_product_command_bridge(cx: &mut TestAppCon
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
     host.update(cx, |host, cx| {
         host.start_installed_extensions(root.clone(), cx)
     });

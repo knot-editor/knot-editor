@@ -1,6 +1,6 @@
 //! The extension file API through the public host.
 
-use super::operations::{empty_product_window, install_operation_fixture};
+use super::operations::{empty_headless_window, install_operation_fixture};
 use super::*;
 use crate::app::documents::{DocumentDirty as _, ExternalChange};
 use crate::app::extensions;
@@ -53,7 +53,7 @@ await commands.register("files.api", async () => {
         "files.api",
         cx,
     );
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&window, native_window, "files.api", cx),
@@ -113,7 +113,7 @@ await commands.register("files.policy", async () => {
         "files.policy",
         cx,
     );
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     let root = ResourceUri::parse("mem://product/").unwrap();
     window.update(cx, |window, cx| {
         window.replace_workspace_roots(vec![root], cx)
@@ -158,7 +158,7 @@ await commands.register("files.unwatch", async () => { await handle.dispose(); }
         "files.watch",
         cx,
     );
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     let run = |name: &'static str, cx: &mut TestAppContext| {
         assert_eq!(
             wait_for_command(
@@ -223,7 +223,7 @@ await commands.register("files.report", async () => {
             "x",
         )
         .unwrap();
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     // Only the first directory is an indexed root; the second is walked.
     window.update(cx, |window, cx| {
         window.replace_workspace_roots(vec![ResourceUri::parse("mem://product/src/").unwrap()], cx)
@@ -274,7 +274,7 @@ await commands.register("files.report", async () => {
             "x",
         )
         .unwrap();
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     let root = ResourceUri::parse("mem://product/src/").unwrap();
     let report = |cx: &mut TestAppContext| {
         assert_eq!(
@@ -395,7 +395,7 @@ await commands.register("files.mutate", async () => {
         "files.mutate",
         cx,
     );
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&window, native_window, "files.mutate", cx),
@@ -439,7 +439,7 @@ await commands.register("files.rename", async () => {
         "files.open",
         cx,
     );
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     let run = |name: &'static str, cx: &mut TestAppContext| {
         assert_eq!(
             wait_for_command(
@@ -527,7 +527,7 @@ await commands.register("files.delete", async () => {
         "files.delete",
         cx,
     );
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&window, native_window, "files.delete", cx),
