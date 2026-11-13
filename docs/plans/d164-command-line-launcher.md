@@ -143,21 +143,14 @@ opens each window's resources one after another. `ApplicationWindows` tracks act
 order. A window whose folder is still loading has no roots yet, so a batch arriving in
 that instant can open the folder again.
 
-### 5. Install command on macOS 🔍
-Implemented in `src/app/shell_command.rs` and `src/app/product/commands.rs`; the link
-targets the running executable, so `/Applications` and `~/Applications` both work.
-Awaiting the review gate.
-Deliverable: install and uninstall palette commands as designed. On other
-platforms they come in checkpoint 6.
-Validation: tests for the built shell command and for translocation refusal.
-Uninstall removes only a link that points at a Knot executable.
-Review gate: from a locally built `Knot.app`, run install, enter the password, run
-`which knot` in a new shell, `knot .`, then uninstall and confirm removal. Cancel the
-password prompt and confirm the warning gives the manual `sudo ln -s …`. `Try:` entries
-in personal-config `post-init.js` run both commands.
-Implementation context: register beside other product commands in
-`src/app/product/commands.rs`; warning prompt as Save and Open failures do
-(`src/app/product/open.rs`).
+### 5. Install command on macOS ✅
+Done: `src/app/shell_command.rs` builds the `osascript` install and uninstall of the
+`/usr/local/bin/knot` link to the running executable (wherever the app lives),
+refuses App Translocation, and removes only a link into a Knot bundle. The palette
+commands are in `src/app/product/commands.rs`; failures use the native warning
+prompt with the manual `sudo` step. A Knot started by LaunchServices does not call
+`open` again (`launcher::started_by_launchd`). The password prompt and link creation
+are verified by hand only.
 
 ### 6. Install command on Windows and Linux
 Deliverable: the same commands on Windows (user `Path` entry) and Linux
