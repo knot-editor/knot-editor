@@ -129,15 +129,20 @@ shapes stay until the extension resets its own state; a run settles once the win
 and the extension pool is quiet, so keys that leave a command waiting on a
 picker or prompt go in unsettled. `TestProduct::launch` starts the whole
 application instead, with its launch window, which `TestWindow` drives
-through native keys and commands, and with package storage, recovery, and
+through keys and commands, and with package storage, recovery, and
 the window record in files of its own, so a relaunch in the same process
-restores what the previous run recorded. Each
+restores what the previous run recorded. Its windows have no native window;
+`launch_windowed` opens native ones. Each
 Vim case starts from an empty clipboard and the package's hidden
 `vim.reset`, which clears registers, their record, marks, and the last find,
 and follows every editor afresh in normal mode, so case order does not
 matter. A case may collapse `folds` before its keys
-and expect them afterwards. Windowed product tests remain for rendering, IME,
-pointer input, and the window adapter. Product tests keep extension storage,
+and expect them afterwards. Tests come in three tiers: plain `#[test]`s in
+`knot-model` for anything that needs no gpui; headless product tests, the
+default for application behavior, which run a window with no native window
+and drive it through its key router and commands; and windowed tests, only
+for rendering, pointer input, IME, in-place tree editing, native prompts, and
+the window adapter. Product tests keep extension storage,
 recovery, and the state database in memory, so each test starts empty; tests
 that reopen a store as a restart would, and the stores' own tests, use
 files.
