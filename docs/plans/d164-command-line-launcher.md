@@ -121,32 +121,13 @@ Done: `LaunchBatch` and `LaunchCommand` in `crates/knot-model/src/entry.rs`;
 rejects unknown flags (exit 2). The launch gate in `src/app/product.rs` and
 `on_open_urls` carry batches. Until checkpoint 4 each batch item opens its own window.
 
-### 2. Single-instance forwarding ✅ (implemented; awaiting review gate)
-Done: `src/app/launch_socket.rs` (forward, bind with overwrite of a stale file,
-listener thread feeding the batch channel); `knot::run` forwards before creating the
-product, otherwise binds. The gpui `Application` is still created before the forward
-decision; checkpoint 3 restructures the entry point if it needs to. Tests cover the
-framing round trip, invalid lines, and stale-socket takeover (Unix only). Manually
-verified: a second `knot a.txt b.txt` and `knot .` exit 0 against a running instance,
-and a restart over the leftover socket file starts normally.
-Deliverable: a new `src/app/launch_socket.rs` (declared in `src/app/mod.rs`) owns
-the socket path, bind, connect, send, and the listener thread. `knot::run` tries
-to forward before creating the product, and otherwise binds and passes the listener
-into `product::run`, whose listener thread feeds the batch channel. Loose binaries
-cold-start in the foreground.
-Validation: tests for framing round trip, invalid lines dropped, and stale-socket
-takeover (bind, drop without unlinking, rebind), using a tempdir path.
-Review gate: start `cargo run`. From another terminal and cwd run
-`target/debug/knot file-a file-b` and `target/debug/knot .`. The second process exits
-0 and the first instance opens the paths. Quit, then run it again and confirm it
-starts normally over the stale socket.
-Implementation context: add `interprocess` to the root `Cargo.toml`; socket path
-beside `StateDatabase::user_path` in `src/app/record_store.rs`; the entry order in
-`src/app/mod.rs::run` (version/help → parse → forward or bind →
-`product::run`). Note that `crates/knot-app/src/main.rs` creates the gpui platform
-before `knot::run`; that's fine here, but checkpoint 3 needs the forward and cold-start
-decision before platform creation, so restructure the entry point now if it's
-simpler (for example, `knot::run` taking a platform factory).
+### 2. Single-instance forwarding ✅
+Done: `src/app/launch_socket.rs` owns the socket name, forward, bind (replacing a
+stale file), and the listener thread that feeds the batch channel. `knot::run`
+forwards before creating the product, otherwise binds. The gpui `Application` is still
+created before the forward decision; checkpoint 3 restructures the entry point if it
+needs to. The Windows named-pipe path is untested; framing and stale-socket tests are
+Unix-only.
 
 ### 3. macOS cold start from the bundle
 Deliverable: when no primary answers and `current_exe` is inside a `.app`, the client
