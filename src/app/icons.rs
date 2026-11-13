@@ -7,7 +7,11 @@
 //! gpui's image element. Both size to the surrounding text, so zoom needs no
 //! extra work.
 
-use std::sync::Arc;
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    sync::{Arc, Mutex, OnceLock},
+};
 
 use gpui::{
     App, Global, Image, ImageFormat, IntoElement, ObjectFit, RenderOnce, Styled, Window, div, img,
@@ -64,7 +68,22 @@ pub(crate) fn remove_lifecycle(
 
 /// Whether `name` is a glyph of the builtin Lucide set.
 pub(crate) fn glyph_exists(name: &str) -> bool {
-    AllAssets::get(&format!("icons/{name}.svg")).is_some()
+    glyph_bytes(name).is_some()
+}
+
+/// The SVG document of the builtin glyph `name`. Each glyph is read once:
+/// the asset source reads the file on every call in debug builds, and icons
+/// render on every draw.
+fn glyph_bytes(name: &str) -> Option<Cow<'static, [u8]>> {
+    type Glyphs = Mutex<HashMap<String, Option<Cow<'static, [u8]>>>>;
+    static GLYPHS: OnceLock<Glyphs> = OnceLock::new();
+    let mut glyphs = GLYPHS.get_or_init(Default::default).lock().unwrap();
+    if let Some(bytes) = glyphs.get(name) {
+        return bytes.clone();
+    }
+    let bytes = AllAssets::get(&format!("icons/{name}.svg")).map(|file| file.data);
+    glyphs.insert(name.to_owned(), bytes.clone());
+    bytes
 }
 
 /// The definition of the icon `name`.
@@ -126,12 +145,10 @@ fn with_registry(
 }
 
 /// The SVG document a definition draws, if its source exists.
-fn svg_bytes(source: &IconSource) -> Option<std::borrow::Cow<'static, [u8]>> {
+fn svg_bytes(source: &IconSource) -> Option<Cow<'static, [u8]>> {
     match source {
         IconSource::Svg(text) => Some(text.clone().into_bytes().into()),
-        IconSource::Lucide(name) => {
-            AllAssets::get(&format!("icons/{name}.svg")).map(|file| file.data)
-        }
+        IconSource::Lucide(name) => glyph_bytes(name),
     }
 }
 
