@@ -1,5 +1,5 @@
 //! Automatic tool-layout memory across windows and restarts.
-use super::operations::empty_product_window;
+use super::operations::empty_headless_window;
 use super::*;
 use crate::app::tool_layout::{ApplicationToolLayout, ToolLayoutSnapshot};
 use crate::app::workbench::{DockLocation, ToolFrameId, WorkbenchLayout};
@@ -34,7 +34,7 @@ fn open_workspace(window: &Entity<KnotWindow>, cx: &mut TestAppContext) {
 #[gpui::test]
 fn user_customization_becomes_the_fresh_window_default(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     // Automatic presentation on workspace open does not publish a new default.
     assert_eq!(stored(cx), ToolLayoutSnapshot::product_default());
@@ -54,7 +54,7 @@ fn user_customization_becomes_the_fresh_window_default(cx: &mut TestAppContext) 
     assert_eq!(snapshot.dock(DockLocation::Bottom).size, 300.);
 
     // A fresh window inherits the customized arrangement.
-    let (fresh, _) = empty_product_window(&documents, cx);
+    let (fresh, _) = empty_headless_window(&documents, cx);
     cx.read(|cx| {
         assert!(
             fresh
@@ -78,12 +78,12 @@ fn user_customization_becomes_the_fresh_window_default(cx: &mut TestAppContext) 
 #[gpui::test]
 fn existing_windows_keep_live_state_and_activation_does_not_publish(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     place_explorer(&window, native_window, DockLocation::Right, cx);
     let published = stored(cx);
 
-    let (fresh, _) = empty_product_window(&documents, cx);
+    let (fresh, _) = empty_headless_window(&documents, cx);
     open_workspace(&fresh, cx);
     // The older window keeps its live arrangement and the fresh window copies it.
     for (candidate, dock) in [
@@ -97,12 +97,11 @@ fn existing_windows_keep_live_state_and_activation_does_not_publish(cx: &mut Tes
         });
     }
     // Interacting with the older window without a layout change publishes nothing.
-    cx.update_window(native_window, |_, _, cx| {
+    native_window.run(cx, |cx| {
         window.update(cx, |window, cx| {
             window.focus_active_surface(cx);
         });
-    })
-    .unwrap();
+    });
     cx.run_until_parked();
     assert_eq!(stored(cx), published);
 }
@@ -110,7 +109,7 @@ fn existing_windows_keep_live_state_and_activation_does_not_publish(cx: &mut Tes
 #[gpui::test]
 fn hidden_tools_restore_placement_and_size_across_windows(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     window.update(cx, |window, cx| {
         window.workbench.update(cx, |workbench, _| {
@@ -128,7 +127,7 @@ fn hidden_tools_restore_placement_and_size_across_windows(cx: &mut TestAppContex
     ));
 
     // A fresh window remembers the hidden placement without showing the tool.
-    let (fresh, _) = empty_product_window(&documents, cx);
+    let (fresh, _) = empty_headless_window(&documents, cx);
     open_workspace(&fresh, cx);
     cx.read(|cx| {
         let workbench = fresh.read(cx).workbench.read(cx);
@@ -150,7 +149,7 @@ fn document_splits_and_dock_visibility_reach_fresh_windows_only_as_dock_state(
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     place_explorer(&window, native_window, DockLocation::Right, cx);
     place_explorer(&window, native_window, DockLocation::Left, cx);
@@ -190,7 +189,7 @@ fn document_splits_and_dock_visibility_reach_fresh_windows_only_as_dock_state(
     );
     // A hidden dock keeps the explorer in it, and fresh windows inherit both.
     assert!(!stored(cx).dock(DockLocation::Left).visible);
-    let (fresh, _) = empty_product_window(&documents, cx);
+    let (fresh, _) = empty_headless_window(&documents, cx);
     open_workspace(&fresh, cx);
     cx.read(|cx| {
         let workbench = fresh.read(cx).workbench.read(cx);
@@ -205,7 +204,7 @@ fn document_splits_and_dock_visibility_reach_fresh_windows_only_as_dock_state(
 #[gpui::test]
 fn reset_layout_restores_product_defaults(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     place_explorer(&window, native_window, DockLocation::Bottom, cx);
     toggle_test_tool(&window, cx);
@@ -233,7 +232,7 @@ fn reset_layout_restores_product_defaults(cx: &mut TestAppContext) {
 #[gpui::test]
 fn restore_skips_unknown_tools_without_blank_frames(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, _) = empty_product_window(&documents, cx);
+    let (window, _) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     let before = stored(cx);
     let mut snapshot = ToolLayoutSnapshot::product_default();
@@ -264,11 +263,11 @@ fn restore_skips_unknown_tools_without_blank_frames(cx: &mut TestAppContext) {
 #[gpui::test]
 fn fresh_window_restores_visible_tools_without_folder(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     place_explorer(&window, native_window, DockLocation::Right, cx);
     // A fresh window with no folder inherits the visible right dock.
-    let (fresh, _) = empty_product_window(&documents, cx);
+    let (fresh, _) = empty_headless_window(&documents, cx);
     fresh.update(cx, |fresh, cx| {
         fresh.restore_fresh_window_layout(cx);
         fresh.ensure_test_tool(false, cx);
@@ -283,11 +282,11 @@ fn fresh_window_restores_visible_tools_without_folder(cx: &mut TestAppContext) {
 #[gpui::test]
 fn fresh_window_with_hidden_tool_restores_nothing(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     place_explorer(&window, native_window, DockLocation::Right, cx);
     toggle_test_tool(&window, cx);
-    let (fresh, _) = empty_product_window(&documents, cx);
+    let (fresh, _) = empty_headless_window(&documents, cx);
     fresh.update(cx, |fresh, cx| {
         fresh.restore_fresh_window_layout(cx);
         fresh.ensure_test_tool(false, cx);
@@ -301,7 +300,7 @@ fn fresh_window_with_hidden_tool_restores_nothing(cx: &mut TestAppContext) {
 #[gpui::test]
 fn move_tab_commands_follow_the_kind_and_rehome_tools(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     let run = |name: &'static str, cx: &mut TestAppContext| {
         wait_for_command(
             dispatch_product_command(&window, native_window, name, cx),
@@ -358,7 +357,7 @@ fn move_tab_commands_follow_the_kind_and_rehome_tools(cx: &mut TestAppContext) {
 #[gpui::test]
 fn moved_tools_return_to_their_new_home_when_hidden_and_in_fresh_windows(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     open_workspace(&window, cx);
     place_explorer(&window, native_window, DockLocation::Right, cx);
     // Hiding the moved tool and showing it again returns it to its new dock.
@@ -377,7 +376,7 @@ fn moved_tools_return_to_their_new_home_when_hidden_and_in_fresh_windows(cx: &mu
     // A fresh window inherits the home: hidden there, the explorer still
     // first shows in the right dock.
     toggle_test_tool(&window, cx);
-    let (fresh, _) = empty_product_window(&documents, cx);
+    let (fresh, _) = empty_headless_window(&documents, cx);
     toggle_test_tool(&fresh, cx);
     cx.read(|cx| {
         let workbench = fresh.read(cx).workbench.read(cx);

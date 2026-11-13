@@ -1,5 +1,5 @@
 //! Native tools participate in the same presentation and closure boundaries as tabs.
-use super::operations::empty_product_window;
+use super::operations::{empty_headless_window, empty_product_window};
 use super::*;
 use crate::app::documents::DocumentDirty;
 use crate::app::workbench::DockLocation;
@@ -90,7 +90,7 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
     cx: &mut TestAppContext,
 ) {
     let documents = install_globals(cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     let workbench = cx.read(|cx| window.read(cx).workbench.clone());
     window.update(cx, |window, cx| window.ensure_test_tool(false, cx));
     let document = cx.read(|cx| {
@@ -114,14 +114,13 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
             TabSurfaceId::Tool(_)
         ));
     });
-    cx.update_window(native_window, |_, _, cx| {
+    native_window.run(cx, |cx| {
         let target = window.update(cx, |window, cx| window.capture_command_target(cx));
         assert!(
             target.tab.is_none(),
             "the tool beside the empty center keeps no focus"
         );
-    })
-    .unwrap();
+    });
     let new = dispatch_product_command(&window, native_window, NEW_COMMAND, cx);
     assert_eq!(wait_for_command(new, cx), CommandOutcome::Completed);
     window.update(cx, |window, cx| {
@@ -150,7 +149,7 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
 fn workspace_refresh_does_not_reopen_or_reposition_tool(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
-    let (window, _) = empty_product_window(&documents, cx);
+    let (window, _) = empty_headless_window(&documents, cx);
     window.update(cx, |window, cx| {
         window.ensure_test_tool(false, cx);
         let id = id_of(window.workbench.read(cx));
