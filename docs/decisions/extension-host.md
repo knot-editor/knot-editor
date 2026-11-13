@@ -138,7 +138,22 @@ state, the package's own state) rather than by replacing the text, which
 would carry undo history, anchors, dirty state, and stale view rows into the
 next case. On Apple Silicon debug builds the fixture took the suite from
 3.6 s to 1.1 s; reuse cut summed per-topic time from 3.7 s to 2.9 s, but not
-the parallel wall time, which is CPU-bound (D186).
+the parallel wall time, which is CPU-bound.
+
+Product tests are made cheap one at a time, not by sharing a started product
+across tests. Sharing would need a reset at every layer (documents, windows,
+sessions, stores, package state) and would fight nextest's process per test
+and gpui's per-test contexts; only the table-driven suites reuse a product,
+within one test. The costs that mattered were found by profiling: drawing
+test windows, then waits that spun a core, then, once those were gone, the
+operating system file watch, whose start blocks about 100 ms on macOS and
+queues across parallel processes. Test file providers therefore report no
+file events unless a test asks. Starting only the packages a test uses
+halved a trivial test, and the language tables share one product because
+compiling the queries at startup cost more than all their cases. On Apple
+Silicon debug builds the workspace went from 13.4 s to 7.2–7.7 s wall and
+from about 130 s to 73 s summed per-test time; no test now takes over 1.6 s.
+`just test-timings` reproduces the per-test log and totals.
 
 References: [extension guide](../extension-api.md#write-and-test-in-typescript)
 and [development](../development.md).

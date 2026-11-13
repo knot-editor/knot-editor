@@ -90,20 +90,6 @@ hold the analyses that support some items.
     piece locators, and keep the piece semantics, edit log, and `TextBuffer`
     API unchanged.
 
-- **D186 — Much faster Rust test suites** 🚧
-  - Depends on: none
-  - Description: Follow its [plan](plans/d186-faster-test-suites.md).
-    Product-driven suites are CPU-bound. `knot-ext-vim` takes
-    ~1.1 s wall time in parallel on 10 cores but ~4.5 s serially, and neither
-    lower nor higher thread counts help; the workspace takes ~12 s. Every test
-    boots a full product (V8 pool, gpui, stores), the 21 general Vim tests
-    each boot their own, and every key settles the extension pool. Cutting
-    per-case work by ~0.8 s CPU moved the parallel wall time by only ~0.1 s,
-    so only less total CPU work helps. Do it now: profile where a product
-    test's CPU goes (startup, settling, V8 turns), then share one started
-    product across the tests of a binary where isolation allows, and make
-    settling after each key cheaper.
-
 - **D187 — File watches start off the foreground**
   - Depends on: none
   - Description: Starting an operating system file watch blocks for about
@@ -112,7 +98,7 @@ hold the analyses that support some items.
     switching to a project with several roots freezes the window for that
     long per root. Start the stream on a background thread and cover the gap
     until it runs, for example with a rescan of the watched tree, so no change
-    is missed. Found while profiling the workbench tests (see D186).
+    is missed. Found while profiling the workbench tests.
 
 - **D156 — Fewer host round trips per key**
   - Depends on: none

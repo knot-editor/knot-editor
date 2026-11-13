@@ -459,7 +459,7 @@ tab restored in place starts in its recorded directory, or by this rule when
 that no longer exists; restoration installs a window's roots before its layout,
 so restored shells see them. `terminals.open` also accepts an explicit
 directory. The rule lives in
-[terminal/directory.rs](../../src/app/terminal/directory.rs).
+[terminal_directory.rs](../../crates/knot-model/src/terminal_directory.rs).
 
 A session reports its shell's current working directory by querying the shell
 process, on macOS and Linux, and otherwise the directory it started in; the

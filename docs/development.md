@@ -17,6 +17,9 @@ in its own process and in parallel across test binaries: install it with
 --workspace --all-targets`. Nextest does not run doc tests, so `just test` and CI also run
 `cargo test --workspace --doc`. [`.config/nextest.toml`](../.config/nextest.toml) holds the
 `ci` profile, which reports every failure instead of stopping at the first.
+`just test-timings` runs the suite under the `timings` profile and prints the
+slowest tests and the totals per binary and module; compare runs on one
+machine, since parallel runs include contention.
 
 The [CI workflow](../.github/workflows/ci.yml) runs on pull requests and pushes
 to `main`:

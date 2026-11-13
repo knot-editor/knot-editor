@@ -108,7 +108,8 @@ touches.
   compiled into the binary under the reserved `@knot` scope.
 - [Extension authoring and tests](decisions/extension-host.md#extension-authoring-and-tests):
   TypeScript per file in `build.rs`; behavior cases without a native window,
-  on a fixture language and a reused editor.
+  on a fixture language and a reused editor; cheap per-test products, not
+  shared ones.
 - [Editor handles](decisions/extension-host.md#editor-handles): bound to one tab
   presentation; payload-free coalesced notifications; open/close undo groups.
 - [Extension restart](decisions/extension-host.md#extension-restart): a minimal
