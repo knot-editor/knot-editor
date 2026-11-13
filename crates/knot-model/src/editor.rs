@@ -735,9 +735,13 @@ impl EditorState {
     }
 
     /// The buffer line the document row `row` belongs to and the byte column
-    /// where the row starts in it; a row past the last is the last.
+    /// where the row starts in it; a row past the last is the last. The wrap
+    /// map may lag the text (a query racing an edit), so the line it names is
+    /// clamped to the text rather than indexing past it.
     pub fn row_start(&self, row: usize, model: &BufferModel) -> (usize, usize) {
         let (line, sub) = self.wrap.position(row);
+        let line = line.min(model.line_count().saturating_sub(1));
+        let sub = sub.min(self.wrap.rows(line).len().saturating_sub(1));
         let start = self.wrap.row_range(line, sub, line_end(model, line)).start;
         (line, start)
     }
@@ -859,9 +863,17 @@ impl EditorState {
     }
 
     pub fn history_view_state(&self, model: &BufferModel) -> HistoryViewState {
-        let caret = to_flat_byte(model, self.cursor_line, self.cursor_col);
+        // The caret may lag the text (a query racing an edit); clamp each
+        // end into the text rather than indexing past it.
+        let clamp = |line: usize, col: usize| {
+            let line = line.min(model.line_count().saturating_sub(1));
+            (line, col.min(line_end(model, line)))
+        };
+        let (line, col) = clamp(self.cursor_line, self.cursor_col);
+        let caret = to_flat_byte(model, line, col);
         let anchor = if self.has_selection {
-            to_flat_byte(model, self.anchor_line, self.anchor_col)
+            let (line, col) = clamp(self.anchor_line, self.anchor_col);
+            to_flat_byte(model, line, col)
         } else {
             caret
         };
@@ -920,6 +932,9 @@ impl EditorState {
     /// The start of the top visible row, as a byte offset.
     fn top_offset(&self, model: &BufferModel) -> usize {
         let (line, sub) = self.wrap.position(self.scroll_top as usize);
+        // As in `row_start`, the wrap map may lag the text.
+        let line = line.min(model.line_count().saturating_sub(1));
+        let sub = sub.min(self.wrap.rows(line).len().saturating_sub(1));
         let start = self.wrap.row_range(line, sub, line_end(model, line)).start;
         to_flat_byte(model, line, start)
     }

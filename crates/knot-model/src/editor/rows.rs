@@ -142,7 +142,10 @@ impl EditorState {
     /// Visual row `index`, clamped to the last row.
     pub fn row(&self, model: &BufferModel, index: usize) -> Row {
         let (line, sub) = self.wrap.position(index);
+        // As in `row_start`, the wrap map may lag the text.
+        let line = line.min(model.line_count().saturating_sub(1));
         let rows = self.wrap.rows(line);
+        let sub = sub.min(rows.len().saturating_sub(1));
         Row {
             index: rows.start + sub,
             line,

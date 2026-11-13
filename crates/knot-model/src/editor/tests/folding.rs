@@ -39,6 +39,24 @@ fn rust_regions_editor(text: &str) -> Fixture {
 }
 
 #[test]
+fn row_queries_clamp_when_the_wrap_map_is_stale() {
+    let mut f = editor();
+    // Shrink the text without notifying the editor, as a stale view query
+    // after a text replacement would see it: the wrap map still counts the
+    // old ten lines while the buffer holds three.
+    let len = f.buffer.len();
+    f.buffer.replace(0..len, "a\nb\nc").unwrap();
+    assert_eq!(f.buffer.line_count(), 3);
+    // A row past the new end resolves to the last line, never a panic.
+    assert_eq!(f.editor.row_start(13, &f.buffer), (2, 0));
+    assert_eq!(f.editor.row_start(1_000, &f.buffer), (2, 0));
+    // The view state's top likewise stays inside the text.
+    let state = f.editor.view_state(&f.buffer);
+    assert!(state.top <= f.buffer.len());
+    assert!(state.caret <= f.buffer.len());
+}
+
+#[test]
 fn a_collapsed_fold_hides_its_lines_from_rows() {
     let mut f = editor();
     fold(&mut f, 2..6);
