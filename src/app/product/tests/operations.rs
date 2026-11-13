@@ -28,7 +28,7 @@ fn semantic_open_returns_the_actual_created_or_reused_presentation(cx: &mut Test
     cx.set_global(ApplicationFileSystems(filesystems));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (window, _) = product_window(placeholder, model, cx);
+    let window = headless_window(placeholder, model, cx);
     let original = cx.read(|cx| current_open_target(&window, cx));
     let mut pending = begin_open(&window, "mem://product/notes.txt", cx);
     cx.run_until_parked();
@@ -86,7 +86,7 @@ fn opening_a_folder_in_a_window_with_roots_uses_a_new_window(cx: &mut TestAppCon
     cx.set_global(ApplicationFileSystems(filesystems));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (window, _) = product_window(placeholder, model, cx);
+    let window = headless_window(placeholder, model, cx);
     let windows = cx.update(|cx| cx.windows().len());
 
     // A window without roots takes the folder.
@@ -129,7 +129,7 @@ fn semantic_open_returns_committed_roots_and_preserves_resource_errors(cx: &mut 
     cx.set_global(ApplicationFileSystems(filesystems));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (window, _) = product_window(placeholder, model, cx);
+    let window = headless_window(placeholder, model, cx);
     let mut pending = begin_open(&window, "mem://product/src", cx);
     cx.run_until_parked();
     let OpenCommit::Workspace(workspace) = pending.try_recv().unwrap().unwrap() else {
@@ -174,7 +174,7 @@ async fn semantic_open_rejects_a_replaced_presentation_without_creating_a_docume
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, _) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
     let pending = begin_open(&window, "mem://product/notes.txt", cx);
     wait_for_api_condition(cx, |_| provider.read_release.lock().unwrap().is_none());
     let target = cx.read(|cx| current_open_target(&window, cx));
@@ -231,6 +231,15 @@ pub(super) fn install_operation_fixture(
     key
 }
 
+pub(super) fn empty_headless_window(
+    documents: &Entity<DocumentCollection>,
+    cx: &mut TestAppContext,
+) -> (Entity<KnotWindow>, Headless) {
+    let document = cx.update(|cx| create_untitled_document(documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    (headless_window(document, model, cx), Headless)
+}
+
 pub(super) fn empty_product_window(
     documents: &Entity<DocumentCollection>,
     cx: &mut TestAppContext,
@@ -283,8 +292,8 @@ await commands.register("operations.open", async ({ target: command }) => {
         "operations.open",
         cx,
     );
-    let (first, window) = empty_product_window(&documents, cx);
-    let (_second, _) = empty_product_window(&documents, cx);
+    let (first, window) = empty_headless_window(&documents, cx);
+    let (_second, _) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&first, window, "operations.open", cx),
@@ -309,8 +318,8 @@ fn public_open_keeps_the_admitted_window_when_focus_changes_during_read(cx: &mut
     filesystems.register("mem", provider.clone()).unwrap();
     cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
     let host = cx.update(extensions::host::install);
-    let (first, first_window) = empty_product_window(&documents, cx);
-    let (second, second_window) = empty_product_window(&documents, cx);
+    let (first, first_window) = empty_headless_window(&documents, cx);
+    let (second, _) = empty_headless_window(&documents, cx);
     let key = install_operation_fixture(
         &host,
         r#"
@@ -327,11 +336,10 @@ await commands.register("operations.delayed", async () => {
     );
     let execution = dispatch_product_command(&first, first_window, "operations.delayed", cx);
     wait_for_api_condition(cx, |_| provider.read_release.lock().unwrap().is_none());
-    cx.update_window(second_window, |_, native_window, cx| {
-        native_window.activate_window();
-        second.update(cx, |window, cx| window.focus_active_surface(cx));
-    })
-    .unwrap();
+    second.update(cx, |window, cx| {
+        window.activate(cx);
+        window.focus_active_surface(cx);
+    });
     release.send(()).unwrap();
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.read(|cx| {
@@ -360,7 +368,7 @@ fn public_open_rejects_replaced_targets_and_unloaded_callers_after_io(cx: &mut T
         filesystems.register("mem", provider.clone()).unwrap();
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let host = cx.update(extensions::host::install);
-        let (window, native_window) = empty_product_window(&documents, cx);
+        let (window, native_window) = empty_headless_window(&documents, cx);
         let key = install_operation_fixture(
             &host,
             r#"
@@ -424,10 +432,7 @@ await commands.register("operations.stale", async () => {
             host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         }
         // Finish this window before installing another application fixture.
-        cx.update_window(native_window, |_, native_window, _| {
-            native_window.remove_window()
-        })
-        .unwrap();
+        window.update(cx, |window, cx| window.end(cx));
     }
 }
 
@@ -437,7 +442,7 @@ fn activation_and_listeners_can_open_with_explicit_targets(cx: &mut TestAppConte
     let (filesystems, _) = memory_filesystems_with_provider();
     cx.set_global(ApplicationFileSystems(filesystems));
     let host = cx.update(extensions::host::install);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     let key = install_operation_fixture(
         &host,
         r#"
@@ -510,13 +515,13 @@ fn installed_open_command_consumes_the_committed_result_in_its_originating_windo
         wait_for_extension_report(&host, cx).report.entries[0].result,
         crate::app::extensions::load::LoadResult::Loaded
     );
-    let (first, first_window) = empty_product_window(&documents, cx);
+    let (first, first_window) = empty_headless_window(&documents, cx);
     let mut opened = begin_open(&first, "mem://product/notes.txt", cx);
     cx.run_until_parked();
     let OpenCommit::Document { document, .. } = opened.try_recv().unwrap().unwrap() else {
         panic!("file open returned roots");
     };
-    let (second, second_window) = empty_product_window(&documents, cx);
+    let (second, second_window) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&second, second_window, "example.open-document", cx),
@@ -642,8 +647,8 @@ await commands.register("operations.clean", async () => {
         "operations.clean",
         cx,
     );
-    let (first, window) = empty_product_window(&documents, cx);
-    let (second, second_window) = empty_product_window(&documents, cx);
+    let (first, window) = empty_headless_window(&documents, cx);
+    let (second, second_window) = empty_headless_window(&documents, cx);
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&second, second_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx),
@@ -707,7 +712,7 @@ fn public_open_rejects_pane_or_window_loss_and_command_cancellation_without_leak
         filesystems.register("mem", provider.clone()).unwrap();
         cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
         let host = cx.update(extensions::host::install);
-        let (first, first_window) = empty_product_window(&documents, cx);
+        let (first, first_window) = empty_headless_window(&documents, cx);
         assert_eq!(
             wait_for_command(
                 dispatch_product_command(&first, first_window, SPLIT_HORIZONTAL_COMMAND, cx),
@@ -715,10 +720,10 @@ fn public_open_rejects_pane_or_window_loss_and_command_cancellation_without_leak
             ),
             CommandOutcome::Completed
         );
-        let (control, control_window) = empty_product_window(&documents, cx);
+        let (control, control_window) = empty_headless_window(&documents, cx);
         let index = usize::from(
-            crate::app::product::test_window_id(first_window)
-                > crate::app::product::test_window_id(control_window),
+            super::super::window_id(first.entity_id())
+                > super::super::window_id(control.entity_id()),
         );
         let source = r#"
 import { commands, documents, windows, workbench } from "knot";
@@ -738,14 +743,11 @@ await commands.register("operations.target-loss", async () => {
         wait_for_api_condition(cx, |_| provider.read_release.lock().unwrap().is_none());
         match scenario {
             "pane" => {
-                cx.update_window(first_window, |_, _, cx| {
-                    first.update(cx, |window, cx| {
-                        let pane = &window.workbench.read(cx).panes()[0];
-                        let (pane, tab) = (pane.id(), pane.active_tab_id());
-                        window.activate_tab(pane, tab, cx);
-                    })
-                })
-                .unwrap();
+                first.update(cx, |window, cx| {
+                    let pane = &window.workbench.read(cx).panes()[0];
+                    let (pane, tab) = (pane.id(), pane.active_tab_id());
+                    window.activate_tab(pane, tab, cx);
+                });
                 assert_eq!(
                     wait_for_command(
                         dispatch_product_command(&first, first_window, CLOSE_TAB_COMMAND, cx),
@@ -798,15 +800,9 @@ await commands.register("operations.target-loss", async () => {
         }
         host.update(cx, |host, cx| host.unload(key, cx).unwrap());
         if scenario != "window" {
-            cx.update_window(first_window, |_, native_window, _| {
-                native_window.remove_window()
-            })
-            .unwrap();
+            first.update(cx, |window, cx| window.end(cx));
         }
-        cx.update_window(control_window, |_, native_window, _| {
-            native_window.remove_window()
-        })
-        .unwrap();
+        control.update(cx, |window, cx| window.end(cx));
     }
 }
 
@@ -844,7 +840,7 @@ fn pick_folder_returns_a_normalized_directory_and_reports_path_failures(cx: &mut
         wait_for_extension_report(&host, cx).report.entries[0].result,
         crate::app::extensions::load::LoadResult::Loaded
     );
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
 
     let directory = tempfile::tempdir().unwrap();
     cx.set_global(ApplicationOpenDialog(Arc::new(FixedOpenDialog(
@@ -943,7 +939,7 @@ await commands.register("operations.terminal", async () => {{
     );
     let host = cx.update(extensions::host::install);
     let key = install_operation_fixture(&host, &source, "operations.terminal", cx);
-    let (window, native_window) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_headless_window(&documents, cx);
     window.update(cx, |window, cx| {
         window.replace_workspace_roots(
             vec![ResourceUri::parse(&directory(root.path())).unwrap()],

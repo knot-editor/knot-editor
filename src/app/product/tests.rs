@@ -51,7 +51,7 @@ use knot_protocol::{
 };
 
 pub(super) use super::driver::setup::{
-    install_globals, install_launch_gate, product_window, wait_for_product_startup,
+    headless_window, install_globals, install_launch_gate, product_window, wait_for_product_startup,
 };
 use super::{
     ApplicationDocuments, ApplicationFileSystems, ApplicationOpenDialog,
@@ -298,11 +298,11 @@ fn current_open_target(window: &Entity<KnotWindow>, cx: &gpui::App) -> OpenTarge
 
 fn place_explorer(
     window: &Entity<KnotWindow>,
-    window_handle: gpui::AnyWindowHandle,
+    window_handle: impl WindowHandle,
     dock: crate::app::workbench::DockLocation,
     cx: &mut TestAppContext,
 ) {
-    cx.update_window(window_handle, |_, _, cx| {
+    window_handle.run(cx, |cx| {
         window.update(cx, |window, cx| {
             window.ensure_test_tool(false, cx);
             let id = window.test_tool_frame(cx).unwrap();
@@ -312,13 +312,34 @@ fn place_explorer(
                 window.move_tab_to_area(pane, tab, area, cx).unwrap();
             }
         })
-    })
-    .unwrap();
+    });
+}
+
+/// Where a test reaches its window: through a native window's handle, or
+/// directly when the window has none.
+trait WindowHandle: Copy {
+    fn run<R>(self, cx: &mut TestAppContext, f: impl FnOnce(&mut gpui::App) -> R) -> R;
+}
+
+impl WindowHandle for gpui::AnyWindowHandle {
+    fn run<R>(self, cx: &mut TestAppContext, f: impl FnOnce(&mut gpui::App) -> R) -> R {
+        cx.update_window(self, |_, _, cx| f(cx)).unwrap()
+    }
+}
+
+/// The handle of a window with no native window.
+#[derive(Clone, Copy)]
+struct Headless;
+
+impl WindowHandle for Headless {
+    fn run<R>(self, cx: &mut TestAppContext, f: impl FnOnce(&mut gpui::App) -> R) -> R {
+        cx.update(f)
+    }
 }
 
 fn dispatch_product_command(
     window: &Entity<KnotWindow>,
-    window_handle: gpui::AnyWindowHandle,
+    window_handle: impl WindowHandle,
     name: &'static str,
     cx: &mut TestAppContext,
 ) -> super::super::CommandExecution {
@@ -327,19 +348,17 @@ fn dispatch_product_command(
 
 fn dispatch_product_command_with(
     window: &Entity<KnotWindow>,
-    window_handle: gpui::AnyWindowHandle,
+    window_handle: impl WindowHandle,
     name: &'static str,
     arguments: CommandArgumentValue,
     cx: &mut TestAppContext,
 ) -> super::super::CommandExecution {
-    let target = cx
-        .update_window(window_handle, |_, _, cx| {
-            window.update(cx, |window, cx| {
-                window.focus_active_surface(cx);
-                window.capture_command_target(cx)
-            })
+    let target = window_handle.run(cx, |cx| {
+        window.update(cx, |window, cx| {
+            window.focus_active_surface(cx);
+            window.capture_command_target(cx)
         })
-        .unwrap();
+    });
     cx.update(|cx| {
         let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
         dispatcher.update(cx, |dispatcher, cx| {
