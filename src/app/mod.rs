@@ -24,6 +24,7 @@ mod file_watch;
 use knot_model::{entry, filesystem, indentation, keys, open, resource, style, syntax, workspace};
 mod icons;
 mod languages;
+mod launch_socket;
 pub mod model;
 mod personal_config;
 mod personal_config_error;
@@ -157,5 +158,11 @@ pub fn run(application: Application, packages: &'static [knot_bundled::BundledSo
         }
         entry::LaunchCommand::Open(batch) => batch,
     };
-    product::run(application, batch, packages);
+    if launch_socket::forward(&batch) {
+        return;
+    }
+    let listener = launch_socket::bind()
+        .map_err(|error| eprintln!("[knot] launch socket unavailable: {error}"))
+        .ok();
+    product::run(application, batch, listener, packages);
 }

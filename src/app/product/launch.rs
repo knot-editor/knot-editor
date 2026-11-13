@@ -432,9 +432,16 @@ fn open_report_after_failed_startup(cx: &mut App) {
 pub(crate) fn run(
     application: Application,
     initial_batch: LaunchBatch,
+    listener: Option<interprocess::local_socket::Listener>,
     packages: &'static [knot_bundled::BundledSource],
 ) {
     let (open_requests, mut incoming_requests) = tokio::sync::mpsc::unbounded_channel();
+    if let Some(listener) = listener {
+        let open_requests = open_requests.clone();
+        crate::app::launch_socket::serve(listener, move |batch| {
+            let _ = open_requests.send(batch);
+        });
+    }
     application.on_open_urls(move |urls| {
         let requests = urls
             .iter()

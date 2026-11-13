@@ -28,6 +28,15 @@ impl StateDatabase {
             .ok_or_else(|| "cannot determine the user application-data directory".into())
     }
 
+    /// The launch socket beside the state database, so one Knot per user
+    /// answers command-line launches.
+    #[cfg(unix)]
+    pub(crate) fn user_socket_path() -> Result<PathBuf, String> {
+        directories::ProjectDirs::from("", "", "Knot")
+            .map(|dirs| dirs.data_local_dir().join("launch.sock"))
+            .ok_or_else(|| "cannot determine the user application-data directory".into())
+    }
+
     /// A database that lives only as long as this value, for tests that
     /// need no file.
     #[cfg(any(test, feature = "test-support"))]

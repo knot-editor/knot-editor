@@ -121,7 +121,14 @@ Done: `LaunchBatch` and `LaunchCommand` in `crates/knot-model/src/entry.rs`;
 rejects unknown flags (exit 2). The launch gate in `src/app/product.rs` and
 `on_open_urls` carry batches. Until checkpoint 4 each batch item opens its own window.
 
-### 2. Single-instance forwarding
+### 2. Single-instance forwarding ✅ (implemented; awaiting review gate)
+Done: `src/app/launch_socket.rs` (forward, bind with overwrite of a stale file,
+listener thread feeding the batch channel); `knot::run` forwards before creating the
+product, otherwise binds. The gpui `Application` is still created before the forward
+decision; checkpoint 3 restructures the entry point if it needs to. Tests cover the
+framing round trip, invalid lines, and stale-socket takeover (Unix only). Manually
+verified: a second `knot a.txt b.txt` and `knot .` exit 0 against a running instance,
+and a restart over the leftover socket file starts normally.
 Deliverable: a new `src/app/launch_socket.rs` (declared in `src/app/mod.rs`) owns
 the socket path, bind, connect, send, and the listener thread. `knot::run` tries
 to forward before creating the product, and otherwise binds and passes the listener
