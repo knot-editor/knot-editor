@@ -343,6 +343,12 @@ impl SyntaxState {
         }
     }
 
+    /// A state over the same language and resolver with no tree yet, for
+    /// text that replaces the old one wholesale.
+    pub fn restarted(&self) -> Self {
+        Self::new(Arc::clone(&self.root.language), Arc::clone(&self.resolver))
+    }
+
     pub fn generation(&self) -> u64 {
         self.generation
     }

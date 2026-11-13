@@ -598,7 +598,10 @@ mod tests {
             .id();
         assert!(documents.mark_clean(untitled, 9));
         assert!(documents.mark_clean(persisted, 11));
-        assert!(!documents.mark_clean(destination, 3), "a destination stays dirty");
+        assert!(
+            !documents.mark_clean(destination, 3),
+            "a destination stays dirty"
+        );
         assert!(!documents.mark_clean(DocumentId::new(999), 0));
         let matches = |_: &u32, revision: u64| revision == 9 || revision == 11;
         assert!(!documents.get(untitled).unwrap().is_dirty_with(matches));

@@ -1166,18 +1166,21 @@ impl BufferModel {
 
     /// Replace the complete text as a fresh buffer would hold it: no undo
     /// history, anchored ranges, contributions, marks, or pending changes
-    /// survive, and the syntax tree reparses the new text. Language, document
-    /// identity, and access policy are kept. The revision advances, so the
-    /// caller re-baselines any clean state recorded against the old one.
-    /// For reusing a buffer in tests; production loads build a new model.
+    /// survive. Language, document identity, and access policy are kept; the
+    /// syntax tree is rebuilt from scratch. The revision advances, so the
+    /// caller re-baselines any clean state recorded against the old one. For
+    /// reusing a buffer in tests; production loads build a new model.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn reset_to_text(&mut self, text: &str) {
         assert!(self.open, "cannot reset a closed buffer");
         self.anchored_ranges.clear();
         self.contributions = ContributionRegistry::new();
         self.marks.clear();
+        let syntax = self.syntax.take();
         let seq = self.buffer.edit_seq();
         self.buffer.replace(0..self.buffer.len(), text);
         self.observe_committed_edits(seq);
+        self.set_syntax(syntax.as_ref().map(SyntaxState::restarted));
         self.history = EditHistory::default();
         self.history_view_restore = None;
         self.pending_changes.clear();

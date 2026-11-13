@@ -111,10 +111,14 @@ part of close-out.
 
 Each step is committed separately once verified.
 
-1. D185 stale-row hardening (handlers + regression test).
-2. `BufferModel::reset_to_text` + document re-baseline, with `knot-model`
-   tests: undo empty after reset, no anchored ranges survive, clean after
-   re-baseline.
+1. ✅ D185 stale-row hardening. Done in `knot-model` instead of the
+   handlers: stale row and caret queries clamp to the current text, so no
+   handler needs an error path.
+2. ✅ `BufferModel::reset_to_text` (test-support; rebuilds the syntax state
+   from scratch) + document re-baseline (`mark_clean` in the model collection
+   and an app wrapper that republishes recovery and observation), with model
+   and gpui tests: undo empty after reset, no anchored ranges survive, clean
+   after re-baseline.
 3. Editor-state swap in the `Editor` entity, with a driver test asserting
    scroll, folds, and selection from a first `load` are gone after a second.
 4. Extend `vim.reset` to per-editor state, keeping existing shared clearing.

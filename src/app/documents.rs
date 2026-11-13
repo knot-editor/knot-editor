@@ -150,6 +150,24 @@ impl DocumentCollection {
         true
     }
 
+    /// Record the model's current revision as the document's clean
+    /// baseline, as a save does, and tell recovery and observation. For a
+    /// buffer reset in place in tests.
+    #[cfg(test)]
+    pub(crate) fn mark_clean(&mut self, id: DocumentId, cx: &mut App) -> bool {
+        let Some(document) = self.0.get(id) else {
+            return false;
+        };
+        let revision = document.model().read(cx).revision();
+        if !self.0.mark_clean(id, revision) {
+            return false;
+        }
+        let document = self.0.get(id).expect("a re-baselined document is live");
+        super::recovery::publish(document, cx);
+        super::application_observation::changed(cx);
+        true
+    }
+
     /// Follow a rename the application performed: every persisted document at
     /// or under `from` moves to the matching URI under `to`, and takes the
     /// language its new name selects. Returns the documents that moved.
@@ -376,6 +394,27 @@ mod tests {
         assert_eq!(document.title(), "untitled.txt");
         assert_eq!(document.resource_uri(), Some(&untitled_uri));
         assert!(!cx.read(|cx| document.is_dirty(cx)));
+    }
+
+    #[gpui::test]
+    fn a_buffer_reset_in_place_is_clean_once_re_baselined(cx: &mut TestAppContext) {
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("first")));
+        let mut documents = DocumentCollection::new();
+        let id = cx.update(|cx| documents.create_untitled("Untitled", model.clone(), cx));
+        model.update(cx, |model, _| model.replace(0..0, "edit ").unwrap());
+        assert!(cx.read(|cx| documents.get(id).unwrap().is_dirty(cx)));
+
+        model.update(cx, |model, _| model.reset_to_text("second"));
+        assert!(
+            cx.read(|cx| documents.get(id).unwrap().is_dirty(cx)),
+            "a reset alone moves off the clean baseline"
+        );
+        assert!(cx.update(|cx| documents.mark_clean(id, cx)));
+        assert!(!cx.read(|cx| documents.get(id).unwrap().is_dirty(cx)));
+        model.update(cx, |model, _| {
+            assert_eq!(model.text(), "second");
+            assert!(!model.undo().unwrap(), "undo cannot cross the reset");
+        });
     }
 
     #[gpui::test]

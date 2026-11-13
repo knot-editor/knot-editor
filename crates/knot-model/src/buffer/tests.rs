@@ -33,7 +33,10 @@ fn reset_to_text_leaves_a_fresh_buffer_over_the_same_identity() {
     assert_eq!(model.anchored_range_count(), 0, "no anchors survive");
     assert_eq!(model.mark_position(source, mark), None, "no marks survive");
     assert!(model.resolved_contributions().is_empty());
-    assert!(model.take_pending_change().is_none(), "no pending change leaks");
+    assert!(
+        model.take_pending_change().is_none(),
+        "no pending change leaks"
+    );
     assert!(
         model.content_matches_revision(model.revision()),
         "the new revision is a usable clean baseline"
@@ -794,6 +797,22 @@ fn syntax_follows_every_commit_path() {
     assert_eq!(syntax_names(&model), expected);
     assert!(model.redo().unwrap());
     assert_eq!(syntax_names(&model), fresh("// x\nfn bc() {}"));
+    assert!(model.start_syntax_parse().is_none());
+}
+
+#[test]
+fn reset_to_text_rebuilds_the_syntax_tree() {
+    let mut model = BufferModel::from_text("fn a() {}");
+    model.set_syntax(rust_syntax());
+    let generation = model.syntax_generation();
+    let language = Arc::clone(model.syntax_language().unwrap());
+
+    model.reset_to_text("// x\nfn b() {}");
+    assert_ne!(model.syntax_generation(), generation, "a new tree");
+    assert!(Arc::ptr_eq(model.syntax_language().unwrap(), &language));
+    let mut fresh = BufferModel::from_text("// x\nfn b() {}");
+    fresh.set_syntax(rust_syntax());
+    assert_eq!(syntax_names(&model), syntax_names(&fresh));
     assert!(model.start_syntax_parse().is_none());
 }
 
