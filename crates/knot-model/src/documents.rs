@@ -387,6 +387,24 @@ impl<M: PartialEq> DocumentCollection<M> {
         true
     }
 
+    /// Record `revision` as the document's clean baseline, as a save does:
+    /// the document is clean while its content matches that revision. A
+    /// destination with nothing persisted yet stays dirty. Returns whether
+    /// a baseline was recorded.
+    pub fn mark_clean(&mut self, id: DocumentId, revision: u64) -> bool {
+        let Some(document) = self.documents.iter_mut().find(|document| document.id == id) else {
+            return false;
+        };
+        match &mut document.state {
+            DocumentState::Untitled { clean_revision } => *clean_revision = revision,
+            DocumentState::Persisted {
+                persisted_revision, ..
+            } => *persisted_revision = revision,
+            DocumentState::Destination { .. } => return false,
+        }
+        true
+    }
+
     pub fn begin_persistence(&mut self, id: DocumentId, model: &M) -> Option<PersistenceCapture> {
         let document = self
             .documents
@@ -566,6 +584,26 @@ mod tests {
                 .unwrap()
                 .is_dirty_with(|_, _| false)
         );
+    }
+
+    #[test]
+    fn mark_clean_moves_the_baseline_of_untitled_and_persisted_documents() {
+        let mut documents = DocumentCollection::new();
+        let untitled = documents.insert_untitled("Untitled", 1u32, 5);
+        let destination = documents
+            .insert_destination("a.txt", 2, uri("mem://w/a.txt"))
+            .id();
+        let persisted = documents
+            .insert_persisted("b.txt", 3, uri("mem://w/b.txt"), 7, version(1))
+            .id();
+        assert!(documents.mark_clean(untitled, 9));
+        assert!(documents.mark_clean(persisted, 11));
+        assert!(!documents.mark_clean(destination, 3), "a destination stays dirty");
+        assert!(!documents.mark_clean(DocumentId::new(999), 0));
+        let matches = |_: &u32, revision: u64| revision == 9 || revision == 11;
+        assert!(!documents.get(untitled).unwrap().is_dirty_with(matches));
+        assert!(!documents.get(persisted).unwrap().is_dirty_with(matches));
+        assert!(documents.get(destination).unwrap().is_dirty_with(matches));
     }
 
     #[test]

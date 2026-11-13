@@ -15,6 +15,37 @@ fn recovered_text_is_dirty_against_its_baseline_without_undo_history() {
 }
 
 #[test]
+fn reset_to_text_leaves_a_fresh_buffer_over_the_same_identity() {
+    let mut model = BufferModel::from_text("one\ntwo");
+    model.set_language(Some("rust".into()), true);
+    let source = ContributionSource::fixture();
+    let mark = model.create_mark(source, 1).unwrap();
+    model.replace(0..3, "ONE").unwrap();
+    assert!(model.take_pending_change().is_some());
+    let before = model.revision();
+
+    model.reset_to_text("a\nb\nc");
+    assert_eq!(model.text(), "a\nb\nc");
+    assert!(model.revision() > before, "the revision stays monotonic");
+    assert_eq!(model.language(), Some("rust"), "language is kept");
+    assert!(!model.undo().unwrap(), "undo cannot cross the reset");
+    assert!(!model.redo().unwrap());
+    assert_eq!(model.anchored_range_count(), 0, "no anchors survive");
+    assert_eq!(model.mark_position(source, mark), None, "no marks survive");
+    assert!(model.resolved_contributions().is_empty());
+    assert!(model.take_pending_change().is_none(), "no pending change leaks");
+    assert!(
+        model.content_matches_revision(model.revision()),
+        "the new revision is a usable clean baseline"
+    );
+
+    // The reset buffer edits and undoes normally afterwards.
+    model.replace(0..1, "z").unwrap();
+    assert!(model.undo().unwrap());
+    assert_eq!(model.text(), "a\nb\nc");
+}
+
+#[test]
 fn replacement_is_one_public_commit() {
     let mut model = BufferModel::from_text("abc");
     assert!(model.replace(1..2, "XYZ").unwrap());

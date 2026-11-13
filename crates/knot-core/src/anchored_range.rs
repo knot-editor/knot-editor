@@ -272,6 +272,15 @@ impl AnchoredRangeStore {
         id
     }
 
+    /// Remove every anchored range, keeping the edit-log cursor and the ID
+    /// sequence, so ranges added afterwards never reuse a live ID and the
+    /// next `stabilize` still sees every edit since the last one.
+    pub fn clear(&mut self) {
+        self.anchored_ranges.clear();
+        self.endpoints_by_piece.clear();
+        self.unanchored_endpoints.clear();
+    }
+
     /// Remove an anchored range entirely.
     pub fn remove(&mut self, id: AnchoredRangeId) {
         if let Some(ann) = self.anchored_ranges.remove(&id) {

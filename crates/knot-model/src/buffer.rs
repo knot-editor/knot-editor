@@ -1164,6 +1164,30 @@ impl BufferModel {
         Ok(self.commit_replacement(range, text, grouping, view))
     }
 
+    /// Replace the complete text as a fresh buffer would hold it: no undo
+    /// history, anchored ranges, contributions, marks, or pending changes
+    /// survive, and the syntax tree reparses the new text. Language, document
+    /// identity, and access policy are kept. The revision advances, so the
+    /// caller re-baselines any clean state recorded against the old one.
+    /// For reusing a buffer in tests; production loads build a new model.
+    pub fn reset_to_text(&mut self, text: &str) {
+        assert!(self.open, "cannot reset a closed buffer");
+        self.anchored_ranges.clear();
+        self.contributions = ContributionRegistry::new();
+        self.marks.clear();
+        let seq = self.buffer.edit_seq();
+        self.buffer.replace(0..self.buffer.len(), text);
+        self.observe_committed_edits(seq);
+        self.history = EditHistory::default();
+        self.history_view_restore = None;
+        self.pending_changes.clear();
+        self.line_changes.clear();
+        self.committing_lines = None;
+        self.snapshot_cache.get_mut().take();
+        self.content_state = self.allocate_content_state();
+        self.advance_revision();
+    }
+
     /// Replace the complete text of a read-only generated buffer. Generated
     /// content is not an editable document, so this bypasses the access policy
     /// while still committing one public revision.
