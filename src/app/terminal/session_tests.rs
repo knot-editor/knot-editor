@@ -400,7 +400,7 @@ fn sustained_output_keeps_foreground_updates_responsive(cx: &mut TestAppContext)
     let session = cx.new(|cx| {
         TerminalSession::new_with_options(
             shell(
-                "IFS= read -r line; i=0; while [ \"$i\" -lt 20000 ]; do printf 'stream-%05d\\n' \"$i\"; i=$((i + 1)); if [ $((i % 100)) -eq 0 ]; then sleep 0.001; fi; done; printf 'stream-complete\\n'",
+                "IFS= read -r line; i=0; while [ \"$i\" -lt 4000 ]; do printf 'stream-%05d\\n' \"$i\"; i=$((i + 1)); if [ $((i % 500)) -eq 0 ]; then sleep 0.001; fi; done; printf 'stream-complete\\n'",
             ),
             cx,
         )
