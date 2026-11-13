@@ -84,7 +84,7 @@
     { "name": ">> undoes as one step", "before": ["a‸b"], "keys": ">>u", "after": ["a‸b"] },
     { "name": "== reindents a Rust line", "language": "rust", "before": ["fn f() {", "‸a();", "}"], "keys": "==", "after": ["fn f() {", "    ‸a();", "}"] },
     { "name": "=ap reindents a Rust block", "language": "rust", "before": ["fn f() {", "a();", "‸  b();", "}"], "keys": "=ap", "after": ["‸fn f() {", "    a();", "    b();", "}"] },
-    { "name": "== reindents a TypeScript line", "language": "typescript", "before": ["function f() {", "‸a();", "}"], "keys": "==", "after": ["function f() {", "    ‸a();", "}"] },
+    { "name": "== reindents a nested Rust line", "language": "rust", "before": ["fn f() {", "    if x {", "‸a();", "    }", "}"], "keys": "==", "after": ["fn f() {", "    if x {", "        ‸a();", "    }", "}"] },
     { "name": ">> in Rust indents by the tab size", "language": "rust", "before": ["‸a();"], "keys": ">>", "after": ["    ‸a();"] },
 
     // Case operators.

@@ -15,4 +15,3 @@ knot = { path = "../..", features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-knot-ext-languages = { path = "../knot-ext-languages" }

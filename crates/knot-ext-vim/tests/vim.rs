@@ -28,6 +28,24 @@ const ENABLE: &str = r#"import { settings } from "knot";
 await settings.set("vim.enabled", true);
 "#;
 
+/// The minimal language fixture for the topics whose cases test
+/// syntax-aware behavior: the compiled-in Rust grammar with only the
+/// queries and bracket pairs those cases need.
+const LANGUAGE_FIXTURE: &str = r#"import { languages, settings } from "knot";
+await settings.set("vim.enabled", true);
+await languages.register({
+  id: "rust",
+  name: "Rust",
+  grammar: "rust",
+  queries: {
+    highlights: "(string_literal) @string",
+    indents: "[ (block) (declaration_list) ] @indent.begin\n\"}\" @indent.branch",
+    folds: "(block) @fold",
+  },
+  brackets: [{ open: "{", close: "}" }, { open: "[", close: "]" }, { open: "(", close: ")" }],
+});
+"#;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Case {
@@ -150,6 +168,19 @@ fn start(cx: &mut TestAppContext) -> TestProduct {
     TestProduct::start_with_post_init(packages(), Some(ENABLE), cx)
 }
 
+/// Start with the minimal language fixture for syntax-aware topics.
+fn start_with_language_fixture(cx: &mut TestAppContext) -> TestProduct {
+    TestProduct::start_with_post_init(packages(), Some(LANGUAGE_FIXTURE), cx)
+}
+
+/// Whether the topic's cases test syntax-aware behavior.
+fn needs_language_fixture(topic: &str) -> bool {
+    matches!(
+        topic,
+        "ex" | "folding" | "insert" | "motions" | "operators" | "visual"
+    )
+}
+
 /// Open `text` with the caret at `caret` in a window Vim follows.
 fn open(product: &TestProduct, text: &str, caret: usize, cx: &mut TestAppContext) -> TestEditor {
     let test_editor = product.editor(text, None, (caret, caret), cx);
@@ -165,9 +196,14 @@ fn start_over(test_editor: &TestEditor, cx: &mut TestAppContext) {
     test_editor.run_command("vim.reset", cx);
 }
 
-/// Run the cases of the topic file `topic`.
+/// Run the cases of the topic file `topic`, with the language fixture for
+/// the topics whose cases test syntax-aware behavior.
 fn run_topic(topic: &str, cx: &mut TestAppContext) {
-    let product = start(cx);
+    let product = if needs_language_fixture(topic) {
+        start_with_language_fixture(cx)
+    } else {
+        start(cx)
+    };
     let mut failures = Failures::default();
     let mut count = 0;
     // One window shows every case in turn.
@@ -398,9 +434,12 @@ fn vim_follows_the_setting_and_a_language_scoped_value(cx: &mut TestAppContext) 
     let product = TestProduct::start_with_post_init(
         packages(),
         Some(
-            r#"import { settings } from "knot";
+            r#"import { languages, settings } from "knot";
 await settings.set("vim.enabled", true);
 await settings.set("vim.enabled", false, { language: "markdown" });
+await languages.register({
+  id: "markdown", name: "Markdown", grammar: "markdown", queries: { highlights: "" },
+});
 "#,
         ),
         cx,
@@ -795,11 +834,9 @@ fn ctrl_w_counts_repeat_resizing(cx: &mut TestAppContext) {
     test_editor.press("<esc>", cx);
 }
 
-/// Vim and the language packages its cases edit in.
+/// The bundled Vim package.
 fn packages() -> &'static [knot_bundled::BundledSource] {
-    static PACKAGES: std::sync::OnceLock<Vec<knot_bundled::BundledSource>> =
-        std::sync::OnceLock::new();
-    PACKAGES.get_or_init(|| [knot_ext_vim::PACKAGES, knot_ext_languages::PACKAGES].concat())
+    knot_ext_vim::PACKAGES
 }
 
 /// The directory of the bundled package `@knot/<name>`.

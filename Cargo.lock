@@ -3827,7 +3827,6 @@ dependencies = [
  "gpui-pre",
  "knot",
  "knot-bundled",
- "knot-ext-languages",
  "serde",
  "serde_json",
 ]
