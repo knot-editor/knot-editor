@@ -129,19 +129,11 @@ created before the forward decision; checkpoint 3 restructures the entry point i
 needs to. The Windows named-pipe path is untested; framing and stale-socket tests are
 Unix-only.
 
-### 3. macOS cold start from the bundle
-Deliverable: when no primary answers and `current_exe` is inside a `.app`, the client
-runs `open -a <bundle> --args <absolute paths>` and exits 0. This happens before any
-gpui platform exists.
-Validation: unit tests for bundle detection from an executable path and for the
-`open` argument list.
-Review gate: with Knot not running, `knot ~/some/dir` and `knot a.txt` through the
-brew link (or a symlink to a locally built `Knot.app`). The shell returns at once,
-Knot starts as a normal app, and the paths open. Then the same commands with Knot
-running.
-Implementation context: `src/app/launch_socket.rs` (or a sibling `launcher.rs`);
-`crates/knot-app/src/main.rs` entry order; `packaging/macos/Info.plist`; the
-`just` bundle recipe in `justfile`.
+### 3. macOS cold start from the bundle ✅
+Done: `src/app/launcher.rs` runs `open -a <bundle> --env KNOT_STARTED_BY_LAUNCHER=1 --args <absolute paths>`
+when no primary answers and `current_exe` is inside a `.app`; the env var keeps the
+app it starts from calling `open` again. `knot::run` takes a platform factory, so no
+gpui application exists before the forward or cold-start decision.
 
 ### 4. Placement
 Deliverable: the placement function in `knot-model` and its wiring into batch
