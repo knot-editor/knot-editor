@@ -10,15 +10,14 @@ async fn cancelling_the_native_open_selection_settles_the_command(cx: &mut TestA
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, window_handle) = product_window(document, model, cx);
-    let target = cx
-        .update_window(window_handle, |_, _, cx| {
-            window.update(cx, |window, cx| {
-                window.focus_active_editor(cx);
-                window.capture_command_target(cx)
-            })
+    let window = headless_window(document, model, cx);
+    let window_handle = Headless;
+    let target = window_handle.run(cx, |cx| {
+        window.update(cx, |window, cx| {
+            window.focus_active_editor(cx);
+            window.capture_command_target(cx)
         })
-        .unwrap();
+    });
     let execution = cx.update(|cx| {
         let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
         dispatcher.update(cx, |dispatcher, cx| {
@@ -51,15 +50,14 @@ async fn save_creates_a_destination_before_binding_it_as_persisted(cx: &mut Test
     let document = documents.update(cx, |documents, cx| {
         documents.create_destination("created.txt", model.clone(), uri.clone(), cx)
     });
-    let (window, window_handle) = product_window(document, model, cx);
-    let target = cx
-        .update_window(window_handle, |_, _, cx| {
-            window.update(cx, |window, cx| {
-                window.focus_active_editor(cx);
-                window.capture_command_target(cx)
-            })
+    let window = headless_window(document, model, cx);
+    let window_handle = Headless;
+    let target = window_handle.run(cx, |cx| {
+        window.update(cx, |window, cx| {
+            window.focus_active_editor(cx);
+            window.capture_command_target(cx)
         })
-        .unwrap();
+    });
     let execution = cx.update(|cx| {
         let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
         dispatcher.update(cx, |dispatcher, cx| {
@@ -108,7 +106,8 @@ fn opening_and_saving_through_a_symlink_keeps_the_link_and_updates_its_target(
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
     let execution =
         dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
@@ -177,9 +176,10 @@ async fn edit_racing_save_keeps_the_newer_revision_dirty(cx: &mut TestAppContext
         model.replace(0..len, "captured text").unwrap();
     });
     let captured_revision = model.read_with(cx, |model, _| model.revision());
-    let (window, window_handle) = product_window(document, model.clone(), cx);
+    let window = headless_window(document, model.clone(), cx);
+    let window_handle = Headless;
     let (completion, receiver) = super::super::CommandCompletion::new();
-    cx.update_window(window_handle, |_, _, cx| {
+    window_handle.run(cx, |cx| {
         let target = window.update(cx, |window, cx| {
             window.focus_active_editor(cx);
             window.capture_command_target(cx)
@@ -191,8 +191,7 @@ async fn edit_racing_save_keeps_the_newer_revision_dirty(cx: &mut TestAppContext
             let len = model.text().len();
             model.replace(0..len, "newer text").unwrap();
         });
-    })
-    .unwrap();
+    });
 
     assert_eq!(receiver.await.unwrap(), CommandOutcome::Completed);
     assert_eq!(provider.read(uri).await.unwrap().bytes, b"captured text");
@@ -279,15 +278,14 @@ async fn save_as_overwrites_the_selected_file_and_retargets_only_after_success(
             documents.create_untitled("Untitled", model.clone(), cx)
         })
     });
-    let (window, window_handle) = product_window(document, model, cx);
-    let target = cx
-        .update_window(window_handle, |_, _, cx| {
-            window.update(cx, |window, cx| {
-                window.focus_active_editor(cx);
-                window.capture_command_target(cx)
-            })
+    let window = headless_window(document, model, cx);
+    let window_handle = Headless;
+    let target = window_handle.run(cx, |cx| {
+        window.update(cx, |window, cx| {
+            window.focus_active_editor(cx);
+            window.capture_command_target(cx)
         })
-        .unwrap();
+    });
     let execution = cx.update(|cx| {
         let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
         dispatcher.update(cx, |dispatcher, cx| {
@@ -325,15 +323,14 @@ async fn save_as_cancellation_preserves_untitled_identity(cx: &mut TestAppContex
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, window_handle) = product_window(document, model, cx);
-    let target = cx
-        .update_window(window_handle, |_, _, cx| {
-            window.update(cx, |window, cx| {
-                window.focus_active_editor(cx);
-                window.capture_command_target(cx)
-            })
+    let window = headless_window(document, model, cx);
+    let window_handle = Headless;
+    let target = window_handle.run(cx, |cx| {
+        window.update(cx, |window, cx| {
+            window.focus_active_editor(cx);
+            window.capture_command_target(cx)
         })
-        .unwrap();
+    });
     let execution = cx.update(|cx| {
         let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
         dispatcher.update(cx, |dispatcher, cx| {
@@ -374,15 +371,14 @@ async fn save_as_failure_preserves_text_and_document_identity(cx: &mut TestAppCo
             documents.create_untitled("Untitled", model.clone(), cx)
         })
     });
-    let (window, window_handle) = product_window(document, model.clone(), cx);
-    let target = cx
-        .update_window(window_handle, |_, _, cx| {
-            window.update(cx, |window, cx| {
-                window.focus_active_editor(cx);
-                window.capture_command_target(cx)
-            })
+    let window = headless_window(document, model.clone(), cx);
+    let window_handle = Headless;
+    let target = window_handle.run(cx, |cx| {
+        window.update(cx, |window, cx| {
+            window.focus_active_editor(cx);
+            window.capture_command_target(cx)
         })
-        .unwrap();
+    });
     let execution = cx.update(|cx| {
         let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
         dispatcher.update(cx, |dispatcher, cx| {
@@ -681,7 +677,7 @@ async fn file_and_missing_file_open_replace_the_launch_placeholder(cx: &mut Test
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (window, _) = product_window(placeholder, model, cx);
+    let window = headless_window(placeholder, model, cx);
 
     let target = cx.read(|cx| current_open_target(&window, cx));
     window.update(cx, |window, cx| {
@@ -734,7 +730,7 @@ async fn open_deduplicates_resources_and_rejects_stale_completions(cx: &mut Test
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
-    let (window, _) = product_window(placeholder, model, cx);
+    let window = headless_window(placeholder, model, cx);
     let target = cx.read(|cx| current_open_target(&window, cx));
 
     window.update(cx, |window, cx| {
@@ -878,7 +874,8 @@ fn open_from_terminal_requests_picker_and_preserves_terminal(cx: &mut TestAppCon
     ))));
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
     let terminal_tab = window.update(cx, |window, cx| {
         let (session, view) = window.create_terminal(cx);
         let pane = window.workbench.read(cx).focused_pane_id().unwrap();
@@ -886,10 +883,9 @@ fn open_from_terminal_requests_picker_and_preserves_terminal(cx: &mut TestAppCon
             workbench.open_terminal_tab(pane, session, view).unwrap()
         })
     });
-    cx.update_window(native_window, |_, _, cx| {
+    native_window.run(cx, |cx| {
         window.update(cx, |window, cx| window.focus_active_surface(cx));
-    })
-    .unwrap();
+    });
     let execution =
         dispatch_product_command(&window, native_window, super::super::OPEN_COMMAND, cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
