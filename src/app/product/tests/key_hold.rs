@@ -38,7 +38,7 @@ const KEY: ExtensionKey = ExtensionKey::new(ExtensionId::new(732), ExtensionLife
 struct Fixture {
     host: Entity<crate::app::extensions::host::ProductExtensionHost>,
     window: Entity<KnotWindow>,
-    native_window: gpui::AnyWindowHandle,
+    native_window: Option<gpui::AnyWindowHandle>,
     model: Entity<Buffer>,
     editor: Entity<EditorView>,
 }
@@ -46,6 +46,15 @@ struct Fixture {
 /// One editor showing `text` with the caret at its end, focused, with the
 /// fixture package loaded.
 fn fixture(text: &str, cx: &mut TestAppContext) -> Fixture {
+    fixture_in(text, false, cx)
+}
+
+/// The same, in a native window, for tests of platform text input.
+fn windowed_fixture(text: &str, cx: &mut TestAppContext) -> Fixture {
+    fixture_in(text, true, cx)
+}
+
+fn fixture_in(text: &str, windowed: bool, cx: &mut TestAppContext) -> Fixture {
     let documents = install_globals(cx);
     cx.update(super::super::bind_product_keys);
     let host = cx.update(super::super::super::extensions::host::install);
@@ -61,10 +70,15 @@ fn fixture(text: &str, cx: &mut TestAppContext) -> Fixture {
     let document = documents.update(cx, |documents, cx| {
         documents.create_untitled("Held", model.clone(), cx)
     });
-    let (window, native_window) = product_window(document, model.clone(), cx);
+    let (window, native_window) = if windowed {
+        let (window, native_window) = product_window(document, model.clone(), cx);
+        (window, Some(native_window))
+    } else {
+        (headless_window(document, model.clone(), cx), None)
+    };
     let editor = focused_editor(&window, cx);
     let end = text.len();
-    focus_editor(&editor, end, native_window, cx);
+    focus_editor(&editor, end, &window, cx);
     Fixture {
         host,
         native_window,
@@ -89,22 +103,40 @@ fn focused_editor(window: &Entity<KnotWindow>, cx: &mut TestAppContext) -> Entit
 fn focus_editor(
     editor: &Entity<EditorView>,
     caret: usize,
-    native_window: gpui::AnyWindowHandle,
+    window: &Entity<KnotWindow>,
     cx: &mut TestAppContext,
 ) {
-    cx.update_window(native_window, |_, native_window, cx| {
+    cx.update(|cx| {
         editor.update(cx, |editor, cx| {
             editor.editor().clone().update(cx, |editor, cx| {
                 editor.set_selection(caret, caret, Reveal::Nearest, cx)
             });
         });
-        focus_view(&editor.focus_handle(cx), native_window, cx);
-    })
-    .unwrap();
-    cx.refresh().unwrap();
+        let handle = editor.focus_handle(cx);
+        window.update(cx, |window, cx| window.focus_view(&handle, cx));
+    });
 }
 
 impl Fixture {
+    fn keys(&self, keys: &str, cx: &mut TestAppContext) {
+        match self.native_window {
+            Some(native_window) => cx.simulate_keystrokes(native_window, keys),
+            None => press(&self.window, keys, cx),
+        }
+    }
+
+    fn input(&self, text: &str, cx: &mut TestAppContext) {
+        match self.native_window {
+            Some(native_window) => cx.simulate_input(native_window, text),
+            // Typing delivers one character at a time.
+            None => {
+                for character in text.chars() {
+                    type_text(&self.window, &character.to_string(), cx);
+                }
+            }
+        }
+    }
+
     fn text(&self, cx: &mut TestAppContext) -> String {
         cx.read(|cx| self.model.read(cx).text())
     }
@@ -122,8 +154,8 @@ impl Fixture {
 fn keys_and_text_after_an_extension_command_apply_after_it_in_order(cx: &mut TestAppContext) {
     let fixture = fixture("xyz", cx);
     // The second f8 is itself held, and holds what follows it in turn.
-    cx.simulate_keystrokes(fixture.native_window, "f8 a f8 b");
-    cx.simulate_input(fixture.native_window, "c");
+    fixture.keys("f8 a f8 b", cx);
+    fixture.input("c", cx);
     fixture.settle(cx);
     assert_eq!(fixture.text(cx), "bcaxyz");
 }
@@ -131,7 +163,7 @@ fn keys_and_text_after_an_extension_command_apply_after_it_in_order(cx: &mut Tes
 #[gpui::test]
 fn a_held_key_resolves_in_the_context_the_command_set(cx: &mut TestAppContext) {
     let fixture = fixture("abc", cx);
-    cx.simulate_keystrokes(fixture.native_window, "f7 h");
+    fixture.keys("f7 h", cx);
     fixture.settle(cx);
     assert_eq!(fixture.text(cx), "abc");
     cx.read(|cx| {
@@ -145,7 +177,7 @@ fn a_held_key_resolves_in_the_context_the_command_set(cx: &mut TestAppContext) {
 #[gpui::test]
 fn native_commands_do_not_hold_keys(cx: &mut TestAppContext) {
     let fixture = fixture("abc", cx);
-    cx.simulate_keystrokes(fixture.native_window, "home");
+    fixture.keys("home", cx);
     assert!(!fixture.holds_keys(cx));
     cx.read(|cx| {
         assert_eq!(
@@ -161,7 +193,7 @@ fn the_timeout_releases_keys_while_the_command_still_runs(cx: &mut TestAppContex
     fixture
         .host
         .update(cx, |host, _| host.hold_clipboard_writes());
-    cx.simulate_keystrokes(fixture.native_window, "f8 a");
+    fixture.keys("f8 a", cx);
     wait_for_api_condition(cx, |cx| {
         fixture.host.read(cx).pending_view_request_count() == 1
     });
@@ -191,19 +223,19 @@ fn a_key_after_focus_leaves_the_view_releases_the_held_keys(cx: &mut TestAppCont
     assert_eq!(wait_for_command(split, cx), CommandOutcome::Completed);
     let other = focused_editor(&fixture.window, cx);
     assert_ne!(other, fixture.editor);
-    focus_editor(&fixture.editor, 3, fixture.native_window, cx);
+    focus_editor(&fixture.editor, 3, &fixture.window, cx);
     fixture
         .host
         .update(cx, |host, _| host.hold_clipboard_writes());
-    cx.simulate_keystrokes(fixture.native_window, "f8 a");
+    fixture.keys("f8 a", cx);
     wait_for_api_condition(cx, |cx| {
         fixture.host.read(cx).pending_view_request_count() == 1
     });
     assert_eq!(fixture.text(cx), "xyz");
 
     // The held key and the new one both go where focus now is.
-    focus_editor(&other, 0, fixture.native_window, cx);
-    cx.simulate_keystrokes(fixture.native_window, "b");
+    focus_editor(&other, 0, &fixture.window, cx);
+    fixture.keys("b", cx);
     cx.run_until_parked();
     assert!(!fixture.holds_keys(cx));
     assert_eq!(fixture.text(cx), "abxyz");
@@ -216,7 +248,7 @@ fn a_key_after_focus_leaves_the_view_releases_the_held_keys(cx: &mut TestAppCont
 #[gpui::test]
 fn keys_typed_ahead_of_an_input_reach_it(cx: &mut TestAppContext) {
     let fixture = fixture("xyz", cx);
-    cx.simulate_keystrokes(fixture.native_window, "f6 a b enter");
+    fixture.keys("f6 a b enter", cx);
     wait_for_api_condition(cx, |cx| cx.read_from_clipboard().is_some());
     assert_eq!(fixture.text(cx), "xyz");
     assert_eq!(
@@ -230,20 +262,20 @@ fn keys_typed_ahead_of_an_input_reach_it(cx: &mut TestAppContext) {
 #[gpui::test]
 fn held_keys_and_text_after_a_text_command_replay_in_order(cx: &mut TestAppContext) {
     let fixture = fixture("", cx);
-    cx.simulate_keystrokes(fixture.native_window, "f7");
+    fixture.keys("f7", cx);
     fixture.settle(cx);
-    cx.simulate_input(fixture.native_window, "ix");
-    cx.simulate_keystrokes(fixture.native_window, "enter");
-    cx.simulate_input(fixture.native_window, "y");
-    cx.simulate_keystrokes(fixture.native_window, "backspace");
-    cx.simulate_input(fixture.native_window, "z");
+    fixture.input("ix", cx);
+    fixture.keys("enter", cx);
+    fixture.input("y", cx);
+    fixture.keys("backspace", cx);
+    fixture.input("z", cx);
     fixture.settle(cx);
     assert_eq!(fixture.text(cx), "x\nz");
 }
 
 #[gpui::test]
 fn a_text_binding_receives_typed_and_composed_text_in_order(cx: &mut TestAppContext) {
-    let fixture = fixture("abc", cx);
+    let fixture = windowed_fixture("abc", cx);
     let typed = |cx: &mut TestAppContext| {
         let report =
             dispatch_product_command(&fixture.window, fixture.native_window, "hold.report", cx);
@@ -252,15 +284,15 @@ fn a_text_binding_receives_typed_and_composed_text_in_order(cx: &mut TestAppCont
             .unwrap_or_default()
     };
     // Without the context nothing claims the text.
-    cx.simulate_keystrokes(fixture.native_window, "x");
+    fixture.keys("x", cx);
     fixture.settle(cx);
     assert_eq!(fixture.text(cx), "abcx");
 
-    cx.simulate_keystrokes(fixture.native_window, "f7 a b");
-    cx.simulate_input(fixture.native_window, "c");
+    fixture.keys("f7 a b", cx);
+    fixture.input("c", cx);
     // A key bound in the context still wins over the text binding.
-    cx.simulate_keystrokes(fixture.native_window, "h");
-    cx.simulate_input(fixture.native_window, "e");
+    fixture.keys("h", cx);
+    fixture.input("e", cx);
     fixture.settle(cx);
     assert_eq!(fixture.text(cx), "abcx");
     cx.read(|cx| {
@@ -272,7 +304,7 @@ fn a_text_binding_receives_typed_and_composed_text_in_order(cx: &mut TestAppCont
     assert_eq!(typed(cx), "a,b,c,e");
 
     // The preedit is not shown; the commit arrives as text.
-    cx.update_window(fixture.native_window, |_, native_window, cx| {
+    cx.update_window(fixture.native_window.unwrap(), |_, native_window, cx| {
         fixture.editor.update(cx, |editor, cx| {
             editor.replace_and_mark_text_in_range(None, "k", None, native_window, cx);
             assert_eq!(editor.marked_text_range(native_window, cx), None);
@@ -288,7 +320,7 @@ fn a_text_binding_receives_typed_and_composed_text_in_order(cx: &mut TestAppCont
     fixture
         .host
         .update(cx, |host, cx| host.unload(KEY, cx).unwrap());
-    cx.simulate_keystrokes(fixture.native_window, "z");
+    fixture.keys("z", cx);
     fixture.settle(cx);
     assert_eq!(fixture.text(cx), "abczx");
 }

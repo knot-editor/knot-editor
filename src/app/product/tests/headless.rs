@@ -2,7 +2,6 @@
 //! through its router, unclaimed keys to the surface with Knot-side focus,
 //! and text to that surface's input.
 use super::*;
-use crate::app::keys::Keystroke;
 use crate::app::transient::{TransientOutcome, TransientOwner};
 use knot_protocol::{ExtensionId, ExtensionLifecycleId, PickerItem};
 
@@ -18,19 +17,6 @@ fn headless_window(
         cx.new(|cx| KnotWindow::new(workbench, cx))
     });
     (window, model)
-}
-
-fn press(window: &Entity<KnotWindow>, keys: &str, cx: &mut TestAppContext) {
-    for key in keys.split_whitespace() {
-        let keystroke = Keystroke::parse(key).unwrap();
-        window.update(cx, |window, cx| window.press_key(keystroke, cx));
-        cx.run_until_parked();
-    }
-}
-
-fn type_text(window: &Entity<KnotWindow>, text: &str, cx: &mut TestAppContext) {
-    window.update(cx, |window, cx| window.type_text(text, cx));
-    cx.run_until_parked();
 }
 
 fn owner() -> TransientOwner {

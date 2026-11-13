@@ -327,6 +327,15 @@ impl WindowHandle for gpui::AnyWindowHandle {
     }
 }
 
+impl WindowHandle for Option<gpui::AnyWindowHandle> {
+    fn run<R>(self, cx: &mut TestAppContext, f: impl FnOnce(&mut gpui::App) -> R) -> R {
+        match self {
+            Some(handle) => handle.run(cx, f),
+            None => cx.update(f),
+        }
+    }
+}
+
 /// The handle of a window with no native window.
 #[derive(Clone, Copy)]
 struct Headless;
@@ -372,6 +381,21 @@ fn dispatch_product_command_with(
             )
         })
     })
+}
+
+/// Press each of the space-separated `keys` in a window with no native
+/// window.
+fn press(window: &Entity<KnotWindow>, keys: &str, cx: &mut TestAppContext) {
+    for key in keys.split_whitespace() {
+        let keystroke = crate::app::keys::Keystroke::parse(key).unwrap();
+        window.update(cx, |window, cx| window.press_key(keystroke, cx));
+        cx.run_until_parked();
+    }
+}
+
+fn type_text(window: &Entity<KnotWindow>, text: &str, cx: &mut TestAppContext) {
+    window.update(cx, |window, cx| window.type_text(text, cx));
+    cx.run_until_parked();
 }
 
 fn install_extension(root: &Path, name: &str, requires: &[&str], files: &[(&str, &str)]) {
