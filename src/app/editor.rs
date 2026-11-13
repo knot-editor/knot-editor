@@ -159,6 +159,21 @@ impl Editor {
         }
     }
 
+    /// Replace the state with a fresh one over the same buffer, as a new
+    /// editor would start: no selection, scroll, folds, completion, or
+    /// lifecycle presentation survives. For reusing an editor in tests.
+    #[cfg(test)]
+    pub(crate) fn reset_state(&mut self, cx: &mut Context<Self>) {
+        let model = self.model.clone();
+        model.update(cx, |buffer, _| self.state.release(buffer));
+        let kind: Arc<str> = Arc::from(self.state.view_kind());
+        let settings = editor_settings(&kind, model.read(cx), cx);
+        self.state = model.update(cx, |buffer, _| EditorState::new(kind, settings, buffer));
+        self.completion_tasks.clear();
+        self.bar_inputs.clear();
+        cx.notify();
+    }
+
     pub(crate) fn model(&self) -> &Entity<Buffer> {
         &self.model
     }

@@ -119,8 +119,9 @@ Each step is committed separately once verified.
    and an app wrapper that republishes recovery and observation), with model
    and gpui tests: undo empty after reset, no anchored ranges survive, clean
    after re-baseline.
-3. Editor-state swap in the `Editor` entity, with a driver test asserting
-   scroll, folds, and selection from a first `load` are gone after a second.
+3. ✅ Editor-state swap (`Editor::reset_state`), with an editor test
+   asserting scroll, folds, and selection are gone after a reset; the
+   driver-level check lands with the rewire in step 5.
 4. Extend `vim.reset` to per-editor state, keeping existing shared clearing.
 5. Rewire `TestEditor::load`. Run topics individually with `scrolling` first
    (canary for the original panic), then the full suite. A leaked sixth owner

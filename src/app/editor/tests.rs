@@ -1194,3 +1194,33 @@ fn double_click_and_word_movement_stop_at_separators(cx: &mut TestAppContext) {
         })
     });
 }
+
+#[gpui::test]
+fn reset_state_starts_over_on_the_same_buffer(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let text = (0..20)
+        .map(|line| format!("line {line}\n"))
+        .collect::<String>()
+        .trim_end()
+        .to_owned();
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
+    let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
+    editor.update(cx, |editor, cx| {
+        editor.lay_out_for_test(5., 100, cx);
+        assert!(editor.fold(2..5, cx));
+        editor.set_selection(10, 15, Reveal::Nearest, cx);
+        editor.scroll_by_rows(5, cx);
+        assert_eq!(editor.folds().len(), 1);
+        assert_ne!(editor.viewport().0, 0);
+    });
+
+    editor.update(cx, |editor, cx| editor.reset_state(cx));
+    cx.read(|cx| {
+        let editor = editor.read(cx);
+        assert!(editor.folds().is_empty(), "folds do not survive a reset");
+        assert_eq!(editor.selection(cx), (0, 0), "selection starts over");
+        assert_eq!(editor.viewport().0, 0, "scroll starts over");
+        assert!(editor.key_contexts().is_empty());
+        assert_eq!(editor.model(), &model, "the buffer entity is kept");
+    });
+}
