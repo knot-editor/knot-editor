@@ -135,25 +135,13 @@ when no primary answers and `current_exe` is inside a `.app`; the env var keeps 
 app it starts from calling `open` again. `knot::run` takes a platform factory, so no
 gpui application exists before the forward or cold-start decision.
 
-### 4. Placement
-Deliverable: the placement function in `knot-model` and its wiring into batch
-dispatch for both the CLI and `on_open_urls`, including batches drained after session
-restore. Windows track focus order if they don't already.
-Validation: plain tests for each rule (folder reuse versus new window, file into a
-matching root, file into a window the same batch created, several matches → most
-recently focused, leftovers grouped into one window, focus choice). Product tests
-through the driver (`TestWindow::roots`, `TestApplication::windows`) for a forwarded
-batch, a restored window receiving a file, and `knot .` opening a workspace.
-Review gate: with a project window open, `knot <file in project> ~/elsewhere.md`,
-`knot <project dir>`, `knot . src/x.rs` from a new directory. Then quit with the
-project open, relaunch with `knot <file in project>`, and confirm it lands in the
-restored window.
-Implementation context: a new `crates/knot-model/src/launch.rs` (or beside
-`entry.rs`); workspace roots from `crates/knot-model/src/workspace.rs`; window registry
-`ApplicationWindows` and `windows(cx)` in `src/app/product.rs` (opening order only today;
-activation is observed at `src/app/product.rs:863`); open path
-`start_open_operation` / `open_workspace` in `src/app/product/open.rs`;
-`open_product_window` in `src/app/product/launch.rs`.
+### 4. Placement ✅
+Done: `knot_model::launch::place` decides, as data, where a batch's folders and files
+open; `src/app/product/launch.rs` resolves each path's kind, runs the placement for the
+CLI, `on_open_urls`, and batches queued during startup (after session restore), and
+opens each window's resources one after another. `ApplicationWindows` tracks activation
+order. A window whose folder is still loading has no roots yet, so a batch arriving in
+that instant can open the folder again.
 
 ### 5. Install command on macOS
 Deliverable: install and uninstall palette commands as designed. On other
