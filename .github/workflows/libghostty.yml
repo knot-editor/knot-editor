@@ -1,0 +1,164 @@
+name: libghostty
+
+# Builds the libghostty-vt static libraries that crates/knot-terminal links,
+# so no other build needs Zig. Each run publishes the release
+# libghostty-vt-<version>; build.rs pins its archive names and checksums.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: libghostty-vt version, such as 1.0.1
+        required: true
+        type: string
+      zig:
+        description: Zig version matching minimum_zig_version in its build.zig.zon
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: libghostty-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  VERSION: ${{ inputs.version }}
+  MINISIGN_KEY: RWQlAjJC23149WL2sEpT/l0QKy7hMIFhYdQOFy0Z7z7PbneUgvlsnYcV
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download and verify the source
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y minisign
+          base="https://release.files.ghostty.org/libghostty-vt/$VERSION"
+          mkdir source
+          cd source
+          for file in "libghostty-vt-$VERSION.tar.gz" "libghostty-vt-$VERSION-deps.tar.gz"; do
+            curl -fsSLO "$base/$file"
+            curl -fsSLO "$base/$file.minisig"
+            minisign -V -P "$MINISIGN_KEY" -m "$file"
+            rm "$file.minisig"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: source
+          path: source
+          retention-days: 1
+
+  build:
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The Darwin archive step uses Apple's libtool and xcrun, and the
+          # MSVC target needs the Windows SDK, so those build on their hosts.
+          - rust: aarch64-apple-darwin
+            zig: aarch64-macos.13.0
+            os: macos-latest
+          - rust: x86_64-apple-darwin
+            zig: x86_64-macos.13.0
+            os: macos-latest
+          - rust: x86_64-unknown-linux-gnu
+            zig: x86_64-linux-gnu
+            os: ubuntu-24.04
+          - rust: aarch64-unknown-linux-gnu
+            zig: aarch64-linux-gnu
+            os: ubuntu-24.04
+          - rust: x86_64-pc-windows-msvc
+            zig: x86_64-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      NAME: libghostty-vt-${{ inputs.version }}-${{ matrix.rust }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: source
+          path: source
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: ${{ inputs.zig }}
+          use-cache: false
+      - name: Build
+        env:
+          ZIG_TARGET: ${{ matrix.zig }}
+        run: |
+          set -euo pipefail
+          cd source
+          tar -xzf "libghostty-vt-$VERSION.tar.gz"
+          tar -xzf "libghostty-vt-$VERSION-deps.tar.gz"
+          cd "libghostty-vt-$VERSION"
+          ZIG_GLOBAL_CACHE_DIR="$RUNNER_TEMP/zig-cache" zig build \
+            --prefix "$RUNNER_TEMP/install" \
+            --system "../libghostty-vt-$VERSION-deps" \
+            -Doptimize=ReleaseFast \
+            -Dcpu=baseline \
+            -Dtarget="$ZIG_TARGET" \
+            -Dvt-features=-kitty-graphics
+      - name: Package
+        run: |
+          set -euo pipefail
+          install="$RUNNER_TEMP/install"
+          out="$RUNNER_TEMP/$NAME"
+          mkdir -p "$out/lib" dist
+          cp -R "$install/include" "$out/include"
+          cp "source/libghostty-vt-$VERSION/LICENSE" "$out/LICENSE"
+          if [ -f "$install/lib/libghostty-vt.a" ]; then
+            cp "$install/lib/libghostty-vt.a" "$out/lib/"
+          else
+            # Windows keeps the DLL and its import library beside the static
+            # library until knot-terminal settles how it links.
+            cp "$install"/lib/ghostty-vt-static.lib "$install"/lib/ghostty-vt.lib "$out/lib/"
+            mkdir "$out/bin"
+            cp "$install"/bin/ghostty-vt.dll "$out/bin/"
+          fi
+          test -f "$out/include/ghostty/vt.h"
+          tar -czf "dist/$NAME.tar.gz" -C "$RUNNER_TEMP" "$NAME"
+          (cd dist && shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
+          tar -tzf "dist/$NAME.tar.gz"
+          cat "dist/$NAME.tar.gz.sha256"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.NAME }}
+          path: dist
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: libghostty-vt-*
+          path: dist
+          merge-multiple: true
+      - name: Publish
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          ZIG: ${{ inputs.zig }}
+        run: |
+          set -euo pipefail
+          tag="libghostty-vt-$VERSION"
+          cat dist/*.sha256
+          gh release create "$tag" dist/* \
+            --repo "$REPO" --target "$SHA" --latest=false \
+            --title "libghostty-vt $VERSION" \
+            --notes "Static libghostty-vt $VERSION for knot-terminal, built with Zig $ZIG (ReleaseFast, baseline CPU, without Kitty graphics) from the signed release tarballs."

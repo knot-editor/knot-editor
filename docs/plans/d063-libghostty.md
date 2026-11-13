@@ -121,11 +121,18 @@ yet, and the gap keeps each step reviewable.
 ### 1a. Prebuilt library workflow and release
 
 Deliverables:
-- `.github/workflows/libghostty.yml`, dispatched manually with the
-  libghostty-vt version: Zig setup, tarball download and minisign check,
-  cross-compiled builds for the five targets, and one archive per target
-  (static library, headers, license) with its sha256.
-- A published `libghostty-vt-1.0.1` release in this repository.
+- ✅ `.github/workflows/libghostty.yml`, dispatched manually with the
+  libghostty-vt and Zig versions: tarball download and minisign check,
+  builds for the five targets, and one archive per target (static library,
+  headers, license) with its sha256. Darwin targets build on macOS, because
+  libghostty's archive step runs Apple's `libtool`, `xcrun`, and `nmedit`;
+  MSVC builds on Windows for the Windows SDK; Linux cross-compiles both
+  architectures. Darwin targets macOS 13, libghostty's minimum. The Windows
+  archive also carries `ghostty-vt.dll` and its import library until 1b
+  settles linking. Both macOS builds were tried locally with Zig 0.17.1;
+  the static archive needs no extra link libraries.
+- A published `libghostty-vt-1.0.1` release in this repository, built with
+  Zig 0.17.1 (1.0.1 requires 0.17.x).
 
 Validation: the workflow run; the archives contain the library and
 `ghostty/vt.h` for each target; actionlint in CI passes.
