@@ -115,7 +115,7 @@ valid across upgrades as long as the app stays where it is.
 
 ## Checkpoints
 
-### 1. Parsing and launch batches
+### 1. Parsing and launch batches ✅ (implemented; awaiting review gate)
 Deliverable: `parse_launch_arguments` accepts many paths and `--help`, rejects
 unknown flags with exit 2, and returns a batch. `product::run`, the launch gate, and
 `on_open_urls` carry batches. Until checkpoint 4, each batch item still opens its own
@@ -123,6 +123,7 @@ window, so behavior is unchanged except that many paths are accepted.
 Validation: unit tests in `crates/knot-model/src/entry.rs` beside the existing cases.
 Update the `src/app/product/tests/observation.rs` caller and the startup product
 tests that dispatch launch requests.
+Done: `LaunchBatch`/`LaunchCommand` in `entry.rs`; `parse_launch_arguments` also accepts `--`; the gate and `on_open_urls` carry batches. `--help`, `--bogus`, `--version` verified from the built binary (exit 0, 2, 0).
 Review gate: `cargo run -- a b`, `cargo run -- --help`, `cargo run -- --bogus`; check
 the output, the windows, and exit codes.
 Implementation context: `crates/knot-model/src/entry.rs` (`OpenRequest::from_path`,

@@ -59,70 +59,131 @@ impl OpenRequest {
     }
 }
 
-/// Whether the arguments ask for the build version instead of starting the product.
-pub fn is_version_request(arguments: impl IntoIterator<Item = String>) -> bool {
-    arguments.into_iter().nth(1).as_deref() == Some("--version")
+/// The resources one launch asks for: one command-line invocation or one
+/// platform open event.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LaunchBatch {
+    requests: Vec<OpenRequest>,
 }
 
-/// Parse the process arguments into the optional resource the product opens.
+impl LaunchBatch {
+    pub fn new(requests: Vec<OpenRequest>) -> Self {
+        Self { requests }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.requests.is_empty()
+    }
+
+    pub fn requests(&self) -> &[OpenRequest] {
+        &self.requests
+    }
+
+    pub fn into_requests(self) -> Vec<OpenRequest> {
+        self.requests
+    }
+}
+
+impl From<OpenRequest> for LaunchBatch {
+    fn from(request: OpenRequest) -> Self {
+        Self::new(vec![request])
+    }
+}
+
+/// What the process arguments ask the executable to do.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LaunchCommand {
+    Version,
+    Help,
+    /// Start or reach the product; the batch is empty without paths.
+    Open(LaunchBatch),
+}
+
+pub const USAGE: &str = "usage: knot [--version] [--help] [path ...]";
+
+/// Parse the process arguments. Every path resolves against `current_dir`;
+/// `--` ends the options.
 pub fn parse_launch_arguments(
     arguments: impl IntoIterator<Item = String>,
     current_dir: &Path,
-) -> Result<Option<OpenRequest>, String> {
-    let mut arguments = arguments.into_iter();
-    let _executable = arguments.next();
-    let Some(first) = arguments.next() else {
-        return Ok(None);
-    };
-    if arguments.next().is_some() {
-        return Err("usage: knot [path]".into());
+) -> Result<LaunchCommand, String> {
+    let mut requests = Vec::new();
+    let mut options_ended = false;
+    for argument in arguments.into_iter().skip(1) {
+        if !options_ended && argument.starts_with('-') && argument != "-" {
+            match argument.as_str() {
+                "--version" => return Ok(LaunchCommand::Version),
+                "--help" => return Ok(LaunchCommand::Help),
+                "--" => options_ended = true,
+                _ => return Err(format!("unknown option {argument}\n{USAGE}")),
+            }
+            continue;
+        }
+        requests.push(OpenRequest::from_path(
+            &PathBuf::from(argument),
+            current_dir,
+        )?);
     }
-    OpenRequest::from_path(&PathBuf::from(first), current_dir).map(Some)
+    Ok(LaunchCommand::Open(LaunchBatch::new(requests)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn version_flag_is_recognized_only_as_the_first_argument() {
-        assert!(is_version_request(["knot".into(), "--version".into()]));
-        assert!(!is_version_request(["knot".into()]));
-        assert!(!is_version_request(["knot".into(), "notes.md".into()]));
+    fn open(arguments: &[&str], directory: &Path) -> Result<LaunchCommand, String> {
+        parse_launch_arguments(arguments.iter().map(|a| a.to_string()), directory)
     }
 
     #[test]
-    fn launch_defaults_to_the_product_without_a_target() {
+    fn version_and_help_are_commands_in_option_position() {
+        let tmp = Path::new("/tmp");
         assert_eq!(
-            parse_launch_arguments(["knot".into()], Path::new("/tmp")).unwrap(),
-            None
+            open(&["knot", "--version"], tmp),
+            Ok(LaunchCommand::Version)
+        );
+        assert_eq!(open(&["knot", "a", "--help"], tmp), Ok(LaunchCommand::Help));
+    }
+
+    #[test]
+    fn launch_defaults_to_an_empty_batch_without_paths() {
+        assert_eq!(
+            open(&["knot"], Path::new("/tmp")),
+            Ok(LaunchCommand::Open(LaunchBatch::default()))
         );
     }
 
     #[test]
-    fn launch_accepts_exactly_one_path_and_normalizes_it_at_the_boundary() {
+    fn unknown_options_are_usage_errors_but_paths_after_double_dash_are_not() {
         let directory = tempfile::tempdir().unwrap();
-        let request = parse_launch_arguments(
-            ["knot".into(), "project/../notes ü.md".into()],
-            directory.path(),
-        )
-        .unwrap()
-        .expect("expected a product open request");
+        let error = open(&["knot", "--bogus"], directory.path()).unwrap_err();
+        assert!(error.contains("--bogus") && error.contains(USAGE));
+        let Ok(LaunchCommand::Open(batch)) = open(&["knot", "--", "--odd"], directory.path())
+        else {
+            panic!("expected a batch");
+        };
+        assert_eq!(batch.requests()[0].title(), "--odd");
+    }
 
+    #[test]
+    fn launch_accepts_many_paths_and_normalizes_them_at_the_boundary() {
+        let directory = tempfile::tempdir().unwrap();
+        let Ok(LaunchCommand::Open(batch)) = open(
+            &["knot", "project/../notes ü.md", "other.txt"],
+            directory.path(),
+        ) else {
+            panic!("expected a batch");
+        };
+
+        assert_eq!(batch.requests().len(), 2);
         assert_eq!(
-            request.uri().to_string(),
+            batch.requests()[0].uri().to_string(),
             Url::from_file_path(directory.path().join("notes ü.md"))
                 .unwrap()
                 .to_string()
         );
-        assert_eq!(request.title(), "notes ü.md");
-        assert!(
-            parse_launch_arguments(
-                ["knot".into(), "one".into(), "two".into()],
-                directory.path()
-            )
-            .is_err()
-        );
+        assert_eq!(batch.requests()[0].title(), "notes ü.md");
+        assert_eq!(batch.requests()[1].title(), "other.txt");
     }
 
     #[test]

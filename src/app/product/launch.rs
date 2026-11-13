@@ -251,15 +251,25 @@ fn restored_bounds(
     (bounds, display.map(|index| displays[index].id()))
 }
 
-pub(super) fn dispatch_launch_request(request: Option<OpenRequest>, cx: &mut App) {
-    let ready_request = cx
+/// Dispatch one launch batch, or a reopen request when `None`.
+pub(super) fn dispatch_launch_request(batch: Option<LaunchBatch>, cx: &mut App) {
+    let ready = cx
         .global::<ApplicationLaunchGate>()
         .0
         .borrow_mut()
-        .request(request);
-    if let Some(request) = ready_request {
-        open_product_window(request, cx);
-        cx.activate(true);
+        .request(batch);
+    match ready {
+        None => {}
+        Some(None) => {
+            open_product_window(None, cx);
+            cx.activate(true);
+        }
+        Some(Some(batch)) => {
+            for request in batch.into_requests() {
+                open_product_window(Some(request), cx);
+            }
+            cx.activate(true);
+        }
     }
 }
 
@@ -334,6 +344,7 @@ fn open_launch_windows(
         .complete()
         .into_iter()
         .flatten()
+        .flat_map(LaunchBatch::into_requests)
         .collect::<Vec<_>>();
     let restored = restored
         .map(|result| result.windows)
@@ -420,18 +431,23 @@ fn open_report_after_failed_startup(cx: &mut App) {
 
 pub(crate) fn run(
     application: Application,
-    initial_request: Option<OpenRequest>,
+    initial_batch: LaunchBatch,
     packages: &'static [knot_bundled::BundledSource],
 ) {
     let (open_requests, mut incoming_requests) = tokio::sync::mpsc::unbounded_channel();
     application.on_open_urls(move |urls| {
-        for url in urls {
-            match OpenRequest::from_url(&url) {
-                Ok(request) => {
-                    let _ = open_requests.send(request);
+        let requests = urls
+            .iter()
+            .filter_map(|url| match OpenRequest::from_url(url) {
+                Ok(request) => Some(request),
+                Err(error) => {
+                    eprintln!("[knot] cannot open {url}: {error}");
+                    None
                 }
-                Err(error) => eprintln!("[knot] cannot open {url}: {error}"),
-            }
+            })
+            .collect::<Vec<_>>();
+        if !requests.is_empty() {
+            let _ = open_requests.send(LaunchBatch::new(requests));
         }
     });
     application.on_reopen(|cx| {
@@ -491,13 +507,15 @@ pub(crate) fn run(
         if cfg!(not(target_os = "macos")) {
             quit_with_last_window(cx);
         }
-        let first_request = initial_request.or_else(|| incoming_requests.try_recv().ok());
-        if let Some(request) = first_request {
-            dispatch_launch_request(Some(request), cx);
+        let first_batch = Some(initial_batch)
+            .filter(|batch| !batch.is_empty())
+            .or_else(|| incoming_requests.try_recv().ok());
+        if let Some(batch) = first_batch {
+            dispatch_launch_request(Some(batch), cx);
         }
         cx.spawn(async move |cx| {
-            while let Some(request) = incoming_requests.recv().await {
-                cx.update(|cx| dispatch_launch_request(Some(request), cx));
+            while let Some(batch) = incoming_requests.recv().await {
+                cx.update(|cx| dispatch_launch_request(Some(batch), cx));
             }
         })
         .detach();

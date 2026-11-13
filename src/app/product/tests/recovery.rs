@@ -818,8 +818,8 @@ async fn launch_requests_open_alongside_recovery_when_an_extension_fails(cx: &mu
     seed(&[&edited, &older], cx).await;
 
     let host = cx.update(super::super::super::extensions::host::install);
-    cx.update(|cx| super::super::dispatch_launch_request(Some(request), cx));
-    cx.update(|cx| super::super::dispatch_launch_request(Some(other), cx));
+    cx.update(|cx| super::super::dispatch_launch_request(Some(request.into()), cx));
+    cx.update(|cx| super::super::dispatch_launch_request(Some(other.into()), cx));
     host.update(cx, |host, cx| {
         host.start_product_startup(
             Ok(config.path().to_path_buf()),

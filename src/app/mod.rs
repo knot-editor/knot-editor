@@ -138,11 +138,7 @@ struct CommandExecution {
 /// Runs the product on `application`, created by the binary for its platform,
 /// with the compiled-in `packages` beside installed ones.
 pub fn run(application: Application, packages: &'static [knot_bundled::BundledSource]) {
-    if entry::is_version_request(std::env::args()) {
-        println!("{}", build_info::summary());
-        return;
-    }
-    let request = entry::parse_launch_arguments(
+    let command = entry::parse_launch_arguments(
         std::env::args(),
         &std::env::current_dir().expect("Knot requires a current working directory"),
     )
@@ -150,5 +146,16 @@ pub fn run(application: Application, packages: &'static [knot_bundled::BundledSo
         eprintln!("[knot] {error}");
         std::process::exit(2);
     });
-    product::run(application, request, packages);
+    let batch = match command {
+        entry::LaunchCommand::Version => {
+            println!("{}", build_info::summary());
+            return;
+        }
+        entry::LaunchCommand::Help => {
+            println!("{}", entry::USAGE);
+            return;
+        }
+        entry::LaunchCommand::Open(batch) => batch,
+    };
+    product::run(application, batch, packages);
 }

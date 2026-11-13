@@ -72,7 +72,7 @@ use super::{
     },
     commands::keymaps::ApplicationKeymaps,
     documents::{ApplicationDocuments, DocumentCollection, DocumentId, DocumentState},
-    entry::OpenRequest,
+    entry::{LaunchBatch, OpenRequest},
     extensions::host::handlers::TransientError,
     filesystem::{
         FileSystemProviderRegistry, LocalFileSystemProvider, ResourceError, ResourceKind,
@@ -134,13 +134,13 @@ struct ApplicationLaunchGate(RefCell<LaunchGate>);
 impl Global for ApplicationLaunchGate {}
 
 enum LaunchGate {
-    Pending(Vec<Option<OpenRequest>>),
+    Pending(Vec<Option<LaunchBatch>>),
     Ready,
     Failed,
 }
 
 impl LaunchGate {
-    fn request(&mut self, request: Option<OpenRequest>) -> Option<Option<OpenRequest>> {
+    fn request(&mut self, request: Option<LaunchBatch>) -> Option<Option<LaunchBatch>> {
         match self {
             Self::Pending(requests) => {
                 requests.push(request);
@@ -151,9 +151,9 @@ impl LaunchGate {
         }
     }
 
-    /// The queued requests; `None` entries are reopen requests without a
+    /// The queued batches; `None` entries are reopen requests without a
     /// resource.
-    fn complete(&mut self) -> Vec<Option<OpenRequest>> {
+    fn complete(&mut self) -> Vec<Option<LaunchBatch>> {
         match std::mem::replace(self, Self::Ready) {
             Self::Pending(requests) => requests,
             Self::Ready => Vec::new(),

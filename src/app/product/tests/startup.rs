@@ -8,6 +8,8 @@ fn launch_gate_keeps_requests_ordered_and_discards_them_on_failure() {
     let second =
         OpenRequest::from_uri_for_product(ResourceUri::parse("file:///queued-second.txt").unwrap());
     let mut gate = LaunchGate::Pending(Vec::new());
+    let first = LaunchBatch::from(first);
+    let second = LaunchBatch::new(vec![second.clone(), second]);
     assert!(gate.request(Some(first.clone())).is_none());
     assert!(gate.request(Some(second.clone())).is_none());
     assert_eq!(gate.complete(), vec![Some(first), Some(second.clone())]);
@@ -123,7 +125,7 @@ fn queued_file_open_runs_only_after_configured_startup(cx: &mut TestAppContext) 
     cx.update(super::super::launch::bind_product_keys);
     install_launch_gate(cx);
     let host = cx.update(super::super::super::extensions::host::install);
-    cx.update(|cx| super::super::dispatch_launch_request(Some(request), cx));
+    cx.update(|cx| super::super::dispatch_launch_request(Some(request.into()), cx));
     assert!(cx.windows().is_empty());
     host.update(cx, |host, cx| {
         host.start_product_startup(
@@ -169,7 +171,7 @@ fn pre_init_failure_skips_extensions_and_opens_only_the_error_window(cx: &mut Te
     let queued = OpenRequest::from_uri_for_product(
         ResourceUri::parse("file:///never-open-on-failure.txt").unwrap(),
     );
-    cx.update(|cx| super::super::dispatch_launch_request(Some(queued.clone()), cx));
+    cx.update(|cx| super::super::dispatch_launch_request(Some(queued.clone().into()), cx));
     assert!(cx.windows().is_empty());
     host.update(cx, |host, cx| {
         host.start_product_startup(
@@ -195,7 +197,7 @@ fn pre_init_failure_skips_extensions_and_opens_only_the_error_window(cx: &mut Te
             .collect::<Vec<_>>()
     });
     assert!(!names.contains(&"config.before-failure".to_owned()));
-    cx.update(|cx| super::super::dispatch_launch_request(Some(queued), cx));
+    cx.update(|cx| super::super::dispatch_launch_request(Some(queued.into()), cx));
     assert_eq!(cx.windows().len(), 1);
 }
 

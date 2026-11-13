@@ -78,7 +78,7 @@ impl Launch {
             super::super::finish_product_startup(Ok(()), cx);
             // Requests arriving while restoration stages wait for it.
             for request in requests {
-                super::super::dispatch_launch_request(Some(request), cx);
+                super::super::dispatch_launch_request(Some(request.into()), cx);
             }
         });
         assert!(wait_for_product_startup(cx));
