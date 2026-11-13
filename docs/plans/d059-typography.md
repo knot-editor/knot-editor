@@ -83,55 +83,16 @@ terminal scope, every cell is shaped alone as today.
 
 ## Checkpoints
 
-### 1. Font settings drive every text surface — 🚧 implemented ✅, review gate pending
+### 1. Font settings drive every text surface — ✅
 
-Deliverables:
-
-- ✅ `font.family`, `font.fallbacks`, `font.weight`, `font.ligatures`, and
-  `font.features` defined and resolved into `FontSettings`.
-- ✅ Editors, gutters, terminals (cells and measurement), and text inputs draw
-  with the resolved font. Terminal cell width follows the configured family.
-  Ligatures appear in editors with a ligature font.
-- ✅ An uninstalled family neither panics nor breaks terminal measurement.
-- ✅ `docs/settings.md` rows; architecture updates for editor and terminal
-  typography.
-
-Validation:
-
-- Model tests: defaults, scope resolution (terminal value beats global,
-  language value applies to editors), weight clamping, feature parsing
-  (`tag`, `-tag`, `tag=N`, malformed), ligature toggle merged before features.
-- App tests: an editor and a terminal pick up a scoped family/feature change
-  and repaint; terminal remeasures when the family changes; an unknown family
-  measures without panicking.
-- `just check`.
-
-Review gate: run `Try:` commands that switch family (e.g. a ligature font if
-installed, such as JetBrains Mono or Fira Code), toggle ligatures, set a
-stylistic set, and give terminals a different family.
-
-Implementation context:
-
-- Definitions: `crates/knot-model/src/settings.rs` (key constants next to
-  `FONT_SIZE`, definitions near line 243; `Strings` type exists). Put
-  `FontSettings` and its parser in a new `crates/knot-model/src/typography.rs`
-  or alongside the settings readers, whichever stays smaller.
-- Typed reads: mirror `font_size` in `src/app/settings.rs`; `resolve` and the
-  `Strings` read (around line 247) already exist.
-- `src/app/typography.rs`: replace `text_font(bold, italic)` with a function
-  taking `&FontSettings`; gpui `Font` has `family`, `features`
-  (`FontFeatures(Arc<Vec<(String, u32)>>)`), `fallbacks`, `weight`.
-- Call sites: `src/app/editor/layout.rs` (`update_wrap` cell width, highlight
-  runs around line 466), `src/app/editor/paint.rs` (lines ~543, ~699),
-  `src/app/editor/gutter.rs` (~120), `src/app/text_input.rs` (~261, ~526),
-  `src/app/terminal/layout.rs` (`TerminalLayout::measure`),
-  `src/app/terminal/view.rs` (cell paint ~1054; `font_size` helper at line 33
-  shows the terminal scope; measurement at ~889 must also re-run when the
-  font changes, not only the size).
-- Docs: `docs/settings.md` Appearance table,
-  `docs/architecture/editor-and-languages.md` (text size paragraph),
-  `docs/architecture/workbench-and-lifecycle.md` (terminal geometry
-  paragraph).
+Completed. The `font.*` family, fallbacks, weight, ligature, and feature
+settings resolve into `FontSettings` per scope and drive editors, gutters,
+terminals, and text inputs. Defaults follow each platform's code font. See
+[settings](../settings.md), [editor views](../architecture/editor-and-languages.md#editor-views),
+and the terminal geometry paragraph of
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md). The test
+platform's mock text system has fixed advances, so measured widths per family
+were validated by hand.
 
 ### 2. Configurable line height — ⬜
 
