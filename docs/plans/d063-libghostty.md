@@ -131,8 +131,9 @@ Deliverables:
   archive also carries `ghostty-vt.dll` and its import library until 1b
   settles linking. Both macOS builds were tried locally with Zig 0.17.1;
   the static archive needs no extra link libraries.
-- A published `libghostty-vt-1.0.1` release in this repository, built with
-  Zig 0.17.1 (1.0.1 requires 0.17.x).
+- ✅ The [`libghostty-vt-1.0.1`](https://github.com/knot-editor/knot-editor/releases/tag/libghostty-vt-1.0.1)
+  release, built with Zig 0.17.1 (1.0.1 requires 0.17.x); checksums verified
+  and every archive holds the library and `ghostty/vt.h`.
 
 Validation: the workflow run; the archives contain the library and
 `ghostty/vt.h` for each target; actionlint in CI passes.
