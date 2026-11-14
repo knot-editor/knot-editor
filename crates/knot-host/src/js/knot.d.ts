@@ -336,9 +336,32 @@ declare module "knot" {
   export interface Settings {
     /** Text size in pixels of editors and text frames, and of terminals
      * when read in the { view: "terminal" } scope, so a terminal-scoped
-     * value sizes terminals separately. Line height follows it. Native
-     * default 14; views use at least 6 and at most 72. */
+     * value sizes terminals separately. Native default 14; views use at
+     * least 6 and at most 72. */
     "font.size": number;
+    /** Primary font family of editors, text frames, text inputs, and
+     * terminals; scope it to { view: "terminal" } or a language to vary it.
+     * Text inputs read the unscoped value. Native default is the platform's
+     * code font, "Menlo" on macOS. */
+    "font.family": string;
+    /** Families tried for glyphs the primary family lacks. Native default
+     * other common code fonts, then the platform's Arabic, CJK, and emoji
+     * fonts. */
+    "font.fallbacks": readonly string[];
+    /** Base font weight; bold text stays at 700. Native default 400; views
+     * use at least 100 and at most 900. */
+    "font.weight": number;
+    /** Row height of editors, text frames, and terminals as a multiple of
+     * the font's ascent plus descent, rounded up to whole physical pixels.
+     * Native default 1.2; views use at least 0.8 and at most 3. */
+    "font.lineHeight": number;
+    /** Whether ligatures form; false turns off the calt and liga OpenType
+     * features. Native default true. */
+    "font.ligatures": boolean;
+    /** OpenType features applied after font.ligatures: "ss01" turns one on,
+     * "-calt" off, and "cv05=2" sets a value. Malformed entries are ignored.
+     * Native default empty. */
+    "font.features": readonly string[];
     /** Columns per tab stop in editor views. Native default 4; editors use
      * at least 1 and at most 32. */
     "editor.tabSize": number;
@@ -368,6 +391,12 @@ declare module "knot" {
      * the pointer is over the gutter, or "always". A collapsed fold always
      * shows one. Native default "mouseover"; other text means "mouseover". */
     "editor.showFoldingControls": "mouseover" | "always";
+    /** Whether saving trims trailing spaces and tabs from every line except
+     * the cursor's: "all" or "off". Native default "all". */
+    "files.trimTrailingWhitespace": "all" | "off";
+    /** Whether saving ends a non-empty file with a line terminator. Native
+     * default true. */
+    "files.insertFinalNewline": boolean;
     /** Which theme applies: theme.dark's, theme.light's, or the one matching
      * the system appearance. Native default "dark"; other text means "dark". */
     "theme.mode": "dark" | "light" | "system";
@@ -381,6 +410,16 @@ declare module "knot" {
     /** The keymap preset that supplies default bindings. Native default
      * "knot"; an unregistered name selects "knot". */
     "keymap.preset": string;
+    /** Whether documents browsed from the explorer or search open as preview
+     * tabs that the next preview replaces. Native default true. */
+    "workbench.previewTabs": boolean;
+    /** Where the bottom dock sits: "contained" under the center between the
+     * side docks, or "full" across the window width under them. Native
+     * default "contained". */
+    "workbench.bottomDockLayout": "contained" | "full";
+    /** Whether the left and right window edges show stripes of tool
+     * buttons. Native default true. */
+    "workbench.toolStripes": boolean;
     /** Whether windows show the status bar. Native default true. */
     "statusBar.visible": boolean;
     /** IDs of status items the bar skips. Hidden items keep running, so a

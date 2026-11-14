@@ -437,3 +437,29 @@ fn a_batch_of_settings_writes_every_value_or_none() {
     assert_eq!(written, [KEY]);
     assert_eq!(store.get(KEY, &scope), Some(&json!(8)));
 }
+
+#[test]
+fn every_native_key_is_declared_for_extensions() {
+    let mut native = native_definitions()
+        .into_iter()
+        .map(|definition| definition.key)
+        .collect::<Vec<_>>();
+    native.sort_unstable();
+    let mut declared = include_str!("../../../knot-host/src/js/knot.d.ts")
+        .split("export interface Settings {")
+        .nth(1)
+        .unwrap()
+        .split("\n  }")
+        .next()
+        .unwrap()
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix('"'))
+        .filter_map(|line| line.split('"').next())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    declared.sort_unstable();
+    assert_eq!(
+        declared, native,
+        "declare every native setting in knot.d.ts Settings"
+    );
+}
