@@ -1,6 +1,6 @@
 # Modern UI
 
-Status: 🚧 approved, not started.
+Status: 🚧 in progress (checkpoint 1 done).
 
 ## Goal
 
@@ -86,30 +86,14 @@ Each checkpoint ends with `just check`, a commit per verified step, and a
 review gate in the real app through `Try:` commands in the personal
 `post-init.js`.
 
-### 1. Tokens and themes
+### 1. Tokens and themes ✅
 
-Status: ✅ implemented, awaiting the review gate.
-
-Deliverables: the token module; the new color keys with native defaults; Knot
-Islands Dark and Light in `@knot/themes`, Dark as the default; the new keys in
-the five existing themes. Existing surfaces switch to tokens without changing
-layout yet.
-
-Validation: theme tests covering the new themes and keys; existing product
-tests stay green.
-
-Review gate: switch between all themes; the app looks the same in structure,
-with the new palette.
-
-**Implementation context**: add `src/app/style.rs` (or extend
-`src/app/typography.rs`) beside `zoom::rems`; color keys in the
-`native_colors!` table of `crates/knot-model/src/theme.rs`, consumed through
-`theme(cx).paint_color`; themes in `extensions/@knot/themes/src/themes/`
-(mirror `one-dark.ts`), registered in `themes.ts`, tested in
-`test/themes.test.ts`; the default theme setting in `docs/settings.md` and its
-definition. Literal sizes to replace live in `src/app/product/render.rs`,
-`stripes.rs`, `src/app/picker.rs`, `src/app/tree_view.rs`,
-`src/app/editor/bars.rs`, and `src/app/transient.rs`.
+Done and approved. The color keys (`window.background`, `card.background`,
+`tab.accent`, `toolbar.background`) are native keys whose defaults match Knot
+Islands Dark/Light; every bundled theme defines them
+([themes](../architecture/semantic-ui.md#themes-and-color-keys)). Shared sizes
+live in `src/app/tokens.rs`; spacing steps and type sizes join it when a
+checkpoint first uses them.
 
 ### 2. Island cards and window frame
 
