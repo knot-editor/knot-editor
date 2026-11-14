@@ -156,7 +156,10 @@ are verified by hand only.
 Windows ✅: `src/app/shell_command/windows.rs` adds or removes the running
 executable's folder in the user `Path`, keeping the value's type and the other
 entries, and broadcasts `WM_SETTINGCHANGE`. Review gate passed by hand.
-Linux: not started.
+Linux ✅ (review gate pending): `src/app/shell_command/linux.rs` links `knot` in the
+user executable directory (`$XDG_BIN_HOME`, else `~/.local/bin`) to the running
+executable, replaces an old link but never a regular file, and removes only a link
+to an executable named `knot`. The tests use links in a tempdir.
 
 Deliverable: the same commands on Windows (user `Path` entry) and Linux
 (`~/.local/bin` symlink).

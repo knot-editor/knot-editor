@@ -1,10 +1,11 @@
 //! The `knot` command on the shell `PATH`, pointing at the running executable
 //! so it stays valid as long as the app stays where it is. On macOS it is a
-//! symlink in `/usr/local/bin`; on Windows the executable's folder is an entry
-//! of the user `Path`.
+//! symlink in `/usr/local/bin`, on Linux a symlink in `~/.local/bin`, and on
+//! Windows the executable's folder is an entry of the user `Path`.
 
 use std::path::{Path, PathBuf};
 
+mod linux;
 mod windows;
 
 /// Where macOS installs the link.
@@ -16,16 +17,21 @@ pub(crate) fn install() -> Result<(), String> {
     let executable = running_executable()?;
     if cfg!(windows) {
         windows::install(&executable)
+    } else if cfg!(target_os = "linux") {
+        linux::install(&executable)
     } else {
         install_macos(&executable, Path::new(MACOS_LINK))
     }
 }
 
-/// Remove the command: on macOS only when the link points to a Knot
-/// executable, on Windows the `Path` entry of the running executable's folder.
+/// Remove the command: on macOS and Linux only when the link points to a
+/// Knot executable, on Windows the `Path` entry of the running executable's
+/// folder.
 pub(crate) fn uninstall() -> Result<(), String> {
     if cfg!(windows) {
         windows::uninstall(&running_executable()?)
+    } else if cfg!(target_os = "linux") {
+        linux::uninstall()
     } else {
         uninstall_macos(Path::new(MACOS_LINK))
     }
