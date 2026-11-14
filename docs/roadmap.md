@@ -271,16 +271,6 @@ hold the analyses that support some items.
     values in the window layout and write them back on restore, as the explicit
     language is, so nothing is kept for documents that are not open.
 
-- **D164 — Command-line launcher** 🚧
-  - Depends on: none
-  - Description: Knot starts only from the app bundle or `cargo run`; there is
-    no `knot <file>...` helper on the `PATH` like VS Code's `code`. Do it for
-    daily use from a terminal: add a small `knot` helper that passes the paths
-    to the running instance, or starts one, and an install command for the
-    `PATH` entry. Paths open in a new window, except that a file inside the
-    roots of an already-open project opens in that project's window. See its
-    [plan](plans/d164-command-line-launcher.md).
-
 - **D166 — Guided personal configuration**
   - Depends on: none
   - Description: A new user gets no hint that Knot is customized through
