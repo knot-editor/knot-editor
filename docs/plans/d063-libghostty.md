@@ -1,6 +1,6 @@
 # D063 — Migrate the terminal engine to libghostty
 
-Status: 🚧 checkpoint 5 awaiting review. Source: [roadmap D063](../roadmap.md). Covers
+Status: ✅ complete. Source: [roadmap D063](../roadmap.md). Covers
 [D128](../roadmap.md) (working directory from OSC 7). Current behavior:
 [terminal sessions and views](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views);
 current rationale: [terminal decision](../decisions/workbench-and-lifecycle.md#terminal).
@@ -257,24 +257,12 @@ that launched Knot, which put zsh in vi mode; terminal programs no longer
 inherit `EDITOR` or `VISUAL`. Keys report presses only, so Kitty's
 report-events flag gets no releases.
 
-### 5. Working directory from OSC 7 (D128)
+### 5. Working directory from OSC 7 (D128) ✅
 
-Deliverables:
-- ✅ The session records the reported directory per process generation.
-  `current_directory` prefers it and falls back to the process query, then
-  the start directory.
-- ✅ Remove D128 from the roadmap, update D041's description now that
-  libghostty covers its protocols, and mark D063 complete.
-
-Validation: ✅ engine tests for `file://` parsing, remote-host rejection, and
-percent-encoding; ✅ a session test where a shell's `printf '\e]7;…'` changes the
-directory reported to layout capture. Manual: a `try.*` command that opens a
-terminal from a terminal after `cd` in a shell that emits OSC 7.
-
-Review gate: restoration and the new-terminal directory in daily use.
-
-**Implementation context:** `TerminalSession::current_directory` in
-`src/app/terminal/session.rs`, `src/app/terminal/process.rs`, and the rule in
-`crates/knot-model/src/terminal_directory.rs` (unchanged). Update the
-restored-terminal paragraph of the terminal decision and the working
-directory paragraph of the terminal sessions reference.
+A session prefers the local directory its shell last reported
+([`local_directory`](../../crates/knot-terminal/src/directory.rs),
+[session](../../src/app/terminal/session.rs)), as the
+[terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views)
+reference describes. Manual review on macOS used a zsh prompt hook that
+emits OSC 7, since the user's zsh does not emit it by default; Windows runs
+first in CI.
