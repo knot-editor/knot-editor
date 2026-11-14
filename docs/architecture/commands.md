@@ -69,7 +69,8 @@ printable character other than backtick is unbound in terminals, so the shell
 receives readline and job-control keys, and terminals copy and paste with
 ctrl-shift-c and ctrl-shift-v. Named keys such as tab and pageup, and ctrl-`,
 stay global because shells do not read them, so tab navigation and Toggle
-Terminal work from a terminal. On every platform Shift+F10, which shows a
+Terminal work from a terminal. Go to File keeps ctrl-p in terminals, as in
+VS Code, so the file finder opens from every surface. On every platform Shift+F10, which shows a
 tree's context menu, is unbound in terminals, whose programs read function
 keys.
 Extensions register further presets by name, lifecycle-owned like themes. The

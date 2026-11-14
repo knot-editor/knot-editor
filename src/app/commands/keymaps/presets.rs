@@ -93,7 +93,8 @@ type PresetEntry = (&'static str, &'static str, Option<&'static str>);
 /// backtick is unbound in terminals, so the shell receives readline and
 /// job-control keys, and the terminal copies and pastes with ctrl-shift-c and
 /// ctrl-shift-v instead. Named keys such as tab and pageup, and ctrl-`, stay
-/// global because shells do not use them.
+/// global because shells do not use them, and Go to File keeps ctrl-p so the
+/// file finder opens from any surface, as in VS Code.
 pub(crate) fn knot_preset(platform: Platform) -> Vec<PresetBinding> {
     let (secondary, platform_entries, os_entries) = match platform {
         Platform::MacOs => ("cmd-", MACOS_BINDINGS, &[][..]),
@@ -117,7 +118,14 @@ pub(crate) fn knot_preset(platform: Platform) -> Vec<PresetBinding> {
     if platform != Platform::MacOs {
         let mut pass_through = preset
             .iter()
-            .filter(|binding| binding.view.is_none() && reaches_the_shell(&binding.key))
+            .filter(|binding| {
+                binding.view.is_none()
+                    && binding
+                        .command
+                        .as_ref()
+                        .is_none_or(|command| command.name.as_ref() != GO_TO_FILE_COMMAND)
+                    && reaches_the_shell(&binding.key)
+            })
             .map(|binding| binding.key.clone())
             .collect::<Vec<_>>();
         pass_through.sort();

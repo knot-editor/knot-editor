@@ -77,7 +77,10 @@ Toggle Terminal is on ctrl-` because Reopen Closed Tab takes ⌘⇧T, as in brow
 and VS Code, and ctrl-` is the key they use to show the terminal; it toggles the
 dock terminals rather than opening a new one, which New Terminal does. Named keys
 and ctrl-` stay global in terminals on Windows and Linux, because shells read
-ctrl only with printable characters.
+ctrl only with printable characters. Go to File's ctrl-p stays global too, at
+the cost of the shell's previous-history key, which the up arrow also
+provides: a file finder that silently fails from one surface is more confusing,
+and VS Code makes the same choice.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#workbench-and-protected-closure).
 

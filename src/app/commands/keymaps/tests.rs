@@ -165,8 +165,10 @@ fn windows_and_linux_terminals_leave_plain_control_keys_to_the_shell() {
             Some(SHOW_COMMAND_PALETTE_COMMAND)
         );
         assert_eq!(resolved(&registry, "ctrl-shift-c", Some("editor")), None);
-        // Named keys and ctrl-` are not shell input, so they stay global.
+        // Named keys and ctrl-` are not shell input, so they stay global, and
+        // ctrl-p opens the file finder from a terminal too.
         for (key, command_name) in [
+            ("ctrl-p", presets::GO_TO_FILE_COMMAND),
             ("ctrl-tab", NEXT_RECENT_TAB_COMMAND),
             ("ctrl-shift-tab", PREVIOUS_RECENT_TAB_COMMAND),
             ("ctrl-pagedown", NEXT_TAB_COMMAND),
