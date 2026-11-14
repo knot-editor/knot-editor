@@ -152,22 +152,13 @@ prompt with the manual `sudo` step. A Knot started by LaunchServices does not ca
 `open` again (`launcher::started_by_launchd`). The password prompt and link creation
 are verified by hand only.
 
-### 6. Install command on Windows and Linux
-Windows ✅: `src/app/shell_command/windows.rs` adds or removes the running
-executable's folder in the user `Path`, keeping the value's type and the other
-entries, and broadcasts `WM_SETTINGCHANGE`. Review gate passed by hand.
-Linux ✅ (review gate pending): `src/app/shell_command/linux.rs` links `knot` in the
-user executable directory (`$XDG_BIN_HOME`, else `~/.local/bin`) to the running
-executable, replaces an old link but never a regular file, and removes only a link
-to an executable named `knot`. The tests use links in a tempdir.
-
-Deliverable: the same commands on Windows (user `Path` entry) and Linux
-(`~/.local/bin` symlink).
-Validation: pure tests for adding and removing a `Path` entry (idempotent, keeps the
-other entries); a Linux symlink test in a tempdir.
-Review gate: on each platform, install, open a new terminal, `knot .`, uninstall.
-Implementation context: same module as checkpoint 5, split by `cfg`; on Windows a
-registry crate (`winreg`) and `windows-sys` for the broadcast.
+### 6. Install command on Windows and Linux ✅
+Done: `src/app/shell_command/windows.rs` adds or removes the running executable's
+folder in the user `Path`, keeping the value's type and the other entries, and
+broadcasts `WM_SETTINGCHANGE`. `src/app/shell_command/linux.rs` links `knot` in
+`$XDG_BIN_HOME` (else `~/.local/bin`) to the running executable, never overwriting a
+regular file, and removes only a link to an executable named `knot`. Install, a new
+terminal, `knot .`, and uninstall were verified by hand on both platforms.
 
 ### 7. Close-out
 Update [product application launch](../architecture/workbench-and-lifecycle.md#product-application-launch)
