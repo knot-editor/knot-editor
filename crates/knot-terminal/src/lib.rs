@@ -1,8 +1,9 @@
 //! The terminal engine, over the statically linked libghostty-vt.
 //!
 //! [`Terminal`] parses program output into screens and scrollback, reports
-//! its effects as [`TerminalEvent`]s, and answers mode, selection, text, and
-//! hyperlink queries; [`RenderState`] reads frames from it for painting.
+//! its effects as [`TerminalEvent`]s, answers mode, selection, text, and
+//! hyperlink queries, and encodes keyboard and mouse input in the protocols
+//! the program asked for; [`RenderState`] reads frames from it for painting.
 //! [`Pty`] runs a program on a pseudo-terminal and feeds its output to a
 //! terminal from its own threads. [`ffi`] is generated from `ghostty/vt.h`
 //! by `scripts/libghostty-bindings.sh` (`just libghostty-bindings`); the
@@ -20,12 +21,14 @@ mod events;
 )]
 pub mod ffi;
 mod grid;
+mod input;
 mod pty;
 mod render;
 mod terminal;
 
 pub use events::TerminalEvent;
 pub use grid::Point;
+pub use input::{Key, KeyAction, KeyEvent, Modifiers, MouseAction, MouseButton, MouseEvent};
 pub use pty::{ExitStatus, Pty, PtyEvent, PtyOptions, Shell};
 pub use render::{
     Cell, CellWidth, Cells, Colors, Cursor, CursorStyle, Dirty, RenderState, Row, Rows, Style,
