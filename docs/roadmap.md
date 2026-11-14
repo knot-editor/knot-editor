@@ -859,6 +859,17 @@ Kakoune mode could use them too. The
     directory from the emulator's OSC 7 state instead of the process, which may
     also cover Windows and remote shells.
 
+- **D191 — Faster libghostty-vt builds**
+  - Depends on: D063
+  - Description: The release archives are built for a baseline CPU. The
+    Windows archive also has no SIMD, because MSVC has no tool that hides
+    the simdutf and Highway symbols V8 links in other versions; macOS and
+    Linux keep SIMD with only the `ghostty_*` API exported. Do it when
+    terminal throughput matters: enable SIMD on Windows, for example by
+    linking the DLL or a symbol-hiding step that works on COFF, and raise
+    the CPU baseline per target, with runtime dispatch where the baseline
+    must stay low.
+
 - **D045 — General terminal settings**
   - Depends on: D059
   - Description: Apart from `font.*` keys scoped `{ view: "terminal" }`, the
