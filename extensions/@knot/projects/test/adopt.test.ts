@@ -93,3 +93,62 @@ test("a failed adoption leaves the file where it opened", async () => {
   assert.deepEqual(host.rootsOf(window), []);
   assert.deepEqual(host.messages(), []);
 });
+
+const OPEN_REPOSITORY = "projects.open-containing-repository";
+const BETA = "file:///src/beta/";
+
+test("the command opens a new repository beside a rooted window", async () => {
+  const file = host.addDocument({ uri: `${ALPHA}src/main.rs` });
+  const source = host.openWindow({ roots: [BETA], documents: [file] });
+  await startLaunched();
+  await host.run(OPEN_REPOSITORY, { window: source });
+
+  const [, window] = host.windowTargets();
+  assert.deepEqual(host.rootsOf(window!), [ALPHA]);
+  assert.deepEqual(host.documentsIn(window!), [file]);
+  assert.deepEqual(host.rootsOf(source), [BETA]);
+  assert.deepEqual(host.documentsIn(source), [file]);
+});
+
+test("the command restores a known project beside a rooted window and keeps its project", async () => {
+  seedProject("a", "Alpha", [ALPHA]);
+  seedProject("b", "Beta", [BETA]);
+  seedSession("a", "suspended", [{ entries: [{ uri: `${ALPHA}notes.md` }], selected: 0 }]);
+  seedSession("b", "active");
+  const file = host.addDocument({ uri: `${ALPHA}src/main.rs` });
+  const source = host.openWindow({ roots: [BETA], documents: [file] });
+  await startLaunched();
+  await host.run(OPEN_REPOSITORY, { window: source });
+
+  const [kept, window, ...rest] = host.windowTargets();
+  assert.equal(kept, source);
+  assert.deepEqual(rest, []);
+  assert.deepEqual(host.rootsOf(source), [BETA]);
+  assert.deepEqual(host.documentsIn(source), [file]);
+  assert.equal(session("b")?.state, "active");
+  assert.deepEqual(host.rootsOf(window!), [ALPHA]);
+  assert.equal(host.documentsIn(window!).at(-1), file);
+  assert.equal(host.focusedWindow(), window);
+  assert.equal(session("a")?.state, "active");
+});
+
+test("the command presents the document in a window that already has its repository", async () => {
+  const file = host.addDocument({ uri: `${ALPHA}src/main.rs` });
+  const source = host.openWindow({ roots: [BETA], documents: [file] });
+  const existing = host.openWindow({ roots: [ALPHA] });
+  await startLaunched();
+  await host.run(OPEN_REPOSITORY, { window: source });
+
+  assert.deepEqual(host.windowTargets(), [source, existing]);
+  assert.deepEqual(host.documentsIn(existing), [file]);
+  assert.equal(host.focusedWindow(), existing);
+});
+
+test("the command says when no repository contains the document", async () => {
+  const file = host.addDocument({ uri: "file:///loose/notes.txt" });
+  const window = host.openWindow({ documents: [file] });
+  await startLaunched();
+  await host.run(OPEN_REPOSITORY, { window });
+  assert.deepEqual(host.messages(), ["notes.txt is not inside a Git repository"]);
+  assert.deepEqual(host.rootsOf(window), []);
+});

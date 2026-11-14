@@ -1,7 +1,10 @@
-import { commands, storage, windows, workbench, workspaces } from "knot";
+import { commands, documents, storage, windows, workbench } from "knot";
 import type { JsonValue } from "knot";
+import { adopt } from "./adopt.js";
 import { syncBindings } from "./bindings.js";
+import { repositoryRoot, windowWithRoot } from "./inference.js";
 import { object } from "./json.js";
+import { selectedDocument } from "./layout.js";
 import {
   displayName,
   newProjectId,
@@ -90,6 +93,40 @@ export async function registerCommands(state: ProjectsState) {
       await report(`cannot open a window for ${displayName(project)}: ${describe(error)}`);
     }
   }, { title: "Open Project in New Window", description: "Open another window on this window's project." });
+
+  // The repository of the active document, as automatic adoption would infer
+  // it, for windows it never adopts automatically: a rooted one keeps its
+  // project and the repository opens beside it.
+  await commands.register("projects.open-containing-repository", async ({ target }) => {
+    await reload(state);
+    const list = await windows.list();
+    const window = list.find((window) => window.target === target.windowTarget);
+    const id = window === undefined ? null : selectedDocument(window);
+    const document = id === null ? null : await documents.get(id);
+    if (window === undefined || document === null) {
+      await report("there is no document to find a repository for");
+      return;
+    }
+    const root = await repositoryRoot(document.resourceUri);
+    if (root === null) {
+      await report(`${document.title} is not inside a Git repository`);
+      return;
+    }
+    try {
+      const open = windowWithRoot(root, list);
+      if (open !== undefined) {
+        await documents.present(document.id, { target: open.target });
+        await windows.focus(open.target);
+      } else {
+        await adopt(state, root, window, document.id);
+      }
+    } catch (error) {
+      await report(`cannot open ${root}: ${describe(error)}`);
+    }
+  }, {
+    title: "Open Containing Repository as Project",
+    description: "Open the Git repository that contains this document as a project.",
+  });
 
   await commands.register("projects.rename", async ({ arguments: args }) => {
     await reload(state);

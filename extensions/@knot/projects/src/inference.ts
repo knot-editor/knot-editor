@@ -50,9 +50,9 @@ export async function repositoryRoot(documentUri: string | null): Promise<string
   }
 }
 
-/** Whether some window already has `root` as one of its roots. */
-export function isOpenRoot(root: string, list: readonly WindowInfo[]): boolean {
-  return list.some((window) => windowRoots(window).some((open) => sameRoot(open, root)));
+/** The first window that already has `root` as one of its roots. */
+export function windowWithRoot(root: string, list: readonly WindowInfo[]): WindowInfo | undefined {
+  return list.find((window) => windowRoots(window).some((open) => sameRoot(open, root)));
 }
 
 /**
@@ -69,6 +69,6 @@ export async function automaticRoot(
   const tabs = window.panes.flatMap((pane) => pane.tabs).filter((tab) => tab.kind !== "tool");
   if (tabs.length === 0 || tabs.some((tab) => tab.document !== document.id)) return null;
   const root = await repositoryRoot(document.resourceUri);
-  if (root === null || isOpenRoot(root, list)) return null;
+  if (root === null || windowWithRoot(root, list) !== undefined) return null;
   return root;
 }
