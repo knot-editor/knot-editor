@@ -7,7 +7,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const tools = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tools, "../..");
@@ -54,7 +54,7 @@ if (task === "check") {
   const files = ["extensions", "scripts/extensions/testing"].flatMap((base) =>
     existsSync(join(build, base)) ? testFiles(join(build, base)) : [],
   );
-  node("--import", join(tools, "testing/register.mjs"), "--test", ...files);
+  node("--import", pathToFileURL(join(tools, "testing/register.mjs")).href, "--test", ...files);
 } else if (task === "build" && argument !== undefined) {
   compile("-p", join(resolve(process.env.INIT_CWD ?? process.cwd(), argument), "tsconfig.json"));
 } else {
