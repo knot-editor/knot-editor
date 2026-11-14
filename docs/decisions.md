@@ -23,6 +23,9 @@ touches.
   display cells, so views run headless.
 - [Product window chrome and failure notices](decisions/platform.md#product-window-chrome-and-failure-notices):
   only product surfaces; silent native failures use the native warning prompt.
+- [Command-line launcher](decisions/platform.md#command-line-launcher): the
+  editor owns one socket for every build; macOS cold start through `open -a`,
+  not a fork; paths open in their project's window.
 - [Nightly distribution](decisions/platform.md#nightly-distribution):
   unsigned prereleases through a versioned cask in a separate tap; one build
   identity; Apple Silicon only.

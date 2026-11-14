@@ -134,6 +134,31 @@ report, because nothing else passively shows that a package failed.
 
 Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#product-application-launch).
 
+## Command-line launcher
+
+The running editor is the only long-lived process: it owns the launch socket,
+which goes away when it quits, and a `knot` that reaches it forwards its paths
+and exits. A separate daemon would be a second process to start, upgrade, and
+stop for no capability the editor lacks. One socket serves every build, so a
+`cargo run` forwards to an installed Knot; a socket per build would let two
+Knots share the state database, and quitting the installed one is cheap.
+
+Cold start from the bundle goes through `open -a`, as VS Code's `code` does, so
+LaunchServices starts Knot as a normal app rather than a child of the shell that
+dies or logs with it. Forking or respawning detached was rejected: it means
+re-creating the process after a platform application exists and reimplementing
+what LaunchServices already does. A loose binary stays in the foreground, which
+keeps logs and Ctrl-C for `cargo run`. The transport is `interprocess` local
+sockets on a plain listener thread; a tokio runtime would serve only this
+listener.
+
+Paths open in the window that already holds their project rather than always in
+a new window, because `knot file` from inside a project means that project.
+The install command links to the running executable instead of copying it, so
+upgrading the app in place keeps the command valid without reinstalling.
+
+Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#product-application-launch).
+
 ## Nightly distribution
 
 Nightly builds ship as unsigned GitHub prereleases installed through a
