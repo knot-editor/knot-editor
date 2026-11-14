@@ -270,6 +270,8 @@ where libghostty follows Ghostty and fixterms:
   position report.
 - F13 to F25 encode instead of sending nothing.
 - In X10 mouse mode (9), releases are no longer reported.
+- On macOS, Option-Left and Option-Right send `ESC b` and `ESC f`, as Ghostty
+  does, so shells move by word.
 
 Keys report presses only, since the key route sees no releases or repeats;
 Kitty's report-events flag gets no release events.

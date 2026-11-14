@@ -489,7 +489,8 @@ or attachment handoff. Typography and bootstrap metrics live in
 Keyboard input follows command/keymap precedence. Keys the keymap leaves to
 the terminal become key presses that libghostty encodes in the protocol the
 program requested, legacy, the Kitty keyboard protocol, or modifyOtherKeys;
-Option acts as Alt, and Command and Super chords never reach the program
+Option acts as Alt, Option-Left and Option-Right send the shell word
+motions as in Ghostty, and Command and Super chords never reach the program
 ([keyboard input](../../src/app/terminal/input.rs),
 [encoders](../../crates/knot-terminal/src/input.rs), and the
 [keyboard fixture](../../scripts/terminal-keys-fixture.py)).

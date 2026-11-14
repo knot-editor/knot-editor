@@ -64,6 +64,21 @@ pub(crate) fn terminal_key_bytes(stroke: &Keystroke, terminal: &Terminal) -> Vec
         alt: stroke.modifiers.alt,
         super_key: false,
     };
+    // As in Ghostty on macOS, Option-Left and Option-Right move by word:
+    // shells bind Escape b and Escape f, not the modified arrows.
+    if cfg!(target_os = "macos")
+        && modifiers
+            == (Modifiers {
+                alt: true,
+                ..Modifiers::default()
+            })
+    {
+        match key {
+            Some(Key::Left) => return b"\x1bb".to_vec(),
+            Some(Key::Right) => return b"\x1bf".to_vec(),
+            _ => {}
+        }
+    }
     let unshifted = if key == Some(Key::Space) {
         Some(' ')
     } else {
@@ -186,6 +201,10 @@ mod tests {
                 ("f4", 'S'),
             ] {
                 for bits in 0..8 {
+                    if cfg!(target_os = "macos") && bits == 2 && matches!(key, "left" | "right") {
+                        // Option-arrows move by word; see below.
+                        continue;
+                    }
                     let expected = if bits != 0 && key == "f3" {
                         // `CSI 1;nR` would read as a cursor position report.
                         format!("\x1b[13;{}~", bits + 1)
@@ -264,6 +283,8 @@ mod tests {
             ("alt-a", "\x1ba"),
             ("alt-shift-a", "\x1bA"),
             ("ctrl-alt-a", "\x1b\x01"),
+            ("alt-up", "\x1b[1;3A"),
+            ("shift-alt-left", "\x1b[1;4D"),
             ("cmd-a", ""),
             // Keys whose legacy byte is ambiguous are disambiguated, as
             // fixterms and Ghostty do.
@@ -301,6 +322,19 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(encode(&stroke, b""), b"2");
+    }
+
+    #[test]
+    fn option_arrows_move_by_word_on_macos() {
+        let (left, right): (&[u8], &[u8]) = if cfg!(target_os = "macos") {
+            (b"\x1bb", b"\x1bf")
+        } else {
+            (b"\x1b[1;3D", b"\x1b[1;3C")
+        };
+        for setup in [&b""[..], b"\x1b[>1u"] {
+            assert_eq!(parsed("alt-left", setup), left);
+            assert_eq!(parsed("alt-right", setup), right);
+        }
     }
 
     #[test]
