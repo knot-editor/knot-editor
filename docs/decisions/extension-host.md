@@ -41,8 +41,7 @@ it to a minimum, so an empty package stayed at 0.75 MiB of heap, and limits belo
 
 The fixed idle cost stays: an empty package costs about 1.2 MiB resident, of
 which a bare isolate and context are about 1.05 MiB. A startup snapshot could
-skip only the bootstrap's 0.15 MiB and 0.75 ms, so lowering the floor waits for
-enough extensions to justify V8 flags, a snapshot, or sharing (D139).
+skip only the bootstrap's 0.15 MiB and 0.75 ms.
 
 Reference: [extension host](../architecture/extension-host.md#runtime-and-scheduler-flow).
 

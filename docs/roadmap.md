@@ -116,18 +116,6 @@ hold the analyses that support some items.
     and measure whether building the host glue optimized in debug, as a crate
     of its own, is worth it.
 
-- **D139 — Per-package isolate floor** 🚧
-  - Depends on: none
-  - Description: Each package keeps its own isolate, which costs about 1.2 MiB
-    resident while idle; a bare isolate with an empty context is about
-    1.05 MiB of that, and the bootstrap a startup snapshot could skip is about
-    0.15 MiB. At 40 packages that is about 48 MiB, which is not yet worth the
-    work with today's handful of packages. Do it when Knot ships enough
-    extensions that their idle cost shows in daily use, with 40 or more as the
-    target. Follow its [plan](plans/d139-isolate-floor.md): measure the real
-    set again, try V8 flags for small isolates, then a startup snapshot, and
-    design sharing or unloading only if those fall short.
-
 - **D129 — Refactor builtin language extensions**
   - Depends on: none
   - Description: Each bundled language package is named `@knot/language-<name>`
