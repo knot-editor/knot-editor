@@ -150,8 +150,17 @@ jobs:
                 -all_load "$install/lib/libghostty-vt.a" \
                 -exported_symbols_list "$RUNNER_TEMP/exports" -o "$merged"
             else
+              # Linkers deduplicate COMDAT groups by signature name even when
+              # the symbol is local, so a kept group would discard V8's copy
+              # and leave its references at address zero. `ld -r` has already
+              # merged the object's own groups, so they can go.
               "${BINUTILS}ld" -r --whole-archive "$install/lib/libghostty-vt.a" -o "$merged"
-              "${BINUTILS}objcopy" --wildcard --keep-global-symbol='ghostty_*' "$merged"
+              "${BINUTILS}objcopy" --wildcard --keep-global-symbol='ghostty_*' \
+                --remove-section=.group "$merged"
+              if "${BINUTILS}readelf" -gW "$merged" | grep -q 'COMDAT group'; then
+                echo "the merged object still has COMDAT groups" >&2
+                exit 1
+              fi
             fi
             "${BINUTILS}ar" rcs "$out/lib/libghostty-vt.a" "$merged"
             exported=$("${BINUTILS}nm" -g --defined-only "$out/lib/libghostty-vt.a" \
