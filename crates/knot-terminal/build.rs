@@ -22,23 +22,23 @@ const RELEASE_URL: &str = "https://github.com/knot-editor/knot-editor/releases/d
 const ARCHIVES: &[(&str, &str)] = &[
     (
         "aarch64-apple-darwin",
-        "816eb6c903b3974917dac0baa2268de64543c19914dd9601f0906bcbfed60700",
+        "808ddbec934b1f13af79bef9f2564f98e6c14c741850a1532c3c713c80bf5e4f",
     ),
     (
         "x86_64-apple-darwin",
-        "36bb95f00f90dd811731ac483abe8064a4d8ae247705e82253dec7f44ca88aa8",
+        "4786193ae592aa6c8bf27fc237cc486d0915ea953690b60695a071e41ee0113c",
     ),
     (
         "aarch64-unknown-linux-gnu",
-        "fc1a3728ef0ed353f71ae61fb51892aa0944197037c9447f88866351e2c87322",
+        "cab7582863597e01f7011f04f524884d480a076036e4ccb2756b8721052dfc5b",
     ),
     (
         "x86_64-unknown-linux-gnu",
-        "c6210c783f4af9160fa881d5d63060af51dd6c6fb31641b5952b38ae49b61b39",
+        "a4a7bf7b8cb12c1e5e4bc505b8e42ca241a3e0976fa17ae00de0767f08d964a6",
     ),
     (
         "x86_64-pc-windows-msvc",
-        "3022a152abfaf178c304a18f6c416b91783eec47852946be9d6c88eff3d49d89",
+        "ab8afa5cb5661c189d95179070640781966a46b97fd096b5828a830617be349a",
     ),
 ];
 

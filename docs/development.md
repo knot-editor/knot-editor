@@ -161,6 +161,11 @@ output directory, so no build needs Zig. To build offline, or to try another
 libghostty build, set `KNOT_LIBGHOSTTY_DIR` to an install prefix holding
 `include/` and `lib/` (`zig build --prefix`).
 
+V8 links simdutf and Highway in versions of its own, under the same symbol
+names as libghostty's copies. The release archives therefore export only the
+`ghostty_*` API, and the Windows archive is built without SIMD. A local build
+linked into the app needs the workflow's Package step first.
+
 The [libghostty workflow](../.github/workflows/libghostty.yml), dispatched by
 hand with the libghostty-vt version and the Zig version its `build.zig.zon`
 requires, builds the archives from the signed release tarballs and publishes
