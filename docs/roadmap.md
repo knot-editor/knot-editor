@@ -211,14 +211,6 @@ hold the analyses that support some items.
     picker actions or companion commands. Remove the Projects tool
     registration and its tree code.
 
-- **D123 — Project inference extension** 🚧
-  - Depends on: none
-  - Description: Find the version-control root above an opened document
-    outside the window's roots and work on it as a project, as Emacs's
-    project.el infers projects: a rootless window opened for the file adopts
-    it automatically, and a command covers the other cases. See its
-    [plan](plans/d123-project-inference.md).
-
 - **D085 — Cross-file search**
   - Depends on: D087
   - Description: A bundled extension that wraps ripgrep through process
