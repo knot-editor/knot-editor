@@ -138,6 +138,9 @@ touches.
 - [Project sessions](decisions/bundled-packages.md#project-sessions): active or
   suspended; durable suspension before switching; hand-opened folders restore
   through the switch.
+- [Project inference](decisions/bundled-packages.md#project-inference): the
+  nearest `.git` ancestor, adopted without asking only by a rootless window
+  opened for the file; known projects open through the switch.
 
 ## [Workbench and lifecycle](decisions/workbench-and-lifecycle.md)
 

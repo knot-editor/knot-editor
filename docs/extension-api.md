@@ -1270,6 +1270,16 @@ written by a newer version is kept unchanged, marked unreadable in the Projects
 tool, and never switched to; while one exists, no retained capture is released
 as an orphan.
 
+The registry also infers projects from Git checkouts, using `files.stat` and
+`homeUri`. A file opened alone in a window without folders, as `knot <file>`
+does for a file no open folder holds, or saved there to a new file, makes the
+nearest folder holding a `.git` entry that window's project, never the
+filesystem root or the home folder. A new folder becomes the window's folder in
+place; a suspended project is restored and the window's tabs move into it.
+Open Containing Repository as Project (`projects.open-containing-repository`)
+does the same on request; from a window with folders, the repository opens in
+a new window and the current project stays open.
+
 If a package stops responding, the palette's Developer: Restart Extension…
 stops and reloads it, re-reading an installed package from disk.
 

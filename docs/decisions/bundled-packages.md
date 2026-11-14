@@ -111,3 +111,33 @@ back, because the source is already durably suspended.
 
 References: [extension guide](../extension-api.md#project-sessions) and
 [session replacement](../architecture/workbench-and-lifecycle.md#session-replacement).
+
+## Project inference
+
+`@knot/projects` infers a project from the nearest `.git` ancestor of an opened
+file, inside the registry package rather than a separate one, because adopting a
+project needs its switch path and a second package's root changes would race
+its tracking. Only `.git` counts, file or directory; other version-control and
+language markers wait for a real need. The filesystem root and the home
+directory never count, through an exact `homeUri` host fact rather than a path
+depth heuristic, so a dotfiles repository at the home directory cannot claim
+every loose file under it.
+
+Inference never asks. A window without roots that holds only the opened file
+adopts the checkout automatically, because launch placement created that window
+for the file and rooting it cannot surprise; everything else is a command. A
+confirmation after opening was rejected: it appeared over a file already shown,
+Cancel undid nothing, accepting moved the file, and it needed dismissal memory.
+Asking before opening would put an extension callback on every open and launch
+path, and a status-bar offer cannot be per window.
+
+A checkout the registry already knows, the common case because every root set
+is remembered, opens through the switch, which carries a rootless window's tabs
+into the restored project or keeps a rooted window and its project untouched.
+Setting the roots and letting tracking restore the project was rejected: the
+window holding the file is not reusable, so the session opened in yet another
+window. Adding the checkout as a root of a rooted window would silently change
+that project's identity, and a plain switch from it would close its project's
+windows.
+
+References: [extension guide](../extension-api.md#project-sessions).
