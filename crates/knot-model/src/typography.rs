@@ -3,8 +3,8 @@
 use serde_json::Value;
 
 use crate::settings::{
-    FONT_FALLBACKS, FONT_FAMILY, FONT_FEATURES, FONT_LIGATURES, FONT_WEIGHT, SettingsScope,
-    SettingsStore,
+    FONT_FALLBACKS, FONT_FAMILY, FONT_FEATURES, FONT_LIGATURES, FONT_LINE_HEIGHT, FONT_WEIGHT,
+    SettingsScope, SettingsStore,
 };
 
 /// The default primary family: the platform's standard code font, as in
@@ -51,6 +51,8 @@ pub struct FontSettings {
     pub fallbacks: Vec<String>,
     /// Base weight, 100 to 900.
     pub weight: f32,
+    /// Row height as a multiple of the font's ascent plus descent, 0.8 to 3.
+    pub line_height: f32,
     /// OpenType feature tags and values, the ligature toggle first.
     pub features: Vec<(String, u32)>,
 }
@@ -92,6 +94,11 @@ impl FontSettings {
                 .and_then(Value::as_f64)
                 .unwrap_or(400.)
                 .clamp(100., 900.) as f32,
+            line_height: store
+                .get(FONT_LINE_HEIGHT, scope)
+                .and_then(Value::as_f64)
+                .unwrap_or(1.2)
+                .clamp(0.8, 3.) as f32,
             features: features(ligatures, &strings(FONT_FEATURES)),
         }
     }
@@ -153,6 +160,7 @@ mod tests {
         assert_eq!(font.family, DEFAULT_FAMILY);
         assert_eq!(font.fallbacks, DEFAULT_FALLBACKS);
         assert_eq!(font.weight, 400.);
+        assert_eq!(font.line_height, 1.2);
         assert!(font.features.is_empty());
     }
 
@@ -195,6 +203,20 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 FontSettings::resolve(&store, &SettingsScope::default()).weight,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn line_height_is_clamped() {
+        let mut store = SettingsStore::default();
+        for (value, expected) in [(0.5, 0.8), (1.5, 1.5), (4., 3.)] {
+            store
+                .set(FONT_LINE_HEIGHT, json!(value), SettingsScope::default())
+                .unwrap();
+            assert_eq!(
+                FontSettings::resolve(&store, &SettingsScope::default()).line_height,
                 expected
             );
         }

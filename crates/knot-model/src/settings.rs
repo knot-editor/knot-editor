@@ -28,6 +28,8 @@ pub const FONT_FAMILY: &str = "font.family";
 pub const FONT_FALLBACKS: &str = "font.fallbacks";
 /// Base font weight, 100 to 900.
 pub const FONT_WEIGHT: &str = "font.weight";
+/// Row height of editors and terminals as a multiple of the font's height.
+pub const FONT_LINE_HEIGHT: &str = "font.lineHeight";
 /// Whether the `calt` and `liga` OpenType features are on.
 pub const FONT_LIGATURES: &str = "font.ligatures";
 /// OpenType features applied after `font.ligatures`.
@@ -271,6 +273,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Number,
             default: 400.into(),
             description: "Base font weight from 100 to 900; bold text stays at 700".into(),
+        },
+        SettingDefinition {
+            key: FONT_LINE_HEIGHT.into(),
+            value_type: SettingType::Number,
+            default: 1.2.into(),
+            description: "Row height of editors and terminals as a multiple of the font's ascent plus descent, from 0.8 to 3".into(),
         },
         SettingDefinition {
             key: FONT_LIGATURES.into(),
