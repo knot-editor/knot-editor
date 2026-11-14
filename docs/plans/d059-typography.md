@@ -94,40 +94,14 @@ and the terminal geometry paragraph of
 platform's mock text system has fixed advances, so measured widths per family
 were validated by hand.
 
-### 2. Configurable line height — 🔍 awaiting review
+### 2. Configurable line height — ✅
 
-Deliverables:
-
-- ✅ `font.lineHeight` defined; editor rows and terminal cells use the font's
-  own height × factor, rounded up to whole physical pixels, with the baseline
-  centered in the row.
-- ✅ A line-height change keeps the editor's top line in place and resizes the
-  terminal grid.
-- ✅ Docs updated for the new editor line-height rule.
-
-Validation:
-
-- ✅ Model tests for default and clamping.
-- ✅ App tests: editor metrics for a given factor; terminal `from_metrics`
-  computes cell height and baseline for factors above and below 1; a scoped
-  terminal value leaves editors unchanged.
-- ✅ `just check`.
-
-Review gate (pending): `Try:` commands that set line height globally and for terminals
-only.
-
-Implementation context:
-
-- Editor: `EditorMetrics::new` in `src/app/editor/layout.rs` computes
-  `line_height` from size alone and `update_metrics` has no window; move the
-  computation to where a `Window` is available (as `update_wrap` already
-  does) to resolve ascent and descent, or pass them in. `EditorView::new` in
-  `src/app/editor/view.rs` (~123) seeds the default metrics.
-- Terminal: `TerminalLayout::from_metrics` in `src/app/terminal/layout.rs`
-  already computes cell height and baseline from ascent and descent; apply
-  the factor there and keep its unit tests.
-- Docs: the "line height follows it at 20/14" sentence in
-  `docs/architecture/editor-and-languages.md`.
+Completed. `font.lineHeight` sizes editor rows and terminal cells as the
+font's ascent plus descent times the factor, rounded up to whole physical
+pixels; see [settings](../settings.md),
+[editor views](../architecture/editor-and-languages.md#editor-views), and the
+terminal geometry paragraph of
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
 
 ### 3. Ligatures in terminals — ⬜
 
