@@ -727,14 +727,6 @@ hold the analyses that support some items.
     allow several contexts, or negated ones, per binding, still resolved by
     counting matching facts rather than by an expression language.
 
-- **D059 — Professional typography: ligatures and configurable font features** 🚧
-  - Depends on: none
-  - Description: Surfaces use shared fixed typography defaults, and only
-    `font.size` is a setting. Define font family, fallbacks, weight, line
-    height, ligatures, and OpenType features as `font.*` settings scoped per
-    surface, such as `{ view: "terminal" }`, including the terminal's font
-    settings from D045. Follow its [plan](plans/d059-typography.md).
-
 ### Vim mode
 
 The bundled Vim mode is built on generic editor primitives, so a Helix or
@@ -850,7 +842,7 @@ Kakoune mode could use them too. The
     must stay low.
 
 - **D045 — General terminal settings**
-  - Depends on: D059
+  - Depends on: none
   - Description: Apart from `font.*` keys scoped `{ view: "terminal" }`, the
     session-local mouse toggle is the only terminal preference; no `terminal.*`
     keys are defined in the settings store. Do it when daily use needs terminal
