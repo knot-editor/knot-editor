@@ -11,6 +11,10 @@ Run `just check` for local formatting, Clippy, Rust and extension tests, and
 actionlint`). Run `just app` to build
 the macOS app bundle locally.
 
+`just run` (`cargo run -p knot-app`) behaves like the `knot` command: while
+any Knot runs, whatever its build, it forwards its paths there and exits, so
+quit that Knot to run your build.
+
 Rust tests run under [cargo-nextest](https://nexte.st), which runs each test
 in its own process and in parallel across test binaries: install it with
 `cargo install --locked cargo-nextest` and run `cargo nextest run

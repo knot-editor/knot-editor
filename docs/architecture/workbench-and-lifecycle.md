@@ -6,15 +6,42 @@ records rationale; deferred work lives in the [roadmap](../roadmap.md).
 ## Product application launch
 
 The macOS product is packaged as `Knot.app` for native activation, file-open,
-and reopen callbacks. CLI and platform requests join a launch queue while
+and reopen callbacks. `knot [path ...]` resolves each path against its working
+directory to a `file:` URI; one invocation, like one macOS file-open event, is
+one launch batch. Knot is single-instance: the running Knot binds a per-user
+local socket before it starts (a Unix socket in the user's local data
+directory, a named pipe named after the user on Windows), and a later `knot` that connects
+sends its batch and exits; a stale socket file is replaced. With no Knot
+running, a `knot` inside `Knot.app` started from a shell has LaunchServices
+start the app with the paths (`open -a`), while any other binary, `cargo run`
+included, becomes the running Knot in the foreground.
+
+Batches join a launch queue while
 [personal config and extensions](extension-host.md#package-admission-and-startup)
 start. Successful startup first restores
 [unsaved documents](documents-and-persistence.md#durable-unsaved-document-recovery),
-then the [recorded windows](#native-window-hot-exit), then opens each
-queued request in its own window. Recovered documents that no restored window
-presents go to the first opened window, so text is never hidden. With nothing
-restored or requested one empty window opens. The last request window is
-focused, else the previously active restored window, and the app activates.
+then the [recorded windows](#native-window-hot-exit), then places each queued
+batch. Recovered documents that no restored window presents go to the first
+opened window, so text is never hidden. With nothing restored or requested one
+empty window opens. The last batch's focus wins, else the previously active
+restored window keeps focus, and the app activates.
+
+Placement (`knot_model::launch::place`) treats restored windows like any open
+window. A folder focuses the window that has it as a workspace root, else opens
+a new window with it as the workspace. Each file goes to the most recently
+active window whose roots contain it, counting windows the batch just opened,
+so `knot . src/main.rs` opens `main.rs` in the folder's window. The files no
+window holds open together in one new window. The batch focuses the last
+window it created, else the window that received its first file.
+
+The palette commands `Shell Command: Install 'knot' command in PATH` and
+`Shell Command: Uninstall 'knot' command from PATH` point `knot` at the running
+executable, so it stays valid while the app stays where it is. On macOS it is
+the link `/usr/local/bin/knot`, created through the system password prompt and
+refused while the app runs translocated; the Homebrew cask links `knot` itself.
+On Linux it is a link in `$XDG_BIN_HOME`, else `~/.local/bin`; on Windows the
+executable's folder in the user `Path`. Uninstall removes only a link to Knot,
+or exactly that `Path` entry, and a failure names the manual step.
 When a package failed to start, each launch window opens the extension startup
 report once; windows opened later do not.
 `ApplicationSnapshot.launched` and a one-time `launched` event then tell
