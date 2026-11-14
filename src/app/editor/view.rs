@@ -13,6 +13,9 @@ pub struct EditorView {
     pub(super) metrics: EditorMetrics,
     /// The regular-style font the view draws with, from `font.*` in its scope.
     pub(super) font: Font,
+    /// The scale factor of the window the view last painted in, which
+    /// rounds the line height to physical pixels.
+    pub(super) scale_factor: f32,
     /// Width of one monospace cell, which wrapping measures rows in.
     pub(super) cell_width: f32,
     /// Widest line width shaped since the text last changed. Bounds horizontal
@@ -122,7 +125,11 @@ impl EditorView {
             rendering,
             editor,
             model,
-            metrics: EditorMetrics::new(crate::app::typography::TEXT_SIZE),
+            metrics: EditorMetrics {
+                font_size: crate::app::typography::TEXT_SIZE,
+                line_height: 0.,
+            },
+            scale_factor: 1.,
             font: crate::app::typography::font(&Default::default()),
             cell_width: 0.,
             max_line_width: 0.,

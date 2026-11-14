@@ -56,6 +56,7 @@ values take effect.
 | `font.family` | string | `"Menlo"` on macOS, `"Consolas"` on Windows, `"DejaVu Sans Mono"` elsewhere | Any; scope `{ view: "terminal" }` or a language to vary it | native | Primary font family of editors, text frames, text inputs, and terminals. Text inputs read the unscoped value. |
 | `font.fallbacks` | strings | Per platform: other common code fonts, then Arabic, CJK, and emoji fonts; see [typography](../crates/knot-model/src/typography.rs) | Same as `font.family` | native | Families tried for glyphs the primary family lacks. |
 | `font.weight` | number | `400` | Same as `font.family`; clamped to 100-900 | native | Base weight; bold syntax styles and bold terminal cells stay at 700. |
+| `font.lineHeight` | number | `1.2` | Same as `font.family`; clamped to 0.8-3 | native | Row height of editors, text frames, and terminals as a multiple of the font's ascent plus descent, rounded up to whole physical pixels. Text inputs keep their own line height. |
 | `font.ligatures` | boolean | `true` | Same as `font.family` | native | Form ligatures; `false` turns off the `calt` and `liga` OpenType features. |
 | `font.features` | strings | `[]` | Same as `font.family` | native | OpenType features applied after `font.ligatures`: `"ss01"` turns one on, `"-calt"` off, `"cv05=2"` sets a value. Malformed entries are ignored. |
 | `theme.mode` | string: `dark`, `light`, `system` | `"dark"` | Global; other text means `dark` | native | Which theme applies; `system` follows the system appearance. |

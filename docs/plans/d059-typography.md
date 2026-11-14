@@ -94,26 +94,26 @@ and the terminal geometry paragraph of
 platform's mock text system has fixed advances, so measured widths per family
 were validated by hand.
 
-### 2. Configurable line height — ⬜
+### 2. Configurable line height — 🔍 awaiting review
 
 Deliverables:
 
-- `font.lineHeight` defined; editor rows and terminal cells use the font's
-  own height × factor, rounded to whole physical pixels, with the baseline
+- ✅ `font.lineHeight` defined; editor rows and terminal cells use the font's
+  own height × factor, rounded up to whole physical pixels, with the baseline
   centered in the row.
-- A line-height change keeps the editor's top line in place and resizes the
+- ✅ A line-height change keeps the editor's top line in place and resizes the
   terminal grid.
-- Docs updated for the new editor line-height rule.
+- ✅ Docs updated for the new editor line-height rule.
 
 Validation:
 
-- Model tests for default and clamping.
-- App tests: editor metrics for a given factor; terminal `from_metrics`
+- ✅ Model tests for default and clamping.
+- ✅ App tests: editor metrics for a given factor; terminal `from_metrics`
   computes cell height and baseline for factors above and below 1; a scoped
   terminal value leaves editors unchanged.
-- `just check`.
+- ✅ `just check`.
 
-Review gate: `Try:` commands that set line height globally and for terminals
+Review gate (pending): `Try:` commands that set line height globally and for terminals
 only.
 
 Implementation context:

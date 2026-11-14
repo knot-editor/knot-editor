@@ -132,6 +132,7 @@ impl Element for EditorElement {
         cx: &mut App,
     ) -> Self::PrepaintState {
         let (gutter, markers) = self.entity.update(cx, |view, cx| {
+            view.scale_factor = window.scale_factor();
             view.update_metrics(cx);
             view.update_gutter_layout(window, cx);
             view.update_wrap(

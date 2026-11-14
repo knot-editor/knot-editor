@@ -1,6 +1,6 @@
 //! Application text defaults shared by native editor and terminal surfaces.
 
-use gpui::{Font, FontFallbacks, FontFeatures, FontWeight};
+use gpui::{Font, FontFallbacks, FontFeatures, FontWeight, Pixels, px};
 use knot_model::typography::FontSettings;
 
 /// The reference text size, which chrome and text inputs scale from.
@@ -23,4 +23,16 @@ pub(crate) fn bold(font: &Font) -> Font {
 
 pub(crate) fn italic(font: &Font) -> Font {
     font.clone().italic()
+}
+
+/// The row height for a font's `ascent` and `descent` (signed or not) times
+/// `factor`, rounded up to whole physical pixels at `scale_factor`.
+pub(crate) fn line_height(
+    ascent: Pixels,
+    descent: Pixels,
+    factor: f32,
+    scale_factor: f32,
+) -> Pixels {
+    let height = f32::from(ascent) + f32::from(descent).abs();
+    px((height * factor * scale_factor).ceil().max(1.) / scale_factor)
 }

@@ -48,7 +48,7 @@ fn measured_layout_drives_the_grid_and_frames_paint_cells(cx: &mut TestAppContex
     cx.update(|window, cx| {
         let view = view.read(cx);
         let layout = view.layout.unwrap();
-        let measured = TerminalLayout::measure(window, &base_font(cx), px(14.));
+        let measured = TerminalLayout::measure(window, &base_font(cx), px(14.), 1.2);
         assert_eq!(layout.cell_width, measured.cell_width);
         assert_eq!(layout.cell_height, measured.cell_height);
         assert_eq!(
@@ -169,6 +169,53 @@ fn terminal_font_size_resizes_the_grid(cx: &mut TestAppContext) {
     let (font_size, larger_columns, larger_lines) = grid(cx);
     assert_eq!(font_size, px(28.));
     assert!(larger_columns < columns && larger_lines < lines);
+}
+
+#[cfg(unix)]
+#[gpui::test]
+fn terminal_line_height_resizes_the_rows(cx: &mut TestAppContext) {
+    use super::*;
+    use crate::app::settings::FONT_LINE_HEIGHT;
+
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let session = cx.new(|cx| TerminalSession::new_with_options(read_line(), cx));
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
+    cx.simulate_resize(size(px(600.), px(400.)));
+    cx.refresh().unwrap();
+    let grid = |cx: &mut VisualTestContext| {
+        cx.read(|cx| {
+            let size = session.read(cx).size();
+            (
+                view.read(cx).layout.unwrap().cell_height,
+                size.columns,
+                size.rows,
+            )
+        })
+    };
+    // The test font is 1.3 em tall, 18.2px at 14px, and the test window's
+    // scale factor of 2 rounds rows to half pixels.
+    let (height, columns, rows) = grid(cx);
+    assert_eq!(height, px(22.));
+
+    cx.update(|_, cx| {
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .set(
+                FONT_LINE_HEIGHT,
+                2.into(),
+                SettingsScope {
+                    view: Some("terminal".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    });
+    cx.run_until_parked();
+    cx.refresh().unwrap();
+    let (taller, same_columns, fewer_rows) = grid(cx);
+    assert_eq!(taller, px(36.5));
+    assert_eq!(same_columns, columns);
+    assert!(fewer_rows < rows);
 }
 
 #[cfg(unix)]

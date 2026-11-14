@@ -39,10 +39,14 @@ fn font_size(cx: &App) -> f32 {
     settings::font_size(&terminal_scope(), cx) * crate::app::zoom::factor(cx)
 }
 
-/// The terminal's regular-style font, from `font.*` in the `terminal` view
-/// scope.
+/// The terminal's font settings, from `font.*` in the `terminal` view scope.
+fn font_settings(cx: &App) -> knot_model::typography::FontSettings {
+    settings::font_settings(&terminal_scope(), cx)
+}
+
+/// The terminal's regular-style font.
 fn base_font(cx: &App) -> Font {
-    typography::font(&settings::font_settings(&terminal_scope(), cx))
+    typography::font(&font_settings(cx))
 }
 
 type LinkOpener = Rc<dyn Fn(&str, &mut App)>;
@@ -995,8 +999,10 @@ impl Element for TerminalElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
-        let font = base_font(cx);
-        let layout = TerminalLayout::measure(window, &font, px(font_size(cx)));
+        let font_settings = font_settings(cx);
+        let font = typography::font(&font_settings);
+        let layout =
+            TerminalLayout::measure(window, &font, px(font_size(cx)), font_settings.line_height);
         let size = layout.grid_size(bounds);
         let palette = TerminalPalette::new(theme(cx));
         self.entity.update(cx, |terminal, cx| {

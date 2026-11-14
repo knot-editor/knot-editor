@@ -15,7 +15,8 @@ use std::sync::Arc;
 use crate::app::{
     languages::{self, LanguageDefinition, LanguageOwner},
     settings::{
-        ApplicationSettings, EDITOR_TAB_SIZE, FONT_FAMILY, FONT_FEATURES, FONT_SIZE, SettingsScope,
+        ApplicationSettings, EDITOR_TAB_SIZE, FONT_FAMILY, FONT_FEATURES, FONT_LINE_HEIGHT,
+        FONT_SIZE, SettingsScope,
     },
     syntax::{SyntaxLanguage, SyntaxState},
     theme::{Appearance, Highlight, Theme, color, native_color_definitions, theme},
@@ -53,7 +54,7 @@ fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut Test
         })
     };
     let (small, small_lines, small_hit, small_gutter) = measure(cx);
-    assert_eq!((small.font_size, small.line_height), (14., 20.));
+    assert_eq!((small.font_size, small.line_height), (14., 22.));
     assert_eq!(small_hit.0, 3);
 
     // A setting for another view kind leaves documents alone.
@@ -74,11 +75,25 @@ fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut Test
         cx.run_until_parked();
     };
     set(cx, Some("terminal"));
+    cx.update(|_, cx| {
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .set(
+                FONT_LINE_HEIGHT,
+                1.into(),
+                SettingsScope {
+                    view: Some("terminal".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    });
+    cx.run_until_parked();
     assert_eq!(measure(cx).0, small);
 
     set(cx, None);
     let (large, large_lines, large_hit, large_gutter) = measure(cx);
-    assert_eq!((large.font_size, large.line_height), (28., 40.));
+    assert_eq!((large.font_size, large.line_height), (28., 44.));
     assert_eq!(large_hit.0, 3);
     let count = |(_, rows): (usize, usize)| rows;
     assert_eq!(count(large_lines), count(small_lines) / 2);
@@ -86,7 +101,7 @@ fn font_size_sets_line_height_visible_lines_hit_testing_and_gutter(cx: &mut Test
 }
 
 #[gpui::test]
-fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
+fn size_and_line_height_changes_keep_the_top_line(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
     let text = (0..100)
         .map(|line| format!("line {line}\n"))
@@ -98,17 +113,24 @@ fn a_font_size_change_keeps_the_top_line(cx: &mut TestAppContext) {
         editor.set_viewport_rows_for_test(10.);
         editor.scroll_to_for_test(30.);
     });
-    cx.update(|cx| {
-        cx.global_mut::<ApplicationSettings>()
-            .0
-            .set(FONT_SIZE, 21.into(), SettingsScope::default())
-            .unwrap();
-    });
-    cx.run_until_parked();
-    cx.read(|cx| {
-        assert_eq!(view.read(cx).metrics.line_height, 30.);
-        assert_eq!(editor.read(cx).scroll_top(), 30.);
-    });
+    // The test font is 1.3 em tall, so 21px text is 27.3px before the factor.
+    for (key, value, line_height) in [
+        (FONT_SIZE, serde_json::json!(21), 33.),
+        (FONT_LINE_HEIGHT, serde_json::json!(1), 28.),
+        (FONT_LINE_HEIGHT, serde_json::json!(2.5), 69.),
+    ] {
+        cx.update(|cx| {
+            cx.global_mut::<ApplicationSettings>()
+                .0
+                .set(key, value, SettingsScope::default())
+                .unwrap();
+        });
+        cx.run_until_parked();
+        cx.read(|cx| {
+            assert_eq!(view.read(cx).metrics.line_height, line_height);
+            assert_eq!(editor.read(cx).scroll_top(), 30.);
+        });
+    }
 }
 
 #[gpui::test]

@@ -51,9 +51,11 @@ source text; expanded tabs are only a rendering projection. Tab stops follow
 document's effective language and the `editor` view kind, or a contributed
 text frame's view ID. Views observe the settings store and repaint on any
 change. Text size is `font.size` in the same scope times the zoom factor, and
-line height follows it at 20/14, rounded to whole pixels; a size change keeps
-the top line in place. The font (`font.family`, `font.fallbacks`, `font.weight`,
-`font.ligatures`, `font.features`) resolves in the same scope into
+line height is the font's ascent plus descent times `font.lineHeight`, rounded
+up to whole physical pixels, with the baseline centered in the row; a size or
+line-height change keeps the top line in place. The font (`font.family`,
+`font.fallbacks`, `font.weight`, `font.lineHeight`, `font.ligatures`,
+`font.features`) resolves in the same scope into
 [`FontSettings`](../../crates/knot-model/src/typography.rs), which
 [typography](../../src/app/typography.rs) turns into a gpui font; the gutter and
 text inputs use it too, and text inputs read the unscoped values.

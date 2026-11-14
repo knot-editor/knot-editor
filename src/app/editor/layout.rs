@@ -8,23 +8,17 @@ use crate::app::convert::ThemePaint as _;
 /// scrollbar.
 const WRAP_MARGIN: f32 = 8.;
 
-/// The text size and line height one view lays out with, from the
-/// `font.size` setting in its scope and the application zoom.
+/// The text size and line height one view lays out with, from the `font.*`
+/// settings in its scope and the application zoom.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EditorMetrics {
     pub(crate) font_size: f32,
-    /// Whole pixels, so rows never land between device pixels.
+    /// The font's ascent plus descent times `font.lineHeight`, in whole
+    /// physical pixels so rows never land between device pixels.
     pub(crate) line_height: f32,
 }
 
 impl EditorMetrics {
-    pub(super) fn new(font_size: f32) -> Self {
-        Self {
-            font_size,
-            line_height: (font_size * 20. / 14.).round().max(1.),
-        }
-    }
-
     /// The size relative to the default text, for chrome drawn beside it.
     pub(super) fn scale(self) -> f32 {
         self.font_size / crate::app::typography::TEXT_SIZE
@@ -37,17 +31,27 @@ impl EditorView {
         self.metrics
     }
 
-    /// Resolve the metrics for the current settings and zoom. Scrolling is
-    /// in rows, so the same line stays at the top when the line height
-    /// changes.
+    /// Resolve the metrics for the current settings, zoom, and the scale
+    /// factor of the last window painted in. Scrolling is in rows, so the
+    /// same line stays at the top when the line height changes.
     pub(super) fn update_metrics(&mut self, cx: &App) {
         let editor = self.editor.read(cx);
-        let font_size = settings::font_size(&editor.settings_scope(self.model.read(cx), cx), cx);
-        let metrics = EditorMetrics::new(font_size * crate::app::zoom::factor(cx));
-        let font = crate::app::typography::font(&settings::font_settings(
-            &editor.settings_scope(self.model.read(cx), cx),
-            cx,
-        ));
+        let scope = editor.settings_scope(self.model.read(cx), cx);
+        let font_settings = settings::font_settings(&scope, cx);
+        let font = crate::app::typography::font(&font_settings);
+        let font_size = settings::font_size(&scope, cx) * crate::app::zoom::factor(cx);
+        let text = cx.text_system();
+        let font_id = text.resolve_font(&font);
+        let size = px(font_size);
+        let metrics = EditorMetrics {
+            font_size,
+            line_height: f32::from(crate::app::typography::line_height(
+                text.ascent(font_id, size),
+                text.descent(font_id, size),
+                font_settings.line_height,
+                self.scale_factor,
+            )),
+        };
         if metrics != self.metrics || font != self.font {
             self.metrics = metrics;
             self.font = font;
