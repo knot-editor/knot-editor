@@ -22,7 +22,9 @@ pub(crate) mod chrome {
     pub(crate) const RESIZE_HANDLE: f32 = 8.;
     /// The margin around the cards at the window edges.
     pub(crate) const WINDOW_INSET: f32 = 4.;
-    /// The toolbar row under a transparent title bar, in unscaled pixels.
+    /// The toolbar row's height; unscaled on macOS, where it matches the native window buttons.
+    /// The width the native window buttons take at the toolbar row's start.
+    pub(crate) const WINDOW_BUTTONS_WIDTH: f32 = 80.;
     pub(crate) const TOOLBAR_HEIGHT: f32 = 40.;
 }
 

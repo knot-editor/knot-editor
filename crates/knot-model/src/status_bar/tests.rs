@@ -15,6 +15,7 @@ fn item(text: &str, side: StatusSide, priority: i64) -> StatusItem {
         command: None,
         color: None,
         side,
+        placement: StatusPlacement::StatusBar,
         priority,
     }
 }
@@ -165,4 +166,23 @@ fn holds_tells_whether_an_update_would_change_nothing() {
     registry.update(owner(1), id, Some("w".into()), Some(b.clone()));
     assert!(registry.holds(owner(1), id, Some("w"), Some(&b)));
     assert!(!registry.holds(owner(1), id, Some("w"), None));
+}
+
+#[test]
+fn toolbar_items_are_kept_apart_and_may_have_only_an_icon() {
+    let mut registry = StatusRegistry::default();
+    registry.register(owner(1), "bar".into(), item("bar", StatusSide::Left, 0));
+    let mut tool = item("", StatusSide::Right, 0);
+    tool.placement = StatusPlacement::Toolbar;
+    tool.icon = Some(knot_protocol::IconRef::Name("search".into()));
+    let id = registry.register(owner(1), "tool".into(), tool.clone());
+    assert_eq!(texts(&registry.items("w", &[]).left), ["bar"]);
+    assert!(registry.items("w", &[]).right.is_empty());
+    assert_eq!(registry.toolbar_items("w", &[]).right.len(), 1);
+    assert!(registry.toolbar_items("w", &[]).left.is_empty());
+    // A window's value can hide the item by clearing text and icon.
+    tool.icon = None;
+    assert!(registry.update(owner(1), id, Some("w".into()), Some(tool)));
+    assert!(registry.toolbar_items("w", &[]).right.is_empty());
+    assert_eq!(registry.toolbar_items("other", &[]).right.len(), 1);
 }

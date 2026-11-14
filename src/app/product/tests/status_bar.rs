@@ -270,3 +270,61 @@ fn an_unchanged_update_redraws_nothing(cx: &mut TestAppContext) {
         assert_eq!(counts.draws, 0, "{command}: {counts:?}");
     }
 }
+
+const TOOLBAR_SOURCE: &str = r##"
+import { commands, workbench } from "knot";
+await commands.register("toolbar.click", async () => {
+  await workbench.writeClipboardText("toolbar clicked");
+});
+await workbench.registerStatusItem("project", {
+  text: "knot", placement: "toolbar", command: { name: "toolbar.click" },
+});
+await workbench.registerStatusItem("search", {
+  text: "", icon: "folder", side: "right", placement: "toolbar",
+});
+await workbench.registerStatusItem("position", { text: "Ln 1", side: "right" });
+"##;
+
+#[gpui::test]
+fn toolbar_items_paint_in_the_toolbar_and_run_their_command(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(971), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(None));
+    let result = loaded.clone();
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, TOOLBAR_SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            *result.lock().unwrap() = Some(execution.await.map(|_| ()));
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
+    loaded.lock().unwrap().take().unwrap().unwrap();
+
+    // Toolbar items sit in the toolbar row above the workbench, an icon-only
+    // one included, and stay out of the status bar.
+    let toolbar = bounds(native_window, "toolbar", cx).expect("the toolbar is laid out");
+    let project = bounds(native_window, "status-item-project", cx).unwrap();
+    let search = bounds(native_window, "status-item-search", cx).unwrap();
+    let pane = bounds(native_window, "pane-1", cx).unwrap();
+    assert!(toolbar.bottom() <= pane.top());
+    assert!(project.right() <= search.left() && search.right() <= toolbar.right());
+    assert_eq!(texts(native_window, cx), (vec![], vec!["Ln 1".into()]));
+
+    // Clicking one runs its command in the window.
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx))
+    })
+    .unwrap();
+    cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("untouched".into())));
+    VisualTestContext::from_window(native_window, cx)
+        .simulate_click(project.center(), Modifiers::default());
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .is_some_and(|item| item.text().as_deref() == Some("toolbar clicked"))
+    });
+}

@@ -921,6 +921,18 @@ export function messages(): string[] {
  * the IDs in `statusBar.hiddenItems`.
  */
 export function statusItems(target: Knot.WindowTarget): (Knot.StatusItemOptions & { id: string })[] {
+  return barItems(target, "statusBar");
+}
+
+/** The items a window's toolbar shows, chosen like `statusItems`. */
+export function toolbarItems(target: Knot.WindowTarget): (Knot.StatusItemOptions & { id: string })[] {
+  return barItems(target, "toolbar");
+}
+
+function barItems(
+  target: Knot.WindowTarget,
+  placement: "statusBar" | "toolbar",
+): (Knot.StatusItemOptions & { id: string })[] {
   const hidden = (resolveSetting("statusBar.hiddenItems", settingScope(undefined)) ?? []) as string[];
   const latest = new Map<string, FakeStatusItem>();
   for (const item of state.statusItems) latest.set(item.id, item);
@@ -928,7 +940,8 @@ export function statusItems(target: Knot.WindowTarget): (Knot.StatusItemOptions 
     .filter((item) => !hidden.includes(item.id))
     .sort((a, b) => state.statusItems.indexOf(a) - state.statusItems.indexOf(b))
     .map((item) => ({ id: item.id, ...(item.windows.get(target) ?? item.value) }))
-    .filter((item) => item.text !== "")
+    .filter((item) => (item.placement ?? "statusBar") === placement)
+    .filter((item) => item.text !== "" || item.icon !== undefined)
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 }
 

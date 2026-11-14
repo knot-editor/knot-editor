@@ -119,7 +119,10 @@ an item's value changes nothing, so packages may resend a value per key. A click
 window's command target and dispatches the item's command as a key or a tree
 action does, so it runs in the clicked window. `statusBar.visible`, its Toggle Status
 Bar command, and `statusBar.hiddenItems` are settings, and lifecycle teardown
-removes a package's items. The editor a bar describes is `WindowInfo.statusTarget`
+removes a package's items. An item's `placement` puts it in the status bar or
+in the toolbar row at the window's top, which renders the same items, per-window
+values, and click commands; hidden IDs skip both. The row shows on macOS
+always and elsewhere only with toolbar items. The editor a bar describes is `WindowInfo.statusTarget`
 ([extension host](extension-host.md#application-metadata-queries)).
 
 The bundled `@knot/status-bar` package registers the built-in items on the right:

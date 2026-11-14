@@ -990,6 +990,10 @@ function statusItemValue(options) {
   const command = value.command == null ? null : record(value.command, "status item command must be an object");
   const side = value.side ?? "left";
   if (side !== "left" && side !== "right") throw new TypeError('status item side must be "left" or "right"');
+  const placement = value.placement ?? "statusBar";
+  if (placement !== "statusBar" && placement !== "toolbar") {
+    throw new TypeError('status item placement must be "statusBar" or "toolbar"');
+  }
   const priority = value.priority ?? 0;
   if (!Number.isSafeInteger(priority)) throw new TypeError("status item priority must be an integer");
   return {
@@ -1002,6 +1006,7 @@ function statusItemValue(options) {
     },
     color: optionalText(value.color),
     side,
+    placement,
     priority,
   };
 }

@@ -2075,10 +2075,10 @@ declare module "knot" {
     readonly title: string;
     readonly message?: string;
   }
-  /** What the status bar shows for one item. */
+  /** What the status bar or toolbar shows for one item. */
   export interface StatusItemOptions {
-    /** An item with empty text is not shown, so a window's value can hide an
-     * item there. */
+    /** An item with neither text nor icon is not shown, so a window's value
+     * can hide an item there. */
     readonly text: string;
     /** An icon painted before the text, in `color` when one is set. */
     readonly icon?: IconRef;
@@ -2090,6 +2090,9 @@ declare module "knot" {
     readonly color?: string;
     /** Which end of the bar the item sits at. Defaults to "left". */
     readonly side?: "left" | "right";
+    /** The bar that shows the item: the status bar below the workbench or the
+     * toolbar above it. Defaults to "statusBar". */
+    readonly placement?: "statusBar" | "toolbar";
     /** Higher values sit further left within a side; equal values keep
      * registration order. Defaults to 0. */
     readonly priority?: number;

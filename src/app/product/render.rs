@@ -418,24 +418,69 @@ impl KnotWindow {
 pub(super) const NATIVE_TOOLBAR_ROW: bool = cfg!(target_os = "macos");
 
 impl KnotWindow {
-    /// The row at the window's top, under the transparent title bar and beside
-    /// the window buttons. It drags the window and zooms it on a double click.
-    fn render_toolbar_row(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        div()
-            .id("toolbar")
-            .debug_selector(|| "toolbar".to_owned())
-            .flex_none()
-            .w_full()
-            // The window buttons are native, so the row's height is too.
-            .h(px(tokens::chrome::TOOLBAR_HEIGHT))
-            .bg(theme(cx).paint_color(color::TOOLBAR_BACKGROUND))
-            .on_mouse_down(MouseButton::Left, |event, window, _| {
-                if event.click_count == 2 {
-                    window.titlebar_double_click();
-                } else {
-                    window.start_window_move();
-                }
-            })
+    /// The row at the window's top: on macOS under the transparent title bar
+    /// and beside the window buttons, where it drags the window and zooms it
+    /// on a double click; elsewhere only while an extension contributes toolbar
+    /// items. It shows those items, left and right.
+    fn render_toolbar_row(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        use crate::app::{settings, status_bar::ApplicationStatusBar};
+        let window_key = window_id(cx.entity_id());
+        let hidden = settings::strings(settings::STATUS_BAR_HIDDEN_ITEMS, cx);
+        let items = cx
+            .try_global::<ApplicationStatusBar>()
+            .map(|bar| bar.0.toolbar_items(&window_key, &hidden))
+            .unwrap_or_default();
+        if !NATIVE_TOOLBAR_ROW && items.left.is_empty() && items.right.is_empty() {
+            return None;
+        }
+        let left = items
+            .left
+            .into_iter()
+            .map(|item| self.render_status_item(item, cx))
+            .collect::<Vec<_>>();
+        let right = items
+            .right
+            .into_iter()
+            .map(|item| self.render_status_item(item, cx))
+            .collect::<Vec<_>>();
+        let group = || div().flex().flex_row().items_center().h_full().gap_1();
+        Some(
+            div()
+                .id("toolbar")
+                .debug_selector(|| "toolbar".to_owned())
+                .flex()
+                .flex_none()
+                .flex_row()
+                .items_center()
+                .w_full()
+                .when(NATIVE_TOOLBAR_ROW, |row| {
+                    // The window buttons are native, so the row's height and
+                    // their reserved width are too.
+                    row.h(px(tokens::chrome::TOOLBAR_HEIGHT))
+                        .pl(px(tokens::chrome::WINDOW_BUTTONS_WIDTH))
+                })
+                .when(!NATIVE_TOOLBAR_ROW, |row| {
+                    row.h(zoom::rems(tokens::chrome::TOOLBAR_HEIGHT))
+                })
+                .pr_2()
+                .text_sm()
+                .bg(theme(cx).paint_color(color::TOOLBAR_BACKGROUND))
+                .text_color(theme(cx).paint_color(color::STATUS_BAR_FOREGROUND))
+                .on_mouse_down(MouseButton::Left, |event, window, _| {
+                    if !NATIVE_TOOLBAR_ROW {
+                        return;
+                    }
+                    if event.click_count == 2 {
+                        window.titlebar_double_click();
+                    } else {
+                        window.start_window_move();
+                    }
+                })
+                .child(group().children(left))
+                .child(div().flex_1())
+                .child(group().children(right))
+                .into_any_element(),
+        )
     }
 
     /// The status bar below the workbench, unless the setting hides it.
@@ -500,6 +545,8 @@ impl KnotWindow {
             .items_center()
             .h_full()
             .px_2()
+            // A press on an item never starts a window drag from a toolbar.
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when_some(color_key.as_ref(), |element, key| {
                 element.text_color(theme(cx).paint_color(key))
             })
@@ -568,6 +615,7 @@ impl Render for KnotWindow {
             .as_ref()
             .map(|palette| palette.picker().clone());
         let transient = self.render_transient();
+        let toolbar = self.render_toolbar_row(cx);
         let status_bar = self.render_status_bar(cx);
         let dismiss_transient =
             cx.listener(|this: &mut Self, _: &MouseDownEvent, _: &mut Window, cx| {
@@ -601,9 +649,7 @@ impl Render for KnotWindow {
             .size_full()
             .bg(theme(cx).paint_color(color::WINDOW_BACKGROUND))
             .text_color(theme(cx).paint_color(color::TEXT))
-            .when(NATIVE_TOOLBAR_ROW, |root| {
-                root.child(self.render_toolbar_row(cx))
-            })
+            .children(toolbar)
             .child(
                 div()
                     .flex_1()

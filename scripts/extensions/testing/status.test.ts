@@ -42,3 +42,11 @@ test("hidden ids leave the bar without disposing the item", async () => {
   await settings.reset("statusBar.hiddenItems");
   assert.deepEqual(texts(window), ["Ln 1"]);
 });
+
+test("toolbar items are kept apart from the status bar and may have only an icon", async () => {
+  const window = host.openWindow();
+  await workbench.registerStatusItem("a", { text: "a" });
+  await workbench.registerStatusItem("search", { text: "", icon: "search", placement: "toolbar" });
+  assert.deepEqual(texts(window), ["a"]);
+  assert.deepEqual(host.toolbarItems(window).map((item) => item.id), ["search"]);
+});

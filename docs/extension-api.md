@@ -919,10 +919,11 @@ const position = await workbench.registerStatusItem("position", {
 await position.update({ text: "Ln 4, Col 2", side: "right", priority: 10 });
 ```
 
-An item has text, which hides it while empty, and optionally an `icon` name
+An item has text, which hides it while empty and without an icon, and optionally an `icon` name
 painted before the text (in the item's color), a tooltip, a command with JSON arguments that a
 click runs in the window it was clicked in, and a theme color key for its
-text. It sits on the `left` or `right` side; within a side, a higher `priority`
+text. Its `placement` is the status bar (the default) or the `"toolbar"`, the row
+at the top of the window; an item with only an icon makes a button. It sits on the `left` or `right` side; within a side, a higher `priority`
 sits further left and equal priorities keep registration order. `update`
 replaces the whole value, so pass every field each time. With
 `{ window }` it sets that window's own value, which shadows the shared one

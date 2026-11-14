@@ -21,6 +21,15 @@ pub enum StatusSide {
     Right,
 }
 
+/// Which bar shows an item.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StatusPlacement {
+    #[default]
+    StatusBar,
+    Toolbar,
+}
+
 /// A command a click on an item runs.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -51,6 +60,9 @@ pub struct StatusItem {
     pub color: Option<String>,
     #[serde(default)]
     pub side: StatusSide,
+    /// The bar that shows the item.
+    #[serde(default)]
+    pub placement: StatusPlacement,
     /// Higher values sit further left.
     #[serde(default)]
     pub priority: i64,
@@ -177,10 +189,21 @@ impl StatusRegistry {
             .retain(|registration| registration.owner != owner);
     }
 
-    /// The items a window's bar shows: each ID's latest registration, minus
-    /// the hidden IDs and the items without text, ordered by priority and then
-    /// by registration.
+    /// The items a window's status bar shows; see [`Self::bar_items`].
     pub fn items(&self, window: &str, hidden: &[String]) -> BarItems {
+        self.bar_items(window, hidden, StatusPlacement::StatusBar)
+    }
+
+    /// The items a window's toolbar shows; see [`Self::bar_items`].
+    pub fn toolbar_items(&self, window: &str, hidden: &[String]) -> BarItems {
+        self.bar_items(window, hidden, StatusPlacement::Toolbar)
+    }
+
+    /// The items a window's bar of `placement` shows: each ID's latest
+    /// registration, minus the hidden IDs and the items with neither text nor
+    /// icon, ordered by priority and then by registration. The window's
+    /// value decides the placement.
+    fn bar_items(&self, window: &str, hidden: &[String], placement: StatusPlacement) -> BarItems {
         let mut effective = Vec::<&Registration>::new();
         for registration in &self.registrations {
             match effective
@@ -200,7 +223,7 @@ impl StatusRegistry {
                 .get(window)
                 .unwrap_or(&registration.value)
                 .clone();
-            if item.text.is_empty() {
+            if item.placement != placement || (item.text.is_empty() && item.icon.is_none()) {
                 continue;
             }
             let side = match item.side {
