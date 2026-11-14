@@ -231,27 +231,14 @@ scrolling, Shift selection while reporting, and TUIs on macOS.
 
 Consequence: OSC 8 cells group by URI, since libghostty exposes no link `id`.
 
-### 3c. Remove Alacritty and update the docs
+### 3c. Remove Alacritty and update the docs ✅
 
-Deliverables: `alacritty_terminal` leaves the workspace and the remaining
-tests are ported. The
+`alacritty_terminal` left the workspace. The
 [terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views)
-reference, the crate list in `docs/architecture.md`, the repository map in
-`AGENTS.md`, and the [terminal decision](../decisions/workbench-and-lifecycle.md#terminal)
-with its index line describe libghostty.
-
-Validation: `just check`; `cargo tree` shows no `alacritty_terminal`.
-
-Review gate: the documentation. ⏳ awaiting review.
-
-Status: ✅ `alacritty_terminal` removed (`cargo tree` finds no package); no
-tests were left to port. ✅ The terminal sessions reference, `architecture.md`
-and `AGENTS.md` (which gain `knot-terminal`), the terminal decision and its
-index line, and the README describe libghostty. D128's roadmap entry no longer
-cites Alacritty; the D063 entry stays until checkpoint 5 removes it.
-
-**Implementation context:** `Cargo.toml` (workspace and root dependencies),
-`src/app/terminal/mod.rs` module docs, `docs/decisions.md`.
+reference, [`architecture.md`](../architecture.md), `AGENTS.md`, the
+[terminal decision](../decisions/workbench-and-lifecycle.md#terminal), and the
+README describe libghostty. The roadmap's D063 entry stays until checkpoint 5
+removes it.
 
 ### 4. libghostty encoders
 
