@@ -195,58 +195,30 @@ Consequences for later checkpoints:
 - After shutdown, the reader keeps a duplicated master open until the
   program exits, so a program that ignores SIGHUP gets no EOF.
 
-### 3a. Session and drawing on libghostty 🔍
+### 3a. Session and drawing on libghostty ✅
 
-Status: implemented, waiting for review. On macOS, the full suite and
-`just check` pass. Linux and Windows run first in CI.
+[`session.rs`](../../src/app/terminal/session.rs) runs on `Pty`, and
+[`view.rs`](../../src/app/terminal/view.rs) paints from a `RenderState`.
+The theme palette becomes the terminal's default colors, and programs' own
+colors survive a theme change. Keys and the mouse keep Knot's wire formats over
+`InputModes` ([`input.rs`](../../src/app/terminal/input.rs)). Manual review
+covered vim, htop, long output (200,000 lines in 0.35 s), color queries, focus
+reports, mouse reporting, and restart on macOS. Linux and Windows run first in
+CI.
 
-Review points:
-- The session queue carries only non-output `PtyEvent`s, of which only the
-  exit acts. Output only wakes the view. Titles, bells, and directories are
-  dropped until checkpoint 5.
-- The view syncs the theme palette into the session while laying out, and a
-  new session takes it from the theme. Programs' OSC 4/10/11 colors survive a
-  theme change.
-- Keys and the mouse read a Knot `InputModes` (tracking, format, cursor keys,
-  alternate screen, alternate scroll). X10 tracking counts as click
-  tracking, and the URxvt and SGR-pixel formats fall back to the legacy
-  format until checkpoint 4.
-- Gestures reset when the generation or modes change between two events.
-  Alacritty's mouse-cursor event used to catch a mode turned off and on
-  inside one output batch; nothing reports that now, and the test switches
-  to another mode instead.
-- An unfocused terminal draws a hollow block, as Alacritty did. Restart
-  replays `Terminal::text`, and the exit overlay reads "exit code N" or
-  "terminated by …".
-- Selection and links are off. Left presses stay local and do nothing, and
-  Copy still copies a selection made through the API. `links.rs` keeps its
-  Alacritty grid behind `allow(dead_code)`. The selection, link, and
-  plain-drag tests left the view, mouse, and product suites; 3b ports them
-  from Git history.
-
-Deliverables:
-- `TerminalSession` runs on the engine: events, process generations,
-  coalesced wakeups, restart with the old screen replayed above the divider,
-  focus reports, paste, and the process query for the directory.
-- `TerminalView` paints from the render state: cells, styles, colors, cursor
-  shape and visibility, with D059 typography and punctuation-run ligatures
-  unchanged. `colors.rs` configures the palette instead of answering color
-  queries.
-- Keyboard and mouse reporting keep Knot's own wire formats, reading modes
-  from the engine. Mouse selection and links are off.
-
-Validation: ported session, view, and product terminal tests for lifecycle,
-restart, attachment, focus, paste, and drawing; `just check`. Manual: `try.*`
-commands that open terminals running a TUI (vim or htop), a long output, a
-restart, and a color-query script.
-
-Review gate: daily shell and TUI use, minus selection and links.
-
-**Implementation context:** `src/app/terminal/{session,view,colors,layout,input,mouse}.rs`,
-`session_tests.rs`, `view/tests.rs`, `src/app/product/tests/terminal.rs`.
-Tests that build `Term` with `VoidListener` and `Processor` become
-`knot-terminal` terminals fed bytes. `alacritty_terminal` may remain only
-where selection and links still reference it.
+Consequences for later checkpoints:
+- Only the exit acts in the session queue. Titles, bells, and directories
+  are dropped until checkpoint 5.
+- Gestures reset when the generation or modes differ between two events. A
+  mode turned off and on within one output batch goes unnoticed, since
+  libghostty reports no mode changes.
+- X10 tracking counts as click tracking. The URxvt and SGR-pixel formats
+  fall back to the legacy format until checkpoint 4.
+- For 3b: left presses stay local and do nothing, and shift-click does
+  nothing while reporting. `links.rs` keeps its Alacritty grid behind
+  `allow(dead_code)`. The selection, link, and plain-drag-copy tests were
+  removed from `mouse_tests.rs`, `view/tests.rs`, and
+  `product/tests/terminal.rs` in commit 4b8f0d1b; port them from its parent.
 
 ### 3b. Selection, copy, and links
 
