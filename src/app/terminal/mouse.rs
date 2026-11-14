@@ -1,13 +1,12 @@
 //! Terminal mouse wire formats and gesture ownership.
 
-use alacritty_terminal::term::TermMode;
+use super::input::{InputModes, MouseFormat};
 use gpui::{Modifiers, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PointerOwner {
     Local,
     Application,
-    Link,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,21 +16,12 @@ pub(crate) enum WheelRoute {
     Alternate,
 }
 
-pub(crate) fn interaction_modes(mode: TermMode) -> TermMode {
-    mode & (TermMode::MOUSE_MODE
-        | TermMode::SGR_MOUSE
-        | TermMode::UTF8_MOUSE
-        | TermMode::ALT_SCREEN
-        | TermMode::ALTERNATE_SCROLL
-        | TermMode::APP_CURSOR)
-}
-
-pub(crate) fn wheel_route(mode: TermMode, shift: bool) -> WheelRoute {
+pub(crate) fn wheel_route(mode: InputModes, shift: bool) -> WheelRoute {
     if shift {
         WheelRoute::Local
-    } else if mode.intersects(TermMode::MOUSE_MODE) {
+    } else if mode.mouse_reporting() {
         WheelRoute::Application
-    } else if mode.contains(TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL) {
+    } else if mode.alternate_screen && mode.alternate_scroll {
         WheelRoute::Alternate
     } else {
         WheelRoute::Local
@@ -47,10 +37,6 @@ pub(crate) struct PointerState {
 }
 
 impl PointerState {
-    pub(crate) fn clear_gestures(&mut self) {
-        self.pressed.clear();
-        self.last_motion = None;
-    }
     pub(crate) fn clear(&mut self) {
         *self = Self::default();
     }
@@ -142,13 +128,13 @@ pub(crate) fn modifier_code(modifiers: Modifiers) -> u8 {
 
 /// Coordinates are zero-based viewport cells. Unrepresentable legacy coordinates produce no report.
 pub(crate) fn mouse_bytes(
-    mode: TermMode,
+    format: MouseFormat,
     code: u8,
     column: usize,
     row: usize,
     release: bool,
 ) -> Vec<u8> {
-    if mode.contains(TermMode::SGR_MOUSE) {
+    if format == MouseFormat::Sgr {
         return format!(
             "\x1b[<{code};{};{}{}",
             column + 1,
@@ -157,7 +143,7 @@ pub(crate) fn mouse_bytes(
         )
         .into_bytes();
     }
-    let limit = if mode.contains(TermMode::UTF8_MOUSE) {
+    let limit = if format == MouseFormat::Utf8 {
         2015
     } else {
         223
@@ -168,7 +154,7 @@ pub(crate) fn mouse_bytes(
     // Legacy releases use button 3 while retaining modifier bits.
     let code = if release { (code & 28) | 3 } else { code };
     let mut bytes = b"\x1b[M".to_vec();
-    if mode.contains(TermMode::UTF8_MOUSE) {
+    if format == MouseFormat::Utf8 {
         for value in [u32::from(code) + 32, column as u32 + 33, row as u32 + 33] {
             let mut buffer = [0; 4];
             bytes.extend_from_slice(
@@ -212,20 +198,20 @@ mod tests {
             for base in [0, 1, 2, 32, 33, 34, 35, 64, 65, 66, 67, 128, 129] {
                 let code = base + modifier;
                 assert_eq!(
-                    mouse_bytes(TermMode::SGR_MOUSE, code, 2, 4, false),
+                    mouse_bytes(MouseFormat::Sgr, code, 2, 4, false),
                     format!("\x1b[<{code};3;5M").as_bytes()
                 );
                 assert_eq!(
-                    mouse_bytes(TermMode::NONE, code, 2, 4, false),
+                    mouse_bytes(MouseFormat::Legacy, code, 2, 4, false),
                     [27, 91, 77, code + 32, 35, 37]
                 );
             }
             assert_eq!(
-                mouse_bytes(TermMode::SGR_MOUSE, 2 + modifier, 2, 4, true),
+                mouse_bytes(MouseFormat::Sgr, 2 + modifier, 2, 4, true),
                 format!("\x1b[<{};3;5m", 2 + modifier).as_bytes()
             );
             assert_eq!(
-                mouse_bytes(TermMode::NONE, 2 + modifier, 2, 4, true),
+                mouse_bytes(MouseFormat::Legacy, 2 + modifier, 2, 4, true),
                 [27, 91, 77, 35 + modifier, 35, 37]
             );
         }
@@ -234,34 +220,28 @@ mod tests {
     #[test]
     fn coordinate_limits_do_not_wrap_or_alias_to_another_cell() {
         assert_eq!(
-            mouse_bytes(TermMode::NONE, 0, 222, 222, false),
+            mouse_bytes(MouseFormat::Legacy, 0, 222, 222, false),
             [27, 91, 77, 32, 255, 255]
         );
         for (column, row) in [(223, 0), (0, 223), (65534, 65534)] {
-            assert!(mouse_bytes(TermMode::NONE, 0, column, row, false).is_empty());
+            assert!(mouse_bytes(MouseFormat::Legacy, 0, column, row, false).is_empty());
         }
         assert_eq!(
-            mouse_bytes(TermMode::SGR_MOUSE, 0, 65534, 65534, false),
+            mouse_bytes(MouseFormat::Sgr, 0, 65534, 65534, false),
             b"\x1b[<0;65535;65535M"
         );
         assert_eq!(
-            mouse_bytes(TermMode::UTF8_MOUSE, 128, 2, 4, false),
+            mouse_bytes(MouseFormat::Utf8, 128, 2, 4, false),
             "\x1b[M\u{a0}#%".as_bytes()
         );
         assert_eq!(
-            mouse_bytes(TermMode::UTF8_MOUSE, 0, 222, 2014, false),
+            mouse_bytes(MouseFormat::Utf8, 0, 222, 2014, false),
             "\x1b[M \u{ff}\u{7ff}".as_bytes()
         );
-        assert!(mouse_bytes(TermMode::UTF8_MOUSE, 0, 2015, 0, false).is_empty());
-        assert!(mouse_bytes(TermMode::UTF8_MOUSE, 0, 0, 2015, false).is_empty());
+        assert!(mouse_bytes(MouseFormat::Utf8, 0, 2015, 0, false).is_empty());
+        assert!(mouse_bytes(MouseFormat::Utf8, 0, 0, 2015, false).is_empty());
         assert_eq!(
-            mouse_bytes(
-                TermMode::UTF8_MOUSE | TermMode::SGR_MOUSE,
-                0,
-                3000,
-                0,
-                false
-            ),
+            mouse_bytes(MouseFormat::Sgr, 0, 3000, 0, false),
             b"\x1b[<0;3001;1M"
         );
     }
@@ -282,21 +262,34 @@ mod tests {
         assert!(state.motion_changed(1, 2, 43));
         state.leave();
         assert!(state.motion_changed(1, 2, 43));
-        state.clear_gestures();
+        state.clear();
         assert_eq!(state.owner(MouseButton::Left), None);
     }
 
     #[test]
     fn wheel_routes_fractional_deltas_direction_changes_and_route_changes() {
-        let tracking =
-            TermMode::MOUSE_REPORT_CLICK | TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL;
+        let alternate = InputModes {
+            alternate_screen: true,
+            alternate_scroll: true,
+            ..InputModes::default()
+        };
+        let tracking = InputModes {
+            mouse: crate::app::terminal::input::MouseTracking::Click,
+            ..alternate
+        };
         assert_eq!(wheel_route(tracking, false), WheelRoute::Application);
         assert_eq!(wheel_route(tracking, true), WheelRoute::Local);
+        assert_eq!(wheel_route(alternate, false), WheelRoute::Alternate);
         assert_eq!(
-            wheel_route(TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL, false),
-            WheelRoute::Alternate
+            wheel_route(
+                InputModes {
+                    alternate_scroll: false,
+                    ..alternate
+                },
+                false
+            ),
+            WheelRoute::Local
         );
-        assert_eq!(wheel_route(TermMode::ALT_SCREEN, false), WheelRoute::Local);
         let mut state = PointerState::default();
         let step = |state: &mut PointerState, delta, route| {
             state.wheel_steps(delta, px(8.), px(16.), route)

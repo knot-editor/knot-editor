@@ -2,7 +2,11 @@
 
 use gpui::{Bounds, Font, Pixels, Point, Window, point, px};
 
-use crate::app::terminal::session::TerminalSize;
+use knot_terminal::TerminalSize;
+
+/// The smallest grid a view gives its terminal.
+pub(crate) const MIN_COLUMNS: u16 = 2;
+pub(crate) const MIN_ROWS: u16 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct TerminalLayout {
@@ -52,17 +56,18 @@ impl TerminalLayout {
     }
 
     pub(crate) fn grid_size(self, bounds: Bounds<Pixels>) -> TerminalSize {
+        let cells = |length: Pixels, cell: Pixels, min: u16| {
+            (length / cell)
+                .floor()
+                .clamp(f32::from(min), f32::from(u16::MAX)) as u16
+        };
+        let physical = |cell: Pixels| (f32::from(cell) * self.scale_factor).round().max(1.) as u32;
         TerminalSize {
-            columns: (bounds.size.width / self.cell_width).floor().max(0.) as usize,
-            lines: (bounds.size.height / self.cell_height).floor().max(0.) as usize,
-            cell_width: (f32::from(self.cell_width) * self.scale_factor)
-                .round()
-                .clamp(1., u16::MAX as f32) as u16,
-            cell_height: (f32::from(self.cell_height) * self.scale_factor)
-                .round()
-                .clamp(1., u16::MAX as f32) as u16,
+            columns: cells(bounds.size.width, self.cell_width, MIN_COLUMNS),
+            rows: cells(bounds.size.height, self.cell_height, MIN_ROWS),
+            cell_width: physical(self.cell_width),
+            cell_height: physical(self.cell_height),
         }
-        .clamped()
     }
 
     /// Viewport coordinates; selection applies the emulator's display offset separately.
@@ -111,7 +116,6 @@ impl TerminalLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alacritty_terminal::term::{MIN_COLUMNS, MIN_SCREEN_LINES};
     use gpui::size;
 
     #[test]
@@ -126,7 +130,7 @@ mod tests {
                 ),
             );
             let grid = layout.grid_size(bounds);
-            assert_eq!((grid.columns, grid.lines), (80, 24));
+            assert_eq!((grid.columns, grid.rows), (80, 24));
             assert_eq!(grid.cell_width as f32, (8.1 * scale).ceil());
             assert_eq!(grid.cell_height as f32, (14.5 * scale).ceil());
             let edge = layout.origin(bounds, 3, 2);
@@ -150,7 +154,7 @@ mod tests {
     fn minimum_grid_and_fallback_baseline() {
         let layout = TerminalLayout::from_metrics(px(14.), px(8.1), px(11.2), px(3.3), 2.);
         let grid = layout.grid_size(Bounds::default());
-        assert_eq!((grid.columns, grid.lines), (MIN_COLUMNS, MIN_SCREEN_LINES));
+        assert_eq!((grid.columns, grid.rows), (MIN_COLUMNS, MIN_ROWS));
         let origin = point(px(23.), px(45.));
         for (ascent, descent) in [(px(11.2), px(3.3)), (px(16.), px(4.)), (px(9.), px(2.))] {
             let painted = layout.text_origin(origin, ascent, descent);

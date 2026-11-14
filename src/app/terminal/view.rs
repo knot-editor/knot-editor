@@ -1,29 +1,24 @@
 use crate::app::convert::ThemePaint as _;
-use alacritty_terminal::{
-    grid::{Dimensions, Scroll},
-    index::{Column, Line, Point as TermPoint, Side},
-    selection::{Selection, SelectionType},
-    term::{TermMode, cell::Flags, point_to_viewport},
-    vte::ansi::CursorShape,
-};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use std::rc::Rc;
+use knot_terminal::{
+    CellWidth, CursorStyle as TerminalCursor, Mode, RenderState, Rgb, Scroll, TerminalSize,
+    Underline,
+};
 
 use crate::app::keys::Keystroke;
 
 use crate::app::{
     TERMINAL_KEY_CONTEXT,
     settings::{self, ApplicationSettings, SettingsScope},
-    terminal::colors::{TerminalPalette, dim, resolve_color},
-    terminal::input::terminal_key_bytes,
+    terminal::colors::{TerminalPalette, dim},
+    terminal::input::{InputModes, MouseTracking, terminal_key_bytes},
     terminal::layout::TerminalLayout,
-    terminal::links::{LinkGrid, LinkTarget},
     terminal::mouse::{
-        PointerOwner, PointerState, WheelRoute, button_code, interaction_modes, modifier_code,
-        mouse_bytes, wheel_route,
+        PointerOwner, PointerState, WheelRoute, button_code, modifier_code, mouse_bytes,
+        wheel_route,
     },
-    terminal::session::{TerminalAttachment, TerminalSession, TerminalSize, TerminalStatus},
+    terminal::session::{TerminalAttachment, TerminalSession, TerminalStatus},
     theme::{color, theme},
     typography::{self, bold, italic},
 };
@@ -48,8 +43,6 @@ fn base_font(cx: &App) -> Font {
     typography::font(&settings::font_settings(&terminal_scope(), cx))
 }
 
-type LinkOpener = Rc<dyn Fn(&str, &mut App)>;
-
 /// Native terminal presentation attached to one stable session.
 pub(crate) struct TerminalView {
     session: Entity<TerminalSession>,
@@ -58,35 +51,15 @@ pub(crate) struct TerminalView {
     _settings_subscription: Subscription,
     focus: FocusHandle,
     pointer: PointerState,
-    pointer_epoch: Option<(u64, u64, TermMode)>,
-    local_dragged: bool,
+    /// The generation and modes the pointer's gestures began under.
+    pointer_epoch: Option<(u64, InputModes)>,
     pointer_position: Option<Point<Pixels>>,
     pointer_modifiers: Modifiers,
     reported_cell: Option<(usize, usize)>,
     interaction_bounds: Bounds<Pixels>,
     layout: Option<TerminalLayout>,
     focus_subscriptions: Vec<Subscription>,
-    hovered_link: Option<LinkTarget>,
-    armed_link: Option<ArmedLink>,
-    open_link: LinkOpener,
-}
-
-struct ArmedLink {
-    grid: LinkGrid,
-    target: LinkTarget,
-    generation: u64,
-    bounds: Bounds<Pixels>,
-    layout: TerminalLayout,
-    position: Point<Pixels>,
-}
-
-fn link_modifier(modifiers: Modifiers) -> bool {
-    !modifiers.shift
-        && if cfg!(target_os = "macos") {
-            modifiers.platform
-        } else {
-            modifiers.control
-        }
+    render_state: RenderState,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -123,12 +96,11 @@ impl TerminalView {
                 return CommandClaim::Declined;
             }
             if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                let bracketed = self.session.read(cx).terminal().is_some_and(|terminal| {
-                    terminal
-                        .lock()
-                        .mode()
-                        .contains(alacritty_terminal::term::TermMode::BRACKETED_PASTE)
-                });
+                let bracketed = self
+                    .session
+                    .read(cx)
+                    .with_terminal(|terminal| terminal.mode(Mode::BracketedPaste))
+                    .unwrap_or(false);
                 let text = if bracketed {
                     format!("\x1b[200~{}\x1b[201~", text.replace('\x1b', ""))
                 } else {
@@ -141,8 +113,8 @@ impl TerminalView {
         let selected = self
             .session
             .read(cx)
-            .terminal()
-            .and_then(|terminal| terminal.lock().selection_to_string())
+            .with_terminal(|terminal| terminal.selection_text())
+            .flatten()
             .filter(|text| !text.is_empty());
         if let Some(text) = selected {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
@@ -157,7 +129,6 @@ impl TerminalView {
             .update(cx, |session, _| session.attach())
             .expect("terminal session already has a view");
         let subscription = cx.observe(&session, |this, _, cx| {
-            this.clear_links();
             this.sync_pointer(cx);
             cx.notify();
         });
@@ -177,16 +148,13 @@ impl TerminalView {
             focus: cx.focus_handle(),
             pointer: PointerState::default(),
             pointer_epoch: None,
-            local_dragged: false,
             pointer_position: None,
             pointer_modifiers: Modifiers::default(),
             reported_cell: None,
             interaction_bounds: Bounds::default(),
             layout: None,
             focus_subscriptions: Vec::new(),
-            hovered_link: None,
-            armed_link: None,
-            open_link: Rc::new(|uri, cx| cx.open_url(uri)),
+            render_state: RenderState::new(),
         }
     }
 
@@ -232,8 +200,7 @@ impl TerminalView {
         let mode = self
             .session
             .read(cx)
-            .terminal()
-            .map(|terminal| *terminal.lock().mode())
+            .with_terminal(|terminal| InputModes::read(terminal))
             .unwrap_or_default();
         let bytes = terminal_key_bytes(keystroke, mode);
         if bytes.is_empty() {
@@ -278,43 +245,15 @@ impl TerminalView {
         self.cancel_pointer(cx);
         let attachment = self.attachment.as_ref().unwrap();
         let session = self.session.read(cx);
-        if let Some(terminal) = session.terminal() {
-            terminal.lock().scroll_display(Scroll::Bottom);
-        }
+        session.with_terminal(|terminal| terminal.scroll_viewport(Scroll::Bottom));
         session.send_input(attachment, session.generation(), bytes);
         self.reset_pointer();
         cx.notify();
     }
 
-    fn clear_links(&mut self) {
-        self.hovered_link = None;
-        self.armed_link = None;
-    }
-
-    fn link_grid(&self, cx: &App) -> Option<LinkGrid> {
-        self.attachment.as_ref()?;
-        let terminal = self.session.read(cx).terminal()?;
-        Some(LinkGrid::capture(&terminal.lock()))
-    }
-
-    fn hover_link(&mut self, position: Point<Pixels>, hovered: bool, cx: &mut Context<Self>) {
-        let target = if hovered && self.interaction_bounds.contains(&position) {
-            self.viewport_cell(position, cx)
-                .and_then(|(column, row)| self.link_grid(cx)?.at(column, row).cloned())
-        } else {
-            None
-        };
-        if target != self.hovered_link {
-            self.hovered_link = target;
-            cx.notify();
-        }
-    }
-
     fn reset_pointer(&mut self) {
-        self.clear_links();
         self.pointer.clear();
         self.pointer_epoch = None;
-        self.local_dragged = false;
         self.pointer_position = None;
         self.pointer_modifiers = Modifiers::default();
         self.reported_cell = None;
@@ -324,14 +263,10 @@ impl TerminalView {
         if let Some(position) = self.pointer_position {
             let session = self.session.read(cx);
             let mode = session
-                .terminal()
-                .map(|terminal| *terminal.lock().mode())
+                .with_terminal(|terminal| InputModes::read(terminal))
                 .unwrap_or_default();
-            if self.pointer_epoch.is_some_and(|epoch| {
-                epoch.0 == session.generation()
-                    && epoch.1 == session.pointer_revision()
-                    && epoch.2 == interaction_modes(mode)
-            }) && mode.intersects(TermMode::MOUSE_MODE)
+            if self.pointer_epoch == Some((session.generation(), mode))
+                && mode.mouse_reporting()
                 && let Some((column, row)) = self.viewport_cell(position, cx)
             {
                 for button in self.pointer.application_buttons() {
@@ -350,42 +285,26 @@ impl TerminalView {
         self.reset_pointer();
     }
 
-    fn sync_pointer(&mut self, cx: &App) -> Option<TermMode> {
+    fn sync_pointer(&mut self, cx: &App) -> Option<InputModes> {
         if self.attachment.is_none() {
             self.reset_pointer();
             return None;
         }
         let session = self.session.read(cx);
-        let mode = if session.status() == TerminalStatus::Running {
+        let mut mode = if session.status() == TerminalStatus::Running {
             session
-                .terminal()
-                .map(|terminal| *terminal.lock().mode())
+                .with_terminal(|terminal| InputModes::read(terminal))
                 .unwrap_or_default()
         } else {
-            TermMode::NONE
+            InputModes::default()
         };
-        let mode = if session.mouse_reporting_enabled() {
-            mode
-        } else {
-            mode & !TermMode::MOUSE_MODE
-        };
-        let epoch = (
-            session.generation(),
-            session.pointer_revision(),
-            interaction_modes(mode),
-        );
-        if let Some(previous) = self.pointer_epoch {
-            if previous.0 != epoch.0 || previous.2 != epoch.2 {
-                self.clear_links();
-                self.pointer.clear();
-                self.reported_cell = None;
-                self.local_dragged = false;
-            } else if previous.1 != epoch.1 {
-                self.clear_links();
-                self.pointer.clear_gestures();
-                self.reported_cell = None;
-                self.local_dragged = false;
-            }
+        if !session.mouse_reporting_enabled() {
+            mode.mouse = MouseTracking::Off;
+        }
+        let epoch = (session.generation(), mode);
+        if self.pointer_epoch.is_some_and(|previous| previous != epoch) {
+            self.pointer.clear();
+            self.reported_cell = None;
         }
         self.pointer_epoch = Some(epoch);
         Some(mode)
@@ -394,15 +313,20 @@ impl TerminalView {
     fn viewport_cell(&self, position: Point<Pixels>, cx: &App) -> Option<(usize, usize)> {
         let layout = self.layout?;
         let size = self.session.read(cx).size();
-        Some(layout.cell_at(position, self.interaction_bounds, size.columns, size.lines))
+        Some(layout.cell_at(
+            position,
+            self.interaction_bounds,
+            size.columns.into(),
+            size.rows.into(),
+        ))
     }
 
-    fn release_bytes(&self, mode: TermMode, code: u8, column: usize, row: usize) -> Vec<u8> {
-        let bytes = mouse_bytes(mode, code, column, row, true);
+    fn release_bytes(&self, mode: InputModes, code: u8, column: usize, row: usize) -> Vec<u8> {
+        let bytes = mouse_bytes(mode.mouse_format, code, column, row, true);
         if bytes.is_empty() {
             // Balance the press at its last representable cell when the pointer exceeds wire limits.
             self.reported_cell
-                .map(|(column, row)| mouse_bytes(mode, code, column, row, true))
+                .map(|(column, row)| mouse_bytes(mode.mouse_format, code, column, row, true))
                 .unwrap_or_default()
         } else {
             bytes
@@ -431,25 +355,9 @@ impl TerminalView {
         self.pointer_position = Some(event.position);
         self.pointer_modifiers = event.modifiers;
         self.focus.focus(window, cx);
-        if event.button == MouseButton::Left
-            && link_modifier(event.modifiers)
-            && let Some(grid) = self.link_grid(cx)
-            && let Some(target) = grid.at(column, row).cloned()
-        {
-            self.armed_link = Some(ArmedLink {
-                grid,
-                target,
-                generation: self.session.read(cx).generation(),
-                bounds: self.interaction_bounds,
-                layout: self.layout.unwrap(),
-                position: event.position,
-            });
-            self.pointer.press(event.button, PointerOwner::Link);
-            return true;
-        }
-        if mode.intersects(TermMode::MOUSE_MODE) && !event.modifiers.shift {
+        if mode.mouse_reporting() && !event.modifiers.shift {
             let code = button_code(event.button) + modifier_code(event.modifiers);
-            let bytes = mouse_bytes(mode, code, column, row, false);
+            let bytes = mouse_bytes(mode.mouse_format, code, column, row, false);
             if !bytes.is_empty() {
                 self.reported_cell = Some((column, row));
                 self.pointer.press(event.button, PointerOwner::Application);
@@ -460,8 +368,6 @@ impl TerminalView {
         }
         if event.button == MouseButton::Left {
             self.pointer.press(event.button, PointerOwner::Local);
-            self.local_dragged = false;
-            self.select_at(event.position, self.interaction_bounds, true, cx);
             return true;
         }
         false
@@ -478,32 +384,16 @@ impl TerminalView {
         };
         self.pointer_position = Some(event.position);
         self.pointer_modifiers = event.modifiers;
-        self.hover_link(event.position, hovered, cx);
         if let Some(button) = event.pressed_button {
             match self.pointer.owner(button) {
-                Some(PointerOwner::Link) => {
-                    if !link_modifier(event.modifiers)
-                        || self.armed_link.as_ref().is_some_and(|armed| {
-                            (event.position.x - armed.position.x).abs() > px(4.)
-                                || (event.position.y - armed.position.y).abs() > px(4.)
-                        })
-                    {
-                        self.armed_link = None;
-                    }
-                    return true;
-                }
-                Some(PointerOwner::Local) if button == MouseButton::Left => {
-                    self.local_dragged = true;
-                    self.select_at(event.position, self.interaction_bounds, false, cx);
-                    return true;
-                }
+                Some(PointerOwner::Local) => return true,
                 Some(PointerOwner::Application) => {
-                    if mode.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION)
+                    if matches!(mode.mouse, MouseTracking::Drag | MouseTracking::Motion)
                         && let Some((column, row)) = self.viewport_cell(event.position, cx)
                     {
                         let code = button_code(button) + 32 + modifier_code(event.modifiers);
                         if self.pointer.motion_changed(column, row, code) {
-                            let bytes = mouse_bytes(mode, code, column, row, false);
+                            let bytes = mouse_bytes(mode.mouse_format, code, column, row, false);
                             if !bytes.is_empty() {
                                 self.reported_cell = Some((column, row));
                             }
@@ -512,18 +402,18 @@ impl TerminalView {
                     }
                     return true;
                 }
-                _ => return false,
+                None => return false,
             }
         }
         if !hovered {
             self.pointer.leave();
             return false;
         }
-        if mode.contains(TermMode::MOUSE_MOTION) && !event.modifiers.shift {
+        if mode.mouse == MouseTracking::Motion && !event.modifiers.shift {
             if let Some((column, row)) = self.viewport_cell(event.position, cx) {
                 let code = 35 + modifier_code(event.modifiers);
                 if self.pointer.motion_changed(column, row, code) {
-                    let bytes = mouse_bytes(mode, code, column, row, false);
+                    let bytes = mouse_bytes(mode.mouse_format, code, column, row, false);
                     if !bytes.is_empty() {
                         self.reported_cell = Some((column, row));
                     }
@@ -542,28 +432,6 @@ impl TerminalView {
         self.pointer_position = Some(event.position);
         self.pointer_modifiers = event.modifiers;
         match self.pointer.release(event.button) {
-            Some(PointerOwner::Link) => {
-                if let Some(armed) = self.armed_link.take() {
-                    let current = self.link_grid(cx);
-                    let cell = self.viewport_cell(event.position, cx);
-                    if link_modifier(event.modifiers)
-                        && self.interaction_bounds.contains(&event.position)
-                        && (event.position.x - armed.position.x).abs() <= px(4.)
-                        && (event.position.y - armed.position.y).abs() <= px(4.)
-                        && armed.generation == self.session.read(cx).generation()
-                        && armed.bounds == self.interaction_bounds
-                        && Some(armed.layout) == self.layout
-                        && current.as_ref() == Some(&armed.grid)
-                        && cell.is_some_and(|(column, row)| {
-                            current.as_ref().and_then(|grid| grid.at(column, row))
-                                == Some(&armed.target)
-                        })
-                    {
-                        (self.open_link)(&armed.target.uri, cx);
-                    }
-                }
-                true
-            }
             Some(PointerOwner::Application) => {
                 if let Some((column, row)) = self.viewport_cell(event.position, cx) {
                     self.send_pointer(
@@ -578,19 +446,12 @@ impl TerminalView {
                 }
                 true
             }
-            Some(PointerOwner::Local) => {
-                if self.local_dragged {
-                    self.select_at(event.position, self.interaction_bounds, false, cx);
-                }
-                self.local_dragged = false;
-                true
-            }
+            Some(PointerOwner::Local) => true,
             None => false,
         }
     }
 
     fn scroll(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) -> bool {
-        self.clear_links();
         let Some(mode) = self.sync_pointer(cx) else {
             return false;
         };
@@ -604,9 +465,11 @@ impl TerminalView {
         match route {
             WheelRoute::Local => {
                 if vertical != 0 {
-                    if let Some(terminal) = self.session.read(cx).terminal() {
-                        terminal.lock().scroll_display(Scroll::Delta(vertical));
-                    }
+                    // The wheel scrolls up with positive steps, the viewport
+                    // with negative deltas.
+                    self.session.read(cx).with_terminal(|terminal| {
+                        terminal.scroll_viewport(Scroll::Delta(-(vertical as isize)))
+                    });
                     cx.notify();
                 }
             }
@@ -617,7 +480,7 @@ impl TerminalView {
                         let code = if steps > 0 { positive } else { negative }
                             + modifier_code(event.modifiers);
                         bytes.extend(
-                            mouse_bytes(mode, code, column, row, false)
+                            mouse_bytes(mode.mouse_format, code, column, row, false)
                                 .repeat(steps.unsigned_abs() as usize),
                         );
                     }
@@ -639,47 +502,6 @@ impl TerminalView {
             }
         }
         true
-    }
-
-    fn select_at(
-        &mut self,
-        position: Point<Pixels>,
-        bounds: Bounds<Pixels>,
-        start: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if self.attachment.is_none() {
-            return;
-        }
-        let Some(terminal) = self.session.read(cx).terminal().cloned() else {
-            return;
-        };
-        let mut terminal = terminal.lock();
-        let Some(layout) = self.layout else {
-            return;
-        };
-        let (column, line) = layout.cell_at(
-            position,
-            bounds,
-            terminal.columns(),
-            terminal.screen_lines(),
-        );
-        let point = TermPoint::new(
-            Line(line as i32 - terminal.grid().display_offset() as i32),
-            Column(column),
-        );
-        if start {
-            terminal.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
-        } else if let Some(selection) = terminal.selection.as_mut() {
-            selection.update(point, Side::Right);
-        }
-        drop(terminal);
-        cx.notify();
-    }
-
-    #[cfg(test)]
-    pub(crate) fn interaction_bounds(&self) -> Bounds<Pixels> {
-        self.interaction_bounds
     }
 }
 
@@ -756,7 +578,7 @@ impl Render for TerminalView {
 
 /// The overlay caption for a non-running session; `None` while running,
 /// where the grid paints alone with no header chrome. The exit payload is
-/// already a plain description (`exit status: 0`, a signal line), so it is
+/// already a plain description (`exit code 0`, a signal line), so it is
 /// shown verbatim instead of gaining a redundant prefix.
 fn terminal_overlay_label(status: &TerminalStatus) -> Option<String> {
     match status {
@@ -779,85 +601,101 @@ impl IntoElement for TerminalElement {
     }
 }
 
-#[derive(Clone)]
 struct RenderCell {
     line: usize,
     column: usize,
     text: String,
-    foreground: u32,
-    background: u32,
-    flags: Flags,
+    wide: bool,
+    foreground: Rgb,
+    background: Rgb,
+    style: knot_terminal::Style,
     selected: bool,
 }
 
+struct RenderCursor {
+    line: usize,
+    column: usize,
+    style: TerminalCursor,
+    color: Option<Rgb>,
+}
+
+/// One frame of the viewport, read from the session's terminal.
+#[derive(Default)]
 struct TerminalSnapshot {
     cells: Vec<RenderCell>,
-    cursor: Option<(usize, usize, CursorShape)>,
-    links: Option<LinkGrid>,
+    cursor: Option<RenderCursor>,
 }
 
 impl TerminalSnapshot {
-    fn capture(view: &TerminalView, cx: &App) -> Self {
+    fn capture(view: &mut TerminalView, cx: &App) -> Self {
         if view.attachment.is_none() {
-            return Self {
-                cells: Vec::new(),
-                cursor: None,
-                links: None,
-            };
+            return Self::default();
         }
-        let Some(terminal) = view.session.read(cx).terminal() else {
-            return Self {
-                cells: Vec::new(),
-                cursor: None,
-                links: None,
-            };
+        let session = view.session.read(cx);
+        let Some(terminal) = session.terminal() else {
+            return Self::default();
         };
-        let palette = TerminalPalette::new(theme(cx));
-        let terminal = terminal.lock();
-        let content = terminal.renderable_content();
-        let display_offset = content.display_offset;
-        let selection = content.selection;
-        let colors = *content.colors;
-        let cursor = point_to_viewport(display_offset, content.cursor.point)
-            .map(|point| (point.line, point.column.0, content.cursor.shape));
-        let cells = content
-            .display_iter
-            .filter_map(|indexed| {
-                let point = point_to_viewport(display_offset, indexed.point)?;
-                let cell = indexed.cell;
-                if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
-                    return None;
+        let state = &mut view.render_state;
+        state.update(terminal);
+        let colors = state.colors();
+        let cursor = state.cursor();
+        let cursor = cursor
+            .position
+            .filter(|_| cursor.visible)
+            .map(|(column, line)| RenderCursor {
+                line: line.into(),
+                // A cursor on the tail of a wide character marks the whole glyph.
+                column: usize::from(column).saturating_sub(usize::from(cursor.wide_tail)),
+                style: if session.focused() {
+                    cursor.style
+                } else {
+                    TerminalCursor::BlockHollow
+                },
+                color: colors.cursor,
+            });
+        let mut cells = Vec::new();
+        let mut rows = state.rows();
+        while let Some(mut row) = rows.next() {
+            let line = usize::from(row.index());
+            let selection = row.selection();
+            let mut row_cells = row.cells();
+            let mut column = 0;
+            while let Some(cell) = row_cells.next() {
+                let index = column;
+                column += 1;
+                if matches!(cell.width, CellWidth::SpacerTail | CellWidth::SpacerHead) {
+                    continue;
                 }
-                let mut foreground = resolve_color(cell.fg, &colors, palette.foreground, &palette);
-                let mut background = resolve_color(cell.bg, &colors, palette.background, &palette);
-                if cell.flags.contains(Flags::INVERSE) {
+                let mut foreground = cell.foreground.unwrap_or(colors.foreground);
+                let mut background = cell.background.unwrap_or(colors.background);
+                if cell.style.inverse {
                     std::mem::swap(&mut foreground, &mut background);
                 }
-                if cell.flags.contains(Flags::DIM) {
+                if cell.style.faint {
                     foreground = dim(foreground);
                 }
-                let mut text = cell.c.to_string();
-                if let Some(zerowidth) = cell.zerowidth() {
-                    text.extend(zerowidth);
-                }
-                Some(RenderCell {
-                    line: point.line,
-                    column: point.column.0,
-                    text,
+                cells.push(RenderCell {
+                    line,
+                    column: index,
+                    text: cell.text.to_owned(),
+                    wide: cell.width == CellWidth::Wide,
                     foreground,
                     background,
-                    flags: cell.flags,
-                    selected: selection.is_some_and(|range| range.contains(indexed.point)),
-                })
-            })
-            .collect();
-
-        Self {
-            cells,
-            cursor,
-            links: Some(LinkGrid::capture(&terminal)),
+                    style: cell.style,
+                    selected: selection.is_some_and(|(start, end)| {
+                        (usize::from(start)..=usize::from(end)).contains(&index)
+                    }),
+                });
+            }
         }
+        state.clean();
+        Self { cells, cursor }
     }
+}
+
+/// `color` for gpui.
+fn paint_rgb(color: Rgb) -> Hsla {
+    rgb(color.packed()).into()
 }
 
 impl Element for TerminalElement {
@@ -897,6 +735,7 @@ impl Element for TerminalElement {
         let font = base_font(cx);
         let layout = TerminalLayout::measure(window, &font, px(font_size(cx)));
         let size = layout.grid_size(bounds);
+        let palette = TerminalPalette::new(theme(cx));
         self.entity.update(cx, |terminal, cx| {
             if terminal.interaction_bounds != bounds || terminal.layout != Some(layout) {
                 terminal.cancel_pointer(cx);
@@ -904,6 +743,11 @@ impl Element for TerminalElement {
             terminal.interaction_bounds = bounds;
             terminal.layout = Some(layout);
             terminal.resize(size, cx);
+            if terminal.attachment.is_some() {
+                terminal
+                    .session
+                    .update(cx, |session, _| session.set_palette(palette));
+            }
         });
         window.insert_hitbox(bounds, HitboxBehavior::Normal)
     }
@@ -959,30 +803,13 @@ impl Element for TerminalElement {
 
         let modifier_entity = self.entity.clone();
         window.on_modifiers_changed(move |event, _, cx| {
-            modifier_entity.update(cx, |terminal, cx| {
+            modifier_entity.update(cx, |terminal, _| {
                 terminal.pointer_modifiers = event.modifiers;
-                if !link_modifier(event.modifiers) {
-                    terminal.armed_link = None;
-                }
-                cx.notify();
             });
         });
-        let snapshot = TerminalSnapshot::capture(self.entity.read(cx), cx);
-        let hovered = self
+        let snapshot = self
             .entity
-            .read(cx)
-            .hovered_link
-            .as_ref()
-            .filter(|target| {
-                snapshot
-                    .links
-                    .as_ref()
-                    .is_some_and(|grid| grid.links_contain(target))
-            })
-            .cloned();
-        if hovered.is_some() && link_modifier(window.modifiers()) {
-            window.set_cursor_style(CursorStyle::PointingHand, hitbox);
-        }
+            .update(cx, |view, cx| TerminalSnapshot::capture(view, cx));
         let Some(layout) = self.entity.read(cx).layout else {
             return;
         };
@@ -996,7 +823,7 @@ impl Element for TerminalElement {
             for cell in &snapshot.cells {
                 let origin = layout.origin(bounds, cell.column, cell.line);
                 if cell.background != terminal_background || cell.selected {
-                    let width = if cell.flags.contains(Flags::WIDE_CHAR) {
+                    let width = if cell.wide {
                         cell_width * 2
                     } else {
                         cell_width
@@ -1009,26 +836,25 @@ impl Element for TerminalElement {
                         if cell.selected {
                             selection
                         } else {
-                            rgb(cell.background).into()
+                            paint_rgb(cell.background)
                         },
                     ));
                 }
             }
 
-            if let Some((line, column, shape)) = snapshot.cursor
-                && shape != CursorShape::Hidden
-            {
-                let origin = layout.origin(bounds, column, line);
-                let cursor_bounds = match shape {
-                    CursorShape::Beam => Bounds {
+            if let Some(cursor) = &snapshot.cursor {
+                let cursor_color = cursor.color.map_or(cursor_color, paint_rgb);
+                let origin = layout.origin(bounds, cursor.column, cursor.line);
+                let cursor_bounds = match cursor.style {
+                    TerminalCursor::Bar => Bounds {
                         origin,
                         size: size(px(2.), cell_height),
                     },
-                    CursorShape::Underline => Bounds {
+                    TerminalCursor::Underline => Bounds {
                         origin: point(origin.x, origin.y + cell_height - px(2.)),
                         size: size(cell_width, px(2.)),
                     },
-                    CursorShape::HollowBlock => {
+                    TerminalCursor::BlockHollow => {
                         window.paint_quad(quad(
                             Bounds {
                                 origin,
@@ -1045,11 +871,10 @@ impl Element for TerminalElement {
                             size: size(px(0.), px(0.)),
                         }
                     }
-                    CursorShape::Block => Bounds {
+                    TerminalCursor::Block => Bounds {
                         origin,
                         size: size(cell_width, cell_height),
                     },
-                    CursorShape::Hidden => unreachable!(),
                 };
                 if cursor_bounds.size.width > px(0.) {
                     window.paint_quad(fill(cursor_bounds, cursor_color.opacity(0.5)));
@@ -1058,34 +883,28 @@ impl Element for TerminalElement {
 
             let base = base_font(cx);
             for cell in &snapshot.cells {
-                if cell.flags.contains(Flags::HIDDEN) || cell.text == " " {
+                if cell.style.invisible || cell.text.trim().is_empty() {
                     continue;
                 }
                 let mut font = base.clone();
-                if cell.flags.contains(Flags::BOLD) {
+                if cell.style.bold {
                     font = bold(&font);
                 }
-                if cell.flags.contains(Flags::ITALIC) {
+                if cell.style.italic {
                     font = italic(&font);
                 }
                 let run = TextRun {
                     len: cell.text.len(),
                     font,
-                    color: rgb(cell.foreground).into(),
+                    color: paint_rgb(cell.foreground),
                     background_color: None,
-                    underline: (cell.flags.intersects(Flags::ALL_UNDERLINES)
-                        || hovered
-                            .as_ref()
-                            .is_some_and(|link| link.contains(cell.column, cell.line)))
-                    .then(|| UnderlineStyle {
+                    underline: (cell.style.underline != Underline::None).then(|| UnderlineStyle {
                         thickness: px(1.),
                         ..Default::default()
                     }),
-                    strikethrough: cell.flags.contains(Flags::STRIKEOUT).then(|| {
-                        StrikethroughStyle {
-                            thickness: px(1.),
-                            ..Default::default()
-                        }
+                    strikethrough: cell.style.strikethrough.then(|| StrikethroughStyle {
+                        thickness: px(1.),
+                        ..Default::default()
                     }),
                 };
                 let shaped = window.text_system().shape_line(
@@ -1095,12 +914,7 @@ impl Element for TerminalElement {
                     None,
                 );
                 let origin = layout.origin(bounds, cell.column, cell.line);
-                let width = cell_width
-                    * if cell.flags.contains(Flags::WIDE_CHAR) {
-                        2
-                    } else {
-                        1
-                    };
+                let width = cell_width * if cell.wide { 2 } else { 1 };
                 window.with_content_mask(
                     Some(ContentMask {
                         bounds: Bounds::new(origin, size(width, cell_height)),
@@ -1142,8 +956,8 @@ fn claim_terminal(command: &Command, target: &ProductCommandTarget, cx: &App) ->
         return view
             .session
             .read(cx)
-            .terminal()
-            .and_then(|terminal| terminal.lock().selection_to_string())
+            .with_terminal(|terminal| terminal.selection_text())
+            .flatten()
             .is_some_and(|text| !text.is_empty());
     }
     true

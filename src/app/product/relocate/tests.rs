@@ -429,16 +429,16 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
             1
         );
     });
-    let size = crate::app::terminal::session::TerminalSize {
+    let size = knot_terminal::TerminalSize {
         columns: 80,
-        lines: 20,
+        rows: 20,
         cell_width: 9,
         cell_height: 18,
     };
     moved_view.update(cx, |view, cx| view.resize(size, cx));
-    let stale_size = crate::app::terminal::session::TerminalSize {
+    let stale_size = knot_terminal::TerminalSize {
         columns: 40,
-        lines: 10,
+        rows: 10,
         cell_width: 9,
         cell_height: 18,
     };

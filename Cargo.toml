@@ -88,6 +88,7 @@ knot-handler-macros = { path = "crates/knot-handler-macros" }
 knot-host = { path = "crates/knot-host" }
 knot-model = { path = "crates/knot-model" }
 knot-protocol = { path = "crates/knot-protocol" }
+knot-terminal = { path = "crates/knot-terminal" }
 alacritty_terminal = { workspace = true }
 anyhow = { workspace = true }
 directories = { workspace = true }

@@ -8,57 +8,30 @@ use std::{
     time::{Duration, Instant},
 };
 
-use alacritty_terminal::{
-    grid::Dimensions,
-    index::{Column, Line},
-    tty,
-};
 use gpui::{AppContext, Entity, TestAppContext};
+use knot_terminal::{Point, PtyOptions, Scroll, Shell, TerminalSize};
 
 use crate::app::{
     keys::Keystroke,
-    terminal::session::{TerminalSession, TerminalSize, TerminalStatus},
+    terminal::session::{TerminalSession, TerminalStatus, lock},
     terminal::view::TerminalView,
 };
 
-fn shell(script: &str) -> tty::Options {
-    tty::Options {
-        shell: Some(tty::Shell::new(
-            "/bin/sh".to_owned(),
+fn shell(script: &str) -> PtyOptions {
+    PtyOptions {
+        shell: Some(Shell::new(
+            "/bin/sh",
             vec!["-c".to_owned(), script.to_owned()],
         )),
-        drain_on_exit: true,
-        ..Default::default()
+        ..PtyOptions::default()
     }
 }
 
+/// The screen and its scrollback as text.
 fn output(session: &TerminalSession) -> String {
-    let Some(terminal) = session.terminal() else {
-        return String::new();
-    };
-    terminal
-        .lock()
-        .renderable_content()
-        .display_iter
-        .map(|cell| cell.cell.c)
-        .collect()
-}
-
-fn full_output(session: &TerminalSession) -> String {
-    let Some(terminal) = session.terminal() else {
-        return String::new();
-    };
-    let terminal = terminal.lock();
-    let grid = terminal.grid();
-    let mut text = String::new();
-    let mut line = grid.topmost_line().0;
-    while line <= grid.bottommost_line().0 {
-        for column in 0..grid.columns() {
-            text.push(grid[Line(line)][Column(column)].c);
-        }
-        line += 1;
-    }
-    text
+    session
+        .with_terminal(|terminal| terminal.text())
+        .unwrap_or_default()
 }
 
 fn wait_for(
@@ -170,12 +143,9 @@ fn attachment_lease_allows_only_one_view(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn startup_failure_has_visible_status_and_can_be_closed(cx: &mut TestAppContext) {
-    let options = tty::Options {
-        shell: Some(tty::Shell::new(
-            "/does-not-exist/knot-test-shell".to_owned(),
-            Vec::new(),
-        )),
-        ..Default::default()
+    let options = PtyOptions {
+        shell: Some(Shell::new("/does-not-exist/knot-test-shell", Vec::new())),
+        ..PtyOptions::default()
     };
     let session = cx.new(|cx| TerminalSession::new_with_options(options, cx));
     assert!(session.read_with(cx, |session, _| {
@@ -206,7 +176,7 @@ fn current_directory_follows_the_shell(cx: &mut TestAppContext) {
     fs::create_dir(&nested).unwrap();
     let session = cx.new(|cx| {
         TerminalSession::new_with_options(
-            tty::Options {
+            PtyOptions {
                 working_directory: Some(temp.path().to_owned()),
                 ..shell("printf 'started\\n'; while IFS= read -r dir; do cd \"$dir\" && printf 'moved\\n'; done")
             },
@@ -240,7 +210,7 @@ fn stopped_and_failed_sessions_report_their_start_directory(cx: &mut TestAppCont
     fs::create_dir(&nested).unwrap();
     let exited = cx.new(|cx| {
         TerminalSession::new_with_options(
-            tty::Options {
+            PtyOptions {
                 working_directory: Some(temp.path().to_owned()),
                 ..shell("cd nested; exit 0")
             },
@@ -257,13 +227,10 @@ fn stopped_and_failed_sessions_report_their_start_directory(cx: &mut TestAppCont
 
     let failed = cx.new(|cx| {
         TerminalSession::new_with_options(
-            tty::Options {
-                shell: Some(tty::Shell::new(
-                    "/does-not-exist/knot-test-shell".to_owned(),
-                    Vec::new(),
-                )),
+            PtyOptions {
+                shell: Some(Shell::new("/does-not-exist/knot-test-shell", Vec::new())),
                 working_directory: Some(temp.path().to_owned()),
-                ..Default::default()
+                ..PtyOptions::default()
             },
             cx,
         )
@@ -284,7 +251,7 @@ fn resize_updates_grid_and_child_pty(cx: &mut TestAppContext) {
     });
     let size = TerminalSize {
         columns: 93,
-        lines: 19,
+        rows: 19,
         cell_width: 8,
         cell_height: 16,
     };
@@ -294,9 +261,8 @@ fn resize_updates_grid_and_child_pty(cx: &mut TestAppContext) {
         output(session).contains("resize-done")
     });
     session.read_with(cx, |session, _| {
-        let terminal = session.terminal().unwrap().lock();
-        assert_eq!(terminal.columns(), 93);
-        assert_eq!(terminal.screen_lines(), 19);
+        let size = session.with_terminal(|terminal| terminal.size()).unwrap();
+        assert_eq!((size.columns, size.rows), (93, 19));
     });
     assert!(session.read_with(cx, |session, _| output(session).contains("19 93")));
 }
@@ -306,10 +272,10 @@ fn repeated_close_reaps_child_without_blocking_foreground(cx: &mut TestAppContex
     let directory = tempfile::tempdir().unwrap();
     let pid_file = directory.path().join("child.pid");
     let mut options = shell("printf '%s' \"$$\" > \"$KNOT_TEST_PID_FILE\"; exec sleep 30");
-    options.env.insert(
+    options.env.push((
         "KNOT_TEST_PID_FILE".to_owned(),
         pid_file.to_string_lossy().into_owned(),
-    );
+    ));
     let session = cx.new(|cx| TerminalSession::new_with_options(options, cx));
     let pid = wait_for_pid(&pid_file);
     assert!(process_exists(pid));
@@ -376,10 +342,10 @@ fn restart_carries_prior_output_into_the_new_session(cx: &mut TestAppContext) {
     session.update(cx, |session, cx| session.restart(cx));
     wait_for(cx, &session, |session| {
         matches!(session.status(), TerminalStatus::Exited(_))
-            && full_output(session).contains("run-2-done")
+            && output(session).contains("run-2-done")
     });
     session.read_with(cx, |session, _| {
-        let text = full_output(session);
+        let text = output(session);
         let first = text
             .find("run-1-done")
             .expect("prior output survives restart");
@@ -453,12 +419,10 @@ fn paste_command_delivers_plain_and_bracketed_clipboard_bytes(cx: &mut TestAppCo
         let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
         wait_for(cx, &session, |session| output(session).contains("ready"));
         session.read_with(cx, |session, _| {
-            let mut terminal = session.terminal().unwrap().lock();
-            let mut parser: alacritty_terminal::vte::ansi::Processor =
-                alacritty_terminal::vte::ansi::Processor::new();
-            parser.advance(&mut *terminal, "history\r\n".repeat(50).as_bytes());
-            terminal.scroll_display(alacritty_terminal::grid::Scroll::Top);
-            assert!(terminal.grid().display_offset() > 0);
+            let mut terminal = lock(session.terminal().unwrap());
+            terminal.write("history\r\n".repeat(50).as_bytes());
+            terminal.scroll_viewport(Scroll::Top);
+            assert!(terminal.scrollbar().rows_below() > 0);
         });
         cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(clipboard.into())));
         let claim = view.update(cx, |view, cx| {
@@ -470,11 +434,8 @@ fn paste_command_delivers_plain_and_bracketed_clipboard_bytes(cx: &mut TestAppCo
         ));
         assert_eq!(
             session.read_with(cx, |session, _| session
-                .terminal()
-                .unwrap()
-                .lock()
-                .grid()
-                .display_offset()),
+                .with_terminal(|terminal| terminal.scrollbar().rows_below())
+                .unwrap()),
             0
         );
         wait_for(cx, &session, |session| {
@@ -496,7 +457,7 @@ fn emulator_queries_deliver_ordered_replies_to_the_child_pty(cx: &mut TestAppCon
     let temp = tempfile::tempdir().unwrap();
     let destination = temp.path().join("replies.hex");
     let expected =
-        b"\x1b[0n\x1b[1;1R\x1b[?6c\x1b[8;24;80t\x1b[4;432;720t\x1b]11;rgb:1818/1818/1818\x1b\\";
+        b"\x1b[0n\x1b[1;1R\x1b[?62;22c\x1b[8;24;80t\x1b[4;432;720t\x1b]11;rgb:1818/1818/1818\x1b\\";
     let script = format!(
         "stty raw -echo; printf ready; dd bs=1 count=1 >/dev/null 2>&1; printf '\\033[H\\033[5n\\033[6n\\033[c\\033[18t\\033[14t\\033]11;?\\033\\\\'; dd bs=1 count={} 2>/dev/null | od -An -tx1 > '{}'",
         expected.len(),
@@ -507,7 +468,7 @@ fn emulator_queries_deliver_ordered_replies_to_the_child_pty(cx: &mut TestAppCon
     session.update(cx, |session, _| {
         session.resize(TerminalSize {
             columns: 80,
-            lines: 24,
+            rows: 24,
             cell_width: 9,
             cell_height: 18,
         });
@@ -620,7 +581,6 @@ fn focus_handoff_reports_each_owner_once_and_detached_keys_are_ignored(cx: &mut 
 
 #[gpui::test]
 fn old_parser_and_input_generation_cannot_write_to_restarted_pty(cx: &mut TestAppContext) {
-    use alacritty_terminal::vte::ansi::Processor;
     let temp = tempfile::tempdir().unwrap();
     let destination = temp.path().join("restart.hex");
     let script = format!(
@@ -634,8 +594,7 @@ fn old_parser_and_input_generation_cannot_write_to_restarted_pty(cx: &mut TestAp
     let old_terminal = session.read_with(cx, |session, _| session.terminal().unwrap().clone());
     session.update(cx, |session, cx| session.restart(cx));
     wait_for(cx, &session, |session| output(session).contains("ready"));
-    let mut parser: Processor = Processor::new();
-    parser.advance(&mut *old_terminal.lock(), b"\x1b[5n\x1b[14t\x1b]11;?\x1b\\");
+    lock(&old_terminal).write(b"\x1b[5n\x1b[14t\x1b]11;?\x1b\\");
     session.update(cx, |session, _| {
         session.send_input(&attachment, generation, b"stale".to_vec());
         session.send_input(&attachment, session.generation(), b"X".to_vec());
@@ -689,10 +648,6 @@ fn keys_reach_the_program_in_its_keyboard_modes_without_a_window(cx: &mut TestAp
 #[gpui::test]
 fn stopped_terminal_keeps_copy_and_declines_paste_and_detached_commands(cx: &mut TestAppContext) {
     use crate::app::commands::dispatch::CommandClaim;
-    use alacritty_terminal::{
-        index::{Column, Line, Point, Side},
-        selection::{Selection, SelectionType},
-    };
     use knot_protocol::CommandOutcome;
     let session = cx.new(|cx| TerminalSession::new_with_options(shell("printf 'copy me'"), cx));
     wait_for(cx, &session, |session| {
@@ -700,14 +655,8 @@ fn stopped_terminal_keeps_copy_and_declines_paste_and_detached_commands(cx: &mut
     });
     let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
     session.read_with(cx, |session, _| {
-        let mut terminal = session.terminal().unwrap().lock();
-        let mut selection = Selection::new(
-            SelectionType::Simple,
-            Point::new(Line(0), Column(0)),
-            Side::Left,
-        );
-        selection.update(Point::new(Line(0), Column(6)), Side::Right);
-        terminal.selection = Some(selection);
+        lock(session.terminal().unwrap())
+            .select(Point { column: 0, row: 0 }, Point { column: 6, row: 0 });
     });
     assert!(matches!(
         view.update(cx, |view, cx| view
@@ -736,7 +685,6 @@ fn stopped_terminal_keeps_copy_and_declines_paste_and_detached_commands(cx: &mut
 
 #[gpui::test]
 fn vim_fixture_enters_alternate_screen_edits_and_exits(cx: &mut TestAppContext) {
-    use alacritty_terminal::term::TermMode;
     if Command::new("vim").arg("--version").output().is_err() {
         eprintln!("Vim fixture unavailable on this host");
         return;
@@ -754,11 +702,8 @@ fn vim_fixture_enters_alternate_screen_edits_and_exits(cx: &mut TestAppContext) 
     });
     assert!(session.read_with(cx, |session, _| {
         session
-            .terminal()
+            .with_terminal(|terminal| terminal.alternate_screen())
             .unwrap()
-            .lock()
-            .mode()
-            .contains(TermMode::ALT_SCREEN)
     }));
     session.update(cx, |session, _| {
         session.send(b"gg0iinserted-\x1b:wq\r".to_vec())
@@ -769,18 +714,14 @@ fn vim_fixture_enters_alternate_screen_edits_and_exits(cx: &mut TestAppContext) 
     assert_eq!(fs::read_to_string(file).unwrap(), "inserted-before-vim\n");
     assert!(!session.read_with(cx, |session, _| {
         session
-            .terminal()
+            .with_terminal(|terminal| terminal.alternate_screen())
             .unwrap()
-            .lock()
-            .mode()
-            .contains(TermMode::ALT_SCREEN)
     }));
     session.update(cx, |session, cx| session.close(cx));
 }
 
 #[gpui::test]
 fn less_fixture_pages_to_end_and_restores_the_primary_screen(cx: &mut TestAppContext) {
-    use alacritty_terminal::term::TermMode;
     if Command::new("less").arg("--version").output().is_err() {
         eprintln!("less fixture unavailable on this host");
         return;
@@ -801,11 +742,8 @@ fn less_fixture_pages_to_end_and_restores_the_primary_screen(cx: &mut TestAppCon
     });
     assert!(session.read_with(cx, |session, _| {
         session
-            .terminal()
+            .with_terminal(|terminal| terminal.alternate_screen())
             .unwrap()
-            .lock()
-            .mode()
-            .contains(TermMode::ALT_SCREEN)
     }));
     session.update(cx, |session, _| session.send(b" G".to_vec()));
     wait_for(cx, &session, |session| {
@@ -817,11 +755,8 @@ fn less_fixture_pages_to_end_and_restores_the_primary_screen(cx: &mut TestAppCon
     });
     assert!(!session.read_with(cx, |session, _| {
         session
-            .terminal()
+            .with_terminal(|terminal| terminal.alternate_screen())
             .unwrap()
-            .lock()
-            .mode()
-            .contains(TermMode::ALT_SCREEN)
     }));
     session.update(cx, |session, cx| session.close(cx));
 }

@@ -3809,6 +3809,7 @@ dependencies = [
  "knot-host",
  "knot-model",
  "knot-protocol",
+ "knot-terminal",
  "libc",
  "percent-encoding",
  "pollster 1.0.1",

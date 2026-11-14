@@ -1,9 +1,74 @@
-//! Legacy xterm keyboard encoding from the emulator's current modes.
+//! Legacy xterm keyboard encoding from the terminal's current modes.
 
 use crate::app::keys::Keystroke;
-use alacritty_terminal::term::TermMode;
+use knot_terminal::{Mode, Terminal};
 
-pub(crate) fn terminal_key_bytes(stroke: &Keystroke, mode: TermMode) -> Vec<u8> {
+/// Which mouse events the program asked to be told about.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum MouseTracking {
+    #[default]
+    Off,
+    /// Presses and releases.
+    Click,
+    /// Presses, releases, and motion while a button is held.
+    Drag,
+    /// Presses, releases, and all motion.
+    Motion,
+}
+
+/// How mouse reports are encoded.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum MouseFormat {
+    #[default]
+    Legacy,
+    Utf8,
+    Sgr,
+}
+
+/// The terminal modes that change what keyboard and mouse input encode to
+/// or where the wheel goes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct InputModes {
+    pub(crate) mouse: MouseTracking,
+    pub(crate) mouse_format: MouseFormat,
+    pub(crate) app_cursor: bool,
+    pub(crate) alternate_screen: bool,
+    pub(crate) alternate_scroll: bool,
+}
+
+impl InputModes {
+    pub(crate) fn read(terminal: &Terminal) -> Self {
+        let mouse = if terminal.mode(Mode::MouseAny) {
+            MouseTracking::Motion
+        } else if terminal.mode(Mode::MouseButton) {
+            MouseTracking::Drag
+        } else if terminal.mode(Mode::MouseNormal) || terminal.mode(Mode::MouseX10) {
+            MouseTracking::Click
+        } else {
+            MouseTracking::Off
+        };
+        let mouse_format = if terminal.mode(Mode::MouseFormatSgr) {
+            MouseFormat::Sgr
+        } else if terminal.mode(Mode::MouseFormatUtf8) {
+            MouseFormat::Utf8
+        } else {
+            MouseFormat::Legacy
+        };
+        Self {
+            mouse,
+            mouse_format,
+            app_cursor: terminal.mode(Mode::CursorKeys),
+            alternate_screen: terminal.alternate_screen(),
+            alternate_scroll: terminal.mode(Mode::AlternateScroll),
+        }
+    }
+
+    pub(crate) fn mouse_reporting(&self) -> bool {
+        self.mouse != MouseTracking::Off
+    }
+}
+
+pub(crate) fn terminal_key_bytes(stroke: &Keystroke, mode: InputModes) -> Vec<u8> {
     if stroke.modifiers.platform {
         return Vec::new();
     }
@@ -29,7 +94,7 @@ pub(crate) fn terminal_key_bytes(stroke: &Keystroke, mode: TermMode) -> Vec<u8> 
     if let Some(final_byte) = final_byte {
         return if parameter != 1 {
             format!("\x1b[1;{parameter}{final_byte}").into_bytes()
-        } else if key.starts_with('f') || mode.contains(TermMode::APP_CURSOR) {
+        } else if key.starts_with('f') || mode.app_cursor {
             format!("\x1bO{final_byte}").into_bytes()
         } else {
             format!("\x1b[{final_byte}").into_bytes()
@@ -115,10 +180,9 @@ mod tests {
     #[test]
     fn cursor_function_and_navigation_modes_and_every_modifier() {
         for app_cursor in [false, true] {
-            let mode = if app_cursor {
-                TermMode::APP_CURSOR
-            } else {
-                TermMode::NONE
+            let mode = InputModes {
+                app_cursor,
+                ..InputModes::default()
             };
             for (key, suffix) in [
                 ("up", 'A'),
@@ -189,7 +253,13 @@ mod tests {
                     format!("\x1b[{number};{}~", bits + 1)
                 };
                 assert_eq!(
-                    terminal_key_bytes(&stroke, TermMode::APP_CURSOR),
+                    terminal_key_bytes(
+                        &stroke,
+                        InputModes {
+                            app_cursor: true,
+                            ..InputModes::default()
+                        }
+                    ),
                     expected.as_bytes()
                 );
             }
@@ -212,7 +282,7 @@ mod tests {
             ("backspace", 8),
         ] {
             let stroke = Keystroke::parse(&format!("ctrl-{key}")).unwrap();
-            assert_eq!(terminal_key_bytes(&stroke, TermMode::NONE), [byte]);
+            assert_eq!(terminal_key_bytes(&stroke, InputModes::default()), [byte]);
         }
         for (key, expected) in [
             ("shift-tab", "\x1b[Z"),
@@ -223,7 +293,7 @@ mod tests {
             ("ctrl-f13", ""),
         ] {
             assert_eq!(
-                terminal_key_bytes(&Keystroke::parse(key).unwrap(), TermMode::NONE),
+                terminal_key_bytes(&Keystroke::parse(key).unwrap(), InputModes::default()),
                 expected.as_bytes()
             );
         }
@@ -233,7 +303,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            terminal_key_bytes(&stroke, TermMode::APP_KEYPAD),
+            terminal_key_bytes(&stroke, InputModes::default()),
             "é界".as_bytes()
         );
         let stroke = Keystroke {
@@ -244,12 +314,12 @@ mod tests {
                 ..Default::default()
             },
         };
-        assert_eq!(terminal_key_bytes(&stroke, TermMode::NONE), b"\x1bb");
+        assert_eq!(terminal_key_bytes(&stroke, InputModes::default()), b"\x1bb");
         let stroke = Keystroke {
             key: "2".into(),
             key_char: Some("2".into()),
             ..Default::default()
         };
-        assert_eq!(terminal_key_bytes(&stroke, TermMode::APP_KEYPAD), b"2");
+        assert_eq!(terminal_key_bytes(&stroke, InputModes::default()), b"2");
     }
 }

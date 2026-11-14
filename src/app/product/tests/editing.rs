@@ -67,21 +67,16 @@ async fn editing_commands_keep_the_captured_view_and_native_clipboard(cx: &mut T
 
 #[gpui::test]
 async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestAppContext) {
-    use alacritty_terminal::tty::{Options, Shell};
-    use alacritty_terminal::{
-        index::{Column, Line, Point as TermPoint, Side},
-        selection::{Selection, SelectionType},
-        vte::ansi::Handler,
-    };
     use gpui::EntityInputHandler;
+    use knot_terminal::{Point as TermPoint, PtyOptions, Shell};
 
     #[cfg(windows)]
     let quiet_shell = Shell::new(
-        "cmd.exe".into(),
+        "cmd.exe",
         vec!["/C".into(), "ping -n 3 127.0.0.1 >nul".into()],
     );
     #[cfg(not(windows))]
-    let quiet_shell = Shell::new("/bin/sh".into(), vec!["-c".into(), "sleep 2".into()]);
+    let quiet_shell = Shell::new("/bin/sh", vec!["-c".into(), "sleep 2".into()]);
 
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -168,9 +163,8 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
     let terminal_session = cx.update(|cx| {
         cx.new(|cx| {
             crate::app::terminal::session::TerminalSession::new_with_options(
-                Options {
+                PtyOptions {
                     shell: Some(quiet_shell),
-                    drain_on_exit: true,
                     ..Default::default()
                 },
                 cx,
@@ -248,19 +242,13 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
             .borrow()
             .sessions[&session_id]
             .clone();
-        let terminal = session.read(cx).terminal().unwrap().clone();
-        let mut terminal = terminal.lock();
-        terminal.goto(0, 0);
-        for ch in "selected terminal text".chars() {
-            terminal.input(ch);
-        }
-        let mut selection = Selection::new(
-            SelectionType::Simple,
-            TermPoint::new(Line(0), Column(0)),
-            Side::Left,
-        );
-        selection.update(TermPoint::new(Line(0), Column(21)), Side::Right);
-        terminal.selection = Some(selection);
+        session.read(cx).with_terminal(|terminal| {
+            terminal.write(b"\x1b[Hselected terminal text");
+            terminal.select(
+                TermPoint { column: 0, row: 0 },
+                TermPoint { column: 21, row: 0 },
+            );
+        });
     });
     let selected_text = cx.read(|cx| {
         let session_id = match target.tab.unwrap().surface {
@@ -275,10 +263,8 @@ async fn copy_requires_focused_selection_and_declines_on_terminal(cx: &mut TestA
             .clone();
         session
             .read(cx)
-            .terminal()
-            .unwrap()
-            .lock()
-            .selection_to_string()
+            .with_terminal(|terminal| terminal.selection_text())
+            .flatten()
             .unwrap()
     });
     assert!(!selected_text.is_empty());

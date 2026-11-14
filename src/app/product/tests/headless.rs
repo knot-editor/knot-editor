@@ -158,7 +158,6 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
 #[gpui::test]
 fn terminal_keys_and_text_reach_the_program(cx: &mut TestAppContext) {
     use crate::app::terminal::{session::TerminalSession, view::TerminalView};
-    use alacritty_terminal::{grid::Dimensions, tty};
 
     let documents = install_globals(cx);
     let (window, _) = headless_window(&documents, cx);
@@ -172,27 +171,20 @@ fn terminal_keys_and_text_reach_the_program(cx: &mut TestAppContext) {
     );
     let session = cx.new(|cx| {
         TerminalSession::new_with_options(
-            tty::Options {
-                shell: Some(tty::Shell::new("/bin/sh".into(), vec!["-c".into(), script])),
-                drain_on_exit: true,
+            knot_terminal::PtyOptions {
+                shell: Some(knot_terminal::Shell::new(
+                    "/bin/sh",
+                    vec!["-c".into(), script],
+                )),
                 ..Default::default()
             },
             cx,
         )
     });
     let ready = |session: &TerminalSession| {
-        session.terminal().is_some_and(|terminal| {
-            let terminal = terminal.lock();
-            let grid = terminal.grid();
-            (0..grid.columns())
-                .map(|column| {
-                    grid[alacritty_terminal::index::Line(0)]
-                        [alacritty_terminal::index::Column(column)]
-                    .c
-                })
-                .collect::<String>()
-                .contains("ready")
-        })
+        session
+            .with_terminal(|terminal| terminal.text().contains("ready"))
+            .unwrap_or(false)
     };
     wait_for_api_condition(cx, |cx| ready(session.read(cx)));
     cx.update(|cx| {

@@ -204,16 +204,11 @@ impl LinkGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::terminal::session::TerminalSize;
+    use alacritty_terminal::term::test::TermSize;
     use alacritty_terminal::{event::VoidListener, term::Config, vte::ansi::Processor};
 
     fn grid(columns: usize, rows: usize, bytes: &[u8]) -> LinkGrid {
-        let size = TerminalSize {
-            columns,
-            lines: rows,
-            cell_width: 8,
-            cell_height: 16,
-        };
+        let size = TermSize::new(columns, rows);
         let mut terminal = Term::new(Config::default(), &size, VoidListener);
         {
             let mut parser: Processor = Processor::new();
@@ -297,12 +292,7 @@ mod tests {
 
     #[test]
     fn scrolled_view_rejects_cut_off_detected_url_but_keeps_explicit_destination() {
-        let size = TerminalSize {
-            columns: 12,
-            lines: 2,
-            cell_width: 8,
-            cell_height: 16,
-        };
+        let size = TermSize::new(12, 2);
         let mut terminal = Term::new(Config::default(), &size, VoidListener);
         let mut parser: Processor = Processor::new();
         parser.advance(&mut terminal, b"https://example.test/long/path/continued");
@@ -323,12 +313,7 @@ mod tests {
 
     #[test]
     fn displayed_scrollback_and_identity_changes_are_distinct() {
-        let size = TerminalSize {
-            columns: 40,
-            lines: 2,
-            cell_width: 8,
-            cell_height: 16,
-        };
+        let size = TermSize::new(40, 2);
         let mut terminal = Term::new(Config::default(), &size, VoidListener);
         {
             let mut parser: Processor = Processor::new();

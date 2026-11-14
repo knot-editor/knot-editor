@@ -1,7 +1,18 @@
 use crate::app::keys::{Keystroke, Modifiers};
 use gpui::TestAppContext;
 
-use super::terminal_key_bytes;
+use super::{InputModes, terminal_key_bytes};
+
+#[cfg(unix)]
+fn read_line() -> knot_terminal::PtyOptions {
+    knot_terminal::PtyOptions {
+        shell: Some(knot_terminal::Shell::new(
+            "/bin/sh",
+            vec!["-c".into(), "read line".into()],
+        )),
+        ..Default::default()
+    }
+}
 
 #[gpui::test]
 fn windows_space_key_without_key_char_reaches_terminal(_cx: &mut TestAppContext) {
@@ -10,37 +21,22 @@ fn windows_space_key_without_key_char_reaches_terminal(_cx: &mut TestAppContext)
         key_char: None,
         modifiers: Modifiers::default(),
     };
-    assert_eq!(
-        terminal_key_bytes(&space, alacritty_terminal::term::TermMode::NONE),
-        b" "
-    );
+    assert_eq!(terminal_key_bytes(&space, InputModes::default()), b" ");
 }
 
 #[cfg(unix)]
 #[gpui::test]
-fn measured_layout_drives_grid_and_unicode_selection(cx: &mut TestAppContext) {
+fn measured_layout_drives_the_grid_and_frames_paint_cells(cx: &mut TestAppContext) {
     use super::*;
-    use alacritty_terminal::{tty, vte::ansi::Processor};
 
-    let session = cx.new(|cx| {
-        TerminalSession::new_with_options(
-            tty::Options {
-                shell: Some(tty::Shell::new(
-                    "/bin/sh".into(),
-                    vec!["-c".into(), "read line".into()],
-                )),
-                ..Default::default()
-            },
-            cx,
-        )
-    });
+    let session = cx.new(|cx| TerminalSession::new_with_options(read_line(), cx));
     let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
     cx.refresh().unwrap();
     let initial = cx.read(|cx| session.read(cx).size());
     cx.simulate_resize(size(px(403.5), px(257.25)));
     cx.refresh().unwrap();
     cx.read(|cx| assert_ne!(session.read(cx).size(), initial));
-    let (layout, bounds) = cx.update(|window, cx| {
+    cx.update(|window, cx| {
         let view = view.read(cx);
         let layout = view.layout.unwrap();
         let measured = TerminalLayout::measure(window, &base_font(cx), px(14.));
@@ -50,55 +46,46 @@ fn measured_layout_drives_grid_and_unicode_selection(cx: &mut TestAppContext) {
             session.read(cx).size(),
             layout.grid_size(view.interaction_bounds)
         );
-        (layout, view.interaction_bounds)
     });
+    let palette = cx.read(|cx| TerminalPalette::new(theme(cx)));
     cx.update(|_, cx| {
-        let terminal = session.read(cx).terminal().unwrap();
-        let mut parser: Processor = Processor::new();
-        parser.advance(
-            &mut *terminal.lock(),
-            "\x1b[2J\x1b[HA界e\u{301}Z".as_bytes(),
-        );
-        let snapshot = TerminalSnapshot::capture(view.read(cx), cx);
-        let wide = snapshot
-            .cells
-            .iter()
-            .find(|cell| cell.text == "界")
-            .unwrap();
-        assert_eq!(wide.column, 1);
-        assert!(wide.flags.contains(Flags::WIDE_CHAR));
-        assert!(
-            !snapshot
-                .cells
-                .iter()
-                .any(|cell| cell.line == 0 && cell.column == 2)
-        );
-        assert!(
+        session.read(cx).with_terminal(|terminal| {
+            terminal.write(
+                "\x1b[2J\x1b[HA界e\u{301}Z\r\n\x1b[1;3;4;9;31mS\x1b[0;7mI\x1b[0;2mF\x1b[0;38;2;1;2;3;48;5;21mC\x1b[0m\x1b[4 q"
+                    .as_bytes(),
+            )
+        });
+        let snapshot = view.update(cx, |view, cx| TerminalSnapshot::capture(view, cx));
+        let cell = |line: usize, column: usize| {
             snapshot
                 .cells
                 .iter()
-                .any(|cell| cell.column == 3 && cell.text == "e\u{301}")
-        );
-    });
-    let start = layout.origin(bounds, 3, 0) + point(px(0.1), px(0.1));
-    cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
-    cx.simulate_mouse_move(
-        start + point(layout.cell_width / 2., px(0.)),
-        MouseButton::Left,
-        Modifiers::default(),
-    );
-    cx.simulate_mouse_up(start, MouseButton::Left, Modifiers::default());
-    cx.read(|cx| {
+                .find(|cell| cell.line == line && cell.column == column)
+        };
+        let wide = cell(0, 1).unwrap();
+        assert_eq!(wide.text, "界");
+        assert!(wide.wide);
+        assert!(cell(0, 2).is_none(), "the wide glyph's spacer is skipped");
+        assert_eq!(cell(0, 3).unwrap().text, "e\u{301}");
+
+        let styled = cell(1, 0).unwrap();
+        assert!(styled.style.bold && styled.style.italic && styled.style.strikethrough);
+        assert_eq!(styled.style.underline, knot_terminal::Underline::Single);
+        assert_eq!(styled.foreground, palette.palette[1]);
+        let inverse = cell(1, 1).unwrap();
         assert_eq!(
-            session
-                .read(cx)
-                .terminal()
-                .unwrap()
-                .lock()
-                .selection_to_string()
-                .as_deref(),
-            Some("e\u{301}")
+            (inverse.foreground, inverse.background),
+            (palette.background, palette.foreground)
         );
+        assert_eq!(cell(1, 2).unwrap().foreground, dim(palette.foreground));
+        let colored = cell(1, 3).unwrap();
+        assert_eq!(colored.foreground, Rgb::new(1, 2, 3));
+        assert_eq!(colored.background, knot_terminal::default_palette()[21]);
+
+        // An unfocused terminal draws a hollow cursor whatever its shape.
+        let cursor = snapshot.cursor.as_ref().unwrap();
+        assert_eq!((cursor.line, cursor.column), (1, 4));
+        assert_eq!(cursor.style, TerminalCursor::BlockHollow);
     });
     cx.update(|_, cx| session.update(cx, |session, cx| session.close(cx)));
 }
@@ -108,21 +95,9 @@ fn measured_layout_drives_grid_and_unicode_selection(cx: &mut TestAppContext) {
 fn terminal_font_size_resizes_the_grid(cx: &mut TestAppContext) {
     use super::*;
     use crate::app::settings::FONT_SIZE;
-    use alacritty_terminal::tty;
 
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let session = cx.new(|cx| {
-        TerminalSession::new_with_options(
-            tty::Options {
-                shell: Some(tty::Shell::new(
-                    "/bin/sh".into(),
-                    vec!["-c".into(), "read line".into()],
-                )),
-                ..Default::default()
-            },
-            cx,
-        )
-    });
+    let session = cx.new(|cx| TerminalSession::new_with_options(read_line(), cx));
     let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
     cx.simulate_resize(size(px(600.), px(400.)));
     cx.refresh().unwrap();
@@ -132,7 +107,7 @@ fn terminal_font_size_resizes_the_grid(cx: &mut TestAppContext) {
             (
                 view.read(cx).layout.unwrap().font_size,
                 size.columns,
-                size.lines,
+                size.rows,
             )
         })
     };
@@ -168,21 +143,9 @@ fn terminal_font_size_resizes_the_grid(cx: &mut TestAppContext) {
 fn terminal_font_family_follows_the_terminal_scope(cx: &mut TestAppContext) {
     use super::*;
     use crate::app::settings::FONT_FAMILY;
-    use alacritty_terminal::tty;
 
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let session = cx.new(|cx| {
-        TerminalSession::new_with_options(
-            tty::Options {
-                shell: Some(tty::Shell::new(
-                    "/bin/sh".into(),
-                    vec!["-c".into(), "read line".into()],
-                )),
-                ..Default::default()
-            },
-            cx,
-        )
-    });
+    let session = cx.new(|cx| TerminalSession::new_with_options(read_line(), cx));
     let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
     cx.simulate_resize(size(px(600.), px(400.)));
     cx.refresh().unwrap();
@@ -233,12 +196,12 @@ fn overlay_label_only_shows_for_non_running_sessions() {
         Some("closed".to_owned())
     );
     assert_eq!(
-        terminal_overlay_label(&TerminalStatus::Exited("exit status: 0".into())),
-        Some("exit status: 0".to_owned())
+        terminal_overlay_label(&TerminalStatus::Exited("exit code 0".into())),
+        Some("exit code 0".to_owned())
     );
     assert_eq!(
-        terminal_overlay_label(&TerminalStatus::Exited("signal: 9 (SIGKILL)".into())),
-        Some("signal: 9 (SIGKILL)".to_owned())
+        terminal_overlay_label(&TerminalStatus::Exited("terminated by Killed: 9".into())),
+        Some("terminated by Killed: 9".to_owned())
     );
     assert!(
         terminal_overlay_label(&TerminalStatus::Failed("boom".into()))
@@ -251,21 +214,9 @@ fn overlay_label_only_shows_for_non_running_sessions() {
 #[gpui::test]
 fn zoom_scales_the_terminal_font_size(cx: &mut TestAppContext) {
     use super::*;
-    use alacritty_terminal::tty;
 
     cx.update(|cx| cx.set_global(ApplicationSettings::default()));
-    let session = cx.new(|cx| {
-        TerminalSession::new_with_options(
-            tty::Options {
-                shell: Some(tty::Shell::new(
-                    "/bin/sh".into(),
-                    vec!["-c".into(), "read line".into()],
-                )),
-                ..Default::default()
-            },
-            cx,
-        )
-    });
+    let session = cx.new(|cx| TerminalSession::new_with_options(read_line(), cx));
     let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
     cx.simulate_resize(size(px(600.), px(400.)));
     cx.refresh().unwrap();

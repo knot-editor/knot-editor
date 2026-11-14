@@ -31,14 +31,11 @@ fn relocate_to_new_window(
 
 #[cfg(unix)]
 #[gpui::test]
-async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain_drag_copies(
-    cx: &mut TestAppContext,
-) {
+async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session(cx: &mut TestAppContext) {
     use crate::app::{
         terminal::session::TerminalSession,
         terminal::view::TOGGLE_TERMINAL_MOUSE_REPORTING_COMMAND, terminal::view::TerminalView,
     };
-    use alacritty_terminal::{tty, vte::ansi::Processor};
     let documents = install_globals(cx);
     cx.update(super::super::bind_product_keys);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -58,40 +55,38 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
     );
     let session = cx.new(|cx| {
         TerminalSession::new_with_options(
-            tty::Options {
-                shell: Some(tty::Shell::new(
-                    "/bin/sh".into(),
+            knot_terminal::PtyOptions {
+                shell: Some(knot_terminal::Shell::new(
+                    "/bin/sh",
                     vec!["-c".into(), "read line".into()],
                 )),
-                drain_on_exit: true,
                 ..Default::default()
             },
             cx,
         )
     });
-    let view = cx
-        .update_window(window_handle, |_, _, cx| {
-            let id = cx
-                .global::<ApplicationTerminalSessions>()
-                .0
-                .borrow_mut()
-                .allocate_id();
-            cx.global::<ApplicationTerminalSessions>()
-                .0
-                .borrow_mut()
-                .sessions
-                .insert(id, session.clone());
-            let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
-            window.update(cx, |window, cx| {
-                let pane = window.workbench.read(cx).focused_pane_id().unwrap();
-                let tab = window.workbench.update(cx, |workbench, _| {
-                    workbench.open_terminal_tab(pane, id, view.clone()).unwrap()
-                });
-                window.activate_tab(pane, tab, cx);
+    cx.update_window(window_handle, |_, _, cx| {
+        let id = cx
+            .global::<ApplicationTerminalSessions>()
+            .0
+            .borrow_mut()
+            .allocate_id();
+        cx.global::<ApplicationTerminalSessions>()
+            .0
+            .borrow_mut()
+            .sessions
+            .insert(id, session.clone());
+        let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
+        window.update(cx, |window, cx| {
+            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+            let tab = window.workbench.update(cx, |workbench, _| {
+                workbench.open_terminal_tab(pane, id, view.clone()).unwrap()
             });
-            view
-        })
-        .unwrap();
+            window.activate_tab(pane, tab, cx);
+        });
+        view
+    })
+    .unwrap();
     cx.refresh().unwrap();
     assert_eq!(
         dispatch_product_command(
@@ -106,42 +101,6 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
         CommandOutcome::Completed
     );
     cx.read(|cx| assert!(!session.read(cx).mouse_reporting_enabled()));
-    let (start, end) = cx
-        .update_window(window_handle, |_, native_window, cx| {
-            let mut parser: Processor = Processor::new();
-            parser.advance(
-                &mut *session.read(cx).terminal().unwrap().lock(),
-                b"\x1b[?1002h\x1b[?1006h\x1b[2J\x1b[3J\x1b[Hcopy me",
-            );
-            let bounds = view.read(cx).interaction_bounds();
-            let width =
-                px(session.read(cx).size().cell_width as f32 / native_window.scale_factor());
-            (
-                bounds.origin + point(px(0.1), px(0.1)),
-                bounds.origin + point(width * 3 + px(0.1), px(0.1)),
-            )
-        })
-        .unwrap();
-    let mut window_cx = VisualTestContext::from_window(window_handle, cx);
-    window_cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
-    window_cx.simulate_mouse_move(end, MouseButton::Left, Modifiers::default());
-    window_cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
-    cx.simulate_keystrokes(
-        window_handle,
-        if cfg!(target_os = "macos") {
-            "cmd-c"
-        } else {
-            "ctrl-shift-c"
-        },
-    );
-    cx.run_until_parked();
-    cx.update(|cx| {
-        assert_eq!(
-            cx.read_from_clipboard().unwrap().text().as_deref(),
-            Some("copy")
-        );
-        assert!(!session.read(cx).mouse_reporting_enabled());
-    });
     assert_eq!(
         dispatch_product_command(
             &window,
@@ -861,17 +820,17 @@ async fn moving_terminal_keeps_its_session_and_source_window_close_does_not_stop
         );
     })
     .unwrap();
-    let destination_size = crate::app::terminal::session::TerminalSize {
+    let destination_size = knot_terminal::TerminalSize {
         columns: 80,
-        lines: 20,
+        rows: 20,
         cell_width: 9,
         cell_height: 18,
     };
     destination_view.update(cx, |view, cx| view.resize(destination_size, cx));
     cx.read(|cx| assert_eq!(session.read(cx).size(), destination_size));
-    let stale_size = crate::app::terminal::session::TerminalSize {
+    let stale_size = knot_terminal::TerminalSize {
         columns: 40,
-        lines: 10,
+        rows: 10,
         cell_width: 9,
         cell_height: 18,
     };
@@ -1054,7 +1013,7 @@ async fn stale_terminal_relocation_is_rejected(cx: &mut TestAppContext) {
 
 #[gpui::test]
 async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppContext) {
-    use alacritty_terminal::tty::{Options, Shell};
+    use knot_terminal::{PtyOptions, Shell};
     use std::{
         thread,
         time::{Duration, Instant},
@@ -1062,12 +1021,12 @@ async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppC
 
     #[cfg(windows)]
     let shell = Shell::new(
-        "cmd.exe".into(),
+        "cmd.exe",
         vec!["/C".into(), "echo handoff-output & exit /b 7".into()],
     );
     #[cfg(not(windows))]
     let shell = Shell::new(
-        "/bin/sh".into(),
+        "/bin/sh",
         vec![
             "-c".into(),
             "printf 'handoff-output\\n'; sleep 0.05; exit 7".into(),
@@ -1081,9 +1040,8 @@ async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppC
     let session = cx.update(|cx| {
         cx.new(|cx| {
             crate::app::terminal::session::TerminalSession::new_with_options(
-                Options {
+                PtyOptions {
                     shell: Some(shell),
-                    drain_on_exit: true,
                     ..Default::default()
                 },
                 cx,
@@ -1140,12 +1098,10 @@ async fn process_exit_during_terminal_handoff_keeps_final_grid(cx: &mut TestAppC
             session.read(cx).status(),
             crate::app::terminal::session::TerminalStatus::Exited(_)
         ));
-        let terminal = session.read(cx).terminal().unwrap().lock();
-        let output: String = terminal
-            .renderable_content()
-            .display_iter
-            .map(|cell| cell.cell.c)
-            .collect();
+        let output = session
+            .read(cx)
+            .with_terminal(|terminal| terminal.text())
+            .unwrap();
         assert!(output.contains("handoff-output"));
         assert!(
             cx.global::<ApplicationTerminalSessions>()

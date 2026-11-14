@@ -1,8 +1,9 @@
-//! Native terminal sessions and their views over `alacritty_terminal`.
+//! Native terminal sessions and their views over `knot-terminal`.
 
 pub(super) mod colors;
 pub(super) mod input;
 pub(super) mod layout;
+#[allow(dead_code)]
 pub(super) mod links;
 pub(super) mod mouse;
 mod process;

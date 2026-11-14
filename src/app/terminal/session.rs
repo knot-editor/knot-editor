@@ -1,178 +1,37 @@
 use std::{
-    borrow::Cow,
+    path::PathBuf,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicU64, Ordering},
     },
-    thread::JoinHandle,
 };
 
-use alacritty_terminal::{
-    event::{Event, EventListener, WindowSize},
-    event_loop::{EventLoop, EventLoopSender, Msg, State},
-    grid::Dimensions,
-    index::{Column, Line},
-    sync::FairMutex,
-    term::{Config, MIN_COLUMNS, MIN_SCREEN_LINES, Term, cell::Flags},
-    tty::{self, Options},
-    vte::ansi::Processor,
-};
 use gpui::{Context, Task};
+use knot_terminal::{Mode, Pty, PtyEvent, PtyOptions, Shell, Terminal, TerminalSize};
 
-use super::colors::{TerminalPalette, query_color};
+use super::colors::TerminalPalette;
 use crate::app::theme::theme;
 
-const INITIAL_COLUMNS: usize = 80;
-const INITIAL_LINES: usize = 11;
+/// Rows of history the primary screen keeps.
+const SCROLLBACK_LINES: usize = 10_000;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct TerminalSize {
-    pub(crate) columns: usize,
-    pub(crate) lines: usize,
-    pub(crate) cell_width: u16,
-    pub(crate) cell_height: u16,
-}
-
-impl TerminalSize {
-    pub(crate) fn initial() -> Self {
-        Self {
-            columns: INITIAL_COLUMNS,
-            lines: INITIAL_LINES,
-            // The attached view supplies measured pixel dimensions on first layout.
-            cell_width: 1,
-            cell_height: 1,
-        }
-    }
-
-    pub(crate) fn clamped(mut self) -> Self {
-        self.columns = self.columns.clamp(MIN_COLUMNS, u16::MAX as usize);
-        self.lines = self.lines.clamp(MIN_SCREEN_LINES, u16::MAX as usize);
-        self
-    }
-
-    fn window_size(self) -> WindowSize {
-        WindowSize {
-            num_lines: self.lines as u16,
-            num_cols: self.columns as u16,
-            cell_width: self.cell_width,
-            cell_height: self.cell_height,
-        }
+/// The grid before a view first lays the terminal out.
+fn initial_size() -> TerminalSize {
+    TerminalSize {
+        columns: 80,
+        rows: 11,
+        // The attached view supplies measured pixel dimensions on first layout.
+        cell_width: 1,
+        cell_height: 1,
     }
 }
 
-impl Dimensions for TerminalSize {
-    fn total_lines(&self) -> usize {
-        self.lines
-    }
-    fn screen_lines(&self) -> usize {
-        self.lines
-    }
-    fn columns(&self) -> usize {
-        self.columns
-    }
-}
+/// A terminal shared by the PTY's reader thread and the foreground.
+pub(crate) type SharedTerminal = Arc<Mutex<Terminal>>;
 
-#[derive(Clone)]
-pub(crate) struct TerminalEventListener {
-    wakeups: tokio::sync::mpsc::Sender<()>,
-    events: Arc<Mutex<Vec<Event>>>,
-    pointer_revision: Arc<AtomicU64>,
-}
-
-impl EventListener for TerminalEventListener {
-    fn send_event(&self, event: Event) {
-        match event {
-            Event::PtyWrite(_)
-            | Event::ColorRequest(..)
-            | Event::TextAreaSizeRequest(_)
-            | Event::ChildExit(_) => {
-                self.events
-                    .lock()
-                    .expect("terminal event queue poisoned")
-                    .push(event);
-            }
-            Event::MouseCursorDirty => {
-                self.pointer_revision.fetch_add(1, Ordering::AcqRel);
-            }
-            Event::Wakeup | Event::CursorBlinkingChange | Event::Exit => {}
-            // OSC 52, title, and bell have no application behavior here.
-            _ => return,
-        }
-        let _ = self.wakeups.try_send(());
-    }
-}
-
-type PtyEventLoop = EventLoop<tty::Pty, TerminalEventListener>;
-type PtyThread = JoinHandle<(PtyEventLoop, State)>;
-
-struct RunningTerminal {
-    terminal: Arc<FairMutex<Term<TerminalEventListener>>>,
-    sender: EventLoopSender,
-    thread: Option<PtyThread>,
-    pid: Option<u32>,
-}
-
-impl RunningTerminal {
-    fn start(
-        listener: TerminalEventListener,
-        size: TerminalSize,
-        options: &Options,
-    ) -> std::io::Result<Self> {
-        let terminal = Arc::new(FairMutex::new(Term::new(
-            Config::default(),
-            &size,
-            listener.clone(),
-        )));
-        let pty = tty::new(options, size.window_size(), 0)?;
-        #[cfg(unix)]
-        let pid = Some(pty.child().id());
-        #[cfg(not(unix))]
-        let pid = None;
-        let event_loop = EventLoop::new(
-            terminal.clone(),
-            listener,
-            pty,
-            options.drain_on_exit,
-            false,
-        )?;
-        let sender = event_loop.channel();
-        let thread = event_loop.spawn();
-        Ok(Self {
-            terminal,
-            sender,
-            thread: Some(thread),
-            pid,
-        })
-    }
-
-    fn shutdown(&mut self) {
-        let _ = self.sender.send(Msg::Shutdown);
-        if let Some(thread) = self.thread.take() {
-            // The event loop hangs the shell up when it drops the PTY, which
-            // never happens if Knot exits first. Closing the PTY on exit ends
-            // a running shell but not one still starting: on macOS its open
-            // of the terminal then blocks forever. The child is `login`,
-            // which survives a hangup and may not have started the shell
-            // yet, so kill its process group now. A shell that started has
-            // its own process group by then and hangs up when the PTY
-            // closes.
-            #[cfg(target_os = "macos")]
-            if let Some(pid) = self.pid {
-                unsafe {
-                    libc::killpg(pid as libc::pid_t, libc::SIGKILL);
-                }
-            }
-            std::thread::spawn(move || {
-                let _ = thread.join();
-            });
-        }
-    }
-}
-
-impl Drop for RunningTerminal {
-    fn drop(&mut self) {
-        self.shutdown();
-    }
+/// Locks `terminal`. A panic while it was held leaves the screen readable.
+pub(crate) fn lock(terminal: &Mutex<Terminal>) -> MutexGuard<'_, Terminal> {
+    terminal.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -184,27 +43,27 @@ pub(crate) enum TerminalStatus {
 }
 
 enum TerminalState {
-    Running(RunningTerminal),
+    Running(Pty),
     Stopped {
-        terminal: Arc<FairMutex<Term<TerminalEventListener>>>,
+        terminal: SharedTerminal,
         status: TerminalStatus,
     },
     Failed(String),
     Closed,
 }
 
-/// Owns one PTY, emulator grid, and process independently of any presentation.
+/// Owns one PTY, terminal, and process independently of any presentation.
 pub(crate) struct TerminalSession {
     state: TerminalState,
     size: TerminalSize,
-    options: Options,
+    options: PtyOptions,
+    palette: TerminalPalette,
     generation: u64,
     _wakeup_task: Option<Task<()>>,
     attachment: Arc<AtomicU64>,
     next_attachment: u64,
     focused: bool,
     mouse_reporting_enabled: bool,
-    pointer_revision: Arc<AtomicU64>,
 }
 
 pub(crate) struct TerminalAttachment {
@@ -220,134 +79,95 @@ impl Drop for TerminalAttachment {
     }
 }
 
-/// Visible lines plus scrollback as plain text, oldest first, without
-/// trailing blank rows. Each line reports whether it wrapped onto the next
-/// row, so replay can let the fresh terminal wrap it again.
-fn snapshot_lines<T>(terminal: &Term<T>) -> Vec<(String, bool)> {
-    let grid = terminal.grid();
-    let columns = grid.columns();
-    if columns == 0 {
-        return Vec::new();
-    }
-    let mut lines = Vec::new();
-    let mut line = grid.topmost_line().0;
-    let bottom = grid.bottommost_line().0;
-    while line <= bottom {
-        let row = &grid[Line(line)];
-        let mut text = String::new();
-        for column in 0..columns {
-            let cell = &row[Column(column)];
-            if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
-                continue;
-            }
-            text.push(cell.c);
-        }
-        while text.ends_with(' ') {
-            text.pop();
-        }
-        let wrapped = row[Column(columns - 1)].flags.contains(Flags::WRAPLINE);
-        lines.push((text, wrapped));
-        line += 1;
-    }
-    while lines.last().is_some_and(|(text, _)| text.is_empty()) {
-        lines.pop();
-    }
-    lines
-}
-
 /// Divider marking where carried output ends and the new session begins.
 const RESTART_DIVIDER: &str = "--- terminal restarted ---";
 
-/// Feed carried lines into a fresh terminal, followed by a divider. The
-/// cursor ends below the divider, so new shell output continues underneath.
-fn replay_lines(terminal: &Arc<FairMutex<Term<TerminalEventListener>>>, lines: &[(String, bool)]) {
-    if lines.is_empty() {
+/// Writes `text`, the lines of a previous session, into a fresh terminal,
+/// followed by a divider. The cursor ends below the divider, so new shell
+/// output continues underneath; lines longer than the grid wrap again.
+fn replay(terminal: &mut Terminal, text: &str) {
+    if text.is_empty() {
         return;
     }
     let mut bytes = Vec::new();
-    for (index, (text, wrapped)) in lines.iter().enumerate() {
-        bytes.extend_from_slice(text.as_bytes());
-        if !wrapped || index + 1 == lines.len() {
-            bytes.extend_from_slice(b"\r\n");
-        }
+    for line in text.lines() {
+        bytes.extend_from_slice(line.as_bytes());
+        bytes.extend_from_slice(b"\r\n");
     }
     bytes.extend_from_slice(RESTART_DIVIDER.as_bytes());
     bytes.extend_from_slice(b"\r\n");
-    let mut parser: Processor = Processor::new();
-    parser.advance(&mut *terminal.lock(), &bytes);
+    terminal.write(&bytes);
 }
 
 impl TerminalSession {
-    pub(crate) fn new(
-        working_directory: Option<std::path::PathBuf>,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        #[allow(unused_mut)]
-        let mut options = Options {
+    pub(crate) fn new(working_directory: Option<PathBuf>, cx: &mut Context<Self>) -> Self {
+        let options = PtyOptions {
+            // Tests may exit without dropping a session. A plain shell hangs
+            // up with its PTY, whereas the platform login wrapper survives
+            // and is orphaned.
+            shell: cfg!(test).then(|| Shell::new("/bin/sh", Vec::new())),
             working_directory,
-            drain_on_exit: true,
-            env: [
-                ("TERM".to_owned(), "xterm-256color".to_owned()),
-                ("COLORTERM".to_owned(), "truecolor".to_owned()),
-            ]
-            .into(),
-            ..Options::default()
+            env: Vec::new(),
         };
-        // Tests may exit without dropping a session. A plain shell hangs up
-        // with its PTY, whereas the platform login wrapper survives and is
-        // orphaned.
-        #[cfg(test)]
-        {
-            options.shell = Some(tty::Shell::new("/bin/sh".into(), vec![]));
-        }
         Self::new_with_options(options, cx)
     }
 
-    pub(crate) fn new_with_options(options: Options, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new_with_options(mut options: PtyOptions, cx: &mut Context<Self>) -> Self {
+        options.env.extend([
+            ("TERM".to_owned(), "xterm-256color".to_owned()),
+            ("COLORTERM".to_owned(), "truecolor".to_owned()),
+        ]);
         let mut this = Self {
             state: TerminalState::Closed,
-            size: TerminalSize::initial(),
+            size: initial_size(),
             options,
+            palette: TerminalPalette::new(theme(cx)),
             generation: 0,
             _wakeup_task: None,
             attachment: Arc::new(AtomicU64::new(0)),
             next_attachment: 0,
             focused: false,
             mouse_reporting_enabled: true,
-            pointer_revision: Arc::new(AtomicU64::new(0)),
         };
-        this.start(cx);
+        this.start(None, cx);
         this
     }
 
-    fn start(&mut self, cx: &mut Context<Self>) {
+    /// Starts a process on a fresh terminal that first shows `carried`.
+    fn start(&mut self, carried: Option<String>, cx: &mut Context<Self>) {
         crate::app::allow_thread_wakeups(cx);
         self.generation += 1;
         let generation = self.generation;
-        let (wakeup_tx, mut wakeup_rx) = tokio::sync::mpsc::channel(1);
+        let mut terminal = Terminal::new(self.size, SCROLLBACK_LINES);
+        self.palette.apply(&mut terminal);
+        if let Some(text) = carried {
+            replay(&mut terminal, &text);
+        }
+        // Output only repaints; the other events wait in order for the
+        // foreground. One pending wakeup covers any number of them.
+        let (wakeups, mut wakeup_rx) = tokio::sync::mpsc::channel(1);
         let events = Arc::new(Mutex::new(Vec::new()));
-        let pointer_revision = Arc::new(AtomicU64::new(0));
-        let listener = TerminalEventListener {
-            wakeups: wakeup_tx,
-            events: events.clone(),
-            pointer_revision: pointer_revision.clone(),
+        let queue = events.clone();
+        let listener = move |event| {
+            if !matches!(event, PtyEvent::Output) {
+                queue
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .push(event);
+            }
+            let _ = wakeups.try_send(());
         };
-        self.pointer_revision = pointer_revision;
-        self.state = match RunningTerminal::start(listener, self.size, &self.options) {
-            Ok(running) => TerminalState::Running(running),
+        self.state = match Pty::spawn(Arc::new(Mutex::new(terminal)), &self.options, listener) {
+            Ok(pty) => TerminalState::Running(pty),
             Err(error) => TerminalState::Failed(error.to_string()),
         };
-        if let Some(terminal) = self.terminal() {
-            terminal.lock().is_focused = self.focused;
-        }
         self._wakeup_task = Some(cx.spawn(async move |this, cx| {
             while wakeup_rx.recv().await.is_some() {
                 let pending =
-                    std::mem::take(&mut *events.lock().expect("terminal event queue poisoned"));
+                    std::mem::take(&mut *events.lock().unwrap_or_else(PoisonError::into_inner));
                 if this
                     .update(cx, |session, cx| {
-                        let palette = TerminalPalette::new(theme(cx));
-                        session.apply_events(generation, pending, &palette);
+                        session.apply_events(generation, pending);
                         cx.notify();
                     })
                     .is_err()
@@ -359,24 +179,16 @@ impl TerminalSession {
         cx.notify();
     }
 
-    fn apply_events(&mut self, generation: u64, events: Vec<Event>, palette: &TerminalPalette) {
+    fn apply_events(&mut self, generation: u64, events: Vec<PtyEvent>) {
         if self.generation != generation {
             return;
         }
         for event in events {
             match event {
-                Event::PtyWrite(text) => self.send(text.into_bytes()),
-                Event::ColorRequest(index, format) => {
-                    if let Some(terminal) = self.terminal() {
-                        let color = query_color(index, terminal.lock().colors(), palette);
-                        self.send(format(color).into_bytes());
-                    }
-                }
-                Event::TextAreaSizeRequest(format) => {
-                    self.send(format(self.size.window_size()).into_bytes())
-                }
-                Event::ChildExit(status) => self.finish_exit(status.to_string()),
-                _ => {}
+                PtyEvent::Exited(status) => self.finish_exit(status.to_string()),
+                // Titles, bells, and reported directories have no product
+                // behavior; the engine answers queries itself.
+                PtyEvent::Terminal(_) | PtyEvent::Output => {}
             }
         }
     }
@@ -390,12 +202,13 @@ impl TerminalSession {
         cx.notify();
     }
 
-    pub(crate) fn pointer_revision(&self) -> u64 {
-        self.pointer_revision.load(Ordering::Acquire)
-    }
-
     pub(crate) fn generation(&self) -> u64 {
         self.generation
+    }
+
+    /// Whether the attached view has focus in an active window.
+    pub(crate) fn focused(&self) -> bool {
+        self.focused
     }
 
     fn owns_attachment(&self, attachment: &TerminalAttachment) -> bool {
@@ -419,31 +232,21 @@ impl TerminalSession {
             return;
         }
         self.focused = focused;
-        let report = self.terminal().is_some_and(|terminal| {
-            let mut terminal = terminal.lock();
-            terminal.is_focused = focused;
-            terminal
-                .mode()
-                .contains(alacritty_terminal::term::TermMode::FOCUS_IN_OUT)
-        });
-        if report {
+        if self
+            .with_terminal(|terminal| terminal.mode(Mode::FocusEvents))
+            .unwrap_or(false)
+        {
             self.send(if focused { b"\x1b[I" } else { b"\x1b[O" }.to_vec());
         }
     }
 
     fn finish_exit(&mut self, status: String) {
-        let old = std::mem::replace(&mut self.state, TerminalState::Closed);
-        self.state = match old {
-            TerminalState::Running(mut running) => {
-                let terminal = running.terminal.clone();
-                running.shutdown();
-                TerminalState::Stopped {
-                    terminal,
-                    status: TerminalStatus::Exited(status),
-                }
-            }
-            state => state,
-        };
+        if let TerminalState::Running(pty) = &self.state {
+            self.state = TerminalState::Stopped {
+                terminal: pty.terminal().clone(),
+                status: TerminalStatus::Exited(status),
+            };
+        }
     }
 
     pub(crate) fn attach(&mut self) -> Option<TerminalAttachment> {
@@ -459,12 +262,17 @@ impl TerminalSession {
         })
     }
 
-    pub(crate) fn terminal(&self) -> Option<&Arc<FairMutex<Term<TerminalEventListener>>>> {
+    pub(crate) fn terminal(&self) -> Option<&SharedTerminal> {
         match &self.state {
-            TerminalState::Running(running) => Some(&running.terminal),
+            TerminalState::Running(pty) => Some(pty.terminal()),
             TerminalState::Stopped { terminal, .. } => Some(terminal),
             TerminalState::Failed(_) | TerminalState::Closed => None,
         }
+    }
+
+    /// Runs `f` on the locked terminal, if the session has one.
+    pub(crate) fn with_terminal<R>(&self, f: impl FnOnce(&mut Terminal) -> R) -> Option<R> {
+        self.terminal().map(|terminal| f(&mut lock(terminal)))
     }
 
     pub(crate) fn status(&self) -> TerminalStatus {
@@ -481,10 +289,8 @@ impl TerminalSession {
     }
 
     pub(crate) fn send(&self, bytes: Vec<u8>) {
-        if let TerminalState::Running(running) = &self.state
-            && !bytes.is_empty()
-        {
-            let _ = running.sender.send(Msg::Input(Cow::Owned(bytes)));
+        if let TerminalState::Running(pty) = &self.state {
+            pty.write(bytes);
         }
     }
 
@@ -493,9 +299,16 @@ impl TerminalSession {
             return;
         }
         self.size = size;
-        if let TerminalState::Running(running) = &self.state {
-            running.terminal.lock().resize(size);
-            let _ = running.sender.send(Msg::Resize(size.window_size()));
+        if let TerminalState::Running(pty) = &self.state {
+            pty.resize(size);
+        }
+    }
+
+    /// Makes `palette` the terminal's default colors.
+    pub(crate) fn set_palette(&mut self, palette: TerminalPalette) {
+        if self.palette != palette {
+            self.palette = palette;
+            self.with_terminal(|terminal| palette.apply(terminal));
         }
     }
 
@@ -513,138 +326,33 @@ impl TerminalSession {
 
     /// The directory the shell is in now where the platform can report it,
     /// otherwise the directory the session started in.
-    pub(crate) fn current_directory(&self) -> Option<std::path::PathBuf> {
+    pub(crate) fn current_directory(&self) -> Option<PathBuf> {
         match &self.state {
-            TerminalState::Running(RunningTerminal { pid: Some(pid), .. }) => {
-                super::process::working_directory(*pid)
-            }
+            TerminalState::Running(pty) => pty.pid().and_then(super::process::working_directory),
             _ => None,
         }
         .or_else(|| self.options.working_directory.clone())
     }
 
     pub(crate) fn restart(&mut self, cx: &mut Context<Self>) {
-        let carried = self
-            .terminal()
-            .map(|terminal| snapshot_lines(&terminal.lock()));
+        let carried = self.with_terminal(|terminal| terminal.text());
         self.close(cx);
-        self.start(cx);
-        if let (Some(lines), Some(terminal)) = (carried, self.terminal()) {
-            replay_lines(terminal, &lines);
-            cx.notify();
-        }
+        self.start(carried, cx);
     }
 }
 
-#[cfg(test)]
-mod compatibility_tests {
+#[cfg(all(test, unix))]
+mod tests {
     use super::*;
-    use alacritty_terminal::{term::TermMode, vte::ansi::Processor};
-
-    #[test]
-    fn parser_replies_remain_ordered_when_repaint_wakeup_is_full() {
-        let (wakeups, mut receiver) = tokio::sync::mpsc::channel(1);
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let pointer_revision = Arc::new(AtomicU64::new(0));
-        let listener = TerminalEventListener {
-            wakeups,
-            events: events.clone(),
-            pointer_revision: pointer_revision.clone(),
-        };
-        let mut terminal = Term::new(
-            Config::default(),
-            &TerminalSize::initial(),
-            listener.clone(),
-        );
-        let mut parser: Processor = Processor::new();
-        for _ in 0..100 {
-            listener.send_event(Event::Wakeup);
-            parser.advance(&mut terminal, b"\x1b[5n\x1b[6n\x1b[c\x1b[18t");
-        }
-        assert!(receiver.try_recv().is_ok());
-        assert!(receiver.try_recv().is_err());
-        let replies: Vec<_> = events
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|event| match event {
-                Event::PtyWrite(text) => text.clone(),
-                _ => panic!("unexpected event: {event:?}"),
-            })
-            .collect();
-        assert_eq!(
-            replies,
-            ["\x1b[0n", "\x1b[1;1R", "\x1b[?6c", "\x1b[8;11;80t"].repeat(100)
-        );
-        parser.advance(
-            &mut terminal,
-            b"\x1b[?1h\x1b=\x1b[?1004h\x1b[?2004h\x1b[?1049h",
-        );
-        assert!(terminal.mode().contains(
-            TermMode::APP_CURSOR
-                | TermMode::APP_KEYPAD
-                | TermMode::FOCUS_IN_OUT
-                | TermMode::BRACKETED_PASTE
-                | TermMode::ALT_SCREEN
-        ));
-        parser.advance(
-            &mut terminal,
-            b"\x1b[?1049l\x1b[?1l\x1b>\x1b[?1004l\x1b[?2004l",
-        );
-        assert!(!terminal.mode().intersects(
-            TermMode::APP_CURSOR
-                | TermMode::APP_KEYPAD
-                | TermMode::FOCUS_IN_OUT
-                | TermMode::BRACKETED_PASTE
-                | TermMode::ALT_SCREEN
-        ));
-    }
-
-    #[test]
-    fn parser_color_queries_use_display_palette_without_clipboard_or_keyboard_protocols() {
-        let (wakeups, _) = tokio::sync::mpsc::channel(1);
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let pointer_revision = Arc::new(AtomicU64::new(0));
-        let listener = TerminalEventListener {
-            wakeups,
-            events: events.clone(),
-            pointer_revision: pointer_revision.clone(),
-        };
-        let mut terminal = Term::new(Config::default(), &TerminalSize::initial(), listener);
-        let mut parser: Processor = Processor::new();
-        parser.advance(&mut terminal, b"\x1b]4;1;#112233\x1b\\\x1b]4;1;?\x1b\\\x1b]10;?\x1b\\\x1b]52;c;?\x1b\\\x1b]52;c;YQ==\x1b\\\x1b[?u");
-        let replies: Vec<_> = events
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|event| match event {
-                Event::ColorRequest(index, format) => format(query_color(
-                    *index,
-                    terminal.colors(),
-                    &TerminalPalette::new(&crate::app::theme::Theme::default()),
-                )),
-                _ => panic!("unexpected event: {event:?}"),
-            })
-            .collect();
-        assert_eq!(
-            replies,
-            [
-                "\x1b]4;1;rgb:1111/2222/3333\x1b\\",
-                "\x1b]10;rgb:d4d4/d4d4/d4d4\x1b\\"
-            ]
-        );
-    }
+    use gpui::AppContext;
 
     #[gpui::test]
-    fn old_generation_events_cannot_format_replies_for_the_replacement(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        use gpui::AppContext;
+    fn an_old_generation_exit_cannot_stop_the_replacement(cx: &mut gpui::TestAppContext) {
         let session = cx.new(|cx| {
             TerminalSession::new_with_options(
-                Options {
-                    shell: Some(tty::Shell::new("/missing/knot-shell".into(), vec![])),
-                    ..Default::default()
+                PtyOptions {
+                    shell: Some(Shell::new("/bin/sh", Vec::new())),
+                    ..PtyOptions::default()
                 },
                 cx,
             )
@@ -652,17 +360,15 @@ mod compatibility_tests {
         session.update(cx, |session, cx| {
             let generation = session.generation;
             session.restart(cx);
-            let status = session.status();
+            assert_eq!(session.status(), TerminalStatus::Running);
             session.apply_events(
                 generation,
-                vec![
-                    Event::PtyWrite("stale".into()),
-                    Event::TextAreaSizeRequest(Arc::new(|_| panic!("stale size formatter ran"))),
-                    Event::ColorRequest(0, Arc::new(|_| panic!("stale color formatter ran"))),
-                ],
-                &TerminalPalette::new(&crate::app::theme::Theme::default()),
+                vec![PtyEvent::Exited(knot_terminal::ExitStatus {
+                    code: 0,
+                    signal: None,
+                })],
             );
-            assert_eq!(session.status(), status);
+            assert_eq!(session.status(), TerminalStatus::Running);
             session.close(cx);
         });
     }
