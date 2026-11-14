@@ -429,6 +429,37 @@ fn hiding_tool_mid_drag_cancels_drop(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn the_dock_divider_is_the_gap_between_the_cards(cx: &mut TestAppContext) {
+    let (_, native_window) = tool_fixture(cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    let dock = visual.debug_bounds("dock-0").unwrap();
+    let divider = visual.debug_bounds("dock-divider-0").unwrap();
+    assert_eq!(
+        divider.size.width,
+        px(crate::app::tokens::chrome::RESIZE_HANDLE)
+    );
+    assert_eq!(divider.left(), dock.right());
+    assert_eq!(dock.top(), divider.top());
+    assert_eq!(dock.bottom(), divider.bottom());
+}
+
+#[gpui::test]
+fn the_toolbar_row_sits_above_the_workbench_on_the_window_frame(cx: &mut TestAppContext) {
+    let (_, native_window) = tool_fixture(cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    let dock = visual.debug_bounds("dock-0").unwrap();
+    let toolbar = visual.debug_bounds("toolbar");
+    assert_eq!(toolbar.is_some(), cfg!(target_os = "macos"));
+    if let Some(toolbar) = toolbar {
+        assert_eq!(
+            toolbar.size.height,
+            px(crate::app::tokens::chrome::TOOLBAR_HEIGHT)
+        );
+        assert!(dock.top() > toolbar.bottom());
+    }
+}
+
+#[gpui::test]
 fn dock_divider_drag_resizes_and_escape_reverts(cx: &mut TestAppContext) {
     let (window, native_window) = tool_fixture(cx);
     let mut visual = VisualTestContext::from_window(native_window, cx);

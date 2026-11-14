@@ -18,7 +18,12 @@ pub(crate) mod chrome {
     pub(crate) const STRIPE_BUTTON: f32 = 26.;
     pub(crate) const STRIPE_GROUP_MIN_HEIGHT: f32 = 60.;
     /// The grab area of a dock or split resize handle.
-    pub(crate) const RESIZE_HANDLE: f32 = 9.;
+    /// The gap between cards and the hit width of a split divider.
+    pub(crate) const RESIZE_HANDLE: f32 = 8.;
+    /// The margin around the cards at the window edges.
+    pub(crate) const WINDOW_INSET: f32 = 4.;
+    /// The toolbar row under a transparent title bar, in unscaled pixels.
+    pub(crate) const TOOLBAR_HEIGHT: f32 = 40.;
 }
 
 /// Lists, trees, and pickers.

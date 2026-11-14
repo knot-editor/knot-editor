@@ -22,8 +22,19 @@ impl KnotWindow {
     /// The workbench's areas, arranged as `workbench.bottomDockLayout`
     /// places the bottom dock; a maximized pane fills it alone.
     pub(super) fn render_workbench(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let card_background = theme(cx).paint_color(color::CARD_BACKGROUND);
+        // Cards clip their content to a rectangle, so a child's own background
+        // matches the card's wherever it reaches a rounded corner.
+        let card = |element: Div| {
+            element
+                .overflow_hidden()
+                .rounded(zoom::rems(tokens::radius::MD))
+                .bg(card_background)
+        };
         if let Some(pane) = self.maximized_pane(cx) {
-            return self.render_pane(pane, cx);
+            return card(div().size_full())
+                .child(self.render_pane(pane, cx))
+                .into_any_element();
         }
         let workbench = self.workbench.read(cx);
         let dock = |dock: DockLocation| {
@@ -43,7 +54,6 @@ impl KnotWindow {
                 .track_focus(&self.empty_focus)
                 .relative()
                 .size_full()
-                .bg(theme(cx).paint_color(color::BACKGROUND))
                 .child(self.empty_center_drag_geometry())
                 .into_any_element(),
         };
@@ -52,7 +62,7 @@ impl KnotWindow {
             let Some((layout, size)) = shown else {
                 continue;
             };
-            let element = div()
+            let element = card(div())
                 .flex_none()
                 .min_w_0()
                 .min_h_0()
@@ -66,7 +76,7 @@ impl KnotWindow {
             docks[dock.index()] = Some((element, divider));
         }
         let [left, right, bottom] = docks;
-        let center = div().flex_1().min_w_0().min_h_0().child(center);
+        let center = card(div()).flex_1().min_w_0().min_h_0().child(center);
         let column = |element: Div| element.flex().flex_col().min_w_0().min_h_0();
         let row = |element: Div| element.flex().flex_row().min_w_0().min_h_0();
         let sides = |element: Div, middle: Div| {
@@ -174,16 +184,18 @@ impl KnotWindow {
                     .items_center()
                     .cursor(CursorStyle::ResizeUpDown)
             })
-            .child(
-                div()
-                    .when(horizontal, |element| element.w(px(1.)).h_full())
-                    .when(!horizontal, |element| element.h(px(1.)).w_full())
-                    .bg(theme(cx).paint_color(color::BORDER))
-                    .hover({
-                        let hover = theme(cx).paint_color(color::BORDER_HOVER);
-                        move |style| style.bg(hover)
-                    }),
-            )
+            .when(matches!(divider, Divider::Split(_)), |element| {
+                element.child(
+                    div()
+                        .when(horizontal, |element| element.w(px(1.)).h_full())
+                        .when(!horizontal, |element| element.h(px(1.)).w_full())
+                        .bg(theme(cx).paint_color(color::BORDER))
+                        .hover({
+                            let hover = theme(cx).paint_color(color::BORDER_HOVER);
+                            move |style| style.bg(hover)
+                        }),
+                )
+            })
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
@@ -401,7 +413,31 @@ impl KnotWindow {
     }
 }
 
+/// Whether the window's title bar is transparent, with the toolbar row in its
+/// place; other platforms keep their native frame.
+pub(super) const NATIVE_TOOLBAR_ROW: bool = cfg!(target_os = "macos");
+
 impl KnotWindow {
+    /// The row at the window's top, under the transparent title bar and beside
+    /// the window buttons. It drags the window and zooms it on a double click.
+    fn render_toolbar_row(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        div()
+            .id("toolbar")
+            .debug_selector(|| "toolbar".to_owned())
+            .flex_none()
+            .w_full()
+            // The window buttons are native, so the row's height is too.
+            .h(px(tokens::chrome::TOOLBAR_HEIGHT))
+            .bg(theme(cx).paint_color(color::TOOLBAR_BACKGROUND))
+            .on_mouse_down(MouseButton::Left, |event, window, _| {
+                if event.click_count == 2 {
+                    window.titlebar_double_click();
+                } else {
+                    window.start_window_move();
+                }
+            })
+    }
+
     /// The status bar below the workbench, unless the setting hides it.
     fn render_status_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         use crate::app::{settings, status_bar::ApplicationStatusBar};
@@ -436,8 +472,6 @@ impl KnotWindow {
                 .h(zoom::rems(tokens::chrome::STATUS_BAR_HEIGHT))
                 .px_1()
                 .text_xs()
-                .border_t_1()
-                .border_color(theme(cx).paint_color(color::STATUS_BAR_BORDER))
                 .bg(theme(cx).paint_color(color::STATUS_BAR_BACKGROUND))
                 .text_color(theme(cx).paint_color(color::STATUS_BAR_FOREGROUND))
                 .child(group().children(left))
@@ -565,8 +599,11 @@ impl Render for KnotWindow {
             .flex()
             .flex_col()
             .size_full()
-            .bg(theme(cx).paint_color(color::BACKGROUND))
+            .bg(theme(cx).paint_color(color::WINDOW_BACKGROUND))
             .text_color(theme(cx).paint_color(color::TEXT))
+            .when(NATIVE_TOOLBAR_ROW, |root| {
+                root.child(self.render_toolbar_row(cx))
+            })
             .child(
                 div()
                     .flex_1()
@@ -580,9 +617,14 @@ impl Render for KnotWindow {
                             .flex_1()
                             .min_w_0()
                             .min_h_0()
-                            .relative()
-                            .child(workbench)
-                            .child(self.workbench_drag_geometry()),
+                            .p(zoom::rems(tokens::chrome::WINDOW_INSET))
+                            .child(
+                                div()
+                                    .size_full()
+                                    .relative()
+                                    .child(workbench)
+                                    .child(self.workbench_drag_geometry()),
+                            ),
                     )
                     .children(right_stripe),
             )

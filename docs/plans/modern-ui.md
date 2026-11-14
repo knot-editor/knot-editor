@@ -95,7 +95,7 @@ Islands Dark/Light; every bundled theme defines them
 live in `src/app/tokens.rs`; spacing steps and type sizes join it when a
 checkpoint first uses them.
 
-### 2. Island cards and window frame
+### 2. Island cards and window frame ✅ (awaiting review)
 
 Deliverables: areas painted as rounded cards with gaps on the window
 background; split lines 1px; resize handles in the gaps; status bar on the
@@ -108,6 +108,13 @@ with painting.
 
 Review gate: the window frame and cards in dark and light themes, with docks
 shown, hidden, and in both `workbench.bottomDockLayout` modes.
+
+Delivered: the toolbar row exists on macOS only; other platforms keep the
+native frame until checkpoint 3 gives the toolbar content. Cards clip to a
+rectangle in gpui, so a child's background must equal the card's near a
+rounded corner. Stripe borders were dropped so the stripes sit on the window
+background. Review with `Try: Bottom dock layout: contained|full` and
+`Try: Use theme ...`.
 
 **Implementation context**: `render_workbench` and the split/resize
 geometry in `src/app/product/render.rs`; `WindowOptions` in

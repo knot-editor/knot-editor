@@ -64,7 +64,6 @@ impl KnotWindow {
             return None;
         }
         let stripes = self.workbench.read(cx).stripes();
-        let border = theme(cx).paint_color(color::BORDER);
         let stripe = |id: &'static str| {
             div()
                 .id(id)
@@ -79,20 +78,15 @@ impl KnotWindow {
                 .items_center()
         };
         let left = stripe("stripe-left")
-            .border_r_1()
-            .border_color(border)
             .child(
                 self.render_stripe_group(DockLocation::Left, &stripes, cx)
                     .flex_1(),
             )
             .child(self.render_stripe_group(DockLocation::Bottom, &stripes, cx));
-        let right = stripe("stripe-right")
-            .border_l_1()
-            .border_color(border)
-            .child(
-                self.render_stripe_group(DockLocation::Right, &stripes, cx)
-                    .flex_1(),
-            );
+        let right = stripe("stripe-right").child(
+            self.render_stripe_group(DockLocation::Right, &stripes, cx)
+                .flex_1(),
+        );
         Some((left, right))
     }
 

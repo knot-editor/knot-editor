@@ -67,6 +67,7 @@ pub(super) fn open_product_window_with(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(480.), px(320.))),
+            titlebar: window_titlebar(),
             ..Default::default()
         },
         cx,
@@ -173,6 +174,7 @@ pub(super) fn open_tab_transfer_window_with_bounds(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(480.), px(320.))),
+            titlebar: window_titlebar(),
             focus: !cfg!(target_os = "macos"),
             show: !cfg!(target_os = "macos"),
             ..Default::default()
@@ -203,6 +205,7 @@ pub(super) fn open_blank_window(
         WindowOptions {
             window_bounds: Some(window_bounds),
             window_min_size: Some(size(px(480.), px(320.))),
+            titlebar: window_titlebar(),
             display_id,
             focus: false,
             ..Default::default()
@@ -775,4 +778,14 @@ fn run_without_window(source: &ApplicationCommandSource, cx: &mut App) {
 pub(in crate::app) fn bind_product_keys(cx: &mut App) {
     crate::app::commands::keymaps::install(cx);
     super::key_routing::intercept_keys(cx);
+}
+
+/// The title bar: transparent on macOS, where the toolbar row sits beside the
+/// window buttons; the platform's own elsewhere.
+fn window_titlebar() -> Option<TitlebarOptions> {
+    super::render::NATIVE_TOOLBAR_ROW.then(|| TitlebarOptions {
+        title: Some("Knot".into()),
+        appears_transparent: true,
+        traffic_light_position: Some(point(px(14.), px(14.))),
+    })
 }
