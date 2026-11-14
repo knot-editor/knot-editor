@@ -6,6 +6,9 @@ import * as host from "knot/testing";
 import { start } from "../src/extension.js";
 import { ALPHA, registry, seedProject, seedSession, session, startLaunched } from "./support.js";
 
+/** ALPHA as inference names it. */
+const REPO = "file:///src/alpha";
+
 beforeEach(() => {
   host.reset();
   host.seedFile(`${ALPHA}.git/HEAD`, "ref: refs/heads/main");
@@ -24,11 +27,11 @@ test("a file opened alone in a rootless window adopts its new repository in plac
   await opened(file);
 
   assert.deepEqual(host.windowTargets(), [window]);
-  assert.deepEqual(host.rootsOf(window), [ALPHA]);
+  assert.deepEqual(host.rootsOf(window), [REPO]);
   assert.deepEqual(host.documentsIn(window), [file]);
-  const workspace = host.setRoots(window, [ALPHA]);
+  const workspace = host.setRoots(window, [REPO]);
   await host.emit({ type: "workspaceChanged", workspace });
-  assert.deepEqual(registry().projects.map((project) => [project.name, project.roots]), [[null, [ALPHA]]]);
+  assert.deepEqual(registry().projects.map((project) => [project.name, project.roots]), [[null, [REPO]]]);
 });
 
 test("a known project restores its session with the file and releases the stray window", async () => {
@@ -81,7 +84,7 @@ test("saving an untitled document into a repository adopts it", async () => {
   Object.assign(host.document(draft), { kind: "persisted", resourceUri: `${ALPHA}notes.md` });
   const saved = await documents.get(draft);
   await host.emit({ type: "documentChanged", document: saved! });
-  assert.deepEqual(host.rootsOf(window), [ALPHA]);
+  assert.deepEqual(host.rootsOf(window), [REPO]);
 });
 
 test("a failed adoption leaves the file where it opened", async () => {
@@ -104,7 +107,7 @@ test("the command opens a new repository beside a rooted window", async () => {
   await host.run(OPEN_REPOSITORY, { window: source });
 
   const [, window] = host.windowTargets();
-  assert.deepEqual(host.rootsOf(window!), [ALPHA]);
+  assert.deepEqual(host.rootsOf(window!), [REPO]);
   assert.deepEqual(host.documentsIn(window!), [file]);
   assert.deepEqual(host.rootsOf(source), [BETA]);
   assert.deepEqual(host.documentsIn(source), [file]);

@@ -11,12 +11,12 @@ const DOC = "file:///repo/src/main.rs";
 test("nearest ancestor wins and a .git file counts", async () => {
   host.seedFile("file:///repo/.git/HEAD", "ref: refs/heads/main");
   host.seedFile("file:///repo/sub/.git", "gitdir: ../.git/worktrees/sub");
-  assert.equal(await repositoryRoot("file:///repo/sub/src/main.rs"), "file:///repo/sub/");
+  assert.equal(await repositoryRoot("file:///repo/sub/src/main.rs"), "file:///repo/sub");
 });
 
 test("a .git directory counts", async () => {
   host.seedFile("file:///repo/.git/HEAD", "ref: refs/heads/main");
-  assert.equal(await repositoryRoot(DOC), "file:///repo/");
+  assert.equal(await repositoryRoot(DOC), "file:///repo");
 });
 
 test("no marker resolves to null", async () => {
@@ -33,7 +33,7 @@ test("a repository at the filesystem root never counts", async () => {
 test("a repository at the home directory never counts", async () => {
   host.seedFile("file:///Users/me/.git/HEAD", "ref: refs/heads/main");
   const uri = "file:///Users/me/dotfiles/todo.txt";
-  assert.equal(await repositoryRoot(uri), "file:///Users/me/");
+  assert.equal(await repositoryRoot(uri), "file:///Users/me");
   host.setHomeUri("file:///Users/me/");
   assert.equal(await repositoryRoot(uri), null);
 });
@@ -60,7 +60,7 @@ test("a rootless window presenting only the document adopts automatically", asyn
   host.seedFile("file:///repo/.git/HEAD", "ref: refs/heads/main");
   const document = host.addDocument({ uri: DOC });
   const window = host.openWindow({ documents: [document] });
-  assert.equal(await automatic(document, window), "file:///repo/");
+  assert.equal(await automatic(document, window), "file:///repo");
 });
 
 test("rooted windows, other tabs, and already open roots never adopt automatically", async () => {

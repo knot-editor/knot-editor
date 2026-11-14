@@ -9,7 +9,8 @@ function trimmed(uri: string): string {
   return uri.replace(/\/+$/, "");
 }
 
-function sameRoot(left: string, right: string): boolean {
+/** Whether two root URIs name the same directory, ignoring trailing slashes. */
+export function sameRoot(left: string, right: string): boolean {
   return trimmed(left) === trimmed(right);
 }
 
@@ -21,7 +22,7 @@ function splitFileUri(uri: string): { origin: string; path: string } | null {
 
 /**
  * The nearest ancestor directory of `documentUri` containing a `.git` entry,
- * in root form with a trailing slash. A `.git` file (worktree, submodule)
+ * without a trailing slash, as Open Folder names roots. A `.git` file (worktree, submodule)
  * counts like a directory; the walk stops at the first match, so nested
  * repositories infer their inner root. Null for an unstored or non-`file:`
  * document, when no ancestor carries the marker, when the nearest one is the
@@ -33,10 +34,10 @@ export async function repositoryRoot(documentUri: string | null): Promise<string
   if (split === null) return null;
   let directory = split.path.slice(0, split.path.lastIndexOf("/")) || "/";
   for (;;) {
-    const candidate = `${split.origin}${directory === "/" ? "" : directory}/`;
+    const candidate = `${split.origin}${directory === "/" ? "" : directory}`;
     let marker;
     try {
-      marker = await files.stat(`${candidate}.git`);
+      marker = await files.stat(`${candidate}/.git`);
     } catch {
       return null;
     }

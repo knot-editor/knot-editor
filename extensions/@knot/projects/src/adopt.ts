@@ -3,9 +3,8 @@
 // Repository command.
 import { documents, windows, workspaces } from "knot";
 import type { DocumentId, DocumentInfo, WindowInfo } from "knot";
-import { automaticRoot } from "./inference.js";
+import { automaticRoot, sameRoot } from "./inference.js";
 import { windowRoots } from "./layout.js";
-import { projectWithRoots } from "./registry.js";
 import type { ProjectsState } from "./state.js";
 import { switchTo } from "./switch.js";
 
@@ -18,7 +17,9 @@ import { switchTo } from "./switch.js";
  */
 export async function adopt(state: ProjectsState, root: string, window: WindowInfo, document: DocumentId) {
   const rootless = windowRoots(window).length === 0;
-  const project = projectWithRoots(state.registry, [root]);
+  const project =
+    state.registry.projects.find((project) => project.roots.length === 1 && sameRoot(project.roots[0]!, root)) ??
+    null;
   if (project !== null && !state.unreadable.has(project.id)) {
     await switchTo(state, project, window.target, { origin: rootless ? "adopt" : "keep", present: document });
     return;
