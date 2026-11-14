@@ -22,7 +22,8 @@ touches.
   extensions supply semantic data, never rendering callbacks; movement uses
   display cells, so views run headless.
 - [Product window chrome and failure notices](decisions/platform.md#product-window-chrome-and-failure-notices):
-  only product surfaces; silent native failures use the native warning prompt.
+  only product surfaces, with a toolbar of package-contributed widgets rather than
+  fixed commands; silent native failures use the native warning prompt.
 - [Command-line launcher](decisions/platform.md#command-line-launcher): the
   editor owns one socket for every build; macOS cold start through `open -a`,
   not a fork; paths open in their project's window.

@@ -125,7 +125,11 @@ References: [semantic UI](../architecture/semantic-ui.md) and
 ## Product window chrome and failure notices
 
 A window shows only Knot's own surfaces. The prototype toolbar duplicated
-commands, menus, and keys, and its free-form status string was the only place
+commands, menus, and keys, so none returned as a fixed command bar. The
+toolbar row now holds only navigation widgets that packages contribute as
+status items with a toolbar placement (the project name, a search button),
+which reuses the status registry instead of adding a second contribution model.
+The prototype's free-form status string was the only place
 some failures appeared, so native failures with no other visible effect use the
 native warning prompt instead. Success and progress notices were dropped because
 their effect is visible. Extension calls get failures as results, so a package

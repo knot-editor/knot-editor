@@ -105,7 +105,7 @@ rectangles, so a child's background must match the card's near a rounded
 corner; check the non-Islands themes for pokes. Whether the focused card gets
 an emphasis is still open (see deferred decisions).
 
-### 3. Main toolbar
+### 3. Main toolbar ✅ (awaiting review)
 
 Deliverables: status items gain a toolbar placement; the toolbar renders
 left and right groups; `@knot/projects` registers the project widget and
