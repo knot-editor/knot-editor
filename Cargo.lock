@@ -3792,6 +3792,8 @@ dependencies = [
  "url",
  "uuid",
  "v8",
+ "windows-sys 0.61.2",
+ "winreg 0.55.0",
 ]
 
 [[package]]

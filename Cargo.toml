@@ -72,6 +72,8 @@ unicode-width = "0.2"
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 v8 = "152.2"
+windows-sys = "0.61"
+winreg = "0.55"
 
 [package]
 name = "knot"
@@ -109,6 +111,10 @@ uuid = { workspace = true }
 v8 = { workspace = true }
 rusqlite = { workspace = true }
 pollster = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+winreg = { workspace = true }
 
 [features]
 # The product test driver in `knot::test_support`, for tests outside the library.

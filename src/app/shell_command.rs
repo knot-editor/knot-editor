@@ -1,8 +1,11 @@
-//! The `knot` command on the shell `PATH`: a symlink to the running executable,
-//! so it stays valid as long as the app stays where it is, in `/Applications`,
-//! `~/Applications`, or anywhere else.
+//! The `knot` command on the shell `PATH`, pointing at the running executable
+//! so it stays valid as long as the app stays where it is. On macOS it is a
+//! symlink in `/usr/local/bin`; on Windows the executable's folder is an entry
+//! of the user `Path`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+mod windows;
 
 /// Where macOS installs the link.
 const MACOS_LINK: &str = "/usr/local/bin/knot";
@@ -10,15 +13,34 @@ const MACOS_LINK: &str = "/usr/local/bin/knot";
 /// Install the command for the running executable. The error is a message for
 /// the user and names the manual step.
 pub(crate) fn install() -> Result<(), String> {
-    let executable = std::env::current_exe()
-        .and_then(std::fs::canonicalize)
-        .map_err(|error| format!("Knot cannot find its own executable: {error}"))?;
-    install_macos(&executable, Path::new(MACOS_LINK))
+    let executable = running_executable()?;
+    if cfg!(windows) {
+        windows::install(&executable)
+    } else {
+        install_macos(&executable, Path::new(MACOS_LINK))
+    }
 }
 
-/// Remove the command, only when it is a link to a Knot executable.
+/// Remove the command: on macOS only when the link points to a Knot
+/// executable, on Windows the `Path` entry of the running executable's folder.
 pub(crate) fn uninstall() -> Result<(), String> {
-    uninstall_macos(Path::new(MACOS_LINK))
+    if cfg!(windows) {
+        windows::uninstall(&running_executable()?)
+    } else {
+        uninstall_macos(Path::new(MACOS_LINK))
+    }
+}
+
+/// The running executable. It is not canonicalized on Windows, which would
+/// add the `\\?\` prefix that `Path` entries do not use.
+fn running_executable() -> Result<PathBuf, String> {
+    let executable = std::env::current_exe();
+    let executable = if cfg!(windows) {
+        executable
+    } else {
+        executable.and_then(std::fs::canonicalize)
+    };
+    executable.map_err(|error| format!("Knot cannot find its own executable: {error}"))
 }
 
 fn install_macos(executable: &Path, link: &Path) -> Result<(), String> {

@@ -581,7 +581,7 @@ pub(crate) async fn about(context: CommandContext, (): ()) -> Result<(), Command
         .await
 }
 
-#[command("shell.install-command", title = "Shell Command: Install 'knot' command in PATH", description = "Link the knot command into a folder on the shell PATH.", id = INSTALL_SHELL_COMMAND, participant = Workbench)]
+#[command("shell.install-command", title = "Shell Command: Install 'knot' command in PATH", description = "Put the knot command on the shell PATH.", id = INSTALL_SHELL_COMMAND, participant = Workbench)]
 pub(crate) async fn install_shell_command(
     context: CommandContext,
     (): (),
