@@ -81,9 +81,16 @@ fn assert_equivalent(directory: &Path, policy: &IgnorePolicy) {
     );
 }
 
+/// A temporary directory as the walk reports it once it has been through a
+/// file URI: without the symbolic links of macOS temporary paths, or the
+/// verbatim prefix that canonicalizing adds on Windows.
 fn root() -> (tempfile::TempDir, PathBuf) {
     let temporary = tempfile::tempdir().unwrap();
-    let root = fs::canonicalize(temporary.path()).unwrap();
+    let canonical = fs::canonicalize(temporary.path()).unwrap();
+    let root = url::Url::from_directory_path(canonical)
+        .unwrap()
+        .to_file_path()
+        .unwrap();
     (temporary, root)
 }
 

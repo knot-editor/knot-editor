@@ -137,7 +137,8 @@ mod tests {
 
     #[test]
     fn version_and_help_are_commands_in_option_position() {
-        let tmp = Path::new("/tmp");
+        let directory = tempfile::tempdir().unwrap();
+        let tmp = directory.path();
         assert_eq!(
             open(&["knot", "--version"], tmp),
             Ok(LaunchCommand::Version)

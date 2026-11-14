@@ -118,7 +118,8 @@ mod tests {
     use super::*;
 
     fn request(path: &str) -> OpenRequest {
-        OpenRequest::from_path(std::path::Path::new(path), std::path::Path::new("/")).unwrap()
+        let root = if cfg!(windows) { "C:\\" } else { "/" };
+        OpenRequest::from_path(std::path::Path::new(path), std::path::Path::new(root)).unwrap()
     }
 
     fn file(path: &str) -> PlacedRequest {
