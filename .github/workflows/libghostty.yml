@@ -137,7 +137,15 @@ jobs:
             # object that exports only the ghostty_* API keeps them apart.
             merged="$RUNNER_TEMP/libghostty-vt.o"
             if [ "$RUNNER_OS" = macOS ]; then
-              echo '_ghostty_*' > "$RUNNER_TEMP/exports"
+              # Some internal ghostty_* symbols are private externs, which
+              # ld refuses to export, so the list names the public ones.
+              nm -m -U "$install/lib/libghostty-vt.a" | awk '
+                NF > 2 && $NF ~ /^_ghostty_/ {
+                  if ($(NF - 1) == "external" && $(NF - 2) != "private") api[$NF] = 1
+                  else internal[$NF] = 1
+                }
+                END { for (s in api) if (!(s in internal)) print s }
+              ' > "$RUNNER_TEMP/exports"
               ld -r -arch "$ARCH" -platform_version macos 13.0 13.0 \
                 -all_load "$install/lib/libghostty-vt.a" \
                 -exported_symbols_list "$RUNNER_TEMP/exports" -o "$merged"
