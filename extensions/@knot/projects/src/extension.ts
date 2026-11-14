@@ -4,7 +4,7 @@
 // Records are application-global extension storage and the presentation is a
 // contributed tree. Root selection, window replacement, and text retention are
 // the application's public operations, so this package needs no private host
-// access.
+// access. A toolbar widget shows each window's project.
 //
 // Every folder set a window shows is remembered: a window without a project
 // for its roots creates an unnamed one, and the least recently opened
@@ -37,6 +37,7 @@ import { defineSettings } from "./prune.js";
 import { describe } from "./report.js";
 import { createState, loadSessions, reload } from "./state.js";
 import { afterLaunch, onApplicationEvent } from "./tracking.js";
+import { registerToolbar } from "./toolbar.js";
 import { registerTree } from "./tree.js";
 
 export async function start() {
@@ -50,6 +51,7 @@ export async function start() {
   }
   await registerTree(state);
   await registerCommands(state);
+  await registerToolbar(state);
   await reload(state);
   const observation = await workbench.observe((event) => onApplicationEvent(state, event));
   // A package restarted after launch sees it in the snapshot instead of an event.

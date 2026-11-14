@@ -35,6 +35,8 @@ export type ProjectsState = {
   launched: boolean;
   /** Membership-relevant metadata per document; revision-only changes are ignored. */
   tracked: Map<string, TrackedDocument>;
+  /** The toolbar widget, once registered. */
+  toolbar: { sync(): Promise<void> } | null;
 };
 
 export function createState(): ProjectsState {
@@ -48,6 +50,7 @@ export function createState(): ProjectsState {
     restoreTried: new Set(),
     launched: false,
     tracked: new Map(),
+    toolbar: null,
   };
 }
 
@@ -64,6 +67,7 @@ export async function reload(state: ProjectsState) {
 
 export async function refreshTree(state: ProjectsState) {
   if (state.view !== null) await state.view.invalidate(null);
+  await state.toolbar?.sync();
 }
 
 export async function commit(state: ProjectsState, next: Registry) {

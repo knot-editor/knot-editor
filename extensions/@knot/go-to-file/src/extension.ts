@@ -1,7 +1,8 @@
 // Go to File: type part of a path to list the matching files of the window's
 // roots, recently active ones first; Enter opens the highlighted one in the
-// pane the command ran from. Open Recent lists every recently active file.
-import { commands, documents, files, workbench, workspaces } from "knot";
+// pane the command ran from. Open Recent lists every recently active file. A
+// search button at the toolbar's right runs Go to File.
+import { commands, documents, files, icons, workbench, workspaces } from "knot";
 import type { CommandContext, FileSearchHit, PickerRow } from "knot";
 import { matchingRecent, recentFiles, recordActive, type RecentFile } from "./recent.js";
 import { clearRecent, recentRows } from "./openRecent.js";
@@ -10,6 +11,7 @@ import { rootName, rowFor } from "./rows.js";
 export const COMMAND = "workspace.go-to-file";
 export const OPEN_RECENT_COMMAND = "workspace.open-recent";
 export const CLEAR_RECENT_COMMAND = "workspace.clear-recent-files";
+export const SEARCH_ICON = "toolbar.search";
 
 function hitFor(file: RecentFile, ranges: FileSearchHit["ranges"]): FileSearchHit {
   return {
@@ -68,5 +70,14 @@ export async function start() {
   await commands.register(CLEAR_RECENT_COMMAND, () => clearRecent(), {
     title: "Clear Recent Files",
     description: "Forget the recently active files.",
+  });
+  await icons.define(SEARCH_ICON, { lucide: "search" });
+  await workbench.registerStatusItem("go-to-file", {
+    text: "",
+    icon: SEARCH_ICON,
+    tooltip: "Go to File",
+    command: { name: COMMAND },
+    side: "right",
+    placement: "toolbar",
   });
 }

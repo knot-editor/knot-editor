@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import * as host from "knot/testing";
-import { COMMAND, start } from "../src/extension.js";
+import { COMMAND, SEARCH_ICON, start } from "../src/extension.js";
 
 const ROOT = "file:///work/app";
 
@@ -69,4 +69,12 @@ test("several roots are ranked as one, each hit's root name starting its descrip
     ["button.ts", "app/src/ui"],
     ["button.ts", "lib"],
   ]);
+});
+
+test("a toolbar search button runs Go to File", async () => {
+  const [window] = host.windowTargets();
+  assert.deepEqual(
+    host.toolbarItems(window!).map((item) => [item.id, item.text, item.icon, item.side, item.command?.name]),
+    [["go-to-file", "", SEARCH_ICON, "right", COMMAND]],
+  );
 });

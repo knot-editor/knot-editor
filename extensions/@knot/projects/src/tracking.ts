@@ -97,6 +97,7 @@ async function track(state: ProjectsState) {
     await rememberUnbound(state, await windows.list());
     const [list, docs] = await Promise.all([windows.list(), documents.list()]);
     await syncBindings(state, list);
+    await state.toolbar?.sync();
     const byId = documentsById(docs);
     for (const project of state.registry.projects.filter((project) => isActive(state, project))) {
       await trackProject(state, project, list, byId);
