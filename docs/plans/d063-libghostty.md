@@ -240,50 +240,22 @@ reference, [`architecture.md`](../architecture.md), `AGENTS.md`, the
 README describe libghostty. The roadmap's D063 entry stays until checkpoint 5
 removes it.
 
-### 4. libghostty encoders 👀
+### 4. libghostty encoders ✅
 
-Deliverables:
-- ✅ `input.rs` translates gpui keystrokes into libghostty key events (action,
-  key, mods, consumed mods, UTF-8, unshifted codepoint, composing) and encodes
-  them with an encoder set from the terminal. macOS Option-as-Alt keeps the
-  current behavior.
-- ✅ `mouse.rs` keeps gesture ownership and encodes through the mouse encoder
-  with the session's pixel geometry; the reporting toggle and balanced
-  releases are unchanged.
-- ✅ Knot's own escape-sequence tables are removed.
-
-Validation: the existing input and mouse tests assert the same bytes for
-legacy modes; new tests cover Kitty keyboard flags and modifyOtherKeys
-requested by the app. Manual: `try.*` commands running an app that enables
-the Kitty keyboard protocol, plus the mouse fixture.
-
-Review gate: typing, shortcuts, and mouse reporting in shells and TUIs.
-
-**Status:** ✅ implemented and `just check` passes; 👀 awaiting the manual
-review. The mouse tests kept their bytes. Legacy key bytes are the same, except
-where libghostty follows Ghostty and fixterms:
-- Ctrl-[, Ctrl-I, Ctrl-M, and Ctrl-Shift-letter send CSI u instead of ESC,
-  Tab, CR, or the plain control byte.
-- Ctrl-Enter, Shift-Enter, Ctrl-Tab, Ctrl-Escape, and Shift-Escape send
-  `CSI 27;m;c~`.
-- Modified F3 sends `CSI 13;m~`, because `CSI 1;mR` would read as a cursor
-  position report.
-- F13 to F25 encode instead of sending nothing.
-- In X10 mouse mode (9), releases are no longer reported.
-- On macOS, Option-Left and Option-Right send `ESC b` and `ESC f`, as Ghostty
-  does, so shells move by word.
-- Terminal programs no longer inherit `EDITOR` and `VISUAL` from the
-  environment Knot started in. zsh chooses its vi keymap from them before its
-  startup files run, so a Knot started from a shell gave its terminals vi mode
-  where desktop-launched terminals get emacs mode.
-
-Keys report presses only, since the key route sees no releases or repeats;
-Kitty's report-events flag gets no release events.
-
-**Implementation context:** `src/app/terminal/input.rs` and `mouse.rs` with
-`mouse_tests.rs`; the key and mouse encoder wrappers go in `knot-terminal`.
-Named keys that stay global on Windows and Linux (the terminal decision) are
-routing, not encoding, and stay in `view.rs`.
+Keys and mouse reports are encoded by libghostty
+([encoders](../../crates/knot-terminal/src/input.rs),
+[keyboard input](../../src/app/terminal/input.rs)), as the
+[terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views)
+reference describes; Knot's escape-sequence tables are gone. The mouse tests
+kept their bytes. Legacy keys differ only where libghostty follows Ghostty
+and fixterms: Ctrl-[, Ctrl-I, Ctrl-M, and Ctrl-Shift-letter send CSI u;
+Ctrl- and Shift-Enter, Ctrl-Tab, and Ctrl- and Shift-Escape send
+`CSI 27;m;c~`; modified F3 sends `CSI 13;m~`; X10 mode reports no releases.
+On macOS, Option-Left and Option-Right send `ESC b` and `ESC f`, as Ghostty
+does. The review also found that terminals inherited `EDITOR` from a shell
+that launched Knot, which put zsh in vi mode; terminal programs no longer
+inherit `EDITOR` or `VISUAL`. Keys report presses only, so Kitty's
+report-events flag gets no releases.
 
 ### 5. Working directory from OSC 7 (D128)
 
