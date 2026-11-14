@@ -1,6 +1,8 @@
 # D123 — Project inference extension
 
-Status: 🚧 checkpoints 1–2 complete; checkpoint 3 remains. Item D123 of the
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 remains. The design was
+revised after the checkpoint-2 review: projects the registry already knows
+now open through the switch path, and dismissal lasts one session. Item D123 of the
 [roadmap](../roadmap.md).
 Depends on ✅ D122 (extension file read, list, and stat API).
 
@@ -51,40 +53,61 @@ an unrooted window and no explorer, file index, or project session for it.
   - the inferred root is already a root of any open window (that project is
     already open; tracking binds windows by root set, so there is nothing to
     offer);
-  - the root was previously dismissed (persisted, below), or an offer for the
-    same root is already shown or was already shown this session in that
-    window.
+  - the root was dismissed earlier this session (below).
 
 - **The offer** is one native confirmation (`workbench.showConfirmation`,
-  targeted at the window presenting the document), naming the inferred root
-  folder, e.g. "Open /path/to/repo as a project?". A confirmation that fails
-  with `OperationInProgress` (another transient interaction owns the window)
+  targeted at the window presenting the document). For a new root it names
+  the folder ("Open /path/to/repo as a project?"); for a root the registry
+  already has a project for (`projectWithRoots`) it names the project
+  ("Switch to knot-editor?"). A confirmation that fails with
+  `OperationInProgress` (another transient interaction owns the window)
   counts as *not shown*, not as a dismissal: the root stays eligible and a
-  later opened document may offer it again. Dismissal by the user counts and
-  is remembered.
+  later opened document may offer it again. Listeners are serial roots, so
+  the next event is evaluated only after the offer resolves and sees its
+  outcome through the guards; no separate "offer pending" state is needed.
 
-- **Accepting:**
-  - *Window without roots:* `workspaces.replaceRoots([inferred], { target })`
-    in place. Existing `@knot/projects` tracking then remembers/binds the
-    root set as an unnamed (or matching suspended) project with no extra
-    code. The document stays open; roots never close documents.
-  - *Window with roots:* a **new window** rooted at the inferred root
-    (`windows.open({ roots: [inferred] })`), with the document presented
+- **Accepting** depends on whether the registry already knows the root.
+  Because `@knot/projects` remembers every root set a window shows, the
+  known case is the common one in daily use.
+  - *New root, window without roots:* `workspaces.replaceRoots([inferred],
+    { target })` in place. Tracking then remembers and binds the root set as
+    an unnamed project with no extra code. The document stays open; roots
+    never close documents.
+  - *New root, window with roots:* a **new window** rooted at the inferred
+    root (`windows.open({ roots: [inferred] })`), with the document presented
     there (`documents.open(uri, { target: newWindow })`). The originating
-    window is untouched. Adding the folder as an extra root of the current
-    window was rejected: projects follow root edits, so it would silently
-    rewrite the current project's identity. Switching the current window via
-    `switchTo` was rejected: it closes the source project's windows, which is
-    far heavier than opening one file warrants.
+    window is untouched.
+  - *Known (suspended) project:* go through `switchTo`, so the project's
+    session (windows, layout, retained text) is restored, and present the
+    document in the first restored window. Two `switchTo` options cover the
+    origin:
+    - *window without roots:* the origin is **adopted**: it is a switch
+      source and its tabs join the first restored window as session entries
+      (carried by document identity, the way switching already carries
+      documents), so the stray window disappears and the user ends with only
+      the project's windows. Nothing is suspended, because the origin has no
+      project.
+    - *window with roots:* the origin is **kept**: no switch sources, so the
+      session opens in new windows and the source project's windows are
+      neither suspended nor closed.
+  - Rejected: going through `replaceRoots` / `windows.open` for a known
+    project and letting tracking's `restoreUnbound` restore it. The origin
+    holds the document, so it is not reusable and the session opens in yet
+    another window, leaving two or three windows for one acceptance (and in
+    the rooted case a race between `documents.open` and the switch
+    releasing the new window). Adding the folder as an extra root of the
+    current window was rejected: projects follow root edits, so it would
+    silently rewrite the current project's identity. A plain `switchTo` from
+    a rooted window was rejected: it closes the source project's windows,
+    which is far heavier than opening one file warrants.
 
-- **Dismissal memory** lives in `@knot/projects` package storage under its
-  own record key (e.g. `inference:dismissed`), a list of normalized root
-  URIs dismissed by the user. It persists across restarts; there is no
-  settings entry and no reset command (see Exclusions). Separately, an
-  in-memory per-session set caps offers to at most one shown offer per root
-  per window, so opening ten files from one checkout shows at most one
-  prompt per window. Accepting a root makes later offers moot through the
-  already-a-root guard.
+- **Dismissal lasts one session.** Cancel adds the root to an in-memory,
+  application-wide set (`state.dismissed`), so no window offers it again
+  until restart. Nothing is persisted: Cancel often means "not now", and a
+  permanent dismissal from one click with no reset path was judged more
+  annoying than one prompt per repository per session. Accepting makes later
+  offers moot through the already-a-root guard, so no per-window "already
+  shown" cap is needed either.
 
 - **Home directory fact.** Extensions have no home-directory fact today
   (`platform` is only the OS string), so D123 adds one small native fact
@@ -100,16 +123,17 @@ an unrooted window and no explorer, file index, or project session for it.
   consistent with the [bundled explorer](../decisions/bundled-packages.md#bundled-explorer)
   and [bundled project registry](../decisions/bundled-packages.md#bundled-project-registry)
   decisions.
-- Inference never mutates the registry directly. Accepting goes through
-  public root/window operations; `@knot/projects` tracking
-  (`rememberUnbound`, `restoreUnbound`, session records) remains the single
-  owner of remembering and binding, exactly as for folders opened by hand.
+- Inference never mutates the registry directly. Accepting a new root goes
+  through public root/window operations, and accepting a known project goes
+  through `switchTo`; `@knot/projects` tracking (`rememberUnbound`,
+  `restoreUnbound`, session records) remains the single owner of
+  remembering and binding, exactly as for folders opened by hand.
 - The ancestor walk uses only `files.stat` on `<dir>/.git` candidates and
   string parent computation over normalized URIs (mirroring `parentOf` in
   `extensions/@knot/explorer/src/rows.ts`); it does not list directories, so
   cost is one stat per ancestor level and independent of tree size. The
   workspace file index and `files.search` are not involved.
-- Failures (stat errors, a window closing mid-offer, storage write failure)
+- Failures (stat errors, a window closing mid-offer, a failed acceptance)
   are silent: no offer, no report prompt. Inference is a convenience and must
   never interrupt editing with its own diagnostics. The next eligible
   document may retry.
@@ -121,11 +145,10 @@ an unrooted window and no explorer, file index, or project session for it.
 - No marker configuration setting, no enable/disable setting.
 - No offer for documents restored at startup, on tab focus, or from the
   Projects tree; no "Open as Project" command in v1.
-- No dismissal-reset command or settings UI; manual Open Folder and project
-  switching remain the recovery path.
-- No change to `@knot/projects` switching, sessions, pruning, or the
-  registry schema. The dismissal record is a separate storage key, not a
-  registry field.
+- No persisted dismissal, so no reset command or settings UI.
+- No change to `@knot/projects` sessions, pruning, or the registry schema.
+  Switching changes only by the two origin options above (adopt a rootless
+  origin, keep a rooted one).
 - No multi-root offer (never proposes adding several inferred roots, and
   never proposes adding a root to a rooted window).
 
@@ -136,7 +159,11 @@ an unrooted window and no explorer, file index, or project session for it.
 - Whether startup-restored loose documents should ever be evaluated (e.g.
   once, after launch settles) — deferred until the opening-only trigger is
   proven insufficient in daily use.
-- Exact offer wording and confirm/cancel labels beyond naming the folder —
+- Whether the rooted-window acceptances should close the document's tab in
+  the originating window when it is clean, instead of leaving a duplicate —
+  deferred until daily use shows the duplicate is a nuisance.
+- Exact offer wording and confirm/cancel labels beyond naming the folder or
+  project —
   settled at implementation against existing `showConfirmation` call sites
   (e.g. project removal in `extensions/@knot/projects/src/commands.ts`).
 
@@ -210,52 +237,72 @@ Validation: package test runner for `@knot/projects`
 Review gate: guard set and walk semantics reviewed against the brief's three
 open questions (markers, no-root behavior, repetition) before prompts land.
 
+Completion note: the review kept the walk and guards and replaced the
+persisted dismissal record with a session-only set; removing the storage
+helpers is the first deliverable of checkpoint 3.
+
 ### 3. Offer wiring and acceptance
 
-Connect the core to observation, the confirmation, and the two acceptance
+Connect the core to observation, the confirmation, and the acceptance
 actions; prove the flow end to end.
 
 Deliverables:
 
+- Drop the persisted dismissal from checkpoint 2: remove
+  `INFERENCE_DISMISSED_KEY`, `dismissedFromJson`, `loadDismissed`,
+  `rememberDismissed`, their call in `start()`, and their tests. Keep
+  `state.dismissed` as the session set.
 - In `src/tracking.ts` / `src/extension.ts`: after `launched`,
   `documentOpened` and URI-changing `documentChanged` events evaluate
   inference for the document's presenting window (found via
-  `windows.list()` presentations). Offers are serialized through the
-  package's existing serial observation handling; at most one confirmation
-  is outstanding, and the per-window/per-root session cap is recorded when
-  an offer is *shown*.
-- `workbench.showConfirmation` targeted at that window, naming the inferred
-  folder. Confirmed → checkpoint-3 acceptance by window state (rootless:
-  `workspaces.replaceRoots`; rooted: `windows.open` + `documents.open` in
-  the new window). Dismissed → persist dismissal, then continue. Errors
-  (including `OperationInProgress`, closed target) leave the root eligible
-  and are swallowed.
+  `windows.list()` presentations).
+- `workbench.showConfirmation` targeted at that window, naming the folder or
+  the known project. Confirmed → acceptance per Chosen design. Dismissed →
+  add the root to `state.dismissed`. Errors (including
+  `OperationInProgress`, closed target, failed acceptance) leave the root
+  eligible and are swallowed.
+- `switchTo` gains the two origin options (adopt a rootless origin, its tabs
+  joining the first restored window; keep a rooted origin, no sources), and
+  presents a given document in the first restored window. The Projects
+  commands keep calling it without options, unchanged.
 - Package tests: offer shown once for ten documents from one checkout;
-  dismissal persists and suppresses after a simulated restart (reload of
-  storage records); rootless acceptance replaces roots; rooted acceptance
-  opens a new window and leaves the source window's roots unchanged; busy
-  transient slot defers without recording dismissal.
+  dismissal suppresses for the rest of the session in every window and not
+  after a simulated restart; busy transient slot defers without dismissing;
+  new root, rootless → roots replaced in place and an unnamed project bound;
+  new root, rooted → new window, source roots unchanged; known project,
+  rootless → session restored, the document in its first window, the stray
+  window gone, dirty text preserved; known project, rooted → session
+  restored in new windows, the source project's windows and session record
+  untouched.
 - One integration test in the real editor
   (`crates/knot-ext-workbench/tests/workbench/projects.rs` or a sibling
   module) proving a bundled-package offer/accept flow against real roots on
-  disk, matching how the other workbench packages are covered.
+  disk, including a file passed to a cold start through the launch path (it
+  lands in a rootless window and must be offered).
 - Update the `@knot/projects` package header comment in `src/extension.ts`
   to describe inference, and the extension guide's project section if it
   enumerates package behavior.
 
 **Implementation context:** observation and launch gating mirror
 `onApplicationEvent`/`afterLaunch` in `src/tracking.ts`; confirmation usage
-mirrors `src/commands.ts` (project removal). Acceptance must not call
-`switchTo` (see Chosen design). Any manual-verification build gets `try.*`
-commands via a personal-config `post-init.js`, per repository rules, rather
-than test-only product commands.
+mirrors `src/commands.ts` (project removal). Session entries already carry
+live documents by `document` identity (`Entry` in `src/session.ts`), which
+the adopt option reuses rather than capturing and reopening by URI. Any
+manual-verification build gets `try.*` commands via a personal-config
+`post-init.js`, per repository rules, rather than test-only product
+commands.
 
 Validation: full `@knot/projects` package tests, the workbench integration
 test, and `just check` (with `cargo fmt` run once at the end). Manual gate:
-open a file from a checkout in a rootless window (offer → window adopts the
-root), dismiss it and open another file from the same checkout (no second
-offer), and open an outside file in a rooted window (offer → new window,
-original untouched).
+1. `knot <file in a never-seen checkout>` → offer → the window adopts the
+   root.
+2. Close it, then `knot <another file from that checkout>` → "Switch to …"
+   offer → the project's session restores with the file in it and no stray
+   window.
+3. Dismiss an offer, open another file from the same checkout → no offer;
+   restart → offered again.
+4. In a rooted window, Open File from another checkout → offer → new
+   window, original untouched.
 
 Review gate: end-to-end behavior accepted; then record the validated choices
 in `docs/decisions/bundled-packages.md` (new project-inference entry plus
@@ -265,8 +312,9 @@ index line in `docs/decisions.md`), fold durable behavior into
 ## Cross-check
 
 - Source item: [D123](../roadmap.md); dependencies D122 ✅.
-- No new crate, no new package, no registry schema change; the only native
-  change is the additive `homeUri` facade fact (checkpoint 1).
+- No new crate, no new package, no registry schema change, no new storage
+  record; the only native change is the additive `homeUri` facade fact
+  (checkpoint 1).
 - Nothing here revisits D084 (project selector), D089 (project-local
   settings), or D124 (workspace trust): inference opens ordinary roots and
   runs no project code.
