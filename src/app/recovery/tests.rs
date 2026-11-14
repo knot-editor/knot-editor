@@ -63,10 +63,17 @@ async fn identical_captures_skip_writes(cx: &mut gpui::TestAppContext) {
     let store = open_store(&path, cx);
     store.submit_automatic(draft(id, "same"));
     store.flush().await.unwrap();
-    std::fs::remove_file(&path).unwrap();
+    // Another connection sees `data_version` change whenever the store commits.
+    let probe = rusqlite::Connection::open(&path).unwrap();
+    let data_version = || {
+        probe
+            .query_row("PRAGMA data_version", [], |row| row.get::<_, i64>(0))
+            .unwrap()
+    };
+    let written = data_version();
     store.submit_automatic(draft(id, "same"));
     store.flush().await.unwrap();
-    assert!(!path.exists());
+    assert_eq!(data_version(), written);
 }
 
 #[gpui::test]

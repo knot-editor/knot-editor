@@ -86,7 +86,6 @@ fn open_arguments(bundle: &Path, batch: &LaunchBatch) -> Vec<OsString> {
 
 #[cfg(test)]
 mod tests {
-    use knot_model::entry::OpenRequest;
 
     use super::*;
 
@@ -116,7 +115,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn open_arguments_pass_absolute_paths_after_args() {
+        use knot_model::entry::OpenRequest;
+
         let batch = LaunchBatch::new(vec![
             OpenRequest::from_path(Path::new("a b.txt"), Path::new("/work")).unwrap(),
             OpenRequest::from_path(Path::new("/tmp/dir"), Path::new("/work")).unwrap(),

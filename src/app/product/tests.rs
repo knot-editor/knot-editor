@@ -76,6 +76,17 @@ use crate::app::{
     workbench::TabSurfaceId,
 };
 
+/// A temporary directory as Knot holds it once it has been through a file
+/// URI: without the symbolic links of macOS temporary paths, or the verbatim
+/// prefix that canonicalizing adds on Windows.
+fn temp_directory(temp: &tempfile::TempDir) -> std::path::PathBuf {
+    let canonical = std::fs::canonicalize(temp.path()).unwrap();
+    url::Url::from_directory_path(canonical)
+        .unwrap()
+        .to_file_path()
+        .unwrap()
+}
+
 struct GatedFileSystemProvider {
     inner: Arc<dyn FileSystemProvider>,
     read_release: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,

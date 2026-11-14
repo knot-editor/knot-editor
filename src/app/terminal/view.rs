@@ -752,11 +752,6 @@ impl TerminalView {
         }
         true
     }
-
-    #[cfg(test)]
-    pub(crate) fn interaction_bounds(&self) -> Bounds<Pixels> {
-        self.interaction_bounds
-    }
 }
 
 #[cfg(test)]

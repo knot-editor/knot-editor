@@ -143,10 +143,18 @@ mod tests {
         assert!(!store.current().customized);
         store.publish(customized(320.));
         store.flush().await.unwrap();
-        std::fs::remove_file(&path).unwrap();
+        // Another connection sees `data_version` change whenever the store
+        // commits.
+        let probe = rusqlite::Connection::open(&path).unwrap();
+        let data_version = || {
+            probe
+                .query_row("PRAGMA data_version", [], |row| row.get::<_, i64>(0))
+                .unwrap()
+        };
+        let written = data_version();
         store.publish(customized(320.));
         store.flush().await.unwrap();
-        assert!(!path.exists());
+        assert_eq!(data_version(), written);
     }
 
     #[gpui::test]

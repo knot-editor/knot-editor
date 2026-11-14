@@ -109,7 +109,12 @@ impl TerminalSession {
             // Tests may exit without dropping a session. A plain shell hangs
             // up with its PTY, whereas the platform login wrapper survives
             // and is orphaned.
-            shell: cfg!(test).then(|| Shell::new("/bin/sh", Vec::new())),
+            shell: cfg!(test).then(|| {
+                Shell::new(
+                    if cfg!(windows) { "cmd.exe" } else { "/bin/sh" },
+                    Vec::new(),
+                )
+            }),
             working_directory,
             env: Vec::new(),
         };

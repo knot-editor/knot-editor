@@ -603,7 +603,13 @@ fn lost_unsupported_and_consumed_records_open_the_default_window(cx: &mut TestAp
         )
         .unwrap();
     drop(connection);
-    std::fs::rename(launch.path().with_extension("v99"), launch.path()).unwrap();
+    // The previous launch may still hold the record open, which on Windows
+    // forbids replacing the file but not rewriting it.
+    std::fs::write(
+        launch.path(),
+        std::fs::read(launch.path().with_extension("v99")).unwrap(),
+    )
+    .unwrap();
     launch.relaunch(Vec::new(), cx);
     assert_eq!(windows_by_creation(cx).len(), 1);
 }

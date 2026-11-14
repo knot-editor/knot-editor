@@ -1181,7 +1181,7 @@ fn terminal_start_directory(
 fn restored_terminals_start_in_their_recorded_directory(cx: &mut TestAppContext) {
     let h = harness(cx);
     let temp = tempfile::tempdir().unwrap();
-    let directory = std::fs::canonicalize(temp.path()).unwrap();
+    let directory = temp_directory(&temp);
     let (one, window, native_window) = h.file_window("a/one.txt", cx);
     window.update(cx, |window, cx| {
         let (id, view) = window.create_terminal_in(Some(directory.clone()), cx);

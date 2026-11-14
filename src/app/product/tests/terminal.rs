@@ -1262,7 +1262,7 @@ async fn new_terminals_start_in_the_root_of_the_last_focused_document(cx: &mut T
 #[gpui::test]
 async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut TestAppContext) {
     let temp = tempfile::tempdir().unwrap();
-    let root = std::fs::canonicalize(temp.path()).unwrap();
+    let root = temp_directory(&temp);
     let nested = root.join("nested");
     std::fs::create_dir_all(&nested).unwrap();
     let documents = install_globals(cx);
