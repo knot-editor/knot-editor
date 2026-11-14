@@ -23,7 +23,6 @@ gpui-component = { version = "=0.9.0", default-features = false }
 gpui-kit-assets = { version = "=0.9.0", default-features = false }
 gpui = { package = "gpui-pre", version = "=0.3.11", default-features = false, features = ["font-kit", "windows-manifest"] }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11", default-features = false, features = ["font-kit"] }
-alacritty_terminal = { version = "0.26", default-features = false }
 anyhow = "1"
 directories = "6"
 flate2 = "1"
@@ -89,7 +88,6 @@ knot-host = { path = "crates/knot-host" }
 knot-model = { path = "crates/knot-model" }
 knot-protocol = { path = "crates/knot-protocol" }
 knot-terminal = { path = "crates/knot-terminal" }
-alacritty_terminal = { workspace = true }
 anyhow = { workspace = true }
 directories = { workspace = true }
 interprocess = { workspace = true }
