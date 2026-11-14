@@ -153,11 +153,9 @@ prompt with the manual `sudo` step. A Knot started by LaunchServices does not ca
 are verified by hand only.
 
 ### 6. Install command on Windows and Linux
-Windows 🔍 (awaiting the review gate): `src/app/shell_command/windows.rs` adds or
-removes the running executable's folder in the `HKCU\Environment` `Path`, keeping
-the value's type (`REG_EXPAND_SZ` entries still expand) and the other entries, and
-broadcasts `WM_SETTINGCHANGE`. Folders compare case-insensitively, ignoring a
-trailing separator. A registry round-trip test runs on a scratch `HKCU` key.
+Windows ✅: `src/app/shell_command/windows.rs` adds or removes the running
+executable's folder in the user `Path`, keeping the value's type and the other
+entries, and broadcasts `WM_SETTINGCHANGE`. Review gate passed by hand.
 Linux: not started.
 
 Deliverable: the same commands on Windows (user `Path` entry) and Linux
