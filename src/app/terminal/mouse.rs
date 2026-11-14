@@ -1,6 +1,7 @@
-//! Terminal mouse wire formats and gesture ownership.
+//! Terminal mouse gesture ownership and wheel routing; the terminal encodes
+//! the reports.
 
-use super::input::{InputModes, MouseFormat};
+use super::input::InputModes;
 use gpui::{Modifiers, MouseButton, NavigationDirection, Pixels, Point, ScrollDelta};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,7 +33,8 @@ pub(crate) fn wheel_route(mode: InputModes, shift: bool) -> WheelRoute {
 #[derive(Default)]
 pub(crate) struct PointerState {
     pressed: Vec<(MouseButton, PointerOwner)>,
-    last_motion: Option<(usize, usize, u8)>,
+    /// The last motion reported, or the drag a press would report.
+    last_motion: Option<Vec<u8>>,
     wheel: Point<f32>,
     wheel_route: Option<WheelRoute>,
 }
@@ -64,12 +66,13 @@ impl PointerState {
         self.last_motion = None;
         owner
     }
-    pub(crate) fn motion_changed(&mut self, column: usize, row: usize, code: u8) -> bool {
-        let motion = (column, row, code);
-        if self.last_motion == Some(motion) {
+    /// Whether `report` differs from the last motion reported, which it
+    /// replaces.
+    pub(crate) fn motion_changed(&mut self, report: &[u8]) -> bool {
+        if self.last_motion.as_deref() == Some(report) {
             return false;
         }
-        self.last_motion = Some(motion);
+        self.last_motion = Some(report.to_vec());
         true
     }
     pub(crate) fn leave(&mut self) {
@@ -113,139 +116,30 @@ impl PointerState {
     }
 }
 
-pub(crate) fn button_code(button: MouseButton) -> u8 {
+pub(crate) fn report_button(button: MouseButton) -> knot_terminal::MouseButton {
     match button {
-        MouseButton::Left => 0,
-        MouseButton::Middle => 1,
-        MouseButton::Right => 2,
-        MouseButton::Navigate(NavigationDirection::Back) => 128,
-        MouseButton::Navigate(NavigationDirection::Forward) => 129,
+        MouseButton::Left => knot_terminal::MouseButton::Left,
+        MouseButton::Middle => knot_terminal::MouseButton::Middle,
+        MouseButton::Right => knot_terminal::MouseButton::Right,
+        MouseButton::Navigate(NavigationDirection::Back) => knot_terminal::MouseButton::Back,
+        MouseButton::Navigate(NavigationDirection::Forward) => knot_terminal::MouseButton::Forward,
     }
 }
 
-pub(crate) fn modifier_code(modifiers: Modifiers) -> u8 {
-    4 * u8::from(modifiers.shift) + 8 * u8::from(modifiers.alt) + 16 * u8::from(modifiers.control)
-}
-
-/// Coordinates are zero-based viewport cells. Unrepresentable legacy coordinates produce no report.
-pub(crate) fn mouse_bytes(
-    format: MouseFormat,
-    code: u8,
-    column: usize,
-    row: usize,
-    release: bool,
-) -> Vec<u8> {
-    if format == MouseFormat::Sgr {
-        return format!(
-            "\x1b[<{code};{};{}{}",
-            column + 1,
-            row + 1,
-            if release { 'm' } else { 'M' }
-        )
-        .into_bytes();
+/// The modifiers mouse reports carry; Command and Super are never reported.
+pub(crate) fn report_modifiers(modifiers: Modifiers) -> knot_terminal::Modifiers {
+    knot_terminal::Modifiers {
+        shift: modifiers.shift,
+        control: modifiers.control,
+        alt: modifiers.alt,
+        super_key: false,
     }
-    let limit = if format == MouseFormat::Utf8 {
-        2015
-    } else {
-        223
-    };
-    if column >= limit || row >= limit {
-        return Vec::new();
-    }
-    // Legacy releases use button 3 while retaining modifier bits.
-    let code = if release { (code & 28) | 3 } else { code };
-    let mut bytes = b"\x1b[M".to_vec();
-    if format == MouseFormat::Utf8 {
-        for value in [u32::from(code) + 32, column as u32 + 33, row as u32 + 33] {
-            let mut buffer = [0; 4];
-            bytes.extend_from_slice(
-                char::from_u32(value)
-                    .unwrap()
-                    .encode_utf8(&mut buffer)
-                    .as_bytes(),
-            );
-        }
-    } else {
-        bytes.extend_from_slice(&[code + 32, column as u8 + 33, row as u8 + 33]);
-    }
-    bytes
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use gpui::{point, px};
-
-    #[test]
-    fn button_motion_wheel_and_modifier_bytes_in_each_encoding() {
-        for (button, base) in [
-            (MouseButton::Left, 0),
-            (MouseButton::Middle, 1),
-            (MouseButton::Right, 2),
-            (MouseButton::Navigate(NavigationDirection::Back), 128),
-            (MouseButton::Navigate(NavigationDirection::Forward), 129),
-        ] {
-            assert_eq!(button_code(button), base);
-        }
-        for bits in 0..8 {
-            let modifiers = Modifiers {
-                shift: bits & 1 != 0,
-                alt: bits & 2 != 0,
-                control: bits & 4 != 0,
-                ..Default::default()
-            };
-            let modifier = bits * 4;
-            assert_eq!(modifier_code(modifiers), modifier);
-            for base in [0, 1, 2, 32, 33, 34, 35, 64, 65, 66, 67, 128, 129] {
-                let code = base + modifier;
-                assert_eq!(
-                    mouse_bytes(MouseFormat::Sgr, code, 2, 4, false),
-                    format!("\x1b[<{code};3;5M").as_bytes()
-                );
-                assert_eq!(
-                    mouse_bytes(MouseFormat::Legacy, code, 2, 4, false),
-                    [27, 91, 77, code + 32, 35, 37]
-                );
-            }
-            assert_eq!(
-                mouse_bytes(MouseFormat::Sgr, 2 + modifier, 2, 4, true),
-                format!("\x1b[<{};3;5m", 2 + modifier).as_bytes()
-            );
-            assert_eq!(
-                mouse_bytes(MouseFormat::Legacy, 2 + modifier, 2, 4, true),
-                [27, 91, 77, 35 + modifier, 35, 37]
-            );
-        }
-    }
-
-    #[test]
-    fn coordinate_limits_do_not_wrap_or_alias_to_another_cell() {
-        assert_eq!(
-            mouse_bytes(MouseFormat::Legacy, 0, 222, 222, false),
-            [27, 91, 77, 32, 255, 255]
-        );
-        for (column, row) in [(223, 0), (0, 223), (65534, 65534)] {
-            assert!(mouse_bytes(MouseFormat::Legacy, 0, column, row, false).is_empty());
-        }
-        assert_eq!(
-            mouse_bytes(MouseFormat::Sgr, 0, 65534, 65534, false),
-            b"\x1b[<0;65535;65535M"
-        );
-        assert_eq!(
-            mouse_bytes(MouseFormat::Utf8, 128, 2, 4, false),
-            "\x1b[M\u{a0}#%".as_bytes()
-        );
-        assert_eq!(
-            mouse_bytes(MouseFormat::Utf8, 0, 222, 2014, false),
-            "\x1b[M \u{ff}\u{7ff}".as_bytes()
-        );
-        assert!(mouse_bytes(MouseFormat::Utf8, 0, 2015, 0, false).is_empty());
-        assert!(mouse_bytes(MouseFormat::Utf8, 0, 0, 2015, false).is_empty());
-        assert_eq!(
-            mouse_bytes(MouseFormat::Sgr, 0, 3000, 0, false),
-            b"\x1b[<0;3001;1M"
-        );
-    }
 
     #[test]
     fn gesture_ownership_motion_deduplication_and_reset() {
@@ -258,11 +152,11 @@ mod tests {
             state.release(MouseButton::Right),
             Some(PointerOwner::Application)
         );
-        assert!(state.motion_changed(1, 2, 35));
-        assert!(!state.motion_changed(1, 2, 35));
-        assert!(state.motion_changed(1, 2, 43));
+        assert!(state.motion_changed(b"one"));
+        assert!(!state.motion_changed(b"one"));
+        assert!(state.motion_changed(b"two"));
         state.leave();
-        assert!(state.motion_changed(1, 2, 43));
+        assert!(state.motion_changed(b"two"));
         state.clear();
         assert_eq!(state.owner(MouseButton::Left), None);
     }

@@ -1,7 +1,7 @@
 use crate::app::keys::{Keystroke, Modifiers};
 use gpui::TestAppContext;
 
-use super::{InputModes, terminal_key_bytes};
+use super::terminal_key_bytes;
 
 #[cfg(unix)]
 fn read_line() -> knot_terminal::PtyOptions {
@@ -21,7 +21,16 @@ fn windows_space_key_without_key_char_reaches_terminal(_cx: &mut TestAppContext)
         key_char: None,
         modifiers: Modifiers::default(),
     };
-    assert_eq!(terminal_key_bytes(&space, InputModes::default()), b" ");
+    let terminal = knot_terminal::Terminal::new(
+        knot_terminal::TerminalSize {
+            columns: 80,
+            rows: 24,
+            cell_width: 8,
+            cell_height: 16,
+        },
+        0,
+    );
+    assert_eq!(terminal_key_bytes(&space, &terminal), b" ");
 }
 
 #[cfg(unix)]

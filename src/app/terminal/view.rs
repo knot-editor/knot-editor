@@ -2,8 +2,9 @@ use crate::app::convert::ThemePaint as _;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use knot_terminal::{
-    CellWidth, CursorStyle as TerminalCursor, Mode, Point as TerminalPoint, RenderState, Rgb,
-    Scroll, TerminalSize, Underline,
+    CellWidth, CursorStyle as TerminalCursor, Key, KeyEvent, Mode, MouseAction,
+    MouseButton as ReportButton, MouseEvent as ReportEvent, Point as TerminalPoint, RenderState,
+    Rgb, Scroll, TerminalSize, Underline,
 };
 use std::rc::Rc;
 
@@ -17,8 +18,7 @@ use crate::app::{
     terminal::layout::TerminalLayout,
     terminal::links::{LinkGrid, LinkGridBuilder, LinkTarget},
     terminal::mouse::{
-        PointerOwner, PointerState, WheelRoute, button_code, modifier_code, mouse_bytes,
-        wheel_route,
+        PointerOwner, PointerState, WheelRoute, report_button, report_modifiers, wheel_route,
     },
     terminal::session::{TerminalAttachment, TerminalSession, TerminalStatus, lock},
     theme::{color, theme},
@@ -59,7 +59,9 @@ pub(crate) struct TerminalView {
     pointer_epoch: Option<(u64, InputModes)>,
     pointer_position: Option<Point<Pixels>>,
     pointer_modifiers: Modifiers,
-    reported_cell: Option<(usize, usize)>,
+    /// The grid position of the last report sent, in the terminal's cell
+    /// pixels.
+    reported_position: Option<(f32, f32)>,
     interaction_bounds: Bounds<Pixels>,
     layout: Option<TerminalLayout>,
     focus_subscriptions: Vec<Subscription>,
@@ -192,7 +194,7 @@ impl TerminalView {
             pointer_epoch: None,
             pointer_position: None,
             pointer_modifiers: Modifiers::default(),
-            reported_cell: None,
+            reported_position: None,
             interaction_bounds: Bounds::default(),
             layout: None,
             focus_subscriptions: Vec::new(),
@@ -245,12 +247,11 @@ impl TerminalView {
         if self.attachment.is_none() || self.session.read(cx).status() != TerminalStatus::Running {
             return false;
         }
-        let mode = self
+        let bytes = self
             .session
             .read(cx)
-            .with_terminal(|terminal| InputModes::read(terminal))
+            .with_terminal(|terminal| terminal_key_bytes(keystroke, terminal))
             .unwrap_or_default();
-        let bytes = terminal_key_bytes(keystroke, mode);
         if bytes.is_empty() {
             return false;
         }
@@ -309,7 +310,7 @@ impl TerminalView {
     fn clear_gestures(&mut self) {
         self.clear_links();
         self.pointer.clear();
-        self.reported_cell = None;
+        self.reported_position = None;
         self.selection_anchor = None;
         self.local_dragged = false;
     }
@@ -411,18 +412,11 @@ impl TerminalView {
                 .unwrap_or_default();
             if self.pointer_epoch == Some((session.generation(), mode))
                 && mode.mouse_reporting()
-                && let Some((column, row)) = self.viewport_cell(position, cx)
+                && let Some(at) = self.report_position(position, cx)
             {
                 for button in self.pointer.application_buttons() {
-                    self.send_pointer(
-                        self.release_bytes(
-                            mode,
-                            button_code(button) + modifier_code(self.pointer_modifiers),
-                            column,
-                            row,
-                        ),
-                        cx,
-                    );
+                    let release = self.release_bytes(button, self.pointer_modifiers, at, cx);
+                    self.send_pointer(release, cx);
                 }
             }
         }
@@ -464,16 +458,78 @@ impl TerminalView {
         ))
     }
 
-    fn release_bytes(&self, mode: InputModes, code: u8, column: usize, row: usize) -> Vec<u8> {
-        let bytes = mouse_bytes(mode.mouse_format, code, column, row, true);
+    /// Where `position` falls on the grid in the terminal's cell pixels,
+    /// clamped to the grid, so reports name the cell `viewport_cell` finds.
+    fn report_position(&self, position: Point<Pixels>, cx: &App) -> Option<(f32, f32)> {
+        let layout = self.layout?;
+        let size = self.session.read(cx).size();
+        let (column, row) = self.viewport_cell(position, cx)?;
+        let origin = layout.origin(self.interaction_bounds, column, row);
+        let within = |offset: Pixels, cell: Pixels| (offset / cell).clamp(0., 0.99);
+        Some((
+            (column as f32 + within(position.x - origin.x, layout.cell_width))
+                * size.cell_width as f32,
+            (row as f32 + within(position.y - origin.y, layout.cell_height))
+                * size.cell_height as f32,
+        ))
+    }
+
+    fn report(
+        &self,
+        action: MouseAction,
+        button: Option<ReportButton>,
+        modifiers: Modifiers,
+        (x, y): (f32, f32),
+        cx: &App,
+    ) -> Vec<u8> {
+        let event = ReportEvent {
+            action,
+            button,
+            modifiers: report_modifiers(modifiers),
+            x,
+            y,
+        };
+        self.session
+            .read(cx)
+            .with_terminal(|terminal| {
+                terminal.encode_mouse(&event, action == MouseAction::Motion && button.is_some())
+            })
+            .unwrap_or_default()
+    }
+
+    fn release_bytes(
+        &self,
+        button: MouseButton,
+        modifiers: Modifiers,
+        at: (f32, f32),
+        cx: &App,
+    ) -> Vec<u8> {
+        let release = |at| {
+            self.report(
+                MouseAction::Release,
+                Some(report_button(button)),
+                modifiers,
+                at,
+                cx,
+            )
+        };
+        let bytes = release(at);
         if bytes.is_empty() {
-            // Balance the press at its last representable cell when the pointer exceeds wire limits.
-            self.reported_cell
-                .map(|(column, row)| mouse_bytes(mode.mouse_format, code, column, row, true))
-                .unwrap_or_default()
+            // Balance the press where the last report was when the pointer
+            // is past what the format can represent.
+            self.reported_position.map(release).unwrap_or_default()
         } else {
             bytes
         }
+    }
+
+    /// Sends a motion report unless it repeats the last one.
+    fn send_motion(&mut self, bytes: Vec<u8>, at: (f32, f32), cx: &App) {
+        if bytes.is_empty() || !self.pointer.motion_changed(&bytes) {
+            return;
+        }
+        self.reported_position = Some(at);
+        self.send_pointer(bytes, cx);
     }
 
     fn send_pointer(&self, bytes: Vec<u8>, cx: &App) {
@@ -515,12 +571,15 @@ impl TerminalView {
             return true;
         }
         if mode.mouse_reporting() && !event.modifiers.shift {
-            let code = button_code(event.button) + modifier_code(event.modifiers);
-            let bytes = mouse_bytes(mode.mouse_format, code, column, row, false);
+            let at = self.report_position(event.position, cx).unwrap_or_default();
+            let button = Some(report_button(event.button));
+            let bytes = self.report(MouseAction::Press, button, event.modifiers, at, cx);
             if !bytes.is_empty() {
-                self.reported_cell = Some((column, row));
+                self.reported_position = Some(at);
                 self.pointer.press(event.button, PointerOwner::Application);
-                self.pointer.motion_changed(column, row, code + 32);
+                // A drag that stays in the pressed cell reports nothing.
+                let drag = self.report(MouseAction::Motion, button, event.modifiers, at, cx);
+                self.pointer.motion_changed(&drag);
                 self.send_pointer(bytes, cx);
             }
             return true;
@@ -566,16 +625,16 @@ impl TerminalView {
                 }
                 Some(PointerOwner::Application) => {
                     if matches!(mode.mouse, MouseTracking::Drag | MouseTracking::Motion)
-                        && let Some((column, row)) = self.viewport_cell(event.position, cx)
+                        && let Some(at) = self.report_position(event.position, cx)
                     {
-                        let code = button_code(button) + 32 + modifier_code(event.modifiers);
-                        if self.pointer.motion_changed(column, row, code) {
-                            let bytes = mouse_bytes(mode.mouse_format, code, column, row, false);
-                            if !bytes.is_empty() {
-                                self.reported_cell = Some((column, row));
-                            }
-                            self.send_pointer(bytes, cx);
-                        }
+                        let bytes = self.report(
+                            MouseAction::Motion,
+                            Some(report_button(button)),
+                            event.modifiers,
+                            at,
+                            cx,
+                        );
+                        self.send_motion(bytes, at, cx);
                     }
                     return true;
                 }
@@ -587,15 +646,9 @@ impl TerminalView {
             return false;
         }
         if mode.mouse == MouseTracking::Motion && !event.modifiers.shift {
-            if let Some((column, row)) = self.viewport_cell(event.position, cx) {
-                let code = 35 + modifier_code(event.modifiers);
-                if self.pointer.motion_changed(column, row, code) {
-                    let bytes = mouse_bytes(mode.mouse_format, code, column, row, false);
-                    if !bytes.is_empty() {
-                        self.reported_cell = Some((column, row));
-                    }
-                    self.send_pointer(bytes, cx);
-                }
+            if let Some(at) = self.report_position(event.position, cx) {
+                let bytes = self.report(MouseAction::Motion, None, event.modifiers, at, cx);
+                self.send_motion(bytes, at, cx);
             }
             return true;
         }
@@ -603,23 +656,16 @@ impl TerminalView {
     }
 
     fn mouse_up(&mut self, event: &MouseUpEvent, cx: &mut Context<Self>) -> bool {
-        let Some(mode) = self.sync_pointer(cx) else {
+        if self.sync_pointer(cx).is_none() {
             return false;
-        };
+        }
         self.pointer_position = Some(event.position);
         self.pointer_modifiers = event.modifiers;
         match self.pointer.release(event.button) {
             Some(PointerOwner::Application) => {
-                if let Some((column, row)) = self.viewport_cell(event.position, cx) {
-                    self.send_pointer(
-                        self.release_bytes(
-                            mode,
-                            button_code(event.button) + modifier_code(event.modifiers),
-                            column,
-                            row,
-                        ),
-                        cx,
-                    );
+                if let Some(at) = self.report_position(event.position, cx) {
+                    let release = self.release_bytes(event.button, event.modifiers, at, cx);
+                    self.send_pointer(release, cx);
                 }
                 true
             }
@@ -665,13 +711,19 @@ impl TerminalView {
                 }
             }
             WheelRoute::Application => {
-                if let Some((column, row)) = self.viewport_cell(event.position, cx) {
+                if let Some(at) = self.report_position(event.position, cx) {
                     let mut bytes = Vec::new();
-                    for (steps, positive, negative) in [(vertical, 64, 65), (horizontal, 66, 67)] {
-                        let code = if steps > 0 { positive } else { negative }
-                            + modifier_code(event.modifiers);
+                    for (steps, positive, negative) in [
+                        (vertical, ReportButton::WheelUp, ReportButton::WheelDown),
+                        (
+                            horizontal,
+                            ReportButton::WheelLeft,
+                            ReportButton::WheelRight,
+                        ),
+                    ] {
+                        let button = if steps > 0 { positive } else { negative };
                         bytes.extend(
-                            mouse_bytes(mode.mouse_format, code, column, row, false)
+                            self.report(MouseAction::Press, Some(button), event.modifiers, at, cx)
                                 .repeat(steps.unsigned_abs() as usize),
                         );
                     }
@@ -680,14 +732,20 @@ impl TerminalView {
             }
             WheelRoute::Alternate => {
                 let mut bytes = Vec::new();
-                for (steps, positive, negative) in
-                    [(vertical, "up", "down"), (horizontal, "left", "right")]
-                {
-                    let key =
-                        Keystroke::parse(if steps > 0 { positive } else { negative }).unwrap();
-                    bytes.extend(
-                        terminal_key_bytes(&key, mode).repeat(steps.unsigned_abs() as usize),
-                    );
+                for (steps, positive, negative) in [
+                    (vertical, Key::Up, Key::Down),
+                    (horizontal, Key::Left, Key::Right),
+                ] {
+                    let event = KeyEvent {
+                        key: Some(if steps > 0 { positive } else { negative }),
+                        ..KeyEvent::default()
+                    };
+                    let key = self
+                        .session
+                        .read(cx)
+                        .with_terminal(|terminal| terminal.encode_key(&event))
+                        .unwrap_or_default();
+                    bytes.extend(key.repeat(steps.unsigned_abs() as usize));
                 }
                 self.send_pointer(bytes, cx);
             }
