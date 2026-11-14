@@ -7,7 +7,7 @@ import { syncBindings } from "./bindings.js";
 import { describeWindow, documentsById, isReusable, needsCapture, presentedDocuments, viewCount, windowRoots } from "./layout.js";
 import { displayName, projectById, sameRoots, suggestedName, type Project } from "./registry.js";
 import { describe, errorCode, report } from "./report.js";
-import { EMPTY_WINDOW, SESSION_SCHEMA, type Entry, type Session } from "./session.js";
+import { EMPTY_WINDOW, SESSION_SCHEMA, type Entry, type Session, type SessionWindow } from "./session.js";
 import {
   boundWindows,
   isActive,
@@ -30,12 +30,41 @@ export function problem(outcome: SessionEntryOutcome, entry: Entry) {
   return null;
 }
 
+export type SwitchOptions = {
+  /**
+   * How the originating window takes part. By default it is replaced with
+   * its project's windows, or reused when it can host the project. "adopt"
+   * releases a window without roots and carries its tabs into the first
+   * destination window; "keep" leaves the origin and its project untouched
+   * and opens the destination in new windows.
+   */
+  origin?: "adopt" | "keep";
+  /** A live document to present and focus in the first destination window. */
+  present?: DocumentId;
+};
+
+/**
+ * The first window with the carried entries appended, except those whose file
+ * it already lists, which resolve to the same live document.
+ */
+function withCarried(windows: readonly SessionWindow[], carried: readonly Entry[]): SessionWindow[] {
+  const [first, ...rest] = windows;
+  const uris = new Set(first!.entries.map((entry) => entry.uri).filter((uri) => uri !== undefined));
+  const added = carried.filter((entry) => entry.uri === undefined || !uris.has(entry.uri));
+  return [{ ...first!, entries: [...first!.entries, ...added] }, ...rest];
+}
+
 /**
  * Switches the originating window to a project. The source project's windows
  * are suspended with their unsaved text retained before the native commit, so
  * a failed, cancelled, or interrupted switch never loses text.
  */
-export async function switchTo(state: ProjectsState, project: Project, origin: WindowTarget) {
+export async function switchTo(
+  state: ProjectsState,
+  project: Project,
+  origin: WindowTarget,
+  options: SwitchOptions = {},
+) {
   if (state.unreadable.has(project.id)) {
     await report(`${displayName(project)} has a session record this version cannot read; it is kept unchanged`);
     return;
@@ -56,16 +85,24 @@ export async function switchTo(state: ProjectsState, project: Project, origin: W
     }
   }
   const destination = state.sessions.get(project.id)?.windows ?? [];
-  const targets = destination.length > 0 ? destination : [EMPTY_WINDOW];
+  const stored = destination.length > 0 ? destination : [EMPTY_WINDOW];
   // The source is fixed before the first attempt suspends its record.
-  const sourceId = state.bindings.get(origin);
+  const sourceId = options.origin === undefined ? state.bindings.get(origin) : undefined;
   const source = sourceId === undefined ? null : projectById(state.registry, sourceId);
   for (let attempt = 1; ; attempt += 1) {
     const [list, docs] = await Promise.all([windows.list(), documents.list()]);
     const byId = documentsById(docs);
     const originWindow = list.find((window) => window.target === origin) ?? null;
     let sources: WindowInfo[] = [];
-    if (source !== null && originWindow !== null && sameRoots(windowRoots(originWindow), source.roots)) {
+    let targets = stored;
+    if (options.origin === "keep") {
+      // No sources: the origin and its project stay as they are.
+    } else if (options.origin === "adopt") {
+      if (originWindow !== null && windowRoots(originWindow).length === 0) {
+        sources = [originWindow];
+        targets = withCarried(stored, (await describeWindow(originWindow, byId, new Map())).entries);
+      }
+    } else if (source !== null && originWindow !== null && sameRoots(windowRoots(originWindow), source.roots)) {
       sources = [originWindow, ...boundWindows(state, source, list).filter((window) => window !== originWindow)];
     } else if (originWindow !== null && (await isReusable(originWindow, byId, project.roots))) {
       sources = [originWindow];
@@ -73,7 +110,8 @@ export async function switchTo(state: ProjectsState, project: Project, origin: W
     const presented = presentedDocuments(sources);
     const captures = new Map<DocumentId, CaptureId>();
     try {
-      for (const id of presented) {
+      // Carried documents stay live in the destination and need no capture.
+      for (const id of options.origin === "adopt" ? [] : presented) {
         const document = byId.get(id);
         if (document === undefined || viewCount(sources, id) < viewCount(list, id)) continue;
         if (await needsCapture(document)) captures.set(id, (await recovery.retain(id)).id);
@@ -137,6 +175,13 @@ export async function switchTo(state: ProjectsState, project: Project, origin: W
     }
     await recordSelection(state, project);
     await refreshTree(state);
+    if (options.present !== undefined && opened !== undefined) {
+      try {
+        await documents.present(options.present, { target: opened });
+      } catch {
+        // The project is open; the document stays where it was.
+      }
+    }
     const problems = [];
     for (const [index, window] of result.windows.entries()) {
       const entries = targets[index]?.entries ?? [];

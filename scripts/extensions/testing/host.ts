@@ -616,6 +616,31 @@ function fakeWindow(target: Knot.WindowTarget): FakeWindow {
   return found;
 }
 
+/** The window a document destination names, defaulting to the first window. */
+function destinationWindow(target: Knot.WindowTarget | Knot.PaneTarget | Knot.ViewTarget | undefined): FakeWindow {
+  if (target === undefined) {
+    const first = state.windows[0];
+    if (first === undefined) throw hostError("ContextUnavailable");
+    return first;
+  }
+  const window = state.windows.find((candidate) => candidate.target === target);
+  return window ?? fakeWindow((target as unknown as { window: Knot.WindowTarget }).window);
+}
+
+/** Selects the document's tab in the window, adding one when it has none. */
+function presentIn(window: FakeWindow, document: FakeDocument): Knot.DocumentPresentation {
+  let tab = window.tabs.find((candidate) => candidate.document === document.id);
+  if (tab === undefined) {
+    present(window.target, document.id);
+    tab = window.tabs.at(-1)!;
+  }
+  window.selected = window.tabs.indexOf(tab);
+  return {
+    document: documentInfo(document),
+    presentation: windowInfo(window).panes[0]!.tabs[window.selected]!,
+  };
+}
+
 /** Adds a tab for the document to the window and selects it. */
 export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
   const window = fakeWindow(target);
@@ -1511,15 +1536,24 @@ function restoreEntry(entry: Knot.SessionEntry): { id: Knot.DocumentId | null; o
 
 /**
  * A minimal commit: closes the released windows, closes suspended documents
- * that are no longer presented, and opens each requested window with its
- * entries resolved live first, then from captures, then by URI.
+ * that are no longer presented and that no entry presents live, and opens
+ * each requested window with its entries resolved live first, then from
+ * captures, then by URI.
  */
 function replaceWindows(options: Knot.ReplaceWindowsOptions): Knot.ReplaceWindowsResult {
   maybeFail("workbench.replaceWindows");
   state.replaced.push(options);
   const suspended = new Set(options.suspend.map((entry) => entry.document));
+  const kept = new Set(
+    options.windows.flatMap((window) => window.entries).flatMap((entry) => {
+      if (entry.document != null && state.documents.has(entry.document)) return [entry.document];
+      const live = [...state.documents.values()].find((document) => document.resourceUri === entry.uri);
+      return entry.uri != null && live !== undefined ? [live.id] : [];
+    }),
+  );
   state.windows = state.windows.filter((window) => !(options.release ?? []).includes(window.target));
   for (const id of suspended) {
+    if (kept.has(id)) continue;
     if (!state.windows.some((window) => window.tabs.some((tab) => tab.document === id))) {
       state.documents.delete(id);
     }
@@ -1737,25 +1771,17 @@ export const api: KnotApi = {
     open: async (uri, options = {}) => {
       maybeFail("documents.open");
       state.opens.push({ uri, options });
-      const target = (options.target as { window?: Knot.WindowTarget } | undefined)?.window
-        ?? state.windows[0]?.target;
-      if (target === undefined) throw hostError("ContextUnavailable");
-      const window = fakeWindow(target);
       let document = [...state.documents.values()].find((candidate) => candidate.resourceUri === uri);
       document ??= state.documents.get(addDocument({ uri, text: state.files.get(uri) ?? "" }))!;
-      let tab = window.tabs.find((candidate) => candidate.document === document.id);
-      if (tab === undefined) {
-        present(target, document.id);
-        tab = window.tabs.at(-1)!;
-      }
-      window.selected = window.tabs.indexOf(tab);
-      return {
-        document: documentInfo(document),
-        presentation: windowInfo(window).panes[0]!.tabs[window.selected]!,
-      };
+      return presentIn(destinationWindow(options.target), document);
     },
     createUntitled: notFaked("documents.createUntitled"),
-    present: notFaked("documents.present"),
+    present: async (id, options = {}) => {
+      maybeFail("documents.present");
+      const document = state.documents.get(id);
+      if (document === undefined) throw hostError("DocumentNotFound");
+      return presentIn(destinationWindow(options.target), document);
+    },
     setLanguage: async (id, language) => {
       const document = state.documents.get(id);
       if (document === undefined) throw hostError("DocumentNotFound");
