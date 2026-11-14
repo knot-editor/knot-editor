@@ -877,6 +877,16 @@ Kakoune mode could use them too. The
     preferences such as the default mouse mode, cursor style, or scrollback
     length: define them as settings.
 
+- **D192 — Terminals that run a command**
+  - Depends on: none
+  - Description: `terminals.open` always starts the login shell, so an
+    extension or personal configuration cannot open a terminal that runs a
+    given program, and manual review commands can only tell the user what to
+    type. Do it when an extension needs to run a program in a terminal, or
+    when review commands should start their fixtures directly: add a command
+    and arguments to the terminal options, run instead of the shell, and
+    define how restart and exit treat such a terminal.
+
 - **D043 — Persistent terminal sessions**
   - Depends on: none
   - Description: Live local sessions survive view reconstruction, but not
