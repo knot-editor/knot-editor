@@ -236,6 +236,20 @@ Review gate: selection and links in daily use.
 **Implementation context:** `src/app/terminal/{links,mouse,view}.rs`. Link
 detection keeps its algorithm and reads cells and hyperlinks from the engine.
 
+Status: 🔍 implemented, awaiting review.
+- ✅ Frames report each row's soft wrap and each cell's hyperlink flag
+  ([`render.rs`](../../crates/knot-terminal/src/render.rs)).
+- ✅ [`links.rs`](../../src/app/terminal/links.rs) collects the painted frame's
+  cells while drawing and reads OSC 8 URIs for flagged cells only. Hover and
+  arming use the painted grid; release compares it with a fresh capture.
+- ✅ A local press clears the selection and anchors it; dragging selects
+  through the terminal, which keeps the anchor on its text while the
+  viewport scrolls. A click without a drag selects nothing.
+- ✅ Ported: the `links.rs` cases, the selection and link cases in
+  `mouse_tests.rs`, the Unicode selection in `view/tests.rs`, and the plain
+  drag copy product test; new: a drag that scrolls mid-way keeps its anchor.
+- OSC 8 cells group by URI, since libghostty exposes no link `id`.
+
 ### 3c. Remove Alacritty and update the docs
 
 Deliverables: `alacritty_terminal` leaves the workspace and the remaining
