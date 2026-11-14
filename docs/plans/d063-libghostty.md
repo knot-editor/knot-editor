@@ -220,35 +220,16 @@ Consequences for later checkpoints:
   removed from `mouse_tests.rs`, `view/tests.rs`, and
   `product/tests/terminal.rs` in commit 4b8f0d1b; port them from its parent.
 
-### 3b. Selection, copy, and links
+### 3b. Selection, copy, and links ✅
 
-Deliverables: local mouse selection and copy over tracked grid refs, the
-scroll interaction during selection, OSC 8 links and HTTP(S) text detection
-over displayed cells with release-time revalidation, and the
-gesture-ownership rules between reporting and selection.
+Local selection and copy run through the terminal's tracked selection, and
+link detection reads the painted frame from the engine
+([`links.rs`](../../src/app/terminal/links.rs),
+[`view.rs`](../../src/app/terminal/view.rs)). The removed selection, link,
+and drag-copy tests are ported. Manual review covered links, selection with
+scrolling, Shift selection while reporting, and TUIs on macOS.
 
-Validation: ported `links.rs` and `mouse_tests.rs` selection cases, and the
-product test for plain drag copy. Manual: `try.*` commands with OSC 8 output,
-URLs across soft wraps, and `scripts/terminal-mouse-fixture.py`.
-
-Review gate: selection and links in daily use.
-
-**Implementation context:** `src/app/terminal/{links,mouse,view}.rs`. Link
-detection keeps its algorithm and reads cells and hyperlinks from the engine.
-
-Status: 🔍 implemented, awaiting review.
-- ✅ Frames report each row's soft wrap and each cell's hyperlink flag
-  ([`render.rs`](../../crates/knot-terminal/src/render.rs)).
-- ✅ [`links.rs`](../../src/app/terminal/links.rs) collects the painted frame's
-  cells while drawing and reads OSC 8 URIs for flagged cells only. Hover and
-  arming use the painted grid; release compares it with a fresh capture.
-- ✅ A local press clears the selection and anchors it; dragging selects
-  through the terminal, which keeps the anchor on its text while the
-  viewport scrolls. A click without a drag selects nothing.
-- ✅ Ported: the `links.rs` cases, the selection and link cases in
-  `mouse_tests.rs`, the Unicode selection in `view/tests.rs`, and the plain
-  drag copy product test; new: a drag that scrolls mid-way keeps its anchor.
-- OSC 8 cells group by URI, since libghostty exposes no link `id`.
+Consequence: OSC 8 cells group by URI, since libghostty exposes no link `id`.
 
 ### 3c. Remove Alacritty and update the docs
 
