@@ -264,7 +264,8 @@ review. The mouse tests kept their bytes. Legacy key bytes are the same, except
 where libghostty follows Ghostty and fixterms:
 - Ctrl-[, Ctrl-I, Ctrl-M, and Ctrl-Shift-letter send CSI u instead of ESC,
   Tab, CR, or the plain control byte.
-- Ctrl, Shift, or Alt with Enter, Tab, or Escape sends `CSI 27;m;c~`.
+- Ctrl-Enter, Shift-Enter, Ctrl-Tab, Ctrl-Escape, and Shift-Escape send
+  `CSI 27;m;c~`.
 - Modified F3 sends `CSI 13;m~`, because `CSI 1;mR` would read as a cursor
   position report.
 - F13 to F25 encode instead of sending nothing.
