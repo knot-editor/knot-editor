@@ -272,6 +272,10 @@ where libghostty follows Ghostty and fixterms:
 - In X10 mouse mode (9), releases are no longer reported.
 - On macOS, Option-Left and Option-Right send `ESC b` and `ESC f`, as Ghostty
   does, so shells move by word.
+- Terminal programs no longer inherit `EDITOR` and `VISUAL` from the
+  environment Knot started in. zsh chooses its vi keymap from them before its
+  startup files run, so a Knot started from a shell gave its terminals vi mode
+  where desktop-launched terminals get emacs mode.
 
 Keys report presses only, since the key route sees no releases or repeats;
 Kitty's report-events flag gets no release events.

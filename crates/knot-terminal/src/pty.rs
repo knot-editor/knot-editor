@@ -323,6 +323,12 @@ fn command(options: &PtyOptions) -> CommandBuilder {
     // Startup notification belongs to the editor, not to programs it runs.
     command.env_remove("XDG_ACTIVATION_TOKEN");
     command.env_remove("DESKTOP_STARTUP_ID");
+    // The editor's own environment may come from a shell that exported
+    // these. zsh picks its vi keymap from them before reading any startup
+    // file, so a shell here would edit differently than in a terminal
+    // started from the desktop; its startup files set them again.
+    command.env_remove("EDITOR");
+    command.env_remove("VISUAL");
     for (name, value) in &options.env {
         command.env(name, value);
     }
