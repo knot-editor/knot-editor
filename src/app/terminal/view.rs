@@ -6,6 +6,7 @@ use knot_terminal::{
     MouseButton as ReportButton, MouseEvent as ReportEvent, Point as TerminalPoint, RenderState,
     Rgb, Scroll, TerminalSize, Underline,
 };
+use std::ops::Range;
 use std::rc::Rc;
 
 use crate::app::keys::Keystroke;
@@ -42,11 +43,6 @@ fn font_size(cx: &App) -> f32 {
 /// The terminal's font settings, from `font.*` in the `terminal` view scope.
 fn font_settings(cx: &App) -> knot_model::typography::FontSettings {
     settings::font_settings(&terminal_scope(), cx)
-}
-
-/// The terminal's regular-style font.
-fn base_font(cx: &App) -> Font {
-    typography::font(&font_settings(cx))
 }
 
 type LinkOpener = Rc<dyn Fn(&str, &mut App)>;
@@ -870,6 +866,49 @@ struct RenderCell {
     selected: bool,
 }
 
+/// The index ranges of `cells` to shape together. With `ligatures`,
+/// consecutive single-width ASCII punctuation cells on one line that draw
+/// identically form one run, so ligatures such as `->` or `!==` can form;
+/// every other cell is its own run.
+fn shaping_runs(
+    cells: &[RenderCell],
+    ligatures: bool,
+    underlined: impl Fn(&RenderCell) -> bool,
+) -> Vec<Range<usize>> {
+    let joinable = |cell: &RenderCell| {
+        ligatures
+            && !cell.wide
+            && !cell.style.invisible
+            && cell.text.len() == 1
+            && cell.text.as_bytes()[0].is_ascii_punctuation()
+    };
+    let looks = |cell: &RenderCell| {
+        (
+            cell.style.bold,
+            cell.style.italic,
+            cell.style.strikethrough,
+            cell.foreground,
+            underlined(cell),
+        )
+    };
+    let mut runs: Vec<Range<usize>> = Vec::new();
+    for (index, cell) in cells.iter().enumerate() {
+        if let Some(run) = runs.last_mut()
+            && run.end == index
+            && joinable(cell)
+            && joinable(&cells[run.start])
+            && cells[index - 1].line == cell.line
+            && cells[index - 1].column + 1 == cell.column
+            && looks(&cells[run.start]) == looks(cell)
+        {
+            run.end += 1;
+        } else {
+            runs.push(index..index + 1);
+        }
+    }
+    runs
+}
+
 struct RenderCursor {
     line: usize,
     column: usize,
@@ -1164,11 +1203,21 @@ impl Element for TerminalElement {
                 }
             }
 
-            let base = base_font(cx);
-            for cell in &snapshot.cells {
+            let font_settings = font_settings(cx);
+            let base = typography::font(&font_settings);
+            let underlined = |cell: &RenderCell| {
+                cell.style.underline != Underline::None
+                    || hovered
+                        .as_ref()
+                        .is_some_and(|link| link.contains(cell.column, cell.line))
+            };
+            for run in shaping_runs(&snapshot.cells, font_settings.ligatures, underlined) {
+                let cells = &snapshot.cells[run];
+                let cell = &cells[0];
                 if cell.style.invisible || cell.text.trim().is_empty() {
                     continue;
                 }
+                let text: String = cells.iter().map(|cell| cell.text.as_str()).collect();
                 let mut font = base.clone();
                 if cell.style.bold {
                     font = bold(&font);
@@ -1177,15 +1226,11 @@ impl Element for TerminalElement {
                     font = italic(&font);
                 }
                 let run = TextRun {
-                    len: cell.text.len(),
+                    len: text.len(),
                     font,
                     color: paint_rgb(cell.foreground),
                     background_color: None,
-                    underline: (cell.style.underline != Underline::None
-                        || hovered
-                            .as_ref()
-                            .is_some_and(|link| link.contains(cell.column, cell.line)))
-                    .then(|| UnderlineStyle {
+                    underline: underlined(cell).then(|| UnderlineStyle {
                         thickness: px(1.),
                         ..Default::default()
                     }),
@@ -1195,13 +1240,13 @@ impl Element for TerminalElement {
                     }),
                 };
                 let shaped = window.text_system().shape_line(
-                    SharedString::from(cell.text.clone()),
+                    SharedString::from(text),
                     layout.font_size,
                     &[run],
                     None,
                 );
                 let origin = layout.origin(bounds, cell.column, cell.line);
-                let width = cell_width * if cell.wide { 2 } else { 1 };
+                let width = cell_width * if cell.wide { 2 } else { cells.len() };
                 window.with_content_mask(
                     Some(ContentMask {
                         bounds: Bounds::new(origin, size(width, cell_height)),

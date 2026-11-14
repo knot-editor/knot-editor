@@ -3,6 +3,12 @@ use gpui::TestAppContext;
 
 use super::terminal_key_bytes;
 
+/// The terminal's regular-style font.
+#[cfg(unix)]
+fn base_font(cx: &gpui::App) -> gpui::Font {
+    crate::app::typography::font(&super::font_settings(cx))
+}
+
 #[cfg(unix)]
 fn read_line() -> knot_terminal::PtyOptions {
     knot_terminal::PtyOptions {
@@ -310,4 +316,73 @@ fn zoom_scales_the_terminal_font_size(cx: &mut TestAppContext) {
         assert!(session.read(cx).size().columns < columns);
     });
     cx.update(|_, cx| session.update(cx, |session, cx| session.close(cx)));
+}
+
+mod shaping_runs {
+    use super::super::{RenderCell, shaping_runs};
+    use knot_terminal::Rgb;
+
+    fn line(text: &str, line: usize) -> Vec<RenderCell> {
+        text.chars()
+            .enumerate()
+            .map(|(column, char)| RenderCell {
+                line,
+                column,
+                text: char.to_string(),
+                wide: false,
+                foreground: Rgb::new(255, 255, 255),
+                background: Rgb::new(0, 0, 0),
+                style: Default::default(),
+                selected: false,
+            })
+            .collect()
+    }
+
+    fn runs(cells: &[RenderCell], ligatures: bool) -> Vec<String> {
+        shaping_runs(cells, ligatures, |_| false)
+            .into_iter()
+            .map(|run| cells[run].iter().map(|cell| cell.text.as_str()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn punctuation_runs_merge_and_letters_and_spaces_stay_single() {
+        assert_eq!(
+            runs(&line("a->b !== c", 0), true),
+            ["a", "->", "b", " ", "!==", " ", "c"]
+        );
+    }
+
+    #[test]
+    fn disabled_ligatures_yield_single_cells() {
+        assert_eq!(runs(&line("=>", 0), false), ["=", ">"]);
+    }
+
+    #[test]
+    fn style_color_and_hover_boundaries_split_runs() {
+        let mut cells = line("====", 0);
+        cells[1].style.bold = true;
+        cells[2].foreground = Rgb::new(1, 2, 3);
+        assert_eq!(runs(&cells, true), ["=", "=", "=", "="]);
+
+        let cells = line("<=>=", 0);
+        let groups = shaping_runs(&cells, true, |cell| cell.column >= 2);
+        assert_eq!(groups, [0..2, 2..4]);
+    }
+
+    #[test]
+    fn wide_cells_line_breaks_and_gaps_split_runs() {
+        let mut cells = line("-->", 0);
+        cells[1].wide = true;
+        assert_eq!(runs(&cells, true), ["-", "-", ">"]);
+
+        let mut cells = line("->", 0);
+        cells.extend(line("->", 1));
+        assert_eq!(runs(&cells, true), ["->", "->"]);
+
+        // The spacer behind a wide glyph leaves a column gap.
+        let mut cells = line("-->", 0);
+        cells[2].column = 3;
+        assert_eq!(runs(&cells, true), ["--", ">"]);
+    }
 }

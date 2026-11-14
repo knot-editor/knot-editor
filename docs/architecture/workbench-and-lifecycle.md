@@ -484,7 +484,11 @@ measured for `font.size` and the `font.*` family settings resolved under
 `{ view: "terminal" }`, with the size times the zoom factor; cell height
 follows `font.lineHeight` as in editors, with the baseline centered in the
 cell. A change resizes the PTY grid. Fallback glyphs
-stay within emulator cell allocations. Selection is the terminal's own, tracked
+stay within emulator cell allocations. Each cell is shaped and clipped alone,
+except that with `font.ligatures` on, consecutive single-width ASCII
+punctuation cells on one line that draw identically are shaped as one run
+clipped to their cells, so ligatures such as `->` form; letter ligatures do
+not. Selection is the terminal's own, tracked
 across scrolling; application mouse reports use viewport cells. Geometry is remeasured after resize
 or attachment handoff. Typography and bootstrap metrics live in
 [terminal layout](../../src/app/terminal/layout.rs) and

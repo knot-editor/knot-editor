@@ -53,6 +53,8 @@ pub struct FontSettings {
     pub weight: f32,
     /// Row height as a multiple of the font's ascent plus descent, 0.8 to 3.
     pub line_height: f32,
+    /// Whether `font.ligatures` lets ligatures form.
+    pub ligatures: bool,
     /// OpenType feature tags and values, the ligature toggle first.
     pub features: Vec<(String, u32)>,
 }
@@ -99,6 +101,7 @@ impl FontSettings {
                 .and_then(Value::as_f64)
                 .unwrap_or(1.2)
                 .clamp(0.8, 3.) as f32,
+            ligatures,
             features: features(ligatures, &strings(FONT_FEATURES)),
         }
     }
@@ -161,6 +164,7 @@ mod tests {
         assert_eq!(font.fallbacks, DEFAULT_FALLBACKS);
         assert_eq!(font.weight, 400.);
         assert_eq!(font.line_height, 1.2);
+        assert!(font.ligatures);
         assert!(font.features.is_empty());
     }
 
