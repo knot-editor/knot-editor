@@ -4,6 +4,7 @@ mod explorer;
 mod find;
 mod go_to_file;
 mod go_to_line;
+mod project_inference;
 mod project_sessions;
 mod projects;
 mod status_bar_package;

@@ -20,14 +20,25 @@ use crate::app::filesystem::{
     ResourceEntry, ResourceFile, ResourceStat, ResourceVersion,
 };
 use crate::app::product::{
-    ApplicationDocuments, ApplicationFileSystems, ApplicationOpenDialog, ApplicationWindows,
-    DocumentCollection, HeadlessWindows, OpenDialogFuture, OpenDialogOutcome, ProductOpenDialog,
-    active_window, native_window, windows,
+    ApplicationDocuments, ApplicationFileSystems, ApplicationLaunchGate, ApplicationOpenDialog,
+    ApplicationWindows, DocumentCollection, HeadlessWindows, OpenDialogFuture, OpenDialogOutcome,
+    ProductOpenDialog, active_window, native_window, windows,
 };
 use crate::app::record_store::StateDatabase;
 use crate::app::recovery::{ApplicationRecovery, RecoveryService, RecoveryStore};
 use crate::app::resource::ResourceUri;
 use crate::test_support::wait_until;
+use knot_model::entry::{LaunchBatch, OpenRequest};
+
+/// The batch `knot` sends for `paths`.
+fn launch_batch(paths: &[&Path]) -> LaunchBatch {
+    LaunchBatch::new(
+        paths
+            .iter()
+            .map(|path| OpenRequest::from_path(path, Path::new("/")).unwrap())
+            .collect(),
+    )
+}
 
 /// A document's text that recovery retains for a package.
 #[derive(Clone, Debug)]
@@ -56,7 +67,7 @@ impl TestProduct {
         cx: &mut TestAppContext,
     ) -> Self {
         cx.set_global(HeadlessWindows::default());
-        Self::launch_windows(packages, cx)
+        Self::launch_windows(packages, None, cx)
     }
 
     /// [Launch](Self::launch) with native windows, for tests of painting,
@@ -65,11 +76,33 @@ impl TestProduct {
         packages: &'static [knot_bundled::BundledSource],
         cx: &mut TestAppContext,
     ) -> Self {
-        Self::launch_windows(packages, cx)
+        Self::launch_windows(packages, None, cx)
+    }
+
+    /// [Launch](Self::launch) as `knot` does with `paths` on its command
+    /// line: the request waits for startup and is placed with the restored
+    /// windows.
+    pub fn launch_opening(
+        packages: &'static [knot_bundled::BundledSource],
+        paths: &[&Path],
+        cx: &mut TestAppContext,
+    ) -> Self {
+        cx.set_global(HeadlessWindows::default());
+        Self::launch_windows(packages, Some(launch_batch(paths)), cx)
+    }
+
+    /// Deliver `paths` as a later `knot` invocation does to the running
+    /// product, and let the opens finish.
+    pub fn open_from_command_line(&self, paths: &[&Path], cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            crate::app::product::launch::dispatch_launch_request(Some(launch_batch(paths)), cx)
+        });
+        cx.run_until_parked();
     }
 
     fn launch_windows(
         packages: &'static [knot_bundled::BundledSource],
+        batch: Option<LaunchBatch>,
         cx: &mut TestAppContext,
     ) -> Self {
         let product = Self::new_directories();
@@ -77,6 +110,14 @@ impl TestProduct {
         product.install_durable_state(cx);
         cx.update(crate::app::product::launch::bind_product_keys);
         install_launch_gate(cx);
+        if let Some(batch) = batch {
+            cx.update(|cx| {
+                cx.global::<ApplicationLaunchGate>()
+                    .0
+                    .borrow_mut()
+                    .request(Some(batch))
+            });
+        }
         let host = cx.update(crate::app::extensions::host::install);
         let storage = product.storage_root();
         host.update(cx, |host, cx| {
