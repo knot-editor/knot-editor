@@ -83,11 +83,21 @@ Reference: [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#
 
 ## Terminal
 
-Use `alacritty_terminal` as a native surface separate from text buffers. Ghostty
-VT offered too little behavioral advantage to offset separate PTY integration,
-pre-1.0 FFI, Zig packaging, integration size, and poor debug parsing performance
-(D063 revisits it). The Alacritty adapter met the required behavior without
-copying Zed code; Zed remains an attributed reference for compatibility gaps.
+Terminals are a native surface separate from text buffers, over libghostty-vt
+in the `knot-terminal` crate with a `portable-pty` PTY. It is preferred over
+`alacritty_terminal` since libghostty-vt 1.0 has a stable, semver C ABI: its
+mode-aware key and mouse encoders cover the Kitty keyboard protocol,
+modifyOtherKeys, and every mouse format, which Knot would otherwise encode
+itself, and its callbacks expose OSC 7 and the protocols D041 needs, which
+Alacritty does not parse. Before 1.0, the pre-1.0 FFI, the Zig toolchain, and
+slow debug-build parsing outweighed that advantage.
+
+The library is linked statically from archives this repository's release
+workflow builds ReleaseFast, so no contributor or CI job needs Zig and parsing
+runs optimized even in debug builds; manual review rendered 200,000 lines of
+output in 0.35 s. Building from source in `build.rs` was rejected for
+requiring Zig everywhere, and the system library through pkg-config because no
+distribution packages it yet.
 
 Windows are application-owned and outlive their presentation, so tab moves and
 native window transfers keep the window. One attachment at a time keeps resize and
@@ -111,12 +121,11 @@ depend on which file happens to be open; daily use may revisit this. The
 process directory is never used, because it is `/` when launched from Finder.
 
 A restored terminal reads its shell's directory from the process rather than
-OSC 7, which `alacritty_terminal` does not parse and which needs shell
-integration (D039); reading the shell rather than the foreground job keeps a
-running editor or build from changing the answer. A deleted directory falls
-back to the default rule rather than its nearest existing parent, a rare case
-where the root is a fine landing place. Moving to libghostty (D063) replaces
-the query with the emulator's OSC 7 state (D128).
+OSC 7, which needs shell integration (D039); reading the shell rather than
+the foreground job keeps a running editor or build from changing the answer.
+A deleted directory falls back to the default rule rather than its nearest
+existing parent, a rare case where the root is a fine landing place. D128 puts
+the emulator's OSC 7 state ahead of the query.
 
 Reference: [terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 

@@ -36,7 +36,7 @@ Website: <https://knot-editor.com>
   light/dark/system mode
 - Multiple windows, split panes, and tabs you can drag between them
 - Multi-root workspaces with a file explorer
-- An integrated terminal (backed by `alacritty_terminal`) that opens in your
+- An integrated terminal (backed by libghostty) that opens in your
   project's folder and survives moving between panes and windows
 - A command palette, plus settings and keybindings you can override from your
   config

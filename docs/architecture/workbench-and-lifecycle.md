@@ -441,10 +441,12 @@ restore dock terminals in their docks, while resetting the layout or
 rebuilding a dock from the tool record moves the dock's terminals to the center.
 
 The application registry owns stable `TerminalSession`s. A session owns its PTY,
-Alacritty grid, process status, authoritative size, session preferences, and event
-delivery. Alacritty reads, parses, and writes on its background event loop.
-Repaint wakeups coalesce; protocol requests, replies, and child exit retain order
-in a process-generation-scoped queue. Restart replaces the process/grid and
+libghostty terminal, process status, authoritative size, session preferences, and
+event delivery. The [knot-terminal](../../crates/knot-terminal/src/lib.rs) PTY
+reads and writes on its own threads; the reader feeds output to the terminal
+under a mutex, and the foreground holds that lock only to update the render
+state it paints from. Repaint wakeups coalesce; protocol requests, replies, and child exit retain order
+in a process-generation-scoped queue. Restart replaces the process and terminal and
 rejects old events, carrying the prior grid's lines into the new session
 above a `--- terminal restarted ---` divider with new output continuing
 below. Shutdown and child reaping run off the foreground.
@@ -478,8 +480,8 @@ size, and PTY pixel dimensions at the destination window's scale. Cells are
 measured for `font.size` and the `font.*` family settings resolved under
 `{ view: "terminal" }`, with the size times the zoom factor, so a change
 resizes the PTY grid. Fallback glyphs
-stay within emulator cell allocations. Selection uses scrollback grid coordinates;
-application mouse reports use viewport cells. Geometry is remeasured after resize
+stay within emulator cell allocations. Selection is the terminal's own, tracked
+across scrolling; application mouse reports use viewport cells. Geometry is remeasured after resize
 or attachment handoff. Typography, bootstrap metrics, and encoding rules live in
 [terminal layout](../../src/app/terminal/layout.rs),
 [session](../../src/app/terminal/session.rs), and
@@ -503,11 +505,11 @@ replacement. Wire formats and coordinate limits live in
 [terminal/mouse.rs](../../src/app/terminal/mouse.rs); the
 [mouse fixture](../../scripts/terminal-mouse-fixture.py) supports native acceptance.
 
-Link lookup uses displayed emulator cells, soft wraps, and OSC 8 identity.
-Explicit destinations take precedence; unsupported explicit schemes suppress text
+Link lookup uses the painted frame's cells, soft wraps, and OSC 8 destinations;
+cells with the same OSC 8 URI form one link. Explicit destinations take precedence; unsupported explicit schemes suppress text
 detection. Only complete HTTP(S) destinations are actionable. Modifier-click owns
-the gesture ahead of mouse reporting; release revalidates grid, scrollback,
-process, destination, and geometry. Output or lifecycle changes invalidate armed
+the gesture ahead of mouse reporting; release revalidates the displayed
+cells, process, destination, and geometry. Output or lifecycle changes invalidate armed
 links. Link recognition lives in [terminal/links.rs](../../src/app/terminal/links.rs).
 
 ## Observing product state

@@ -34,6 +34,7 @@ crates/knot-model     gpui-free editor state and policy: the buffer model, edito
                       completion, syntax, history, keys, keymaps, theme values, resources,
                       package discovery, application stores, extension-API semantics,
                       workbench layout, and protected-closure decisions
+crates/knot-terminal  libghostty-vt terminal engine, PTY, and frame reading, without gpui
 crates/knot-bundled   BundledSource and the build helper that compiles bundled packages
 crates/knot-ext-*     compiled bundled packages by domain, with their integration tests
 crates/knot-app       the knot binary: joins the packages, creates the platform
@@ -53,7 +54,7 @@ canonical source before reading broadly.
 | Text storage, buffer model, history, anchored ranges | [core and buffers](docs/architecture/core-and-buffers.md) | `crates/knot-core/src/`, `crates/knot-model/src/{buffer,history}.rs`, `src/app/model.rs` |
 | Document identity, dirty state, providers, Open/Save | [documents and persistence](docs/architecture/documents-and-persistence.md) | `crates/knot-model/src/{documents,open,resource}.rs`, `src/app/documents.rs`, `src/app/product/{open,save}.rs`, `crates/knot-model/src/buffer.rs`, `src/app/model.rs` |
 | Editor state, native editing commands, editor views | [editor views](docs/architecture/editor-and-languages.md#editor-views) | `crates/knot-model/src/editor.rs`, `crates/knot-model/src/editor/`, `src/app/editor.rs`, `src/app/editor/` |
-| Windows, panes, tabs, closure, terminal, tool layout | [workbench and lifecycle](docs/architecture/workbench-and-lifecycle.md) | `crates/knot-model/src/workbench/` (`closure.rs`, `recent.rs`), `src/app/workbench.rs`, `src/app/product/` (`closure.rs`, `tools.rs`, `launch.rs`, `render.rs`), `src/app/terminal/` |
+| Windows, panes, tabs, closure, terminal, tool layout | [workbench and lifecycle](docs/architecture/workbench-and-lifecycle.md) | `crates/knot-model/src/workbench/` (`closure.rs`, `recent.rs`), `src/app/workbench.rs`, `src/app/product/` (`closure.rs`, `tools.rs`, `launch.rs`, `render.rs`), `src/app/terminal/`, `crates/knot-terminal/src/` |
 | Commands, keymaps, captured targets, focus routing | [commands](docs/architecture/commands.md) | `src/app/commands/`, `src/app/product/commands.rs` |
 | Extension runtime, scheduling, lifecycle, records | [extension host](docs/architecture/extension-host.md) | `crates/knot-host/src/`, `crates/knot-protocol/src/`, `src/app/extensions/` |
 | Contributed UI, trees, completion, generated text | [semantic UI](docs/architecture/semantic-ui.md) | `src/app/extensions/semantics.rs`, `src/app/tree_view.rs`, `crates/knot-model/src/completion.rs`, `src/app/completion.rs` |

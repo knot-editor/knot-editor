@@ -143,8 +143,8 @@ touches.
   tabs, stripes that replace.
 - [Workbench navigation](decisions/workbench-and-lifecycle.md#workbench-navigation):
   a command for every operation; momentary state is never recorded.
-- [Terminal](decisions/workbench-and-lifecycle.md#terminal): `alacritty_terminal`
-  sessions that outlive their single attachment.
+- [Terminal](decisions/workbench-and-lifecycle.md#terminal): libghostty-vt from
+  prebuilt static archives; sessions outlive their single attachment.
 - [Window layouts and restoration by position](decisions/workbench-and-lifecycle.md#window-layouts-and-restoration-by-position):
   one versioned JSON layout for hot exit and project sessions.
 - [Session replacement contract](decisions/workbench-and-lifecycle.md#session-replacement-contract):

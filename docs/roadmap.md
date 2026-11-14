@@ -853,8 +853,7 @@ Kakoune mode could use them too. The
 - **D128 — Terminal working directory from libghostty**
   - Depends on: D063
   - Description: A terminal's working directory is read by querying the shell
-    process (`proc_pidinfo` on macOS, `/proc/<pid>/cwd` on Linux), because
-    `alacritty_terminal` does not parse OSC 7. Windows records only the start
+    process (`proc_pidinfo` on macOS, `/proc/<pid>/cwd` on Linux). Windows records only the start
     directory. Do it when D063 moves the terminal engine to libghostty: read the
     directory from the emulator's OSC 7 state instead of the process, which may
     also cover Windows and remote shells.

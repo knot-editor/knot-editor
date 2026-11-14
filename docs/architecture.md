@@ -51,6 +51,10 @@ gpui application and native views
 - `knot-host` owns V8, bounded scheduling, and immutable module-graph
   validation. Its public control surface and protocol expose no V8 or gpui
   objects.
+- `knot-terminal` owns the terminal engine over the statically linked
+  libghostty-vt, the PTY and its threads, and frame reading for painting,
+  without depending on gpui; terminal sessions and views in `src/app/terminal`
+  build on it.
 - `knot-handler-macros` generates adapters for annotated native host handlers
   and commands, without depending on V8, gpui, or editor models. Application
   owners expose semantic operations; declaration adapters own transport.
