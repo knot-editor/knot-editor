@@ -240,17 +240,17 @@ reference, [`architecture.md`](../architecture.md), `AGENTS.md`, the
 README describe libghostty. The roadmap's D063 entry stays until checkpoint 5
 removes it.
 
-### 4. libghostty encoders
+### 4. libghostty encoders 👀
 
 Deliverables:
-- `input.rs` translates gpui keystrokes into libghostty key events (action,
+- ✅ `input.rs` translates gpui keystrokes into libghostty key events (action,
   key, mods, consumed mods, UTF-8, unshifted codepoint, composing) and encodes
   them with an encoder set from the terminal. macOS Option-as-Alt keeps the
   current behavior.
-- `mouse.rs` keeps gesture ownership and encodes through the mouse encoder
+- ✅ `mouse.rs` keeps gesture ownership and encodes through the mouse encoder
   with the session's pixel geometry; the reporting toggle and balanced
   releases are unchanged.
-- Knot's own escape-sequence tables are removed.
+- ✅ Knot's own escape-sequence tables are removed.
 
 Validation: the existing input and mouse tests assert the same bytes for
 legacy modes; new tests cover Kitty keyboard flags and modifyOtherKeys
@@ -258,6 +258,20 @@ requested by the app. Manual: `try.*` commands running an app that enables
 the Kitty keyboard protocol, plus the mouse fixture.
 
 Review gate: typing, shortcuts, and mouse reporting in shells and TUIs.
+
+**Status:** ✅ implemented and `just check` passes; 👀 awaiting the manual
+review. The mouse tests kept their bytes. Legacy key bytes are the same, except
+where libghostty follows Ghostty and fixterms:
+- Ctrl-[, Ctrl-I, Ctrl-M, and Ctrl-Shift-letter send CSI u instead of ESC,
+  Tab, CR, or the plain control byte.
+- Ctrl, Shift, or Alt with Enter, Tab, or Escape sends `CSI 27;m;c~`.
+- Modified F3 sends `CSI 13;m~`, because `CSI 1;mR` would read as a cursor
+  position report.
+- F13 to F25 encode instead of sending nothing.
+- In X10 mouse mode (9), releases are no longer reported.
+
+Keys report presses only, since the key route sees no releases or repeats;
+Kitty's report-events flag gets no release events.
 
 **Implementation context:** `src/app/terminal/input.rs` and `mouse.rs` with
 `mouse_tests.rs`; the key and mouse encoder wrappers go in `knot-terminal`.
