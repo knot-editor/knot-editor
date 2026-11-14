@@ -7,7 +7,9 @@ use std::{
 };
 
 use gpui::{Context, Task};
-use knot_terminal::{Mode, Pty, PtyEvent, PtyOptions, Shell, Terminal, TerminalSize};
+use knot_terminal::{
+    Mode, Pty, PtyEvent, PtyOptions, Shell, Terminal, TerminalEvent, TerminalSize,
+};
 
 use super::colors::TerminalPalette;
 use crate::app::theme::theme;
@@ -59,6 +61,8 @@ pub(crate) struct TerminalSession {
     options: PtyOptions,
     palette: TerminalPalette,
     generation: u64,
+    /// The directory the current process last reported, if local.
+    reported_directory: Option<PathBuf>,
     _wakeup_task: Option<Task<()>>,
     attachment: Arc<AtomicU64>,
     next_attachment: u64,
@@ -123,6 +127,7 @@ impl TerminalSession {
             options,
             palette: TerminalPalette::new(theme(cx)),
             generation: 0,
+            reported_directory: None,
             _wakeup_task: None,
             attachment: Arc::new(AtomicU64::new(0)),
             next_attachment: 0,
@@ -137,6 +142,7 @@ impl TerminalSession {
     fn start(&mut self, carried: Option<String>, cx: &mut Context<Self>) {
         crate::app::allow_thread_wakeups(cx);
         self.generation += 1;
+        self.reported_directory = None;
         let generation = self.generation;
         let mut terminal = Terminal::new(self.size, SCROLLBACK_LINES);
         self.palette.apply(&mut terminal);
@@ -186,8 +192,11 @@ impl TerminalSession {
         for event in events {
             match event {
                 PtyEvent::Exited(status) => self.finish_exit(status.to_string()),
-                // Titles, bells, and reported directories have no product
-                // behavior; the engine answers queries itself.
+                PtyEvent::Terminal(TerminalEvent::WorkingDirectory(reported)) => {
+                    self.reported_directory = knot_terminal::local_directory(&reported);
+                }
+                // Titles and bells have no product behavior; the engine
+                // answers queries itself.
                 PtyEvent::Terminal(_) | PtyEvent::Output => {}
             }
         }
@@ -324,9 +333,13 @@ impl TerminalSession {
         self.options.working_directory.as_deref()
     }
 
-    /// The directory the shell is in now where the platform can report it,
-    /// otherwise the directory the session started in.
+    /// The directory the shell last reported, otherwise the one it is in
+    /// now where the platform can report it, otherwise the directory the
+    /// session started in. A remote directory counts as unreported.
     pub(crate) fn current_directory(&self) -> Option<PathBuf> {
+        if let Some(reported) = &self.reported_directory {
+            return Some(reported.clone());
+        }
         match &self.state {
             TerminalState::Running(pty) => pty.pid().and_then(super::process::working_directory),
             _ => None,

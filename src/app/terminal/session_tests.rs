@@ -204,6 +204,57 @@ fn current_directory_follows_the_shell(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn current_directory_prefers_the_directory_the_shell_reports(cx: &mut TestAppContext) {
+    let temp = tempfile::tempdir().unwrap();
+    let reported = temp.path().join("with space");
+    fs::create_dir(&reported).unwrap();
+    let session = cx.new(|cx| {
+        TerminalSession::new_with_options(
+            PtyOptions {
+                working_directory: Some(temp.path().to_owned()),
+                ..shell(
+                    "printf 'started\\n'; n=0; while IFS= read -r uri; do \
+                     n=$((n+1)); printf '\\033]7;%s\\033\\\\reported-%s\\n' \"$uri\" $n; done",
+                )
+            },
+            cx,
+        )
+    });
+    wait_for(cx, &session, |session| output(session).contains("started"));
+    let canonical = |path: &Path| fs::canonicalize(path).unwrap();
+    let current = |cx: &mut TestAppContext| {
+        session.read_with(cx, |session, _| session.current_directory().unwrap())
+    };
+    let report = |uri: String, n: u32, cx: &mut TestAppContext| {
+        session.update(cx, |session, _| {
+            session.send(format!("{uri}\r").into_bytes())
+        });
+        wait_for(cx, &session, |session| {
+            output(session).contains(&format!("reported-{n}"))
+        });
+    };
+
+    // The shell never left the start directory, so only the report moves it.
+    let uri = url::Url::from_directory_path(&reported)
+        .unwrap()
+        .to_string();
+    assert!(uri.contains("%20"));
+    report(uri.clone(), 1, cx);
+    assert_eq!(current(cx), reported);
+
+    // A directory on another machine leaves the process query in charge.
+    report("file://elsewhere.example/tmp".to_owned(), 2, cx);
+    assert_eq!(canonical(&current(cx)), canonical(temp.path()));
+
+    // A restarted shell has reported nothing yet.
+    report(uri, 3, cx);
+    assert_eq!(current(cx), reported);
+    session.update(cx, |session, cx| session.restart(cx));
+    assert_eq!(canonical(&current(cx)), canonical(temp.path()));
+    session.update(cx, |session, cx| session.close(cx));
+}
+
+#[gpui::test]
 fn stopped_and_failed_sessions_report_their_start_directory(cx: &mut TestAppContext) {
     let temp = tempfile::tempdir().unwrap();
     let nested = temp.path().join("nested");
