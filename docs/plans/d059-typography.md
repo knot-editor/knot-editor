@@ -103,21 +103,22 @@ pixels; see [settings](../settings.md),
 terminal geometry paragraph of
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
 
-### 3. Ligatures in terminals — ⬜
+### 3. Ligatures in terminals — 🔍 awaiting review
 
 Deliverables:
 
-- Terminal paint groups eligible punctuation cells into shaped runs as
+- ✅ Terminal paint groups eligible punctuation cells into shaped runs as
   described above, when ligatures are enabled for the terminal scope.
-- Terminal architecture notes the punctuation-run rule.
-- Decision entry for the validated choices, if still warranted.
+- ✅ Terminal architecture notes the punctuation-run rule.
+- ⬜ Decision entry for the validated choices, if still warranted, written
+  after the review gate.
 
 Validation:
 
-- Unit tests for the pure grouping function: punctuation runs merge; a style,
+- ✅ Unit tests for the pure grouping function: punctuation runs merge; a style,
   color, hover, or wide-cell boundary splits them; letters and spaces stay
   single; disabled ligatures yield single cells.
-- `just check`.
+- ✅ `just check`.
 
 Review gate: in a terminal with a ligature font, `echo '-> => != === <= |>'`
 renders ligatures aligned to the grid, colored prompts and selections still
