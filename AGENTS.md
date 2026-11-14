@@ -26,26 +26,6 @@ compatibility concerns at any time.
 
 ## Repository map
 
-```text
-crates/knot-core      UI-, platform-, and scripting-independent text and edit primitives
-crates/knot-protocol  Knot-owned serde transport types and operation declarations
-crates/knot-host      V8, bounded scheduling, and module-graph validation
-crates/knot-model     gpui-free editor state and policy: the buffer model, editor state,
-                      completion, syntax, history, keys, keymaps, theme values, resources,
-                      package discovery, application stores, extension-API semantics,
-                      workbench layout, and protected-closure decisions
-crates/knot-terminal  libghostty-vt terminal engine, PTY, and frame reading, without gpui
-crates/knot-bundled   BundledSource and the build helper that compiles bundled packages
-crates/knot-ext-*     compiled bundled packages by domain, with their integration tests
-crates/knot-app       the knot binary: joins the packages, creates the platform
-                      application, and calls knot::run
-crates/knot-handler-macros   adapters for annotated native host handlers and commands
-src/app               gpui shell, foreground editor state, native views, resource providers,
-                      commands, startup, and application persistence
-extensions/@knot      bundled TypeScript extension packages, compiled by the knot-ext-* crates
-scripts/extensions    extension toolchain, fake knot host, and package test runner
-```
-
 Use the table below to route a change to its authoritative documentation and
 canonical source before reading broadly.
 
@@ -95,7 +75,7 @@ updated. Use ✅ and other emoji to mark executed steps.
   their `docs/decisions.md` index, following the entry rules of
   [its guide](docs/README.md#decisions), and
   implementation details and API contracts in the code.
-- Follow @docs/README.md for documentation ownership. Link to authoritative
+- Follow [docs/README.md](docs/README.md) for documentation ownership. Link to authoritative
   contracts rather than duplicating them; repeat only enough context for orientation.
 - Code comments and module documentation must describe the current design and
   behavior only. Do not record migrations, previous locations, roadmap phases,
