@@ -4,6 +4,7 @@
 // for launch so restored windows rebind by root set first.
 import { documents, recovery, windows } from "knot";
 import type { ApplicationEvent, CaptureId, DocumentId, DocumentInfo, WindowInfo } from "knot";
+import { adoptAutomatically } from "./adopt.js";
 import { syncBindings } from "./bindings.js";
 import { describeWindow, documentsById, windowRoots } from "./layout.js";
 import { newProjectId, projectWithRoots, withProject, type Project } from "./registry.js";
@@ -153,12 +154,23 @@ export async function afterLaunch(state: ProjectsState) {
   await refreshTree(state);
 }
 
-/** Whether a document's membership-relevant metadata changed since last seen. */
-function membershipChanged(state: ProjectsState, document: DocumentInfo) {
-  const key = `${document.kind}|${document.resourceUri}|${document.dirty}`;
-  if (state.tracked.get(document.id) === key) return false;
-  state.tracked.set(document.id, key);
-  return true;
+/**
+ * Records a document's membership-relevant metadata, returning what was seen
+ * before, or null when nothing changed; revision-only changes are ignored.
+ */
+function membershipChange(state: ProjectsState, document: DocumentInfo) {
+  const previous = state.tracked.get(document.id);
+  const next = { kind: document.kind, resourceUri: document.resourceUri, dirty: document.dirty };
+  if (
+    previous !== undefined &&
+    previous.kind === next.kind &&
+    previous.resourceUri === next.resourceUri &&
+    previous.dirty === next.dirty
+  ) {
+    return null;
+  }
+  state.tracked.set(document.id, next);
+  return { previous: previous ?? null };
 }
 
 export async function onApplicationEvent(state: ProjectsState, event: ApplicationEvent) {
@@ -166,8 +178,17 @@ export async function onApplicationEvent(state: ProjectsState, event: Applicatio
     await afterLaunch(state);
     return;
   }
-  if (event.type === "documentChanged" && !membershipChanged(state, event.document)) return;
-  if (event.type === "documentOpened") membershipChanged(state, event.document);
+  if (event.type === "documentChanged") {
+    const change = membershipChange(state, event.document);
+    if (change === null) return;
+    // Save As to a new file is evaluated like an opened document.
+    const saved = change.previous !== null && change.previous.resourceUri !== event.document.resourceUri;
+    if (saved && state.launched) await adoptAutomatically(state, event.document);
+  }
+  if (event.type === "documentOpened") {
+    membershipChange(state, event.document);
+    if (state.launched) await adoptAutomatically(state, event.document);
+  }
   if (event.type === "documentClosed") state.tracked.delete(event.document);
   await track(state);
   if (event.type === "workspaceChanged" || event.type === "windowClosed") await refreshTree(state);

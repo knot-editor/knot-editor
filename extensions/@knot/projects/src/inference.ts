@@ -1,45 +1,20 @@
-// Project inference: the nearest `.git` ancestor of a document that falls
-// outside every open root. Pure decision logic over explicit inputs, so tests
-// exercise it against the fake host's `files` without opening anything; the
-// confirmation and window mutation land with the offer wiring.
-import { files } from "knot";
+// Project inference: the nearest `.git` ancestor of a document, and whether a
+// window adopts it automatically. Pure decisions over listed state and
+// `files.stat`; adoption itself lives in `adopt.ts`.
+import { files, homeUri } from "knot";
+import type { DocumentId, WindowInfo } from "knot";
+import { windowRoots } from "./layout.js";
 
-export type InferenceInput = {
-  /** The document's stored resource URI, or null for untitled documents and destinations without one. */
-  documentUri: string | null;
-  /** Roots of the window presenting the document. */
-  windowRoots: readonly string[];
-  /** Roots of every open window. */
-  allRoots: readonly string[];
-  /** The `homeUri` host fact, or null when no home directory is known. */
-  homeUri: string | null;
-  /** Normalized dismissed roots. */
-  dismissed: ReadonlySet<string>;
-};
-
-/** The URI without trailing slashes, mirroring `trimmed` in the explorer's rows. */
-export function trimmedUri(uri: string): string {
+function trimmed(uri: string): string {
   return uri.replace(/\/+$/, "");
 }
 
-/** The comparison and storage form for a root URI. */
-export function normalizeRoot(uri: string): string {
-  return trimmedUri(uri);
-}
-
-/** Whether `uri` is `base` or below it, by string prefix like the explorer's `idPath`. */
-function within(uri: string, base: string): boolean {
-  const target = trimmedUri(uri);
-  const root = trimmedUri(base);
-  return target === root || target.startsWith(`${root}/`);
-}
-
 function sameRoot(left: string, right: string): boolean {
-  return normalizeRoot(left) === normalizeRoot(right);
+  return trimmed(left) === trimmed(right);
 }
 
 function splitFileUri(uri: string): { origin: string; path: string } | null {
-  const match = /^file:\/\/([^/]*)(\/.*)$/i.exec(trimmedUri(uri));
+  const match = /^file:\/\/([^/]*)(\/.*)$/i.exec(trimmed(uri));
   if (match === null) return null;
   return { origin: `file://${match[1]}`, path: match[2]! };
 }
@@ -48,16 +23,15 @@ function splitFileUri(uri: string): { origin: string; path: string } | null {
  * The nearest ancestor directory of `documentUri` containing a `.git` entry,
  * in root form with a trailing slash. A `.git` file (worktree, submodule)
  * counts like a directory; the walk stops at the first match, so nested
- * repositories infer their inner root. Null when the URI is not a stored
- * `file:` URI, when no ancestor carries the marker, or when a stat fails, so
- * a later document may retry.
+ * repositories infer their inner root. Null for an unstored or non-`file:`
+ * document, when no ancestor carries the marker, when the nearest one is the
+ * filesystem root or the home directory, or when a stat fails.
  */
-export async function inferRoot(documentUri: string | null): Promise<string | null> {
+export async function repositoryRoot(documentUri: string | null): Promise<string | null> {
   if (documentUri === null) return null;
   const split = splitFileUri(documentUri);
   if (split === null) return null;
-  let directory = split.path.slice(0, split.path.lastIndexOf("/"));
-  if (directory === "") directory = "/";
+  let directory = split.path.slice(0, split.path.lastIndexOf("/")) || "/";
   for (;;) {
     const candidate = `${split.origin}${directory === "/" ? "" : directory}/`;
     let marker;
@@ -66,27 +40,35 @@ export async function inferRoot(documentUri: string | null): Promise<string | nu
     } catch {
       return null;
     }
-    if (marker !== null) return candidate;
+    if (marker !== null) {
+      if (directory === "/") return null;
+      if (homeUri !== null && sameRoot(candidate, homeUri)) return null;
+      return candidate;
+    }
     if (directory === "/") return null;
     directory = directory.slice(0, directory.lastIndexOf("/")) || "/";
   }
 }
 
+/** Whether some window already has `root` as one of its roots. */
+export function isOpenRoot(root: string, list: readonly WindowInfo[]): boolean {
+  return list.some((window) => windowRoots(window).some((open) => sameRoot(open, root)));
+}
+
 /**
- * The root to offer for `input`, or null when no offer applies: an unstored
- * or non-`file:` document, a document already under one of its window's
- * roots, no `.git` ancestor, the filesystem root, the home directory, a root
- * already open in some window, or a dismissed root.
+ * The root `window` adopts automatically for a document it presents: only a
+ * window without roots whose every document or terminal tab is that
+ * document, and only for a repository no window already has as a root.
  */
-export async function inferProjectRoot(input: InferenceInput): Promise<string | null> {
-  if (input.documentUri === null) return null;
-  if (input.windowRoots.some((root) => within(input.documentUri!, root))) return null;
-  const inferred = await inferRoot(input.documentUri);
-  if (inferred === null) return null;
-  const split = splitFileUri(input.documentUri);
-  if (split !== null && sameRoot(inferred, `${split.origin}/`)) return null;
-  if (input.homeUri !== null && sameRoot(inferred, input.homeUri)) return null;
-  if (input.allRoots.some((root) => sameRoot(inferred, root))) return null;
-  if (input.dismissed.has(normalizeRoot(inferred))) return null;
-  return inferred;
+export async function automaticRoot(
+  document: { id: DocumentId; resourceUri: string | null },
+  window: WindowInfo,
+  list: readonly WindowInfo[],
+): Promise<string | null> {
+  if (windowRoots(window).length > 0) return null;
+  const tabs = window.panes.flatMap((pane) => pane.tabs).filter((tab) => tab.kind !== "tool");
+  if (tabs.length === 0 || tabs.some((tab) => tab.document !== document.id)) return null;
+  const root = await repositoryRoot(document.resourceUri);
+  if (root === null || isOpenRoot(root, list)) return null;
+  return root;
 }

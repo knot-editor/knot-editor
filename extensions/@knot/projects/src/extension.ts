@@ -28,7 +28,7 @@ import { workbench } from "knot";
 import { registerCommands } from "./commands.js";
 import { defineSettings } from "./prune.js";
 import { describe } from "./report.js";
-import { createState, loadDismissed, loadSessions, reload } from "./state.js";
+import { createState, loadSessions, reload } from "./state.js";
 import { afterLaunch, onApplicationEvent } from "./tracking.js";
 import { registerTree } from "./tree.js";
 
@@ -36,7 +36,6 @@ export async function start() {
   await defineSettings();
   const state = createState();
   await reload(state);
-  await loadDismissed(state);
   try {
     await loadSessions(state);
   } catch (error) {
