@@ -400,9 +400,9 @@ declare module "knot" {
     /** Which theme applies: theme.dark's, theme.light's, or the one matching
      * the system appearance. Native default "dark"; other text means "dark". */
     "theme.mode": "dark" | "light" | "system";
-    /** The theme name used in dark mode. Native default "One Dark". */
+    /** The theme name used in dark mode. Native default "Knot Islands Dark". */
     "theme.dark": string;
-    /** The theme name used in light mode. Native default "One Light". */
+    /** The theme name used in light mode. Native default "Knot Islands Light". */
     "theme.light": string;
     /** The icon pack that restyles icons; empty uses the default icons.
      * Native default "". */
@@ -539,6 +539,8 @@ declare module "knot" {
     readonly "button.background"?: string;
     /** An inline action button under the pointer. */
     readonly "button.hover.background"?: string;
+    /** The cards of the center and the docks. */
+    readonly "card.background"?: string;
     /** Where a dragged tab would land. */
     readonly "dropTarget.background"?: string;
     /** Text editor background. */
@@ -615,6 +617,8 @@ declare module "knot" {
     readonly "statusBar.item.hover.background"?: string;
     /** Success markers. */
     readonly "success"?: string;
+    /** The line under the active tab. */
+    readonly "tab.accent"?: string;
     /** The active tab. */
     readonly "tab.active.background"?: string;
     /** Title of the active tab. */
@@ -671,8 +675,12 @@ declare module "knot" {
     readonly "text.accent"?: string;
     /** Secondary interface text. */
     readonly "text.muted"?: string;
+    /** The main toolbar above the workbench. */
+    readonly "toolbar.background"?: string;
     /** Warnings. */
     readonly "warning"?: string;
+    /** The window behind the cards, the toolbar, and the status bar. */
+    readonly "window.background"?: string;
   }
   export interface ThemeSyntaxStyle {
     /** "#rrggbb" or "#rrggbbaa". */

@@ -207,7 +207,7 @@ impl EditorView {
                             .w(crate::app::zoom::rems(240.))
                             .flex_shrink_0()
                             .px_1()
-                            .rounded_sm()
+                            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
                             .border_1()
                             .border_color(theme.paint_color(if has_focus {
                                 color::INPUT_FOCUSED_BORDER
@@ -347,7 +347,7 @@ fn bar_control(
         .items_center()
         .justify_center()
         .p_0p5()
-        .rounded_sm()
+        .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
         .cursor_pointer()
         .when(active == Some(true), |element| {
             element.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))

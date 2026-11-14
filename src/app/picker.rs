@@ -24,7 +24,7 @@ use super::{
     theme::{color, theme},
 };
 
-const PANEL_WIDTH: f32 = 560.;
+use super::tokens::list::PANEL_WIDTH;
 const PANEL_MAX_HEIGHT: f32 = 420.;
 const LINE_HEIGHT: f32 = 22.;
 const ROW_PADDING: f32 = 6.;
@@ -474,7 +474,7 @@ impl Render for Picker {
             .w(px(PANEL_WIDTH * zoom))
             .flex()
             .flex_col()
-            .rounded_md()
+            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::MD))
             .border_1()
             .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
             .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))

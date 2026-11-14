@@ -81,7 +81,8 @@ registration of a name wins, and extension color definitions. The
 resolves into the `Theme` global: each defined key takes the theme's value,
 else its default for the theme's appearance, following references. An
 unregistered selection resolves the defaults alone, so the native defaults are
-also the fallback when the theme package fails. Resolution happens once when
+also the fallback when the theme package fails; they match the bundled
+Knot Islands Dark and Light themes, the default selection. Resolution happens once when
 startup completes and again when the selection settings or, in `system` mode,
 the system appearance change; registering or removing a theme later takes
 effect at the next selection change rather than repainting mid-session.

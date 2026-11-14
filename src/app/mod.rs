@@ -43,6 +43,7 @@ mod text_input;
 mod text_view;
 mod theme;
 mod themes;
+mod tokens;
 pub(crate) mod tool_layout;
 mod transient;
 mod tree_view;

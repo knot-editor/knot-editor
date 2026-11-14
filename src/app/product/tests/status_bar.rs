@@ -203,7 +203,8 @@ fn hovering_an_item_with_a_tooltip_shows_it_on_a_popover(cx: &mut TestAppContext
     wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
     loaded.lock().unwrap().take().unwrap().unwrap();
 
-    // The tooltip is the only surface on the theme's popover background.
+    // The tooltip adds one quad on the theme's popover background; other
+    // surfaces may share that color, so count against the idle baseline.
     let popover: gpui::Background = cx
         .read(|cx| theme(cx).paint_color(color::POPOVER_BACKGROUND))
         .into();
@@ -229,12 +230,12 @@ fn hovering_an_item_with_a_tooltip_shows_it_on_a_popover(cx: &mut TestAppContext
         cx.executor()
             .advance_clock(std::time::Duration::from_secs(1));
     };
-    assert_eq!(popovers(cx), 0);
+    let idle = popovers(cx);
     hover("status-item-position", cx);
-    assert_eq!(popovers(cx), 1);
+    assert_eq!(popovers(cx), idle + 1);
     // An item without a tooltip shows none.
     hover("status-item-language", cx);
-    assert_eq!(popovers(cx), 0);
+    assert_eq!(popovers(cx), idle);
 }
 
 #[gpui::test]

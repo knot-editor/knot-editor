@@ -34,17 +34,17 @@ const duplicate = await failure(() => themes.defineColor({
 if (duplicate.code !== "DuplicateColor" || duplicate.details.key !== "background") throw duplicate;
 
 await themes.register({
-  name: "One Dark", appearance: "dark",
+  name: "Knot Islands Dark", appearance: "dark",
   colors: { background: "#101010", success: "#20a020", "other.package.key": "#123456" },
   syntax: { keyword: { color: "#ff0000", fontWeight: 700 } },
 });
 await themes.register({ name: "Paper", appearance: "light", colors: { background: "#fefefe" } });
-const base = await themes.get("One Dark");
+const base = await themes.get("Knot Islands Dark");
 const derived = await themes.register({
   ...base, name: "My Dark", colors: { ...base.colors, background: "#000001" },
 });
 const listed = await themes.list();
-if (listed.map((entry) => `${entry.name}:${entry.appearance}`).join() !== "My Dark:dark,One Dark:dark,Paper:light"
+if (listed.map((entry) => `${entry.name}:${entry.appearance}`).join() !== "Knot Islands Dark:dark,My Dark:dark,Paper:light"
     || await themes.get("Missing") !== null || base.syntax.keyword.fontWeight !== 700) {
   throw new Error(JSON.stringify({ listed, base }));
 }
@@ -82,7 +82,7 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     loaded.lock().unwrap().take().unwrap().unwrap();
 
     // Registering changes nothing until startup resolves the selection.
-    assert_eq!(background(cx), gpui::rgb(0x1e1e1e).into());
+    assert_eq!(background(cx), gpui::rgb(0x2b2d30).into());
     cx.update(crate::app::themes::apply_at_startup);
     cx.run_until_parked();
     assert_eq!(background(cx), gpui::rgb(0x101010).into());
@@ -136,10 +136,10 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     cx.run_until_parked();
     assert_eq!(background(cx), gpui::rgb(0x000001).into());
     select("theme.dark", "My Dark ", cx);
-    assert_eq!(background(cx), gpui::rgb(0x1e1e1e).into());
+    assert_eq!(background(cx), gpui::rgb(0x2b2d30).into());
 
     // Teardown removes the extension's themes and color keys.
-    select("theme.dark", "One Dark", cx);
+    select("theme.dark", "Knot Islands Dark", cx);
     assert_eq!(background(cx), gpui::rgb(0x101010).into());
     host.update(cx, |host, cx| host.unload(key, cx)).unwrap();
     cx.run_until_parked();
@@ -149,7 +149,7 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     cx.read(|cx| {
         assert_eq!(
             theme(cx).paint_color(color::BACKGROUND),
-            gpui::rgb(0x1e1e1e).into()
+            gpui::rgb(0x2b2d30).into()
         );
         assert_eq!(
             theme(cx).paint_color("diff.add"),

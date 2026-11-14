@@ -4,6 +4,7 @@
 use super::*;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{color, theme};
+use crate::app::tokens;
 use crate::app::workbench::{StripeButton, Stripes};
 use crate::app::zoom;
 use gpui_component::menu::{PopupMenu, PopupMenuItem};
@@ -29,8 +30,8 @@ struct StripeDragLabel(StripeDrag);
 impl Render for StripeDragLabel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         stripe_face(self.0.icon.clone(), &self.0.title)
-            .size(zoom::rems(26.))
-            .rounded_sm()
+            .size(zoom::rems(tokens::chrome::STRIPE_BUTTON))
+            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
             .bg(theme(cx).paint_color(color::LIST_SELECTED_BACKGROUND))
             .text_color(theme(cx).paint_color(color::LIST_SELECTED_FOREGROUND))
     }
@@ -72,7 +73,7 @@ impl KnotWindow {
                 .flex()
                 .flex_col()
                 .h_full()
-                .w(zoom::rems(30.))
+                .w(zoom::rems(tokens::chrome::STRIPE_WIDTH))
                 .py_1()
                 .gap_1()
                 .items_center()
@@ -118,7 +119,9 @@ impl KnotWindow {
             .gap_1()
             .w_full()
             .when(dock == DockLocation::Bottom, |group| {
-                group.min_h(zoom::rems(60.)).justify_end()
+                group
+                    .min_h(zoom::rems(tokens::chrome::STRIPE_GROUP_MIN_HEIGHT))
+                    .justify_end()
             })
             .drag_over::<StripeDrag>(move |style, _, _, _| style.bg(drop_hint))
             .on_drop(cx.listener(move |this, drag: &StripeDrag, _, cx| {
@@ -157,9 +160,9 @@ impl KnotWindow {
         stripe_face(icon, &title)
             .id(SharedString::from(selector.clone()))
             .debug_selector(move || selector.clone())
-            .size(zoom::rems(26.))
+            .size(zoom::rems(tokens::chrome::STRIPE_BUTTON))
             .flex_none()
-            .rounded_sm()
+            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
             .cursor_pointer()
             .hover(move |style| style.bg(hover))
             .when(visible, |element| {

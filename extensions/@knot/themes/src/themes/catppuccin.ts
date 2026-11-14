@@ -30,6 +30,10 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
     appearance,
     colors: {
       "background": p.mantle,
+      "card.background": p.base,
+      "tab.accent": p.blue,
+      "toolbar.background": p.mantle,
+      "window.background": p.mantle,
       "border": dark ? p.crust : p.surface0,
       "border.hover": p.blue,
       "button.background": p.surface0,

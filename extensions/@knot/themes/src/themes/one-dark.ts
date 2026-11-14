@@ -19,6 +19,10 @@ export const ONE_DARK: ThemeDefinition = {
   appearance: "dark",
   colors: {
     "background": panel,
+    "card.background": bg,
+    "tab.accent": accent,
+    "toolbar.background": panel,
+    "window.background": panel,
     "border": "#181a1f",
     "border.hover": accent,
     "button.background": "#2c313a",

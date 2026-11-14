@@ -88,6 +88,8 @@ review gate in the real app through `Try:` commands in the personal
 
 ### 1. Tokens and themes
 
+Status: ✅ implemented, awaiting the review gate.
+
 Deliverables: the token module; the new color keys with native defaults; Knot
 Islands Dark and Light in `@knot/themes`, Dark as the default; the new keys in
 the five existing themes. Existing surfaces switch to tokens without changing

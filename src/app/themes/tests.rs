@@ -29,7 +29,7 @@ fn startup_applies_the_selection_and_settings_writes_switch_it(cx: &mut TestAppC
         let registry = &mut cx.default_global::<ApplicationThemes>().0;
         registry.register(
             owner(1),
-            definition("One Dark", Appearance::Dark, "#101010"),
+            definition("Knot Islands Dark", Appearance::Dark, "#101010"),
         );
         registry.register(owner(1), definition("Paper", Appearance::Light, "#fefefe"));
         apply_at_startup(cx);

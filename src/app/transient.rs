@@ -21,8 +21,8 @@ use super::text_input::{TextInput, TextInputEvent};
 use super::theme::{color, theme};
 use knot_model::matching::byte_ranges;
 
-const PANEL_WIDTH: f32 = 560.;
-const ROW_HEIGHT: f32 = 26.;
+use super::tokens::list::{PANEL_WIDTH, ROW_HEIGHT};
+
 /// Completion rows visible at once; the highlight scrolls into view.
 const MAX_VISIBLE_ROWS: usize = 8;
 
@@ -302,7 +302,7 @@ impl Render for InputView {
             .w(crate::app::zoom::rems(PANEL_WIDTH))
             .flex()
             .flex_col()
-            .rounded_md()
+            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::MD))
             .border_1()
             .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
             .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))

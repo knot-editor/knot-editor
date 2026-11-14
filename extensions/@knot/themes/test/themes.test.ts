@@ -16,7 +16,8 @@ test("registers every theme before start resolves", async () => {
   assert.deepEqual(
     (await themes.list()).map((theme) => `${theme.name}:${theme.appearance}`),
     [
-      "Catppuccin Latte:light", "Catppuccin Mocha:dark", "One Dark:dark", "One Light:light",
+      "Catppuccin Latte:light", "Catppuccin Mocha:dark", "Knot Islands Dark:dark",
+      "Knot Islands Light:light", "One Dark:dark", "One Light:light",
       "Solarized Dark:dark", "Solarized Light:light", "Tokyo Night:dark", "Tokyo Night Light:light",
     ],
   );
@@ -39,4 +40,15 @@ test("every theme styles only known captures and valid colors", () => {
       assert.match(value ?? "", color, `${theme.name}: ${key}`);
     }
   }
+});
+
+test("the Islands themes are the native default pair and keep the window darker than the card in dark", () => {
+  const dark = THEMES.find((theme) => theme.name === "Knot Islands Dark");
+  const light = THEMES.find((theme) => theme.name === "Knot Islands Light");
+  assert.equal(dark?.appearance, "dark");
+  assert.equal(light?.appearance, "light");
+  assert.equal(dark?.colors?.["window.background"], "#1e1f22");
+  assert.equal(dark?.colors?.["card.background"], "#2b2d30");
+  assert.equal(dark?.colors?.["tab.accent"], "#3574f0");
+  assert.equal(light?.colors?.["tab.accent"], "#3574f0");
 });

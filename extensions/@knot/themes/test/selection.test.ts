@@ -32,14 +32,14 @@ test("selecting a theme sets its appearance's theme and the mode", async () => {
   host.answer("showPicker", { kind: "selected", id: "One Light" });
   await host.run("themes.select");
 
-  assert.deepEqual(await selection(), { mode: "light", dark: "One Dark", light: "One Light" });
+  assert.deepEqual(await selection(), { mode: "light", dark: "Knot Islands Dark", light: "One Light" });
   const [prompt] = host.prompts();
   const items = (prompt?.options as { items: { label: string; description: string }[] }).items;
   assert.deepEqual(
-    items.filter((item) => item.label.startsWith("One ") || item.label === "Solarized Dark"),
+    items.filter((item) => item.label.startsWith("Knot ") || item.label === "Solarized Dark"),
     [
-      { id: "One Dark", label: "One Dark", description: "dark, selected" },
-      { id: "One Light", label: "One Light", description: "light, selected" },
+      { id: "Knot Islands Dark", label: "Knot Islands Dark", description: "dark, selected" },
+      { id: "Knot Islands Light", label: "Knot Islands Light", description: "light, selected" },
       { id: "Solarized Dark", label: "Solarized Dark", description: "dark" },
     ],
   );
@@ -52,7 +52,7 @@ test("the choice survives a restart of the package", async () => {
   await restart();
 
   assert.deepEqual(host.record(RECORD_KEY), { light: "One Light", mode: "light" });
-  assert.deepEqual(await selection(), { mode: "light", dark: "One Dark", light: "One Light" });
+  assert.deepEqual(await selection(), { mode: "light", dark: "Knot Islands Dark", light: "One Light" });
 });
 
 test("in system mode a choice keeps the mode", async () => {
@@ -61,7 +61,7 @@ test("in system mode a choice keeps the mode", async () => {
   host.answer("showPicker", { kind: "selected", id: "One Light" });
   await host.run("themes.select");
 
-  assert.deepEqual(await selection(), { mode: "system", dark: "One Dark", light: "One Light" });
+  assert.deepEqual(await selection(), { mode: "system", dark: "Knot Islands Dark", light: "One Light" });
   assert.deepEqual(host.record(RECORD_KEY), { light: "One Light" });
 });
 
@@ -70,14 +70,14 @@ test("dismissing the picker changes nothing", async () => {
   host.answer("showPicker", { kind: "dismissed" });
   await host.run("themes.select");
 
-  assert.deepEqual(await selection(), { mode: "dark", dark: "One Dark", light: "One Light" });
+  assert.deepEqual(await selection(), { mode: "dark", dark: "Knot Islands Dark", light: "Knot Islands Light" });
   assert.equal(host.record(RECORD_KEY), undefined);
 });
 
 test("an unreadable record keeps the defaults", async () => {
   host.setRecord(RECORD_KEY, { mode: "sepia", dark: 4 });
   await start();
-  assert.deepEqual(await selection(), { mode: "dark", dark: "One Dark", light: "One Light" });
+  assert.deepEqual(await selection(), { mode: "dark", dark: "Knot Islands Dark", light: "Knot Islands Light" });
 });
 
 test("highlighting previews a theme and dismissing restores the settings", async () => {
@@ -92,7 +92,7 @@ test("highlighting previews a theme and dismissing restores the settings", async
   await unobserve.dispose();
 
   assert.ok(seen.includes("Solarized Light"));
-  assert.deepEqual(await selection(), { mode: "dark", dark: "One Dark", light: "One Light" });
+  assert.deepEqual(await selection(), { mode: "dark", dark: "Knot Islands Dark", light: "Knot Islands Light" });
   assert.equal(host.record(RECORD_KEY), undefined);
 });
 
@@ -102,6 +102,6 @@ test("selecting after previewing keeps the selected theme", async () => {
   host.answer("showPicker", { kind: "selected", id: "One Light" });
   await host.run("themes.select");
 
-  assert.deepEqual(await selection(), { mode: "light", dark: "One Dark", light: "One Light" });
+  assert.deepEqual(await selection(), { mode: "light", dark: "Knot Islands Dark", light: "One Light" });
   assert.deepEqual(host.record(RECORD_KEY), { light: "One Light", mode: "light" });
 });

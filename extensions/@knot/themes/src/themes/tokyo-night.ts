@@ -7,6 +7,10 @@ export const TOKYO_NIGHT: ThemeDefinition = {
   appearance: "dark",
   colors: {
     "background": "#16161e",
+    "card.background": "#1a1b26",
+    "tab.accent": "#7aa2f7",
+    "toolbar.background": "#16161e",
+    "window.background": "#16161e",
     "border": "#101014",
     "border.hover": "#3d59a1",
     "button.background": "#292e42",
@@ -97,6 +101,10 @@ export const TOKYO_NIGHT_LIGHT: ThemeDefinition = {
   appearance: "light",
   colors: {
     "background": "#cbccd1",
+    "card.background": "#d5d6db",
+    "tab.accent": "#34548a",
+    "toolbar.background": "#cbccd1",
+    "window.background": "#cbccd1",
     "border": "#b9bac0",
     "border.hover": "#34548a",
     "button.background": "#c4c5cb",

@@ -29,6 +29,7 @@ pub(crate) use edit::{EditSession, EditTarget};
 use super::TREE_KEY_CONTEXT;
 use super::icons::{AppIcon, icon_definition, ref_definition};
 use super::theme::{color, theme};
+use super::tokens;
 use knot_model::icons::IconDefinition;
 
 /// An action's face: its icon when it has one, else its label.
@@ -1291,7 +1292,7 @@ impl Render for TreeView {
                         .id(("extension-tree-frame-action", action_index))
                         .px_2()
                         .py_0p5()
-                        .rounded_sm()
+                        .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
                         .text_xs()
                         .text_color(button_text)
                         .bg(if focused { button_focused } else { button })
@@ -1342,7 +1343,10 @@ impl Render for TreeView {
                             .debug_selector(move || format!("extension-tree-row-{index}"))
                             .w_full()
                             .overflow_hidden()
-                            .pl(crate::app::zoom::rems(8. + *depth as f32 * 14.))
+                            .pl(crate::app::zoom::rems(
+                                tokens::list::TREE_INSET
+                                    + *depth as f32 * tokens::list::TREE_INDENT,
+                            ))
                             .pr_2()
                             .py_1()
                             .flex()
@@ -1350,7 +1354,9 @@ impl Render for TreeView {
                             .items_center()
                             .gap_1()
                             .text_sm()
-                            .when(two_lines, |row| row.h(crate::app::zoom::rems(44.)))
+                            .when(two_lines, |row| {
+                                row.h(crate::app::zoom::rems(tokens::list::TWO_LINE_ROW_HEIGHT))
+                            })
                             .when(is_group, |row| {
                                 row.bg(theme.paint_color(color::LIST_GROUP_BACKGROUND))
                                     .text_color(theme.paint_color(color::TEXT_MUTED))
@@ -1430,7 +1436,7 @@ impl Render for TreeView {
                         if let Some(badge) = &item.badge {
                             row = row.child(
                                 div()
-                                    .size(crate::app::zoom::rems(6.0))
+                                    .size(crate::app::zoom::rems(tokens::list::BADGE_SIZE))
                                     .flex_shrink_0()
                                     .rounded_full()
                                     .bg(theme.paint_color(badge)),
@@ -1449,7 +1455,7 @@ impl Render for TreeView {
                                 div()
                                     .id(("extension-tree-action", index * 1024 + action_index))
                                     .px_1()
-                                    .rounded_sm()
+                                    .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
                                     .text_xs()
                                     .text_color(theme.paint_color(color::TEXT_ACCENT))
                                     .bg(theme.paint_color(if focused {
@@ -1515,7 +1521,9 @@ impl Render for TreeView {
                         .id(("extension-tree-draft", index))
                         .debug_selector(move || format!("extension-tree-draft-{index}"))
                         .w_full()
-                        .pl(crate::app::zoom::rems(8. + *depth as f32 * 14.))
+                        .pl(crate::app::zoom::rems(
+                            tokens::list::TREE_INSET + *depth as f32 * tokens::list::TREE_INDENT,
+                        ))
                         .pr_2()
                         .py_1()
                         .flex()
@@ -1523,7 +1531,9 @@ impl Render for TreeView {
                         .items_center()
                         .gap_1()
                         .text_sm()
-                        .when(two_lines, |row| row.h(crate::app::zoom::rems(44.)))
+                        .when(two_lines, |row| {
+                            row.h(crate::app::zoom::rems(tokens::list::TWO_LINE_ROW_HEIGHT))
+                        })
                         .child(AppIcon::blank())
                         .children(
                             icon.as_ref()
@@ -1539,14 +1549,20 @@ impl Render for TreeView {
                         .id(("extension-tree-status", index))
                         .debug_selector(move || format!("extension-tree-status-{index}"))
                         .w_full()
-                        .pl(crate::app::zoom::rems(22. + *depth as f32 * 14.))
+                        .pl(crate::app::zoom::rems(
+                            tokens::list::TREE_INSET
+                                + 14.
+                                + *depth as f32 * tokens::list::TREE_INDENT,
+                        ))
                         .pr_2()
                         .py_1()
                         .text_sm()
                         // Rows share one height, so a long message is cut
                         // short rather than wrapped over the rows below.
                         .truncate()
-                        .when(two_lines, |row| row.h(crate::app::zoom::rems(44.)))
+                        .when(two_lines, |row| {
+                            row.h(crate::app::zoom::rems(tokens::list::TWO_LINE_ROW_HEIGHT))
+                        })
                         .text_color(theme.paint_color(if *error {
                             color::ERROR
                         } else {

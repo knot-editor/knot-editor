@@ -32,7 +32,7 @@ Website: <https://knot-editor.com>
   and scroll, and correct handling of CJK, emoji, and right-to-left text
 - Tree-sitter syntax highlighting for about twenty languages, including Rust,
   TypeScript, Python, Go, C/C++, and Markdown
-- Themes: One Dark, One Light, Catppuccin, Tokyo Night, and Solarized, with a
+- Themes: Knot Islands, One Dark, One Light, Catppuccin, Tokyo Night, and Solarized, with a
   light/dark/system mode
 - Multiple windows, split panes, and tabs you can drag between them
 - Multi-root workspaces with a file explorer

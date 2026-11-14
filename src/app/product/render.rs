@@ -5,6 +5,7 @@ use crate::app::convert::ThemePaint as _;
 use crate::app::documents::{DocumentDirty, ExternalChange};
 use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Theme, color, theme};
+use crate::app::tokens;
 use crate::app::workbench::BottomDockLayout;
 use crate::app::zoom;
 
@@ -160,7 +161,7 @@ impl KnotWindow {
             .when(horizontal, |element| {
                 element
                     .flex_row()
-                    .w(zoom::rems(9.))
+                    .w(zoom::rems(tokens::chrome::RESIZE_HANDLE))
                     .h_full()
                     .justify_center()
                     .cursor(CursorStyle::ResizeLeftRight)
@@ -168,7 +169,7 @@ impl KnotWindow {
             .when(!horizontal, |element| {
                 element
                     .flex_col()
-                    .h(zoom::rems(9.))
+                    .h(zoom::rems(tokens::chrome::RESIZE_HANDLE))
                     .w_full()
                     .items_center()
                     .cursor(CursorStyle::ResizeUpDown)
@@ -381,7 +382,7 @@ impl KnotWindow {
                     .flex()
                     .flex_row()
                     .flex_none()
-                    .h(zoom::rems(30.))
+                    .h(zoom::rems(tokens::chrome::TAB_BAR_HEIGHT))
                     .relative()
                     .debug_selector(move || format!("tab-bar-{}", pane_id.value()))
                     .child(self.tab_bar_drag_geometry(pane_id))
@@ -432,7 +433,7 @@ impl KnotWindow {
                 .flex_none()
                 .flex_row()
                 .items_center()
-                .h(zoom::rems(22.))
+                .h(zoom::rems(tokens::chrome::STATUS_BAR_HEIGHT))
                 .px_1()
                 .text_xs()
                 .border_t_1()
@@ -606,7 +607,7 @@ impl Render for KnotWindow {
                         .flex()
                         .items_start()
                         .justify_center()
-                        .pt(zoom::rems(80.))
+                        .pt(zoom::rems(tokens::list::PANEL_TOP))
                         .bg(scrim)
                         .on_mouse_down(MouseButton::Left, dismiss_transient)
                         .child(transient),
@@ -620,7 +621,7 @@ impl Render for KnotWindow {
                         .flex()
                         .items_start()
                         .justify_center()
-                        .pt(zoom::rems(80.))
+                        .pt(zoom::rems(tokens::list::PANEL_TOP))
                         .bg(scrim)
                         .child(palette),
                 )

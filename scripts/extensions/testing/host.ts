@@ -153,8 +153,8 @@ function emptyState() {
       ["editor.folding", { key: "editor.folding", type: "boolean", default: true, description: "Show the fold lane in the editor gutter" }],
       ["editor.showFoldingControls", { key: "editor.showFoldingControls", type: "string", default: "mouseover", description: "When the fold lane shows chevrons on foldable lines" }],
       ["theme.mode", { key: "theme.mode", type: "string", default: "dark", description: "Which theme applies" }],
-      ["theme.dark", { key: "theme.dark", type: "string", default: "One Dark", description: "The theme used in dark mode" }],
-      ["theme.light", { key: "theme.light", type: "string", default: "One Light", description: "The theme used in light mode" }],
+      ["theme.dark", { key: "theme.dark", type: "string", default: "Knot Islands Dark", description: "The theme used in dark mode" }],
+      ["theme.light", { key: "theme.light", type: "string", default: "Knot Islands Light", description: "The theme used in light mode" }],
       ["icons.pack", { key: "icons.pack", type: "string", default: "", description: "The icon pack that restyles icons" }],
       ["keymap.preset", { key: "keymap.preset", type: "string", default: "knot", description: "The keymap preset that supplies default key bindings" }],
       ["statusBar.visible", { key: "statusBar.visible", type: "boolean", default: true, description: "Show the status bar below the workbench" }],
@@ -1607,20 +1607,20 @@ export const CAPTURE_NAMES: readonly string[] = [
 /** The color keys native code defines, as the native table lists them. */
 export const NATIVE_COLOR_KEYS: readonly string[] = [
   "background", "border", "border.hover", "button.background", "button.hover.background",
-  "dropTarget.background", "editor.background", "editor.bar.background", "editor.bar.border", "editor.bracketMatch", "editor.cursor", "editor.findMatch", "editor.findMatchCurrent", "editor.foldPlaceholder", "editor.foreground",
+  "card.background", "dropTarget.background", "editor.background", "editor.bar.background", "editor.bar.border", "editor.bracketMatch", "editor.cursor", "editor.findMatch", "editor.findMatchCurrent", "editor.foldPlaceholder", "editor.foreground",
   "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
   "editor.markedText", "editor.selection", "editor.selectionHighlight", "editor.wordHighlight", "error", "icon", "info", "input.background", "input.border", "input.focused.border", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",
   "popover.background", "popover.border", "scrim", "scrollbar.thumb",
   "statusBar.background", "statusBar.border", "statusBar.foreground", "statusBar.item.hover.background", "success",
-  "tab.active.background", "tab.active.foreground", "tab.bar.background",
+  "tab.accent", "tab.active.background", "tab.active.foreground", "tab.bar.background",
   "tab.inactive.background", "tab.inactive.foreground", "terminal.ansi.black",
   "terminal.ansi.blue", "terminal.ansi.brightBlack", "terminal.ansi.brightBlue",
   "terminal.ansi.brightCyan", "terminal.ansi.brightGreen", "terminal.ansi.brightMagenta",
   "terminal.ansi.brightRed", "terminal.ansi.brightWhite", "terminal.ansi.brightYellow",
   "terminal.ansi.cyan", "terminal.ansi.green", "terminal.ansi.magenta", "terminal.ansi.red",
   "terminal.ansi.white", "terminal.ansi.yellow", "terminal.background", "terminal.cursor",
-  "terminal.foreground", "terminal.selection", "text", "text.accent", "text.muted", "warning",
+  "terminal.foreground", "terminal.selection", "text", "text.accent", "text.muted", "toolbar.background", "warning", "window.background",
 ];
 
 /** Every live theme registration, in registration order. */

@@ -60,8 +60,8 @@ values take effect.
 | `font.ligatures` | boolean | `true` | Same as `font.family` | native | Form ligatures; `false` turns off the `calt` and `liga` OpenType features. |
 | `font.features` | strings | `[]` | Same as `font.family` | native | OpenType features applied after `font.ligatures`: `"ss01"` turns one on, `"-calt"` off, `"cv05=2"` sets a value. Malformed entries are ignored. |
 | `theme.mode` | string: `dark`, `light`, `system` | `"dark"` | Global; other text means `dark` | native | Which theme applies; `system` follows the system appearance. |
-| `theme.dark` | string | `"One Dark"` | Global | native | Theme name used in dark mode. |
-| `theme.light` | string | `"One Light"` | Global | native | Theme name used in light mode. |
+| `theme.dark` | string | `"Knot Islands Dark"` | Global | native | Theme name used in dark mode. |
+| `theme.light` | string | `"Knot Islands Light"` | Global | native | Theme name used in light mode. |
 
 | `icons.pack` | string | `""` | Global | native | Name of the registered icon pack that restyles icons; empty means no pack. |
 

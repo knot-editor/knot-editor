@@ -19,6 +19,10 @@ export const ONE_LIGHT: ThemeDefinition = {
   appearance: "light",
   colors: {
     "background": panel,
+    "card.background": bg,
+    "tab.accent": accent,
+    "toolbar.background": panel,
+    "window.background": panel,
     "border": "#dbdbdc",
     "border.hover": accent,
     "button.background": "#dbdbdc",

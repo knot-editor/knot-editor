@@ -508,7 +508,7 @@ fn emulator_queries_deliver_ordered_replies_to_the_child_pty(cx: &mut TestAppCon
     let temp = tempfile::tempdir().unwrap();
     let destination = temp.path().join("replies.hex");
     let expected =
-        b"\x1b[0n\x1b[1;1R\x1b[?62;22c\x1b[8;24;80t\x1b[4;432;720t\x1b]11;rgb:1818/1818/1818\x1b\\";
+        b"\x1b[0n\x1b[1;1R\x1b[?62;22c\x1b[8;24;80t\x1b[4;432;720t\x1b]11;rgb:2b2b/2d2d/3030\x1b\\";
     let script = format!(
         "stty raw -echo; printf ready; dd bs=1 count=1 >/dev/null 2>&1; printf '\\033[H\\033[5n\\033[6n\\033[c\\033[18t\\033[14t\\033]11;?\\033\\\\'; dd bs=1 count={} 2>/dev/null | od -An -tx1 > '{}'",
         expected.len(),

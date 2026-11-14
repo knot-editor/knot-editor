@@ -389,8 +389,8 @@ fn native_definitions() -> Vec<SettingDefinition> {
             "dark",
             "Which theme applies: \"dark\", \"light\", or \"system\" to follow the system appearance",
         ),
-        text(THEME_DARK, "One Dark", "The theme used in dark mode"),
-        text(THEME_LIGHT, "One Light", "The theme used in light mode"),
+        text(THEME_DARK, "Knot Islands Dark", "The theme used in dark mode"),
+        text(THEME_LIGHT, "Knot Islands Light", "The theme used in light mode"),
         text(
             ICONS_PACK,
             "",
