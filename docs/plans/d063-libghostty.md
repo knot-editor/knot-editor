@@ -242,7 +242,13 @@ with its index line describe libghostty.
 
 Validation: `just check`; `cargo tree` shows no `alacritty_terminal`.
 
-Review gate: the documentation.
+Review gate: the documentation. ⏳ awaiting review.
+
+Status: ✅ `alacritty_terminal` removed (`cargo tree` finds no package); no
+tests were left to port. ✅ The terminal sessions reference, `architecture.md`
+and `AGENTS.md` (which gain `knot-terminal`), the terminal decision and its
+index line, and the README describe libghostty. D128's roadmap entry no longer
+cites Alacritty; the D063 entry stays until checkpoint 5 removes it.
 
 **Implementation context:** `Cargo.toml` (workspace and root dependencies),
 `src/app/terminal/mod.rs` module docs, `docs/decisions.md`.
