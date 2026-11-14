@@ -213,11 +213,10 @@ hold the analyses that support some items.
 
 - **D123 — Project inference extension** 🚧
   - Depends on: none
-  - Description: A bundled extension that finds the version-control root above
-    an opened document outside the window's roots and offers to open it as a
-    project, as Emacs's project.el infers projects. Decide which markers count
-    (`.git` first), whether a window without roots switches without asking, and
-    how often the offer may repeat for the same folder. See its
+  - Description: Find the version-control root above an opened document
+    outside the window's roots and work on it as a project, as Emacs's
+    project.el infers projects: a rootless window opened for the file adopts
+    it automatically, and a command covers the other cases. See its
     [plan](plans/d123-project-inference.md).
 
 - **D085 — Cross-file search**
