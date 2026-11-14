@@ -1,6 +1,6 @@
 # D059 — Professional typography
 
-Status: 🚧 planned. Source: [roadmap D059](../roadmap.md). Covers the font part
+Status: ✅ complete. Source: [roadmap D059](../roadmap.md). Covers the font part
 of D045; D045 keeps the non-font terminal preferences.
 
 ## Outcome
@@ -103,34 +103,9 @@ pixels; see [settings](../settings.md),
 terminal geometry paragraph of
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
 
-### 3. Ligatures in terminals — 🔍 awaiting review
+### 3. Ligatures in terminals — ✅
 
-Deliverables:
-
-- ✅ Terminal paint groups eligible punctuation cells into shaped runs as
-  described above, when ligatures are enabled for the terminal scope.
-- ✅ Terminal architecture notes the punctuation-run rule.
-- ⬜ Decision entry for the validated choices, if still warranted, written
-  after the review gate.
-
-Validation:
-
-- ✅ Unit tests for the pure grouping function: punctuation runs merge; a style,
-  color, hover, or wide-cell boundary splits them; letters and spaces stay
-  single; disabled ligatures yield single cells.
-- ✅ `just check`.
-
-Review gate: in a terminal with a ligature font, `echo '-> => != === <= |>'`
-renders ligatures aligned to the grid, colored prompts and selections still
-look right, and disabling ligatures for the terminal scope reverts to single
-glyphs.
-
-Implementation context:
-
-- The cell loop in `src/app/terminal/view.rs` (~1050) shapes one
-  `TextRun` per cell inside a cell-sized content mask. Extract a pure
-  function over a line's cells returning column ranges to shape together;
-  paint each range as one `shape_line` clipped to `cell_width × len`.
-- Cell style equality covers the fields that feed the `TextRun`: bold,
-  italic, foreground, underline flags, strikethrough, and hovered-link
-  membership.
+Completed. Terminals shape identically styled punctuation runs together; see
+the terminal geometry paragraph of
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md) and the
+[typography decision](../decisions/editing.md#typography).

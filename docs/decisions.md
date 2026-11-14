@@ -52,6 +52,9 @@ touches.
 - [Zoom, text size, and soft wrap](decisions/editing.md#zoom-text-size-and-soft-wrap):
   one application zoom level; wrapping by monospace cells; row and logical-line
   movement.
+- [Typography](decisions/editing.md#typography): `font.*` settings per scope;
+  line height as a multiple of the font's height; terminal ligatures only for
+  punctuation runs.
 - [Folding](decisions/editing.md#folding): per-view anchored folds as zero-row
   lines in the wrap map.
 

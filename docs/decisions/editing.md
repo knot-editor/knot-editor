@@ -152,6 +152,29 @@ References: [editor views](../architecture/editor-and-languages.md#editor-views)
 [zoom](../architecture/workbench-and-lifecycle.md#zoom), and
 [core and buffers](../architecture/core-and-buffers.md#application-buffer-ownership).
 
+## Typography
+
+Fonts are `font.*` settings resolved per scope like `font.size`, so a terminal
+or a language can differ without surface-specific keys.
+
+`font.lineHeight` multiplies the font's own ascent plus descent rather than
+its size, as VS Code's does. A multiple of the size clips tall fonts at a value
+that suits short ones; a multiple of the font's height means 1 is the tightest
+row that never clips, whatever the font, so one value can serve editors and
+terminal grids alike.
+
+Terminals shape runs of identically styled ASCII punctuation together and every
+other cell alone. Shaping whole lines would let font advances drift from the
+rounded cell grid that hit testing, the cursor, and wide characters rely on,
+while punctuation runs are short enough that the drift stays under a pixel.
+Letter ligatures, such as `www` or `0x`, were left out because joining letters
+would make runs as long as words. Manual review in Fira Code and JetBrains Mono
+showed `->`, `=>`, `!==`, and `|>` forming aligned to the grid.
+
+References: [settings](../settings.md),
+[editor views](../architecture/editor-and-languages.md#editor-views), and
+[terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
+
 ## Folding
 
 Fold state belongs to the view, as anchored byte ranges, so two views of one
