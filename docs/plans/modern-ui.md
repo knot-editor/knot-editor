@@ -1,6 +1,6 @@
 # Modern UI
 
-Status: 🚧 in progress (checkpoint 1 done).
+Status: 🚧 in progress (checkpoints 1–2 done).
 
 ## Goal
 
@@ -95,32 +95,15 @@ Islands Dark/Light; every bundled theme defines them
 live in `src/app/tokens.rs`; spacing steps and type sizes join it when a
 checkpoint first uses them.
 
-### 2. Island cards and window frame ✅ (awaiting review)
+### 2. Island cards and window frame ✅
 
-Deliverables: areas painted as rounded cards with gaps on the window
-background; split lines 1px; resize handles in the gaps; status bar on the
-window background; transparent title bar with an empty native toolbar row
-that drags and zooms the window.
-
-Validation: product tests that dock and split resizing still hit their
-handles; `Workbench::area_rects` and directional navigation stay consistent
-with painting.
-
-Review gate: the window frame and cards in dark and light themes, with docks
-shown, hidden, and in both `workbench.bottomDockLayout` modes.
-
-Delivered: the toolbar row exists on macOS only; other platforms keep the
-native frame until checkpoint 3 gives the toolbar content. Cards clip to a
-rectangle in gpui, so a child's background must equal the card's near a
-rounded corner. Stripe borders were dropped so the stripes sit on the window
-background. Review with `Try: Bottom dock layout: contained|full` and
-`Try: Use theme ...`.
-
-**Implementation context**: `render_workbench` and the split/resize
-geometry in `src/app/product/render.rs`; `WindowOptions` in
-`src/app/product/launch.rs` (`titlebar`, traffic light position); the status
-bar in `render_status_bar`. Update
-[workbench and lifecycle](../architecture/workbench-and-lifecycle.md#windows).
+Done and approved. Areas paint as rounded cards with gaps that double as resize
+handles, and the macOS title bar is transparent over a draggable toolbar row
+([windows](../architecture/workbench-and-lifecycle.md#windows)). The row exists
+on macOS only until checkpoint 3 gives the toolbar content. gpui clips to
+rectangles, so a child's background must match the card's near a rounded
+corner; check the non-Islands themes for pokes. Whether the focused card gets
+an emphasis is still open (see deferred decisions).
 
 ### 3. Main toolbar
 
