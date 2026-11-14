@@ -21,6 +21,13 @@
 // layout, so switching back and restarting restore splits, docks, and view
 // state.
 //
+// A file opened alone in a window without roots, or saved there to a new
+// file, makes its Git checkout (the nearest `.git` ancestor, never the
+// filesystem root or the home directory) the window's project: a new root in
+// place, or a known project restored with the window's tabs carried into it.
+// Open Containing Repository as Project does the same on request for any
+// window; from a rooted one the repository opens beside it.
+//
 // A session record with an unknown schema is kept unchanged and never switched
 // to, and while one exists no capture is released as an orphan, because that
 // record may reference it.

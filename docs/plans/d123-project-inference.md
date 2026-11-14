@@ -1,6 +1,7 @@
 # D123 — Project inference
 
-Status: 🚧 checkpoints 1–2 complete; checkpoint 3 remains. Item D123 of the
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 implemented, awaiting its
+manual gate. Item D123 of the
 [roadmap](../roadmap.md).
 Depends on ✅ D122 (extension file read, list, and stat API).
 
@@ -33,8 +34,8 @@ an unrooted window and no explorer, file index, or project session for it.
     `knot foo.txt` case: launch placement puts a file no root contains in a
     fresh rootless window created just for it, so rooting that window cannot
     surprise. A rootless window holding other loose files is left alone.
-  - *Command* "Projects: Open Containing Repository as Project"
-    (`projects.openContainingRepository`) on the active document, for every
+  - *Command* "Open Containing Repository as Project"
+    (`projects.open-containing-repository`) on the active document, for every
     other case, notably File → Open of a file from another checkout in a
     rooted window. Nothing happens automatically there: the file opens in
     the current window as today.
@@ -118,7 +119,9 @@ an unrooted window and no explorer, file index, or project session for it.
   independent of tree size. The file index and `files.search` are not
   involved.
 - Automatic adoption fails silently (stat errors, a window closing midway, a
-  failed switch): the file stays where it opened. The command, being
+  failed root change): the file stays where it opened. A switch to a known
+  project reports its own failures and missing session files, as every
+  switch does. The command, being
   user-invoked, tells the user when no repository contains the document and
   reports failures like the other Projects commands.
 
@@ -220,29 +223,30 @@ confirmation to automatic adoption, so the dismissal record, the
 `dismissed` state, and the `dismissed` inference input are removed in
 checkpoint 3.
 
-### 3. Automatic adoption and the command
+### 3. Automatic adoption and the command 🚧 (manual gate pending)
 
 Wire the core to observation and a command, with both adoption paths, and
 prove them end to end.
 
 Deliverables:
 
-- Remove the dismissal parts of checkpoint 2: `INFERENCE_DISMISSED_KEY`,
+- ✅ Remove the dismissal parts of checkpoint 2: `INFERENCE_DISMISSED_KEY`,
   `dismissedFromJson`, `loadDismissed`, `rememberDismissed` and their call in
   `start()`, `state.dismissed`, the `dismissed` field of `InferenceInput`,
   and their tests. Split the guards so the automatic-only ones (inside a
   window root, other tabs, root already open) are applied by the automatic
   path and not by the command.
-- `switchTo` gains the two origin options (adopt a rootless origin, keep a
+- ✅ `switchTo` gains the two origin options (adopt a rootless origin, keep a
   rooted one) and presents a given document in the first restored window.
   The existing Projects commands call it without options, unchanged.
-- Automatic path in `src/tracking.ts`: after `launched`, `documentOpened` and
+- ✅ Automatic path in `src/tracking.ts`: after `launched`, `documentOpened` and
   URI-changing `documentChanged` find the presenting window via
   `windows.list()` and adopt per Chosen design, before `track` runs.
-- `projects.openContainingRepository` in `src/commands.ts`, titled "Projects:
-  Open Containing Repository as Project", acting on the active document of
+- ✅ `projects.open-containing-repository` in `src/commands.ts`, titled "Open
+  Containing Repository as Project" (matching the other Projects command IDs
+  and titles), acting on the active document of
   the command's window.
-- Package tests: automatic, new root → roots replaced in place, unnamed
+- ✅ Package tests: automatic, new root → roots replaced in place, unnamed
   project bound; automatic, known project → session restored, document in
   its first window, origin released, dirty text preserved; no adoption in a
   rootless window with another tab, in a rooted window, for an untitled
@@ -252,14 +256,31 @@ Deliverables:
   session in new windows, source project's windows and record untouched;
   root already open → that window focused with the document; no repository
   → message.
-- One integration test in the real editor
+- ✅ One integration test in the real editor
   (`crates/knot-ext-workbench/tests/workbench/projects.rs` or a sibling
   module) against real roots on disk, including a file passed to a cold
   start through the launch path, which must end in a window rooted at its
   repository.
-- Update the `@knot/projects` package header comment in `src/extension.ts`,
+- ✅ Update the `@knot/projects` package header comment in `src/extension.ts`,
   and the extension guide's project section if it enumerates package
   behavior.
+
+Implementation notes:
+
+- Inferred roots carry no trailing slash, the form native window roots and
+  Open Folder use; known projects are matched by directory, ignoring
+  trailing slashes. The fake host's trailing-slash roots had hidden the
+  mismatch, which the real-editor test caught.
+- The fake host gained `documents.present`, window-target resolution for
+  document destinations, and keeps suspended documents that a destination
+  entry presents live, as the native commit does. The test driver gained
+  `TestProduct::launch_opening` (files on the command line at launch) and
+  `open_from_command_line` (a later invocation).
+- Coverage: `extensions/@knot/projects/test/{inference,adopt}.test.ts` and
+  `crates/knot-ext-workbench/tests/workbench/project_inference.rs` (cold
+  start with a file; a suspended project restored without a stray window).
+  The extension guide does not enumerate package behavior, so only the
+  package header comment changed.
 
 **Implementation context:** observation and launch gating mirror
 `onApplicationEvent`/`afterLaunch` in `src/tracking.ts`; the command mirrors
