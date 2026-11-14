@@ -60,21 +60,28 @@ jobs:
         include:
           # The Darwin archive step uses Apple's libtool and xcrun, and the
           # MSVC target needs the Windows SDK, so those build on their hosts.
+          # `arch` and `binutils` select the tools that hide every symbol
+          # but the ghostty_* API. MSVC has no such tool, so Windows builds
+          # without SIMD, which leaves out simdutf and Highway instead.
           - rust: aarch64-apple-darwin
             zig: aarch64-macos.13.0
             os: macos-latest
+            arch: arm64
           - rust: x86_64-apple-darwin
             zig: x86_64-macos.13.0
             os: macos-latest
+            arch: x86_64
           - rust: x86_64-unknown-linux-gnu
             zig: x86_64-linux-gnu
             os: ubuntu-24.04
           - rust: aarch64-unknown-linux-gnu
             zig: aarch64-linux-gnu
             os: ubuntu-24.04
+            binutils: aarch64-linux-gnu-
           - rust: x86_64-pc-windows-msvc
             zig: x86_64-windows-msvc
             os: windows-latest
+            options: -Dsimd=false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
@@ -106,8 +113,17 @@ jobs:
             -Doptimize=ReleaseFast \
             -Dcpu=baseline \
             -Dtarget="$ZIG_TARGET" \
-            -Dvt-features=-kitty-graphics
+            -Dvt-features=-kitty-graphics \
+            ${{ matrix.options }}
+      - name: Install the cross binutils
+        if: matrix.binutils
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y binutils-aarch64-linux-gnu
       - name: Package
+        env:
+          ARCH: ${{ matrix.arch }}
+          BINUTILS: ${{ matrix.binutils }}
         run: |
           set -euo pipefail
           install="$RUNNER_TEMP/install"
@@ -116,13 +132,29 @@ jobs:
           cp -R "$install/include" "$out/include"
           cp "source/libghostty-vt-$VERSION/LICENSE" "$out/LICENSE"
           if [ -f "$install/lib/libghostty-vt.a" ]; then
-            cp "$install/lib/libghostty-vt.a" "$out/lib/"
+            # The archive also carries simdutf and Highway, which V8 links
+            # in other versions under the same names. Merging it into one
+            # object that exports only the ghostty_* API keeps them apart.
+            merged="$RUNNER_TEMP/libghostty-vt.o"
+            if [ "$RUNNER_OS" = macOS ]; then
+              echo '_ghostty_*' > "$RUNNER_TEMP/exports"
+              ld -r -arch "$ARCH" -platform_version macos 13.0 13.0 \
+                -all_load "$install/lib/libghostty-vt.a" \
+                -exported_symbols_list "$RUNNER_TEMP/exports" -o "$merged"
+            else
+              "${BINUTILS}ld" -r --whole-archive "$install/lib/libghostty-vt.a" -o "$merged"
+              "${BINUTILS}objcopy" --wildcard --keep-global-symbol='ghostty_*' "$merged"
+            fi
+            "${BINUTILS}ar" rcs "$out/lib/libghostty-vt.a" "$merged"
+            exported=$("${BINUTILS}nm" -g --defined-only "$out/lib/libghostty-vt.a" \
+              | awk 'NF == 3 && $3 !~ /^_?ghostty_/')
+            if [ -n "$exported" ]; then
+              echo "symbols outside the ghostty_* API are still global:" >&2
+              echo "$exported" >&2
+              exit 1
+            fi
           else
-            # Windows keeps the DLL and its import library beside the static
-            # library until knot-terminal settles how it links.
-            cp "$install"/lib/ghostty-vt-static.lib "$install"/lib/ghostty-vt.lib "$out/lib/"
-            mkdir "$out/bin"
-            cp "$install"/bin/ghostty-vt.dll "$out/bin/"
+            cp "$install"/lib/ghostty-vt-static.lib "$out/lib/"
           fi
           test -f "$out/include/ghostty/vt.h"
           tar -czf "dist/$NAME.tar.gz" -C "$RUNNER_TEMP" "$NAME"
@@ -162,4 +194,4 @@ jobs:
           gh release create "$tag" ./* \
             --repo "$REPO" --target "$SHA" --latest=false \
             --title "libghostty-vt $VERSION" \
-            --notes "Static libghostty-vt $VERSION for knot-terminal, built with Zig $ZIG (ReleaseFast, baseline CPU, without Kitty graphics) from the signed release tarballs."
+            --notes "Static libghostty-vt $VERSION for knot-terminal, built with Zig $ZIG (ReleaseFast, baseline CPU, without Kitty graphics) from the signed release tarballs. Only the ghostty_* API is global; the Windows build has no SIMD."
