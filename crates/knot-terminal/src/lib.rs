@@ -10,6 +10,7 @@
 //! library itself creates no threads, and every handle it returns belongs
 //! to the caller.
 
+mod directory;
 mod events;
 #[allow(
     non_camel_case_types,
@@ -26,6 +27,7 @@ mod pty;
 mod render;
 mod terminal;
 
+pub use directory::local_directory;
 pub use events::TerminalEvent;
 pub use grid::Point;
 pub use input::{Key, KeyAction, KeyEvent, Modifiers, MouseAction, MouseButton, MouseEvent};

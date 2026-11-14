@@ -8,6 +8,7 @@ links = "ghostty-vt"
 
 [dependencies]
 portable-pty = { workspace = true }
+url = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
