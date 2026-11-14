@@ -120,9 +120,14 @@ yet, and the gap keeps each step reviewable.
 release with Zig 0.17.1 (1.0.1 requires 0.17.x). Darwin targets build on
 macOS, because libghostty's archive step runs Apple's tools, and MSVC on
 Windows; Linux cross-compiles both architectures. Darwin targets macOS 13.
-The static archive needs no extra link libraries. The Windows archive also
-carries `ghostty-vt.dll` and its import library for 1b's linking decision.
-`-Dcpu=baseline` could be raised later for a faster build.
+The static archive needs no extra link libraries. `-Dcpu=baseline` could be
+raised later for a faster build.
+
+Republished in 3a: linking the app showed that libghostty's simdutf 9.0.0 and
+Highway share symbol names with V8's simdutf 7.7.0 and Highway. macOS kept
+one copy of each and warned. The macOS and Linux archives are now merged into
+one object that exports only `ghostty_*`. MSVC has no such tool, so the
+Windows archive is built with `-Dsimd=false` and drops the unused DLL.
 
 ### 1b. Linked binding ✅
 
@@ -190,7 +195,34 @@ Consequences for later checkpoints:
 - After shutdown, the reader keeps a duplicated master open until the
   program exits, so a program that ignores SIGHUP gets no EOF.
 
-### 3a. Session and drawing on libghostty
+### 3a. Session and drawing on libghostty 🔍
+
+Status: implemented, waiting for review. On macOS, the full suite and
+`just check` pass. Linux and Windows run first in CI.
+
+Review points:
+- The session queue carries only non-output `PtyEvent`s, of which only the
+  exit acts. Output only wakes the view. Titles, bells, and directories are
+  dropped until checkpoint 5.
+- The view syncs the theme palette into the session while laying out, and a
+  new session takes it from the theme. Programs' OSC 4/10/11 colors survive a
+  theme change.
+- Keys and the mouse read a Knot `InputModes` (tracking, format, cursor keys,
+  alternate screen, alternate scroll). X10 tracking counts as click
+  tracking, and the URxvt and SGR-pixel formats fall back to the legacy
+  format until checkpoint 4.
+- Gestures reset when the generation or modes change between two events.
+  Alacritty's mouse-cursor event used to catch a mode turned off and on
+  inside one output batch; nothing reports that now, and the test switches
+  to another mode instead.
+- An unfocused terminal draws a hollow block, as Alacritty did. Restart
+  replays `Terminal::text`, and the exit overlay reads "exit code N" or
+  "terminated by …".
+- Selection and links are off. Left presses stay local and do nothing, and
+  Copy still copies a selection made through the API. `links.rs` keeps its
+  Alacritty grid behind `allow(dead_code)`. The selection, link, and
+  plain-drag tests left the view, mouse, and product suites; 3b ports them
+  from Git history.
 
 Deliverables:
 - `TerminalSession` runs on the engine: events, process generations,
