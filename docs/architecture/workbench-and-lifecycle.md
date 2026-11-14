@@ -463,9 +463,12 @@ so restored shells see them. `terminals.open` also accepts an explicit
 directory. The rule lives in
 [terminal_directory.rs](../../crates/knot-model/src/terminal_directory.rs).
 
-A session reports its shell's current working directory by querying the shell
-process, on macOS and Linux, and otherwise the directory it started in; the
-query lives in [terminal/process.rs](../../src/app/terminal/process.rs). A
+A session reports its shell's current working directory: the last local
+directory the shell reported through OSC 7, 9, or 1337 since it started
+([`local_directory`](../../crates/knot-terminal/src/directory.rs)), otherwise
+what querying the shell process returns on macOS and Linux
+([terminal/process.rs](../../src/app/terminal/process.rs)), otherwise the
+directory it started in. A directory on another host counts as unreported. A
 captured layout records it, so quit and project switches see the latest `cd`,
 while a crash restores the directory of the last debounced capture.
 

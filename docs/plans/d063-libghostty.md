@@ -1,6 +1,6 @@
 # D063 — Migrate the terminal engine to libghostty
 
-Status: 🚧 planned. Source: [roadmap D063](../roadmap.md). Covers
+Status: 🚧 checkpoint 5 awaiting review. Source: [roadmap D063](../roadmap.md). Covers
 [D128](../roadmap.md) (working directory from OSC 7). Current behavior:
 [terminal sessions and views](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views);
 current rationale: [terminal decision](../decisions/workbench-and-lifecycle.md#terminal).
@@ -260,14 +260,14 @@ report-events flag gets no releases.
 ### 5. Working directory from OSC 7 (D128)
 
 Deliverables:
-- The session records the reported directory per process generation.
+- ✅ The session records the reported directory per process generation.
   `current_directory` prefers it and falls back to the process query, then
   the start directory.
-- Remove D128 from the roadmap, update D041's description now that
+- ✅ Remove D128 from the roadmap, update D041's description now that
   libghostty covers its protocols, and mark D063 complete.
 
-Validation: engine tests for `file://` parsing, remote-host rejection, and
-percent-encoding; a session test where a shell's `printf '\e]7;…'` changes the
+Validation: ✅ engine tests for `file://` parsing, remote-host rejection, and
+percent-encoding; ✅ a session test where a shell's `printf '\e]7;…'` changes the
 directory reported to layout capture. Manual: a `try.*` command that opens a
 terminal from a terminal after `cd` in a shell that emits OSC 7.
 

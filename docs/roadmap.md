@@ -173,19 +173,6 @@ hold the analyses that support some items.
     commands conflict: extract a dedicated read-only presentation over the same
     buffer layer.
 
-- **D063 — Migrate the terminal engine to libghostty** 🚧
-  - Depends on: none
-  - Description: The `alacritty_terminal` adapter meets current terminal
-    behavior. Ghostty VT was rejected earlier for its separate PTY
-    integration, pre-1.0 FFI, Zig packaging, integration size, and poor debug
-    parsing performance. Do it when libghostty offers a stable embeddable API
-    and packaging that fits the Rust build, or covers terminal behavior
-    Alacritty lacks (such as D041 protocols), and with or before D041 if it
-    covers those protocols. Replace the emulator behind the existing
-    application-owned session without changing its PTY ownership or
-    single-attachment contract. Follow its
-    [plan](plans/d063-libghostty.md).
-
 ## Features
 
 ### Workspace, projects, and files
@@ -842,24 +829,17 @@ Kakoune mode could use them too. The
 ### Terminal
 
 - **D041 — Additional terminal protocols and product events**
-  - Depends on: D063
-  - Description: Legacy keyboard/mouse protocols and HTTP(S) links are covered;
-    Kitty/modifyOtherKeys, graphics, OSC 52 clipboard access, titles, and bells
-    have no selected product contract. Do it when a daily shell/TUI workflow
-    demonstrates a specific missing protocol or event, with or after D063 if
-    libghostty covers the protocol: define its compatibility and product
-    behavior together.
-
-- **D128 — Terminal working directory from libghostty**
-  - Depends on: D063
-  - Description: A terminal's working directory is read by querying the shell
-    process (`proc_pidinfo` on macOS, `/proc/<pid>/cwd` on Linux). Windows records only the start
-    directory. Do it when D063 moves the terminal engine to libghostty: read the
-    directory from the emulator's OSC 7 state instead of the process, which may
-    also cover Windows and remote shells.
+  - Depends on: none
+  - Description: Keyboard and mouse protocols, HTTP(S) links, and the
+    reported working directory are covered. libghostty also parses titles,
+    bells, notifications, semantic prompts, and Kitty graphics, and Knot
+    ignores them; OSC 52 clipboard access has no callback. None has a product
+    contract. Do it when a daily shell/TUI workflow demonstrates a specific
+    missing protocol or event: define its compatibility and product behavior
+    together.
 
 - **D191 — Faster libghostty-vt builds**
-  - Depends on: D063
+  - Depends on: none
   - Description: The release archives are built for a baseline CPU. The
     Windows archive also has no SIMD, because MSVC has no tool that hides
     the simdutf and Highway symbols V8 links in other versions; macOS and

@@ -120,12 +120,15 @@ because such a window is usually a scratch window and the result should not
 depend on which file happens to be open; daily use may revisit this. The
 process directory is never used, because it is `/` when launched from Finder.
 
-A restored terminal reads its shell's directory from the process rather than
-OSC 7, which needs shell integration (D039); reading the shell rather than
-the foreground job keeps a running editor or build from changing the answer.
-A deleted directory falls back to the default rule rather than its nearest
-existing parent, a rare case where the root is a fine landing place. D128 puts
-the emulator's OSC 7 state ahead of the query.
+A terminal's directory is the one its shell reports through OSC 7, because
+that works on Windows, which has no process query, and follows the shell
+without asking the operating system. Querying the shell process remains the
+fallback, since shells emit OSC 7 only with some setups until shell
+integration (D039); it reads the shell rather than the foreground job, so a
+running editor or build does not change the answer. A directory reported from
+another host is ignored, since a local terminal cannot start there. A deleted
+directory falls back to the default rule rather than its nearest existing
+parent, a rare case where the root is a fine landing place.
 
 Reference: [terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
