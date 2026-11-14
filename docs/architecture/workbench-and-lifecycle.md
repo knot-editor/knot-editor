@@ -482,12 +482,17 @@ measured for `font.size` and the `font.*` family settings resolved under
 resizes the PTY grid. Fallback glyphs
 stay within emulator cell allocations. Selection is the terminal's own, tracked
 across scrolling; application mouse reports use viewport cells. Geometry is remeasured after resize
-or attachment handoff. Typography, bootstrap metrics, and encoding rules live in
-[terminal layout](../../src/app/terminal/layout.rs),
-[session](../../src/app/terminal/session.rs), and
-[keyboard input](../../src/app/terminal/input.rs).
+or attachment handoff. Typography and bootstrap metrics live in
+[terminal layout](../../src/app/terminal/layout.rs) and
+[session](../../src/app/terminal/session.rs).
 
-Keyboard input follows command/keymap precedence and current emulator modes.
+Keyboard input follows command/keymap precedence. Keys the keymap leaves to
+the terminal become key presses that libghostty encodes in the protocol the
+program requested, legacy, the Kitty keyboard protocol, or modifyOtherKeys;
+Option acts as Alt, and Command and Super chords never reach the program
+([keyboard input](../../src/app/terminal/input.rs),
+[encoders](../../crates/knot-terminal/src/input.rs), and the
+[keyboard fixture](../../scripts/terminal-keys-fixture.py)).
 Focus reports require both exact view focus and native window activation. Detach
 reports focus loss before handoff; stopped or detached views cannot write input.
 Keyboard/paste reveals the live grid, while focus reports and emulator replies
@@ -501,9 +506,12 @@ current route independently. The session-local reporting toggle survives restart
 and handoff without changing application-requested modes. Disabling it balances
 active reports before local selection takes over. Focus, geometry, detach, restart,
 and mode changes invalidate gestures without sending old-process releases to a
-replacement. Wire formats and coordinate limits live in
-[terminal/mouse.rs](../../src/app/terminal/mouse.rs); the
-[mouse fixture](../../scripts/terminal-mouse-fixture.py) supports native acceptance.
+replacement. Gesture ownership lives in
+[terminal/mouse.rs](../../src/app/terminal/mouse.rs); libghostty's mouse
+encoder chooses the reported events, wire format, and coordinate limits from
+the terminal's modes. A release past a format's limit is reported at the last
+reported position. The [mouse fixture](../../scripts/terminal-mouse-fixture.py)
+supports native acceptance.
 
 Link lookup uses the painted frame's cells, soft wraps, and OSC 8 destinations;
 cells with the same OSC 8 URI form one link. Explicit destinations take precedence; unsupported explicit schemes suppress text
