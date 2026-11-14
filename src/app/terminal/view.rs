@@ -2,9 +2,10 @@ use crate::app::convert::ThemePaint as _;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use knot_terminal::{
-    CellWidth, CursorStyle as TerminalCursor, Mode, RenderState, Rgb, Scroll, TerminalSize,
-    Underline,
+    CellWidth, CursorStyle as TerminalCursor, Mode, Point as TerminalPoint, RenderState, Rgb,
+    Scroll, TerminalSize, Underline,
 };
+use std::rc::Rc;
 
 use crate::app::keys::Keystroke;
 
@@ -14,11 +15,12 @@ use crate::app::{
     terminal::colors::{TerminalPalette, dim},
     terminal::input::{InputModes, MouseTracking, terminal_key_bytes},
     terminal::layout::TerminalLayout,
+    terminal::links::{LinkGrid, LinkGridBuilder, LinkTarget},
     terminal::mouse::{
         PointerOwner, PointerState, WheelRoute, button_code, modifier_code, mouse_bytes,
         wheel_route,
     },
-    terminal::session::{TerminalAttachment, TerminalSession, TerminalStatus},
+    terminal::session::{TerminalAttachment, TerminalSession, TerminalStatus, lock},
     theme::{color, theme},
     typography::{self, bold, italic},
 };
@@ -43,6 +45,8 @@ fn base_font(cx: &App) -> Font {
     typography::font(&settings::font_settings(&terminal_scope(), cx))
 }
 
+type LinkOpener = Rc<dyn Fn(&str, &mut App)>;
+
 /// Native terminal presentation attached to one stable session.
 pub(crate) struct TerminalView {
     session: Entity<TerminalSession>,
@@ -60,6 +64,43 @@ pub(crate) struct TerminalView {
     layout: Option<TerminalLayout>,
     focus_subscriptions: Vec<Subscription>,
     render_state: RenderState,
+    /// Where a local left press began, while it is held.
+    selection_anchor: Option<TerminalPoint>,
+    local_dragged: bool,
+    /// The links of the last painted frame.
+    links: Option<LinkGrid>,
+    hovered_link: Option<LinkTarget>,
+    armed_link: Option<ArmedLink>,
+    open_link: LinkOpener,
+}
+
+/// A link pressed with the link modifier, opened if the release finds it
+/// unchanged.
+struct ArmedLink {
+    grid: LinkGrid,
+    target: LinkTarget,
+    generation: u64,
+    bounds: Bounds<Pixels>,
+    layout: TerminalLayout,
+    position: Point<Pixels>,
+}
+
+/// Command-click on macOS and Control-click elsewhere open links; Shift
+/// selects instead.
+fn link_modifier(modifiers: Modifiers) -> bool {
+    !modifiers.shift
+        && if cfg!(target_os = "macos") {
+            modifiers.platform
+        } else {
+            modifiers.control
+        }
+}
+
+/// The armed link moves at most this far before the gesture is a drag.
+const LINK_SLOP: Pixels = px(4.);
+
+fn within_slop(a: Point<Pixels>, b: Point<Pixels>) -> bool {
+    (a.x - b.x).abs() <= LINK_SLOP && (a.y - b.y).abs() <= LINK_SLOP
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -129,6 +170,7 @@ impl TerminalView {
             .update(cx, |session, _| session.attach())
             .expect("terminal session already has a view");
         let subscription = cx.observe(&session, |this, _, cx| {
+            this.clear_links();
             this.sync_pointer(cx);
             cx.notify();
         });
@@ -155,6 +197,12 @@ impl TerminalView {
             layout: None,
             focus_subscriptions: Vec::new(),
             render_state: RenderState::new(),
+            selection_anchor: None,
+            local_dragged: false,
+            links: None,
+            hovered_link: None,
+            armed_link: None,
+            open_link: Rc::new(|uri, cx| cx.open_url(uri)),
         }
     }
 
@@ -252,11 +300,107 @@ impl TerminalView {
     }
 
     fn reset_pointer(&mut self) {
-        self.pointer.clear();
+        self.clear_gestures();
         self.pointer_epoch = None;
         self.pointer_position = None;
         self.pointer_modifiers = Modifiers::default();
+    }
+
+    fn clear_gestures(&mut self) {
+        self.clear_links();
+        self.pointer.clear();
         self.reported_cell = None;
+        self.selection_anchor = None;
+        self.local_dragged = false;
+    }
+
+    fn clear_links(&mut self) {
+        self.hovered_link = None;
+        self.armed_link = None;
+    }
+
+    /// The painted link under `position`, if the pointer is over the grid.
+    fn link_at(&self, position: Point<Pixels>, cx: &App) -> Option<&LinkTarget> {
+        self.attachment.as_ref()?;
+        if !self.interaction_bounds.contains(&position) {
+            return None;
+        }
+        let (column, row) = self.viewport_cell(position, cx)?;
+        self.links.as_ref()?.at(column, row)
+    }
+
+    fn hover_link(&mut self, position: Point<Pixels>, hovered: bool, cx: &mut Context<Self>) {
+        let target = hovered
+            .then(|| self.link_at(position, cx).cloned())
+            .flatten();
+        if target != self.hovered_link {
+            self.hovered_link = target;
+            cx.notify();
+        }
+    }
+
+    /// The links the terminal displays now, rather than at the last paint.
+    fn current_links(&mut self, cx: &App) -> Option<LinkGrid> {
+        self.attachment.as_ref()?;
+        let terminal = self.session.read(cx).terminal()?;
+        Some(LinkGrid::capture(&mut self.render_state, terminal))
+    }
+
+    /// Opens the armed link if the release finds it where it was pressed,
+    /// in the same frame, process, and geometry.
+    fn activate_link(&mut self, armed: ArmedLink, event: &MouseUpEvent, cx: &mut Context<Self>) {
+        if !link_modifier(event.modifiers)
+            || !self.interaction_bounds.contains(&event.position)
+            || !within_slop(event.position, armed.position)
+            || armed.generation != self.session.read(cx).generation()
+            || armed.bounds != self.interaction_bounds
+            || Some(armed.layout) != self.layout
+        {
+            return;
+        }
+        let current = self.current_links(cx);
+        let cell = self.viewport_cell(event.position, cx);
+        if current.as_ref() == Some(&armed.grid)
+            && cell.is_some_and(|(column, row)| {
+                current.as_ref().and_then(|grid| grid.at(column, row)) == Some(&armed.target)
+            })
+        {
+            (self.open_link)(&armed.target.uri, cx);
+        }
+    }
+
+    /// Starts a local selection at `position`, clearing the previous one.
+    fn start_selection(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        let Some((column, row)) = self.viewport_cell(position, cx) else {
+            return;
+        };
+        self.selection_anchor = Some(TerminalPoint::new(column as u16, row as u16));
+        self.local_dragged = false;
+        self.session
+            .read(cx)
+            .with_terminal(|terminal| terminal.clear_selection());
+        cx.notify();
+    }
+
+    /// Selects from the anchor to the cell under `position`. The terminal
+    /// keeps the anchor on its text as the viewport scrolls.
+    fn extend_selection(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        let (Some(anchor), Some((column, row))) =
+            (self.selection_anchor, self.viewport_cell(position, cx))
+        else {
+            return;
+        };
+        let to = TerminalPoint::new(column as u16, row as u16);
+        let first = !self.local_dragged;
+        self.local_dragged = true;
+        self.session.read(cx).with_terminal(|terminal| {
+            if first {
+                terminal.select(anchor, to);
+            } else {
+                terminal.extend_selection(to);
+            }
+        });
+        cx.notify();
     }
 
     fn cancel_pointer(&mut self, cx: &App) {
@@ -303,8 +447,7 @@ impl TerminalView {
         }
         let epoch = (session.generation(), mode);
         if self.pointer_epoch.is_some_and(|previous| previous != epoch) {
-            self.pointer.clear();
-            self.reported_cell = None;
+            self.clear_gestures();
         }
         self.pointer_epoch = Some(epoch);
         Some(mode)
@@ -355,6 +498,22 @@ impl TerminalView {
         self.pointer_position = Some(event.position);
         self.pointer_modifiers = event.modifiers;
         self.focus.focus(window, cx);
+        if event.button == MouseButton::Left
+            && link_modifier(event.modifiers)
+            && let (Some(grid), Some(layout)) = (self.links.clone(), self.layout)
+            && let Some(target) = grid.at(column, row).cloned()
+        {
+            self.armed_link = Some(ArmedLink {
+                grid,
+                target,
+                generation: self.session.read(cx).generation(),
+                bounds: self.interaction_bounds,
+                layout,
+                position: event.position,
+            });
+            self.pointer.press(event.button, PointerOwner::Link);
+            return true;
+        }
         if mode.mouse_reporting() && !event.modifiers.shift {
             let code = button_code(event.button) + modifier_code(event.modifiers);
             let bytes = mouse_bytes(mode.mouse_format, code, column, row, false);
@@ -368,6 +527,7 @@ impl TerminalView {
         }
         if event.button == MouseButton::Left {
             self.pointer.press(event.button, PointerOwner::Local);
+            self.start_selection(event.position, cx);
             return true;
         }
         false
@@ -384,9 +544,26 @@ impl TerminalView {
         };
         self.pointer_position = Some(event.position);
         self.pointer_modifiers = event.modifiers;
+        self.hover_link(event.position, hovered, cx);
         if let Some(button) = event.pressed_button {
             match self.pointer.owner(button) {
-                Some(PointerOwner::Local) => return true,
+                Some(PointerOwner::Link) => {
+                    if !link_modifier(event.modifiers)
+                        || self
+                            .armed_link
+                            .as_ref()
+                            .is_some_and(|armed| !within_slop(event.position, armed.position))
+                    {
+                        self.armed_link = None;
+                    }
+                    return true;
+                }
+                Some(PointerOwner::Local) => {
+                    if button == MouseButton::Left {
+                        self.extend_selection(event.position, cx);
+                    }
+                    return true;
+                }
                 Some(PointerOwner::Application) => {
                     if matches!(mode.mouse, MouseTracking::Drag | MouseTracking::Motion)
                         && let Some((column, row)) = self.viewport_cell(event.position, cx)
@@ -446,7 +623,20 @@ impl TerminalView {
                 }
                 true
             }
-            Some(PointerOwner::Local) => true,
+            Some(PointerOwner::Link) => {
+                if let Some(armed) = self.armed_link.take() {
+                    self.activate_link(armed, event, cx);
+                }
+                true
+            }
+            Some(PointerOwner::Local) => {
+                if self.local_dragged {
+                    self.extend_selection(event.position, cx);
+                }
+                self.selection_anchor = None;
+                self.local_dragged = false;
+                true
+            }
             None => false,
         }
     }
@@ -458,6 +648,7 @@ impl TerminalView {
         let Some(layout) = self.layout else {
             return false;
         };
+        self.clear_links();
         let route = wheel_route(mode, event.modifiers.shift);
         let (horizontal, vertical) =
             self.pointer
@@ -502,6 +693,11 @@ impl TerminalView {
             }
         }
         true
+    }
+
+    #[cfg(test)]
+    pub(crate) fn interaction_bounds(&self) -> Bounds<Pixels> {
+        self.interaction_bounds
     }
 }
 
@@ -624,6 +820,7 @@ struct RenderCursor {
 struct TerminalSnapshot {
     cells: Vec<RenderCell>,
     cursor: Option<RenderCursor>,
+    links: Option<LinkGrid>,
 }
 
 impl TerminalSnapshot {
@@ -654,13 +851,16 @@ impl TerminalSnapshot {
                 color: colors.cursor,
             });
         let mut cells = Vec::new();
+        let mut links = LinkGridBuilder::default();
         let mut rows = state.rows();
         while let Some(mut row) = rows.next() {
             let line = usize::from(row.index());
             let selection = row.selection();
+            let wrapped = row.wrapped();
             let mut row_cells = row.cells();
             let mut column = 0;
             while let Some(cell) = row_cells.next() {
+                links.push(&cell);
                 let index = column;
                 column += 1;
                 if matches!(cell.width, CellWidth::SpacerTail | CellWidth::SpacerHead) {
@@ -687,9 +887,14 @@ impl TerminalSnapshot {
                     }),
                 });
             }
+            links.end_row(wrapped);
         }
         state.clean();
-        Self { cells, cursor }
+        Self {
+            cells,
+            cursor,
+            links: Some(links.finish(&lock(terminal))),
+        }
     }
 }
 
@@ -803,13 +1008,27 @@ impl Element for TerminalElement {
 
         let modifier_entity = self.entity.clone();
         window.on_modifiers_changed(move |event, _, cx| {
-            modifier_entity.update(cx, |terminal, _| {
+            modifier_entity.update(cx, |terminal, cx| {
                 terminal.pointer_modifiers = event.modifiers;
+                if !link_modifier(event.modifiers) {
+                    terminal.armed_link = None;
+                }
+                cx.notify();
             });
         });
-        let snapshot = self
-            .entity
-            .update(cx, |view, cx| TerminalSnapshot::capture(view, cx));
+        let (snapshot, hovered) = self.entity.update(cx, |view, cx| {
+            let mut snapshot = TerminalSnapshot::capture(view, cx);
+            view.links = snapshot.links.take();
+            let hovered = view.hovered_link.clone().filter(|target| {
+                view.links
+                    .as_ref()
+                    .is_some_and(|grid| grid.links_contain(target))
+            });
+            (snapshot, hovered)
+        });
+        if hovered.is_some() && link_modifier(window.modifiers()) {
+            window.set_cursor_style(CursorStyle::PointingHand, hitbox);
+        }
         let Some(layout) = self.entity.read(cx).layout else {
             return;
         };
@@ -898,7 +1117,11 @@ impl Element for TerminalElement {
                     font,
                     color: paint_rgb(cell.foreground),
                     background_color: None,
-                    underline: (cell.style.underline != Underline::None).then(|| UnderlineStyle {
+                    underline: (cell.style.underline != Underline::None
+                        || hovered
+                            .as_ref()
+                            .is_some_and(|link| link.contains(cell.column, cell.line)))
+                    .then(|| UnderlineStyle {
                         thickness: px(1.),
                         ..Default::default()
                     }),

@@ -31,7 +31,9 @@ fn relocate_to_new_window(
 
 #[cfg(unix)]
 #[gpui::test]
-async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session(cx: &mut TestAppContext) {
+async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain_drag_copies(
+    cx: &mut TestAppContext,
+) {
     use crate::app::{
         terminal::session::TerminalSession,
         terminal::view::TOGGLE_TERMINAL_MOUSE_REPORTING_COMMAND, terminal::view::TerminalView,
@@ -65,28 +67,29 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session(cx: &mut 
             cx,
         )
     });
-    cx.update_window(window_handle, |_, _, cx| {
-        let id = cx
-            .global::<ApplicationTerminalSessions>()
-            .0
-            .borrow_mut()
-            .allocate_id();
-        cx.global::<ApplicationTerminalSessions>()
-            .0
-            .borrow_mut()
-            .sessions
-            .insert(id, session.clone());
-        let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
-        window.update(cx, |window, cx| {
-            let pane = window.workbench.read(cx).focused_pane_id().unwrap();
-            let tab = window.workbench.update(cx, |workbench, _| {
-                workbench.open_terminal_tab(pane, id, view.clone()).unwrap()
+    let view = cx
+        .update_window(window_handle, |_, _, cx| {
+            let id = cx
+                .global::<ApplicationTerminalSessions>()
+                .0
+                .borrow_mut()
+                .allocate_id();
+            cx.global::<ApplicationTerminalSessions>()
+                .0
+                .borrow_mut()
+                .sessions
+                .insert(id, session.clone());
+            let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
+            window.update(cx, |window, cx| {
+                let pane = window.workbench.read(cx).focused_pane_id().unwrap();
+                let tab = window.workbench.update(cx, |workbench, _| {
+                    workbench.open_terminal_tab(pane, id, view.clone()).unwrap()
+                });
+                window.activate_tab(pane, tab, cx);
             });
-            window.activate_tab(pane, tab, cx);
-        });
-        view
-    })
-    .unwrap();
+            view
+        })
+        .unwrap();
     cx.refresh().unwrap();
     assert_eq!(
         dispatch_product_command(
@@ -101,6 +104,41 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session(cx: &mut 
         CommandOutcome::Completed
     );
     cx.read(|cx| assert!(!session.read(cx).mouse_reporting_enabled()));
+    // With reporting off, a plain drag selects even though the program asks
+    // for drag reports.
+    let (start, end) = cx
+        .update_window(window_handle, |_, native_window, cx| {
+            session.read(cx).with_terminal(|terminal| {
+                terminal.write(b"\x1b[?1002h\x1b[?1006h\x1b[2J\x1b[3J\x1b[Hcopy me")
+            });
+            let bounds = view.read(cx).interaction_bounds();
+            let width =
+                px(session.read(cx).size().cell_width as f32 / native_window.scale_factor());
+            (
+                bounds.origin + point(px(0.1), px(0.1)),
+                bounds.origin + point(width * 3 + px(0.1), px(0.1)),
+            )
+        })
+        .unwrap();
+    let mut window_cx = VisualTestContext::from_window(window_handle, cx);
+    window_cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
+    window_cx.simulate_mouse_move(end, MouseButton::Left, Modifiers::default());
+    window_cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
+    cx.simulate_keystrokes(
+        window_handle,
+        if cfg!(target_os = "macos") {
+            "cmd-c"
+        } else {
+            "ctrl-shift-c"
+        },
+    );
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(
+            cx.read_from_clipboard().unwrap().text().as_deref(),
+            Some("copy")
+        );
+    });
     assert_eq!(
         dispatch_product_command(
             &window,

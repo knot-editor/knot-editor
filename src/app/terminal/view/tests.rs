@@ -87,6 +87,30 @@ fn measured_layout_drives_the_grid_and_frames_paint_cells(cx: &mut TestAppContex
         assert_eq!((cursor.line, cursor.column), (1, 4));
         assert_eq!(cursor.style, TerminalCursor::BlockHollow);
     });
+
+    // Dragging within a combining cell selects the whole cluster.
+    let (layout, bounds) = cx.read(|cx| {
+        let view = view.read(cx);
+        (view.layout.unwrap(), view.interaction_bounds)
+    });
+    let start = layout.origin(bounds, 3, 0) + point(px(0.1), px(0.1));
+    cx.simulate_mouse_down(start, MouseButton::Left, gpui::Modifiers::default());
+    cx.simulate_mouse_move(
+        start + point(layout.cell_width / 2., px(0.)),
+        MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    cx.simulate_mouse_up(start, MouseButton::Left, gpui::Modifiers::default());
+    cx.read(|cx| {
+        assert_eq!(
+            session
+                .read(cx)
+                .with_terminal(|terminal| terminal.selection_text())
+                .flatten()
+                .as_deref(),
+            Some("e\u{301}")
+        )
+    });
     cx.update(|_, cx| session.update(cx, |session, cx| session.close(cx)));
 }
 

@@ -4,7 +4,7 @@ use gpui::{
     App, AppContext, Entity, Modifiers, MouseButton, Pixels, Point, ScrollDelta, ScrollEvent,
     TestAppContext, point, px,
 };
-use knot_terminal::{PtyOptions, Shell};
+use knot_terminal::{PtyOptions, Scroll, Shell};
 use std::{
     fs, thread,
     time::{Duration, Instant},
@@ -70,6 +70,37 @@ fn cell(view: &Entity<TerminalView>, cx: &App, column: usize, row: usize) -> Poi
 
 fn parse(fixture: &Fixture, bytes: &[u8], cx: &App) {
     lock(fixture.session.read(cx).terminal().unwrap()).write(bytes);
+}
+
+/// Writes `bytes` as program output would arrive, repainting the view.
+fn show(fixture: &Fixture, bytes: &[u8], cx: &mut gpui::VisualTestContext) {
+    cx.update(|_, cx| {
+        parse(fixture, bytes, cx);
+        fixture.session.update(cx, |_, cx| cx.notify());
+    });
+    cx.run_until_parked();
+}
+
+fn selection(fixture: &Fixture, cx: &App) -> Option<String> {
+    lock(fixture.session.read(cx).terminal().unwrap()).selection_text()
+}
+
+/// The first row of the viewport, counted from the oldest scrollback row.
+fn viewport_offset(fixture: &Fixture, cx: &App) -> u64 {
+    lock(fixture.session.read(cx).terminal().unwrap())
+        .scrollbar()
+        .offset
+}
+
+fn scroll_to_top(fixture: &Fixture, cx: &App) {
+    lock(fixture.session.read(cx).terminal().unwrap()).scroll_viewport(Scroll::Top);
+}
+
+fn shift() -> Modifiers {
+    Modifiers {
+        shift: true,
+        ..Default::default()
+    }
 }
 
 fn finish(fixture: &Fixture, expected: &[u8], cx: &mut TestAppContext) {
@@ -199,6 +230,114 @@ fn all_motion_legacy_reports_use_viewport_cells_and_deduplicate(cx: &mut TestApp
     cx.simulate_mouse_move(moved, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_up(moved, MouseButton::Left, Modifiers::default());
     finish(&fixture, expected, cx);
+}
+
+#[gpui::test]
+fn shift_selection_and_scrolling_stay_local_in_tracking_scrollback(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::CommandClaim;
+    use knot_protocol::CommandOutcome;
+    let expected = b"\x1b[<0;2;1M\x1b[<0;2;1m\x1b[<65;2;1M";
+    let fixture = fixture(cx, "\\033[?1002h\\033[?1006h", expected.len());
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    cx.update(|_, cx| {
+        parse(
+            &fixture,
+            format!(
+                "\x1b[2J\x1b[3J\x1b[H{}",
+                "history-A界e\u{301}\r\n"
+                    .repeat(usize::from(fixture.session.read(cx).size().rows) + 30)
+            )
+            .as_bytes(),
+            cx,
+        );
+        scroll_to_top(&fixture, cx);
+    });
+    let start = cx.read(|cx| cell(&view, cx, 0, 0));
+    let end = cx.read(|cx| cell(&view, cx, 3, 0));
+    let reported = cx.read(|cx| cell(&view, cx, 1, 0));
+    cx.simulate_mouse_down(start, MouseButton::Left, shift());
+    cx.simulate_mouse_move(end, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
+    cx.update(|_, cx| {
+        assert_eq!(selection(&fixture, cx).as_deref(), Some("hist"));
+        assert!(matches!(
+            view.update(cx, |view, cx| view
+                .execute_terminal_command(super::TerminalCommand::Copy, cx)),
+            CommandClaim::Finished(CommandOutcome::Completed)
+        ));
+        assert_eq!(
+            cx.read_from_clipboard().unwrap().text().as_deref(),
+            Some("hist")
+        );
+    });
+    // Shift scrolls the viewport locally; the selection stays on its text.
+    let offset = cx.read(|cx| viewport_offset(&fixture, cx));
+    cx.simulate_event(ScrollEvent {
+        position: start,
+        delta: ScrollDelta::Lines(point(0., -1.)),
+        modifiers: shift(),
+        ..Default::default()
+    });
+    cx.read(|cx| {
+        assert_eq!(viewport_offset(&fixture, cx), offset + 1);
+        assert_eq!(selection(&fixture, cx).as_deref(), Some("hist"));
+    });
+    // Without Shift, presses and the wheel report to the program.
+    cx.simulate_mouse_down(reported, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(reported, MouseButton::Left, Modifiers::default());
+    cx.simulate_event(ScrollEvent {
+        position: reported,
+        delta: ScrollDelta::Lines(point(0., -1.)),
+        ..Default::default()
+    });
+    cx.read(|cx| assert_eq!(viewport_offset(&fixture, cx), offset + 1));
+    finish(&fixture, expected, cx);
+}
+
+#[gpui::test]
+fn plain_drag_selects_and_scrolling_mid_drag_keeps_the_anchor(cx: &mut TestAppContext) {
+    let fixture = fixture(cx, "", 0);
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    cx.update(|_, cx| {
+        let rows = usize::from(fixture.session.read(cx).size().rows);
+        let lines: String = (0..rows + 10)
+            .map(|line| format!("line{line:02}\r\n"))
+            .collect();
+        parse(
+            &fixture,
+            format!("\x1b[2J\x1b[3J\x1b[H{lines}").as_bytes(),
+            cx,
+        );
+        scroll_to_top(&fixture, cx);
+    });
+    let (first, second) = cx.read(|cx| (cell(&view, cx, 2, 1), cell(&view, cx, 3, 1)));
+    // A click without a drag selects nothing and clears the old selection.
+    cx.simulate_mouse_down(first, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(second, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(second, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx).as_deref(), Some("ne")));
+    cx.simulate_mouse_down(first, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(first, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx), None));
+
+    cx.simulate_mouse_down(first, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(second, MouseButton::Left, Modifiers::default());
+    cx.simulate_event(ScrollEvent {
+        position: second,
+        delta: ScrollDelta::Lines(point(0., -2.)),
+        ..Default::default()
+    });
+    cx.simulate_mouse_move(second, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(second, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| {
+        assert_eq!(
+            selection(&fixture, cx).as_deref(),
+            Some("ne01\nline02\nline")
+        )
+    });
+    finish(&fixture, b"", cx);
 }
 
 #[gpui::test]
@@ -379,7 +518,9 @@ fn native_mouse_fixture_decodes_gpui_reports_and_restores_modes_on_quit(cx: &mut
 }
 
 #[gpui::test]
-fn wide_spacer_mouse_coordinates_stay_distinct(cx: &mut TestAppContext) {
+fn wide_spacer_mouse_coordinates_stay_distinct_and_shift_selection_expands_the_glyph(
+    cx: &mut TestAppContext,
+) {
     let expected = b"\x1b[<0;3;1M\x1b[<0;3;1m";
     let fixture = fixture(cx, "\\033[?1000h\\033[?1006h", expected.len());
     let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
@@ -388,6 +529,14 @@ fn wide_spacer_mouse_coordinates_stay_distinct(cx: &mut TestAppContext) {
     let spacer = cx.read(|cx| cell(&view, cx, 2, 0));
     cx.simulate_mouse_down(spacer, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_up(spacer, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_down(spacer, MouseButton::Left, shift());
+    cx.simulate_mouse_move(
+        spacer + point(px(1.), px(0.)),
+        MouseButton::Left,
+        Modifiers::default(),
+    );
+    cx.simulate_mouse_up(spacer, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx).as_deref(), Some("界")));
     finish(&fixture, expected, cx);
 }
 
@@ -449,7 +598,9 @@ fn legacy_wire_limit_ignores_unrepresentable_presses_and_balances_owned_releases
 }
 
 #[gpui::test]
-fn mouse_reporting_toggle_balances_drag_and_keeps_later_presses_local(cx: &mut TestAppContext) {
+fn mouse_reporting_toggle_balances_drag_then_supports_ordinary_selection_and_copy(
+    cx: &mut TestAppContext,
+) {
     use crate::app::commands::dispatch::CommandClaim;
     use knot_protocol::CommandOutcome;
     let expected = b"\x1b[<0;2;1M\x1b[<0;2;1m\x1b[<2;2;1M\x1b[<2;2;1m";
@@ -466,6 +617,7 @@ fn mouse_reporting_toggle_balances_drag_and_keeps_later_presses_local(cx: &mut T
             CommandClaim::Finished(CommandOutcome::Completed)
         ));
         assert!(!fixture.session.read(cx).mouse_reporting_enabled());
+        parse(&fixture, b"\x1b[2J\x1b[3J\x1b[Hcopy me", cx);
     });
     cx.simulate_mouse_up(position, MouseButton::Left, Modifiers::default());
     let (start, end) = cx.read(|cx| (cell(&view, cx, 0, 0), cell(&view, cx, 3, 0)));
@@ -473,6 +625,15 @@ fn mouse_reporting_toggle_balances_drag_and_keeps_later_presses_local(cx: &mut T
     cx.simulate_mouse_move(end, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
     cx.update(|_, cx| {
+        assert!(matches!(
+            view.update(cx, |view, cx| view
+                .execute_terminal_command(super::TerminalCommand::Copy, cx)),
+            CommandClaim::Finished(CommandOutcome::Completed)
+        ));
+        assert_eq!(
+            cx.read_from_clipboard().unwrap().text().as_deref(),
+            Some("copy")
+        );
         view.update(cx, |view, cx| {
             view.execute_terminal_command(toggle, cx);
         });
@@ -504,4 +665,203 @@ fn mouse_reporting_preference_survives_view_handoff_and_restart_and_rejects_deta
     rebuilt.update(cx, |view, cx| view.restart(cx));
     cx.read(|cx| assert!(!fixture.session.read(cx).mouse_reporting_enabled()));
     fixture.session.update(cx, |session, cx| session.close(cx));
+}
+
+fn link_modifiers() -> Modifiers {
+    if cfg!(target_os = "macos") {
+        Modifiers {
+            platform: true,
+            ..Default::default()
+        }
+    } else {
+        Modifiers {
+            control: true,
+            ..Default::default()
+        }
+    }
+}
+
+type Opened = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
+
+fn record_opened(view: &Entity<TerminalView>, cx: &mut gpui::VisualTestContext) -> Opened {
+    let opened = Opened::default();
+    view.update(cx, |view, _| {
+        let opened = opened.clone();
+        view.open_link = std::rc::Rc::new(move |uri, _| opened.borrow_mut().push(uri.to_owned()));
+    });
+    opened
+}
+
+#[gpui::test]
+fn modifier_link_click_owns_gesture_and_opens_fresh_explicit_destination(cx: &mut TestAppContext) {
+    let expected = b"\x1b[<0;2;1M\x1b[<0;2;1m";
+    let fixture = fixture(cx, "\\033[?1003h\\033[?1006h", expected.len());
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    let opened = record_opened(&view, cx);
+    show(
+        &fixture,
+        b"\x1b[H\x1b]8;id=click;https://destination.test/path\x1b\\label\x1b]8;;\x1b\\",
+        cx,
+    );
+    let position = cx.read(|cx| cell(&view, cx, 1, 0));
+    cx.simulate_mouse_down(position, MouseButton::Left, link_modifiers());
+    cx.simulate_mouse_move(position, MouseButton::Left, link_modifiers());
+    cx.simulate_mouse_up(position, MouseButton::Left, link_modifiers());
+    assert_eq!(&*opened.borrow(), &["https://destination.test/path"]);
+    cx.read(|cx| assert_eq!(selection(&fixture, cx), None));
+    cx.simulate_mouse_down(position, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(position, MouseButton::Left, Modifiers::default());
+    assert_eq!(opened.borrow().len(), 1);
+    finish(&fixture, expected, cx);
+}
+
+#[gpui::test]
+fn link_click_rejects_changed_grid_and_shift_uses_local_selection(cx: &mut TestAppContext) {
+    let fixture = fixture(cx, "\\033[?1002h\\033[?1006h", 0);
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    let opened = record_opened(&view, cx);
+    show(&fixture, b"\x1b[Hhttps://example.test/path", cx);
+    let start = cx.read(|cx| cell(&view, cx, 1, 0));
+    cx.simulate_mouse_down(start, MouseButton::Left, link_modifiers());
+    cx.read(|cx| parse(&fixture, b"\x1b[Hhttps://changed.test/path", cx));
+    cx.simulate_mouse_up(start, MouseButton::Left, link_modifiers());
+    assert!(opened.borrow().is_empty());
+    let shift = Modifiers {
+        shift: true,
+        ..link_modifiers()
+    };
+    let end = cx.read(|cx| cell(&view, cx, 5, 0));
+    cx.simulate_mouse_down(start, MouseButton::Left, shift);
+    cx.simulate_mouse_move(end, MouseButton::Left, shift);
+    cx.simulate_mouse_up(end, MouseButton::Left, shift);
+    assert!(opened.borrow().is_empty());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx).as_deref(), Some("ttps:")));
+    finish(&fixture, b"", cx);
+}
+
+#[gpui::test]
+fn detected_link_activation_and_cancelled_lifecycle_gestures(cx: &mut TestAppContext) {
+    let fixture = fixture(cx, "", 0);
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    let opened = record_opened(&view, cx);
+    show(&fixture, b"\x1b[Hhttps://example.test/path", cx);
+    let start = cx.read(|cx| cell(&view, cx, 1, 0));
+    cx.simulate_mouse_move(start, None, link_modifiers());
+    cx.read(|cx| {
+        assert_eq!(
+            view.read(cx).hovered_link.as_ref().unwrap().uri,
+            "https://example.test/path"
+        )
+    });
+    cx.simulate_mouse_down(start, MouseButton::Left, link_modifiers());
+    cx.simulate_mouse_up(start, MouseButton::Left, link_modifiers());
+    assert_eq!(&*opened.borrow(), &["https://example.test/path"]);
+    opened.borrow_mut().clear();
+
+    // Repaint/output notifications invalidate even an unchanged destination.
+    cx.simulate_mouse_down(start, MouseButton::Left, link_modifiers());
+    fixture.session.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    cx.simulate_mouse_up(start, MouseButton::Left, link_modifiers());
+    assert!(opened.borrow().is_empty());
+
+    cx.simulate_mouse_down(start, MouseButton::Left, link_modifiers());
+    cx.simulate_event(ScrollEvent {
+        position: start,
+        delta: ScrollDelta::Lines(point(0., 1.)),
+        ..Default::default()
+    });
+    cx.simulate_mouse_up(start, MouseButton::Left, link_modifiers());
+    assert!(opened.borrow().is_empty());
+
+    // An actual drag must never become an activation.
+    cx.simulate_mouse_down(start, MouseButton::Left, link_modifiers());
+    let moved = cx.read(|cx| cell(&view, cx, 4, 0));
+    cx.simulate_mouse_move(moved, MouseButton::Left, link_modifiers());
+    cx.simulate_mouse_up(start, MouseButton::Left, link_modifiers());
+    assert!(opened.borrow().is_empty());
+
+    cx.simulate_mouse_down(start, MouseButton::Left, link_modifiers());
+    view.update(cx, |view, cx| {
+        let mut size = view.session.read(cx).size();
+        size.columns += 1;
+        view.resize(size, cx);
+    });
+    cx.simulate_mouse_up(start, MouseButton::Left, link_modifiers());
+    assert!(opened.borrow().is_empty());
+
+    cx.refresh().unwrap();
+    cx.simulate_mouse_down(start, MouseButton::Left, link_modifiers());
+    view.update(cx, |view, cx| view.detach(cx));
+    cx.simulate_mouse_up(start, MouseButton::Left, link_modifiers());
+    assert!(opened.borrow().is_empty());
+    finish(&fixture, b"", cx);
+}
+
+#[gpui::test]
+fn hyperlink_state_cannot_cross_attachment_handoff_or_process_restart(cx: &mut TestAppContext) {
+    let fixture = fixture(cx, "", 0);
+    let (source, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    source.update(cx, |view, _| {
+        view.open_link = std::rc::Rc::new(|_, _| panic!("stale source opened"))
+    });
+    show(&fixture, b"\x1b[Hhttps://example.test/path", cx);
+    let position = cx.read(|cx| cell(&source, cx, 1, 0));
+    cx.simulate_mouse_move(position, None, link_modifiers());
+    cx.simulate_mouse_down(position, MouseButton::Left, link_modifiers());
+    source.update(cx, |view, cx| view.detach(cx));
+    cx.simulate_mouse_up(position, MouseButton::Left, link_modifiers());
+    cx.read(|cx| {
+        assert!(source.read(cx).hovered_link.is_none());
+        assert!(source.read(cx).armed_link.is_none());
+    });
+    let (target, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    target.update(cx, |view, _| {
+        view.open_link = std::rc::Rc::new(|_, _| panic!("stale target opened"))
+    });
+    cx.refresh().unwrap();
+    let position = cx.read(|cx| cell(&target, cx, 1, 0));
+    cx.simulate_mouse_up(position, MouseButton::Left, link_modifiers());
+    cx.simulate_mouse_down(position, MouseButton::Left, link_modifiers());
+    cx.read(|cx| assert!(target.read(cx).armed_link.is_some()));
+    target.update(cx, |view, cx| view.restart(cx));
+    cx.simulate_mouse_up(position, MouseButton::Left, link_modifiers());
+    cx.read(|cx| {
+        assert!(target.read(cx).hovered_link.is_none());
+        assert!(target.read(cx).armed_link.is_none());
+    });
+    fixture.session.update(cx, |session, cx| session.close(cx));
+}
+
+#[gpui::test]
+fn modifier_click_opens_current_scrollback_url(cx: &mut TestAppContext) {
+    let fixture = fixture(cx, "", 0);
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    let opened = record_opened(&view, cx);
+    cx.update(|_, cx| {
+        let rows = usize::from(fixture.session.read(cx).size().rows);
+        let output = format!(
+            "\x1b[Hhttps://history.test/path\r\n{}",
+            "next\r\n".repeat(rows + 3)
+        );
+        parse(&fixture, output.as_bytes(), cx);
+        scroll_to_top(&fixture, cx);
+        fixture.session.update(cx, |_, cx| cx.notify());
+    });
+    cx.run_until_parked();
+    let position = cx.read(|cx| cell(&view, cx, 1, 0));
+    cx.simulate_mouse_down(position, MouseButton::Left, link_modifiers());
+    cx.read(|cx| assert!(view.read(cx).armed_link.is_some(), "press not armed"));
+    cx.simulate_mouse_up(position, MouseButton::Left, link_modifiers());
+    assert_eq!(&*opened.borrow(), &["https://history.test/path"]);
+    cx.read(|cx| {
+        let scrollbar = lock(fixture.session.read(cx).terminal().unwrap()).scrollbar();
+        assert!(scrollbar.rows_below() > 0);
+    });
+    finish(&fixture, b"", cx);
 }

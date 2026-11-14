@@ -1,18 +1,15 @@
-//! HTTP(S) destinations in the currently displayed emulator grid.
+//! HTTP(S) destinations in the displayed terminal frame.
 
-use alacritty_terminal::{
-    grid::Dimensions,
-    term::{
-        Term,
-        cell::{Cell, Flags},
-        point_to_viewport,
-    },
-};
+use std::sync::Mutex;
+
+use knot_terminal::{Cell, CellWidth, Point, RenderState, Terminal};
+
+use super::session::lock;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LinkTarget {
     pub(crate) uri: String,
-    identity: Option<String>,
+    explicit: bool,
     pub(crate) cells: Vec<(usize, usize)>,
 }
 
@@ -22,12 +19,68 @@ impl LinkTarget {
     }
 }
 
+/// What link detection reads from one displayed cell.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LinkCell {
+    text: String,
+    width: CellWidth,
+    hidden: bool,
+    /// Whether the cell has an OSC 8 hyperlink, and its URI once resolved.
+    hyperlink: Option<Option<String>>,
+}
+
+/// The displayed cells, collected row by row from a frame.
+#[derive(Default)]
+pub(crate) struct LinkGridBuilder {
+    cells: Vec<LinkCell>,
+    wrapped: Vec<bool>,
+}
+
+impl LinkGridBuilder {
+    pub(crate) fn push(&mut self, cell: &Cell) {
+        self.cells.push(LinkCell {
+            text: cell.text.to_owned(),
+            width: cell.width,
+            hidden: cell.style.invisible,
+            hyperlink: cell.hyperlink.then_some(None),
+        });
+    }
+
+    pub(crate) fn end_row(&mut self, wrapped: bool) {
+        self.wrapped.push(wrapped);
+    }
+
+    /// The grid, reading the URIs of hyperlinked cells from `terminal`,
+    /// which shows the same frame.
+    pub(crate) fn finish(mut self, terminal: &Terminal) -> LinkGrid {
+        let rows = self.wrapped.len();
+        let columns = self.cells.len().checked_div(rows).unwrap_or(0);
+        for (index, cell) in self.cells.iter_mut().enumerate() {
+            if let Some(uri) = &mut cell.hyperlink {
+                *uri = terminal.hyperlink(Point::new(
+                    (index % columns) as u16,
+                    (index / columns) as u16,
+                ));
+            }
+        }
+        let mut grid = LinkGrid {
+            columns,
+            rows,
+            cells: self.cells,
+            wrapped: self.wrapped,
+            links: Vec::new(),
+        };
+        grid.find_links();
+        grid
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LinkGrid {
     columns: usize,
     rows: usize,
-    offset: usize,
-    cells: Vec<Cell>,
+    cells: Vec<LinkCell>,
+    wrapped: Vec<bool>,
     links: Vec<LinkTarget>,
 }
 
@@ -43,21 +96,20 @@ pub(crate) fn http_destination(uri: &str) -> Option<String> {
 }
 
 impl LinkGrid {
-    pub(crate) fn capture<T: alacritty_terminal::event::EventListener>(terminal: &Term<T>) -> Self {
-        let mut grid = Self {
-            columns: terminal.columns(),
-            rows: terminal.screen_lines(),
-            offset: terminal.grid().display_offset(),
-            cells: vec![Cell::default(); terminal.columns() * terminal.screen_lines()],
-            links: Vec::new(),
-        };
-        for indexed in terminal.renderable_content().display_iter {
-            if let Some(point) = point_to_viewport(grid.offset, indexed.point) {
-                grid.cells[point.line * grid.columns + point.column.0] = indexed.cell.clone();
+    /// The links of the frame `terminal` displays now, read through `state`.
+    pub(crate) fn capture(state: &mut RenderState, terminal: &Mutex<Terminal>) -> Self {
+        state.update(terminal);
+        let mut builder = LinkGridBuilder::default();
+        let mut rows = state.rows();
+        while let Some(mut row) = rows.next() {
+            let wrapped = row.wrapped();
+            let mut cells = row.cells();
+            while let Some(cell) = cells.next() {
+                builder.push(&cell);
             }
+            builder.end_row(wrapped);
         }
-        grid.find_links();
-        grid
+        builder.finish(&lock(terminal))
     }
 
     pub(crate) fn links_contain(&self, target: &LinkTarget) -> bool {
@@ -70,24 +122,23 @@ impl LinkGrid {
 
     fn find_links(&mut self) {
         for (index, cell) in self.cells.iter().enumerate() {
-            let Some(link) = cell.hyperlink() else {
+            let Some(Some(uri)) = &cell.hyperlink else {
                 continue;
             };
-            let Some(uri) = http_destination(link.uri()) else {
+            let Some(uri) = http_destination(uri) else {
                 continue;
             };
-            let identity = Some(link.id().to_owned());
             let coordinate = (index % self.columns, index / self.columns);
             if let Some(target) = self
                 .links
                 .iter_mut()
-                .find(|target| target.uri == uri && target.identity == identity)
+                .find(|target| target.explicit && target.uri == uri)
             {
                 target.cells.push(coordinate);
             } else {
                 self.links.push(LinkTarget {
                     uri,
-                    identity,
+                    explicit: true,
                     cells: vec![coordinate],
                 });
             }
@@ -97,30 +148,22 @@ impl LinkGrid {
         for row in 0..self.rows {
             for column in 0..self.columns {
                 let cell = &self.cells[row * self.columns + column];
-                if cell
-                    .flags
-                    .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
-                {
+                if matches!(cell.width, CellWidth::SpacerTail | CellWidth::SpacerHead) {
                     continue;
                 }
                 let start = text.len();
                 // Explicit destinations, including unsupported schemes, are authoritative.
-                if cell.hyperlink().is_some() || cell.flags.contains(Flags::HIDDEN) {
+                if cell.hyperlink.is_some() || cell.hidden || cell.text.is_empty() {
                     text.push(' ');
                 } else {
-                    text.push(cell.c);
-                    if let Some(zero) = cell.zerowidth() {
-                        text.extend(zero);
-                    }
+                    text.push_str(&cell.text);
                 }
                 coordinates.push((start..text.len(), (column, row)));
-                if cell.flags.contains(Flags::WIDE_CHAR) && column + 1 < self.columns {
+                if cell.width == CellWidth::Wide && column + 1 < self.columns {
                     coordinates.push((start..text.len(), (column + 1, row)));
                 }
             }
-            let wrapped = self.cells[(row + 1) * self.columns - 1]
-                .flags
-                .contains(Flags::WRAPLINE);
+            let wrapped = self.wrapped[row];
             if !wrapped || row + 1 == self.rows {
                 self.detect(&text, &coordinates, wrapped);
                 text.clear();
@@ -194,7 +237,7 @@ impl LinkGrid {
                 .collect();
             self.links.push(LinkTarget {
                 uri,
-                identity: None,
+                explicit: false,
                 cells,
             });
         }
@@ -204,21 +247,30 @@ impl LinkGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alacritty_terminal::term::test::TermSize;
-    use alacritty_terminal::{event::VoidListener, term::Config, vte::ansi::Processor};
+    use knot_terminal::{Scroll, TerminalSize};
 
-    fn grid(columns: usize, rows: usize, bytes: &[u8]) -> LinkGrid {
-        let size = TermSize::new(columns, rows);
-        let mut terminal = Term::new(Config::default(), &size, VoidListener);
-        {
-            let mut parser: Processor = Processor::new();
-            parser.advance(&mut terminal, bytes);
-        }
-        LinkGrid::capture(&terminal)
+    fn terminal(columns: u16, rows: u16, bytes: &[u8]) -> Mutex<Terminal> {
+        let size = TerminalSize {
+            columns,
+            rows,
+            cell_width: 8,
+            cell_height: 16,
+        };
+        let mut terminal = Terminal::new(size, 100);
+        terminal.write(bytes);
+        Mutex::new(terminal)
+    }
+
+    fn capture(terminal: &Mutex<Terminal>) -> LinkGrid {
+        LinkGrid::capture(&mut RenderState::new(), terminal)
+    }
+
+    fn grid(columns: u16, rows: u16, bytes: &[u8]) -> LinkGrid {
+        capture(&terminal(columns, rows, bytes))
     }
 
     #[test]
-    fn explicit_identity_and_destination_override_visible_label() {
+    fn explicit_destination_overrides_visible_label() {
         let grid = grid(
             80,
             3,
@@ -226,7 +278,7 @@ mod tests {
         );
         let link = grid.at(0, 0).unwrap();
         assert_eq!(link.uri, "https://destination.test/path");
-        assert_eq!(link.identity.as_deref(), Some("one"));
+        assert!(link.contains(17, 0));
         assert_eq!(grid.links.len(), 1);
     }
 
@@ -292,42 +344,37 @@ mod tests {
 
     #[test]
     fn scrolled_view_rejects_cut_off_detected_url_but_keeps_explicit_destination() {
-        let size = TermSize::new(12, 2);
-        let mut terminal = Term::new(Config::default(), &size, VoidListener);
-        let mut parser: Processor = Processor::new();
-        parser.advance(&mut terminal, b"https://example.test/long/path/continued");
-        terminal.scroll_display(alacritty_terminal::grid::Scroll::Top);
-        assert!(LinkGrid::capture(&terminal).links.is_empty());
-        let mut terminal = Term::new(Config::default(), &size, VoidListener);
-        let mut parser: Processor = Processor::new();
-        parser.advance(
-            &mut terminal,
+        let detected = terminal(12, 2, b"https://example.test/long/path/continued");
+        lock(&detected).scroll_viewport(Scroll::Top);
+        assert!(capture(&detected).links.is_empty());
+        let explicit = terminal(
+            12,
+            2,
             b"\x1b]8;;https://example.test/full\x1b\\long visible label continuing below viewport",
         );
-        terminal.scroll_display(alacritty_terminal::grid::Scroll::Top);
+        lock(&explicit).scroll_viewport(Scroll::Top);
         assert_eq!(
-            LinkGrid::capture(&terminal).at(0, 0).unwrap().uri,
+            capture(&explicit).at(0, 0).unwrap().uri,
             "https://example.test/full"
         );
     }
 
     #[test]
-    fn displayed_scrollback_and_identity_changes_are_distinct() {
-        let size = TermSize::new(40, 2);
-        let mut terminal = Term::new(Config::default(), &size, VoidListener);
-        {
-            let mut parser: Processor = Processor::new();
-            parser.advance(&mut terminal, b"https://history.test\r\nnext\r\nlast");
-        }
-        assert!(LinkGrid::capture(&terminal).links.is_empty());
-        terminal.scroll_display(alacritty_terminal::grid::Scroll::Top);
+    fn displayed_scrollback_links_are_found() {
+        let terminal = terminal(40, 2, b"https://history.test\r\nnext\r\nlast");
+        assert!(capture(&terminal).links.is_empty());
+        lock(&terminal).scroll_viewport(Scroll::Top);
         assert_eq!(
-            LinkGrid::capture(&terminal).at(0, 0).unwrap().uri,
+            capture(&terminal).at(0, 0).unwrap().uri,
             "https://history.test/"
         );
+    }
+
+    #[test]
+    fn changed_destinations_change_the_grid() {
         assert_ne!(
-            grid(40, 2, b"\x1b]8;id=a;https://test\x1b\\label"),
-            grid(40, 2, b"\x1b]8;id=b;https://test\x1b\\label")
+            grid(40, 2, b"\x1b]8;;https://a.test\x1b\\label"),
+            grid(40, 2, b"\x1b]8;;https://b.test\x1b\\label")
         );
     }
 }
