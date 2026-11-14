@@ -139,6 +139,9 @@ pub struct Cell<'a> {
     pub foreground: Option<Rgb>,
     /// The cell's own background; `None` draws with the frame's background.
     pub background: Option<Rgb>,
+    /// Whether the cell carries an OSC 8 hyperlink, which
+    /// [`Terminal::hyperlink`] reads.
+    pub hyperlink: bool,
 }
 
 /// A frame read from a [`Terminal`], reused from update to update.
@@ -375,6 +378,39 @@ impl Row<'_> {
         dirty
     }
 
+    /// Whether the row soft-wraps into the next one.
+    pub fn wrapped(&self) -> bool {
+        let row: ffi::GhosttyRow = {
+            let mut row = 0;
+            // SAFETY: the iterator is positioned on this row; the kind writes
+            // one `GhosttyRow`.
+            check(
+                unsafe {
+                    ffi::ghostty_render_state_row_get(
+                        self.state.rows,
+                        ffi::GHOSTTY_RENDER_STATE_ROW_DATA_RAW,
+                        (&mut row as *mut ffi::GhosttyRow).cast(),
+                    )
+                },
+                "reading a row",
+            );
+            row
+        };
+        let mut wrapped = false;
+        // SAFETY: the kind writes a bool.
+        check(
+            unsafe {
+                ffi::ghostty_row_get(
+                    row,
+                    ffi::GHOSTTY_ROW_DATA_WRAP,
+                    (&mut wrapped as *mut bool).cast(),
+                )
+            },
+            "reading a row's wrap",
+        );
+        wrapped
+    }
+
     /// The first and last selected columns of the row, if the selection
     /// reaches it.
     pub fn selection(&self) -> Option<(u16, u16)> {
@@ -453,6 +489,18 @@ impl Cells<'_> {
             ffi::GHOSTTY_CELL_WIDE_SPACER_HEAD => CellWidth::SpacerHead,
             _ => CellWidth::Narrow,
         };
+        let mut hyperlink = false;
+        // SAFETY: the kind writes a bool.
+        check(
+            unsafe {
+                ffi::ghostty_cell_get(
+                    raw,
+                    ffi::GHOSTTY_CELL_DATA_HAS_HYPERLINK,
+                    (&mut hyperlink as *mut bool).cast(),
+                )
+            },
+            "reading a cell's hyperlink",
+        );
         let style: ffi::GhosttyStyle = cell_get(
             cells,
             ffi::GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE,
@@ -467,6 +515,7 @@ impl Cells<'_> {
             style: style.into(),
             foreground: cell_color(cells, ffi::GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_FG_COLOR),
             background: cell_color(cells, ffi::GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_BG_COLOR),
+            hyperlink,
         })
     }
 }

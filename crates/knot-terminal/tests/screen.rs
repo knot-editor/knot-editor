@@ -319,3 +319,28 @@ fn dirty_tracking_follows_changes_until_cleaned() {
     state.update(&terminal);
     assert_eq!(state.dirty(), Dirty::Full);
 }
+
+#[test]
+fn rows_report_soft_wraps_and_cells_report_hyperlinks() {
+    let terminal = terminal(4, 4);
+    write(
+        &terminal,
+        b"abcdef\r\n\x1b]8;;https://example.test\x1b\\li\x1b]8;;\x1b\\nk",
+    );
+    let mut state = frame(&terminal);
+    let mut wrapped = Vec::new();
+    let mut linked = Vec::new();
+    let mut rows = state.rows();
+    while let Some(mut row) = rows.next() {
+        wrapped.push(row.wrapped());
+        let mut cells = row.cells();
+        let mut line = Vec::new();
+        while let Some(cell) = cells.next() {
+            line.push(cell.hyperlink);
+        }
+        linked.push(line);
+    }
+    assert_eq!(wrapped, [true, false, false, false]);
+    assert_eq!(linked[2], [true, true, false, false]);
+    assert_eq!(linked[0], [false; 4]);
+}
