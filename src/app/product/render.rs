@@ -693,8 +693,8 @@ impl KnotWindow {
                 .flex_row()
                 .items_center()
                 .h(zoom::rems(tokens::chrome::STATUS_BAR_HEIGHT))
-                .px_1()
-                .text_xs()
+                .px(zoom::rems(tokens::list::ROW_INSET))
+                .text_size(zoom::rems(tokens::chrome::STATUS_TEXT_SIZE))
                 .bg(theme(cx).paint_color(color::STATUS_BAR_BACKGROUND))
                 .text_color(theme(cx).paint_color(color::STATUS_BAR_FOREGROUND))
                 .child(group().children(left))
@@ -721,8 +721,9 @@ impl KnotWindow {
             .debug_selector(move || item_selector.clone())
             .flex()
             .items_center()
-            .h_full()
-            .px_2()
+            .h(zoom::rems(tokens::chrome::STATUS_ITEM_HEIGHT))
+            .px(zoom::rems(8.))
+            .rounded(zoom::rems(tokens::radius::SM))
             // A press on an item never starts a window drag from a toolbar.
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when_some(color_key.as_ref(), |element, key| {

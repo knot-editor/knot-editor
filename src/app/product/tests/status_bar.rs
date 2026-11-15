@@ -102,6 +102,9 @@ fn registered_items_paint_in_order_follow_settings_and_run_their_command(cx: &mu
     assert!(branch.right() <= position.left());
     assert!(position.right() <= language.left());
     assert!(language.right() <= bar.right());
+    // Items are inset, rounded chips centered in the bar.
+    assert!(branch.size.height < bar.size.height);
+    assert!(branch.top() > bar.top() && branch.bottom() < bar.bottom());
 
     // An item paints its icon before the text; one without an icon paints none.
     let icon = bounds(native_window, "status-icon-branch", cx).expect("the icon is painted");
