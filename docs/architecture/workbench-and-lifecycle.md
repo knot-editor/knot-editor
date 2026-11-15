@@ -74,9 +74,12 @@ closes. Launch, restoration, tab transfer to a new window, and
 [session replacement](#session-replacement) build the window first and then open
 a native window for it. Extensions see a window's ID as `WindowTarget.window`.
 
-A window paints the center and each shown dock as rounded cards on the
-`window.background` color. The gap between two cards is also the handle that
-resizes them, and splits inside a card are 1px lines. On macOS the title bar
+A window paints the center and each shown dock as cards on the
+`window.background` color; the theme's [chrome](semantic-ui.md#themes-and-color-keys)
+sets their corner radius, gap, window margin, and border, so a theme may be
+Islands (rounded cards with gaps) or flat (square cards meeting at borders).
+The gap between two cards is also the handle that resizes them, at least
+6px wide, and splits inside a card are 1px lines. On macOS the title bar
 is transparent and the window buttons sit in a toolbar row that drags the
 window and zooms it on a double click; other platforms keep the native frame
 and have no row. The status bar sits on the window background.

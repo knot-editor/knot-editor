@@ -87,6 +87,13 @@ startup completes and again when the selection settings or, in `system` mode,
 the system appearance change; registering or removing a theme later takes
 effect at the next selection change rather than repainting mid-session.
 
+A theme also sets the chrome's shape and weight: `Chrome` (`CHROME_KEYS` in
+`theme.rs`) holds the card radius, gap, window inset, and border width, the
+tab bar height, stripe width, header title weight, and accent line thickness.
+Values a theme leaves out keep the Islands defaults, and each `chrome.*`
+setting overrides the theme's value while it is not negative. Setting writes
+repaint every window, so a flat layout needs no new theme.
+
 gpui-component's widgets take their colors from the same resolution: each
 theme application switches gpui-component to the theme's appearance, which
 loads its built-in colors, then sets each field of the `COLORS` table in

@@ -576,6 +576,11 @@ await themes.register({
 });
 ```
 
+A theme's `chrome` sets the shape and weight of the workbench, such as
+`{ cardRadius: 0, cardGap: 0, cardInset: 0, cardBorder: 1 }` for square cards
+that meet at borders; `ThemeChrome` in `knot.d.ts` lists every value and its
+range, and a value a theme leaves out keeps its Islands default.
+
 `syntax` keys are capture names or a dotted prefix of them, such as `markup`;
 a capture takes its longest styled prefix, and an unknown name rejects
 `UnknownCapture`. Themes are code, so derive one by spreading a registered

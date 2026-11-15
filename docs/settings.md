@@ -62,6 +62,8 @@ values take effect.
 | `theme.mode` | string: `dark`, `light`, `system` | `"dark"` | Global; other text means `dark` | native | Which theme applies; `system` follows the system appearance. |
 | `theme.dark` | string | `"Knot Islands Dark"` | Global | native | Theme name used in dark mode. |
 | `theme.light` | string | `"Knot Islands Light"` | Global | native | Theme name used in light mode. |
+| `chrome.cardRadius`, `chrome.cardGap`, `chrome.cardInset`, `chrome.cardBorder`, `chrome.tabBarHeight`, `chrome.stripeWidth`, `chrome.headerWeight`, `chrome.accentWidth` | number | `-1` | Global; clamped to each value's range, listed in `ThemeChrome` in `knot.d.ts` | native | Override the theme's value of the workbench chrome: the corner radius, gap, window margin, and border width of the cards, the tab bar height, the stripe width, the weight of dock header titles, and the thickness of the active tab's accent line. A negative value follows the theme. |
+
 
 | `icons.pack` | string | `""` | Global | native | Name of the registered icon pack that restyles icons; empty means no pack. |
 
