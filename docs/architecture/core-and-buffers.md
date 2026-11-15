@@ -109,6 +109,13 @@ whether more matches follow a limit that defaults to 1,000 and is capped at
 100,000. There is no reverse search: a caller wanting the matches before a
 point searches the range before it.
 
+`BufferModel::replace_matches` builds the edits that replace those matches, and
+`find_and_replace` commits them as one revision-checked batch, one undo step
+(`limit` defaults to every match up to the cap). A literal replacement is
+inserted as typed; a pattern's expands `$1`, `${name}` and `$$` from the match's
+groups (a missing group is empty) and `\n`, `\t` and `\\`. Nothing is committed when no
+match changes the text.
+
 ## Anchored ranges
 
 - `AnchoredRangeStore` owns stable range geometry only. Each endpoint is a

@@ -99,7 +99,7 @@ pattern cache was measured unnecessary (compile and search of a small buffer
 took 0.03–0.8 ms). The fake testing host approximates regex with JavaScript
 `RegExp`.
 
-### 2. `buffer.replace`
+### 2. `buffer.replace` ✅ — awaiting review
 
 Deliverables: model function returning the edit batch and count, host
 operation committing it through the buffer's normal edit path, `knot.d.ts`
@@ -115,6 +115,14 @@ Implementation context:
   `host.buffers.apply_edits` uses so history, read-only, and change
   notification behave identically.
 - `bootstrap.js`, `knot.d.ts`, `docs/extension-api.md`.
+
+Done: `BufferModel::replace_matches` / `find_and_replace`, the `replace` host
+operation (`ReplaceArguments`, `ReplaceResult`), `bootstrap.js`, `knot.d.ts`,
+the guide and [text search](../architecture/core-and-buffers.md#text-search),
+and the fake testing host. Model tests cover expansion, escapes, literal mode,
+empty matches, range, limit/`more`, and no-op; host tests cover revision
+conflict, read-only, one notification, and one undo step per call. `ifRevision`
+is optional and defaults to the current revision.
 
 Review gate: primitive semantics, ready for D150 to reuse.
 
