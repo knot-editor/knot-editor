@@ -293,7 +293,7 @@ native_colors! {
     CARD_BACKGROUND = "card.background", "The cards of the center and the docks.", Key(BACKGROUND), Key(BACKGROUND);
     TAB_ACCENT = "tab.accent", "The line under the active tab.", Key(BORDER_HOVER), Key(BORDER_HOVER);
     TOOLBAR_BACKGROUND = "toolbar.background", "The main toolbar above the workbench.", Key(WINDOW_BACKGROUND), Key(WINDOW_BACKGROUND);
-    WINDOW_BACKGROUND = "window.background", "The window behind the cards, the toolbar, and the status bar.", Rgb(0x16171a), Rgb(0xdfe1e5);
+    WINDOW_BACKGROUND = "window.background", "The window behind the cards, the toolbar, and the status bar.", Rgb(0x1e1f22), Rgb(0xdfe1e5);
     WARNING = "warning", "Warnings.", Rgb(0xf2c55c), Rgb(0xa46a00);
 }
 

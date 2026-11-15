@@ -47,7 +47,7 @@ test("the Islands themes are the native default pair and keep the window darker 
   const light = THEMES.find((theme) => theme.name === "Knot Islands Light");
   assert.equal(dark?.appearance, "dark");
   assert.equal(light?.appearance, "light");
-  assert.equal(dark?.colors?.["window.background"], "#16171a");
+  assert.equal(dark?.colors?.["window.background"], "#1e1f22");
   assert.equal(dark?.colors?.["card.background"], "#2b2d30");
   assert.equal(dark?.colors?.["tab.accent"], "#3574f0");
   assert.equal(light?.colors?.["tab.accent"], "#3574f0");
