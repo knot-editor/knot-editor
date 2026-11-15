@@ -129,6 +129,10 @@ commands, menus, and keys, so none returned as a fixed command bar. The
 toolbar row now holds only navigation widgets that packages contribute as
 status items with a toolbar placement (the project name, a search button),
 which reuses the status registry instead of adding a second contribution model.
+The window's look, IntelliJ's Islands (rounded cards on a darker window
+background), is a set of theme values with setting overrides rather than a
+layout mode or a hard-coded style, so a flat theme needs no code and a user can
+reshape any theme.
 The prototype's free-form status string was the only place
 some failures appeared, so native failures with no other visible effect use the
 native warning prompt instead. Success and progress notices were dropped because

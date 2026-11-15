@@ -924,6 +924,13 @@ Kakoune mode could use them too. The
     Knot is ready to run on other Linux machines: choose the package formats,
     ship `knot` on the `PATH`, a desktop entry and icon, and an update path.
 
+- **D193 — Chrome refinements**
+  - Depends on: none
+  - Description: Two choices of the Islands look stayed open. The focused card
+    has no visible emphasis, and pickers have no scope tabs (All, Files,
+    Symbols, Actions) like Search Everywhere. Decide each after living with the
+    current look, and build the ones worth having.
+
 - **D168 — Website screenshots and documentation** 🚧
   - Depends on: none
   - Description: The landing page has no screenshot, and the user-facing docs
