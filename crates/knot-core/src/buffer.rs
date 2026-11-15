@@ -12,6 +12,15 @@
 //! O(log pieces) however many pieces earlier edits created. The tree's nodes
 //! are shared with snapshots and copied on write.
 //!
+//! ## Locators
+//!
+//! Each piece carries a locator (`locator`), an ordering key that increases in
+//! text order and is chosen between its neighbors when the piece is created, so
+//! it never changes. The buffer maps every piece id to its locator, and `resolve`
+//! finds a piece by seeking the tree by locator, in O(log pieces) rather than a
+//! walk over the pieces. Snapshots never resolve positions and do not carry the
+//! map.
+//!
 //! ## Line index
 //!
 //! There is no document-wide line table. Each backing keeps its own sorted
@@ -843,10 +852,8 @@ impl TextBuffer {
         let right_id = self.next_id;
         self.next_id += 1;
         let successor = self.piece_starting_at(at + piece.len - left_len);
-        let right_locator = Locator::between(
-            Some(&piece.locator),
-            successor.as_ref().map(|p| &p.locator),
-        );
+        let right_locator =
+            Locator::between(Some(&piece.locator), successor.as_ref().map(|p| &p.locator));
         self.locators.insert(right_id, right_locator.clone());
         let right = Piece {
             id: right_id,

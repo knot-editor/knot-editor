@@ -75,8 +75,6 @@ reindent, and foreground parse, so painting pays today's O(pieces) copy too.
 
 - Leaf and internal node fan-out, tuned from benchmark results in
   checkpoint 2.
-- Whether a locator is a fixed small array or a growable inline sequence,
-  decided in checkpoint 3 from how deep keys grow under the randomized test.
 
 ## Baseline
 
@@ -150,29 +148,35 @@ logarithmic or constant except `resolve`, which still walks the pieces and is
 until checkpoint 3. Heap per edit grew from 88 to 140 bytes because a piece
 caches its break count and UTF-16 length.
 
-### 3. Locators and logarithmic resolve
+### 3. Locators and logarithmic resolve 🔍 ready for review
 
-Give each piece a locator, keep the `PieceId → Locator` map on the buffer,
-and make `resolve` a map lookup plus a locator seek.
+Each piece carries a locator, the buffer keeps the `PieceId → Locator` map,
+and `resolve` is a map lookup plus a locator seek.
 
-- **Deliverables:** the locator type and the "key between two neighbors"
-  function; locator assignment on insert, coalescing (unchanged key), and
-  split; map maintenance on insert, split, and delete; node summaries carry
-  the greatest locator; `resolve` seeks by locator and keeps today's `None`
-  semantics for deleted pieces and stale right-of-split offsets.
-- **Validation:** unit tests for key generation (between neighbors, at the
-  ends, repeated inserts at one point keep keys short enough); the tree
-  validator also checks locators increase in order and that the map matches
-  the tree; the differential test's position checks pass; anchored-range
-  tests pass; benchmark rerun for the resolve and stabilization workloads;
-  `just check`.
+- ✅ **Deliverables:** `buffer/locator.rs` holds the locator type and
+  `Locator::between`; locators are assigned on insert and split, kept on
+  coalescing, and dropped from the map on delete; each tree child caches its
+  greatest locator; `resolve` seeks by locator and keeps the `None` semantics
+  for deleted pieces and stale right-of-split offsets.
+- ✅ **Validation:** key-generation unit tests (ends, between neighbors,
+  repeated inserts at one point); the tree validator checks locators increase
+  in order and cached maxima, the buffer validator checks the map against the
+  tree, and the differential test runs both every step; `just check`.
+- **Locator representation (settled):** an `Arc<[u32]>` of digits compared
+  lexicographically, growable rather than a fixed array. A new key moves at
+  most 2^16 from its lower neighbor within a digit, so appending in order
+  stays one digit and repeated inserts at one point deepen by about one digit
+  per 17–32 pieces. `Piece` is no longer `Copy`.
+- **Results (release, same machine):** resolve per anchored range at 10k /
+  100k pieces 0.35 / 0.73 µs (was 3.8 / 33 µs before the tree and 10.9 / 135
+  µs at checkpoint 2); stabilize after deleting a quarter of the text 4 / 8 ms
+  (was 18 / 137 ms); typing p50 0.3 µs; 10,000-match replace-all 0.070 s
+  (0.018 s at checkpoint 2, the cost of a map insert and a locator allocation
+  per piece); heap per edit 294 bytes and 6.4 allocations (140 bytes at
+  checkpoint 2).
 - **Review gate:** confirm resolve and stabilization costs no longer grow
-  with piece count beyond O(log n), and settle the locator representation.
-- **Implementation context:** locator in `crates/knot-core/src/buffer/tree.rs`
-  or its own `buffer/locator.rs`; map as a field on `TextBuffer` in
-  `buffer.rs`, maintained in `split_at`, `insert`, and `delete`.
-  `AnchoredRangeStore::stabilize` in `crates/knot-core/src/anchored_range.rs`
-  calls `resolve` per moved endpoint and needs no change.
+  with piece count beyond O(log n), and that the replace-all and heap cost of
+  locators is acceptable.
 
 ### 4. Final benchmark and documentation
 

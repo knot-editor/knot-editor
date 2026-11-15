@@ -77,7 +77,9 @@ impl TextSnapshot {
                     return None;
                 }
                 let end = start + piece.len;
-                Some(&self.slice(&piece)[range.start.max(start) - start..range.end.min(end) - start])
+                Some(
+                    &self.slice(&piece)[range.start.max(start) - start..range.end.min(end) - start],
+                )
             })
     }
 
