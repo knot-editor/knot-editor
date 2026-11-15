@@ -307,9 +307,9 @@ fn an_invalid_pattern_shows_the_parsers_message_and_escape_closes_both_bars(
 }
 
 const SCOPE: &str = if cfg!(target_os = "macos") {
-    "<a-d-l>"
+    "<a-d-s>"
 } else {
-    "<a-c-l>"
+    "<a-c-s>"
 };
 const SCOPE_COLOR: &str = "editor.findScope";
 

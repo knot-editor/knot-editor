@@ -16,7 +16,7 @@ The `@knot/find` bar gains, with VS Code and IntelliJ behavior and bindings:
   current match and advances (or only advances when the selection is not a
   match); `cmd-enter` / `ctrl-enter` and a button replace all in one undo step
   and report how many.
-- A **Find in Selection** toggle (`cmd-alt-l` / `ctrl-alt-l`) that limits
+- A **Find in Selection** toggle (`cmd-alt-s` / `ctrl-alt-s`) that limits
   highlights, stepping, and Replace All to a scope that follows edits and is
   painted beneath the matches.
 

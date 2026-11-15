@@ -233,7 +233,7 @@ async function showBar(session: Session, message: string | null) {
         {
           id: "scope",
           icon: "find.selection",
-          tooltip: `Find in Selection (${shortcut("alt-l")})`,
+          tooltip: `Find in Selection (${shortcut("alt-s")})`,
           active: session.scope !== null,
           command: { name: TOGGLE_SCOPE },
         },
@@ -476,7 +476,7 @@ export async function start() {
     keymaps.bind(`${mod}-alt-c`, TOGGLE_CASE, { view: "bar", context });
     keymaps.bind(`${mod}-alt-w`, TOGGLE_WORD, { view: "bar", context });
     keymaps.bind(`${mod}-alt-r`, TOGGLE_REGEX, { view: "bar", context });
-    keymaps.bind(`${mod}-alt-l`, TOGGLE_SCOPE, { view: "bar", context });
+    keymaps.bind(`${mod}-alt-s`, TOGGLE_SCOPE, { view: "bar", context });
     keymaps.bind("escape", CLOSE, { view: "bar", context });
   }
   keymaps.bind("enter", NEXT, { view: "bar", context: BAR });
