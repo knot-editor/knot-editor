@@ -539,6 +539,25 @@ function bufferFor(handle) {
         more: result.more,
       });
     },
+    async replace(query, replacement, options) {
+      if (typeof query !== "string") throw new TypeError("replace query must be a string");
+      if (typeof replacement !== "string") throw new TypeError("replacement must be a string");
+      const limit = options?.limit ?? Number.MAX_SAFE_INTEGER;
+      if (!Number.isSafeInteger(limit) || limit < 0) throw new TypeError("limit must be a non-negative safe integer");
+      const result = await request(
+        "replace",
+        handle,
+        query,
+        replacement,
+        options?.caseSensitive === true,
+        options?.wholeWord === true,
+        options?.regex === true,
+        options?.range == null ? null : byteRange(options.range),
+        limit,
+        options?.ifRevision == null ? null : safeInteger(options.ifRevision),
+      );
+      return Object.freeze({ revision: result.revision, count: result.count, more: result.more });
+    },
     async createMark(offset) {
       const id = await request("createMark", handle, safeInteger(offset));
       const owned = ownership(() => {}, () => request("disposeMark", handle, id));

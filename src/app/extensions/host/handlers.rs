@@ -671,8 +671,8 @@ pub(crate) async fn close_presentation(
 
 pub(crate) use crate::app::extensions::buffers::BufferError;
 use knot_protocol::{
-    BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, FindResult, TextEdit,
-    TextSnapshot, WordKind, WordSegment,
+    BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, FindResult, ReplaceResult,
+    TextEdit, TextSnapshot, WordKind, WordSegment,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -892,14 +892,7 @@ pub(crate) async fn find(
                     regex: arguments.regex,
                 };
                 let limit = usize::try_from(arguments.limit).unwrap_or(usize::MAX);
-                let found = model
-                    .find(&arguments.query, options, arguments.range, limit)
-                    .map_err(|error| match error {
-                        knot_model::buffer::FindError::Access(_) => BufferError::InvalidRange,
-                        knot_model::buffer::FindError::InvalidQuery(message) => {
-                            BufferError::InvalidQuery { message }
-                        }
-                    })?;
+                let found = model.find(&arguments.query, options, arguments.range, limit)?;
                 Ok(FindResult {
                     revision: model.revision(),
                     matches: found
@@ -913,6 +906,60 @@ pub(crate) async fn find(
                     more: found.more,
                 })
             },
+        )
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ReplaceArguments {
+    pub buffer: BufferHandle,
+    pub query: String,
+    pub replacement: String,
+    pub options: knot_model::buffer::FindOptions,
+    pub range: Option<ByteRange>,
+    pub limit: u64,
+    pub if_revision: Option<u64>,
+}
+impl HostArguments for ReplaceArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            buffer: BufferHandle::new(reader.integer(2)?),
+            query: reader.text(3, "replace query must be a string")?,
+            replacement: reader.text(4, "replacement must be a string")?,
+            options: knot_model::buffer::FindOptions {
+                case_sensitive: reader
+                    .optional_boolean(5, "caseSensitive must be a boolean")?
+                    .unwrap_or(false),
+                whole_word: reader
+                    .optional_boolean(6, "wholeWord must be a boolean")?
+                    .unwrap_or(false),
+                regex: reader
+                    .optional_boolean(7, "regex must be a boolean")?
+                    .unwrap_or(false),
+            },
+            range: reader.range(8)?,
+            limit: reader.integer(9)?,
+            if_revision: reader.optional_integer(10)?,
+        })
+    }
+}
+
+/// Replace the matches of a query in one commit: one undo step and one change
+/// notification. The result carries the revision after it, the number of
+/// replacements, and whether more matches remained.
+#[host_operation("replace")]
+pub(crate) async fn replace(
+    context: HostContext,
+    arguments: ReplaceArguments,
+) -> Result<ReplaceResult, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        host.buffers.replace_matches(
+            &request,
+            arguments,
+            || commands.is_cancelled(request.invocation),
+            cx,
         )
     })?
 }

@@ -4,9 +4,10 @@ use std::collections::HashSet;
 
 use gpui::{App, Entity};
 
+use knot_model::buffer::FindError;
 use knot_protocol::{
     BufferChange, BufferHandle, BufferSubscriptionId, ExtensionId, ExtensionLifecycleId,
-    RequestContext, TextSnapshot,
+    ReplaceResult, RequestContext, TextSnapshot,
 };
 
 use crate::app::extensions::host::handlers::AccessError;
@@ -47,7 +48,8 @@ impl From<AccessError> for BufferError {
 }
 
 use crate::app::extensions::host::handlers::{
-    BufferArguments, ContributionArguments, EditArguments, SnapshotArguments, SubscriptionArguments,
+    BufferArguments, ContributionArguments, EditArguments, ReplaceArguments, SnapshotArguments,
+    SubscriptionArguments,
 };
 
 /// One committed change routed to a lifecycle-owned JavaScript subscription.
@@ -185,6 +187,43 @@ impl ExtensionBufferBridge {
                 cx.notify();
             }
             Ok(model.revision())
+        })
+    }
+
+    /// Replace the matches of a query as one commit; see
+    /// [`BufferModel::find_and_replace`].
+    pub(crate) fn replace_matches(
+        &mut self,
+        request: &RequestContext,
+        arguments: ReplaceArguments,
+        mut cancelled: impl FnMut() -> bool,
+        cx: &mut App,
+    ) -> Result<ReplaceResult, BufferError> {
+        self.validate(request, &mut cancelled)?;
+        let model = self
+            .buffers
+            .resolve(arguments.buffer, cx)
+            .map_err(|_| BufferError::BufferClosed)?;
+        model.update(cx, |model, cx| {
+            if cancelled() {
+                return Err(AccessError::Cancelled.into());
+            }
+            let outcome = model.find_and_replace(
+                &arguments.query,
+                &arguments.replacement,
+                arguments.options,
+                arguments.range,
+                usize::try_from(arguments.limit).unwrap_or(usize::MAX),
+                arguments.if_revision,
+            )?;
+            if outcome.changed {
+                cx.notify();
+            }
+            Ok(ReplaceResult {
+                revision: model.revision(),
+                count: outcome.count as u64,
+                more: outcome.more,
+            })
         })
     }
 
@@ -373,6 +412,15 @@ impl Default for ExtensionBufferBridge {
     }
 }
 
+impl From<FindError> for BufferError {
+    fn from(error: FindError) -> Self {
+        match error {
+            FindError::Access(error) => map_buffer_error(error),
+            FindError::InvalidQuery(message) => Self::InvalidQuery { message },
+        }
+    }
+}
+
 fn map_buffer_error(error: BufferAccessError) -> BufferError {
     match error {
         BufferAccessError::Closed => BufferError::BufferClosed,
@@ -505,6 +553,84 @@ mod tests {
                 cx,
             );
             assert_eq!(cancelled, Err(BufferError::Access(AccessError::Cancelled)));
+        });
+    }
+
+    #[gpui::test]
+    fn replacement_commits_once_and_fails_by_revision_policy_or_pattern(cx: &mut TestAppContext) {
+        use std::{cell::RefCell, rc::Rc};
+
+        let extension = ExtensionId::new(7);
+        let lifecycle = ExtensionLifecycleId::new(3);
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text("a a a")));
+        let notified = Rc::new(RefCell::new(0));
+        let counter = notified.clone();
+        cx.update(|cx| {
+            cx.observe(&model, move |_, _| *counter.borrow_mut() += 1)
+                .detach();
+        });
+        cx.update(|cx| {
+            let mut bridge = ExtensionBufferBridge::new();
+            bridge.admit_lifecycle(extension, lifecycle);
+            let buffer = bridge.open_buffer(&model);
+            let mut replace = |query: &str, regex: bool, if_revision: Option<u64>, cx: &mut App| {
+                bridge.replace_matches(
+                    &request(extension, lifecycle, 1),
+                    ReplaceArguments {
+                        buffer,
+                        query: query.into(),
+                        replacement: "b".into(),
+                        options: knot_model::buffer::FindOptions {
+                            regex,
+                            ..Default::default()
+                        },
+                        range: None,
+                        limit: u64::MAX,
+                        if_revision,
+                    },
+                    || false,
+                    cx,
+                )
+            };
+
+            assert_eq!(
+                replace("a", false, Some(9), cx),
+                Err(BufferError::RevisionConflict)
+            );
+            assert!(matches!(
+                replace("(", true, None, cx),
+                Err(BufferError::InvalidQuery { .. })
+            ));
+            let nothing = replace("z", false, None, cx).unwrap();
+            assert_eq!((nothing.count, nothing.revision), (0, 0));
+            let done = replace("a", false, Some(0), cx).unwrap();
+            assert_eq!((done.count, done.revision, done.more), (3, 1, false));
+            assert_eq!(model.read(cx).text(), "b b b");
+        });
+        cx.run_until_parked();
+        assert_eq!(*notified.borrow(), 1);
+
+        let generated = cx.new(|_| Buffer::new(BufferModel::from_read_only_text("a")));
+        cx.update(|cx| {
+            let mut bridge = ExtensionBufferBridge::new();
+            bridge.admit_lifecycle(extension, lifecycle);
+            let buffer = bridge.open_buffer(&generated);
+            let result = bridge.replace_matches(
+                &request(extension, lifecycle, 1),
+                ReplaceArguments {
+                    buffer,
+                    query: "a".into(),
+                    replacement: "b".into(),
+                    options: Default::default(),
+                    range: None,
+                    limit: u64::MAX,
+                    if_revision: None,
+                },
+                || false,
+                cx,
+            );
+            assert_eq!(result, Err(BufferError::BufferReadOnly));
+            assert_eq!(generated.read(cx).text(), "a");
         });
     }
 

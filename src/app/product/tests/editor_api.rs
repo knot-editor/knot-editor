@@ -65,6 +65,25 @@ await commands.register("api.find", async ({ buffer }) => {
   try { await buffer.find(7); } catch (error) { rejected = error instanceof TypeError; }
   check(rejected, "query type");
 });
+await commands.register("api.replace", async ({ buffer }) => {
+  const text = async () => (await buffer.snapshot()).text;
+  const { revision } = await buffer.snapshot();
+  const none = await buffer.replace("zzz", "y");
+  check(none.count === 0 && !none.more && none.revision === revision, "no match commits nothing");
+  await expectCode(() => buffer.replace("foo", "x", { ifRevision: revision + 5 }), "RevisionConflict");
+  const invalid = await buffer.replace("(", "x", { regex: true }).catch((error) => error);
+  check(invalid.code === "InvalidQuery" && invalid.details.message.includes("unclosed group"), "invalid pattern");
+  await expectCode(() => buffer.replace("foo", "x", { range: { startByteOffset: 0, endByteOffset: 1000 } }), "InvalidRange");
+  const first = await buffer.replace("foo", "x", { limit: 1, ifRevision: revision });
+  check(first.count === 1 && first.more && first.revision === revision + 1, "limited replacement");
+  check(await text() === "x Bar foo", "limited text");
+  const all = await buffer.replace("(\\w+)", "<$1>", { regex: true, wholeWord: true });
+  check(all.count === 3 && !all.more && all.revision === revision + 2, "one commit for all matches");
+  check(await text() === "<x> <Bar> <foo>", "expanded text");
+  let rejected = false;
+  try { await buffer.replace("a", 7); } catch (error) { rejected = error instanceof TypeError; }
+  check(rejected, "replacement type");
+});
 await commands.register("api.marks", async ({ buffer }) => {
   // "a\r\n" then "é😀": offset 3 is the start of "é".
   const { revision } = await buffer.snapshot();
@@ -198,6 +217,26 @@ fn buffer_find_returns_byte_ranges_options_and_revision(cx: &mut TestAppContext)
     let native_window = Headless;
     let execution = dispatch_product_command(&window, native_window, "api.find", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn buffer_replace_commits_one_undo_step_per_call(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    load(cx);
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("foo Bar foo")));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Replace", model.clone(), cx)
+    });
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
+    let execution = dispatch_product_command(&window, native_window, "api.replace", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    let text = |cx: &mut TestAppContext| model.read_with(cx, |model, _| model.text());
+    assert_eq!(text(cx), "<x> <Bar> <foo>");
+    model.update(cx, |model, _| model.undo().unwrap());
+    assert_eq!(text(cx), "x Bar foo");
+    model.update(cx, |model, _| model.undo().unwrap());
+    assert_eq!(text(cx), "foo Bar foo");
 }
 
 #[gpui::test]

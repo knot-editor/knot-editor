@@ -1046,6 +1046,16 @@ pub struct FindResult {
     pub more: bool,
 }
 
+/// What a buffer replacement did: the revision after it, how many matches it
+/// replaced, and whether more followed them.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceResult {
+    pub revision: u64,
+    pub count: u64,
+    pub more: bool,
+}
+
 /// The class of a word segment.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

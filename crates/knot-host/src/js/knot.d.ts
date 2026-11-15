@@ -1369,6 +1369,24 @@ declare module "knot" {
     /** Most matches to return, 1000 by default and at most 100000 whatever is asked. */
     readonly limit?: number;
   }
+  /** Options of `Buffer.replace`: those of `find`, with its own limit. */
+  export interface ReplaceOptions extends Omit<FindOptions, "limit"> {
+    /** Most replacements to make; every match up to 100000 by default. */
+    readonly limit?: number;
+    /**
+     * The revision the matches must come from; defaults to the current one,
+     * which suits a replacement made from the query alone.
+     */
+    readonly ifRevision?: number;
+  }
+  export type ReplaceResult = Readonly<{
+    /** The revision after the replacement; unchanged when nothing was replaced. */
+    revision: number;
+    /** The matches replaced. */
+    count: number;
+    /** Whether a match followed the last replaced, cut off by the limit. */
+    more: boolean;
+  }>;
   /** A unit of text that double click selects; see `Buffer.wordAt`. */
   export type WordSegment = Readonly<{
     range: ByteRange;
@@ -1474,6 +1492,23 @@ declare module "knot" {
      * invalid pattern (`details.message`), or Cancelled on teardown.
      */
     find(query: string, options?: FindOptions): Promise<FindResult>;
+    /**
+     * Replace the occurrences `find` would return for `query` and `options`
+     * (`limit` and `range` included) with `replacement`, in one commit: one
+     * undo step and one change notification. Matching and expansion are
+     * native, so no text crosses the boundary. A literal query inserts the
+     * replacement as typed. With `options.regex` the replacement expands `$1`,
+     * `${name}` and `$$` from the match's groups (a missing group is empty;
+     * write `${1}x`, since `$1x` names the group `1x`), and `\n`, `\t` and
+     * `\\` to a line break, a tab and a backslash. Nothing is committed
+     * when nothing matches or each replacement equals its match.
+     * @throws TypeError for a non-string query or replacement or an invalid
+     * limit or revision; HostError with BufferClosed, BufferReadOnly,
+     * InvalidRange as for `find`, InvalidQuery with the parser's message for
+     * an invalid pattern (`details.message`), RevisionConflict when
+     * `ifRevision` is not the current revision, or Cancelled on teardown.
+     */
+    replace(query: string, replacement: string, options?: ReplaceOptions): Promise<ReplaceResult>;
     /**
      * Mark a byte offset. The mark stays with the character after it as edits
      * move that character, so text inserted before or at the mark moves it, and
