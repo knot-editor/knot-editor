@@ -189,3 +189,22 @@ Review gate: a full session like the original screenshot, compared with it.
 **Implementation context**: scrollbars in `src/app/editor/paint.rs` and
 `src/app/editor/layout.rs`; terminal geometry in `src/app/terminal/`;
 `src/app/components.rs` for gpui-component scrollbars elsewhere.
+
+### 8. Themable chrome
+
+Deliverables: the chrome's shape and weight become settings and theme values,
+so a theme can switch from islands (cards with gaps and rounded corners) to a
+flat layout (no gaps, 1px borders, square corners) and back. Candidates: card
+radius, gap between cards, window inset, card border, dock header and stripe
+sizes, tab title weight, accent underline, stripe selected tint, and colors for
+each remaining hard-coded value. A theme sets them through the extension theme
+API like colors; settings override a theme. Every bundled theme defines them.
+
+Validation: product tests that a flat configuration paints borders and no gaps,
+and that an island configuration paints the cards.
+
+Review gate: switch between island and flat themes in the real app.
+
+**Implementation context**: `src/app/tokens.rs` and `src/app/product/render.rs`;
+the theme model in `crates/knot-model/src/theme.rs`; settings in
+`crates/knot-model/src/settings*`.
