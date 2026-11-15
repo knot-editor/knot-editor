@@ -410,43 +410,49 @@ impl Render for Picker {
                     let is_selected = index == picker.selected;
                     let confirmed = found.entry;
                     let entity = entity.clone();
-                    let line =
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_4()
-                            .when_some(entry.icon.as_ref(), |line, icon| {
-                                line.child(
-                                    div()
-                                        .debug_selector(move || format!("picker-icon-{index}"))
-                                        .child(AppIcon::new(ref_definition(icon, false, cx))),
-                                )
-                            })
-                            .child(div().flex_shrink_0().child(highlighted(
-                                entry.label.clone(),
-                                &found.label,
-                                matched,
-                            )))
-                            .when_some(entry.description.clone(), |line, description| {
-                                line.child(
-                                    div().flex_1().truncate().text_xs().text_color(muted).child(
+                    let line = div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_4()
+                        .when_some(entry.icon.as_ref(), |line, icon| {
+                            line.child(
+                                div()
+                                    .debug_selector(move || format!("picker-icon-{index}"))
+                                    .child(AppIcon::new(ref_definition(icon, false, cx))),
+                            )
+                        })
+                        .child(div().flex_shrink_0().child(highlighted(
+                            entry.label.clone(),
+                            &found.label,
+                            matched,
+                        )))
+                        .when_some(entry.description.clone(), |line, description| {
+                            // A file's folder sits at the row's end so the names
+                            // line up; a command's description follows its title.
+                            line.child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .when(entry.icon.is_some(), |column| column.justify_end())
+                                    .child(div().truncate().text_xs().text_color(muted).child(
                                         highlighted(description, &found.description, matched),
-                                    ),
-                                )
-                            })
-                            .when(entry.description.is_none(), |line| {
-                                line.child(div().flex_1())
-                            })
-                            .when_some(entry.hint.clone(), |line, hint| {
-                                line.child(
-                                    div()
-                                        .flex_shrink_0()
-                                        .text_xs()
-                                        .text_color(muted)
-                                        .child(hint),
-                                )
-                            });
+                                    )),
+                            )
+                        })
+                        .when(entry.description.is_none(), |line| {
+                            line.child(div().flex_1())
+                        })
+                        .when_some(entry.hint.clone(), |line, hint| {
+                            line.child(
+                                div()
+                                    .flex_shrink_0()
+                                    .text_xs()
+                                    .text_color(muted)
+                                    .child(hint),
+                            )
+                        });
                     div()
                         .h(px(row_height))
                         .px(zoom::rems(tokens::list::PICKER_INSET))
