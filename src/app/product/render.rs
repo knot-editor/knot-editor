@@ -393,7 +393,11 @@ impl KnotWindow {
                                 div()
                                     .id(("close-tab", tab_id.value()))
                                     .debug_selector(move || format!("close-tab-{}", tab_id.value()))
-                                    .px_1()
+                                    .group(format!("close-{}", tab_id.value()))
+                                    .size(zoom::rems(16.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
                                     .rounded_sm()
                                     .hover(|style| {
                                         style
@@ -405,9 +409,13 @@ impl KnotWindow {
                                         div().child("×")
                                     } else {
                                         // The × shows on the active or hovered
-                                        // tab; a dirty tab's dot takes its
-                                        // place until the pointer arrives.
-                                        let group = format!("tab-{}", tab_id.value());
+                                        // tab; a dirty tab's dot takes its place
+                                        // until the pointer is on the button.
+                                        let group = if dirty {
+                                            format!("close-{}", tab_id.value())
+                                        } else {
+                                            format!("tab-{}", tab_id.value())
+                                        };
                                         div()
                                             .opacity(if tab_id == active_tab && !dirty {
                                                 1.
@@ -418,7 +426,7 @@ impl KnotWindow {
                                             .child("×")
                                     })
                                     .when(dirty && !in_dock, |close| {
-                                        let group = format!("tab-{}", tab_id.value());
+                                        let group = format!("close-{}", tab_id.value());
                                         close.child(
                                             div()
                                                 .debug_selector(move || {
