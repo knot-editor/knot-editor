@@ -171,7 +171,10 @@ are unavailable when the tab is already there. Each tab kind declares the areas 
 may occupy (`TabKind::allows`): documents the center, tools the docks, and
 terminals either. Placement, relocation, directional moves, and restore check the
 declaration, so a tool never joins the center and a document never enters a
-dock. Every dock pane has a header instead of a tab bar: plain text tabs with
+dock. A center tab sits on the tab background with an accent line under the
+active one; its close button shows on the active or hovered tab, a dirty
+document's dot takes the button's place until hover, and a pinned tab shows a
+pin icon. Every dock pane has a header instead of a tab bar: plain text tabs with
 the active one underlined in the accent (a pane with one tab shows only its
 title), a close button on terminal tabs, none on tool tabs, a new-terminal button on terminal panes, the
 tree frame actions of the active tool, and a hide button at the right. Stripes

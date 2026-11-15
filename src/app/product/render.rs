@@ -283,9 +283,8 @@ impl KnotWindow {
                     TabSurfaceId::Document(document_id) => {
                         let document = documents.get(document_id).unwrap();
                         format!(
-                            "{}{}{}",
+                            "{}{}",
                             document.title(),
-                            if document.is_dirty(cx) { " •" } else { "" },
                             match document.external_change() {
                                 Some(ExternalChange::Deleted) => " (deleted)",
                                 Some(ExternalChange::Changed { .. }) => " (changed on disk)",
@@ -295,6 +294,12 @@ impl KnotWindow {
                     }
                     TabSurfaceId::Terminal(_) => "Terminal".to_owned(),
                     TabSurfaceId::Tool(id) => workbench.tool(id).unwrap().title.to_owned(),
+                };
+                let dirty = match tab.surface_id() {
+                    TabSurfaceId::Document(document_id) => {
+                        documents.get(document_id).unwrap().is_dirty(cx)
+                    }
+                    _ => false,
                 };
                 let capture = workbench.capture_tab_move(pane_id, tab_id).unwrap();
                 let source = self.capture_tab_relocation(pane_id, tab_id, cx).unwrap();
@@ -319,6 +324,7 @@ impl KnotWindow {
                     .id(("tab", tab_id.value()))
                     .debug_selector(move || format!("tab-{}", tab_id.value()))
                     .relative()
+                    .group(format!("tab-{}", tab_id.value()))
                     .on_drag(source, drag_label)
                     .child(self.tab_drag_geometry(pane_id, capture))
                     .px_3()
@@ -330,12 +336,22 @@ impl KnotWindow {
                     } else {
                         color::TAB_INACTIVE_FOREGROUND
                     }))
+                    // A center tab sits on the tab background with an accent
+                    // line under the active one.
                     .when(!in_dock, |element| {
-                        element.bg(theme(cx).paint_color(if tab_id == active_tab {
+                        let background = theme(cx).paint_color(if tab_id == active_tab {
                             color::TAB_ACTIVE_BACKGROUND
                         } else {
                             color::TAB_INACTIVE_BACKGROUND
-                        }))
+                        });
+                        element
+                            .bg(background)
+                            .border_b_2()
+                            .border_color(if tab_id == active_tab {
+                                accent
+                            } else {
+                                background
+                            })
                     })
                     // A dock header's tabs are text on the card, the active
                     // one underlined with the accent.
@@ -365,8 +381,9 @@ impl KnotWindow {
                         element.child(
                             div()
                                 .debug_selector(move || format!("pin-{}", tab_id.value()))
-                                .text_xs()
-                                .child("📌"),
+                                .child(crate::app::icons::AppIcon::new(
+                                    knot_model::icons::IconDefinition::lucide("pin"),
+                                )),
                         )
                     })
                     .when(
@@ -383,7 +400,44 @@ impl KnotWindow {
                                             .bg(theme(cx)
                                                 .paint_color(color::BUTTON_HOVER_BACKGROUND))
                                     })
-                                    .child("×")
+                                    .relative()
+                                    .child(if in_dock {
+                                        div().child("×")
+                                    } else {
+                                        // The × shows on the active or hovered
+                                        // tab; a dirty tab's dot takes its
+                                        // place until the pointer arrives.
+                                        let group = format!("tab-{}", tab_id.value());
+                                        div()
+                                            .opacity(if tab_id == active_tab && !dirty {
+                                                1.
+                                            } else {
+                                                0.
+                                            })
+                                            .group_hover(group, |style| style.opacity(1.))
+                                            .child("×")
+                                    })
+                                    .when(dirty && !in_dock, |close| {
+                                        let group = format!("tab-{}", tab_id.value());
+                                        close.child(
+                                            div()
+                                                .debug_selector(move || {
+                                                    format!("dirty-{}", tab_id.value())
+                                                })
+                                                .absolute()
+                                                .inset_0()
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .group_hover(group, |style| style.opacity(0.))
+                                                .child(
+                                                    div()
+                                                        .size(zoom::rems(7.))
+                                                        .rounded_full()
+                                                        .bg(accent),
+                                                ),
+                                        )
+                                    })
                                     // Keep the press from starting a tab drag or
                                     // activating the tab it closes.
                                     .on_mouse_down(MouseButton::Left, |_, _, cx| {
