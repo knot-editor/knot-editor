@@ -333,8 +333,12 @@ async function toggle(context: CommandContext, flip: () => void) {
 /** Limit the search to the selection, or to the caret's line when nothing is
  * selected, or lift the limit. */
 async function toggleScope(context: CommandContext) {
-  const session = await openSession(context);
-  if (session === undefined) return;
+  let session = await openSession(context);
+  if (session === undefined) {
+    await open(context, false);
+    session = await openSession(context);
+    if (session === undefined) return;
+  }
   session.replaced = null;
   const selection = await session.editor.selection();
   let scope: ByteRange | null = null;
@@ -468,8 +472,8 @@ export async function start() {
     palette: false,
   });
   await commands.register(TOGGLE_SCOPE, toggleScope, {
-    title: "Find: Toggle Find in Selection",
-    palette: false,
+    title: "Find in Selection",
+    description: "Limit the search to the selection, or the current line.",
   });
   const mod = platform === "macos" ? "cmd" : "ctrl";
   for (const context of [BAR, REPLACE_BAR]) {

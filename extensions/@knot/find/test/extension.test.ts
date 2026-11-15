@@ -457,3 +457,11 @@ test("replace all and replace stay inside the scope, which follows the longer te
   assert.equal(host.editorBars(window).bars[1]!.message, "Replaced 1");
   assert.deepEqual(scope(window), [LINE_TWO[0], LINE_TWO[1]! + 2]);
 });
+
+test("find in selection is a command that opens find when it is closed", async () => {
+  const { window, editor } = await setup();
+  await editor.setSelection({ anchor: LINE_TWO[0]!, caret: LINE_TWO[1]! - 1 });
+  await host.run(TOGGLE_SCOPE, { window });
+  assert.deepEqual(host.editorBars(window).bars.map((bar) => bar.id), ["find"]);
+  assert.deepEqual(scope(window), [LINE_TWO[0], LINE_TWO[1]! - 1]);
+});
