@@ -1,6 +1,6 @@
 # D092: Piece tree text buffer
 
-Status: 🚧 approved, checkpoint 1 complete. Roadmap item [D092](../roadmap.md). Follows
+Status: 🚧 approved, checkpoint 1 complete, checkpoint 2 awaiting review. Roadmap item [D092](../roadmap.md). Follows
 the [text buffer analysis](../reports/text-buffer-structure.md) (option B);
 current behavior is owned by
 [core and buffers](../architecture/core-and-buffers.md) and
@@ -137,7 +137,9 @@ tokens followed through the edit log's `Split` records. The baseline is
 recorded above. The replace-all target of tens of milliseconds for 10,000
 matches stands.
 
-### 2. Piece tree with summaries and per-backing line indexes
+### 2. Piece tree with summaries and per-backing line indexes 🔍
+
+Implemented and awaiting the review gate; see the intermediate results below.
 
 Replace `pieces: Vec<Piece>` and `line_starts: Vec<LineStart>` with the
 persistent B-tree and per-backing line indexes, and make snapshots share the
@@ -161,6 +163,28 @@ O(pieces) for `resolve` but no longer slower than today.
 - **Review gate:** confirm typing is not slower than the baseline and that
   edit, snapshot, line, and read costs no longer grow with piece or line
   count, and settle the node fan-out.
+- **Intermediate results** (same machine and harness as the baseline; leaves
+  hold up to 32 pieces and internal nodes up to 16, chosen because 16/8,
+  64/16, and 64/32 measured the same within noise except for memory):
+
+  | Workload | Baseline | Piece tree |
+  | --- | --- | --- |
+  | Typing bursts, 1M lines | p50 145 µs, p99 307 µs | p50 0.2 µs, p99 3.9 µs |
+  | Replace-all, 10,000 matches | 3.43 s | 0.018 s |
+  | 50 cursors × 100 characters | 0.83 s | 0.003 s |
+  | Snapshot, 10k / 100k pieces | 21 µs / 141 µs | 0.13 µs / 0.08 µs |
+  | Last 50 lines, 100k pieces | 389 µs | 0.47 µs |
+  | `utf16_of_offset` / `offset_of_utf16` / `position_at`, 100k pieces | 363 / 339 / 47 µs | 0.11 / 0.14 / 0.04 µs |
+  | Resolve one anchored range, 10k / 100k pieces | 3.8 / 33 µs | 10.9 / 135 µs |
+  | Stabilize after deleting a quarter, 10k / 100k pieces | 18 / 137 ms | 47 / 461 ms |
+  | Heap per edit over an unedited buffer | 88 bytes, 1.8 allocations | 140 bytes, 1.05 allocations |
+
+  Everything but `resolve` is now logarithmic or constant. `resolve` still
+  walks every piece (a scan of leaves by id) and is about 3–4 times slower
+  than the old `Vec` scan, which also slows the stabilization that is
+  dominated by it; checkpoint 3 replaces the walk. Memory per piece grew
+  because a piece caches its line-break count and UTF-16 length (48 bytes
+  against 40); narrowing those fields is possible if it matters.
 - **Implementation context:** add `crates/knot-core/src/buffer/tree.rs` (the
   B-tree, summaries, seeks, cursor iteration) and a backing module (for
   example `buffer/backing.rs`) owning the original text, sealed chunks, tail,
