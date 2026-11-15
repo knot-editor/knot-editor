@@ -331,7 +331,9 @@ One native `Picker` serves the command palette, native pickers, and extension
 pickers. It matches the supplied item list locally through the shared
 `knot_model::matching` matcher, ranking label matches above description
 matches above an item's hidden match text, and keeps the caller's order for an
-empty query and equal scores; no provider, scheduler, or event bus is added. An extension
+empty query and equal scores; no provider, scheduler, or event bus is added.
+The panel has a search icon and the query field, whose placeholder is the
+picker's title, above inset, rounded rows. An extension
 picker with `onHighlight` or `onQuery` reports the highlighted item and the
 typed query through a pull loop in the caller's own turn, because package
 roots are serial and a notification could not run while the command awaits the

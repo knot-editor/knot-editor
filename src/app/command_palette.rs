@@ -66,7 +66,14 @@ impl<Origin: Clone> CommandPalette<Origin> {
                 arguments: CommandArgumentValue::Null,
             })
             .collect();
-        let picker = cx.new(|cx| Picker::new(None, entries, PALETTE_KEY_CONTEXT, cx));
+        let picker = cx.new(|cx| {
+            Picker::new(
+                Some("Search commands".into()),
+                entries,
+                PALETTE_KEY_CONTEXT,
+                cx,
+            )
+        });
         Self {
             picker,
             commands,

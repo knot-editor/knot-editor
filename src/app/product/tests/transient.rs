@@ -92,6 +92,10 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
     visual.run_until_parked();
     assert!(visual.debug_bounds("picker-icon-0").is_some());
     assert!(visual.debug_bounds("picker-icon-1").is_none());
+    assert!(visual.debug_bounds("picker-search-icon").is_some());
+    let panel = visual.debug_bounds("picker-panel").unwrap();
+    let row = visual.debug_bounds("picker-row-0").unwrap();
+    assert!(row.left() > panel.left() && row.right() < panel.right());
     cx.simulate_input(native_window, "beta");
     cx.simulate_keystrokes(native_window, "enter");
     assert_eq!(

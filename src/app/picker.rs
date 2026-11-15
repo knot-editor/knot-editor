@@ -17,6 +17,8 @@ use gpui::{prelude::*, *};
 
 use super::icons::{AppIcon, ref_definition};
 use super::keys::Keystroke;
+use super::{tokens, zoom};
+use knot_model::icons::IconDefinition;
 use knot_model::matching::{Matcher, Query, styles_from_names};
 
 use super::{
@@ -156,6 +158,11 @@ impl Picker {
             confirm_pending: false,
             _input_subscription: subscription,
         };
+        if let Some(title) = &this.title {
+            let title = title.clone();
+            this.input
+                .update(cx, |input, cx| input.set_placeholder(title, cx));
+        }
         this.refilter("", cx);
         this.highlighted = this.selected_entry();
         this
@@ -422,7 +429,7 @@ impl Render for Picker {
                             )))
                             .when_some(entry.description.clone(), |line, description| {
                                 line.child(
-                                    div().flex_1().truncate().text_sm().text_color(muted).child(
+                                    div().flex_1().truncate().text_xs().text_color(muted).child(
                                         highlighted(description, &found.description, matched),
                                     ),
                                 )
@@ -434,35 +441,48 @@ impl Render for Picker {
                                 line.child(
                                     div()
                                         .flex_shrink_0()
-                                        .text_sm()
+                                        .text_xs()
                                         .text_color(muted)
                                         .child(hint),
                                 )
                             });
                     div()
-                        .id(("picker-row", index))
                         .h(px(row_height))
-                        .px_3()
-                        .flex()
-                        .flex_col()
-                        .justify_center()
-                        .overflow_hidden()
-                        .when(is_selected, |row| {
-                            row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
-                                .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
-                        })
-                        .when(!is_selected, |row| {
-                            row.hover(|style| {
-                                style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
-                            })
-                        })
-                        .child(line)
-                        .when_some(entry.detail.clone(), |row, detail| {
-                            row.child(div().truncate().text_sm().text_color(muted).child(detail))
-                        })
-                        .on_click(move |_, _, cx| {
-                            entity.update(cx, |_, cx| cx.emit(PickerEvent::Confirmed(confirmed)));
-                        })
+                        .px(zoom::rems(tokens::list::ROW_INSET))
+                        .child(
+                            div()
+                                .id(("picker-row", index))
+                                .debug_selector(move || format!("picker-row-{index}"))
+                                .size_full()
+                                .px_2()
+                                .rounded(zoom::rems(tokens::radius::SM))
+                                .flex()
+                                .flex_col()
+                                .justify_center()
+                                .overflow_hidden()
+                                .when(is_selected, |row| {
+                                    row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                                        .text_color(
+                                            theme.paint_color(color::LIST_SELECTED_FOREGROUND),
+                                        )
+                                })
+                                .when(!is_selected, |row| {
+                                    row.hover(|style| {
+                                        style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
+                                    })
+                                })
+                                .child(line)
+                                .when_some(entry.detail.clone(), |row, detail| {
+                                    row.child(
+                                        div().truncate().text_xs().text_color(muted).child(detail),
+                                    )
+                                })
+                                .on_click(move |_, _, cx| {
+                                    entity.update(cx, |_, cx| {
+                                        cx.emit(PickerEvent::Confirmed(confirmed))
+                                    });
+                                }),
+                        )
                 })
                 .collect()
         })
@@ -471,27 +491,38 @@ impl Render for Picker {
 
         div()
             .id("picker")
+            .debug_selector(|| "picker-panel".to_owned())
             .w(px(PANEL_WIDTH * zoom))
             .flex()
             .flex_col()
-            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::MD))
+            .rounded(zoom::rems(tokens::radius::MD))
             .border_1()
             .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
             .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))
             .text_color(theme(cx).paint_color(color::TEXT))
             .shadow_lg()
+            .text_sm()
             .key_context(self.key_context)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .when_some(self.title.clone(), |panel, title| {
-                panel.child(div().px_3().pt_2().text_sm().child(title))
-            })
             .child(
                 div()
                     .px_3()
                     .py_2()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
                     .border_b_1()
                     .border_color(theme(cx).paint_color(color::BORDER))
-                    .child(self.input.clone()),
+                    .child(
+                        div()
+                            .debug_selector(|| "picker-search-icon".to_owned())
+                            .child(
+                                AppIcon::new(IconDefinition::lucide("search"))
+                                    .tinted(Some(color::TEXT_MUTED.to_owned())),
+                            ),
+                    )
+                    .child(div().flex_1().child(self.input.clone())),
             )
             .when(rows == 0, |panel| {
                 panel.child(
