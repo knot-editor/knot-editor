@@ -164,6 +164,19 @@ fn click_tracking_reports_buttons_and_wheels_without_selection_or_motion(cx: &mu
 }
 
 #[gpui::test]
+fn the_cell_grid_starts_after_the_left_inset(cx: &mut TestAppContext) {
+    let fixture = fixture(cx, "\\033[?1000h\\033[?1006h", 18);
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    let (bounds, first) = cx.read(|cx| (view.read(cx).interaction_bounds, cell(&view, cx, 0, 0)));
+    assert_eq!(bounds.origin.x, px(crate::app::tokens::chrome::TEXT_INSET));
+    assert!(first.x > bounds.origin.x);
+    cx.simulate_mouse_down(first, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(first, MouseButton::Left, Modifiers::default());
+    finish(&fixture, b"\x1b[<0;1;1M\x1b[<0;1;1m", cx);
+}
+
+#[gpui::test]
 fn drag_tracking_owns_release_outside_bounds_and_ignores_foreign_drags(cx: &mut TestAppContext) {
     let fixture = fixture(cx, "\\033[?1002h\\033[?1006h", 200);
     let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));

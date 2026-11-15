@@ -942,7 +942,8 @@ fn the_gutter_reserves_its_lanes_beside_the_text(cx: &mut TestAppContext) {
                 let text = view.text_bounds();
                 let gutter = px(view.gutter.width);
                 assert_eq!(gutter > px(16.), show_gutter);
-                assert_eq!(gutter == px(0.), !show_gutter);
+                assert!(gutter > px(0.));
+                assert_eq!(view.gutter_lane_at(bounds.origin).is_some(), show_gutter);
                 assert_eq!(text.origin.x - bounds.origin.x, gutter);
                 assert_eq!(text.size.width, bounds.size.width - gutter);
                 let x = view.caret_x_at(1, window, cx);

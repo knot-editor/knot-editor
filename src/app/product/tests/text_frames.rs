@@ -71,6 +71,7 @@ fn text_frames_show_the_gutter_only_when_registered_with_one(cx: &mut TestAppCon
             ExtensionView::Tree(_) => panic!("frame.plain is a text frame"),
         },
     );
-    assert_eq!(text_offset("frame.plain", cx), px(0.));
+    // A frame without a gutter keeps only the small text inset.
+    assert!(text_offset("frame.plain", cx) < px(16.));
     assert!(text_offset("frame.numbered", cx) > px(16.));
 }

@@ -36,6 +36,7 @@ mod shell_command;
 pub(crate) use product::driver;
 mod record_store;
 mod recovery;
+mod scrollbar;
 mod settings;
 mod status_bar;
 mod terminal;

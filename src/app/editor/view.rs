@@ -42,6 +42,7 @@ pub struct EditorView {
     /// jitter must not turn it into a text drag from the old caret.
     pub(super) suppress_drag_selection: bool,
     pub(super) caret_blink: CaretBlink,
+    pub(super) scroll_fade: crate::app::scrollbar::ScrollFade,
     pub(super) focus: FocusHandle,
     /// The bar field this view had the window focus as of the last render.
     pub(super) focused_field: Option<FocusHandle>,
@@ -142,6 +143,7 @@ impl EditorView {
             drag_anchor: None,
             suppress_drag_selection: false,
             caret_blink: CaretBlink::default(),
+            scroll_fade: Default::default(),
             focus: cx.focus_handle(),
             focused_field: None,
             history_was_focused: false,

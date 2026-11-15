@@ -726,24 +726,22 @@ impl Element for EditorElement {
             view.max_line_width = view.max_line_width.max(widest);
         });
 
-        // Scrollbar overlay: paint a thin vertical thumb at the right edge
-        // of the editor bounds indicating the current scroll position. Painted
-        // OUTSIDE the content-mask so it always shows at the pane's right edge
-        // regardless of how far the content has scrolled. Only drawn when the
-        // content exceeds the viewport.
+        // The scrollbar overlay sits at the pane's right edge, outside the
+        // content mask, so it shows wherever the content has scrolled.
         let viewport_h = f32::from(bounds.size.height);
-        let content_h = scroll_max;
-        if content_h > viewport_h && viewport_h > 0. {
-            let track = 6.0_f32;
-            let thumb_h = (viewport_h * viewport_h / content_h).max(track);
-            let origin_y = f32::from(bounds.origin.y);
-            let thumb_y = origin_y + (scroll.max(0.) / content_h) * (viewport_h - thumb_h);
-            let thumb_bounds = Bounds {
-                origin: point(bounds.origin.x + bounds.size.width - px(track), px(thumb_y)),
-                size: size(px(track), px(thumb_h)),
-            };
-            window.paint_quad(fill(thumb_bounds, colors.scrollbar));
-        }
+        self.entity.update(cx, |view, cx| {
+            view.scroll_fade.paint(
+                window,
+                cx,
+                bounds,
+                crate::app::scrollbar::Scroll {
+                    offset: scroll.max(0.),
+                    total: scroll_max,
+                    visible: viewport_h,
+                },
+                colors.scrollbar,
+            );
+        });
     }
 }
 pub(super) type EditorPaintState = (

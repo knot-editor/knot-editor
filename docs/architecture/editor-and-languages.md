@@ -179,6 +179,9 @@ the pointer is over the gutter, or always when `editor.showFoldingControls` is
 for the view's scope, turns the lane off. Documents always
 have the gutter, while a contributed text frame has none unless its
 registration asks for one.
+A view without a gutter and a terminal leave a small inset before the text.
+Editors and terminals draw a thin overlay scrollbar at the right edge that
+shows while the content moves and fades out shortly after.
 
 A view folds line regions, which stay per view. A collapsed fold keeps its
 first line visible, with an `editor.foldPlaceholder` `…` after it, and gives

@@ -24,7 +24,7 @@ pub(super) enum GutterLane {
 }
 
 /// Where each gutter lane sits, as x offsets from the view's left edge.
-/// A view without a gutter has a zero-width layout.
+/// A view without a gutter has no lanes, only the inset before its text.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct GutterLayout {
     pub(super) line_numbers: LineNumbers,
@@ -76,7 +76,7 @@ impl GutterLayout {
 
     /// The lane `x` pixels right of the view's left edge falls in.
     pub(super) fn lane_at(&self, x: f32) -> Option<GutterLane> {
-        if !(0. ..self.width).contains(&x) {
+        if self.markers_width == 0. || !(0. ..self.width).contains(&x) {
             None
         } else if x < self.markers_width {
             Some(GutterLane::Markers)
@@ -106,7 +106,10 @@ impl EditorView {
     /// Lay the gutter out for the current settings, line count, and font.
     pub(super) fn update_gutter_layout(&mut self, window: &Window, cx: &App) {
         if !self.rendering.show_gutter {
-            self.gutter = GutterLayout::default();
+            self.gutter = GutterLayout {
+                width: crate::app::tokens::chrome::TEXT_INSET * self.metrics.scale(),
+                ..GutterLayout::default()
+            };
             return;
         }
         let editor = self.editor.read(cx);

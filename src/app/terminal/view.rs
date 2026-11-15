@@ -63,6 +63,7 @@ pub(crate) struct TerminalView {
     /// pixels.
     reported_position: Option<(f32, f32)>,
     interaction_bounds: Bounds<Pixels>,
+    scroll_fade: crate::app::scrollbar::ScrollFade,
     layout: Option<TerminalLayout>,
     focus_subscriptions: Vec<Subscription>,
     render_state: RenderState,
@@ -196,6 +197,7 @@ impl TerminalView {
             pointer_modifiers: Modifiers::default(),
             reported_position: None,
             interaction_bounds: Bounds::default(),
+            scroll_fade: Default::default(),
             layout: None,
             focus_subscriptions: Vec::new(),
             render_state: RenderState::new(),
@@ -790,6 +792,9 @@ impl Render for TerminalView {
                     .size_full()
                     .track_focus(&self.focus)
                     .key_context(TERMINAL_KEY_CONTEXT)
+                    .pl(crate::app::zoom::rems(
+                        crate::app::tokens::chrome::TEXT_INSET,
+                    ))
                     .child(TerminalElement { entity }),
             )
             .when(terminal_overlay_label(&status).is_some(), |this| {
@@ -922,6 +927,7 @@ struct TerminalSnapshot {
     cells: Vec<RenderCell>,
     cursor: Option<RenderCursor>,
     links: Option<LinkGrid>,
+    scrollbar: Option<knot_terminal::Scrollbar>,
 }
 
 impl TerminalSnapshot {
@@ -991,10 +997,12 @@ impl TerminalSnapshot {
             links.end_row(wrapped);
         }
         state.clean();
+        let scrollbar = lock(terminal).scrollbar();
         Self {
             cells,
             cursor,
             links: Some(links.finish(&lock(terminal))),
+            scrollbar: Some(scrollbar),
         }
     }
 }
@@ -1129,6 +1137,7 @@ impl Element for TerminalElement {
             });
             (snapshot, hovered)
         });
+        let scrollbar_color = theme(cx).paint_color(color::SCROLLBAR_THUMB);
         if hovered.is_some() && link_modifier(window.modifiers()) {
             window.set_cursor_style(CursorStyle::PointingHand, hitbox);
         }
@@ -1259,6 +1268,21 @@ impl Element for TerminalElement {
                 );
             }
         });
+        if let Some(scrollbar) = snapshot.scrollbar {
+            self.entity.update(cx, |view, cx| {
+                view.scroll_fade.paint(
+                    window,
+                    cx,
+                    bounds,
+                    crate::app::scrollbar::Scroll {
+                        offset: scrollbar.offset as f32,
+                        total: scrollbar.total as f32,
+                        visible: scrollbar.len as f32,
+                    },
+                    scrollbar_color,
+                );
+            });
+        }
     }
 }
 

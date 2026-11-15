@@ -14,7 +14,10 @@ pub(crate) mod radius {
 /// Heights and widths of the workbench chrome.
 pub(crate) mod chrome {
     pub(crate) const TAB_BAR_HEIGHT: f32 = 30.;
-    pub(crate) const STATUS_BAR_HEIGHT: f32 = 22.;
+    pub(crate) const STATUS_BAR_HEIGHT: f32 = 24.;
+    /// A status or toolbar item, centered in its bar.
+    pub(crate) const STATUS_ITEM_HEIGHT: f32 = 20.;
+    pub(crate) const STATUS_TEXT_SIZE: f32 = 12.;
     pub(crate) const STRIPE_WIDTH: f32 = 36.;
     pub(crate) const STRIPE_BUTTON: f32 = 30.;
     pub(crate) const STRIPE_GROUP_MIN_HEIGHT: f32 = 60.;
@@ -27,6 +30,8 @@ pub(crate) mod chrome {
     /// The width the native window buttons take at the toolbar row's start.
     pub(crate) const WINDOW_BUTTONS_WIDTH: f32 = 80.;
     pub(crate) const TOOLBAR_HEIGHT: f32 = 40.;
+    /// The space between a text surface's left edge and its text, where no gutter sits.
+    pub(crate) const TEXT_INSET: f32 = 8.;
 }
 
 /// Lists, trees, and pickers.
