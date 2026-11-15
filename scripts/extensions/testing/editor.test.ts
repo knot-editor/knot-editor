@@ -73,6 +73,9 @@ test("find matches literally in byte offsets with case, word, range, and limit o
   assert.equal(limited.matches.length, 2);
   assert.equal(limited.more, true);
   await assert.rejects(buffer.find("é", { range: { startByteOffset: 1, endByteOffset: 5 } }), { code: "InvalidRange" });
+  assert.deepEqual(await ranges("c(a)t", { regex: true, wholeWord: true }), [[19, 22], [30, 33]]);
+  assert.deepEqual(await ranges("^", { regex: true, range: { startByteOffset: 0, endByteOffset: 0 } }), [[0, 0]]);
+  await assert.rejects(buffer.find("(", { regex: true }), { code: "InvalidQuery" });
 });
 
 test("find folds case one character at a time", async () => {

@@ -847,6 +847,7 @@ pub(crate) struct FindArguments {
     pub query: String,
     pub case_sensitive: bool,
     pub whole_word: bool,
+    pub regex: bool,
     pub range: Option<ByteRange>,
     pub limit: u64,
 }
@@ -861,13 +862,16 @@ impl HostArguments for FindArguments {
             whole_word: reader
                 .optional_boolean(5, "wholeWord must be a boolean")?
                 .unwrap_or(false),
-            range: reader.range(6)?,
-            limit: reader.integer(7)?,
+            regex: reader
+                .optional_boolean(6, "regex must be a boolean")?
+                .unwrap_or(false),
+            range: reader.range(7)?,
+            limit: reader.integer(8)?,
         })
     }
 }
 
-/// The literal matches of a query, in order, with the revision searched.
+/// The matches of a query, in order, with the revision searched.
 #[host_operation("find")]
 pub(crate) async fn find(
     context: HostContext,
@@ -885,11 +889,17 @@ pub(crate) async fn find(
                 let options = knot_model::buffer::FindOptions {
                     case_sensitive: arguments.case_sensitive,
                     whole_word: arguments.whole_word,
+                    regex: arguments.regex,
                 };
                 let limit = usize::try_from(arguments.limit).unwrap_or(usize::MAX);
                 let found = model
                     .find(&arguments.query, options, arguments.range, limit)
-                    .map_err(|_| BufferError::InvalidRange)?;
+                    .map_err(|error| match error {
+                        knot_model::buffer::FindError::Access(_) => BufferError::InvalidRange,
+                        knot_model::buffer::FindError::InvalidQuery(message) => {
+                            BufferError::InvalidQuery { message }
+                        }
+                    })?;
                 Ok(FindResult {
                     revision: model.revision(),
                     matches: found

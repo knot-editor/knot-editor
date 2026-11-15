@@ -1355,6 +1355,15 @@ declare module "knot" {
      * needs no boundary, and the text around a `range` counts.
      */
     readonly wholeWord?: boolean;
+    /**
+     * Read the query as a Rust `regex` pattern, matched natively in multi-line
+     * mode: `^` and `$` match at line boundaries and `\n` matches across
+     * lines. `caseSensitive` is the pattern's case flag, and `wholeWord`
+     * checks each match's edges. Empty matches are returned; a search resumes
+     * one character after one. Anchors and `\b` at a `range` edge look at the
+     * text outside it.
+     */
+    readonly regex?: boolean;
     /** Search only here; a match must lie wholly inside. Defaults to the whole buffer. */
     readonly range?: ByteRange;
     /** Most matches to return, 1000 by default and at most 100000 whatever is asked. */
@@ -1453,14 +1462,16 @@ declare module "knot" {
      */
     wordAt(offset: number): Promise<WordSegment | null>;
     /**
-     * Find the occurrences of a literal query, in order and without overlap,
+     * Find the occurrences of a query (literal, or a pattern with
+     * `options.regex`), in order and without overlap,
      * in the whole buffer or `options.range`. Matching is native, so the text
      * never crosses the boundary. The result carries the revision it searched,
      * for the revision-checked calls that use it; `more` is true when a match
      * followed the last one returned. An empty query matches nothing.
      * @throws TypeError for a non-string query or an invalid limit; HostError
      * with BufferClosed, InvalidRange for a range past the end, reversed, or
-     * splitting a UTF-8 scalar, or Cancelled on teardown.
+     * splitting a UTF-8 scalar, InvalidQuery with the parser's message for an
+     * invalid pattern (`details.message`), or Cancelled on teardown.
      */
     find(query: string, options?: FindOptions): Promise<FindResult>;
     /**

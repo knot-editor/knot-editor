@@ -17,7 +17,7 @@ use crate::app::model::{
     BufferSubscriptionRegistry, ContributionError, ContributionSource,
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, HostError)]
+#[derive(Clone, Debug, Eq, PartialEq, HostError)]
 pub(crate) enum BufferError {
     #[error(transparent)]
     Access(AccessError),
@@ -33,6 +33,11 @@ pub(crate) enum BufferError {
     RevisionConflict,
     #[error(code = "ContributionSetNotFound", message = "ContributionSetNotFound")]
     ContributionSetNotFound,
+    #[error(
+        code = "InvalidQuery",
+        message = "invalid regular expression: {message}"
+    )]
+    InvalidQuery { message: String },
 }
 
 impl From<AccessError> for BufferError {

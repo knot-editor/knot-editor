@@ -52,6 +52,13 @@ await commands.register("api.find", async ({ buffer }) => {
   const within = await buffer.find("é", { range: { startByteOffset: 3, endByteOffset: 13 } });
   check(JSON.stringify(ranges(within)) === "[[3,5],[11,13]]", "range");
   check((await buffer.find("")).matches.length === 0, "empty query");
+  const pattern = await buffer.find("c(a)t", { regex: true, wholeWord: true });
+  check(JSON.stringify(ranges(pattern)) === "[[19,22],[30,33]]", "regex whole words");
+  const lines = await buffer.find("^", { regex: true, range: { startByteOffset: 0, endByteOffset: 0 } });
+  check(JSON.stringify(ranges(lines)) === "[[0,0]]", "empty regex match");
+  const invalid = await buffer.find("(", { regex: true }).catch((error) => error);
+  check(invalid.code === "InvalidQuery" && invalid.details.message.includes("unclosed group"), "invalid pattern");
+  check((await buffer.find("(")).matches.length === 0, "a literal paren is no pattern");
   await expectCode(() => buffer.find("é", { range: { startByteOffset: 1, endByteOffset: 5 } }), "InvalidRange");
   await expectCode(() => buffer.find("é", { range: { startByteOffset: 0, endByteOffset: 1000 } }), "InvalidRange");
   let rejected = false;

@@ -95,14 +95,19 @@ by stale views. Disposal, cancellation, and host release follow the shared
 
 ## Text search
 
-`BufferModel::find` (`crates/knot-model/src/buffer/find.rs`) matches a literal
-query over the buffer text, optionally within a byte range, in order and
-without overlap. Matching compares simple case folds unless `caseSensitive`;
+`BufferModel::find` (`crates/knot-model/src/buffer/find.rs`) matches a query
+over the buffer text, optionally within a byte range, in order and without
+overlap. A literal query compares simple case folds unless `caseSensitive`.
+With `regex` the query is a Rust `regex` pattern in multi-line mode (`^` and
+`$` at line boundaries, `\n` across lines) and case folding is the engine's;
+empty matches are kept and the search resumes one character after one, and an
+invalid pattern fails with the parser's message. Anchors and `\b` at a range
+edge are judged against the buffer text just outside it, as `wholeWord` is.
 `wholeWord` requires non-word characters, in the editor's word classes, on both
 sides of a match. The result carries the searched revision, the byte ranges, and
 whether more matches follow a limit that defaults to 1,000 and is capped at
 100,000. There is no reverse search: a caller wanting the matches before a
-point searches the range before it. Regular expressions are not supported.
+point searches the range before it.
 
 ## Anchored ranges
 

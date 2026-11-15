@@ -303,6 +303,7 @@ function findMatches(
   rangeStart: number,
   rangeEnd: number,
 ): [number, number][] {
+  if (options.regex === true) return findPatternMatches(text, query, options, rangeStart, rangeEnd);
   const fold = (character: string) => foldCharacter(character, options.caseSensitive === true);
   const wanted = [...query].map(fold);
   const matches: [number, number][] = [];
@@ -329,6 +330,46 @@ function findMatches(
       }
     }
     index += text.codePointAt(index)! > 0xffff ? 2 : 1;
+  }
+  return matches;
+}
+
+/**
+ * An approximation of the native regex search with JavaScript's engine: same
+ * multi-line anchors, empty matches, and whole-word check, but its syntax and
+ * its view of the text around the range differ in corners.
+ */
+function findPatternMatches(
+  text: string,
+  pattern: string,
+  options: Knot.FindOptions,
+  rangeStart: number,
+  rangeEnd: number,
+): [number, number][] {
+  const matches: [number, number][] = [];
+  if (pattern === "") return matches;
+  let expression: RegExp;
+  try {
+    expression = new RegExp(pattern, `gmu${options.caseSensitive === true ? "" : "i"}`);
+  } catch (error) {
+    throw hostError("InvalidQuery", `invalid regular expression: ${(error as Error).message}`);
+  }
+  const characterAt = (index: number) =>
+    text.codePointAt(index) === undefined ? undefined : String.fromCodePoint(text.codePointAt(index)!);
+  const characterBefore = (index: number) => (index > 0 ? [...text.slice(Math.max(0, index - 2), index)].at(-1) : undefined);
+  expression.lastIndex = rangeStart;
+  for (let found = expression.exec(text); found !== null; found = expression.exec(text)) {
+    const start = found.index;
+    const end = start + found[0].length;
+    if (end > rangeEnd) break;
+    if (end === start) expression.lastIndex = end + (characterAt(end)?.length ?? 1);
+    const first = characterAt(start);
+    const last = characterBefore(end);
+    const bounded =
+      options.wholeWord !== true ||
+      ((!isWordCharacter(first) || !isWordCharacter(characterBefore(start))) &&
+        (!isWordCharacter(last) || !isWordCharacter(characterAt(end))));
+    if (bounded) matches.push([start, end]);
   }
   return matches;
 }

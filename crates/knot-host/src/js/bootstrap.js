@@ -529,6 +529,7 @@ function bufferFor(handle) {
         query,
         options?.caseSensitive === true,
         options?.wholeWord === true,
+        options?.regex === true,
         options?.range == null ? null : byteRange(options.range),
         limit,
       );

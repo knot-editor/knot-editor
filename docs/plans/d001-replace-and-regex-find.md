@@ -24,8 +24,9 @@ The `@knot/find` bar gains, with VS Code and IntelliJ behavior and bindings:
 
 ### Native matching (`knot-model`)
 
-- `FindOptions` gains `regex`. Regex mode uses the `regex` crate (already in
-  the lockfile) in multi-line mode: `^`/`$` match at line boundaries and `\n`
+- `FindOptions` gains `regex`. Regex mode uses `regex-automata`'s meta regex
+  (the engine under the `regex` crate, already in the lockfile, and the one
+  that can search a span of a larger haystack) in multi-line mode: `^`/`$` match at line boundaries and `\n`
   matches across lines. Case-insensitive regex uses the crate's own folding;
   literal mode keeps the current simple-fold matcher. Whole word applies the
   existing word-class edge check to each regex match.
@@ -89,7 +90,13 @@ None material. Bindings and icons follow VS Code and may be adjusted at review.
 
 ## Checkpoints
 
-### 1. Regex matching in `buffer.find`
+### 1. Regex matching in `buffer.find` ✅
+
+Status: implemented, awaiting review. ✅ Model matcher and `FindError`,
+✅ host operation and `InvalidQuery` (code shared with language queries, parser
+message in `details.message`), ✅ `knot.d.ts`, guide and architecture, ✅ model
+and extension-API tests, ✅ the fake testing host approximates regex with
+JavaScript `RegExp`.
 
 Deliverables: `regex` option and `InvalidQuery` across model, protocol, host
 operation, `knot.d.ts`, and the extension guide; model tests for multi-line
