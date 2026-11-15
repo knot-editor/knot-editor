@@ -1,4 +1,4 @@
-//! `TextBuffer`: stable-ID piece-table backing store.
+//! `TextBuffer`: stable-ID piece-tree backing store.
 //!
 //! The buffer has monotonic stable piece IDs, insert / delete / replace /
 //! read-range operations, line and UTF-16 queries, and a `Position` /
@@ -330,7 +330,7 @@ struct Piece {
     utf16: usize,
 }
 
-/// A hand-rolled piece table with stable piece IDs.
+/// A hand-rolled piece tree with stable piece IDs.
 ///
 /// See module docs for the backing-store and split-rule policies.
 pub struct TextBuffer {

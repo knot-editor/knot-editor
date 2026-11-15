@@ -28,7 +28,7 @@ detailed in [semantic UI](semantic-ui.md#completion-ownership-and-aggregation).
 
 A view keeps no copy of the text. It reads the lines it paints, measures, or
 edits from the model, and converts positions, including the platform's
-document-wide UTF-16 offsets, through the buffer's line index, so editing cost
+document-wide UTF-16 offsets, through the buffer's line lookups, so editing cost
 does not grow with document size. A test guards that editing, navigation, IME,
 scrolling, and painting never read the whole document.
 

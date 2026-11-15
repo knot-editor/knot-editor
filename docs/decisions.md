@@ -35,7 +35,8 @@ touches.
 ## [Core and buffers](decisions/core-and-buffers.md)
 
 - [Text buffer and stable positions](decisions/core-and-buffers.md#text-buffer-and-stable-positions):
-  a hand-built stable-ID piece table with an eager line index.
+  a hand-built stable-ID piece tree with per-backing line indexes and
+  piece locators.
 - [Anchored ranges and contributions](decisions/core-and-buffers.md#anchored-ranges-and-contributions):
   geometry in core, feature policy in the application.
 - [Reversible edits](decisions/core-and-buffers.md#reversible-edits): undo

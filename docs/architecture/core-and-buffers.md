@@ -8,7 +8,7 @@ Part of the [architecture](../architecture.md). Design rationale is recorded in
 `knot-core` contains:
 
 - `TextBuffer`: UTF-8 text, stable positions, line lookup, and the primitive
-  edit log, implemented as a stable-ID piece table.
+  edit log, implemented as a stable-ID piece tree.
 - `AnchoredRangeStore`: stable range geometry without feature, source, or
   presentation metadata.
 - `EditTransaction`: one reversible group of primitive edits, not an undo
@@ -69,17 +69,23 @@ by stale views. Disposal, cancellation, and host release follow the shared
 - A `Position` identifies a piece and offset. Splits preserve the left piece ID
   and allocate a right piece ID; edit-log records repair affected stale
   positions. Unrelated positions require no work.
-- The line index is maintained on every edit and records each line start as
-  both a byte offset and a UTF-16 offset, so views and platform text input
-  convert positions without scanning the document. It is intentionally
-  replaceable: its linear suffix update dominates large-buffer edit cost, and
-  replacement remains deferred pending real workload evidence.
+- Pieces live in a persistent B-tree whose nodes summarize their subtree's
+  bytes, line breaks, and UTF-16 units. Offset, line, and UTF-16 lookups and
+  edits are O(log pieces), so a buffer with many thousands of pieces edits and
+  answers queries as fast as a fresh one.
+- There is no document-wide line table. The original text and each add chunk
+  keep their own line starts as byte and UTF-16 offsets, and a piece caches
+  its break count and UTF-16 length, so views and platform text input convert
+  positions without scanning the document.
+- Each piece carries a locator, an ordering key fixed at creation that
+  increases in text order. The foreground buffer maps piece IDs to locators,
+  so resolving a `Position` is a map lookup plus a tree seek, not a walk.
 - Inserted backing storage is append-only. Contiguous typing extends the piece
-  at the end of the add buffer instead of adding one per keystroke; other
-  edits still add pieces, and compaction remains deferred.
-- The original text and sealed add-buffer chunks are shared `Arc<str>`s, so an
-  immutable `Send` `TextSnapshot` copies only the unsealed tail and the piece
-  list. Readers off the foreground use snapshots instead of the live buffer.
+  at the end of the add buffer instead of adding one per keystroke.
+- The original text and sealed add-buffer chunks are shared `Arc<str>`s and
+  tree nodes are copy-on-write, so an immutable `Send` `TextSnapshot` clones
+  the tree root and copies only the unsealed tail. Readers off the foreground
+  use snapshots instead of the live buffer.
 - Each primitive edit records its start and old and new end as line and
   byte-column points as well as byte offsets, because a later primitive in
   the same commit makes them unrecoverable; syntax trees are edited with them.

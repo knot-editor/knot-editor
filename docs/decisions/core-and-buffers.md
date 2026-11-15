@@ -6,22 +6,54 @@ Text storage, stable positions, anchored ranges, and history. The
 
 ## Text buffer and stable positions
 
-Use a hand-built stable-ID piece table for direct control over edit events and
-stable positions. A single-threaded UTF-8 core matches foreground ownership;
-presentation handles graphemes and the extension boundary adapts strings.
+Use a hand-built stable-ID piece tree: a persistent, copy-on-write B-tree of
+pieces whose nodes summarize bytes, line breaks, and UTF-16 length, with a line
+index per backing and an ordering locator per piece. It gives direct control
+over edit events and stable positions, and bulk edits, snapshots, and position
+resolution stop depending on document size or piece count. A single-threaded
+UTF-8 core matches foreground ownership; presentation handles graphemes and the
+extension boundary adapts strings. The structure is in
+[core and buffers](../architecture/core-and-buffers.md#stable-positions-and-edit-behavior).
 
-On Apple M1 Pro/macOS release builds with a 1,001,395-line, 29 MiB Rust fixture,
-edits measured p50 678 µs with the line index and 75 µs without it. Linear suffix
-shifts accounted for about 88% of indexed latency; position issuance and
-resolution were sub-microsecond. This supports deferring index replacement until
-real workloads justify it (D092); absolute tails included system noise.
+Rejected: patching the flat `Vec` and document-wide line index piece by piece,
+which left the piece walk, the splice, and the O(pieces) snapshot each needing
+its own index; a rope crate, which loses piece identity, so anchors would be
+remapped through the edit stream or rebuilt on an ID layer, which is the piece
+tree again; and a gap buffer or CRDT, which offer no stable positions or
+snapshots, or pay for collaboration, a [design non-goal](../design.md#non-goals).
+Batched bulk-edit primitives and piece compaction were left out because
+per-primitive O(log n) edits already make replace-all fast.
 
-The line index is eager because views read lines from the model rather than
-keeping a private copy, which had made every keystroke cost O(document) per
-view. It also records UTF-16 line starts, because platform text input speaks
-document-wide UTF-16 offsets and every IME callback had scanned from the start
-of the document. The core stays UTF-8: the rejected whole-document UTF-16 table
-was a JavaScript adapter that exceeded the isolate heap (see
+Measured with `cargo run --release -p knot-core --example buffer_bench` on an
+Apple M1 Pro, macOS, with a 1M-line, 27.8 MiB fixture and 100,000-line fixtures
+for the piece-count workloads (about two pieces per insert):
+
+| Workload | `Vec` and flat line index | Piece tree |
+| --- | --- | --- |
+| Typing p50 / p99, 1M lines | 145 / 307 µs | 0.2 / 4.4 µs |
+| Replace-all, 10,000 matches | 3.43 s | 0.069 s |
+| 50 cursors × 100 characters | 0.83 s | 0.004 s |
+| Snapshot, 10k / 100k pieces | 21 / 141 µs | 0.12 / 0.05 µs |
+| Build 10k / 100k pieces | 0.10 / 2.6 s | 0.01 / 0.09 s |
+| Resolve per anchored range, 10k / 100k pieces | 3.8 / 33 µs | 0.27 / 0.65 µs |
+| Stabilize after deleting a quarter of the text, 10k / 100k pieces | 18 / 137 ms | 3 / 7 ms |
+| Last 50 lines, 100k pieces | 389 µs | 0.50 µs |
+| `utf16_of_offset` / `position_at`, 100k pieces | 363 / 47 µs | 0.12 / 0.04 µs |
+| `line_of_offset`, 100k pieces | 0.02 µs | 0.09 µs |
+| Heap per edit | 88 B, 1.8 allocations | 294 B, 6.4 allocations |
+
+Resolve scales with the logarithm of the piece count because of the locators.
+Their cost shows in the last row and in replace-all, which was 0.018 s before
+locators: a map insert and a key allocation per piece, accepted for
+logarithmic resolve. Typing deepens a locator by about one digit per 17–32
+pieces inserted at one point, and appends stay one digit.
+
+The line index is per backing because views read lines from the model rather
+than keeping a private copy, which had made every keystroke cost O(document)
+per view. It also records UTF-16 line starts, because platform text input
+speaks document-wide UTF-16 offsets and every IME callback had scanned from the
+start of the document. The core stays UTF-8: the rejected whole-document UTF-16
+table was a JavaScript adapter that exceeded the isolate heap (see
 [extension runtime](extension-host.md#extension-runtime)), not one integer per
 line in Rust.
 

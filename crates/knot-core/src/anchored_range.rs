@@ -311,7 +311,7 @@ impl AnchoredRangeStore {
     /// endpoints whose token pieces are touched by those edits.
     ///
     /// Untouched anchored ranges are not scanned: their `Position` tokens stay
-    /// valid and resolve through the buffer's piece table.
+    /// valid and resolve through the buffer's piece tree.
     pub fn stabilize(&mut self, buffer: &TextBuffer) -> StabilizationResult {
         let edits = buffer.edits_since(self.cursor);
         // Invariant: the log must never have been shortened underneath us.

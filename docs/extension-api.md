@@ -104,7 +104,7 @@ The buffer belongs to the command’s captured context. Focus changes during
 the revision read from a snapshot. Completion and change callbacks receive an
 explicit buffer to use outside commands.
 
-Buffers answer line lookups from their line index: `lineCount()`,
+Buffers answer line lookups directly: `lineCount()`,
 `lineRange(line)` without the line's terminator, and `lineAt(offset)`. Lines
 are 0-based like every other coordinate; snapshot one line's range to work with
 its text, so a large file never crosses the boundary whole.
