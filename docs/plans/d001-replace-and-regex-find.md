@@ -99,32 +99,12 @@ pattern cache was measured unnecessary (compile and search of a small buffer
 took 0.03–0.8 ms). The fake testing host approximates regex with JavaScript
 `RegExp`.
 
-### 2. `buffer.replace` ✅ — awaiting review
+### 2. `buffer.replace` ✅
 
-Deliverables: model function returning the edit batch and count, host
-operation committing it through the buffer's normal edit path, `knot.d.ts`
-and guide entry; model tests for expansion (`$1`, `${name}`, `$$`, escapes),
-literal mode, empty matches, range, limit/`more`, and no-op; host-level tests
-for revision conflict, single undo step, and one change notification.
-
-Implementation context:
-- Expansion and batch construction in `crates/knot-model/src/buffer/find.rs`
-  (or a sibling `replace.rs`), returning plain data.
-- Handler beside `find` and `apply_edits` in
-  `src/app/extensions/host/handlers.rs`; commit through the same buffer path
-  `host.buffers.apply_edits` uses so history, read-only, and change
-  notification behave identically.
-- `bootstrap.js`, `knot.d.ts`, `docs/extension-api.md`.
-
-Done: `BufferModel::replace_matches` / `find_and_replace`, the `replace` host
-operation (`ReplaceArguments`, `ReplaceResult`), `bootstrap.js`, `knot.d.ts`,
-the guide and [text search](../architecture/core-and-buffers.md#text-search),
-and the fake testing host. Model tests cover expansion, escapes, literal mode,
-empty matches, range, limit/`more`, and no-op; host tests cover revision
-conflict, read-only, one notification, and one undo step per call. `ifRevision`
-is optional and defaults to the current revision.
-
-Review gate: primitive semantics, ready for D150 to reuse.
+Complete and approved. Behavior: [text search](../architecture/core-and-buffers.md#text-search);
+API: `knot.d.ts` and the [extension guide](../extension-api.md#show-an-editor-bar).
+`ifRevision` is optional and defaults to the current revision. The fake testing
+host expands replacements with JavaScript `RegExp`, an approximation.
 
 ### 3. Regex toggle and Replace bar
 
