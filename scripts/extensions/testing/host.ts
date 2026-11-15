@@ -303,7 +303,9 @@ function findMatches(
   rangeStart: number,
   rangeEnd: number,
 ): [number, number][] {
-  if (options.regex === true) return findPatternMatches(text, query, options, rangeStart, rangeEnd);
+  if (options.regex === true) {
+    return findPatternMatches(text, query, options, rangeStart, rangeEnd).map(({ start, end }) => [start, end]);
+  }
   const fold = (character: string) => foldCharacter(character, options.caseSensitive === true);
   const wanted = [...query].map(fold);
   const matches: [number, number][] = [];
@@ -345,8 +347,8 @@ function findPatternMatches(
   options: Knot.FindOptions,
   rangeStart: number,
   rangeEnd: number,
-): [number, number][] {
-  const matches: [number, number][] = [];
+): PatternMatch[] {
+  const matches: PatternMatch[] = [];
   if (pattern === "") return matches;
   let expression: RegExp;
   try {
@@ -369,9 +371,28 @@ function findPatternMatches(
       options.wholeWord !== true ||
       ((!isWordCharacter(first) || !isWordCharacter(characterBefore(start))) &&
         (!isWordCharacter(last) || !isWordCharacter(characterAt(end))));
-    if (bounded) matches.push([start, end]);
+    if (bounded) matches.push({ start, end, groups: [...found], named: { ...found.groups } });
   }
   return matches;
+}
+
+interface PatternMatch {
+  start: number;
+  end: number;
+  groups: (string | undefined)[];
+  named: Record<string, string | undefined>;
+}
+
+/** The native replacement's expansion: `\\n`, `\\t`, `\\\\`, then `$1`, `${name}` and `$$`. */
+function expandReplacement(replacement: string, match: PatternMatch): string {
+  const template = replacement.replace(/\\([nt\\])/g, (_, escaped: string) =>
+    escaped === "n" ? "\n" : escaped === "t" ? "\t" : "\\",
+  );
+  return template.replace(/\$(?:(\$)|\{(\w+)\}|(\w+))/g, (_, dollar: string | undefined, braced?: string, bare?: string) => {
+    if (dollar !== undefined) return "$";
+    const name = (braced ?? bare)!;
+    return (/^\d+$/.test(name) ? match.groups[Number(name)] : match.named[name]) ?? "";
+  });
 }
 
 /** The native word segments of a line as UTF-16 `[start, end, kind]` triples. */
@@ -558,6 +579,39 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
         })),
         more: matches.length > limit,
       };
+    },
+    replace: async (query, replacement, options) => {
+      if (options?.ifRevision !== undefined && options.ifRevision !== document.revision) {
+        throw hostError("RevisionConflict");
+      }
+      const range = options?.range ?? { startByteOffset: 0, endByteOffset: byteLength(document.text) };
+      const start = utf16AtByte(document.text, range.startByteOffset);
+      const end = utf16AtByte(document.text, range.endByteOffset);
+      if (start === undefined || end === undefined || start > end) throw hostError("InvalidRange");
+      const limit = Math.min(options?.limit ?? MAX_FIND_MATCHES, MAX_FIND_MATCHES);
+      const found: { start: number; end: number; text: string }[] =
+        options?.regex === true
+          ? findPatternMatches(document.text, query, options, start, end).map((match) => ({
+              ...match,
+              text: expandReplacement(replacement, match),
+            }))
+          : findMatches(document.text, query, options ?? {}, start, end).map(([from, to]) => ({
+              start: from,
+              end: to,
+              text: replacement,
+            }));
+      const chosen = found.slice(0, limit);
+      const result = { count: chosen.length, more: found.length > limit };
+      if (chosen.length === 0) return { revision: document.revision, ...result };
+      const edits = chosen.map((match) => ({
+        range: {
+          startByteOffset: byteLength(document.text.slice(0, match.start)),
+          endByteOffset: byteLength(document.text.slice(0, match.end)),
+        },
+        text: match.text,
+      }));
+      const applied = await fake.applyEdits(edits, { ifRevision: document.revision });
+      return { revision: applied.revision, ...result };
     },
     createMark: async (offset) => {
       if (document.text === "" || utf16AtByte(document.text, offset) === undefined) {

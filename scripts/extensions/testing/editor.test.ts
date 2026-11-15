@@ -78,6 +78,30 @@ test("find matches literally in byte offsets with case, word, range, and limit o
   await assert.rejects(buffer.find("(", { regex: true }), { code: "InvalidQuery" });
 });
 
+test("replace commits matches in one batch with expansion, limit, and revision checks", async () => {
+  const document = host.addDocument({ text: "foo Bar foo\nbaz" });
+  host.openWindow({ documents: [document] });
+  const buffer = (await capture()).buffer!;
+  const text = async () => (await buffer.snapshot()).text;
+  let changes = 0;
+  await buffer.onDidChange(() => {
+    changes += 1;
+  });
+  const none = await buffer.replace("zzz", "y");
+  assert.deepEqual(none, { revision: 0, count: 0, more: false });
+  await assert.rejects(buffer.replace("foo", "x", { ifRevision: 4 }), { code: "RevisionConflict" });
+  await assert.rejects(buffer.replace("(", "x", { regex: true }), { code: "InvalidQuery" });
+  assert.deepEqual(await buffer.replace("foo", "$1", { limit: 1 }), { revision: 1, count: 1, more: true });
+  assert.equal(await text(), "$1 Bar foo\nbaz");
+  const expanded = await buffer.replace("(?<word>\\w+) (\\w+)", "${word}_$2\\n$$", { regex: true });
+  assert.equal(expanded.count, 1);
+  assert.equal(await text(), "$1_Bar\n$ foo\nbaz");
+  const lines = await buffer.replace("^", "// ", { regex: true });
+  assert.equal(lines.count, 3);
+  assert.equal(await text(), "// $1_Bar\n// $ foo\n// baz");
+  assert.equal(changes, 3);
+});
+
 test("find folds case one character at a time", async () => {
   const document = host.addDocument({ text: "Σ σ ς ß ss SS İ ı i" });
   host.openWindow({ documents: [document] });
