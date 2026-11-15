@@ -1,6 +1,6 @@
 # Modern UI
 
-Status: 🚧 in progress (checkpoints 1–2 done).
+Status: 🚧 in progress (checkpoints 1–3 done).
 
 ## Goal
 
@@ -105,28 +105,17 @@ rectangles, so a child's background must match the card's near a rounded
 corner; check the non-Islands themes for pokes. Whether the focused card gets
 an emphasis is still open (see deferred decisions).
 
-### 3. Main toolbar ✅ (awaiting review)
+### 3. Main toolbar ✅
 
-Deliverables: status items gain a toolbar placement; the toolbar renders
-left and right groups; `@knot/projects` registers the project widget and
-`@knot/go-to-file` the search button; the revised window chrome decision.
-
-Validation: model tests for placement in the status registry; package tests
-against the fake host; a product test that clicks a toolbar item and runs
-its command in that window.
-
-Review gate: the project widget follows a project switch per window; search
-opens Go to File.
-
-**Implementation context**: the registry in `src/app/status_bar.rs` and its
-model; `StatusItemOptions` in `crates/knot-host/src/js/knot.d.ts` and
-`docs/schemas`; the handler in `src/app/extensions/host/handlers.rs`;
-`render_status_item` reused for toolbar items; mirror `@knot/status-bar`
-for per-window values; `extensions/@knot/projects/src/` and
-`extensions/@knot/go-to-file/src/extension.ts`. Update the
-[status bar reference](../architecture/workbench-and-lifecycle.md#status-bar),
-the [extension guide](../extension-api.md), and
-[decisions/platform.md](../decisions/platform.md) with its index line.
+Done and approved. Status items carry a `placement` (status bar or toolbar), and
+the toolbar row renders the toolbar ones with the same per-window values,
+tooltip, and click command ([status bar](../architecture/workbench-and-lifecycle.md#status-bar),
+[extension guide](../extension-api.md#show-status-items),
+[decision](../decisions/platform.md#product-window-chrome-and-failure-notices)).
+`@knot/projects` shows each window's project and `@knot/go-to-file` a search
+button. The project widget and the Projects tool run Open Project, which focuses
+the project's window or opens one and leaves the current window alone; Switch
+Project remains a palette command.
 
 ### 4. Dock headers and stripes
 
