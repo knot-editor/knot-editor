@@ -37,6 +37,9 @@ pub(crate) struct TextInput {
     focus: FocusHandle,
     /// Last painted text bounds, used for pointer hit testing.
     bounds: Option<Bounds<Pixels>>,
+    /// Interface text at this size in pixels at 100% zoom instead of the
+    /// editor font.
+    interface_size: Option<f32>,
 }
 
 impl TextInput {
@@ -51,7 +54,26 @@ impl TextInput {
             placeholder: SharedString::default(),
             focus: cx.focus_handle(),
             bounds: None,
+            interface_size: None,
         }
+    }
+
+    /// Set the text in the interface font at `size` pixels, for fields that
+    /// sit among interface chrome rather than editing text.
+    pub(crate) fn interface_text(mut self, size: f32) -> Self {
+        self.interface_size = Some(size);
+        self
+    }
+
+    fn text_font(&self, window: &Window, cx: &App) -> Font {
+        match self.interface_size {
+            Some(_) => window.text_style().font(),
+            None => input_font(cx),
+        }
+    }
+
+    fn text_size(&self, cx: &App) -> Pixels {
+        zoom::scaled(self.interface_size.unwrap_or(FONT_SIZE), cx)
     }
 
     pub(crate) fn text(&self) -> &str {
@@ -258,7 +280,7 @@ impl TextInput {
     fn shape(&self, window: &Window, cx: &App) -> ShapedLine {
         let run = TextRun {
             len: self.text.len(),
-            font: input_font(cx),
+            font: self.text_font(window, cx),
             // Only measured, never painted.
             color: Hsla::default(),
             background_color: None,
@@ -267,7 +289,7 @@ impl TextInput {
         };
         window.text_system().shape_line(
             SharedString::from(self.text.clone()),
-            zoom::scaled(FONT_SIZE, cx),
+            self.text_size(cx),
             &[run],
             None,
         )
@@ -523,7 +545,7 @@ impl Render for TextInput {
         let selection = self.selection();
         let caret = self.caret;
         let marked = self.marked.clone();
-        let font = input_font(cx);
+        let font = self.text_font(window, cx);
         let foreground = theme(cx).paint_color(color::TEXT);
         let placeholder = (text.is_empty() && !self.placeholder.is_empty()).then(|| {
             (
@@ -535,7 +557,7 @@ impl Render for TextInput {
         let marked_color = theme(cx).paint_color(color::EDITOR_MARKED_TEXT);
         let caret_color = theme(cx).paint_color(color::EDITOR_CURSOR);
         let line_height = zoom::scaled(INPUT_LINE_HEIGHT, cx);
-        let font_size = zoom::scaled(FONT_SIZE, cx);
+        let font_size = self.text_size(cx);
         div()
             .id("text-input")
             .h(line_height)

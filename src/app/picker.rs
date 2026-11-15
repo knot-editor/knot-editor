@@ -28,7 +28,7 @@ use super::{
 
 use super::tokens::list::PANEL_WIDTH;
 const PANEL_MAX_HEIGHT: f32 = 420.;
-const LINE_HEIGHT: f32 = 20.;
+const LINE_HEIGHT: f32 = 24.;
 const ROW_PADDING: f32 = 4.;
 const PAGE_ROWS: isize = 10;
 
@@ -129,7 +129,8 @@ impl Picker {
         supplied: bool,
         cx: &mut Context<Self>,
     ) -> Self {
-        let input = cx.new(|cx| TextInput::new("", cx));
+        let input =
+            cx.new(|cx| TextInput::new("", cx).interface_text(tokens::list::PICKER_INPUT_SIZE));
         let subscription = cx.subscribe(
             &input,
             |this: &mut Self, _input, _event: &TextInputEvent, cx| {
@@ -414,7 +415,7 @@ impl Render for Picker {
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap_3()
+                            .gap_4()
                             .when_some(entry.icon.as_ref(), |line, icon| {
                                 line.child(
                                     div()
@@ -448,14 +449,14 @@ impl Render for Picker {
                             });
                     div()
                         .h(px(row_height))
-                        .px(zoom::rems(tokens::list::ROW_INSET))
+                        .px(zoom::rems(tokens::list::PICKER_INSET))
                         .child(
                             div()
                                 .id(("picker-row", index))
                                 .debug_selector(move || format!("picker-row-{index}"))
                                 .size_full()
                                 .px_2()
-                                .rounded(zoom::rems(tokens::radius::SM))
+                                .rounded(zoom::rems(tokens::radius::MD))
                                 .flex()
                                 .flex_col()
                                 .justify_center()
@@ -495,7 +496,7 @@ impl Render for Picker {
             .w(px(PANEL_WIDTH * zoom))
             .flex()
             .flex_col()
-            .rounded(zoom::rems(tokens::radius::MD))
+            .rounded(zoom::rems(tokens::radius::LG))
             .border_1()
             .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
             .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))
@@ -506,8 +507,8 @@ impl Render for Picker {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
                 div()
-                    .px_3()
-                    .py_2()
+                    .px_4()
+                    .py_3()
                     .flex()
                     .flex_row()
                     .items_center()
@@ -533,7 +534,9 @@ impl Render for Picker {
                         .child("No matching items"),
                 )
             })
-            .child(list)
+            .when(rows > 0, |panel| {
+                panel.child(div().py(zoom::rems(tokens::list::PICKER_INSET)).child(list))
+            })
     }
 }
 

@@ -8,6 +8,7 @@
 pub(crate) mod radius {
     pub(crate) const SM: f32 = 4.;
     pub(crate) const MD: f32 = 6.;
+    pub(crate) const LG: f32 = 10.;
 }
 
 /// Heights and widths of the workbench chrome.
@@ -32,6 +33,10 @@ pub(crate) mod chrome {
 pub(crate) mod list {
     /// A row of a transient list.
     pub(crate) const ROW_HEIGHT: f32 = 24.;
+    /// The gap between a picker panel's edge and its rows, and above and below them.
+    pub(crate) const PICKER_INSET: f32 = 6.;
+    /// The picker query field's text size.
+    pub(crate) const PICKER_INPUT_SIZE: f32 = 14.;
     /// The text size of tree and picker rows.
     pub(crate) const TEXT_SIZE: f32 = 13.;
     /// A tree row with a second line.
