@@ -186,8 +186,21 @@ await commands.register("files.unwatch", async () => { await handle.dispose(); }
     assert_eq!(cx.read(extensions::host::file_watch_count), 0);
     assert_eq!(provider.watch_count(), 0);
 
-    run("files.watch", cx);
-    assert_eq!(provider.watch_count(), 1);
+    // The watch resolves only once it runs.
+    provider.defer_watch_starts();
+    let mut execution = dispatch_product_command(&window, native_window, "files.watch", cx);
+    crate::test_support::wait_until(cx, |_| provider.watch_count() == 1);
+    // Give the extension worker time to finish the command if it could.
+    for _ in 0..10 {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        cx.run_until_parked();
+    }
+    assert!(matches!(
+        execution.completion.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+    ));
+    provider.start_watches();
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     assert_eq!(cx.read(extensions::host::file_watch_count), 0);
     assert_eq!(provider.watch_count(), 0);
@@ -239,6 +252,62 @@ await commands.register("files.report", async () => {
         cx.read(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
             .unwrap(),
         "mem://product/src/:notes.md|mem://product/:notes.txt|mem://product/:src/notes.md|0"
+    );
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
+
+#[gpui::test]
+fn an_indexed_root_scans_once_its_watch_runs(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let key = install_operation_fixture(
+        &host,
+        r#"
+import { commands, files, workbench } from "knot";
+await commands.register("files.report", async () => {
+  const listed = (await files.list("mem://product/src/")).map(entry => entry.name).sort().join();
+  await workbench.writeClipboardText(listed);
+});
+"#,
+        "files.report",
+        cx,
+    );
+    let root = ResourceUri::parse("mem://product/src/").unwrap();
+    provider
+        .seed_file(
+            ResourceUri::parse("mem://product/src/kept.txt").unwrap(),
+            "x",
+        )
+        .unwrap();
+    provider.defer_watch_starts();
+    let (window, native_window) = empty_headless_window(&documents, cx);
+    window.update(cx, |window, cx| {
+        window.replace_workspace_roots(vec![root.clone()], cx)
+    });
+    assert_eq!(provider.watch_count(), 1);
+    cx.run_until_parked();
+    // The watch does not report this change: it is not running yet.
+    provider
+        .seed_file(
+            ResourceUri::parse("mem://product/src/early.txt").unwrap(),
+            "x",
+        )
+        .unwrap();
+
+    provider.start_watches();
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command(&window, native_window, "files.report", cx),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
+            .unwrap(),
+        "early.txt,kept.txt"
     );
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }

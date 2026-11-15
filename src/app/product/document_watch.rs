@@ -111,7 +111,7 @@ fn sync(cx: &mut App) {
             continue;
         };
         let (sender, mut batches) = futures::channel::mpsc::unbounded();
-        let Ok(subscription) = registry.watch(
+        let Ok(mut subscription) = registry.watch(
             &providers,
             parent.clone(),
             false,
@@ -122,7 +122,12 @@ fn sync(cx: &mut App) {
             continue;
         };
         let file = uri.clone();
+        let live = subscription.live();
         let task = cx.spawn(async move |cx| {
+            // The file may have changed between its read and the watch
+            // starting.
+            live.await;
+            cx.update(|cx| recheck(id, cx));
             while let Some(batch) = batches.next().await {
                 if batch
                     .iter()

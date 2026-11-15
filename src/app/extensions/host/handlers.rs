@@ -2271,9 +2271,13 @@ async fn watch_files(
         .await
         .map_err(|error| product::operations::resource_error(error.into()))?;
     let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
-    context
+    let (subscription, live) = context
         .foreground(|host, cx| host.watch_files(uri, arguments.recursive, key, &providers, cx))?
-        .map_err(|error| product::operations::resource_error(error.into()))
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    // Resolving once live lets the caller read the disk without missing a
+    // change.
+    live.await;
+    Ok(subscription)
 }
 
 #[derive(Clone, Debug, PartialEq)]

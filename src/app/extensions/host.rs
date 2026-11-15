@@ -2478,7 +2478,8 @@ impl ProductExtensionHost {
         true
     }
 
-    /// Starts reporting batches under `uri` to the caller's listener.
+    /// Starts reporting batches under `uri` to the caller's listener, with a
+    /// future that resolves once the watch is live.
     pub(crate) fn watch_files(
         &mut self,
         uri: knot_model::resource::ResourceUri,
@@ -2486,7 +2487,13 @@ impl ProductExtensionHost {
         key: ExtensionKey,
         providers: &knot_model::filesystem::FileSystemProviderRegistry,
         cx: &mut Context<Self>,
-    ) -> Result<knot_protocol::WatchSubscriptionId, knot_model::filesystem::ResourceError> {
+    ) -> Result<
+        (
+            knot_protocol::WatchSubscriptionId,
+            futures::future::BoxFuture<'static, ()>,
+        ),
+        knot_model::filesystem::ResourceError,
+    > {
         use futures::StreamExt as _;
 
         let registry = cx
@@ -2494,7 +2501,7 @@ impl ProductExtensionHost {
             .0
             .clone();
         let (sender, mut batches) = futures::channel::mpsc::unbounded();
-        let subscription = registry.watch(
+        let mut subscription = registry.watch(
             providers,
             uri.clone(),
             recursive,
@@ -2522,6 +2529,7 @@ impl ProductExtensionHost {
                 }
             }
         });
+        let live = subscription.live();
         self.file_watches.insert(
             id,
             FileWatch {
@@ -2530,7 +2538,7 @@ impl ProductExtensionHost {
                 _task: task,
             },
         );
-        Ok(id)
+        Ok((id, live))
     }
 
     pub(crate) fn unwatch_files(

@@ -20,7 +20,8 @@ struct Slot {
     index: Arc<FileIndex>,
     leases: usize,
     _subscription: WatchSubscription,
-    /// Scans the root, then applies the watch's batches.
+    /// Scans the root once its watch is live, then applies the watch's
+    /// batches.
     _task: Task<()>,
 }
 
@@ -82,7 +83,7 @@ impl ApplicationFileIndex {
             .default_global::<crate::app::file_watch::ApplicationFileWatches>()
             .0
             .clone();
-        let subscription = registry
+        let mut subscription = registry
             .watch(
                 providers,
                 root.clone(),
@@ -94,7 +95,10 @@ impl ApplicationFileIndex {
             .ok()?;
         let policy = crate::app::settings::files_ignore_policy(cx);
         let scanned = index.clone();
+        let live = subscription.live();
         let task = cx.background_spawn(async move {
+            // Scanning once the watch runs misses no change in between.
+            live.await;
             scanned.scan(policy).await;
             while let Some(batch) = batches.next().await {
                 scanned.apply(&batch).await;

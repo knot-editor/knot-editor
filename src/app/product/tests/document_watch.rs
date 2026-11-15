@@ -19,9 +19,18 @@ struct Fixture {
 }
 
 async fn fixture(cx: &mut TestAppContext) -> Fixture {
+    fixture_with(cx, false).await
+}
+
+/// Like [`fixture`]; with `held_watches`, provider watches wait for
+/// `start_watches` before they run.
+async fn fixture_with(cx: &mut TestAppContext, held_watches: bool) -> Fixture {
     let documents = install_globals(cx);
     cx.set_global(save_without_cleanup());
     let (filesystems, provider) = memory_filesystems_with_provider();
+    if held_watches {
+        provider.defer_watch_starts();
+    }
     cx.set_global(ApplicationFileSystems(filesystems));
     let uri = ResourceUri::parse("mem://product/notes.txt").unwrap();
     provider.seed_file(uri.clone(), TEXT).unwrap();
@@ -170,6 +179,19 @@ async fn activation_recheck_reloads_a_document_whose_event_was_missed(cx: &mut T
     cx.run_until_parked();
 
     assert_eq!(f.text(cx), "changed\n");
+    assert!(!f.dirty(cx));
+}
+
+#[gpui::test]
+async fn a_change_while_the_watch_starts_reloads_once_it_runs(cx: &mut TestAppContext) {
+    let f = fixture_with(cx, true).await;
+    assert_eq!(f.provider.watch_count(), 1);
+    f.provider.seed_file(f.uri.clone(), "changed\n").unwrap();
+    cx.run_until_parked();
+    assert_eq!(f.text(cx), TEXT);
+
+    f.provider.start_watches();
+    wait_for_api_condition(cx, |cx| f.model.read(cx).text() == "changed\n");
     assert!(!f.dirty(cx));
 }
 
