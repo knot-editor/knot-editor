@@ -160,7 +160,7 @@ quarter of the text 4 / 8 ms (18 / 137 ms), typing p50 0.3 µs, 10,000-match
 replace-all 0.070 s (0.018 s at checkpoint 2, the cost of a map insert and a
 key allocation per piece), heap per edit 294 bytes and 6.4 allocations.
 
-### 4. Final benchmark and documentation
+### 4. Final benchmark and documentation 🔎 awaiting review
 
 Rerun the full benchmark on the same machine as the baseline and update the
 durable docs.
@@ -182,4 +182,12 @@ durable docs.
   references to D092 as a dependency (D067, Find) updated.
 - **Validation:** `just check`; the full benchmark output kept in the
   decisions entry in summarized form.
+- **Done ✅:** full benchmark rerun and all targets met (typing p50 0.2 µs
+  against 145 µs; 10,000-match replace-all 0.069 s against 3.43 s; snapshot
+  0.05 µs and resolve 0.65 µs at 100k pieces); architecture reference,
+  decision entry with the before/after table, index line, and module docs
+  updated; `just check` passes.
+- **Remaining after approval:** remove this plan, the D092 roadmap entry and
+  the analysis report, and update the roadmap's D092 dependencies, in one
+  final commit.
 - **Review gate:** final review of numbers and docs before closing D092.
