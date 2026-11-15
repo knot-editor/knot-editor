@@ -1,6 +1,6 @@
 # D187: File watches start off the foreground
 
-Status: 🚧 checkpoint 1 implemented, awaiting review. Roadmap item [D187](../roadmap.md).
+Status: 🚧 checkpoint 1 complete; checkpoint 2 in progress. Roadmap item [D187](../roadmap.md).
 References: [watching](../architecture/documents-and-persistence.md#watching),
 [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index),
 [detecting external changes](../architecture/documents-and-persistence.md#detecting-external-changes),
@@ -62,47 +62,13 @@ None.
 
 ## Checkpoints
 
-### 1. Asynchronous provider watches and the live signal 🔍
+### 1. Asynchronous provider watches and the live signal ✅
 
-Deliverables:
-
-- ✅ `WatchEvent::Started`; the local provider's asynchronous start and stop;
-  the memory provider's immediate `Started`, or a held one after
-  `defer_watch_starts` until `start_watches` (test support).
-- ✅ The registry's per-watch started state and per-subscription live signal
-  (`WatchSubscription::live`), delivered before any batch, immediately for a
-  running watch. Events before a subscription is live are not reported, which
-  also covers platform events that race ahead of `Started`.
-- ✅ Model tests: a subscription to a fresh watch becomes live only after
-  `Started`; one sharing a running watch is live at once; the live signal
-  precedes batches; a guard dropped before its local start completes leaves no
-  watcher; with OS events, a write made right after the live signal is
-  reported.
-
-Implementation context:
-
-- `crates/knot-model/src/filesystem/mod.rs`: `WatchEvent`, `WatchGuard`,
-  `FileSystemProvider::watch` contract docs.
-- `crates/knot-model/src/filesystem/local.rs` `watch`: split validation from
-  the `notify::recommended_watcher` + `watch` call, which moves to a spawned
-  thread; the guard owns shared state (the watcher once built, a dropped flag)
-  and stops the watcher off the calling thread on drop. The `os_events: false`
-  path sends `Started` immediately.
-- `crates/knot-model/src/filesystem/memory.rs` `watch`: send `Started` after
-  registering the watcher.
-- `crates/knot-model/src/watch.rs`: `ProviderWatch` gains a started flag;
-  `absorb` handles `Started`; `Subscriber` holds the live signal (for example a
-  `futures::channel::oneshot` sender returned to the caller through
-  `WatchSubscription`), fired from the delivery thread so ordering with
-  batches holds. Existing registry tests in the same file are the pattern.
-- The registry no longer blocks under its state lock, since the provider call
-  is quick.
-
-Validation: the new tests in `watch.rs`, existing filesystem and registry
-tests, `just check`.
-
-Review gate: the provider and registry contract (event, live signal shape,
-failure behavior) before users move onto it.
+Done. The local provider starts and stops `notify` watchers on their own
+threads and reports `WatchEvent::Started`; the registry gives each
+subscription `WatchSubscription::live` and reports nothing before it. The
+memory provider can hold starts (`defer_watch_starts`, `start_watches`) for
+tests. Covered by the tests in `crates/knot-model/src/watch.rs`.
 
 ### 2. Watch users wait for live
 
