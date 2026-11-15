@@ -1,6 +1,6 @@
 # Modern UI
 
-Status: 🚧 in progress (checkpoints 1–5 done).
+Status: 🚧 in progress (checkpoints 1–6 done).
 
 ## Goal
 
@@ -135,23 +135,13 @@ active or hovered tab, a dirty dot takes its place until the pointer is on the
 button, and pinned tabs show a pin icon
 ([workbench](../architecture/workbench-and-lifecycle.md#windows)).
 
-### 6. Trees and pickers
+### 6. Trees and pickers ✅
 
-Deliverables: tree rows with a smaller indent, inset rounded selection and
-hover, colored file icons matching the picker, and the clipped first row
-fixed; picker rows full width, inset and rounded, a search icon and
-placeholder in the input, no separate title row, and the shared type size.
-
-Validation: tree and picker tests for row geometry where practical; existing
-speed search, reveal, and picker tests stay green.
-
-Review gate: Explorer, Projects, Go to File, the command palette, and Open
-Recent.
-
-**Implementation context**: row rendering in `src/app/tree_view.rs`; icon
-resolution in `src/app/icons.rs` (why tree file icons lose their color);
-`src/app/picker.rs` and `src/app/command_palette.rs`; the input in
-`src/app/text_input.rs`.
+Done and approved. Tree rows are 24px with 13px text, a 12px indent, and inset
+rounded selection and hover; file icons are colored like the picker's. Picker
+panels have a search icon and an interface-font query field whose placeholder
+is the picker's title, 28px inset rounded rows, and the folder of a file row at
+the row's end ([semantic UI](../architecture/semantic-ui.md#extension-transient-interactions)).
 
 ### 7. Polish
 
