@@ -37,7 +37,7 @@ export const ONE_DARK: ThemeDefinition = {
     "editor.cursor": accent,
     "editor.findMatch": "#665014",
     "editor.findMatchCurrent": "#a1551a",
-    "editor.findScope": "#515a6b26",
+    "editor.findScope": "#abb2bf33",
     "editor.foldPlaceholder": "#7f848e",
     "editor.foreground": fg,
     "editor.gutter.background": bg,

@@ -37,7 +37,7 @@ export const ONE_LIGHT: ThemeDefinition = {
     "editor.cursor": accent,
     "editor.findMatch": "#c1840170",
     "editor.findMatchCurrent": "#98680180",
-    "editor.findScope": "#383a4226",
+    "editor.findScope": "#383a421a",
     "editor.foldPlaceholder": "#7f848e",
     "editor.foreground": fg,
     "editor.gutter.background": bg,
