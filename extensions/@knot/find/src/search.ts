@@ -7,7 +7,7 @@ export const HIGHLIGHT_LIMIT = 1000;
 /** The most `buffer.find` returns, and so the most one step back can read. */
 const READ_LIMIT = 100_000;
 
-export type Options = { caseSensitive: boolean; wholeWord: boolean };
+export type Options = { caseSensitive: boolean; wholeWord: boolean; regex: boolean };
 
 export type Highlights = { revision: number; matches: readonly ByteRange[]; more: boolean };
 
@@ -16,7 +16,7 @@ export function highlights(buffer: Buffer, query: string, options: Options): Pro
   return buffer.find(query, { ...options, limit: HIGHLIGHT_LIMIT });
 }
 
-async function endOf(buffer: Buffer): Promise<number> {
+export async function endOf(buffer: Buffer): Promise<number> {
   const last = await buffer.lineRange((await buffer.lineCount()) - 1);
   return last.endByteOffset;
 }
@@ -71,4 +71,11 @@ export function summary(query: string, found: Highlights, current: ByteRange | n
 
 export function sameRange(a: ByteRange, b: ByteRange): boolean {
   return a.startByteOffset === b.startByteOffset && a.endByteOffset === b.endByteOffset;
+}
+
+/** The parser's message when `error` is an invalid regular expression, else
+ * `null`. */
+export function invalidPattern(error: unknown): string | null {
+  const host = error as { code?: string; message?: string; details?: { message?: string } };
+  return host.code === "InvalidQuery" ? (host.details?.message ?? host.message ?? "Invalid pattern") : null;
 }

@@ -3,7 +3,21 @@ import { beforeEach, test } from "node:test";
 import { windows, workbench } from "knot";
 import type { DocumentId, WindowTarget } from "knot";
 import * as host from "knot/testing";
-import { CLOSE, CURRENT_COLOR, FIND, MATCH_COLOR, NEXT, PREVIOUS, TOGGLE_CASE, TOGGLE_WORD, start } from "../src/extension.js";
+import {
+  CLOSE,
+  CURRENT_COLOR,
+  FIND,
+  MATCH_COLOR,
+  NEXT,
+  PREVIOUS,
+  REPLACE,
+  REPLACE_ALL,
+  REPLACE_CURRENT,
+  TOGGLE_CASE,
+  TOGGLE_REGEX,
+  TOGGLE_WORD,
+  start,
+} from "../src/extension.js";
 
 const TEXT = "foo bar\nFoo baz foo\nfoofoo\n";
 const offset = (text: string) => new TextEncoder().encode(text).length;
@@ -50,9 +64,16 @@ test("find binds its keys in the bar", async () => {
   assert.deepEqual(bound, [
     ["cmd-alt-c", TOGGLE_CASE, "bar", "find"],
     ["cmd-alt-w", TOGGLE_WORD, "bar", "find"],
+    ["cmd-alt-r", TOGGLE_REGEX, "bar", "find"],
+    ["escape", CLOSE, "bar", "find"],
+    ["cmd-alt-c", TOGGLE_CASE, "bar", "replace"],
+    ["cmd-alt-w", TOGGLE_WORD, "bar", "replace"],
+    ["cmd-alt-r", TOGGLE_REGEX, "bar", "replace"],
+    ["escape", CLOSE, "bar", "replace"],
     ["enter", NEXT, "bar", "find"],
     ["shift-enter", PREVIOUS, "bar", "find"],
-    ["escape", CLOSE, "bar", "find"],
+    ["enter", REPLACE_CURRENT, "bar", "replace"],
+    ["cmd-enter", REPLACE_ALL, "bar", "replace"],
   ]);
 });
 
@@ -212,7 +233,7 @@ test("the toggles switch case and whole word and search again", async () => {
   const { window, editor } = await setup();
   await search(window, "foo");
   const bar = () => host.editorBars(window).bars[0]!;
-  assert.deepEqual(bar().toggles.map((toggle) => [toggle.id, toggle.active]), [["case", false], ["word", false]]);
+  assert.deepEqual(bar().toggles.map((toggle) => [toggle.id, toggle.active]), [["case", false], ["word", false], ["regex", false]]);
   assert.equal(message(window), "1 of 5");
 
   await host.clickBarControl("find", "case", window);
@@ -225,7 +246,7 @@ test("the toggles switch case and whole word and search again", async () => {
 
   await host.run(TOGGLE_CASE, { window });
   await host.run(TOGGLE_WORD, { window });
-  assert.deepEqual(bar().toggles.map((toggle) => toggle.active), [false, false]);
+  assert.deepEqual(bar().toggles.map((toggle) => toggle.active), [false, false, false]);
   assert.equal(message(window), "1 of 5");
 });
 
@@ -243,4 +264,96 @@ test("the buttons step and close", async () => {
   assert.deepEqual(host.editorBars(window).bars, []);
   assert.deepEqual(host.viewDecorations(window), []);
   assert.equal(await selected(editor, TEXT), "foo");
+});
+
+test("the regex toggle searches a pattern and shows an invalid one's message", async () => {
+  const { window, editor } = await setup("foo1 foo22 bar\nfoo\n");
+  await search(window, "foo\\d+");
+  assert.equal(message(window), "No results");
+
+  await host.clickBarControl("find", "regex", window);
+  assert.equal(host.editorBars(window).bars[0]!.toggles[2]!.active, true);
+  assert.equal(message(window), "1 of 2");
+  assert.equal(host.viewDecorations(window).length, 2);
+
+  await host.typeInBar("find", "query", "foo(", window);
+  assert.match(message(window)!, /invalid regular expression/);
+  assert.deepEqual(host.viewDecorations(window), []);
+  await host.run(NEXT, { window });
+
+  await host.typeInBar("find", "query", "^foo", window);
+  assert.equal(message(window), "1 of 2");
+  await host.run(TOGGLE_REGEX, { window });
+  assert.equal(message(window), "No results");
+});
+
+test("replace opens a bar beneath find, and closing one closes both", async () => {
+  const { window } = await setup();
+  await host.run(REPLACE, { window });
+  const ids = () => host.editorBars(window).bars.map((bar) => bar.id);
+  assert.deepEqual(ids(), ["find", "replace"]);
+  assert.deepEqual(host.editorBars(window).focus, { bar: "find", field: "query" });
+  assert.deepEqual(host.editorBars(window).bars[1]!.buttons.map((button) => button.id), ["replace", "replace-all"]);
+
+  // Find leaves the Replace bar alone.
+  await host.run(FIND, { window });
+  assert.deepEqual(ids(), ["find", "replace"]);
+
+  await host.run(CLOSE, { window });
+  assert.deepEqual(ids(), []);
+  await host.run(FIND, { window });
+  assert.deepEqual(ids(), ["find"]);
+});
+
+test("replace advances over matches, replaces the selected one, and wraps", async () => {
+  const { window, document, editor } = await setup("a1 b a2 a3\n");
+  await host.run(REPLACE, { window });
+  await host.typeInBar("find", "query", "a\\d", window);
+  await host.run(TOGGLE_REGEX, { window });
+  await host.typeInBar("replace", "replacement", "#", window);
+  assert.equal(message(window), "1 of 3");
+
+  // The first match is selected: replace it and move to the next.
+  await host.run(REPLACE_CURRENT, { window });
+  const text = () => host.document(document).text;
+  assert.equal(text(), "# b a2 a3\n");
+  assert.equal(await selected(editor, text()), "a2");
+  assert.equal(message(window), "1 of 2");
+
+  // A selection that is not a match only advances.
+  await editor.setSelection({ anchor: 0, caret: 1 });
+  await host.run(REPLACE_CURRENT, { window });
+  assert.equal(text(), "# b a2 a3\n");
+  assert.equal(await selected(editor, text()), "a2");
+
+  await host.clickBarControl("replace", "replace", window);
+  await host.run(REPLACE_CURRENT, { window });
+  assert.equal(text(), "# b # #\n");
+  assert.equal(message(window), "No results");
+});
+
+test("replace all expands captures, reports the count, and clears when the text changes", async () => {
+  const { window, document } = await setup("ann@1 bob@22 x@y\n");
+  await host.run(REPLACE, { window });
+  await host.run(TOGGLE_REGEX, { window });
+  await host.typeInBar("find", "query", "(\\w+)@(\\d+)", window);
+  await host.typeInBar("replace", "replacement", "$2:$1", window);
+
+  await host.run(REPLACE_ALL, { window });
+  assert.equal(host.document(document).text, "1:ann 22:bob x@y\n");
+  assert.equal(host.editorBars(window).bars[1]!.message, "Replaced 2");
+  assert.equal(message(window), "No results");
+
+  await host.typeInBar("replace", "replacement", "z", window);
+  assert.equal(host.editorBars(window).bars[1]!.message, null);
+  await host.typeInBar("find", "query", "nothing", window);
+  await host.clickBarControl("replace", "replace-all", window);
+  assert.equal(host.document(document).text, "1:ann 22:bob x@y\n");
+  assert.equal(host.editorBars(window).bars[1]!.message, "Replaced 0");
+
+  // An invalid pattern replaces nothing and keeps the parser's message.
+  await host.typeInBar("find", "query", "(", window);
+  await host.run(REPLACE_ALL, { window });
+  assert.equal(host.document(document).text, "1:ann 22:bob x@y\n");
+  assert.match(message(window)!, /invalid regular expression/);
 });

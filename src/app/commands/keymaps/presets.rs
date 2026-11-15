@@ -20,6 +20,7 @@ pub(crate) const GO_TO_LINE_COMMAND: &str = "editor.go-to-line";
 pub(crate) const GO_TO_FILE_COMMAND: &str = "workspace.go-to-file";
 pub(crate) const OPEN_RECENT_COMMAND: &str = "workspace.open-recent";
 pub(crate) const FIND_COMMAND: &str = "editor.find";
+pub(crate) const REPLACE_COMMAND: &str = "editor.replace";
 pub(crate) const FIND_NEXT_COMMAND: &str = "editor.find-next";
 pub(crate) const FIND_PREVIOUS_COMMAND: &str = "editor.find-previous";
 #[cfg(test)]
@@ -28,6 +29,7 @@ pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] = &[
     GO_TO_FILE_COMMAND,
     OPEN_RECENT_COMMAND,
     FIND_COMMAND,
+    REPLACE_COMMAND,
     FIND_NEXT_COMMAND,
     FIND_PREVIOUS_COMMAND,
 ];
@@ -263,6 +265,8 @@ const MACOS_BINDINGS: &[PresetEntry] = &[
     ("cmd-h", HIDE_COMMAND, None),
     ("alt-cmd-h", HIDE_OTHERS_COMMAND, None),
     ("cmd-m", MINIMIZE_WINDOW_COMMAND, None),
+    ("alt-cmd-f", REPLACE_COMMAND, Some("editor")),
+    ("alt-cmd-f", REPLACE_COMMAND, Some("bar")),
     ("cmd-g", FIND_NEXT_COMMAND, Some("editor")),
     ("cmd-g", FIND_NEXT_COMMAND, Some("bar")),
     ("shift-cmd-g", FIND_PREVIOUS_COMMAND, Some("editor")),
@@ -321,6 +325,8 @@ const MACOS_BINDINGS: &[PresetEntry] = &[
 /// navigation keys that shells leave alone.
 const PC_BINDINGS: &[PresetEntry] = &[
     // ctrl-g is Go to Line.
+    ("ctrl-h", REPLACE_COMMAND, Some("editor")),
+    ("ctrl-h", REPLACE_COMMAND, Some("bar")),
     ("f3", FIND_NEXT_COMMAND, Some("editor")),
     ("f3", FIND_NEXT_COMMAND, Some("bar")),
     ("shift-f3", FIND_PREVIOUS_COMMAND, Some("editor")),
