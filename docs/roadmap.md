@@ -613,12 +613,12 @@ hold the analyses that support some items.
     consistent with the final-newline insertion on save, which uses
     `line_ending()`.
 
-- **D001 — Replace and regular-expression Find**
+- **D001 — Replace, regular-expression Find, and find in selection** 🚧
   - Depends on: none
   - Description: Current-file Find matches literal text, with case and
-    whole-word toggles. Replace and regular expressions are missing. Do it when
-    daily use identifies required replacement or regular-expression behavior:
-    add them to the `@knot/find` bar and `buffer.find`.
+    whole-word toggles. Replace, regular expressions, and find in selection are
+    missing: add them to the `@knot/find` bar and the buffer API, as the
+    [plan](plans/d001-replace-and-regex-find.md) describes.
 
 - **D142 — Multiple and rectangular selections**
   - Depends on: none
@@ -690,7 +690,7 @@ Kakoune mode could use them too. The
     `:g` and `:v` come with D150's pattern matching.
 
 - **D150 — Vim search and substitution**
-  - Depends on: none
+  - Depends on: D001
   - Description: The first Vim mode ships without search, so that Vim search
     reuses current-file Find's match layer instead of a second engine, and
     without substitution, a whole-buffer edit. Missing: `/`, `?`, `n`, `N`, `*`,
@@ -919,3 +919,22 @@ Kakoune mode could use them too. The
     Knot approaches a first release (D035): choose a static blog under
     `website/` with an RSS feed, and a newsletter provider that keeps
     subscriber data out of the repository.
+
+## Lower priority
+
+Items worth having that no current workflow needs. They follow the same shape
+and may move into a section above when daily use asks for them.
+
+- **D194 — Preserve-case replacement**
+  - Depends on: none
+  - Description: Replace inserts its text as typed. Do it when replacing
+    identifiers across case styles becomes common: add a preserve-case toggle
+    to the Replace bar that adapts each replacement to its match's case, as VS
+    Code's and IntelliJ's do.
+
+- **D195 — Multi-line Find and Replace fields**
+  - Depends on: none
+  - Description: Find bar fields are single-line, so a multi-line query or
+    replacement is typed as `\n` in regex mode. Do it when that is too awkward
+    in daily use: let bar fields grow to several lines, and seed the query from
+    a multi-line selection.
