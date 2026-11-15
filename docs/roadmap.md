@@ -73,24 +73,6 @@ hold the analyses that support some items.
     [scheduling report](reports/extension-task-scheduling.md) has the analysis
     and proposed checkpoints.
 
-- **D092 — Piece tree text buffer** 🚧
-  - Depends on: none
-  - Description: `TextBuffer` keeps its pieces in a flat `Vec` searched
-    linearly, shifts a flat line-start index on every edit, and copies the
-    piece list for each snapshot. Coalesced typing keeps the piece count low,
-    so measured typing latency is acceptable. The change absorbs the former
-    piece-table compaction (D013) and line-start index (D014) items. Do it
-    before or together with the first bulk-edit feature (Replace D001,
-    multi-cursor editing D142, substitution D150, formatting, or language-server
-    edit lists D067), or when long editing runs show measured latency, memory,
-    or stabilization problems. Follow the
-    [text buffer analysis](reports/text-buffer-structure.md): benchmark the
-    current buffer, store the pieces in a copy-on-write B-tree that summarizes
-    bytes, line breaks, and UTF-16 length, resolve positions through ordered
-    piece locators, and keep the piece semantics, edit log, and `TextBuffer`
-    API unchanged. The [plan](plans/d092-piece-tree-text-buffer.md) holds the
-    design and checkpoints.
-
 - **D156 — Fewer host round trips per key**
   - Depends on: none
   - Description: Found by the headless package tests. A key bound to an
@@ -386,7 +368,7 @@ hold the analyses that support some items.
     pipeline it hooks into exists.
 
 - **D067 — Language servers and semantic tokens**
-  - Depends on: D182, D087, D092, D145, D117, D115
+  - Depends on: D182, D087, D145, D117, D115
   - Description: No language client exists. The syntax highlighting work
     prepared for one: LSP language IDs, `Send` text snapshots, a highlight
     vocabulary that semantic token types and modifiers map onto, and a
@@ -396,7 +378,7 @@ hold the analyses that support some items.
     it needs D087), define a whole-range semantic-token contribution that
     scales to file-sized token counts unlike per-item anchored contributions,
     and connect diagnostics to decorations and completion to D022. It needs
-    D092 for server edit lists and D145 for hover, inlay hints, and diagnostic
+    D145 for hover, inlay hints, and diagnostic
     text, and format on save builds on D115.
 
 - **D022 — Rich completion policy and presentation**
@@ -632,15 +614,14 @@ hold the analyses that support some items.
     `line_ending()`.
 
 - **D001 — Replace and regular-expression Find**
-  - Depends on: D092
+  - Depends on: none
   - Description: Current-file Find matches literal text, with case and
     whole-word toggles. Replace and regular expressions are missing. Do it when
     daily use identifies required replacement or regular-expression behavior:
-    add them to the `@knot/find` bar and `buffer.find`. Replace-all is a bulk
-    edit, so it comes with or after D092.
+    add them to the `@knot/find` bar and `buffer.find`.
 
 - **D142 — Multiple and rectangular selections**
-  - Depends on: D092
+  - Depends on: none
   - Description: The editor handle and views hold one selection. Vim's
     visual-block mode, multi-cursor editing, and rectangular selection need
     several, and each edit across them is a bulk edit. Do it when visual-block
@@ -709,7 +690,7 @@ Kakoune mode could use them too. The
     `:g` and `:v` come with D150's pattern matching.
 
 - **D150 — Vim search and substitution**
-  - Depends on: D092
+  - Depends on: none
   - Description: The first Vim mode ships without search, so that Vim search
     reuses current-file Find's match layer instead of a second engine, and
     without substitution, a whole-buffer edit. Missing: `/`, `?`, `n`, `N`, `*`,
@@ -717,7 +698,7 @@ Kakoune mode could use them too. The
     Do it when daily Vim use misses search: build search inside the Vim package
     on Find's matching and highlights, decide how Vim's regex syntax maps onto
     the engine Find uses, and add substitution as one batch in one undo step.
-    Substitution is a bulk edit, so it comes after D092.
+
 
 - **D151 — Smaller Vim commands**
   - Depends on: D144, D061

@@ -98,7 +98,7 @@ What is missing for editing-level extensibility:
 | Registers | Extension state plus clipboard read and write | Write only | D109 |
 | Marks, jumplist | Anchored positions without decoration | Only decorated contributions | D109 |
 | `/` search highlights, visual feedback | Decoration styles | `background`, `line`, `underline`, and `wavy` in any color key | D114 |
-| `:s` | Regex over snapshots and an edit batch | Possible in JS; bulk edits need D092 | D092 |
+| `:s` | Regex over snapshots and an edit batch | Possible in JS; bulk edits are cheap | D150 |
 | Ex command line | Transient input with completion | `showInput` without completion | D058 |
 | Folds | Fold state and commands | None | D066 |
 | Relative line numbers, mode indicator | Gutter lanes, status bar items | `editor.lineNumbers: "relative"`; `workbench.registerStatusItem` | D077 |
@@ -182,8 +182,7 @@ presets, and D068 and D077 surfaces. Then:
 1. D110 spike and key contexts, because it decides the shape of everything
    after it.
 2. D109 view, selection, and position API, designed with the editor-handle
-   observation D080 added;
-   D092 before multi-selection edits.
+   observation D080 added.
 3. D111 undo groups and D112 visual-line movement, in parallel.
 4. D113 recording, once commands, contexts, and selections are stable.
 5. D066 syntax-tree queries, folds, and text objects, and D114's decoration
