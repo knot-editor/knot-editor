@@ -428,7 +428,11 @@ impl KnotWindow {
             .size_full()
             .min_w_0()
             .min_h_0()
-            .bg(theme(cx).paint_color(color::BACKGROUND))
+            .bg(theme(cx).paint_color(if in_dock {
+                color::CARD_BACKGROUND
+            } else {
+                color::BACKGROUND
+            }))
             .child(
                 div()
                     .flex()
