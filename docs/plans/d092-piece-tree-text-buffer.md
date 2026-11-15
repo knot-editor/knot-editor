@@ -1,6 +1,6 @@
 # D092: Piece tree text buffer
 
-Status: 🚧 approved, checkpoint 1 awaiting review. Roadmap item [D092](../roadmap.md). Follows
+Status: 🚧 approved, checkpoint 1 complete. Roadmap item [D092](../roadmap.md). Follows
 the [text buffer analysis](../reports/text-buffer-structure.md) (option B);
 current behavior is owned by
 [core and buffers](../architecture/core-and-buffers.md) and
@@ -127,52 +127,15 @@ Observations that shape the acceptance targets:
 
 ## Checkpoints
 
-### 1. Benchmark harness, baseline, and differential test ✅ (awaiting review)
+### 1. Benchmark harness, baseline, and differential test ✅
 
-Add a release-mode benchmark example and a randomized differential test, both
-against the current `Vec`-based buffer, and record the baseline. No change to
-the buffer.
-
-- **Benchmark workloads** (each reports p50/p99 or total, as fits):
-  - typing bursts in a generated 1M-line, ~29 MiB Rust-like fixture;
-  - replace-all of 1,000 and 10,000 matches spread through the same file;
-  - 50 cursors each typing 100 characters (primitive edits in descending
-    offset order, as a multi-cursor command would issue them);
-  - snapshot cost at 10k and 100k pieces;
-  - stabilizing and resolving 10,000 anchored ranges at 10k and 100k pieces;
-  - reading the last screen of lines (`line_start` plus `read_range`) at 100k
-    pieces;
-  - line lookup and UTF-16 conversion near the end of the file at 100k pieces;
-  - resident memory per piece (estimated from struct sizes and allocation
-    counts, not process RSS).
-  Workloads whose projected cost is many seconds on the current buffer run
-  once rather than repeatedly, so the baseline finishes in reasonable time.
-- **Differential test:** a seeded, dependency-free PRNG (xorshift) drives
-  inserts, deletes, and replaces with ASCII, multi-byte, `\n`, and `\r\n`
-  text, at the start, end, interior, and piece boundaries, including enough
-  edits to seal add chunks. After each step it compares against a plain
-  `String`: full text, `read_range` of random ranges, `line_count`,
-  `line_start`, `line_of_offset`, `point_of_offset`, `utf16_of_offset`,
-  `offset_of_utf16`, and snapshot reads. It also issues positions with
-  `position_at` and checks that `resolve` follows them across later edits,
-  using the edit log's `Split` records exactly as `AnchoredRangeStore` does.
-  Several fixed seeds run in the normal test suite.
-- **Deliverable:** ✅ record the baseline table in this plan, under a
-  "Baseline" heading, with machine, OS, and build profile.
-- **Validation:** ✅ the differential test passes on the current buffer;
-  `just check`.
-- **Review gate:** review the workloads and baseline numbers, and confirm
-  the projected bulk-edit costs (or correct the acceptance targets) before
-  the structure changes.
-- **Implementation context:** add `crates/knot-core/examples/buffer_bench.rs`,
-  modeled on `crates/knot-model/examples/walk_bench.rs` (plain
-  `std::time::Instant`, usage line in the module doc, run with
-  `cargo run --release -p knot-core --example buffer_bench`). Anchored ranges
-  come from `crates/knot-core/src/anchored_range.rs` (`AnchoredRangeStore`,
-  `stabilize`). Add the differential test as a new module under
-  `crates/knot-core/src/buffer/` (for example `buffer/differential_tests.rs`,
-  declared next to `mod tests` in `buffer.rs`), so it can read internals if
-  needed; the PRNG lives in the test module.
+Complete and approved. `crates/knot-core/examples/buffer_bench.rs` runs the
+workloads (run it with `cargo run --release -p knot-core --example
+buffer_bench -- [workload...]`), and `buffer/differential_tests.rs` checks
+the buffer against a `String` model over fixed seeds, including position
+tokens followed through the edit log's `Split` records. The baseline is
+recorded above. The replace-all target of tens of milliseconds for 10,000
+matches stands.
 
 ### 2. Piece tree with summaries and per-backing line indexes
 
