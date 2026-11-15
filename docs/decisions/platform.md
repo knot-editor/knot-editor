@@ -126,7 +126,7 @@ References: [semantic UI](../architecture/semantic-ui.md) and
 
 A window shows only Knot's own surfaces. The prototype toolbar duplicated
 commands, menus, and keys, so none returned as a fixed command bar. The
-toolbar row now holds only navigation widgets that packages contribute as
+toolbar row holds only navigation widgets that packages contribute as
 status items with a toolbar placement (the project name, a search button),
 which reuses the status registry instead of adding a second contribution model.
 The window's look, IntelliJ's Islands (rounded cards on a darker window

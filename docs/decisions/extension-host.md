@@ -151,7 +151,7 @@ file events unless a test asks. Starting only the packages a test uses
 halved a trivial test, and the language tables share one product because
 compiling the queries at startup cost more than all their cases. On Apple
 Silicon debug builds the workspace went from 13.4 s to 7.2–7.7 s wall and
-from about 130 s to 73 s summed per-test time; no test now takes over 1.6 s.
+from about 130 s to 73 s summed per-test time; no test took over 1.6 s afterwards.
 `just test-timings` reproduces the per-test log and totals.
 
 References: [extension guide](../extension-api.md#write-and-test-in-typescript)
