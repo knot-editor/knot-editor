@@ -119,3 +119,29 @@ fn a_stripe_without_buttons_is_not_painted(cx: &mut TestAppContext) {
     assert!(visual.debug_bounds("stripe-left").is_some());
     assert!(visual.debug_bounds("stripe-right").is_none());
 }
+
+#[gpui::test]
+fn a_terminal_header_opens_another_terminal_beside_it(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    cx.set_global(ApplicationFileSystems(memory_filesystems()));
+    let (window, native_window) = empty_product_window(&documents, cx);
+    window.update(cx, |window, cx| window.toggle_terminal(cx).unwrap());
+    cx.run_until_parked();
+    let (pane, count) = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let (pane, _) = workbench.recent_dock_terminal().unwrap();
+        (pane, workbench.pane(pane).unwrap().tabs().len())
+    });
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    let button = visual
+        .debug_bounds(Box::leak(
+            format!("new-terminal-{}", pane.value()).into_boxed_str(),
+        ))
+        .unwrap();
+    visual.simulate_click(button.center(), Modifiers::default());
+    visual.run_until_parked();
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        assert_eq!(workbench.pane(pane).unwrap().tabs().len(), count + 1);
+    });
+}

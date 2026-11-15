@@ -269,6 +269,7 @@ impl KnotWindow {
         };
         let documents = Self::documents(cx);
         let in_dock = matches!(area, Area::Dock(_));
+        let terminal_active = matches!(pane.active_tab().surface_id(), TabSurfaceId::Terminal(_));
         let titled_alone = in_dock && pane.tabs().len() == 1;
         let accent = theme(cx).paint_color(color::TAB_ACCENT);
         let card_background = theme(cx).paint_color(color::CARD_BACKGROUND);
@@ -456,6 +457,9 @@ impl KnotWindow {
                     .when(in_dock, |bar| {
                         bar.child(div().flex_1())
                             .children(frame_actions)
+                            .when(terminal_active, |bar| {
+                                bar.child(self.render_new_terminal_button(pane_id, cx))
+                            })
                             .child(self.render_hide_button(pane_id, cx))
                     }),
             )
@@ -487,6 +491,29 @@ impl KnotWindow {
             .child("–")
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.hide_pane_from_header(pane_id, cx);
+            }))
+    }
+
+    /// The dock header button that opens a terminal beside the pane's.
+    fn render_new_terminal_button(&self, pane_id: PaneId, cx: &mut Context<Self>) -> Stateful<Div> {
+        let hover = theme(cx).paint_color(color::BUTTON_HOVER_BACKGROUND);
+        div()
+            .id(("new-terminal", pane_id.value()))
+            .debug_selector(move || format!("new-terminal-{}", pane_id.value()))
+            .px_1p5()
+            .rounded(zoom::rems(tokens::radius::SM))
+            .cursor_pointer()
+            .text_color(theme(cx).paint_color(color::TAB_INACTIVE_FOREGROUND))
+            .hover(move |style| style.bg(hover))
+            .child("+")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                let directory = this.terminal_directory(cx);
+                this.new_terminal_in_pane(
+                    Some(pane_id),
+                    super::operations::TerminalLocation::Dock,
+                    directory,
+                    cx,
+                );
             }))
     }
 
