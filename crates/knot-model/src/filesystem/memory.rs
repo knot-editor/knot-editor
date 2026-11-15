@@ -54,6 +54,9 @@ pub struct MemoryFileSystemProvider {
     next_version: AtomicU64,
     watchers: MemoryWatchers,
     next_watcher: AtomicU64,
+    /// While deferred, the watches that have not reported
+    /// [`WatchEvent::Started`] yet.
+    unstarted: Mutex<Option<Vec<WatchSink>>>,
 }
 
 impl MemoryFileSystemProvider {
@@ -71,7 +74,31 @@ impl MemoryFileSystemProvider {
             next_version: AtomicU64::new(1),
             watchers: MemoryWatchers::default(),
             next_watcher: AtomicU64::new(1),
+            unstarted: Mutex::new(None),
         })
+    }
+
+    /// Hold new watches before they start, as a platform watch that takes
+    /// time to run, until [`start_watches`](Self::start_watches).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn defer_watch_starts(&self) {
+        *self
+            .unstarted
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner()) = Some(Vec::new());
+    }
+
+    /// Start the held watches, and every later one at once.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn start_watches(&self) {
+        let held = self
+            .unstarted
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .take();
+        for sink in held.into_iter().flatten() {
+            sink(WatchEvent::Started);
+        }
     }
 
     /// Reports dropped events to every watcher, as a platform would.
@@ -498,8 +525,23 @@ impl FileSystemProvider for MemoryFileSystemProvider {
                 id,
                 uri,
                 recursive,
-                sink,
+                sink: sink.clone(),
             });
+        let held = match self
+            .unstarted
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .as_mut()
+        {
+            Some(unstarted) => {
+                unstarted.push(sink.clone());
+                true
+            }
+            None => false,
+        };
+        if !held {
+            sink(WatchEvent::Started);
+        }
         Ok(Box::new(MemoryWatchGuard {
             id,
             watchers: self.watchers.clone(),

@@ -143,6 +143,10 @@ impl std::error::Error for ResourceError {}
 /// What a provider reports about a watched location.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WatchEvent {
+    /// The watch is running: changes from now on are reported. Sent once,
+    /// before any other event; a watch whose start failed sends it too and
+    /// then stays silent.
+    Started,
     /// Entries that changed, were created, or were removed.
     Changed(Vec<ResourceUri>),
     /// The platform dropped events, so anything under the watch may differ.
@@ -187,7 +191,8 @@ pub trait FileSystemProvider: Send + Sync {
 
     /// Reports changes to `uri` to `sink` until the guard is dropped: the
     /// directory and its direct children, or everything below it when
-    /// `recursive`. A watched file reports itself.
+    /// `recursive`. A watched file reports itself. The watch may start after
+    /// this returns; it reports [`WatchEvent::Started`] once it runs.
     fn watch(
         &self,
         uri: ResourceUri,

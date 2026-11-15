@@ -506,8 +506,6 @@ impl FileSystemProvider for LocalFileSystemProvider {
         recursive: bool,
         sink: WatchSink,
     ) -> Result<WatchGuard, ResourceError> {
-        use notify::{RecursiveMode, Watcher};
-
         let uri = self.normalize_scoped(uri)?;
         let path = self.uri_to_path(&uri)?;
         // The platform reports resolved paths, so events are mapped back onto
@@ -515,43 +513,103 @@ impl FileSystemProvider for LocalFileSystemProvider {
         let resolved =
             std::fs::canonicalize(&path).map_err(|error| map_io("watch", &uri, error))?;
         if !self.os_events {
+            sink(WatchEvent::Started);
             return Ok(Box::new(()));
         }
-        let requested = path.clone();
-        let mut watcher = notify::recommended_watcher(
-            move |result: notify::Result<notify::Event>| match result {
-                Ok(event) if event.need_rescan() => sink(WatchEvent::Rescan),
-                Ok(event) if event.kind.is_access() => {}
-                Ok(event) => {
-                    let uris: Vec<ResourceUri> = event
-                        .paths
-                        .iter()
-                        .filter_map(|path| {
-                            let path = match path.strip_prefix(&resolved) {
-                                Ok(relative) => requested.join(relative),
-                                Err(_) => path.clone(),
-                            };
-                            path_to_unrestricted_uri(&path).ok()
-                        })
-                        .collect();
-                    if !uris.is_empty() {
-                        sink(WatchEvent::Changed(uris));
+        let guard = OsWatchGuard(Arc::new(Mutex::new(OsWatch::Starting)));
+        let slot = guard.0.clone();
+        // Starting an OS watch can block (FSEvents waits on `fseventsd`), so
+        // it never runs on the caller's thread.
+        let spawned = std::thread::Builder::new()
+            .name("knot-watch-start".into())
+            .spawn(move || {
+                let started = start_os_watch(path, resolved, recursive, sink.clone());
+                let watcher = match started {
+                    Ok(watcher) => Some(watcher),
+                    Err(error) => {
+                        eprintln!("knot: cannot watch {uri}: {error}");
+                        None
                     }
+                };
+                {
+                    let mut slot = slot.lock().unwrap_or_else(|poison| poison.into_inner());
+                    if matches!(*slot, OsWatch::Dropped) {
+                        return;
+                    }
+                    *slot = OsWatch::Running(watcher);
                 }
-                Err(_) => sink(WatchEvent::Rescan),
-            },
-        )
-        .map_err(|error| ResourceError::io("watch", error))?;
-        let mode = if recursive {
-            RecursiveMode::Recursive
-        } else {
-            RecursiveMode::NonRecursive
-        };
-        watcher
-            .watch(&path, mode)
-            .map_err(|error| ResourceError::io("watch", error))?;
-        Ok(Box::new(watcher))
+                sink(WatchEvent::Started);
+            });
+        spawned.map_err(|error| ResourceError::io("watch", error))?;
+        Ok(Box::new(guard))
     }
+}
+
+/// One OS watch, from its start on a background thread to its release.
+enum OsWatch {
+    Starting,
+    /// `None` when the start failed.
+    Running(Option<notify::RecommendedWatcher>),
+    /// The guard was dropped; a start still running discards its watcher.
+    Dropped,
+}
+
+struct OsWatchGuard(Arc<Mutex<OsWatch>>);
+
+impl Drop for OsWatchGuard {
+    fn drop(&mut self) {
+        let previous = std::mem::replace(
+            &mut *self.0.lock().unwrap_or_else(|poison| poison.into_inner()),
+            OsWatch::Dropped,
+        );
+        // Stopping an OS watch joins its thread, so it happens elsewhere too.
+        if let OsWatch::Running(Some(watcher)) = previous {
+            let _ = std::thread::Builder::new()
+                .name("knot-watch-stop".into())
+                .spawn(move || drop(watcher));
+        }
+    }
+}
+
+/// Starts the platform watch of `path`, blocking until it runs.
+fn start_os_watch(
+    path: PathBuf,
+    resolved: PathBuf,
+    recursive: bool,
+    sink: WatchSink,
+) -> notify::Result<notify::RecommendedWatcher> {
+    use notify::{RecursiveMode, Watcher};
+
+    let requested = path.clone();
+    let mut watcher =
+        notify::recommended_watcher(move |result: notify::Result<notify::Event>| match result {
+            Ok(event) if event.need_rescan() => sink(WatchEvent::Rescan),
+            Ok(event) if event.kind.is_access() => {}
+            Ok(event) => {
+                let uris: Vec<ResourceUri> = event
+                    .paths
+                    .iter()
+                    .filter_map(|path| {
+                        let path = match path.strip_prefix(&resolved) {
+                            Ok(relative) => requested.join(relative),
+                            Err(_) => path.clone(),
+                        };
+                        path_to_unrestricted_uri(&path).ok()
+                    })
+                    .collect();
+                if !uris.is_empty() {
+                    sink(WatchEvent::Changed(uris));
+                }
+            }
+            Err(_) => sink(WatchEvent::Rescan),
+        })?;
+    let mode = if recursive {
+        RecursiveMode::Recursive
+    } else {
+        RecursiveMode::NonRecursive
+    };
+    watcher.watch(&path, mode)?;
+    Ok(watcher)
 }
 
 /// Copies a file, keeping its permissions, or a directory tree. A symlink is

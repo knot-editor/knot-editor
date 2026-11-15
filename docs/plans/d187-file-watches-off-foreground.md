@@ -1,6 +1,6 @@
 # D187: File watches start off the foreground
 
-Status: 🚧 approved, not started. Roadmap item [D187](../roadmap.md).
+Status: 🚧 checkpoint 1 implemented, awaiting review. Roadmap item [D187](../roadmap.md).
 References: [watching](../architecture/documents-and-persistence.md#watching),
 [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index),
 [detecting external changes](../architecture/documents-and-persistence.md#detecting-external-changes),
@@ -62,15 +62,18 @@ None.
 
 ## Checkpoints
 
-### 1. Asynchronous provider watches and the live signal
+### 1. Asynchronous provider watches and the live signal 🔍
 
 Deliverables:
 
-- `WatchEvent::Started`; the local provider's asynchronous start and stop; the
-  memory provider's immediate `Started`.
-- The registry's per-watch started state and per-subscription live signal,
-  delivered before any batch, immediately for a running watch.
-- Model tests: a subscription to a fresh watch becomes live only after
+- ✅ `WatchEvent::Started`; the local provider's asynchronous start and stop;
+  the memory provider's immediate `Started`, or a held one after
+  `defer_watch_starts` until `start_watches` (test support).
+- ✅ The registry's per-watch started state and per-subscription live signal
+  (`WatchSubscription::live`), delivered before any batch, immediately for a
+  running watch. Events before a subscription is live are not reported, which
+  also covers platform events that race ahead of `Started`.
+- ✅ Model tests: a subscription to a fresh watch becomes live only after
   `Started`; one sharing a running watch is live at once; the live signal
   precedes batches; a guard dropped before its local start completes leaves no
   watcher; with OS events, a write made right after the live signal is

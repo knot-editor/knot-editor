@@ -5,6 +5,11 @@
 //! already covers it is reused: a recursive watch of an ancestor, or the same
 //! URI watched alike. Every provider event is routed to each subscription whose
 //! scope contains it, so sharing a watch never widens what a subscriber sees.
+//!
+//! A provider watch may start after it is requested. Each subscription
+//! becomes live once its provider watch runs, and is told so through
+//! [`WatchSubscription::live`] before any of its batches; changes before then
+//! are not reported, so a subscriber reads the current state once live.
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -14,6 +19,8 @@ use std::{
     },
     time::{Duration, Instant},
 };
+
+use futures::{FutureExt as _, channel::oneshot, future::BoxFuture};
 
 use crate::{
     filesystem::{FileSystemProviderRegistry, ResourceError, WatchEvent, WatchGuard},
@@ -34,6 +41,8 @@ enum Message {
 struct ProviderWatch {
     uri: ResourceUri,
     recursive: bool,
+    /// Whether the provider reported [`WatchEvent::Started`].
+    started: bool,
     _guard: WatchGuard,
 }
 
@@ -43,6 +52,8 @@ struct Subscriber {
     listener: WatchListener,
     /// The provider watch this subscription holds.
     watch: u64,
+    /// Fired when the provider watch runs; `None` once live.
+    live: Option<oneshot::Sender<()>>,
     pending: BTreeSet<String>,
     pending_uris: Vec<ResourceUri>,
 }
@@ -83,6 +94,18 @@ impl Default for WatchRegistry {
 pub struct WatchSubscription {
     inner: Arc<Inner>,
     id: u64,
+    live: Option<oneshot::Receiver<()>>,
+}
+
+impl WatchSubscription {
+    /// Resolves once the subscription is live: its provider watch runs and
+    /// every later change is reported. Resolves at once when called again.
+    pub fn live(&mut self) -> BoxFuture<'static, ()> {
+        match self.live.take() {
+            Some(receiver) => receiver.map(|_| ()).boxed(),
+            None => futures::future::ready(()).boxed(),
+        }
+    }
 }
 
 impl Drop for WatchSubscription {
@@ -152,11 +175,19 @@ impl WatchRegistry {
                     ProviderWatch {
                         uri: uri.clone(),
                         recursive,
+                        started: false,
                         _guard: guard,
                     },
                 );
                 id
             }
+        };
+        let (sender, receiver) = oneshot::channel();
+        let live = if state.watches[&watch].started {
+            let _ = sender.send(());
+            None
+        } else {
+            Some(sender)
         };
         let id = state.next_subscriber;
         state.next_subscriber += 1;
@@ -167,6 +198,7 @@ impl WatchRegistry {
                 recursive,
                 listener,
                 watch,
+                live,
                 pending: BTreeSet::new(),
                 pending_uris: Vec::new(),
             },
@@ -174,6 +206,7 @@ impl WatchRegistry {
         Ok(WatchSubscription {
             inner: self.inner.clone(),
             id,
+            live: Some(receiver),
         })
     }
 
@@ -210,7 +243,23 @@ fn record(subscriber: &mut Subscriber, uri: &ResourceUri) {
 
 fn absorb(state: &Mutex<State>, watch: u64, event: WatchEvent) {
     let mut state = lock(state);
+    if event == WatchEvent::Started {
+        if let Some(provider) = state.watches.get_mut(&watch) {
+            provider.started = true;
+        }
+        for subscriber in state.subscribers.values_mut() {
+            if subscriber.watch == watch
+                && let Some(live) = subscriber.live.take()
+            {
+                let _ = live.send(());
+            }
+        }
+        return;
+    }
     for subscriber in state.subscribers.values_mut() {
+        if subscriber.live.is_some() {
+            continue;
+        }
         match &event {
             WatchEvent::Changed(uris) => {
                 for uri in uris {
@@ -223,7 +272,7 @@ fn absorb(state: &Mutex<State>, watch: u64, event: WatchEvent) {
                 let uri = subscriber.uri.clone();
                 record(subscriber, &uri);
             }
-            WatchEvent::Rescan => {}
+            WatchEvent::Rescan | WatchEvent::Started => {}
         }
     }
 }
@@ -277,7 +326,9 @@ mod tests {
     };
 
     use super::*;
-    use crate::filesystem::{LocalFileSystemProvider, MemoryFileSystemProvider};
+    use crate::filesystem::{
+        FileSystemProvider, LocalFileSystemProvider, MemoryFileSystemProvider,
+    };
 
     const WINDOW: Duration = Duration::from_millis(40);
     const WAIT: Duration = Duration::from_secs(5);
@@ -348,6 +399,73 @@ mod tests {
             sorted(batches.recv_timeout(WAIT).unwrap()),
             ["mem://workspace/src/c.txt"]
         );
+    }
+
+    #[test]
+    fn a_subscription_is_live_once_its_provider_watch_runs() {
+        let fixture = fixture();
+        fixture.provider.defer_watch_starts();
+        let (on_batch, batches) = listener();
+        let mut watch = fixture
+            .registry
+            .watch(&fixture.providers, uri("/src"), false, on_batch)
+            .unwrap();
+        let mut live = watch.live();
+        assert!((&mut live).now_or_never().is_none());
+        // A change before the watch runs is not reported: a subscriber reads
+        // the current state once live.
+        fixture
+            .provider
+            .seed_file(uri("/src/early.txt"), "x")
+            .unwrap();
+
+        fixture.provider.start_watches();
+        pollster::block_on(live);
+        fixture
+            .provider
+            .seed_file(uri("/src/late.txt"), "x")
+            .unwrap();
+        assert_eq!(
+            sorted(batches.recv_timeout(WAIT).unwrap()),
+            ["mem://workspace/src/late.txt"]
+        );
+    }
+
+    #[test]
+    fn sharing_a_running_watch_is_live_at_once_and_a_starting_one_when_it_runs() {
+        let fixture = fixture();
+        let (root_listener, _root_batches) = listener();
+        let mut root = fixture
+            .registry
+            .watch(&fixture.providers, uri("/"), true, root_listener)
+            .unwrap();
+        pollster::block_on(root.live());
+        let (inner_listener, _inner_batches) = listener();
+        let mut inner = fixture
+            .registry
+            .watch(&fixture.providers, uri("/src"), false, inner_listener)
+            .unwrap();
+        assert!(inner.live().now_or_never().is_some());
+
+        // A subscription that joins a watch still starting waits for it.
+        let fixture = self::fixture();
+        fixture.provider.defer_watch_starts();
+        let (first_listener, _first_batches) = listener();
+        let (second_listener, _second_batches) = listener();
+        let mut first = fixture
+            .registry
+            .watch(&fixture.providers, uri("/src"), true, first_listener)
+            .unwrap();
+        let mut second = fixture
+            .registry
+            .watch(&fixture.providers, uri("/src/deep"), false, second_listener)
+            .unwrap();
+        assert_eq!(fixture.provider.watch_count(), 1);
+        let (mut first_live, mut second_live) = (first.live(), second.live());
+        assert!((&mut first_live).now_or_never().is_none());
+        assert!((&mut second_live).now_or_never().is_none());
+        fixture.provider.start_watches();
+        pollster::block_on(async { futures::join!(first_live, second_live) });
     }
 
     #[test]
@@ -465,9 +583,11 @@ mod tests {
 
         let registry = WatchRegistry::new(WINDOW);
         let (on_batch, batches) = listener();
-        let _watch = registry
+        let mut watch = registry
             .watch(&providers, root.clone(), false, on_batch)
             .unwrap();
+        // Changes are reported from the moment the watch is live.
+        pollster::block_on(watch.live());
         let note = ResourceUri::from_url(url::Url::from_file_path(&file).unwrap());
         let wait_for = |expected: &ResourceUri| {
             let deadline = Instant::now() + WAIT;
@@ -491,5 +611,34 @@ mod tests {
         fs::write(&replacement, "two").unwrap();
         fs::rename(&replacement, &file).unwrap();
         assert!(wait_for(&note));
+    }
+
+    #[test]
+    fn a_dropped_local_watch_releases_its_platform_watch() {
+        let temporary = tempfile::tempdir().unwrap();
+        let provider = LocalFileSystemProvider::new(temporary.path()).unwrap();
+        let (sender, events) = channel();
+        let sender = Mutex::new(sender);
+        let guard = provider
+            .watch(
+                provider.root().clone(),
+                true,
+                Arc::new(move |event| {
+                    let _ = sender.lock().unwrap().send(event);
+                }),
+            )
+            .unwrap();
+        // Dropped while its start is most likely still running.
+        drop(guard);
+        // The sink lives inside the platform watch, so the channel closes
+        // only once no platform watch survives.
+        let deadline = Instant::now() + WAIT;
+        loop {
+            match events.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                Ok(_) => continue,
+                Err(RecvTimeoutError::Disconnected) => break,
+                Err(RecvTimeoutError::Timeout) => panic!("the platform watch outlived its guard"),
+            }
+        }
     }
 }
