@@ -1436,7 +1436,7 @@ pub enum BufferAccessError {
 mod find;
 mod folds;
 
-pub use find::{FindMatches, FindOptions, MAX_FIND_MATCHES};
+pub use find::{FindError, FindMatches, FindOptions, MAX_FIND_MATCHES};
 
 /// Foreground-authoritative buffer-change subscriptions.
 pub struct BufferSubscriptionRegistry {

@@ -17,6 +17,7 @@ nucleo-matcher = { workspace = true }
 percent-encoding = { workspace = true }
 rusqlite = { workspace = true }
 futures = { workspace = true }
+regex-automata = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

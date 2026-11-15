@@ -1351,16 +1351,139 @@ fn find_range_limits_matches_and_is_checked() {
     );
     assert_eq!(
         model.find("ab", insensitive(), range(9, 20), 10),
-        Err(BufferAccessError::InvalidRange)
+        Err(FindError::Access(BufferAccessError::InvalidRange))
     );
     assert_eq!(
         model.find("ab", insensitive(), range(0, 10), 10),
-        Err(BufferAccessError::InvalidRange),
+        Err(FindError::Access(BufferAccessError::InvalidRange)),
         "10 splits the two-byte é"
     );
     assert_eq!(
         model.find("ab", insensitive(), range(5, 3), 10),
-        Err(BufferAccessError::InvalidRange)
+        Err(FindError::Access(BufferAccessError::InvalidRange))
+    );
+}
+
+fn pattern() -> FindOptions {
+    FindOptions {
+        regex: true,
+        ..FindOptions::default()
+    }
+}
+
+fn pattern_sensitive() -> FindOptions {
+    FindOptions {
+        case_sensitive: true,
+        ..pattern()
+    }
+}
+
+fn span(start: usize, end: usize) -> Option<ByteRange> {
+    Some(ByteRange {
+        start_byte_offset: start,
+        end_byte_offset: end,
+    })
+}
+
+#[test]
+fn find_regex_anchors_match_at_line_boundaries() {
+    let model = BufferModel::from_text("one\ntwo\nthree");
+    assert_eq!(found(&model, "^t", pattern()), vec![4..5, 8..9]);
+    assert_eq!(found(&model, "e$", pattern()), vec![2..3, 12..13]);
+    assert_eq!(found(&model, "e\\nt", pattern()), vec![2..5]);
+}
+
+#[test]
+fn find_regex_folds_case_unless_sensitive() {
+    let model = BufferModel::from_text("Foo foo FOO é É");
+    assert_eq!(found(&model, "f(o)+", pattern()), vec![0..3, 4..7, 8..11]);
+    assert_eq!(found(&model, "f(o)+", pattern_sensitive()), vec![4..7]);
+    assert_eq!(found(&model, "é", pattern()), vec![12..14, 15..17]);
+}
+
+#[test]
+fn find_regex_whole_word_checks_each_match() {
+    let model = BufferModel::from_text("cat concat cat.cat cats");
+    let options = FindOptions {
+        whole_word: true,
+        ..pattern()
+    };
+    assert_eq!(found(&model, "cat", options), vec![0..3, 11..14, 15..18]);
+    assert_eq!(
+        found(&model, "cats?", options),
+        vec![0..3, 11..14, 15..18, 19..23]
+    );
+}
+
+#[test]
+fn find_regex_judges_anchors_and_boundaries_against_the_surrounding_text() {
+    let model = BufferModel::from_text("ab\nab ab");
+    // 3..5 starts a line; 6..8 does not, and `\b` sees the space before it.
+    assert_eq!(
+        model.find("^ab", pattern(), span(3, 8), 10).unwrap().ranges,
+        vec![3..5]
+    );
+    assert_eq!(
+        model.find("^ab", pattern(), span(1, 8), 10).unwrap().ranges,
+        vec![3..5]
+    );
+    assert_eq!(
+        model
+            .find("\\bb", pattern(), span(1, 8), 10)
+            .unwrap()
+            .ranges,
+        Vec::<Range<usize>>::new()
+    );
+    // `$` at the range edge needs a real line end after it.
+    assert_eq!(
+        model.find("a$", pattern(), span(0, 1), 10).unwrap().ranges,
+        Vec::<Range<usize>>::new()
+    );
+    assert_eq!(
+        model.find("b$", pattern(), span(0, 2), 10).unwrap().ranges,
+        vec![1..2]
+    );
+    // A match cannot run past the range.
+    assert_eq!(
+        model.find("a+b", pattern(), span(3, 4), 10).unwrap().ranges,
+        Vec::<Range<usize>>::new()
+    );
+}
+
+#[test]
+fn find_regex_keeps_empty_matches() {
+    let model = BufferModel::from_text("a\n\nbé");
+    assert_eq!(found(&model, "^", pattern()), vec![0..0, 2..2, 3..3]);
+    assert_eq!(
+        found(&model, "x*", pattern()),
+        vec![0..0, 1..1, 2..2, 3..3, 4..4, 6..6]
+    );
+}
+
+#[test]
+fn find_regex_limit_reports_more() {
+    let model = BufferModel::from_text("a1 b2 c3");
+    let two = model.find("[a-z]\\d", pattern(), None, 2).unwrap();
+    assert_eq!(two.ranges, vec![0..2, 3..5]);
+    assert!(two.more);
+    assert!(!model.find("[a-z]\\d", pattern(), None, 3).unwrap().more);
+}
+
+#[test]
+fn find_regex_rejects_an_invalid_pattern_with_the_parser_message() {
+    let model = BufferModel::from_text("abc");
+    let Err(FindError::InvalidQuery(message)) = model.find("(", pattern(), None, 10) else {
+        panic!("an unclosed group is invalid");
+    };
+    assert!(message.contains("unclosed group"), "{message}");
+    // The same text is a fine literal query, and an empty pattern matches nothing.
+    assert!(model.find("(", insensitive(), None, 10).is_ok());
+    assert!(
+        model
+            .find("", pattern(), None, 10)
+            .unwrap()
+            .ranges
+            .is_empty()
     );
 }
 
@@ -1370,7 +1493,7 @@ fn find_on_a_closed_buffer_fails() {
     model.close();
     assert_eq!(
         model.find("a", insensitive(), None, 1),
-        Err(BufferAccessError::Closed)
+        Err(FindError::Access(BufferAccessError::Closed))
     );
 }
 

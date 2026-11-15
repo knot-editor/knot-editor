@@ -1,8 +1,9 @@
-//! Literal text search over a buffer.
+//! Literal and regular-expression text search over a buffer.
 
 use std::ops::Range;
 
 use knot_protocol::ByteRange;
+use regex_automata::{Input, meta::Regex, util::syntax};
 
 use super::{BufferAccessError, BufferModel};
 use crate::editor::{WordClass, word_class};
@@ -17,6 +18,24 @@ pub struct FindOptions {
     pub case_sensitive: bool,
     /// Accept a match only at word boundaries, by the editor's word classes.
     pub whole_word: bool,
+    /// Read the query as a Rust `regex` pattern in multi-line mode: `^` and
+    /// `$` match at line boundaries and `\n` matches across lines. Case
+    /// folding is then the pattern engine's own.
+    pub regex: bool,
+}
+
+/// Why a search failed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FindError {
+    Access(BufferAccessError),
+    /// The regular expression did not parse; carries the parser's message.
+    InvalidQuery(String),
+}
+
+impl From<BufferAccessError> for FindError {
+    fn from(error: BufferAccessError) -> Self {
+        Self::Access(error)
+    }
 }
 
 /// The matches of a search in order, and whether more followed the last.
@@ -49,20 +68,24 @@ impl BufferModel {
     /// The non-overlapping matches of `query` inside `range` (the whole
     /// buffer when absent), up to `limit` capped at [`MAX_FIND_MATCHES`].
     /// Matches lie wholly inside the range, and a whole-word match is judged
-    /// against the buffer text around the range, not its edges. An empty
-    /// query matches nothing.
+    /// against the buffer text around the range, not its edges; so are the
+    /// anchors and word boundaries of a regular expression, whose empty
+    /// matches are kept. An empty query matches nothing.
     pub fn find(
         &self,
         query: &str,
         options: FindOptions,
         range: Option<ByteRange>,
         limit: usize,
-    ) -> Result<FindMatches, BufferAccessError> {
+    ) -> Result<FindMatches, FindError> {
         let range = self.checked_range(range.unwrap_or(ByteRange {
             start_byte_offset: 0,
             end_byte_offset: self.len(),
         }))?;
         let limit = limit.min(MAX_FIND_MATCHES);
+        if options.regex {
+            return self.find_regex(query, options, range, limit);
+        }
         let query: Vec<char> = query.chars().map(|c| options.fold(c)).collect();
         let mut found = FindMatches {
             ranges: Vec::new(),
@@ -95,6 +118,53 @@ impl BufferModel {
             }
             found.ranges.push(range.start + start..range.start + end);
             resume = end;
+        }
+        Ok(found)
+    }
+
+    fn find_regex(
+        &self,
+        pattern: &str,
+        options: FindOptions,
+        range: Range<usize>,
+        limit: usize,
+    ) -> Result<FindMatches, FindError> {
+        let mut found = FindMatches {
+            ranges: Vec::new(),
+            more: false,
+        };
+        if pattern.is_empty() {
+            return Ok(found);
+        }
+        let regex = Regex::builder()
+            .syntax(
+                syntax::Config::new()
+                    .multi_line(true)
+                    .case_insensitive(!options.case_sensitive),
+            )
+            .build(pattern)
+            .map_err(|error| FindError::InvalidQuery(invalid_message(&error)))?;
+        if limit == 0 {
+            return Ok(found);
+        }
+
+        // One character of context on each side is all an anchor or a word
+        // boundary can look at.
+        let window_start = range.start - self.char_before(range.start).map_or(0, char::len_utf8);
+        let window_end = range.end + self.char_after(range.end).map_or(0, char::len_utf8);
+        let text = self.read(window_start..window_end);
+        let span = range.start - window_start..range.end - window_start;
+        for matched in regex.find_iter(Input::new(&text).span(span)) {
+            if options.whole_word && !bounded(&text, matched.start(), matched.end(), None, None) {
+                continue;
+            }
+            if found.ranges.len() == limit {
+                found.more = true;
+                break;
+            }
+            found
+                .ranges
+                .push(window_start + matched.start()..window_start + matched.end());
         }
         Ok(found)
     }
@@ -151,4 +221,12 @@ fn bounded(
     let left = !first.is_some_and(is_word) || !previous.is_some_and(is_word);
     let right = !last.is_some_and(is_word) || !next.is_some_and(is_word);
     left && right
+}
+
+/// The parser's message for a pattern that did not compile.
+fn invalid_message(error: &regex_automata::meta::BuildError) -> String {
+    match error.syntax_error() {
+        Some(syntax) => syntax.to_string(),
+        None => error.to_string(),
+    }
 }
