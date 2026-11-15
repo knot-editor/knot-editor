@@ -321,7 +321,6 @@ impl KnotWindow {
                     .relative()
                     .on_drag(source, drag_label)
                     .child(self.tab_drag_geometry(pane_id, capture))
-                    .group(SharedString::from(format!("tab-group-{}", tab_id.value())))
                     .px_3()
                     .py_1()
                     .cursor_pointer()
@@ -377,15 +376,6 @@ impl KnotWindow {
                                     .debug_selector(move || format!("close-tab-{}", tab_id.value()))
                                     .px_1()
                                     .rounded_sm()
-                                    .when(in_dock, |close| {
-                                        close.invisible().group_hover(
-                                            SharedString::from(format!(
-                                                "tab-group-{}",
-                                                tab_id.value()
-                                            )),
-                                            |style| style.visible(),
-                                        )
-                                    })
                                     .hover(|style| {
                                         style
                                             .bg(theme(cx)

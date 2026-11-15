@@ -145,3 +145,23 @@ fn a_terminal_header_opens_another_terminal_beside_it(cx: &mut TestAppContext) {
         assert_eq!(workbench.pane(pane).unwrap().tabs().len(), count + 1);
     });
 }
+
+#[gpui::test]
+fn a_dock_terminal_tab_has_a_close_button(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    cx.set_global(ApplicationFileSystems(memory_filesystems()));
+    let (window, native_window) = empty_product_window(&documents, cx);
+    window.update(cx, |window, cx| window.toggle_terminal(cx).unwrap());
+    cx.run_until_parked();
+    let tab = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let (pane, _) = workbench.recent_dock_terminal().unwrap();
+        workbench.pane(pane).unwrap().active_tab_id().value()
+    });
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    assert!(
+        visual
+            .debug_bounds(Box::leak(format!("close-tab-{tab}").into_boxed_str()))
+            .is_some()
+    );
+}

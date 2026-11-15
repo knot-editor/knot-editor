@@ -45,7 +45,7 @@ larger type size than the rest of the UI.
 - **Dock headers.** Every dock pane has a header. Its tabs are plain text, the
   active one bright with an accent underline; a pane with one tool shows just
   its title. Tool tabs have no close button; a hide (`–`) button sits at the
-  header's right. Terminal tabs keep a close button that appears on hover. A
+  header's right. Terminal tabs keep a close button. A
   tree tool's frame actions (the Explorer's New File and New Folder) render at
   the header's right, replacing the tree's own action row; their keyboard
   focus stays in the tree.
@@ -120,13 +120,13 @@ Project remains a palette command.
 ### 4. Dock headers and stripes ✅ (pending review)
 
 Delivered: dock headers, frame actions in the header (the tree's action row is
-removed), the hide button, hover close for terminals, wider accent-tinted
+removed), the hide button, close button on terminal tabs, wider accent-tinted
 stripes, empty stripes hidden (shown while a button is dragged), and the
 Projects tool icon `tool.builtin.projects`. Tests: `tests/dock_header.rs` and
 the stripe drag test.
 
 Deliverables: dock pane headers with text tabs, accent underline, hide
-button, hover close for terminals, and tree frame actions at the right; the
+button, close button on terminal tabs, and tree frame actions at the right; the
 tree's own action row removed; restyled stripes, empty stripes hidden, an
 icon for the Projects tool.
 
