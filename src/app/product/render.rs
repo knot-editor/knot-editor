@@ -342,6 +342,7 @@ impl KnotWindow {
                     .when(in_dock, |element| {
                         element
                             .font_weight(FontWeight::SEMIBOLD)
+                            .text_size(zoom::rems(13.))
                             .border_b_2()
                             .border_color(if tab_id == active_tab && !titled_alone {
                                 accent
