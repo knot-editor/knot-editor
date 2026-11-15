@@ -3,7 +3,11 @@
 use std::ops::Range;
 
 use knot_protocol::ByteRange;
-use regex_automata::{Input, meta::Regex, util::syntax};
+use regex_automata::{
+    Input, PatternID,
+    meta::Regex,
+    util::{interpolate, syntax},
+};
 
 use super::{BufferAccessError, BufferModel};
 use crate::editor::{WordClass, word_class};
@@ -36,6 +40,13 @@ impl From<BufferAccessError> for FindError {
     fn from(error: BufferAccessError) -> Self {
         Self::Access(error)
     }
+}
+
+/// The edits of a replacement and whether more matches followed the last.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Replacements {
+    pub edits: Vec<knot_protocol::TextEdit>,
+    pub more: bool,
 }
 
 /// The matches of a search in order, and whether more followed the last.
@@ -136,24 +147,12 @@ impl BufferModel {
         if pattern.is_empty() {
             return Ok(found);
         }
-        let regex = Regex::builder()
-            .syntax(
-                syntax::Config::new()
-                    .multi_line(true)
-                    .case_insensitive(!options.case_sensitive),
-            )
-            .build(pattern)
-            .map_err(|error| FindError::InvalidQuery(invalid_message(&error)))?;
+        let regex = compile(pattern, options)?;
         if limit == 0 {
             return Ok(found);
         }
 
-        // One character of context on each side is all an anchor or a word
-        // boundary can look at.
-        let window_start = range.start - self.char_before(range.start).map_or(0, char::len_utf8);
-        let window_end = range.end + self.char_after(range.end).map_or(0, char::len_utf8);
-        let text = self.read(window_start..window_end);
-        let span = range.start - window_start..range.end - window_start;
+        let (window_start, text, span) = self.window(&range);
         for matched in regex.find_iter(Input::new(&text).span(span)) {
             if options.whole_word && !bounded(&text, matched.start(), matched.end(), None, None) {
                 continue;
@@ -167,6 +166,94 @@ impl BufferModel {
                 .push(window_start + matched.start()..window_start + matched.end());
         }
         Ok(found)
+    }
+
+    /// The text of `range` with one character of context on each side, which
+    /// is all an anchor or a word boundary can look at: where it starts in
+    /// the buffer, the text, and `range` within it.
+    fn window(&self, range: &Range<usize>) -> (usize, String, Range<usize>) {
+        let start = range.start - self.char_before(range.start).map_or(0, char::len_utf8);
+        let end = range.end + self.char_after(range.end).map_or(0, char::len_utf8);
+        (
+            start,
+            self.read(start..end),
+            range.start - start..range.end - start,
+        )
+    }
+
+    /// The edits that replace the non-overlapping matches of `query` inside
+    /// `range` (the whole buffer when absent) with `replacement`, up to
+    /// `limit` capped at [`MAX_FIND_MATCHES`]; matching is [`Self::find`]'s.
+    /// A literal query inserts the replacement as typed. A pattern expands
+    /// `$1`, `${name}` and `$$` from the match's groups, and `\n`, `\t` and
+    /// `\\` to a line break, a tab and a backslash. The edits are ascending
+    /// and disjoint, in the buffer's current coordinates.
+    pub fn replace_matches(
+        &self,
+        query: &str,
+        replacement: &str,
+        options: FindOptions,
+        range: Option<ByteRange>,
+        limit: usize,
+    ) -> Result<Replacements, FindError> {
+        if !options.regex {
+            let found = self.find(query, options, range, limit)?;
+            return Ok(Replacements {
+                edits: found
+                    .ranges
+                    .into_iter()
+                    .map(|range| edit(range, replacement.to_owned()))
+                    .collect(),
+                more: found.more,
+            });
+        }
+
+        let range = self.checked_range(range.unwrap_or(ByteRange {
+            start_byte_offset: 0,
+            end_byte_offset: self.len(),
+        }))?;
+        let limit = limit.min(MAX_FIND_MATCHES);
+        let mut replaced = Replacements {
+            edits: Vec::new(),
+            more: false,
+        };
+        if query.is_empty() {
+            return Ok(replaced);
+        }
+        let regex = compile(query, options)?;
+        if limit == 0 {
+            return Ok(replaced);
+        }
+        let template = unescape(replacement);
+        let (window_start, text, span) = self.window(&range);
+        for captures in regex.captures_iter(Input::new(&text).span(span)) {
+            let Some(matched) = captures.get_match() else {
+                continue;
+            };
+            if options.whole_word && !bounded(&text, matched.start(), matched.end(), None, None) {
+                continue;
+            }
+            if replaced.edits.len() == limit {
+                replaced.more = true;
+                break;
+            }
+            let mut expanded = String::new();
+            interpolate::string(
+                &template,
+                |index, dst| {
+                    if let Some(group) = captures.get_group(index) {
+                        dst.push_str(&text[group.range()]);
+                    }
+                },
+                |name| captures.group_info().to_index(PatternID::ZERO, name),
+                &mut expanded,
+            );
+            replaced.edits.push(edit(
+                window_start + matched.start()..window_start + matched.end(),
+                expanded,
+            ));
+        }
+        Ok(replaced)
     }
 
     fn char_before(&self, offset: usize) -> Option<char> {
@@ -229,4 +316,46 @@ fn invalid_message(error: &regex_automata::meta::BuildError) -> String {
         Some(syntax) => syntax.to_string(),
         None => error.to_string(),
     }
+}
+
+fn compile(pattern: &str, options: FindOptions) -> Result<Regex, FindError> {
+    Regex::builder()
+        .syntax(
+            syntax::Config::new()
+                .multi_line(true)
+                .case_insensitive(!options.case_sensitive),
+        )
+        .build(pattern)
+        .map_err(|error| FindError::InvalidQuery(invalid_message(&error)))
+}
+
+fn edit(range: Range<usize>, text: String) -> knot_protocol::TextEdit {
+    knot_protocol::TextEdit {
+        range: ByteRange {
+            start_byte_offset: range.start,
+            end_byte_offset: range.end,
+        },
+        text,
+    }
+}
+
+/// `replacement` with `\n`, `\t` and `\\` replaced by their characters; any
+/// other backslash stays.
+fn unescape(replacement: &str) -> String {
+    let mut text = String::with_capacity(replacement.len());
+    let mut characters = replacement.chars().peekable();
+    while let Some(character) = characters.next() {
+        let escaped = match (character, characters.peek()) {
+            ('\\', Some('n')) => '\n',
+            ('\\', Some('t')) => '\t',
+            ('\\', Some('\\')) => '\\',
+            _ => {
+                text.push(character);
+                continue;
+            }
+        };
+        characters.next();
+        text.push(escaped);
+    }
+    text
 }

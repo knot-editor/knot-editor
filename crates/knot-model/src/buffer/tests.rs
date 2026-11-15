@@ -1518,3 +1518,183 @@ fn find_folds_case_by_simple_unicode_folding() {
     assert_eq!(found(&model, "ı", insensitive()).len(), 1);
     assert_eq!(found(&model, "i", insensitive()).len(), 2);
 }
+
+/// The text after replacing the matches of `query`, and whether more remained.
+fn replaced(
+    text: &str,
+    query: &str,
+    replacement: &str,
+    options: FindOptions,
+    range: Option<ByteRange>,
+    limit: usize,
+) -> (String, bool) {
+    let model = BufferModel::from_text(text);
+    let replacements = model
+        .replace_matches(query, replacement, options, range, limit)
+        .unwrap();
+    let mut result = text.to_owned();
+    for edit in replacements.edits.iter().rev() {
+        result.replace_range(
+            edit.range.start_byte_offset..edit.range.end_byte_offset,
+            &edit.text,
+        );
+    }
+    (result, replacements.more)
+}
+
+fn replaced_all(text: &str, query: &str, replacement: &str, options: FindOptions) -> String {
+    replaced(text, query, replacement, options, None, usize::MAX).0
+}
+
+#[test]
+fn replace_literal_inserts_the_replacement_as_typed() {
+    let options = FindOptions::default();
+    assert_eq!(
+        replaced_all("a.b a.b", "a.b", "$1\\n", options),
+        "$1\\n $1\\n"
+    );
+    assert_eq!(replaced_all("Foo foo", "foo", "bar", options), "bar bar");
+    let sensitive = FindOptions {
+        case_sensitive: true,
+        ..options
+    };
+    assert_eq!(replaced_all("Foo foo", "foo", "bar", sensitive), "Foo bar");
+    let word = FindOptions {
+        whole_word: true,
+        ..options
+    };
+    assert_eq!(
+        replaced_all("cat concat cat", "cat", "dog", word),
+        "dog concat dog"
+    );
+    assert_eq!(replaced_all("abc", "b", "", options), "ac");
+}
+
+#[test]
+fn replace_regex_expands_groups() {
+    assert_eq!(
+        replaced_all("john smith", "(\\w+) (\\w+)", "$2, $1", pattern()),
+        "smith, john"
+    );
+    assert_eq!(
+        replaced_all(
+            "john smith",
+            "(?<first>\\w+) (?<last>\\w+)",
+            "${last}_${first}",
+            pattern()
+        ),
+        "smith_john"
+    );
+    assert_eq!(replaced_all("a", "a", "$$1", pattern()), "$1");
+    assert_eq!(replaced_all("abc", "b", "[$0]", pattern()), "a[b]c");
+    // A group that did not take part, or does not exist, expands to nothing.
+    assert_eq!(replaced_all("ac", "a(b)?c", "<$1>", pattern()), "<>");
+    assert_eq!(replaced_all("a", "a", "<$7>", pattern()), "<>");
+    // Braces end a name where a bare name would run on.
+    assert_eq!(replaced_all("a", "(a)", "$1x", pattern()), "");
+    assert_eq!(replaced_all("a", "(a)", "${1}x", pattern()), "ax");
+}
+
+#[test]
+fn replace_regex_expands_escapes() {
+    assert_eq!(replaced_all("a b", " ", "\\n", pattern()), "a\nb");
+    assert_eq!(replaced_all("a b", " ", "\\t", pattern()), "a\tb");
+    assert_eq!(replaced_all("a b", " ", "\\\\", pattern()), "a\\b");
+    assert_eq!(replaced_all("a b", " ", "\\x", pattern()), "a\\xb");
+    assert_eq!(replaced_all("a b", " ", "\\\\n", pattern()), "a\\nb");
+}
+
+#[test]
+fn replace_regex_empty_matches_prefix_every_line() {
+    assert_eq!(
+        replaced_all("one\ntwo\n", "^", "// ", pattern()),
+        "// one\n// two\n// "
+    );
+    assert_eq!(replaced_all("ab", "x*", "-", pattern()), "-a-b-");
+}
+
+#[test]
+fn replace_regex_whole_word_and_case() {
+    let word = FindOptions {
+        whole_word: true,
+        ..pattern()
+    };
+    assert_eq!(replaced_all("cat concat", "c\\w*t", "X", word), "X X");
+    assert_eq!(replaced_all("cat concat", "cat", "X", word), "X concat");
+    assert_eq!(replaced_all("Cat cat", "cat", "X", pattern()), "X X");
+    assert_eq!(
+        replaced_all("Cat cat", "cat", "X", pattern_sensitive()),
+        "Cat X"
+    );
+}
+
+#[test]
+fn replace_stays_inside_a_range() {
+    let options = FindOptions::default();
+    assert_eq!(
+        replaced("aaa aaa", "a", "b", options, span(4, 7), usize::MAX).0,
+        "aaa bbb"
+    );
+    // Anchors are judged against the text around the range.
+    assert_eq!(
+        replaced(
+            "one\ntwo\nthree",
+            "^",
+            "> ",
+            pattern(),
+            span(4, 7),
+            usize::MAX
+        )
+        .0,
+        "one\n> two\nthree"
+    );
+    assert_eq!(
+        replaced("one\ntwo", "^", "> ", pattern(), span(5, 7), usize::MAX).0,
+        "one\ntwo"
+    );
+}
+
+#[test]
+fn replace_limits_and_reports_more() {
+    let options = FindOptions::default();
+    assert_eq!(
+        replaced("a a a", "a", "b", options, None, 2),
+        ("b b a".to_owned(), true)
+    );
+    assert_eq!(
+        replaced("a a", "a", "b", options, None, 2),
+        ("b b".to_owned(), false)
+    );
+    assert_eq!(
+        replaced("a a", "a", "b", options, None, 0),
+        ("a a".to_owned(), false)
+    );
+    assert_eq!(
+        replaced("a a a", "a", "b", pattern(), None, 1),
+        ("b a a".to_owned(), true)
+    );
+}
+
+#[test]
+fn replace_with_no_match_or_an_empty_query_makes_no_edits() {
+    let model = BufferModel::from_text("abc");
+    for options in [FindOptions::default(), pattern()] {
+        let none = model.replace_matches("x", "y", options, None, 10).unwrap();
+        assert!(none.edits.is_empty() && !none.more);
+        let empty = model.replace_matches("", "y", options, None, 10).unwrap();
+        assert!(empty.edits.is_empty() && !empty.more);
+    }
+}
+
+#[test]
+fn replace_reports_invalid_patterns_and_ranges() {
+    let model = BufferModel::from_text("abc");
+    assert!(matches!(
+        model.replace_matches("(", "y", pattern(), None, 10),
+        Err(FindError::InvalidQuery(_))
+    ));
+    assert!(matches!(
+        model.replace_matches("a", "y", FindOptions::default(), span(0, 9), 10),
+        Err(FindError::Access(_))
+    ));
+}
