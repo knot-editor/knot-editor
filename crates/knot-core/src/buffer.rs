@@ -111,6 +111,7 @@ use backing::Backings;
 use tree::{Bias, Dimension, Tree};
 
 mod backing;
+mod locator;
 mod snapshot;
 mod tree;
 
