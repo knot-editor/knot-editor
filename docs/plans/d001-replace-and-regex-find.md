@@ -113,7 +113,7 @@ keys: `editor.replace` presets in `src/app/commands/keymaps/presets.rs` and the
 package's bar bindings. Replacing an empty match with an empty replacement does
 not advance (left unhandled).
 
-### 4. Find in selection
+### 4. Find in selection ✅ ready for review
 
 Deliverables: the toggle, auto-enable on multi-line selections, scope rebasing,
 the `editor.findScope` color key with defaults and theme values, scoped
@@ -126,7 +126,7 @@ Implementation context:
   `BufferChange.edits` in `search.ts`).
 - Color key in `crates/knot-model/src/theme.rs` beside `EDITOR_FIND_MATCH`,
   `knot.d.ts` color keys, and `extensions/@knot/themes/src/themes/*.ts`.
-- Lucide icon `text-select`.
+- Lucide icon `scan-text` (the bundled set has no `text-select`).
 
 Review gate: manual review in the app, then record the decision in
 [semantic UI decisions](../decisions/semantic-ui.md#editor-bars) and its

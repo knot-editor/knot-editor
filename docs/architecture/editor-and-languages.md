@@ -247,6 +247,11 @@ both; Enter there replaces the selected match, when the selection is one, and
 selects the next, and Replace All commits every match as one undo step with
 the native `replace`. Escape in either closes both. An invalid pattern shows the
 parser's message in the find bar.
+Find in Selection is per editor: it limits highlights, stepping and Replace All
+to the selection (the caret's line without one; a multi-line selection turns it
+on when Find opens). The package rebases that range through each change and
+drops it when an edit deletes all of it or the bar closes; the range is painted
+in `editor.findScope` beneath the matches.
 Its highlights are the editor's own decorations
 ([semantic UI](semantic-ui.md#semantic-extension-ui)) in `editor.findMatch` and
 `editor.findMatchCurrent`, capped at 1,000 matches, and it finds matches with
