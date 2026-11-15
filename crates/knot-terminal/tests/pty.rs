@@ -57,6 +57,23 @@ fn wait_for_line(pty: &Pty, found: impl Fn(&str) -> bool) {
     panic!("timed out; the terminal shows:\n{}", text(pty));
 }
 
+/// Waits until the shell shows its prompt on the last line, so that typed
+/// input is not echoed before the prompt it belongs to.
+fn wait_for_prompt(pty: &Pty) {
+    let deadline = Instant::now() + TIMEOUT;
+    while Instant::now() < deadline {
+        if text(pty)
+            .lines()
+            .last()
+            .is_some_and(|line| line.trim_end().ends_with('$'))
+        {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out; the terminal shows:\n{}", text(pty));
+}
+
 fn wait_for_exit(events: &mpsc::Receiver<PtyEvent>) -> ExitStatus {
     let deadline = Instant::now() + TIMEOUT;
     loop {
@@ -110,6 +127,7 @@ fn a_signal_ends_the_program() {
 #[test]
 fn input_round_trips() {
     let (pty, _events) = spawn(&sh(None));
+    wait_for_prompt(&pty);
     pty.write("echo $((6 * 7))\r");
     wait_for_line(&pty, |line| line == "42");
 }
@@ -129,8 +147,10 @@ fn replies_reach_the_program() {
 #[test]
 fn resizing_reaches_the_program() {
     let (pty, _events) = spawn(&sh(None));
+    wait_for_prompt(&pty);
     pty.write("stty size\r");
     wait_for_line(&pty, |line| line == "24 80");
+    wait_for_prompt(&pty);
 
     pty.resize(size(100, 30));
     assert_eq!(pty.terminal().lock().unwrap().size(), size(100, 30));
