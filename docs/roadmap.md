@@ -73,7 +73,7 @@ hold the analyses that support some items.
     [scheduling report](reports/extension-task-scheduling.md) has the analysis
     and proposed checkpoints.
 
-- **D092 — Piece tree text buffer**
+- **D092 — Piece tree text buffer** 🚧
   - Depends on: none
   - Description: `TextBuffer` keeps its pieces in a flat `Vec` searched
     linearly, shifts a flat line-start index on every edit, and copies the
@@ -88,7 +88,8 @@ hold the analyses that support some items.
     current buffer, store the pieces in a copy-on-write B-tree that summarizes
     bytes, line breaks, and UTF-16 length, resolve positions through ordered
     piece locators, and keep the piece semantics, edit log, and `TextBuffer`
-    API unchanged.
+    API unchanged. The [plan](plans/d092-piece-tree-text-buffer.md) holds the
+    design and checkpoints.
 
 - **D156 — Fewer host round trips per key**
   - Depends on: none

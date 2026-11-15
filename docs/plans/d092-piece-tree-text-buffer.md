@@ -1,0 +1,211 @@
+# D092: Piece tree text buffer
+
+Status: 🚧 approved, not started. Roadmap item [D092](../roadmap.md). Follows
+the [text buffer analysis](../reports/text-buffer-structure.md) (option B);
+current behavior is owned by
+[core and buffers](../architecture/core-and-buffers.md) and
+`crates/knot-core/src/buffer.rs`, and the original rationale by
+[decisions](../decisions/core-and-buffers.md#text-buffer-and-stable-positions).
+
+## Goal
+
+Bulk edits stop scaling with document size and piece count. Replace-all,
+multi-cursor typing, formatting, and language-server edit lists can add
+thousands of pieces without making each later edit, snapshot, line lookup, or
+position resolve slower. Typing latency stays at or below today's.
+
+Snapshots also become O(1). This matters beyond background parsing:
+`BufferModel` takes a snapshot for every highlight query, bracket lookup,
+reindent, and foreground parse, so painting pays today's O(pieces) copy too.
+
+## Design
+
+- **Unchanged semantics and API.** Stable piece IDs, the split rule (left half
+  keeps its ID, right half gets a fresh one), trailing-piece coalescing, the
+  append-only backing store, the `BufferEdit` log with its `Split` records,
+  and the public `TextBuffer` and `TextSnapshot` surfaces stay as they are.
+  `AnchoredRangeStore`, `EditTransaction`, syntax, history, and every
+  `knot-model` caller need no changes.
+- **Hand-rolled persistent B-tree, maintained in `knot-core`.** It is
+  specialized to pieces rather than generic, and `knot-core` keeps zero
+  dependencies. Nodes are `Arc`-shared and mutated through `Arc::make_mut`, so
+  the foreground edits in place when no snapshot holds a node and a snapshot
+  is a root clone. Each node summarizes its subtree's byte length, line-break
+  count, UTF-16 length, and greatest locator. Operations: seek by byte offset,
+  line, UTF-16 offset, and locator; insert a piece after a position; remove a
+  range of pieces; update one piece's length; iterate pieces from a seek
+  position. Leaves hold tens of pieces, so a freshly loaded file is one leaf.
+- **Per-backing line indexes, as in VS Code.** The original text and each add
+  chunk keep their own sorted `(byte, utf16)` line starts; the tail's index
+  grows as text is appended and moves with the chunk when it is sealed. A
+  piece's line breaks and UTF-16 length come from binary searches over its
+  backing's index plus a scan of at most one partial line, so splitting the
+  29 MiB original piece costs no full rescan. The document-wide `line_starts`
+  index and its O(lines) shift on every edit are removed: `line_start`,
+  `line_of_offset`, `utf16_of_offset`, and `offset_of_utf16` become one tree
+  seek plus a lookup in the reached piece's backing index.
+- **Locators for `resolve`.** Each piece carries a dense ordering key that
+  increases in text order (a short inline sequence of `u32`s, Zed's
+  technique), chosen between its neighbors when the piece is created; a split
+  gives the right half a key between the left half and its old successor. The
+  foreground buffer keeps a `HashMap<PieceId, Locator>` that inserts, splits,
+  and deletions maintain; snapshots never resolve positions and do not carry
+  it. `resolve` is a map lookup plus an O(log n) seek by locator, so anchored
+  range stabilization becomes O(a log p) instead of O(a · p).
+- **Snapshot sharing.** Sealed chunks are held as `Arc<[Arc<str>]>`, rebuilt
+  only when a chunk is sealed, so a snapshot is a root clone, a chunk-list
+  clone, and a copy of the unsealed tail (under 16 KiB).
+- **Benchmark before and after.** A benchmark example measures the current
+  buffer before any structural change, and the same harness is rerun on the
+  same machine afterwards. The baseline numbers are recorded in this plan;
+  the final comparison moves to decisions.
+
+## Exclusions
+
+- Batched bulk-edit primitives. Per-primitive edits at O(log n) make
+  replace-all O(m log n), which the analysis judges acceptable; revisit only
+  if the final benchmark disagrees.
+- Piece compaction (merging adjacent pieces of one backing span). The tree
+  removes the costs that motivated it.
+- Changes to `AnchoredRangeStore`'s algorithm beyond what faster `resolve`
+  gives for free.
+- A benchmarking dependency such as criterion, and CI benchmark gating.
+
+## Deferred decisions
+
+- Leaf and internal node fan-out, tuned from benchmark results in
+  checkpoint 2.
+- Whether a locator is a fixed small array or a growable inline sequence,
+  decided in checkpoint 3 from how deep keys grow under the randomized test.
+
+## Checkpoints
+
+### 1. Benchmark harness, baseline, and differential test
+
+Add a release-mode benchmark example and a randomized differential test, both
+against the current `Vec`-based buffer, and record the baseline. No change to
+the buffer.
+
+- **Benchmark workloads** (each reports p50/p99 or total, as fits):
+  - typing bursts in a generated 1M-line, ~29 MiB Rust-like fixture;
+  - replace-all of 1,000 and 10,000 matches spread through the same file;
+  - 50 cursors each typing 100 characters (primitive edits in descending
+    offset order, as a multi-cursor command would issue them);
+  - snapshot cost at 10k and 100k pieces;
+  - stabilizing and resolving 10,000 anchored ranges at 10k and 100k pieces;
+  - reading the last screen of lines (`line_start` plus `read_range`) at 100k
+    pieces;
+  - line lookup and UTF-16 conversion near the end of the file at 100k pieces;
+  - resident memory per piece (estimated from struct sizes and allocation
+    counts, not process RSS).
+  Workloads whose projected cost is many seconds on the current buffer run
+  once rather than repeatedly, so the baseline finishes in reasonable time.
+- **Differential test:** a seeded, dependency-free PRNG (xorshift) drives
+  inserts, deletes, and replaces with ASCII, multi-byte, `\n`, and `\r\n`
+  text, at the start, end, interior, and piece boundaries, including enough
+  edits to seal add chunks. After each step it compares against a plain
+  `String`: full text, `read_range` of random ranges, `line_count`,
+  `line_start`, `line_of_offset`, `point_of_offset`, `utf16_of_offset`,
+  `offset_of_utf16`, and snapshot reads. It also issues positions with
+  `position_at` and checks that `resolve` follows them across later edits,
+  using the edit log's `Split` records exactly as `AnchoredRangeStore` does.
+  Several fixed seeds run in the normal test suite.
+- **Deliverable:** record the baseline table in this plan, under a
+  "Baseline" heading, with machine, OS, and build profile.
+- **Validation:** the differential test passes on the current buffer;
+  `just check`.
+- **Review gate:** review the workloads and baseline numbers, and confirm
+  the projected bulk-edit costs (or correct the acceptance targets) before
+  the structure changes.
+- **Implementation context:** add `crates/knot-core/examples/buffer_bench.rs`,
+  modeled on `crates/knot-model/examples/walk_bench.rs` (plain
+  `std::time::Instant`, usage line in the module doc, run with
+  `cargo run --release -p knot-core --example buffer_bench`). Anchored ranges
+  come from `crates/knot-core/src/anchored_range.rs` (`AnchoredRangeStore`,
+  `stabilize`). Add the differential test as a new module under
+  `crates/knot-core/src/buffer/` (for example `buffer/differential_tests.rs`,
+  declared next to `mod tests` in `buffer.rs`), so it can read internals if
+  needed; the PRNG lives in the test module.
+
+### 2. Piece tree with summaries and per-backing line indexes
+
+Replace `pieces: Vec<Piece>` and `line_starts: Vec<LineStart>` with the
+persistent B-tree and per-backing line indexes, and make snapshots share the
+tree. `resolve` and `position_at` walk the tree in order for now, still
+O(pieces) for `resolve` but no longer slower than today.
+
+- **Deliverables:** the tree module; `split_at`, `insert`, `delete`,
+  coalescing, `read_range`/`chunks`, `is_char_boundary`, `position_at`, and
+  every line and UTF-16 query on top of tree seeks; per-backing line indexes
+  for the original text, sealed chunks, and the tail; `TextSnapshot` holding
+  a root clone and the shared chunk list, with `chunk_at` and `chunks` as
+  tree seeks; `update_line_starts` and `scan_line_starts` over the whole
+  document removed. Tree invariants (summaries equal the sum of children,
+  leaves within fan-out bounds, uniform depth) are checked by a debug-only
+  validator that the differential test calls after each step.
+- **Validation:** existing `buffer/tests.rs`, `buffer/snapshot/tests.rs`,
+  `anchored_range/tests.rs`, and `transaction.rs` tests pass, with internal
+  piece inspections rewritten against a test-only piece iterator; the
+  differential test passes with the tree validator; benchmark rerun noted in
+  this plan as an intermediate result; `just check`.
+- **Review gate:** confirm typing is not slower than the baseline and that
+  edit, snapshot, line, and read costs no longer grow with piece or line
+  count, and settle the node fan-out.
+- **Implementation context:** add `crates/knot-core/src/buffer/tree.rs` (the
+  B-tree, summaries, seeks, cursor iteration) and a backing module (for
+  example `buffer/backing.rs`) owning the original text, sealed chunks, tail,
+  and their line indexes, replacing the `original`/`sealed`/`tail` fields and
+  `backing_slice` in `buffer.rs`. `Piece`, `Backing`, and `SplitLoc` in
+  `buffer.rs` stay as the leaf item and split result; `split_at` returns a
+  tree position instead of a `Vec` index. `snapshot.rs` drops `pieces` and
+  `piece_ends`. Tests that touch `b.pieces` and `line_starts` directly are in
+  `crates/knot-core/src/buffer/tests.rs` (around lines 199–262). Snapshot
+  callers in `crates/knot-model/src/buffer.rs` are unchanged.
+
+### 3. Locators and logarithmic resolve
+
+Give each piece a locator, keep the `PieceId → Locator` map on the buffer,
+and make `resolve` a map lookup plus a locator seek.
+
+- **Deliverables:** the locator type and the "key between two neighbors"
+  function; locator assignment on insert, coalescing (unchanged key), and
+  split; map maintenance on insert, split, and delete; node summaries carry
+  the greatest locator; `resolve` seeks by locator and keeps today's `None`
+  semantics for deleted pieces and stale right-of-split offsets.
+- **Validation:** unit tests for key generation (between neighbors, at the
+  ends, repeated inserts at one point keep keys short enough); the tree
+  validator also checks locators increase in order and that the map matches
+  the tree; the differential test's position checks pass; anchored-range
+  tests pass; benchmark rerun for the resolve and stabilization workloads;
+  `just check`.
+- **Review gate:** confirm resolve and stabilization costs no longer grow
+  with piece count beyond O(log n), and settle the locator representation.
+- **Implementation context:** locator in `crates/knot-core/src/buffer/tree.rs`
+  or its own `buffer/locator.rs`; map as a field on `TextBuffer` in
+  `buffer.rs`, maintained in `split_at`, `insert`, and `delete`.
+  `AnchoredRangeStore::stabilize` in `crates/knot-core/src/anchored_range.rs`
+  calls `resolve` per moved endpoint and needs no change.
+
+### 4. Final benchmark and documentation
+
+Rerun the full benchmark on the same machine as the baseline and update the
+durable docs.
+
+- **Deliverables:** before/after table for every workload; acceptance check
+  against the targets (typing at or below baseline p50, 10,000-match
+  replace-all in tens of milliseconds, snapshot and resolve O(log n) or
+  better in piece count); updated
+  [core and buffers](../architecture/core-and-buffers.md) (the piece tree,
+  per-backing line indexes, locators, O(1) snapshots; remove the eager
+  document-wide line index and the deferred-compaction note);
+  [decisions](../decisions/core-and-buffers.md#text-buffer-and-stable-positions)
+  updated with the chosen structure, the rejected alternatives in one or two
+  sentences, and the before/after evidence, with the
+  [decisions index](../decisions.md) adjusted if its summary changes; the
+  module documentation in `buffer.rs` and `snapshot.rs` describing the new
+  structure; the analysis report removed or reduced as the docs guide
+  requires; this plan and the D092 roadmap entry removed, with roadmap
+  references to D092 as a dependency (D067, Find) updated.
+- **Validation:** `just check`; the full benchmark output kept in the
+  decisions entry in summarized form.
+- **Review gate:** final review of numbers and docs before closing D092.
