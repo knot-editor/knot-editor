@@ -232,6 +232,7 @@ native_colors! {
     EDITOR_CURSOR = "editor.cursor", "Text cursor.", Rgb(0xced0d6), Rgb(0x000000);
     EDITOR_FIND_MATCH = "editor.findMatch", "Background of each text match of an open Find bar.", Rgb(0x5c4d1f), Rgb(0xffeb9b);
     EDITOR_FIND_MATCH_CURRENT = "editor.findMatchCurrent", "Background of the match Find has selected.", Rgb(0x7a5a1a), Rgb(0xffc66d);
+    EDITOR_FIND_SCOPE = "editor.findScope", "Background of the range Find in Selection limits its search to.", Rgba(0x3574f026), Rgba(0x3574f01f);
     EDITOR_FOLD_PLACEHOLDER = "editor.foldPlaceholder", "The placeholder after the first line of a collapsed fold.", Rgb(0x6f737a), Rgb(0x818594);
     EDITOR_FOREGROUND = "editor.foreground", "Unhighlighted editor text.", Rgb(0xbcbec4), Rgb(0x080808);
     EDITOR_GUTTER_BACKGROUND = "editor.gutter.background", "The editor gutter beside the text.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);

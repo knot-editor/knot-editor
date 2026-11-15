@@ -48,6 +48,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "editor.cursor": p.rosewater,
       "editor.findMatch": `${p.yellow}${dark ? "33" : "66"}`,
       "editor.findMatchCurrent": `${p.peach}${dark ? "66" : "59"}`,
+      "editor.findScope": `${p.overlay2}26`,
       "editor.foldPlaceholder": p.overlay1,
       "editor.foreground": p.text,
       "editor.gutter.background": p.base,

@@ -13,8 +13,10 @@ import {
   REPLACE,
   REPLACE_ALL,
   REPLACE_CURRENT,
+  SCOPE_COLOR,
   TOGGLE_CASE,
   TOGGLE_REGEX,
+  TOGGLE_SCOPE,
   TOGGLE_WORD,
   start,
 } from "../src/extension.js";
@@ -45,7 +47,7 @@ function message(window: WindowTarget) {
 
 /** Highlights as [start, current] pairs of byte offsets. */
 function highlights(window: WindowTarget) {
-  return host.viewDecorations(window).map((item) => [
+  return host.viewDecorations(window).filter((item) => item.decoration?.color !== SCOPE_COLOR).map((item) => [
     item.range.startByteOffset,
     item.decoration?.color === CURRENT_COLOR,
   ]);
@@ -65,10 +67,12 @@ test("find binds its keys in the bar", async () => {
     ["cmd-alt-c", TOGGLE_CASE, "bar", "find"],
     ["cmd-alt-w", TOGGLE_WORD, "bar", "find"],
     ["cmd-alt-r", TOGGLE_REGEX, "bar", "find"],
+    ["cmd-alt-l", TOGGLE_SCOPE, "bar", "find"],
     ["escape", CLOSE, "bar", "find"],
     ["cmd-alt-c", TOGGLE_CASE, "bar", "replace"],
     ["cmd-alt-w", TOGGLE_WORD, "bar", "replace"],
     ["cmd-alt-r", TOGGLE_REGEX, "bar", "replace"],
+    ["cmd-alt-l", TOGGLE_SCOPE, "bar", "replace"],
     ["escape", CLOSE, "bar", "replace"],
     ["enter", NEXT, "bar", "find"],
     ["shift-enter", PREVIOUS, "bar", "find"],
@@ -233,7 +237,7 @@ test("the toggles switch case and whole word and search again", async () => {
   const { window, editor } = await setup();
   await search(window, "foo");
   const bar = () => host.editorBars(window).bars[0]!;
-  assert.deepEqual(bar().toggles.map((toggle) => [toggle.id, toggle.active]), [["case", false], ["word", false], ["regex", false]]);
+  assert.deepEqual(bar().toggles.map((toggle) => [toggle.id, toggle.active]), [["case", false], ["word", false], ["regex", false], ["scope", false]]);
   assert.equal(message(window), "1 of 5");
 
   await host.clickBarControl("find", "case", window);
@@ -246,7 +250,7 @@ test("the toggles switch case and whole word and search again", async () => {
 
   await host.run(TOGGLE_CASE, { window });
   await host.run(TOGGLE_WORD, { window });
-  assert.deepEqual(bar().toggles.map((toggle) => toggle.active), [false, false, false]);
+  assert.deepEqual(bar().toggles.map((toggle) => toggle.active), [false, false, false, false]);
   assert.equal(message(window), "1 of 5");
 });
 
@@ -356,4 +360,100 @@ test("replace all expands captures, reports the count, and clears when the text 
   await host.run(REPLACE_ALL, { window });
   assert.equal(host.document(document).text, "1:ann 22:bob x@y\n");
   assert.match(message(window)!, /invalid regular expression/);
+});
+
+/** The scope's decoration as [start, end] byte offsets, or null. */
+function scope(window: WindowTarget) {
+  const item = host.viewDecorations(window).find((item) => item.decoration?.color === SCOPE_COLOR);
+  return item === undefined ? null : [item.range.startByteOffset, item.range.endByteOffset];
+}
+
+const LINE_TWO = [offset("foo bar\n"), offset("foo bar\nFoo baz foo\n")];
+
+test("find in selection limits highlights and stepping to the selection, wrapping inside it", async () => {
+  const { window, editor } = await setup();
+  await editor.setSelection({ anchor: LINE_TWO[0]!, caret: LINE_TWO[1]! });
+  await host.run(FIND, { window });
+  assert.deepEqual(host.editorBars(window).bars[0]!.toggles[3]!.active, true);
+  await host.typeInBar("find", "query", "foo", window);
+  assert.equal(message(window), "1 of 2");
+  assert.deepEqual(scope(window), LINE_TWO);
+  assert.deepEqual(highlights(window).map(([start]) => start), [LINE_TWO[0], offset("foo bar\nFoo baz ")]);
+
+  await host.run(NEXT, { window });
+  assert.equal(message(window), "2 of 2");
+  await host.run(NEXT, { window });
+  assert.equal(message(window), "1 of 2");
+  await host.run(PREVIOUS, { window });
+  assert.equal(message(window), "2 of 2");
+
+  // Turning it off searches the whole buffer again.
+  await host.clickBarControl("find", "scope", window);
+  assert.equal(scope(window), null);
+  assert.equal(message(window), "3 of 5");
+  await host.run(CLOSE, { window });
+});
+
+test("find in selection with no selection scopes the caret's line, and closing drops it", async () => {
+  const { window, editor } = await setup();
+  await editor.setSelection({ anchor: offset("foo bar\nFoo"), caret: offset("foo bar\nFoo") });
+  await host.run(FIND, { window });
+  assert.equal(scope(window), null);
+  await host.run(TOGGLE_SCOPE, { window });
+  assert.deepEqual(scope(window), [LINE_TWO[0], LINE_TWO[1]! - 1]);
+  await host.typeInBar("find", "query", "foo", window);
+  assert.equal(message(window), "2 of 2");
+
+  await host.run(CLOSE, { window });
+  await host.run(FIND, { window });
+  assert.equal(scope(window), null);
+  assert.equal(host.editorBars(window).bars[0]!.toggles[3]!.active, false);
+});
+
+test("the scope follows edits and goes away when they delete it", async () => {
+  const { window, editor, buffer, document } = await setup();
+  await editor.setSelection({ anchor: LINE_TWO[0]!, caret: LINE_TWO[1]! });
+  await host.run(FIND, { window });
+  await host.typeInBar("find", "query", "foo", window);
+  const revision = async () => (await buffer.find("", { limit: 1 })).revision;
+
+  // Text before moves it; text inside and at its end joins it.
+  await buffer.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 0 }, text: ">>" }], {
+    ifRevision: await revision(),
+  });
+  assert.deepEqual(scope(window), [LINE_TWO[0]! + 2, LINE_TWO[1]! + 2]);
+  const end = LINE_TWO[1]! + 2;
+  await buffer.applyEdits([{ range: { startByteOffset: end, endByteOffset: end }, text: "foo\n" }], {
+    ifRevision: await revision(),
+  });
+  assert.deepEqual(scope(window), [LINE_TWO[0]! + 2, end + 4]);
+  assert.equal(message(window), "3 results");
+
+  // Deleting all of it lifts the limit.
+  await buffer.applyEdits(
+    [{ range: { startByteOffset: LINE_TWO[0]! + 2, endByteOffset: end + 4 }, text: "" }],
+    { ifRevision: await revision() },
+  );
+  assert.equal(host.document(document).text, ">>foo bar\nfoofoo\n");
+  assert.equal(scope(window), null);
+  assert.equal(host.editorBars(window).bars[0]!.toggles[3]!.active, false);
+  assert.equal(message(window), "3 results");
+});
+
+test("replace all and replace stay inside the scope, which follows the longer text", async () => {
+  const { window, editor, document } = await setup();
+  await editor.setSelection({ anchor: LINE_TWO[0]!, caret: LINE_TWO[1]! });
+  await host.run(REPLACE, { window });
+  await host.typeInBar("find", "query", "foo", window);
+  await host.typeInBar("replace", "replacement", "quux", window);
+
+  await host.run(REPLACE_CURRENT, { window });
+  assert.equal(host.document(document).text, "foo bar\nquux baz foo\nfoofoo\n");
+  assert.equal(message(window), "1 of 1");
+  assert.deepEqual(scope(window), [LINE_TWO[0], LINE_TWO[1]! + 1]);
+
+  await host.run(REPLACE_ALL, { window });
+  assert.equal(host.document(document).text, "foo bar\nquux baz quux\nfoofoo\n");
+  assert.equal(host.editorBars(window).bars[1]!.message, "Replaced 1");
+  assert.deepEqual(scope(window), [LINE_TWO[0], LINE_TWO[1]! + 2]);
 });

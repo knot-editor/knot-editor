@@ -573,6 +573,8 @@ declare module "knot" {
     readonly "editor.findMatch"?: string;
     /** Background of the match Find has selected. */
     readonly "editor.findMatchCurrent"?: string;
+    /** Background of the range Find in Selection limits its search to. */
+    readonly "editor.findScope"?: string;
     /** The placeholder after the first line of a collapsed fold. */
     readonly "editor.foldPlaceholder"?: string;
     /** Unhighlighted editor text. */
