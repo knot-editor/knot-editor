@@ -196,17 +196,17 @@ fn piece_chain_grows_under_interior_edits() {
     e.insert(7, 'e'); // "abacadae"
     assert_eq!(s(&b), e);
     assert_eq!(b.len(), 8);
-    assert!(b.pieces.len() > 1);
+    assert!(b.pieces().len() > 1);
 }
 
 #[test]
 fn piece_ids_are_monotonic() {
     let mut b = TextBuffer::from_text("hello");
-    let id0 = b.pieces[0].id;
+    let id0 = b.pieces()[0].id;
     b.insert(2, "X");
     // The original split: left half retains id0, right half gets a
     // higher id; the inserted piece gets an even higher id.
-    let ids: Vec<PieceId> = b.pieces.iter().map(|p| p.id).collect();
+    let ids: Vec<PieceId> = b.pieces().iter().map(|p| p.id).collect();
     assert!(ids.iter().all(|&id| id >= id0));
     // All ids distinct (counter never reuses).
     let mut sorted = ids.clone();
@@ -218,12 +218,12 @@ fn piece_ids_are_monotonic() {
 #[test]
 fn left_half_retains_id_on_split() {
     let mut b = TextBuffer::from_text("hello");
-    let orig_id = b.pieces[0].id;
+    let orig_id = b.pieces()[0].id;
     b.insert(2, "X");
     // First piece is the left half: same id, shortened to len 2.
-    assert_eq!(b.pieces[0].id, orig_id);
-    assert_eq!(b.pieces[0].len, 2);
-    assert_eq!(b.backing_slice(b.pieces[0]), "he");
+    assert_eq!(b.pieces()[0].id, orig_id);
+    assert_eq!(b.pieces()[0].len, 2);
+    assert_eq!(b.backings.slice(b.pieces()[0]), "he");
 }
 
 #[test]
@@ -232,12 +232,12 @@ fn boundary_insert_elides_split() {
     b.insert(0, "X");
     // No new piece from splitting — original piece intact, inserted piece
     // spliced in front.
-    assert_eq!(b.pieces.len(), 2);
+    assert_eq!(b.pieces().len(), 2);
     assert_eq!(s(&b), "Xhello");
 
     let mut b = TextBuffer::from_text("hello");
     b.insert(5, "X");
-    assert_eq!(b.pieces.len(), 2);
+    assert_eq!(b.pieces().len(), 2);
     assert_eq!(s(&b), "helloX");
 }
 
@@ -259,14 +259,17 @@ fn delete_crossing_multiple_pieces() {
 
 /// Peek the byte line starts directly.
 fn ls(b: &TextBuffer) -> Vec<usize> {
-    b.line_starts.iter().map(|start| start.byte).collect()
+    (0..b.line_count()).map(|line| b.line_start(line)).collect()
 }
 
-/// Assert the incrementally maintained index equals a rebuild from text.
+/// Assert the line index and the tree summaries agree with the text.
 fn assert_index_matches_text(b: &TextBuffer) {
-    let mut rebuilt = vec![BUFFER_START];
-    scan_line_starts(&s(b), BUFFER_START, &mut rebuilt);
-    assert_eq!(b.line_starts, rebuilt, "text {:?}", s(b));
+    b.validate();
+    let text = s(b);
+    let expected: Vec<usize> = std::iter::once(0)
+        .chain(text.match_indices('\n').map(|(i, _)| i + 1))
+        .collect();
+    assert_eq!(ls(b), expected, "text {text:?}");
 }
 
 #[test]
@@ -517,7 +520,7 @@ fn position_at_empty_buffer_returns_none() {
 fn position_at_zero_is_first_piece_offset_zero() {
     let b = TextBuffer::from_text("abc");
     let p = b.position_at(0).unwrap();
-    assert_eq!(p.piece(), b.pieces[0].id);
+    assert_eq!(p.piece(), b.pieces()[0].id);
     assert_eq!(p.offset(), 0);
     assert_eq!(b.resolve(p), Some(0));
 }
@@ -527,7 +530,7 @@ fn position_at_end_is_last_piece_len_sticky_left() {
     // Single piece "abc": at==3 returns (piece0, 3).
     let b = TextBuffer::from_text("abc");
     let p = b.position_at(3).unwrap();
-    assert_eq!(p.piece(), b.pieces[0].id);
+    assert_eq!(p.piece(), b.pieces()[0].id);
     assert_eq!(p.offset(), 3);
     assert_eq!(b.resolve(p), Some(3));
 }
@@ -536,7 +539,7 @@ fn position_at_end_is_last_piece_len_sticky_left() {
 fn position_at_interior_of_piece() {
     let b = TextBuffer::from_text("abcde");
     let p = b.position_at(2).unwrap();
-    assert_eq!(p.piece(), b.pieces[0].id);
+    assert_eq!(p.piece(), b.pieces()[0].id);
     assert_eq!(p.offset(), 2);
     assert_eq!(b.resolve(p), Some(2));
 }
@@ -558,7 +561,11 @@ fn position_at_piece_boundary_is_sticky_left() {
     let boundary_offset = 2; // between A and X
     let p = b.position_at(boundary_offset).unwrap();
     // Sticky-left → anchored to A whose end is at offset 2.
-    assert_eq!(p.piece(), b.pieces[0].id, "boundary should be sticky-left");
+    assert_eq!(
+        p.piece(),
+        b.pieces()[0].id,
+        "boundary should be sticky-left"
+    );
     assert_eq!(p.offset(), 2);
     assert_eq!(b.resolve(p), Some(2));
 }
@@ -587,7 +594,7 @@ fn resolve_offset_past_piece_len_returns_none() {
     // Construct a stale position past the piece's current length.
     let b = TextBuffer::from_text("abc");
     let stale = Position {
-        piece: b.pieces[0].id,
+        piece: b.pieces()[0].id,
         offset: 99,
     };
     assert!(b.resolve(stale).is_none());
@@ -614,7 +621,7 @@ fn right_half_position_becomes_stale_after_split() {
     // so (id0, 4) is now stale (offset > current len).
     let mut b = TextBuffer::from_text("hello");
     let right_pos = b.position_at(4).unwrap(); // (id0, 4) — right half
-    assert_eq!(right_pos.piece(), b.pieces[0].id);
+    assert_eq!(right_pos.piece(), b.pieces()[0].id);
     assert_eq!(right_pos.offset(), 4);
     b.insert(2, "X");
     // id0 has len 2 now; (id0, 4) is stale → resolve None.
@@ -630,7 +637,7 @@ fn position_in_deleted_piece_resolves_none() {
     assert_eq!(s(&b), "helloworld");
     // Position anchored in id1 at offset 2 (= logical offset 7).
     let p = b.position_at(7).unwrap();
-    assert_eq!(p.piece(), b.pieces[1].id);
+    assert_eq!(p.piece(), b.pieces()[1].id);
     // Delete from offset 5 to end (whole of id1).
     b.delete(5..10);
     assert_eq!(s(&b), "hello");
@@ -736,17 +743,17 @@ fn contiguous_typing_coalesces_into_one_piece() {
     for (at, ch) in "hello".char_indices() {
         b.insert(at, &ch.to_string());
     }
-    assert_eq!(b.pieces.len(), 1);
+    assert_eq!(b.pieces().len(), 1);
     let inside = b.position_at(2).unwrap();
     let end = b.position_at(5).unwrap();
     b.insert(5, "!");
-    assert_eq!(b.pieces.len(), 1);
+    assert_eq!(b.pieces().len(), 1);
     assert_eq!(s(&b), "hello!");
     assert_eq!(b.resolve(inside), Some(2));
     assert_eq!(b.resolve(end), Some(5), "sticky-left end stays before");
     match b.edits_since(0).last() {
         Some(BufferEdit::Insert { inserted_end, .. }) => {
-            assert_eq!(*inserted_end, Position::new(b.pieces[0].id, 6));
+            assert_eq!(*inserted_end, Position::new(b.pieces()[0].id, 6));
         }
         other => panic!("expected Insert, got {other:?}"),
     }
@@ -757,27 +764,27 @@ fn inserts_not_at_the_sink_end_do_not_coalesce() {
     // Original-backed pieces never extend.
     let mut b = TextBuffer::from_text("ab");
     b.insert(2, "c");
-    assert_eq!(b.pieces.len(), 2);
+    assert_eq!(b.pieces().len(), 2);
     // A typed piece no longer ends at the sink once something else was
     // appended.
     b.insert(0, "x");
     b.insert(4, "d");
-    assert_eq!(b.pieces.len(), 4);
+    assert_eq!(b.pieces().len(), 4);
     b.insert(5, "e");
-    assert_eq!(b.pieces.len(), 4, "\"d\" ends at the sink and extends");
+    assert_eq!(b.pieces().len(), 4, "\"d\" ends at the sink and extends");
     // The left half of a split typed piece never extends, because its
     // right half references the sink after it.
     b.insert(5, "f");
-    assert_eq!(b.pieces.len(), 6);
+    assert_eq!(b.pieces().len(), 6);
     b.insert(5, "g");
-    assert_eq!(b.pieces.len(), 7);
+    assert_eq!(b.pieces().len(), 7);
     assert_eq!(s(&b), "xabcdgfe");
 }
 
 #[test]
 fn interior_insert_emits_one_split() {
     let mut b = TextBuffer::from_text("hello");
-    let id0 = b.pieces[0].id;
+    let id0 = b.pieces()[0].id;
     b.insert(2, "X"); // strict interior split at offset 2
     let edits = b.edits_since(0);
     match &edits[0] {
@@ -834,7 +841,7 @@ fn delete_emits_delete_event_with_correct_range() {
 #[test]
 fn delete_with_two_interior_ends_emits_two_splits() {
     let mut b = TextBuffer::from_text("abcdefghij");
-    let id0 = b.pieces[0].id;
+    let id0 = b.pieces()[0].id;
     // Two interior splits: range.start=2 on the original piece, and
     // range.end=8 on the right half (R1) created by the first split.
     // R1 starts at logical offset 2 with len 8; the second split is
@@ -1039,19 +1046,47 @@ fn remap_walks_multiple_splits_in_order() {
 fn full_add_tail_seals_and_stops_coalescing() {
     let mut b = TextBuffer::new();
     b.insert(0, &"a".repeat(ADD_CHUNK_SIZE - 1));
-    assert!(b.sealed.is_empty());
+    assert!(b.backings.sealed.is_empty());
     b.insert(b.len(), "b");
-    assert_eq!(b.sealed.len(), 1, "a full tail seals");
-    assert!(b.tail.is_empty());
-    assert_eq!(b.pieces.len(), 1, "the sealing insert still coalesced");
+    assert_eq!(b.backings.sealed.len(), 1, "a full tail seals");
+    assert!(b.backings.tail.is_empty());
+    assert_eq!(b.pieces().len(), 1, "the sealing insert still coalesced");
 
     b.insert(b.len(), "c");
     b.insert(b.len(), "d");
-    assert_eq!(b.pieces.len(), 2, "typing starts a piece in the new tail");
+    assert_eq!(b.pieces().len(), 2, "typing starts a piece in the new tail");
     assert_eq!(b.read_range(ADD_CHUNK_SIZE - 1..b.len()), "bcd");
 
     b.insert(1, &"z".repeat(3 * ADD_CHUNK_SIZE));
-    assert_eq!(b.sealed.len(), 2, "an oversized insert seals at once");
+    assert_eq!(
+        b.backings.sealed.len(),
+        2,
+        "an oversized insert seals at once"
+    );
     assert_eq!(b.len(), 4 * ADD_CHUNK_SIZE + 2);
     assert_eq!(b.read_range(0..3), "azz");
+}
+
+#[test]
+fn many_pieces_grow_and_shrink_the_tree() {
+    let mut b = TextBuffer::from_text("line\n".repeat(3000));
+    for line in (0..3000).rev() {
+        b.insert(line * 5 + 2, "x");
+    }
+    b.validate();
+    assert!(b.tree.height() >= 3, "{} pieces", b.pieces().len());
+    assert_eq!(b.line_count(), 3001);
+    assert_eq!(b.line_start(1500), 1500 * 6);
+
+    // Remove a middle span crossing many nodes, then the rest in steps.
+    b.delete(2000..9000);
+    b.validate();
+    while !b.is_empty() {
+        let len = b.len();
+        b.delete(len.saturating_sub(997)..len);
+        b.validate();
+    }
+    assert_eq!(b.tree.height(), 1);
+    b.insert(0, "again");
+    assert_eq!(s(&b), "again");
 }

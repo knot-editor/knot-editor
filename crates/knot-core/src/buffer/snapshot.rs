@@ -1,50 +1,38 @@
 //! `TextSnapshot`: an immutable, `Send` view of a `TextBuffer`'s text at one
 //! moment, for readers off the foreground such as background parsing.
 //!
-//! A snapshot shares the buffer's original text and sealed add chunks and
-//! owns copies of the add tail and the piece list, so later edits never
-//! change what it reads. Piece end offsets are precomputed, so a read at any
-//! offset is a binary search rather than a walk over the piece chain.
+//! A snapshot shares the buffer's piece tree, original text, and sealed add
+//! chunks, and owns a copy of the add tail, so later edits never change what
+//! it reads. Taking one clones the tree root and the chunk list and copies at
+//! most one chunk's worth of tail text, however many pieces the buffer has.
 
 use std::ops::Range;
 use std::sync::Arc;
 
+use super::tree::{Bias, Dimension, Tree};
 use super::{Backing, Piece, TextBuffer};
 
 /// Immutable text of a `TextBuffer` at the moment `TextBuffer::snapshot` ran.
 #[derive(Clone)]
 pub struct TextSnapshot {
     original: Arc<str>,
-    /// The buffer's sealed add chunks followed by a copy of its tail, so
-    /// `Backing::Add(chunk)` indexes this list directly.
-    chunks: Vec<Arc<str>>,
-    pieces: Vec<Piece>,
-    /// Logical end offset of each piece, ascending.
-    piece_ends: Vec<usize>,
+    sealed: Arc<[Arc<str>]>,
+    tail: Arc<str>,
+    tree: Tree,
 }
 
 impl TextBuffer {
     /// Capture the current text as an immutable snapshot.
     ///
-    /// Costs O(pieces) plus a copy of the unsealed add tail, which is shorter
-    /// than `ADD_CHUNK_SIZE`; the original text and sealed chunks are shared.
+    /// Costs a copy of the unsealed add tail, which is shorter than
+    /// `ADD_CHUNK_SIZE`; the piece tree, original text, and sealed chunks are
+    /// shared.
     pub fn snapshot(&self) -> TextSnapshot {
-        let mut chunks = Vec::with_capacity(self.sealed.len() + 1);
-        chunks.extend(self.sealed.iter().cloned());
-        chunks.push(Arc::from(self.tail.as_str()));
-        let piece_ends = self
-            .pieces
-            .iter()
-            .scan(0, |end, p| {
-                *end += p.len;
-                Some(*end)
-            })
-            .collect();
         TextSnapshot {
-            original: Arc::clone(&self.original),
-            chunks,
-            pieces: self.pieces.clone(),
-            piece_ends,
+            original: Arc::clone(&self.backings.original),
+            sealed: Arc::clone(&self.backings.sealed),
+            tail: Arc::from(self.backings.tail.as_str()),
+            tree: self.tree.clone(),
         }
     }
 }
@@ -52,7 +40,7 @@ impl TextBuffer {
 impl TextSnapshot {
     /// Total length of the text, in UTF-8 bytes.
     pub fn len(&self) -> usize {
-        self.piece_ends.last().copied().unwrap_or(0)
+        self.tree.summary().bytes
     }
 
     /// Whether the text is empty.
@@ -69,12 +57,10 @@ impl TextSnapshot {
     /// access pattern of tree-sitter's chunked input callback. `offset` must
     /// land on a UTF-8 char boundary.
     pub fn chunk_at(&self, offset: usize) -> &str {
-        let index = self.piece_ends.partition_point(|&end| end <= offset);
-        let Some(&piece) = self.pieces.get(index) else {
+        let Some(found) = self.tree.seek(Dimension::Bytes, offset, Bias::Right) else {
             return "";
         };
-        let piece_start = self.piece_ends[index] - piece.len;
-        &self.slice(piece)[offset - piece_start..]
+        &self.slice(found.piece)[offset - found.before.bytes..]
     }
 
     /// The text in `range` as borrowed slices, in order.
@@ -84,17 +70,14 @@ impl TextSnapshot {
     pub fn chunks(&self, range: Range<usize>) -> impl Iterator<Item = &str> {
         assert!(range.start <= range.end);
         assert!(range.end <= self.len());
-        let first = self.piece_ends.partition_point(|&end| end <= range.start);
-        self.pieces[first..]
-            .iter()
-            .zip(&self.piece_ends[first..])
-            .map_while(move |(&piece, &end)| {
-                let start = end - piece.len;
+        self.tree
+            .pieces_from(range.start)
+            .map_while(move |(start, piece)| {
                 if start >= range.end {
                     return None;
                 }
-                let slice = self.slice(piece);
-                Some(&slice[range.start.max(start) - start..range.end.min(end) - start])
+                let end = start + piece.len;
+                Some(&self.slice(piece)[range.start.max(start) - start..range.end.min(end) - start])
             })
     }
 
@@ -111,7 +94,10 @@ impl TextSnapshot {
     fn slice(&self, p: Piece) -> &str {
         let buf = match p.backing {
             Backing::Original => &self.original,
-            Backing::Add(chunk) => &self.chunks[chunk as usize],
+            Backing::Add(chunk) => self
+                .sealed
+                .get(chunk as usize)
+                .map_or(&self.tail, |sealed| sealed),
         };
         &buf[p.start..p.start + p.len]
     }

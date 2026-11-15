@@ -367,6 +367,7 @@ fn run(seed: u64, steps: usize, initial: &str) {
             check_positions(&b, &mut tracked, &edits[0]);
         }
 
+        b.validate();
         check_buffer(&b, &model, &mut rng, step % 40 == 0);
         for (snapshot, expected) in &snapshots {
             if rng.chance(10) {

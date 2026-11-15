@@ -116,7 +116,10 @@ fn snapshot_reads_match_buffer_after_random_edits() {
             assert_eq!(snapshot.read_range(start..end), b.read_range(start..end));
         }
     }
-    assert!(b.sealed.len() > 1, "the sequence must seal add chunks");
+    assert!(
+        b.backings.sealed.len() > 1,
+        "the sequence must seal add chunks"
+    );
 }
 
 /// Measures snapshot and streamed-read cost on a 29 MiB, million-line
@@ -175,9 +178,9 @@ fn snapshot_cost_on_large_buffer() {
         "{} bytes, {} lines, {} pieces, {} sealed chunks, {} tail bytes",
         b.len(),
         b.line_count(),
-        b.pieces.len(),
-        b.sealed.len(),
-        b.tail.len()
+        b.pieces().len(),
+        b.backings.sealed.len(),
+        b.backings.tail.len()
     );
     println!(
         "snapshot p50 {:?}, p99 {:?}, max {:?}; streamed read {:?}",

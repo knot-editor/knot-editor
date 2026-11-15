@@ -1,15 +1,25 @@
 //! `TextBuffer`: stable-ID piece-table backing store.
 //!
 //! The buffer has monotonic stable piece IDs, insert / delete / replace /
-//! read-range operations, an incrementally maintained line index, and a
-//! `Position` / `BufferEdit` surface for stable external ranges.
+//! read-range operations, line and UTF-16 queries, and a `Position` /
+//! `BufferEdit` surface for stable external ranges.
+//!
+//! ## Piece tree
+//!
+//! The pieces live in a persistent B-tree (`tree`) whose nodes summarize their
+//! subtree's bytes, line breaks, and UTF-16 units. Offsets, lines, and UTF-16
+//! offsets are found by descending the tree, so an edit or a query costs
+//! O(log pieces) however many pieces earlier edits created. The tree's nodes
+//! are shared with snapshots and copied on write.
 //!
 //! ## Line index
 //!
-//! Every line start is recorded both as a byte offset and as a UTF-16 offset.
-//! Text and every public position stay UTF-8; the UTF-16 column lets platform
-//! text input, which speaks document-wide UTF-16 offsets, convert in
-//! O(log lines + line length) instead of scanning from the buffer start.
+//! There is no document-wide line table. Each backing keeps its own sorted
+//! line starts (`backing`), as UTF-8 byte and UTF-16 offsets within it. A
+//! piece caches its line-break count and UTF-16 length, computed from its
+//! backing's index. Text and every public position stay UTF-8; the UTF-16
+//! queries let platform text input, which speaks document-wide UTF-16 offsets,
+//! convert in O(log pieces + line length).
 //!
 //! ## Position tokens
 //!
@@ -64,9 +74,9 @@
 //! ## Snapshots
 //!
 //! `snapshot` returns an immutable, `Send` [`TextSnapshot`] for readers off
-//! the foreground. It shares the original text and sealed chunks, and copies
-//! only the tail and the piece list, so its cost is bounded by the chunk size
-//! plus O(pieces) rather than by the document length.
+//! the foreground. It shares the piece tree, the original text, and the sealed
+//! chunks, and copies only the tail, so its cost is bounded by the chunk size
+//! rather than by the document length or the piece count.
 //!
 //! ## Split rule
 //!
@@ -91,14 +101,18 @@
 //! boundaries. Grapheme-aware caret movement and deletion remain presentation
 //! policy above the byte-native core.
 
-use std::mem;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub use snapshot::TextSnapshot;
 
+use backing::Backings;
+use tree::{Bias, Dimension, Tree};
+
+mod backing;
 mod snapshot;
+mod tree;
 
 /// Length at which the add sink's tail is sealed into an immutable chunk.
 ///
@@ -274,15 +288,6 @@ pub enum BufferEdit {
     },
 }
 
-/// Start of one line, as UTF-8 byte and UTF-16 code-unit offsets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct LineStart {
-    byte: usize,
-    utf16: usize,
-}
-
-const BUFFER_START: LineStart = LineStart { byte: 0, utf16: 0 };
-
 /// Which backing buffer a piece references.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Backing {
@@ -296,20 +301,19 @@ enum Backing {
 
 /// A reference to a contiguous span of one backing buffer.
 ///
-/// `(backing, start)` is fixed at creation. Only `len` changes: the split
-/// rule shortens the left half, and coalescing extends a trailing `Add` piece.
+/// `(backing, start)` is fixed at creation. Only `len` changes, with the
+/// summary fields that follow it: the split rule shortens the left half, and
+/// coalescing extends a trailing `Add` piece.
 #[derive(Clone, Copy, Debug)]
 struct Piece {
     id: PieceId,
     backing: Backing,
     start: usize,
     len: usize,
-}
-
-/// Result of `split_at`: the index in `pieces` at which a new piece should
-/// be inserted to land at the requested logical offset.
-struct SplitLoc {
-    insert_at: usize,
+    /// Number of `'\n'` bytes in the span.
+    breaks: usize,
+    /// Length of the span in UTF-16 code units.
+    utf16: usize,
 }
 
 /// A hand-rolled piece table with stable piece IDs.
@@ -319,26 +323,13 @@ pub struct TextBuffer {
     /// Stable identity of this buffer instance. Kept crate-visible because
     /// `EditTransaction` must bind its recorded byte offsets to one buffer.
     instance_id: u64,
-    /// Immutable load-time text backing the `Original` pieces.
-    original: Arc<str>,
-    /// Sealed chunks of the append-only add sink, shared with snapshots.
-    sealed: Vec<Arc<str>>,
-    /// Unsealed end of the add sink. Appended spans are never overwritten or
-    /// moved; only new bytes go at the end.
-    tail: String,
-    /// The piece chain. Operations splice and shorten in place; snapshots
-    /// take a copy.
-    pieces: Vec<Piece>,
+    /// The text the pieces refer to, with a line index per backing.
+    backings: Backings,
+    /// The pieces in text order. Operations change it in place; snapshots
+    /// clone its root.
+    tree: Tree,
     /// Global monotonic piece-id counter. Never reused.
     next_id: PieceId,
-    /// Total length of the logical text, in UTF-8 bytes.
-    len: usize,
-    /// Line index, kept valid under every edit by `update_line_starts`.
-    ///
-    /// Sorted ascending. Entry 0 is always the buffer start, even for an empty
-    /// buffer. A trailing `'\n'` creates one extra empty line, so `"abc\n"`
-    /// has byte starts `[0, 4]`.
-    line_starts: Vec<LineStart>,
     /// Retained edit log. Each `insert` / `delete` pushes one `BufferEdit`.
     /// `replace` decomposes into a delete-then-insert pair and pushes two.
     edits: Vec<BufferEdit>,
@@ -355,51 +346,31 @@ impl TextBuffer {
     pub fn from_text(text: impl Into<Arc<str>>) -> Self {
         let original = text.into();
         let len = original.len();
-        let mut line_starts = vec![BUFFER_START];
-        scan_line_starts(&original, BUFFER_START, &mut line_starts);
+        let backings = Backings::new(original);
         let mut buf = TextBuffer {
             instance_id: NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed),
-            original,
-            sealed: Vec::new(),
-            tail: String::new(),
-            pieces: Vec::new(),
+            backings,
+            tree: Tree::new(),
             next_id: 1,
-            len,
-            line_starts,
             edits: Vec::new(),
             discarded_edits: 0,
         };
         if len > 0 {
-            buf.pieces.push(Piece {
-                id: buf.next_id,
-                backing: Backing::Original,
-                start: 0,
-                len,
-            });
+            let piece = buf.backings.piece(buf.next_id, Backing::Original, 0, len);
             buf.next_id += 1;
+            buf.tree = Tree::from_piece(piece);
         }
         buf
     }
 
     /// Build an empty buffer.
     pub fn new() -> Self {
-        TextBuffer {
-            instance_id: NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed),
-            original: Arc::from(""),
-            sealed: Vec::new(),
-            tail: String::new(),
-            pieces: Vec::new(),
-            next_id: 1,
-            len: 0,
-            line_starts: vec![BUFFER_START],
-            edits: Vec::new(),
-            discarded_edits: 0,
-        }
+        Self::from_text("")
     }
 
     /// Total length of the logical text, in UTF-8 bytes.
     pub fn len(&self) -> usize {
-        self.len
+        self.tree.summary().bytes
     }
 
     /// Stable identity of this `TextBuffer` instance.
@@ -412,7 +383,7 @@ impl TextBuffer {
 
     /// Whether the logical text is empty.
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.len() == 0
     }
 
     /// Read a byte range of the logical text into a `String`.
@@ -435,17 +406,18 @@ impl TextBuffer {
 
     /// The logical text in `range` as borrowed piece slices, in order.
     fn chunks(&self, range: Range<usize>) -> impl Iterator<Item = &str> {
-        let mut offset = 0usize;
-        self.pieces.iter().map_while(move |p| {
-            let p_start = offset;
-            offset += p.len;
-            if p_start >= range.end {
-                return None;
-            }
-            let slice_start = p_start.max(range.start).min(offset) - p_start;
-            let slice_end = offset.min(range.end) - p_start;
-            Some(&self.backing_slice(*p)[slice_start..slice_end])
-        })
+        self.tree
+            .pieces_from(range.start)
+            .map_while(move |(start, piece)| {
+                if start >= range.end {
+                    return None;
+                }
+                let end = start + piece.len;
+                Some(
+                    &self.backings.slice(piece)
+                        [range.start.max(start) - start..range.end.min(end) - start],
+                )
+            })
     }
 
     /// Insert `text` at byte offset `at`.
@@ -461,67 +433,57 @@ impl TextBuffer {
             return;
         }
 
-        // Append the span to the add tail and record its placement.
-        let tail_chunk = self.sealed.len() as u32;
-        let add_start = self.tail.len();
-        self.tail.push_str(text);
-
         let at_point = self.point_of_offset(at);
 
-        // Locate the insertion point in the piece chain. Splits are
-        // recorded so they can be attached to the BufferEdit event.
-        let pre_first_piece = self.pieces.first().map(|p| p.id);
+        // Make `at` a piece boundary. Splits are recorded so they can be
+        // attached to the BufferEdit event.
+        let pre_first_piece = self.first_piece().map(|p| p.id);
         let mut splits = Vec::new();
-        let split = self.split_at(at, &mut splits);
+        self.split_at(at, &mut splits);
 
-        // Compute the piece ending at logical `at` pre-insert (and the
+        // The piece ending at logical `at` pre-insert (and the
         // offset-within-that-piece corresponding to the boundary `at`).
         // For interior-split inserts this is `(splits[0].old_piece,
         // splits[0].split_offset)` (post-split, the old_piece is
         // shortened to the split offset); stabilize relies only on the
         // splits list in that case, so this is dormant but kept
-        // consistent. For boundary-elided inserts (no splits) the
-        // piece chain is unchanged and `pieces[split.insert_at - 1]`
-        // is the piece ending at `at`.
-        let left_piece = if at == 0 {
-            None
-        } else {
-            let p = self.pieces[split.insert_at - 1];
-            Some((p.id, p.len))
-        };
+        // consistent.
+        let left = self.piece_ending_at(at);
+        let left_piece = left.map(|p| (p.id, p.len));
+
+        // Append the span to the add tail and record its placement.
+        let tail_chunk = self.backings.tail_chunk();
+        let (add_start, breaks, utf16) = self.backings.append(text);
 
         let coalesce = splits.is_empty()
-            && split.insert_at > 0
             && matches!(
-                self.pieces[split.insert_at - 1],
-                Piece { backing: Backing::Add(chunk), start, len, .. }
+                left,
+                Some(Piece { backing: Backing::Add(chunk), start, len, .. })
                     if chunk == tail_chunk && start + len == add_start
             );
         let inserted_end = if coalesce {
-            let piece = &mut self.pieces[split.insert_at - 1];
-            piece.len += text.len();
-            Position::new(piece.id, piece.len as u32)
+            self.tree.modify(at, |piece, _| {
+                piece.len += text.len();
+                piece.breaks += breaks;
+                piece.utf16 += utf16;
+                Position::new(piece.id, piece.len as u32)
+            })
         } else {
             let id = self.next_id;
             self.next_id += 1;
-            self.pieces.insert(
-                split.insert_at,
-                Piece {
-                    id,
-                    backing: Backing::Add(tail_chunk),
-                    start: add_start,
-                    len: text.len(),
-                },
-            );
+            let piece = Piece {
+                id,
+                backing: Backing::Add(tail_chunk),
+                start: add_start,
+                len: text.len(),
+                breaks,
+                utf16,
+            };
+            self.tree.insert(at, piece);
             Position::new(id, text.len() as u32)
         };
-        self.len += text.len();
-        if self.tail.len() >= ADD_CHUNK_SIZE {
-            self.sealed.push(Arc::from(mem::take(&mut self.tail)));
-        }
+        self.backings.seal_full_tail();
 
-        // Keep the line index valid for the edited span.
-        self.update_line_starts(at..at, text, 0);
         let end_point = self.point_of_offset(at + text.len());
 
         // Record the edit event. `at` and `inserted_len` are byte
@@ -551,58 +513,33 @@ impl TextBuffer {
         if range.is_empty() {
             return;
         }
-        let removed_utf16 = self.chunks(range.clone()).map(utf16_len).sum();
         let start_point = self.point_of_offset(range.start);
         let end_point = self.point_of_offset(range.end);
 
-        // Split the chain at both ends, then drop the pieces in between.
-        // Both calls share one `splits` vec so the ordering in the
-        // BufferEdit event is "left-end-split, then right-end-split".
+        // Split at both ends, then drop the pieces in between. Both calls
+        // share one `splits` vec so the ordering in the BufferEdit event is
+        // "left-end-split, then right-end-split".
         let mut splits = Vec::new();
-        let left = self.split_at(range.start, &mut splits);
-        let right = self.split_at(range.end, &mut splits);
+        self.split_at(range.start, &mut splits);
+        self.split_at(range.end, &mut splits);
 
-        // The splits guarantee that `left.insert_at` is the index of the
-        // first piece strictly at-or-after `range.start`, and
-        // `right.insert_at` is the first piece at-or-after `range.end`.
-        // Anything in `[left.insert_at, right.insert_at)` lies inside the
-        // deleted span and is removed wholesale. The right-edge split may
-        // have shortened a piece to the post-end remainder; that remainder
-        // sits at `right.insert_at` and survives the drain.
-        //
         // Collect the affected-piece metadata stabilization needs to
         // repair stale tokens in O(affected) without walking the chain.
         // `left_survivor` is the piece ending at `range.start` (= `s`)
-        // post-edit — `pieces[left.insert_at - 1]`, which (if a split
-        // happened at `s`) is the original piece now shortened to the
-        // split offset, or (if no split) the boundary piece unchanged.
-        // `right_survivor` is `pieces[right.insert_at]` — the piece that
-        // pre-edit starts at `range.end` and post-edit shifts to start
-        // at `s`. `None` iff the delete reaches the buffer's start or
+        // post-edit, which (if a split happened at `s`) is the original
+        // piece now shortened to the split offset. `right_survivor` is the
+        // piece that pre-edit starts at `range.end` and post-edit shifts to
+        // start at `s`. `None` iff the delete reaches the buffer's start or
         // end respectively (no left/right edge survives).
-        let deleted_piece_lens: Vec<(PieceId, usize)> = self.pieces
-            [left.insert_at..right.insert_at]
-            .iter()
-            .map(|p| (p.id, p.len))
-            .collect();
+        let removed = self.tree.remove(range.start, range.end);
+        let deleted_piece_lens: Vec<(PieceId, usize)> =
+            removed.iter().map(|p| (p.id, p.len)).collect();
         let deleted_pieces: Vec<PieceId> = deleted_piece_lens.iter().map(|(id, _)| *id).collect();
-        let left_survivor = if left.insert_at == 0 {
-            None
-        } else {
-            let p = self.pieces[left.insert_at - 1];
-            Some((p.id, p.len))
-        };
-        let right_survivor = if right.insert_at == self.pieces.len() {
-            None
-        } else {
-            Some(self.pieces[right.insert_at].id)
-        };
-
-        self.pieces.drain(left.insert_at..right.insert_at);
-        self.len -= range.len();
-
-        // Keep the line index valid for the edited span.
-        self.update_line_starts(range.clone(), "", removed_utf16);
+        let left_survivor = self.piece_ending_at(range.start).map(|p| (p.id, p.len));
+        let right_survivor = self
+            .tree
+            .seek(Dimension::Bytes, range.start, Bias::Right)
+            .map(|found| found.piece.id);
 
         // Record the edit event. `range` is the pre-edit byte span.
         self.edits.push(BufferEdit::Delete {
@@ -639,20 +576,33 @@ impl TextBuffer {
     // ---- Line index ------------------------------------------------
 
     /// Number of lines. The buffer always has at least one line (line 0,
-    /// possibly empty), so this returns `>= 1`.
+    /// possibly empty), so this returns `>= 1`. A trailing `'\n'` creates one
+    /// extra empty line.
     pub fn line_count(&self) -> usize {
-        self.line_starts.len()
+        self.tree.summary().breaks + 1
     }
 
     /// Byte offset of the start of `line` (0-indexed). `line` must be
     /// `< line_count()`.
     pub fn line_start(&self, line: usize) -> usize {
         assert!(
-            line < self.line_starts.len(),
+            line < self.line_count(),
             "line {line} out of range ({})",
-            self.line_starts.len()
+            self.line_count()
         );
-        self.line_starts[line].byte
+        if line == 0 {
+            return 0;
+        }
+        // The piece holding the `line`th line break.
+        let found = self
+            .tree
+            .seek(Dimension::Breaks, line, Bias::Left)
+            .expect("the line break exists");
+        let piece = found.piece;
+        // The line break's index among the backing's line starts.
+        let nth =
+            self.backings.breaks_before(piece.backing, piece.start) + (line - found.before.breaks);
+        found.before.bytes + self.backings.nth_line_start(piece.backing, nth) - piece.start
     }
 
     /// 0-indexed line number of the line containing byte offset `offset`.
@@ -660,9 +610,14 @@ impl TextBuffer {
     /// last line.
     pub fn line_of_offset(&self, offset: usize) -> usize {
         assert!(offset <= self.len());
-        // First index where `starts[i] > offset`; the line containing
-        // `offset` is the one before it. Entry 0 is always 0.
-        self.line_starts.partition_point(|s| s.byte <= offset) - 1
+        let Some(found) = self.tree.seek(Dimension::Bytes, offset, Bias::Left) else {
+            return 0;
+        };
+        let piece = found.piece;
+        let start = piece.start;
+        let within = offset - found.before.bytes;
+        found.before.breaks + self.backings.breaks_before(piece.backing, start + within)
+            - self.backings.breaks_before(piece.backing, start)
     }
 
     /// Line and byte column of `offset`, which must satisfy
@@ -671,7 +626,7 @@ impl TextBuffer {
         let line = self.line_of_offset(offset);
         TextPoint {
             line,
-            column: offset - self.line_starts[line].byte,
+            column: offset - self.line_start(line),
         }
     }
 
@@ -679,34 +634,26 @@ impl TextBuffer {
     /// boundary `<= len()`.
     pub fn utf16_of_offset(&self, offset: usize) -> usize {
         debug_assert!(self.is_char_boundary(offset));
-        let start = self.line_starts[self.line_of_offset(offset)];
-        start.utf16
-            + self
-                .chunks(start.byte..offset)
-                .map(utf16_len)
-                .sum::<usize>()
+        let Some(found) = self.tree.seek(Dimension::Bytes, offset, Bias::Left) else {
+            return 0;
+        };
+        let piece = found.piece;
+        let within = offset - found.before.bytes;
+        found.before.utf16 + self.backings.utf16_at(piece.backing, piece.start + within)
+            - self.backings.utf16_at(piece.backing, piece.start)
     }
 
     /// Byte offset of UTF-16 code-unit offset `utf16`. An offset inside a
     /// surrogate pair rounds up to the end of its scalar, and an offset past
     /// the end clamps to `len()`.
     pub fn offset_of_utf16(&self, utf16: usize) -> usize {
-        let line = self.line_starts.partition_point(|s| s.utf16 <= utf16) - 1;
-        let start = self.line_starts[line];
-        let end = self
-            .line_starts
-            .get(line + 1)
-            .map_or(self.len, |next| next.byte);
-        let mut units = start.utf16;
-        let mut offset = start.byte;
-        for ch in self.chunks(start.byte..end).flat_map(str::chars) {
-            if units >= utf16 {
-                break;
-            }
-            units += ch.len_utf16();
-            offset += ch.len_utf8();
-        }
-        offset
+        let Some(found) = self.tree.seek(Dimension::Utf16, utf16, Bias::Left) else {
+            return self.len();
+        };
+        found.before.bytes
+            + self
+                .backings
+                .byte_of_utf16(found.piece, utf16 - found.before.utf16)
     }
 
     // ---- Position tokens -------------------------------------
@@ -726,36 +673,11 @@ impl TextBuffer {
     /// edit, or remaps via the edit log.
     pub fn position_at(&self, at: usize) -> Option<Position> {
         assert!(at <= self.len());
-        if self.pieces.is_empty() {
-            return None;
-        }
-        if at == 0 {
-            return Some(Position {
-                piece: self.pieces[0].id,
-                offset: 0,
-            });
-        }
-        let mut acc = 0usize;
-        for p in &self.pieces {
-            let p_end = acc + p.len;
-            if at == p_end {
-                // Sticky-left: position anchored to the piece ending at `at`.
-                return Some(Position {
-                    piece: p.id,
-                    offset: p.len as u32,
-                });
-            }
-            if at > acc && at < p_end {
-                return Some(Position {
-                    piece: p.id,
-                    offset: (at - acc) as u32,
-                });
-            }
-            acc = p_end;
-        }
-        // `at <= len()` and the last piece's `p_end == len()`, so the
-        // `at == p_end` branch above is taken for `at == len()`.
-        unreachable!("position_at({at}) not resolved");
+        let found = self.tree.seek(Dimension::Bytes, at, Bias::Left)?;
+        Some(Position {
+            piece: found.piece.id,
+            offset: (at - found.before.bytes) as u32,
+        })
     }
 
     /// Resolve a `Position` token back to a byte offset.
@@ -771,18 +693,12 @@ impl TextBuffer {
     ///   `Split` from the edit log and remaps to
     ///   `(Split::new_piece, offset - Split::split_offset)`.
     pub fn resolve(&self, p: Position) -> Option<usize> {
-        let mut acc = 0usize;
-        for piece in &self.pieces {
-            if piece.id == p.piece {
-                let off = p.offset as usize;
-                if off > piece.len {
-                    return None;
-                }
-                return Some(acc + off);
-            }
-            acc += piece.len;
-        }
-        None
+        let (start, piece) = self
+            .tree
+            .pieces_from(0)
+            .find(|(_, piece)| piece.id == p.piece)?;
+        let off = p.offset as usize;
+        (off <= piece.len).then_some(start + off)
     }
 
     // ---- Edit log -------------------------------------------------
@@ -828,70 +744,22 @@ impl TextBuffer {
 
     // ---- Internals -------------------------------------------------------
 
-    /// Backing slice for a piece. Lifetime ties to `self`.
-    fn backing_slice(&self, p: Piece) -> &str {
-        let buf = match p.backing {
-            Backing::Original => &self.original,
-            Backing::Add(chunk) => self
-                .sealed
-                .get(chunk as usize)
-                .map_or(self.tail.as_str(), |sealed| sealed),
-        };
-        &buf[p.start..p.start + p.len]
+    /// The first piece, if the buffer is not empty.
+    fn first_piece(&self) -> Option<Piece> {
+        self.tree
+            .seek(Dimension::Bytes, 0, Bias::Left)
+            .map(|found| found.piece)
     }
 
-    /// Incrementally update the line index after an edit that replaced the
-    /// byte span `[range.start, range.end)`, which held `removed_utf16` UTF-16
-    /// code units, with `new_text`. Called after the piece chain changed.
-    ///
-    /// Splices the K-entry delta for the edited span and fixes up the
-    /// surviving suffix in O(n−i).
-    ///
-    /// Algorithm:
-    /// - `delta = new_text.len() - (range.end - range.start)` (signed), and
-    ///   likewise in UTF-16 code units.
-    /// - `lo`  = first index where `starts[i] >= range.start` → kept
-    ///   unchanged.
-    /// - `hi`  = first index where `starts[i] > range.end` → suffix to
-    ///   shift by `delta`.
-    /// - Middle section (replaces `starts[lo..hi]`):
-    ///   1. If `starts[lo] == range.start`, the `'\n'` at `range.start - 1`
-    ///      survives untouched, so the line at `range.start` survives at
-    ///      the same byte offset — re-emit `range.start`.
-    ///   2. For each `'\n'` at index `i` in `new_text`, emit a new line
-    ///      start at `range.start + i + 1`.
-    /// - The new array is `[starts[..lo], middle, [s + delta for s in starts[hi..]]]`.
-    fn update_line_starts(&mut self, range: Range<usize>, new_text: &str, removed_utf16: usize) {
-        let byte_delta = new_text.len() as isize - range.len() as isize;
-        let utf16_delta = utf16_len(new_text) as isize - removed_utf16 as isize;
-        let lo = self.line_starts.partition_point(|s| s.byte < range.start);
-        let hi = self.line_starts.partition_point(|s| s.byte <= range.end);
-
-        // Build the middle section: surviving line at `range.start` (if any)
-        // plus new line starts from `'\n'`s in `new_text`. The text before
-        // `range.start` is unchanged, so its UTF-16 offset is still valid.
-        let mut middle = Vec::new();
-        if self
-            .line_starts
-            .get(lo)
-            .is_some_and(|start| start.byte == range.start)
-        {
-            middle.push(self.line_starts[lo]);
+    /// The piece ending at byte `at`, which must be a piece boundary; `None`
+    /// at offset 0.
+    fn piece_ending_at(&self, at: usize) -> Option<Piece> {
+        if at == 0 {
+            return None;
         }
-        if new_text.contains('\n') {
-            let base = LineStart {
-                byte: range.start,
-                utf16: self.utf16_of_offset(range.start),
-            };
-            scan_line_starts(new_text, base, &mut middle);
-        }
-
-        let tail = lo + middle.len();
-        self.line_starts.splice(lo..hi, middle);
-        for start in &mut self.line_starts[tail..] {
-            start.byte = start.byte.wrapping_add_signed(byte_delta);
-            start.utf16 = start.utf16.wrapping_add_signed(utf16_delta);
-        }
+        self.tree
+            .seek(Dimension::Bytes, at, Bias::Left)
+            .map(|found| found.piece)
     }
 
     /// Whether `offset` is a UTF-8 scalar boundary in the logical text.
@@ -900,129 +768,88 @@ impl TextBuffer {
     /// ranges before calling the buffer's assertion-based mutation and read
     /// operations.
     pub fn is_char_boundary(&self, offset: usize) -> bool {
-        // Walk the pieces and stitch a logical view; reading a full char
-        // would be wasteful, so we reconstruct boundary-ness by inspecting
-        // the byte at the piece boundary. Cheap path: the offset falls
-        // strictly inside a piece (not at its edges) — defer to that
-        // piece's backing, which is valid UTF-8.
-        // Cheap path 2: offset is at the very start or end of the buffer.
         if offset == 0 || offset == self.len() {
             return true;
         }
-        let mut acc = 0usize;
-        for p in &self.pieces {
-            if offset == acc {
-                // At the start of this piece; valid iff the byte before
-                // (last byte of the previous logical position) is not a
-                // UTF-8 continuation. Walk back is unnecessary: piece
-                // boundaries are always char boundaries by construction
-                // (splits only happen at char boundaries via debug-asserts).
-                return true;
-            }
-            if offset > acc && offset < acc + p.len {
-                let bytes = self.backing_slice(*p);
-                return bytes.is_char_boundary(offset - acc);
-            }
-            acc += p.len;
-        }
-        false
+        // Piece boundaries are char boundaries by construction; inside a
+        // piece, defer to its backing, which is valid UTF-8.
+        self.tree
+            .seek(Dimension::Bytes, offset, Bias::Right)
+            .is_some_and(|found| {
+                let within = offset - found.before.bytes;
+                within == 0 || self.backings.slice(found.piece).is_char_boundary(within)
+            })
     }
 
-    /// Split the piece chain at logical offset `at`, returning the index
-    /// at which a new piece should be inserted.
+    /// Make byte offset `at` a piece boundary.
     ///
     /// `at` must satisfy `0 <= at <= len()`.
     ///
     /// Degenerate splits — `at` at the start or end of an existing piece —
-    /// are elided by the split rule: the new piece is spliced in directly, no
-    /// zero-length halves created. Otherwise the containing piece is split,
-    /// the left half retains its id (with `len` shortened to the split
-    /// offset) and the right half is inserted as a fresh piece behind it.
+    /// are elided by the split rule: no zero-length halves are created.
+    /// Otherwise the containing piece is split, the left half retains its id
+    /// (with `len` shortened to the split offset) and the right half is
+    /// inserted as a fresh piece behind it.
     ///
     /// If a strict interior split occurs, a `Split` record is pushed onto
     /// `splits` so the caller can attach it to the `BufferEdit` event it
     /// is constructing. Boundary-elided splits push nothing.
-    fn split_at(&mut self, at: usize, splits: &mut Vec<Split>) -> SplitLoc {
-        // Empty buffer or insertion at the very end.
-        if at == self.len() {
-            return SplitLoc {
-                insert_at: self.pieces.len(),
-            };
+    fn split_at(&mut self, at: usize, splits: &mut Vec<Split>) {
+        if at == 0 || at == self.len() {
+            return;
         }
-        if at == 0 {
-            return SplitLoc { insert_at: 0 };
+        let found = self
+            .tree
+            .seek(Dimension::Bytes, at, Bias::Left)
+            .expect("`at` lies within the text");
+        let piece = found.piece;
+        let left_len = at - found.before.bytes;
+        if left_len == piece.len {
+            return;
         }
 
-        let mut acc = 0usize;
-        for (i, p) in self.pieces.iter_mut().enumerate() {
-            let p_end = acc + p.len;
-            if at == acc {
-                // Insertion at the start of piece `i`: elide; no split.
-                return SplitLoc { insert_at: i };
-            }
-            if at == p_end {
-                // Insertion at the end of piece `i`: elide; insert before
-                // the next piece (or at the tail if `i` is last).
-                return SplitLoc { insert_at: i + 1 };
-            }
-            if at > acc && at < p_end {
-                // Strict interior split — the split rule's only non-degenerate case.
-                let left_len = at - acc;
-                let right_len = p.len - left_len;
-                let right_start = p.start + left_len;
-                let backing = p.backing;
-                let old_id = p.id;
-
-                // Shorten the left half in place (retains id, start, backing).
-                p.len = left_len;
-
-                // Append the right half as a fresh piece after index `i`.
-                let right_id = self.next_id;
-                self.next_id += 1;
-                let insert_at = i + 1;
-                self.pieces.insert(
-                    insert_at,
-                    Piece {
-                        id: right_id,
-                        backing,
-                        start: right_start,
-                        len: right_len,
-                    },
-                );
-
-                // Record the split for the caller's edit-log event.
-                splits.push(Split {
-                    old_piece: old_id,
-                    split_offset: left_len,
-                    new_piece: right_id,
-                });
-                return SplitLoc { insert_at };
-            }
-            acc = p_end;
-        }
-        // `at` was beyond `self.len()` — caller's `assert!` should have
-        // caught this; reaching here is a bug.
-        unreachable!("split_at({at}) past end of len {}", self.len())
+        let left = self
+            .backings
+            .piece(piece.id, piece.backing, piece.start, left_len);
+        let right_id = self.next_id;
+        self.next_id += 1;
+        let right = Piece {
+            id: right_id,
+            backing: piece.backing,
+            start: piece.start + left_len,
+            len: piece.len - left_len,
+            breaks: piece.breaks - left.breaks,
+            utf16: piece.utf16 - left.utf16,
+        };
+        self.tree.modify(at, |p, _| *p = left);
+        self.tree.insert(at, right);
+        splits.push(Split {
+            old_piece: piece.id,
+            split_offset: left_len,
+            new_piece: right_id,
+        });
     }
-}
 
-/// Append the start of every line that follows a `'\n'` in `text`, where
-/// `text` begins at `base`.
-fn scan_line_starts(text: &str, base: LineStart, out: &mut Vec<LineStart>) {
-    let mut utf16 = base.utf16;
-    for (i, ch) in text.char_indices() {
-        utf16 += ch.len_utf16();
-        if ch == '\n' {
-            out.push(LineStart {
-                byte: base.byte + i + 1,
-                utf16,
-            });
+    /// The pieces in text order, for tests.
+    #[cfg(test)]
+    fn pieces(&self) -> Vec<Piece> {
+        self.tree.pieces_from(0).map(|(_, piece)| piece).collect()
+    }
+
+    /// Assert the invariants of the tree and the line indexes: node sizes,
+    /// summaries, and every piece's cached summary against its text.
+    #[cfg(test)]
+    fn validate(&self) {
+        self.tree.validate();
+        self.backings.validate();
+        let mut ids = std::collections::HashSet::new();
+        for piece in self.pieces() {
+            assert!(ids.insert(piece.id), "duplicate piece id {}", piece.id);
+            let text = self.backings.slice(piece);
+            assert_eq!(piece.breaks, text.matches('\n').count());
+            assert_eq!(piece.utf16, backing::utf16_len(text));
         }
     }
-}
-
-fn utf16_len(text: &str) -> usize {
-    text.chars().map(char::len_utf16).sum()
 }
 
 impl Default for TextBuffer {
