@@ -17,12 +17,37 @@ The next unused ID is **D198**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
-priority. An item marked 🚧 has a plan under [plans/](plans/).
+priority. [Next up](#next-up) orders the work to do next across all sections;
+an item there is worth doing in that order, whatever its own trigger says. An
+item marked 🚧 has a plan under [plans/](plans/).
 
 Knot has no users, so every current command, binding, setting, surface, API,
 and stored format may be redesigned or removed, with no migration or
 compatibility path. Descriptions name current behavior only as a starting
 point.
+
+## Next up
+
+1. D001 — Replace, regular-expression Find, and find in selection: its plan is
+   underway.
+2. D045 — General terminal settings: small.
+3. D193 — Chrome refinements: two open choices of the current look.
+4. D119 — Tab, editor, and extension menu items.
+5. D117 — Non-modal notifications and progress: D041 and D181 build on it.
+6. D022 — Editor autocompletion.
+7. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+8. D183 — Deterministic indentation after Enter and closing tokens.
+9. D175 — Type-ahead after a held Enter.
+10. D182 — Interleave extension roots at awaits: before D067.
+11. D156 — Fewer host round trips per key.
+12. D129 — Refactor builtin language extensions.
+13. D138 — Extension startup report as an untitled document.
+14. D054 — Dedicated read-only generated text surface.
+15. D085 — Cross-file search.
+16. D197 — Diff view: D126 and D174 build on it.
+17. D126 — Git status and changes per root.
+
+Remove an item from this list when it is done or dropped.
 
 ## Working an item
 
@@ -42,13 +67,13 @@ hold the analyses that support some items.
     request for the indent query that waits for a syntax tree of that exact
     revision, and any later edit drops it. When the parse exceeds the 1 ms
     foreground budget and finishes in the background, a key typed first leaves
-    the line at the wrong indentation, so the result depends on timing in
-    large files. Enter between an auto-closed pair is unaffected. Fix it now:
-    let these two commands parse in the foreground up to a larger budget,
-    chosen from a benchmark of incremental reparses on a large file, and keep
-    the deferred request only beyond it. Rebasing the request over later
-    typing was rejected: the line would shift after the typed text and needs
-    rules for when to give up.
+    the line at the wrong indentation, so the result depends on timing in large
+    files. Enter between an auto-closed pair is unaffected. Let these two
+    commands parse in the foreground up to a larger budget, chosen from a
+    benchmark of incremental reparses on a large file, and keep the deferred
+    request only beyond it. Rebasing the request over later typing was
+    rejected: the line would shift after the typed text and needs rules for
+    when to give up.
 
 - **D175 — Type-ahead after a held Enter**
   - Depends on: none
@@ -62,17 +87,17 @@ hold the analyses that support some items.
 
 - **D182 — Interleave extension roots at awaits**
   - Depends on: none
-  - Description: A package runs one root (command, listener, timer, or
-    provider call) at a time to completion, and extension commands are serial
-    across all packages. An awaiting command freezes its package's listeners
-    and providers; a command that awaits a timer or an event of its own
-    package deadlocks it until restart; and a language client cannot handle
-    out-of-order responses or server requests. Do it now, before D067: carry
-    each root's identity through its continuations instead of global state,
-    let the scheduler keep several live roots per package, make the command
-    queue per package, and audit the bundled packages for state assumed stable
-    across an await. The [scheduling report](reports/extension-task-scheduling.md) has the analysis
-    and proposed checkpoints.
+  - Description: A package runs one root (command, listener, timer, or provider
+    call) at a time to completion, and extension commands are serial across all
+    packages. An awaiting command freezes its package's listeners and
+    providers; a command that awaits a timer or an event of its own package
+    deadlocks it until restart; and a language client cannot handle
+    out-of-order responses or server requests. Before D067, carry each root's
+    identity through its continuations instead of global state, let the
+    scheduler keep several live roots per package, make the command queue per
+    package, and audit the bundled packages for state assumed stable across an
+    await. The [scheduling report](reports/extension-task-scheduling.md) has
+    the analysis and proposed checkpoints.
 
 - **D156 — Fewer host round trips per key**
   - Depends on: none
@@ -172,21 +197,21 @@ hold the analyses that support some items.
 
 - **D197 — Diff view**
   - Depends on: none
-  - Description: Knot cannot compare two texts. Do it now, before Git
-    integration needs it: a native side-by-side and inline diff of two
-    buffers or snapshots that stays current while one side is edited, with
-    navigation between hunks, and an extension API to open one, so Git (D126)
-    can diff against `HEAD` and D174 can diff the buffer against the file.
+  - Description: Knot cannot compare two texts. Build a native side-by-side and
+    inline diff of two buffers or snapshots that stays current while one side
+    is edited, with navigation between hunks, and an extension API to open one,
+    so Git (D126) can diff against `HEAD` and D174 can diff the buffer against
+    the file.
 
 - **D126 — Git status and changes per root**
   - Depends on: D087, D197
   - Description: No Git integration exists, though every compared editor shows
     at least the branch and file status, built in or through a near-universal
-    plugin. Do it now that the explorer is in daily use: show each root's
-    branch and file status in the explorer and the status bar from a bundled
-    extension over process spawning or a native library, decide how status
-    refreshes with file watching, show a file's changes against `HEAD` in a
-    diff view (D197), and mark changed lines in a change gutter.
+    plugin. Show each root's branch and file status in the explorer and the
+    status bar from a bundled extension over process spawning or a native
+    library, decide how status refreshes with file watching, show a file's
+    changes against `HEAD` in a diff view (D197), and mark changed lines in a
+    change gutter.
 
 - **D124 — Workspace trust**
   - Depends on: D089
@@ -273,26 +298,24 @@ hold the analyses that support some items.
   - Depends on: none
   - Description: Extension messages use the native modal prompt, and native
     success and progress notices were dropped because their effect is visible.
-    A long-running task, such as starting a language server or indexing, has
-    no non-blocking way to report progress or a passing notice. Do it now:
-    add a transient notice and a progress handle with a title, optional
-    percentage, and cancellation, shown through the status bar rather than a
-    new surface. Its consumers are extensions, terminal notifications (D041),
-    and native operation failures (D181). Deliver cancellation through the
-    progress handle to the root that holds it, so it works with serial roots
-    and needs no D182.
+    A long-running task, such as starting a language server or indexing, has no
+    non-blocking way to report progress or a passing notice. Add a transient
+    notice and a progress handle with a title, optional percentage, and
+    cancellation, shown through the status bar rather than a new surface. Its
+    consumers are extensions, terminal notifications (D041), and native
+    operation failures (D181). Deliver cancellation through the progress handle
+    to the root that holds it, so it works with serial roots and needs no D182.
 
 - **D119 — Tab, editor, and extension menu items**
   - Depends on: none
   - Description: Trees and tool stripes have context menus, but tabs and the
-    editor have none, and extension commands reach the palette and keymaps
-    but not the application menus. Do it now: give tabs a context menu (close,
-    close others, close to the right, copy path, reveal in the explorer,
-    split) and the editor one (cut, copy, paste), and let a registration place
-    a command in a named menu location, reusing the tree context menus. If
-    more popups then take gpui focus, give "a native popup is open" its own
-    Knot-side focus identity instead of extending the key path's popup
-    exception.
+    editor have none, and extension commands reach the palette and keymaps but
+    not the application menus. Give tabs a context menu (close, close others,
+    close to the right, copy path, reveal in the explorer, split) and the
+    editor one (cut, copy, paste), and let a registration place a command in a
+    named menu location, reusing the tree context menus. If more popups then
+    take gpui focus, give "a native popup is open" its own Knot-side focus
+    identity instead of extending the key path's popup exception.
 
 - **D181 — Native operation failures in the status bar**
   - Depends on: D117
@@ -325,16 +348,15 @@ hold the analyses that support some items.
 
 - **D022 — Editor autocompletion**
   - Depends on: none
-  - Description: Completion providers register, aggregate, and show in a
-    native list, but completion only opens on request, and no bundled package
-    provides candidates. Do it now: open completion while typing, with
-    triggers and a delay, show each candidate's kind and detail, and ship a
-    bundled provider of the words in open documents. Language-server
-    completion arrives with D067 over the same providers. Design the provider
-    contract so that a later AI provider of inline suggestions, in the style
-    of GitHub Copilot, fits it: slow and streamed results, cancellation as the
-    user types, and a multi-line suggestion shown as virtual text (D145)
-    rather than in the list.
+  - Description: Completion providers register, aggregate, and show in a native
+    list, but completion only opens on request, and no bundled package provides
+    candidates. Open completion while typing, with triggers and a delay, show
+    each candidate's kind and detail, and ship a bundled provider of the words
+    in open documents. Language-server completion arrives with D067 over the
+    same providers. Design the provider contract so that a later AI provider of
+    inline suggestions, in the style of GitHub Copilot, fits it: slow and
+    streamed results, cancellation as the user types, and a multi-line
+    suggestion shown as virtual text (D145) rather than in the list.
 
 - **D067 — Language servers and semantic tokens**
   - Depends on: D182, D087, D145, D117, D115, D022
@@ -602,8 +624,8 @@ Kakoune mode could use them too. The
   - Depends on: none
   - Description: Apart from `font.*` keys scoped `{ view: "terminal" }`, the
     session-local mouse toggle is the only terminal preference; no `terminal.*`
-    keys are defined in the settings store. Do it now: define settings for
-    the default mouse mode, cursor style, and scrollback length.
+    keys are defined in the settings store. Define settings for the default
+    mouse mode, cursor style, and scrollback length.
 
 - **D041 — Terminal titles, bells, and notifications**
   - Depends on: D117
@@ -665,8 +687,8 @@ Kakoune mode could use them too. The
   - Depends on: none
   - Description: Two choices of the Islands look stayed open. The focused card
     has no visible emphasis, and pickers have no scope tabs (All, Files,
-    Symbols, Actions) like Search Everywhere. Do it now: decide each, and
-    build the ones worth having.
+    Symbols, Actions) like Search Everywhere. Decide each, and build the ones
+    worth having.
 
 - **D035 — macOS distribution**
   - Depends on: none
