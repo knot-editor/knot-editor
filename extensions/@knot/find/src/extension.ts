@@ -127,6 +127,9 @@ async function refresh(session: Session, selection: { anchor: number; caret: num
   try {
     found = await highlights(session.buffer, query, options, session.scope);
   } catch (error) {
+    // A newer edit shortened the buffer under the scope; its own notification
+    // searches again.
+    if (session.scope !== null && (error as { code?: string }).code === "InvalidRange") return;
     const invalid = invalidPattern(error);
     if (invalid === null) throw error;
     await clearHighlights(session);
@@ -433,7 +436,7 @@ export async function start() {
   await icons.define("find.case", { lucide: "case-sensitive" });
   await icons.define("find.word", { lucide: "whole-word" });
   await icons.define("find.regex", { lucide: "regex" });
-  await icons.define("find.selection", { lucide: "text-select" });
+  await icons.define("find.selection", { lucide: "scan-text" });
   await icons.define("find.replace", { lucide: "replace" });
   await icons.define("find.replace-all", { lucide: "replace-all" });
   await icons.define("find.previous", { lucide: "arrow-up" });

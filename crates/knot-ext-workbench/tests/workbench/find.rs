@@ -305,3 +305,52 @@ fn an_invalid_pattern_shows_the_parsers_message_and_escape_closes_both_bars(
     editor.press_unsettled("<esc>", cx);
     wait_until(cx, |cx| editor.bars(cx).is_empty());
 }
+
+const SCOPE: &str = if cfg!(target_os = "macos") {
+    "<a-d-l>"
+} else {
+    "<a-c-l>"
+};
+const SCOPE_COLOR: &str = "editor.findScope";
+
+#[gpui::test]
+fn a_multi_line_selection_scopes_find_and_replace_all_in_one_undo_step(cx: &mut TestAppContext) {
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
+    let editor = product.windowed_editor("ab\nab ab\nab\n", cx);
+
+    // Opening with the second and third lines selected scopes the search.
+    editor.select(3, 11, cx);
+    editor.press_unsettled(REPLACE, cx);
+    wait_until(cx, |cx| editor.bars(cx).len() == 2);
+    editor.type_input("ab", cx);
+    wait_for_message(&editor, "1 of 3", cx);
+    let scope = |cx: &mut TestAppContext| {
+        editor
+            .decorations(cx)
+            .into_iter()
+            .filter(|(_, _, color)| color == SCOPE_COLOR)
+            .map(|(start, end, _)| (start, end))
+            .collect::<Vec<_>>()
+    };
+    // One span per line, as the editor draws them.
+    assert_eq!(scope(cx), [(3, 8), (9, 11)]);
+
+    // Replace All reaches only the scope, which grows with the text.
+    editor.press_unsettled("<tab>", cx);
+    editor.type_input("xyz", cx);
+    editor.press_unsettled(REPLACE_ALL, cx);
+    wait_until(cx, |cx| {
+        replace_message(&editor, cx).as_deref() == Some("Replaced 3")
+    });
+    assert_eq!(editor.marked(cx).replace('‸', ""), "ab\nxyz xyz\nxyz\n");
+    wait_until(cx, |cx| scope(cx) == [(3, 10), (11, 14)]);
+
+    // Undo restores the text, and the scope follows it.
+    editor.run_command("editor.undo", cx);
+    assert_eq!(editor.marked(cx).replace('‸', ""), "ab\nab ab\nab\n");
+    wait_until(cx, |cx| scope(cx) == [(3, 8), (9, 11)]);
+
+    // The key lifts the limit.
+    editor.press_unsettled(SCOPE, cx);
+    wait_until(cx, |cx| scope(cx).is_empty());
+}
