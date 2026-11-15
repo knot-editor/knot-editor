@@ -281,6 +281,32 @@ impl Tree {
         }
     }
 
+    /// The piece with `id` and its start offset, by walking every piece.
+    pub fn find(&self, id: u64) -> Option<(usize, Piece)> {
+        fn go(node: &Node, id: u64) -> Result<(usize, Piece), usize> {
+            match node {
+                Node::Leaf(pieces) => match pieces.iter().position(|p| p.id == id) {
+                    Some(index) => {
+                        let start = pieces[..index].iter().map(|p| p.len).sum();
+                        Ok((start, pieces[index]))
+                    }
+                    None => Err(pieces.iter().map(|p| p.len).sum()),
+                },
+                Node::Internal(children) => {
+                    let mut offset = 0;
+                    for child in children {
+                        match go(&child.node, id) {
+                            Ok((start, piece)) => return Ok((offset + start, piece)),
+                            Err(_) => offset += child.summary.bytes,
+                        }
+                    }
+                    Err(offset)
+                }
+            }
+        }
+        go(&self.root, id).ok()
+    }
+
     /// Insert `piece` after the piece that ends at byte `at`, or first when
     /// `at` is 0.
     pub fn insert(&mut self, at: usize, piece: Piece) {

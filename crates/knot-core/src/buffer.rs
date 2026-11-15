@@ -693,10 +693,7 @@ impl TextBuffer {
     ///   `Split` from the edit log and remaps to
     ///   `(Split::new_piece, offset - Split::split_offset)`.
     pub fn resolve(&self, p: Position) -> Option<usize> {
-        let (start, piece) = self
-            .tree
-            .pieces_from(0)
-            .find(|(_, piece)| piece.id == p.piece)?;
+        let (start, piece) = self.tree.find(p.piece)?;
         let off = p.offset as usize;
         (off <= piece.len).then_some(start + off)
     }
