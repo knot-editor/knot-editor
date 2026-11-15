@@ -113,21 +113,11 @@ keys: `editor.replace` presets in `src/app/commands/keymaps/presets.rs` and the
 package's bar bindings. Replacing an empty match with an empty replacement does
 not advance (left unhandled).
 
-### 4. Find in selection ✅ ready for review
+### 4. Find in selection ✅
 
-Deliverables: the toggle, auto-enable on multi-line selections, scope rebasing,
-the `editor.findScope` color key with defaults and theme values, scoped
-highlights, stepping, and Replace All; unit tests of the rebase function and
-extension tests for scoped search, stepping wrap, edits moving the scope,
-deletion clearing it, and scoped Replace All; updated `Try:` commands.
-
-Implementation context:
-- `extensions/@knot/find/src/` (session gains `scope`; rebase over
-  `BufferChange.edits` in `search.ts`).
-- Color key in `crates/knot-model/src/theme.rs` beside `EDITOR_FIND_MATCH`,
-  `knot.d.ts` color keys, and `extensions/@knot/themes/src/themes/*.ts`.
-- Lucide icon `scan-text` (the bundled set has no `text-select`).
-
-Review gate: manual review in the app, then record the decision in
-[semantic UI decisions](../decisions/semantic-ui.md#editor-bars) and its
-index, update the architecture references, and remove D001 and this plan.
+Complete and approved. Behavior: [editor bars](../architecture/editor-and-languages.md#editor-bars);
+the scope paints in `editor.findScope`, which follows `editor.selection`. The
+bundled icon set has no `text-select`, so the toggle uses `scan-text`.
+`cmd-alt-s` / `ctrl-alt-s` does not reach the bar on the author's macOS layout,
+where `cmd-alt-l` also failed in other apps; the toggle button and the
+`Find in Selection` palette command work, and the key is left as is.
