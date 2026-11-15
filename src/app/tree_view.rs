@@ -1351,15 +1351,17 @@ impl Render for TreeView {
                                     + *depth as f32 * tokens::list::TREE_INDENT,
                             ))
                             .pr_2()
-                            .py_1()
+                            .py_0p5()
                             .flex()
                             .flex_row()
                             .items_center()
                             .gap_1()
-                            .text_sm()
-                            .when(two_lines, |row| {
-                                row.h(crate::app::zoom::rems(tokens::list::TWO_LINE_ROW_HEIGHT))
-                            })
+                            .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
+                            .h(crate::app::zoom::rems(if two_lines {
+                                tokens::list::TWO_LINE_ROW_HEIGHT
+                            } else {
+                                tokens::list::ROW_HEIGHT
+                            }))
                             .when(is_group, |row| {
                                 row.bg(theme.paint_color(color::LIST_GROUP_BACKGROUND))
                                     .text_color(theme.paint_color(color::TEXT_MUTED))
@@ -1538,15 +1540,17 @@ impl Render for TreeView {
                             tokens::list::TREE_INSET + *depth as f32 * tokens::list::TREE_INDENT,
                         ))
                         .pr_2()
-                        .py_1()
+                        .py_0p5()
                         .flex()
                         .flex_row()
                         .items_center()
                         .gap_1()
-                        .text_sm()
-                        .when(two_lines, |row| {
-                            row.h(crate::app::zoom::rems(tokens::list::TWO_LINE_ROW_HEIGHT))
-                        })
+                        .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
+                        .h(crate::app::zoom::rems(if two_lines {
+                            tokens::list::TWO_LINE_ROW_HEIGHT
+                        } else {
+                            tokens::list::ROW_HEIGHT
+                        }))
                         .child(AppIcon::blank())
                         .children(
                             icon.as_ref()
@@ -1568,14 +1572,16 @@ impl Render for TreeView {
                                 + *depth as f32 * tokens::list::TREE_INDENT,
                         ))
                         .pr_2()
-                        .py_1()
-                        .text_sm()
+                        .py_0p5()
+                        .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
                         // Rows share one height, so a long message is cut
                         // short rather than wrapped over the rows below.
                         .truncate()
-                        .when(two_lines, |row| {
-                            row.h(crate::app::zoom::rems(tokens::list::TWO_LINE_ROW_HEIGHT))
-                        })
+                        .h(crate::app::zoom::rems(if two_lines {
+                            tokens::list::TWO_LINE_ROW_HEIGHT
+                        } else {
+                            tokens::list::ROW_HEIGHT
+                        }))
                         .text_color(theme.paint_color(if *error {
                             color::ERROR
                         } else {
@@ -1612,7 +1618,7 @@ impl Render for TreeView {
                         .gap_2()
                         .border_t_1()
                         .border_color(border)
-                        .text_sm()
+                        .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
                         .child(div().flex_1().truncate().child(query))
                         .child(
                             div()

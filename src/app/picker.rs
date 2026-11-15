@@ -28,8 +28,8 @@ use super::{
 
 use super::tokens::list::PANEL_WIDTH;
 const PANEL_MAX_HEIGHT: f32 = 420.;
-const LINE_HEIGHT: f32 = 22.;
-const ROW_PADDING: f32 = 6.;
+const LINE_HEIGHT: f32 = 20.;
+const ROW_PADDING: f32 = 4.;
 const PAGE_ROWS: isize = 10;
 
 /// One row offered to a picker.
@@ -501,7 +501,7 @@ impl Render for Picker {
             .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))
             .text_color(theme(cx).paint_color(color::TEXT))
             .shadow_lg()
-            .text_sm()
+            .text_size(zoom::rems(tokens::list::TEXT_SIZE))
             .key_context(self.key_context)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(

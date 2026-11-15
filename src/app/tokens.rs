@@ -31,7 +31,9 @@ pub(crate) mod chrome {
 /// Lists, trees, and pickers.
 pub(crate) mod list {
     /// A row of a transient list.
-    pub(crate) const ROW_HEIGHT: f32 = 26.;
+    pub(crate) const ROW_HEIGHT: f32 = 24.;
+    /// The text size of tree and picker rows.
+    pub(crate) const TEXT_SIZE: f32 = 13.;
     /// A tree row with a second line.
     pub(crate) const TWO_LINE_ROW_HEIGHT: f32 = 44.;
     /// The gap between a list's edge and its rounded selection.
