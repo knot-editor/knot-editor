@@ -1,6 +1,6 @@
 # Modern UI
 
-Status: 🚧 in progress (checkpoints 1–3 done).
+Status: 🚧 in progress (checkpoints 1–4 done).
 
 ## Goal
 
@@ -117,30 +117,15 @@ button. The project widget and the Projects tool run Open Project, which focuses
 the project's window or opens one and leaves the current window alone; Switch
 Project remains a palette command.
 
-### 4. Dock headers and stripes ✅ (pending review)
+### 4. Dock headers and stripes ✅
 
-Delivered: dock headers, frame actions in the header (the tree's action row is
-removed), the hide button, close button on terminal tabs, wider accent-tinted
-stripes, empty stripes hidden (shown while a button is dragged), and the
-Projects tool icon `tool.builtin.projects`. Tests: `tests/dock_header.rs` and
-the stripe drag test.
-
-Deliverables: dock pane headers with text tabs, accent underline, hide
-button, close button on terminal tabs, and tree frame actions at the right; the
-tree's own action row removed; restyled stripes, empty stripes hidden, an
-icon for the Projects tool.
-
-Validation: product tests for hide from the header, frame actions clicked
-from the header and focused by keyboard, and the empty stripe.
-
-Review gate: Explorer, Projects, and terminals in docks, grouped and alone.
-
-**Implementation context**: the pane and tab rendering in
-`src/app/product/render.rs`, branching on the pane's area; frame actions in
-`src/app/tree_view.rs` (the `extension-tree-frame-actions` row) exposed to
-the header; `src/app/product/stripes.rs` and `Workbench::stripes`; the
-Projects tool icon defined in `extensions/@knot/projects/src/tree.ts` like
-`tool.builtin.explorer` in `@knot/explorer`.
+Done and approved. Dock panes have a header with semibold text tabs, frame
+actions, a new-terminal button on terminal panes, and a hide button; stripes are
+restyled and a stripe without buttons is not painted
+([workbench](../architecture/workbench-and-lifecycle.md#windows),
+[tree actions](../architecture/semantic-ui.md#trees)). The Projects tool defines
+`tool.builtin.projects`. The dark Islands window background is `#16171a` for
+contrast with the cards.
 
 ### 5. Editor tabs
 
