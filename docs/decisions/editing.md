@@ -26,8 +26,8 @@ Packages keep behavior cases as JSONC beside their data, run by a generic Rust
 product test through the native commands, so a package's data and the behavior
 it produces are reviewed together. A package test against the in-memory host
 could only restate the data, since the behavior is native. TypeScript case
-modules would add type checking but need Node, `build.rs`, or V8 to load them
-for Rust (D133).
+modules were rejected: they add type checking but need Node, `build.rs`, or V8
+to load them for Rust.
 
 References: [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages)
 and [extension guide](../extension-api.md#register-a-language).
@@ -52,7 +52,7 @@ see the typed text. Dropping the correction when another commit lands first
 means a parse that overruns its foreground budget never races typing. Typing
 only ever outdents, as in Zed and VS Code, and only when the match reaches the
 caret, so a brace someone placed stays when they type ` else {` after it.
-Reindenting pasted text and an `editor.autoIndent` setting are D135 and D136.
+Reindenting pasted text is D135.
 
 References: [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages)
 and [editor views](../architecture/editor-and-languages.md#editor-views).

@@ -13,6 +13,8 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
+The next unused ID is **D198**; take it for a new item and bump this line.
+
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
 priority. An item marked 🚧 has a plan under [plans/](plans/).
@@ -65,12 +67,11 @@ hold the analyses that support some items.
     across all packages. An awaiting command freezes its package's listeners
     and providers; a command that awaits a timer or an event of its own
     package deadlocks it until restart; and a language client cannot handle
-    out-of-order responses or server requests. Do it now, before D067 and
-    D117: carry each root's identity through its continuations instead of
-    global state, let the scheduler keep several live roots per package, make
-    the command queue per package, and audit the bundled packages for state
-    assumed stable across an await. The
-    [scheduling report](reports/extension-task-scheduling.md) has the analysis
+    out-of-order responses or server requests. Do it now, before D067: carry
+    each root's identity through its continuations instead of global state,
+    let the scheduler keep several live roots per package, make the command
+    queue per package, and audit the bundled packages for state assumed stable
+    across an await. The [scheduling report](reports/extension-task-scheduling.md) has the analysis
     and proposed checkpoints.
 
 - **D156 — Fewer host round trips per key**
@@ -98,19 +99,6 @@ hold the analyses that support some items.
     of their own: decide whether package IDs gain a nested form such as
     `@knot/language/rust`, which touches identity validation, discovery,
     storage paths, and the build, and split the remaining grammars.
-
-- **D133 — TypeScript case modules for native behavior tests**
-  - Depends on: none
-  - Description: Language packages keep the cases that native code runs
-    against their registered data, such as comment toggling, as JSONC files
-    beside the package, which a generic Rust product test reads. TypeScript
-    modules would type-check the cases and share them in code, but the Rust
-    runner cannot read TypeScript without spawning Node at test time,
-    evaluating them in `build.rs`, or a test-only V8 loading path. Do it when
-    more native features need per-package cases (auto-closing, indentation,
-    text objects) and untyped JSONC causes mistakes or repeated cases: choose
-    one of those loading paths and replace every JSONC case file with
-    TypeScript, so packages keep one format.
 
 - **D138 — Extension startup report as an untitled document**
   - Depends on: none
@@ -182,14 +170,23 @@ hold the analyses that support some items.
     preview tab; cancelling a superseded search; and refresh. It promotes
     D007: decide here how results recover when edits make their targets stale.
 
-- **D126 — Git status per root**
-  - Depends on: D087
+- **D197 — Diff view**
+  - Depends on: none
+  - Description: Knot cannot compare two texts. Do it now, before Git
+    integration needs it: a native side-by-side and inline diff of two
+    buffers or snapshots that stays current while one side is edited, with
+    navigation between hunks, and an extension API to open one, so Git (D126)
+    can diff against `HEAD` and D174 can diff the buffer against the file.
+
+- **D126 — Git status and changes per root**
+  - Depends on: D087, D197
   - Description: No Git integration exists, though every compared editor shows
     at least the branch and file status, built in or through a near-universal
     plugin. Do it now that the explorer is in daily use: show each root's
     branch and file status in the explorer and the status bar from a bundled
-    extension over process spawning or a native library, and decide how status
-    refreshes with file watching.
+    extension over process spawning or a native library, decide how status
+    refreshes with file watching, show a file's changes against `HEAD` in a
+    diff view (D197), and mark changed lines in a change gutter.
 
 - **D124 — Workspace trust**
   - Depends on: D089
@@ -210,17 +207,6 @@ hold the analyses that support some items.
     `path`-glob scope, and writes them from the root down to the nearest file,
     so last-write-wins reproduces EditorConfig's rule that the nearest file
     takes precedence.
-
-- **D091 — Settings UI**
-  - Depends on: none
-  - Description: Settings are set from code. Definitions carry a type, default,
-    and description so a UI can be built, but none exists. Do it when
-    discovering or changing settings from code becomes the friction in daily
-    use: build the UI as an ordinary extension over `settings.define`, `get`,
-    `set`, and `observe`. It keeps its choices in extension storage and applies
-    them again in `start()`, which beats `pre-init` and loses to `post-init`,
-    so it must show when a later write overrides a choice. Also decide whether
-    it lists undefined keys that hold values, to help spot typos.
 
 - **D184 — Document-scoped settings survive hot exit**
   - Depends on: none
@@ -248,14 +234,6 @@ hold the analyses that support some items.
     keeping its focus and drop behavior. It lists the recent files and the
     projects of D084.
 
-- **D169 — Default key for Toggle Explorer**
-  - Depends on: none
-  - Description: Toggle Explorer has no key; Toggle Left Dock (`secondary-b`)
-    already shows the explorer, which lives in the left dock. IntelliJ binds
-    `cmd-1` and VS Code `cmd-shift-e` to focus the explorer. Do it when daily
-    use wants the explorer focused or toggled apart from its dock, or tool
-    stripes make tool toggles common: choose a key against the presets.
-
 - **D176 — Drag and drop in trees**
   - Depends on: none
   - Description: The explorer moves files through Cut and Paste or Rename;
@@ -279,64 +257,42 @@ hold the analyses that support some items.
     decide row identity, reveal, and actions on a joined row.
 
 - **D174 — Show Difference for files changed on disk**
-  - Depends on: none
+  - Depends on: D197
   - Description: The Reload or Keep prompt for a document changed on disk
-    offers no comparison, because Knot has no diff view. Do it when a diff view
-    exists, such as with Git integration (D126), or choosing between Reload and
-    Keep blind becomes friction in daily use: add Show Difference to the
-    prompt, comparing the buffer with the file.
+    offers no comparison. Do it with D197: add Show Difference to the prompt,
+    comparing the buffer with the file.
 
 - **D006 — File drag and drop**
   - Depends on: none
   - Description: Open and Save As establish workspace-independent documents
     first. Do it when platform interaction becomes a selected product slice.
 
-- **D009 — Binary buffers and encoding detection**
-  - Depends on: none
-  - Description: The first slice explicitly targets UTF-8 text. Do it when a
-    concrete file workflow requires non-UTF-8 or binary inspection.
-
-- **D171 — Binary file reads for extensions**
-  - Depends on: none
-  - Description: `files.readText` is text-only, because no consumer needs
-    non-UTF-8 content, and a binary transport would be designed without one.
-    Do it when a consumer needs non-UTF-8 file content: add a bytes read beside
-    `readText`.
-
-- **D011 — Remote filesystem providers**
-  - Depends on: none
-  - Description: The URI boundary is validated with local and memory providers.
-    Do it when a specific remote workflow is selected.
-
-- **D012 — Persistent undo and history trees**
-  - Depends on: none
-  - Description: Session-local linear undo is sufficient for dogfooding. Do it
-    when users need edit history across restarts or branching history.
-    Byte-offset view state already survives restarts and project switches.
-
-- **D015 — URI deduplication across processes**
-  - Depends on: none
-  - Description: The first slice handles identity within one application
-    process. Do it when multi-process editing or document handoff is
-    introduced.
-
-- **D016 — Sandboxed workspace roots**
-  - Depends on: none
-  - Description: Local roots are trusted and intentionally follow symlinks. Do
-    it when Knot opens untrusted workspaces under a security boundary.
-
 ### Extension platform and language tooling
 
 - **D117 — Non-modal notifications and progress**
-  - Depends on: D182
+  - Depends on: none
   - Description: Extension messages use the native modal prompt, and native
     success and progress notices were dropped because their effect is visible.
-    A long-running extension task, such as starting a language server or
-    indexing, has no non-blocking way to report progress or a passing notice.
-    Do it before D067, when D085 or another bundled extension runs work that
-    takes seconds: add a transient notice and a progress handle with a title,
-    optional percentage, and cancellation, shown through the status bar rather
-    than a new surface.
+    A long-running task, such as starting a language server or indexing, has
+    no non-blocking way to report progress or a passing notice. Do it now:
+    add a transient notice and a progress handle with a title, optional
+    percentage, and cancellation, shown through the status bar rather than a
+    new surface. Its consumers are extensions, terminal notifications (D041),
+    and native operation failures (D181). Deliver cancellation through the
+    progress handle to the root that holds it, so it works with serial roots
+    and needs no D182.
+
+- **D119 — Tab, editor, and extension menu items**
+  - Depends on: none
+  - Description: Trees and tool stripes have context menus, but tabs and the
+    editor have none, and extension commands reach the palette and keymaps
+    but not the application menus. Do it now: give tabs a context menu (close,
+    close others, close to the right, copy path, reveal in the explorer,
+    split) and the editor one (cut, copy, paste), and let a registration place
+    a command in a named menu location, reusing the tree context menus. If
+    more popups then take gpui focus, give "a native popup is open" its own
+    Knot-side focus identity instead of extending the key path's popup
+    exception.
 
 - **D181 — Native operation failures in the status bar**
   - Depends on: D117
@@ -367,8 +323,21 @@ hold the analyses that support some items.
     command, with a bounded wait so a slow hook cannot block saving. The save
     pipeline it hooks into exists.
 
+- **D022 — Editor autocompletion**
+  - Depends on: none
+  - Description: Completion providers register, aggregate, and show in a
+    native list, but completion only opens on request, and no bundled package
+    provides candidates. Do it now: open completion while typing, with
+    triggers and a delay, show each candidate's kind and detail, and ship a
+    bundled provider of the words in open documents. Language-server
+    completion arrives with D067 over the same providers. Design the provider
+    contract so that a later AI provider of inline suggestions, in the style
+    of GitHub Copilot, fits it: slow and streamed results, cancellation as the
+    user types, and a multi-line suggestion shown as virtual text (D145)
+    rather than in the list.
+
 - **D067 — Language servers and semantic tokens**
-  - Depends on: D182, D087, D145, D117, D115
+  - Depends on: D182, D087, D145, D117, D115, D022
   - Description: No language client exists. The syntax highlighting work
     prepared for one: LSP language IDs, `Send` text snapshots, a highlight
     vocabulary that semantic token types and modifiers map onto, and a
@@ -380,18 +349,6 @@ hold the analyses that support some items.
     and connect diagnostics to decorations and completion to D022. It needs
     D145 for hover, inlay hints, and diagnostic
     text, and format on save builds on D115.
-
-- **D022 — Rich completion policy and presentation**
-  - Depends on: D067
-  - Description: The prototype validated provider aggregation and replaceable
-    native presentation. Do it when completion becomes part of a dogfood slice;
-    language-server completion follows D067.
-
-- **D023 — Standardized AI integration**
-  - Depends on: D087
-  - Description: No concrete user workflow or provider boundary has been
-    selected. Do it when an AI-assisted editing slice is defined; D087 gates
-    its network access.
 
 - **D125 — Tasks and run configurations**
   - Depends on: D087, D089, D124
@@ -418,16 +375,6 @@ hold the analyses that support some items.
     how such views behave in closure, recovery, and restoration. It builds on
     the editor handle's cursor and selection access and the decoration styles.
 
-- **D119 — Extension menu and context-menu items**
-  - Depends on: none
-  - Description: Extension commands reach the palette and keymaps but not the
-    application menus or the context menus of the editor and tabs. Do it when a
-    bundled or installed extension needs a command where users look for it by
-    pointer: let a registration place a command in a named menu location,
-    reusing the tree context menus. If more popups then take gpui focus, give
-    "a native popup is open" its own Knot-side focus identity instead of
-    extending the key path's popup exception.
-
 - **D140 — Placeholder text in input fields**
   - Depends on: none
   - Description: `TextInput` renders placeholder text, which editor bars use,
@@ -450,27 +397,8 @@ hold the analyses that support some items.
 - **D019 — Quotas, backpressure, slow-consumer policy, and timeouts**
   - Depends on: none
   - Description: Correct policy depends on observed extension workloads. Do it
-    when real extensions can affect responsiveness or resource use.
-
-- **D020 — Public command schemas, aliases, and concurrent task graphs**
-  - Depends on: none
-  - Description: Ordinary commands and awaited composition cover validated
-    cases. Native typed handler declarations are implemented; public schema
-    introspection remains open. User macros and repetition moved to D113. Do it
-    when a concrete automation workflow cannot be expressed cleanly.
-
-- **D021 — General extension UI or WebView escape hatch**
-  - Depends on: D145
-  - Description: Surface-specific semantic UI remains sufficient. Do it only
-    when a selected extension requires genuinely arbitrary UI, and only after
-    D145 has shown its surfaces fall short.
-
-- **D032 — Extension source maps**
-  - Depends on: none
-  - Description: Built JavaScript loads and reports generated source locations
-    without mapping them back to authoring files. Do it when debugging built
-    extensions requires errors and stack traces to identify the original source
-    locations.
+    with or before D067, whose language servers are the first workload that
+    can affect responsiveness or resource use.
 
 - **D065 — Runtime grammar loading**
   - Depends on: none
@@ -485,18 +413,6 @@ hold the analyses that support some items.
     scanner, which the native parser calls on every lex step, so start with a
     spike that measures per-token call overhead and isolate ownership on
     background parse threads.
-
-- **D057 — Extension and product localization (i18n)**
-  - Depends on: none
-  - Description: Contributed view titles, tree labels, status text, native
-    prompt text, and the bundled registry's own strings are literal English.
-    Extensions and personal config can pass arbitrary strings, but there is no
-    locale source, message catalog, or lookup for native-owned product text. Do
-    it when shipping a second language becomes a product requirement: define
-    locale discovery, a catalog format with fallback, which strings are
-    extension-owned versus application-owned, contribution-time versus
-    call-time resolution, and how native product text such as "Projects"
-    reaches the same mechanism.
 
 ### Package manager
 
@@ -522,7 +438,8 @@ hold the analyses that support some items.
     platform, once the command set is stable. Commands with no equivalent stay
     unbound. Add a test that every preset binding names a registered command,
     and a Select Keymap Preset picker. Decide whether first launch asks for a
-    preset.
+    preset, and choose a default key for Toggle Explorer against the presets
+    (IntelliJ binds `cmd-1`, VS Code `cmd-shift-e`).
 
 - **D132 — Editing data for the remaining bundled languages**
   - Depends on: D129
@@ -547,28 +464,8 @@ hold the analyses that support some items.
     language with two block comment styles needs them: extend the same
     registration rather than adding a parallel one.
 
-- **D130 — Syntax-scoped language configuration**
-  - Depends on: none
-  - Description: Editing configuration applies to a whole language, or to an
-    injected language's layer. Some constructs need other values inside one
-    language: JSX children comment with `{/* */}` rather than `//`, and
-    auto-closing may differ inside template strings or attributes. Do it when
-    toggle comment or auto-closing inside JSX, or another language's
-    sub-context, gets in the way in daily use: add a per-language query that
-    names syntax scopes and per-scope overrides of the editing configuration,
-    as Zed's `overrides.scm` does.
-
-- **D136 — Auto-indent setting**
-  - Depends on: none
-  - Description: Automatic indentation on Enter and while typing is always on
-    for languages with an indent query. Do it when a language's query
-    misbehaves in daily use, or someone wants plain keep-indentation Enter: add
-    a language-scoped `editor.autoIndent` setting, as VS Code's
-    `editor.autoIndent` does, choosing between keeping the indentation,
-    brackets only, and the full query, and decide whether it also governs D135.
-
 - **D135 — Reindent pasted text**
-  - Depends on: D136
+  - Depends on: none
   - Description: Lines are indented from the syntax tree on Enter, while typing
     a closer, and through Reindent Selected Lines and Reindent Buffer. Pasted
     lines keep the indentation they had where they were copied from. Do it when
@@ -576,29 +473,8 @@ hold the analyses that support some items.
     Lines afterwards often enough to be friction: decide, as Zed's auto-indent
     on paste and VS Code's `editor.autoIndentOnPaste` do, whether to reindent
     every pasted line from the query or shift the block by the first line's
-    change and keep its relative indentation, and how pasting inside strings
-    and comments behaves. D136 may turn it off.
-
-- **D157 — Indent width separate from tab width**
-  - Depends on: none
-  - Description: Low priority. `editor.tabSize` sets both how wide a tab
-    displays and how far indentation steps, so Vim's `:set tabstop` and
-    `:set shiftwidth` write the same setting. Only mixed styles lose, such as
-    GNU-style C that indents by 4 and shows tabs as 8, turning 8 columns of
-    indentation into one tab. Do it when real files in such a style need
-    editing: add an indent width setting defaulting to the tab size, and carry
-    it through indent and outdent, reindent and indent queries, Enter's
-    indentation, indentation detection, the conversion commands, the status
-    bar's picker, and `DocumentInfo.indentation`.
-
-- **D159 — Trim trailing whitespace on modified lines only**
-  - Depends on: D126
-  - Description: Save trims every line. Trimming only the lines a change
-    touched keeps saves from adding noise to the diff of a file that already
-    had trailing whitespace, and needs a notion of modified lines that Knot
-    lacks. Do it when a VCS or diff layer exists, such as a change gutter or
-    diff view: add `"modified"` to the values of `files.trimTrailingWhitespace`
-    (`"off"`, `"all"`) and trim only the lines that differ from the baseline.
+    change and keep its relative indentation, how pasting inside strings and
+    comments behaves, and whether it needs a setting to turn it off.
 
 - **D149 — Line ending facts and conversion**
   - Depends on: none
@@ -645,7 +521,7 @@ hold the analyses that support some items.
   - Depends on: none
   - Description: Nothing can observe the stream of invoked commands together
     with the text typed between them, so neither repeat nor macros can be
-    built. It absorbs user macros and repetition from D020. The first Vim mode
+    built. It covers user macros and repetition. The first Vim mode
     ships without `.`, `q`, the `".` register (the last inserted text), and
     counts on insert commands such as `3ihi<Esc>`, which all need the text
     typed in insert mode. Do it when daily Vim use misses them, or a user macro
@@ -659,14 +535,6 @@ hold the analyses that support some items.
     kind alone. Do it when a consumer needs a modal tree, terminal, or
     contributed view, such as Vim keys in the explorer: extend the same
     lifecycle-owned contexts and fact-count resolution to that view.
-
-- **D148 — Richer key context matching**
-  - Depends on: none
-  - Description: A binding names at most one context, with no negation or
-    `when`-style expressions. Do it when one context per binding forces an
-    extension to duplicate many bindings or keep redundant contexts in sync:
-    allow several contexts, or negated ones, per binding, still resolved by
-    counting matching facts rather than by an expression language.
 
 ### Vim mode
 
@@ -728,48 +596,24 @@ Kakoune mode could use them too. The
     for a mark whose document is closed, and clamp an offset past a changed
     file's end, as view state does.
 
-### Workbench and windows
-
-- **D037 — Whole-pane dragging and arbitrary split-tree reshaping**
-  - Depends on: none
-  - Description: Tabs move individually into existing panes or new edge splits;
-    moving groups of tabs and restructuring whole split branches is a separate
-    interaction and layout problem. Do it when daily use shows that moving tabs
-    one at a time or creating edge splits is too cumbersome for a common layout
-    change.
-
-- **D170 — Overlay mode for docked tools**
-  - Depends on: none
-  - Description: A tool is always docked, resizing the center. IntelliJ's
-    "undock" mode slides a tool over the center without resizing it, which
-    suits a wide tool opened briefly. Do it when daily use shows tools opened
-    briefly and dismissed, where the center reflowing is disruptive: add the
-    mode per tool as a placement, with focus loss dismissing it.
-
-- **D062 — Positioning existing windows**
-  - Depends on: none
-  - Description: gpui sets a window's bounds only at creation and can
-    afterwards only resize it, including on its separate platform crates.
-    Session restoration and project switching always create their windows, so
-    they apply saved geometry at creation and no product path needs to move an
-    existing window. Do it when a workflow needs to move or re-frame an open
-    window, such as window arrangement commands, an extension API, or reusing
-    windows during restoration: add a small native per-platform window-frame
-    operation (`NSWindow` frame on macOS, `SetWindowPos` on Windows, X11
-    configure requests) beside gpui rather than vendoring it. Wayland
-    compositors own placement, so positioning there stays best-effort.
-
 ### Terminal
 
-- **D041 — Additional terminal protocols and product events**
+- **D045 — General terminal settings**
   - Depends on: none
+  - Description: Apart from `font.*` keys scoped `{ view: "terminal" }`, the
+    session-local mouse toggle is the only terminal preference; no `terminal.*`
+    keys are defined in the settings store. Do it now: define settings for
+    the default mouse mode, cursor style, and scrollback length.
+
+- **D041 — Terminal titles, bells, and notifications**
+  - Depends on: D117
   - Description: Keyboard and mouse protocols, HTTP(S) links, and the
-    reported working directory are covered. libghostty also parses titles,
-    bells, notifications, semantic prompts, and Kitty graphics, and Knot
-    ignores them; OSC 52 clipboard access has no callback. None has a product
-    contract. Do it when a daily shell/TUI workflow demonstrates a specific
-    missing protocol or event: define its compatibility and product behavior
-    together.
+    reported working directory are covered. libghostty also parses window
+    titles, bells, and desktop notifications (OSC 9 and 777), and Knot ignores
+    them. Do it when daily use misses a program's title or a notification from
+    a long-running command: show the title on the terminal tab, mark a tab
+    whose terminal rang its bell while hidden, and deliver notifications
+    through D117's notices.
 
 - **D191 — Faster libghostty-vt builds**
   - Depends on: none
@@ -782,14 +626,6 @@ Kakoune mode could use them too. The
     the CPU baseline per target, with runtime dispatch where the baseline
     must stay low.
 
-- **D045 — General terminal settings**
-  - Depends on: none
-  - Description: Apart from `font.*` keys scoped `{ view: "terminal" }`, the
-    session-local mouse toggle is the only terminal preference; no `terminal.*`
-    keys are defined in the settings store. Do it when daily use needs terminal
-    preferences such as the default mouse mode, cursor style, or scrollback
-    length: define them as settings.
-
 - **D192 — Terminals that run a command**
   - Depends on: none
   - Description: `terminals.open` always starts the login shell, so an
@@ -799,21 +635,6 @@ Kakoune mode could use them too. The
     when review commands should start their fixtures directly: add a command
     and arguments to the terminal options, run instead of the shell, and
     define how restart and exit treat such a terminal.
-
-- **D043 — Persistent terminal sessions**
-  - Depends on: none
-  - Description: Live local sessions survive view reconstruction, but not
-    application exit. Restored terminal tabs start fresh shells in their last
-    working directory. Do it when those tabs need their processes or scrollback
-    to continue; persistent processes and grid restoration need a separate
-    lifecycle contract.
-
-- **D044 — Simultaneous terminal views**
-  - Depends on: none
-  - Description: A sole attachment keeps input ownership and PTY resize
-    authority unambiguous while supporting cross-window transfer. Do it when
-    daily use requires viewing one live session in multiple panes: define
-    independent viewport and shared resize/input policies.
 
 - **D155 — Word and line selection in terminals**
   - Depends on: none
@@ -834,35 +655,18 @@ Kakoune mode could use them too. The
 - **D039 — Shell integration**
   - Depends on: none
   - Description: Ordinary terminal input and output cover current shell
-    workflows. Do it when daily use requires working-directory tracking,
-    command boundaries, or exit status: select supported shells and integration
-    setup.
-
-- **D038 — Remote PTYs**
-  - Depends on: none
-  - Description: Local interactive sessions cover current terminal workflows.
-    Do it when daily use requires remote shells: select transport,
-    authentication, and disconnect behavior for a concrete workflow.
-
-- **D040 — Physical application-keypad input**
-  - Depends on: none
-  - Description: gpui merges numeric-keypad keys with ordinary key identities,
-    so Knot retains numeric input but cannot emit distinct application-keypad
-    sequences. The choice was deferral over vendoring gpui for a platform patch.
-    Do it when gpui exposes keypad identity, or a concrete TUI workflow
-    requires a framework patch and its platform maintenance cost.
+    workflows. Do it when daily use requires command boundaries or exit status:
+    select supported shells and integration setup, and give the semantic
+    prompts (OSC 133) that libghostty already parses a product contract.
 
 ### Platforms, accessibility, and website
 
-- **D030 — Accessibility bridge**
+- **D193 — Chrome refinements**
   - Depends on: none
-  - Description: gpui has a public AccessKit bridge (`Element::a11y_role`,
-    `write_a11y_info`), and gpui-component's widgets publish roles through it,
-    but the editor, trees, terminal, palette, and pickers publish nothing,
-    though their semantic state is already retained. Do it when accessibility
-    becomes a product priority, or a user needs a screen reader: give each
-    native surface its roles and the editor its text and caret, starting from
-    the semantic tree state.
+  - Description: Two choices of the Islands look stayed open. The focused card
+    has no visible emphasis, and pickers have no scope tabs (All, Files,
+    Symbols, Actions) like Search Everywhere. Do it now: decide each, and
+    build the ones worth having.
 
 - **D035 — macOS distribution**
   - Depends on: none
@@ -895,13 +699,6 @@ Kakoune mode could use them too. The
     link it into `~/.local/bin` with the palette install command. Do it when
     Knot is ready to run on other Linux machines: choose the package formats,
     ship `knot` on the `PATH`, a desktop entry and icon, and an update path.
-
-- **D193 — Chrome refinements**
-  - Depends on: none
-  - Description: Two choices of the Islands look stayed open. The focused card
-    has no visible emphasis, and pickers have no scope tabs (All, Files,
-    Symbols, Actions) like Search Everywhere. Decide each after living with the
-    current look, and build the ones worth having.
 
 - **D168 — Website screenshots and documentation** 🚧
   - Depends on: none
@@ -938,3 +735,139 @@ and may move into a section above when daily use asks for them.
     replacement is typed as `\n` in regex mode. Do it when that is too awkward
     in daily use: let bar fields grow to several lines, and seed the query from
     a multi-line selection.
+
+- **D157 — Indent width separate from tab width**
+  - Depends on: none
+  - Description: `editor.tabSize` sets both how wide a tab displays and how
+    far indentation steps, so Vim's `:set tabstop` and `:set shiftwidth` write
+    the same setting. Only mixed styles lose, such as
+    GNU-style C that indents by 4 and shows tabs as 8, turning 8 columns of
+    indentation into one tab. Do it when real files in such a style need
+    editing: add an indent width setting defaulting to the tab size, and carry
+    it through indent and outdent, reindent and indent queries, Enter's
+    indentation, indentation detection, the conversion commands, the status
+    bar's picker, and `DocumentInfo.indentation`.
+
+- **D011 — Remote filesystem providers**
+  - Depends on: none
+  - Description: The URI boundary is validated with local and memory providers.
+    Do it when a specific remote workflow is selected.
+
+- **D016 — Sandboxed workspace roots**
+  - Depends on: none
+  - Description: Local roots are trusted and intentionally follow symlinks. Do
+    it when Knot opens untrusted workspaces under a security boundary.
+
+- **D038 — Remote PTYs**
+  - Depends on: none
+  - Description: Local interactive sessions cover current terminal workflows.
+    Do it when daily use requires remote shells: select transport,
+    authentication, and disconnect behavior for a concrete workflow.
+
+- **D057 — Extension and product localization (i18n)**
+  - Depends on: none
+  - Description: Contributed view titles, tree labels, status text, native
+    prompt text, and the bundled registry's own strings are literal English.
+    Extensions and personal config can pass arbitrary strings, but there is no
+    locale source, message catalog, or lookup for native-owned product text. Do
+    it when shipping a second language becomes a product requirement: define
+    locale discovery, a catalog format with fallback, which strings are
+    extension-owned versus application-owned, contribution-time versus
+    call-time resolution, and how native product text such as "Projects"
+    reaches the same mechanism.
+
+- **D021 — General extension UI or WebView escape hatch**
+  - Depends on: D145
+  - Description: Surface-specific semantic UI remains sufficient. Do it only
+    when a selected extension requires genuinely arbitrary UI, and only after
+    D145 has shown its surfaces fall short.
+
+- **D043 — Persistent terminal sessions**
+  - Depends on: none
+  - Description: Live local sessions survive view reconstruction, but not
+    application exit. Restored terminal tabs start fresh shells in their last
+    working directory. Do it when those tabs need their processes or scrollback
+    to continue; persistent processes and grid restoration need a separate
+    lifecycle contract.
+
+- **D170 — Overlay mode for docked tools**
+  - Depends on: none
+  - Description: A tool is always docked, resizing the center. IntelliJ's
+    "undock" mode slides a tool over the center without resizing it, which
+    suits a wide tool opened briefly. Do it when daily use shows tools opened
+    briefly and dismissed, where the center reflowing is disruptive: add the
+    mode per tool as a placement, with focus loss dismissing it.
+
+- **D012 — Persistent undo and history trees**
+  - Depends on: none
+  - Description: Session-local linear undo is sufficient for dogfooding. Do it
+    when users need edit history across restarts or branching history.
+    Byte-offset view state already survives restarts and project switches.
+
+- **D009 — Binary buffers and encoding detection**
+  - Depends on: none
+  - Description: The first slice explicitly targets UTF-8 text. Do it when a
+    concrete file workflow requires non-UTF-8 or binary inspection.
+
+- **D171 — Binary file reads for extensions**
+  - Depends on: none
+  - Description: `files.readText` is text-only, because no consumer needs
+    non-UTF-8 content, and a binary transport would be designed without one.
+    Do it when a consumer needs non-UTF-8 file content: add a bytes read beside
+    `readText`.
+
+- **D030 — Accessibility bridge**
+  - Depends on: none
+  - Description: gpui has a public AccessKit bridge (`Element::a11y_role`,
+    `write_a11y_info`), and gpui-component's widgets publish roles through it,
+    but the editor, trees, terminal, palette, and pickers publish nothing,
+    though their semantic state is already retained. Do it when accessibility
+    becomes a product priority, or a user needs a screen reader: give each
+    native surface its roles and the editor its text and caret, starting from
+    the semantic tree state.
+
+- **D196 — Kitty graphics and OSC 52 clipboard in terminals**
+  - Depends on: none
+  - Description: libghostty parses Kitty graphics, and OSC 52 clipboard access
+    has no callback, so Knot draws no inline images and programs cannot write
+    the clipboard. Do it when a TUI workflow needs inline images or clipboard
+    writes from a remote program: paint the images, and decide when a program
+    may read or write the clipboard.
+
+- **D032 — Extension source maps**
+  - Depends on: none
+  - Description: Built JavaScript loads and reports generated source locations
+    without mapping them back to authoring files. Do it when debugging built
+    extensions requires errors and stack traces to identify the original source
+    locations.
+
+- **D130 — Syntax-scoped language configuration**
+  - Depends on: none
+  - Description: Editing configuration applies to a whole language, or to an
+    injected language's layer. Some constructs need other values inside one
+    language: JSX children comment with `{/* */}` rather than `//`, and
+    auto-closing may differ inside template strings or attributes. Do it when
+    toggle comment or auto-closing inside JSX, or another language's
+    sub-context, gets in the way in daily use: add a per-language query that
+    names syntax scopes and per-scope overrides of the editing configuration,
+    as Zed's `overrides.scm` does.
+
+- **D159 — Trim trailing whitespace on modified lines only**
+  - Depends on: D126
+  - Description: Save trims every line. Trimming only the lines a change
+    touched keeps saves from adding noise to the diff of a file that already
+    had trailing whitespace, and needs a notion of modified lines that Knot
+    lacks. Do it when a VCS or diff layer exists, such as a change gutter or
+    diff view: add `"modified"` to the values of `files.trimTrailingWhitespace`
+    (`"off"`, `"all"`) and trim only the lines that differ from the baseline.
+
+- **D091 — Settings UI**
+  - Depends on: none
+  - Description: Settings are set from code. Definitions carry a type, default,
+    and description so a UI can be built, but none exists. Do it when
+    discovering or changing settings from code becomes the friction in daily
+    use: build the UI as an ordinary extension over `settings.define`, `get`,
+    `set`, and `observe`. It keeps its choices in extension storage and applies
+    them again in `start()`, which beats `pre-init` and loses to `post-init`,
+    so it must show when a later write overrides a choice. Also decide whether
+    it lists undefined keys that hold values, to help spot typos.

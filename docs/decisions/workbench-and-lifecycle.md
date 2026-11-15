@@ -168,7 +168,7 @@ lets callers release captures immediately.
 
 Switching closes released windows and creates new ones rather than reusing
 them: one creation path serves startup and switching, existing windows never
-move (D062), and released terminals stop as closing any window does. The
+move, and released terminals stop as closing any window does. The
 rejected alternative, clearing a released window that held a terminal, left a
 window outside every session.
 
