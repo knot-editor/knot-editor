@@ -1738,8 +1738,16 @@ export async function registerTheme(definition) {
   for (const [capture, style] of Object.entries(record(value.syntax ?? {}, "theme syntax must be an object"))) {
     if (style !== undefined) syntax[capture] = syntaxStyle(style, capture);
   }
+  const chrome = {};
+  for (const [key, entry] of Object.entries(record(value.chrome ?? {}, "theme chrome must be an object"))) {
+    if (entry === undefined) continue;
+    if (typeof entry !== "number" || !Number.isFinite(entry)) {
+      throw new TypeError(`theme chrome ${key} must be a number`);
+    }
+    chrome[key] = entry;
+  }
   const registration = await request("registerTheme",
-    { name, appearance: value.appearance, colors, syntax });
+    { name, appearance: value.appearance, colors, syntax, chrome });
   const owned = ownership(() => {}, () => request("unregisterTheme", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }

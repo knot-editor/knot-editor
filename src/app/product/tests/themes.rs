@@ -16,6 +16,9 @@ for (const invalid of [
   () => themes.register({ name: "Bad", appearance: "dark", colors: { background: "red" } }),
   () => themes.register({ name: "Bad", appearance: "dark", syntax: { type: { fontWeight: 950 } } }),
   () => themes.register({ name: "Bad", appearance: "dark", syntax: { type: { shadow: true } } }),
+  () => themes.register({ name: "Bad", appearance: "dark", chrome: { cardRadius: "round" } }),
+  () => themes.register({ name: "Bad", appearance: "dark", chrome: { cardRadius: 99 } }),
+  () => themes.register({ name: "Bad", appearance: "dark", chrome: { cornerRadius: 1 } }),
   () => themes.defineColor({ key: "diff.add", description: "", defaults: { dark: "#12", light: "#000000" } }),
 ]) {
   const error = await failure(invalid);
@@ -38,7 +41,10 @@ await themes.register({
   colors: { background: "#101010", success: "#20a020", "other.package.key": "#123456" },
   syntax: { keyword: { color: "#ff0000", fontWeight: 700 } },
 });
-await themes.register({ name: "Paper", appearance: "light", colors: { background: "#fefefe" } });
+await themes.register({
+  name: "Paper", appearance: "light", colors: { background: "#fefefe" },
+  chrome: { cardRadius: 0, cardGap: 0, cardBorder: 1 },
+});
 const base = await themes.get("Knot Islands Dark");
 const derived = await themes.register({
   ...base, name: "My Dark", colors: { ...base.colors, background: "#000001" },
@@ -120,6 +126,17 @@ fn registered_themes_apply_at_startup_and_follow_the_selection_settings(cx: &mut
     select("theme.mode", "light", cx);
     assert_eq!(background(cx), gpui::rgb(0xfefefe).into());
     cx.read(|cx| {
+        // The theme's chrome values reach the painted chrome; the rest stay
+        // at the Islands defaults.
+        let chrome = crate::app::theme::chrome(cx);
+        assert_eq!(
+            (chrome.card_radius, chrome.card_gap, chrome.card_border),
+            (0., 0., 1.)
+        );
+        assert_eq!(
+            chrome.card_inset,
+            crate::app::theme::Chrome::default().card_inset
+        );
         assert_eq!(theme(cx).appearance, Appearance::Light);
         // diff.add takes its own light default.
         assert_eq!(
