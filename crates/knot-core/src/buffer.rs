@@ -1036,4 +1036,6 @@ impl Default for TextBuffer {
 // ----------------------------------------------------------------------
 
 #[cfg(test)]
+mod differential_tests;
+#[cfg(test)]
 mod tests;
