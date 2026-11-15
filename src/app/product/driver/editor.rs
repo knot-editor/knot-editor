@@ -324,6 +324,27 @@ impl TestEditor {
         })
     }
 
+    /// Each bar of the editor, top to bottom, as its ID, message, and the text
+    /// of its first field.
+    pub fn bars(&self, cx: &mut TestAppContext) -> Vec<(String, Option<String>, String)> {
+        cx.read(|cx| {
+            let editor = self.editor.read(cx);
+            editor
+                .bars()
+                .bars()
+                .iter()
+                .map(|bar| {
+                    let text = editor
+                        .bar_field_texts(bar.owner, &bar.id, cx)
+                        .and_then(|fields| fields.into_iter().next())
+                        .map(|(_, text)| text)
+                        .unwrap_or_default();
+                    (bar.id.to_string(), bar.spec.message.clone(), text)
+                })
+                .collect()
+        })
+    }
+
     /// The ranges the editor paints with a decoration, as absolute start,
     /// end, and color key: the buffer's contributions and this view's own.
     pub fn decorations(&self, cx: &mut TestAppContext) -> Vec<(usize, usize, String)> {

@@ -201,3 +201,107 @@ fn the_toggle_keys_switch_case_and_whole_word_in_the_bar(cx: &mut TestAppContext
     editor.press_unsettled(word, cx);
     wait_for_message(&editor, "1 of 3", cx);
 }
+
+const REPLACE: &str = if cfg!(target_os = "macos") {
+    "<a-d-f>"
+} else {
+    "<c-h>"
+};
+const REGEX: &str = if cfg!(target_os = "macos") {
+    "<a-d-r>"
+} else {
+    "<a-c-r>"
+};
+const REPLACE_ALL: &str = if cfg!(target_os = "macos") {
+    "<d-cr>"
+} else {
+    "<c-cr>"
+};
+
+fn replace_message(editor: &TestEditor, cx: &mut TestAppContext) -> Option<String> {
+    editor
+        .bars(cx)
+        .get(1)
+        .and_then(|(_, message, _)| message.clone())
+}
+
+/// Open Find and Replace, type the query, and move to the replacement field.
+fn open_replace(editor: &TestEditor, query: &str, replacement: &str, cx: &mut TestAppContext) {
+    editor.press_unsettled(REPLACE, cx);
+    wait_until(cx, |cx| editor.bars(cx).len() == 2);
+    editor.type_input(query, cx);
+    editor.press_unsettled("<tab>", cx);
+    editor.type_input(replacement, cx);
+}
+
+#[gpui::test]
+fn enter_in_the_replace_field_replaces_the_match_and_advances(cx: &mut TestAppContext) {
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
+    let editor = product.windowed_editor("ab ab ab\n", cx);
+
+    open_replace(&editor, "ab", "x", cx);
+    wait_until(cx, |cx| {
+        editor
+            .bars(cx)
+            .first()
+            .and_then(|bar| bar.1.clone())
+            .as_deref()
+            == Some("1 of 3")
+    });
+    assert_eq!(editor.bars(cx)[1].2, "x");
+
+    editor.press_unsettled("<cr>", cx);
+    wait_until(cx, |cx| editor.marked(cx).replace('‸', "") == "x ab ab\n");
+    wait_for_message(&editor, "1 of 2", cx);
+    assert_eq!(editor.caret(cx), 4);
+
+    // Each replacement is its own undo step.
+    editor.press_unsettled("<cr>", cx);
+    wait_until(cx, |cx| editor.marked(cx).replace('‸', "") == "x x ab\n");
+    editor.run_command("editor.undo", cx);
+    assert_eq!(editor.marked(cx).replace('‸', ""), "x ab ab\n");
+}
+
+#[gpui::test]
+fn replace_all_expands_groups_in_one_undo_step_and_reports_the_count(cx: &mut TestAppContext) {
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
+    let editor = product.windowed_editor("a=1\nb=22\nnote\n", cx);
+
+    editor.press_unsettled(REPLACE, cx);
+    wait_until(cx, |cx| editor.bars(cx).len() == 2);
+    editor.press_unsettled(REGEX, cx);
+    editor.type_input(r"(\w)=(\d+)", cx);
+    wait_for_message(&editor, "1 of 2", cx);
+    editor.press_unsettled("<tab>", cx);
+    editor.type_input(r"$2:$1", cx);
+
+    editor.press_unsettled(REPLACE_ALL, cx);
+    wait_until(cx, |cx| {
+        replace_message(&editor, cx).as_deref() == Some("Replaced 2")
+    });
+    assert_eq!(editor.marked(cx).replace('‸', ""), "1:a\n22:b\nnote\n");
+
+    editor.run_command("editor.undo", cx);
+    assert_eq!(editor.marked(cx).replace('‸', ""), "a=1\nb=22\nnote\n");
+}
+
+#[gpui::test]
+fn an_invalid_pattern_shows_the_parsers_message_and_escape_closes_both_bars(
+    cx: &mut TestAppContext,
+) {
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
+    let editor = product.windowed_editor("foo (bar\n", cx);
+
+    editor.press_unsettled(REPLACE, cx);
+    wait_until(cx, |cx| editor.bars(cx).len() == 2);
+    editor.press_unsettled(REGEX, cx);
+    editor.type_input("(bar", cx);
+    wait_until(cx, |cx| {
+        message(&editor, cx).is_some_and(|message| message.contains("unclosed group"))
+    });
+    assert!(editor.decorations(cx).is_empty());
+
+    editor.press_unsettled("<tab>", cx);
+    editor.press_unsettled("<esc>", cx);
+    wait_until(cx, |cx| editor.bars(cx).is_empty());
+}
