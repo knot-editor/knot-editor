@@ -1,6 +1,6 @@
 # D092: Piece tree text buffer
 
-Status: 🚧 approved, checkpoints 1 and 2 complete. Roadmap item [D092](../roadmap.md). Follows
+Status: 🚧 approved, checkpoints 1–3 complete. Roadmap item [D092](../roadmap.md). Follows
 the [text buffer analysis](../reports/text-buffer-structure.md) (option B);
 current behavior is owned by
 [core and buffers](../architecture/core-and-buffers.md) and
@@ -148,35 +148,17 @@ logarithmic or constant except `resolve`, which still walks the pieces and is
 until checkpoint 3. Heap per edit grew from 88 to 140 bytes because a piece
 caches its break count and UTF-16 length.
 
-### 3. Locators and logarithmic resolve 🔍 ready for review
+### 3. Locators and logarithmic resolve ✅
 
-Each piece carries a locator, the buffer keeps the `PieceId → Locator` map,
-and `resolve` is a map lookup plus a locator seek.
-
-- ✅ **Deliverables:** `buffer/locator.rs` holds the locator type and
-  `Locator::between`; locators are assigned on insert and split, kept on
-  coalescing, and dropped from the map on delete; each tree child caches its
-  greatest locator; `resolve` seeks by locator and keeps the `None` semantics
-  for deleted pieces and stale right-of-split offsets.
-- ✅ **Validation:** key-generation unit tests (ends, between neighbors,
-  repeated inserts at one point); the tree validator checks locators increase
-  in order and cached maxima, the buffer validator checks the map against the
-  tree, and the differential test runs both every step; `just check`.
-- **Locator representation (settled):** an `Arc<[u32]>` of digits compared
-  lexicographically, growable rather than a fixed array. A new key moves at
-  most 2^16 from its lower neighbor within a digit, so appending in order
-  stays one digit and repeated inserts at one point deepen by about one digit
-  per 17–32 pieces. `Piece` is no longer `Copy`.
-- **Results (release, same machine):** resolve per anchored range at 10k /
-  100k pieces 0.35 / 0.73 µs (was 3.8 / 33 µs before the tree and 10.9 / 135
-  µs at checkpoint 2); stabilize after deleting a quarter of the text 4 / 8 ms
-  (was 18 / 137 ms); typing p50 0.3 µs; 10,000-match replace-all 0.070 s
-  (0.018 s at checkpoint 2, the cost of a map insert and a locator allocation
-  per piece); heap per edit 294 bytes and 6.4 allocations (140 bytes at
-  checkpoint 2).
-- **Review gate:** confirm resolve and stabilization costs no longer grow
-  with piece count beyond O(log n), and that the replace-all and heap cost of
-  locators is acceptable.
+Complete and approved. `buffer/locator.rs` holds the locator (an
+`Arc<[u32]>` of digits, growable; a new key moves at most 2^16 from its lower
+neighbor, so appends stay one digit and repeated inserts at one point deepen
+by about one digit per 17–32 pieces), and `resolve` is a map lookup plus a
+locator seek. Results against the baseline: resolve 0.35 / 0.73 µs per
+anchored range at 10k / 100k pieces (3.8 / 33 µs), stabilize after deleting a
+quarter of the text 4 / 8 ms (18 / 137 ms), typing p50 0.3 µs, 10,000-match
+replace-all 0.070 s (0.018 s at checkpoint 2, the cost of a map insert and a
+key allocation per piece), heap per edit 294 bytes and 6.4 allocations.
 
 ### 4. Final benchmark and documentation
 
