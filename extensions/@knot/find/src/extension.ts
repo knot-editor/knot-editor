@@ -335,9 +335,11 @@ async function toggle(context: CommandContext, flip: () => void) {
 async function toggleScope(context: CommandContext) {
   let session = await openSession(context);
   if (session === undefined) {
+    // Opening turns the scope on for a multi-line selection; any other
+    // selection is scoped below.
     await open(context, false);
     session = await openSession(context);
-    if (session === undefined) return;
+    if (session === undefined || session.scope !== null) return;
   }
   session.replaced = null;
   const selection = await session.editor.selection();

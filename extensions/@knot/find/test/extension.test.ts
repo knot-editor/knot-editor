@@ -465,3 +465,12 @@ test("find in selection is a command that opens find when it is closed", async (
   assert.deepEqual(host.editorBars(window).bars.map((bar) => bar.id), ["find"]);
   assert.deepEqual(scope(window), [LINE_TWO[0], LINE_TWO[1]! - 1]);
 });
+
+test("find in selection from the palette keeps a multi-line selection as the scope", async () => {
+  const { window, editor } = await setup();
+  await editor.setSelection({ anchor: 0, caret: LINE_TWO[1]! });
+  await host.run(TOGGLE_SCOPE, { window });
+  assert.deepEqual(scope(window), [0, LINE_TWO[1]]);
+  await host.typeInBar("find", "query", "foo", window);
+  assert.deepEqual(scope(window), [0, LINE_TWO[1]]);
+});
