@@ -117,7 +117,13 @@ button. The project widget and the Projects tool run Open Project, which focuses
 the project's window or opens one and leaves the current window alone; Switch
 Project remains a palette command.
 
-### 4. Dock headers and stripes
+### 4. Dock headers and stripes ✅ (pending review)
+
+Delivered: dock headers, frame actions in the header (the tree's action row is
+removed), the hide button, hover close for terminals, wider accent-tinted
+stripes, empty stripes hidden (shown while a button is dragged), and the
+Projects tool icon `tool.builtin.projects`. Tests: `tests/dock_header.rs` and
+the stripe drag test.
 
 Deliverables: dock pane headers with text tabs, accent underline, hide
 button, hover close for terminals, and tree frame actions at the right; the

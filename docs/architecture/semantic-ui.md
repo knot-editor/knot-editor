@@ -170,7 +170,7 @@ during activation, before startup restores windows, so load order does not
 change the first frame.
 
 A tool's stripe button paints the icon named `tool.` plus the tool's ID, and
-shows the title's initial when nothing defines it; the terminal button paints
+shows the title's initial when nothing defines it, which no bundled tool needs; the terminal button paints
 `terminal`.
 
 File icons resolve apart from the definitions. A file tries the name
@@ -236,7 +236,9 @@ Actions are labeled commands; an action with an `icon` renders as an icon
 button that shows its label as a tooltip.
 
 Frame, group, and row actions are semantic command references with JSON
-arguments, never drawing callbacks. The native view renders them as controls
+arguments, never drawing callbacks. The native view renders row actions as
+controls on the row, and frame actions in the header of the dock pane that
+shows the tree, which keeps keyboard focus,
 and emits the same captured-window command event as activation, with the action
 arguments instead of null; the event names the window and the tree, which
 must still have focus there when it runs. Action clicks stop propagation so

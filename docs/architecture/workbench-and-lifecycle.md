@@ -171,8 +171,13 @@ are unavailable when the tab is already there. Each tab kind declares the areas 
 may occupy (`TabKind::allows`): documents the center, tools the docks, and
 terminals either. Placement, relocation, directional moves, and restore check the
 declaration, so a tool never joins the center and a document never enters a
-dock. Thin stripes on the left and right window edges
-(`workbench.toolStripes`) show a button for every tool by home dock, bottom-dock
+dock. Every dock pane has a header instead of a tab bar: plain text tabs with
+the active one underlined in the accent (a pane with one tab shows only its
+title), a close button on terminal tabs while hovered, none on tool tabs, the
+tree frame actions of the active tool, and a hide button at the right. Stripes
+on the left and right window edges
+(`workbench.toolStripes`; a stripe without buttons is not painted, except
+while a button is dragged) show a button for every tool by home dock, bottom-dock
 tools at the left stripe's lower end, plus the terminal button in the terminal
 home's group (`Workbench::stripes`). A click toggles the tool, or the dock
 terminals. Like a stripe elsewhere, a click shows a hidden tool in place of the
