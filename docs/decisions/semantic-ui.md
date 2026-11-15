@@ -241,13 +241,27 @@ painting and field editing must never wait on JavaScript: edits reach the
 extension through a coalescing subscription rather than a synchronous callback.
 Rendering extension-drawn bars was rejected for the same reason.
 
-Matching is native (`buffer.find`) rather than JavaScript over snapshots. An
-extension addresses text in UTF-8 byte offsets, and a snapshot would copy the
-whole buffer on every keystroke. The workflow itself stays in the bundled
+Matching and replacement are native (`buffer.find`, `buffer.replace`) rather
+than JavaScript over snapshots. An extension addresses text in UTF-8 byte
+offsets, and a snapshot would copy the whole buffer on every keystroke, or
+ship every match's text across the protocol to replace it. Replacement
+commits as one batch in one foreground step, so it is one undo step and cannot
+race other edits, and a Vim substitution can use the same call. Regular
+expressions use `regex-automata`'s meta regex, the engine under the `regex`
+crate, because it can search a span of a larger haystack: anchors and `\b` at
+a range edge see the text around it, which Find in Selection needs. Compiling
+a pattern on every search was measured at 0.03 to 0.8 ms for a small buffer,
+so no compiled-pattern cache exists. The workflow itself stays in the bundled
 `@knot/find` package, and its highlights are per-view decorations
 ([view-owned editor decorations](#view-owned-editor-decorations)), so they
-belong to the editor that owns the bar. Regular expressions and replace remain deferred (D001), so
-the matcher is a literal one.
+belong to the editor that owns the bar.
+
+Replace is a second bar stacked under Find rather than a second field in one
+bar, so each bar keeps its own fields, buttons and message, and no layout for
+nested rows is needed. The Find in Selection scope is plain package state
+rebased through each change's edits rather than an anchored native range,
+because only the package needs to read it back; the editor paints it as a
+view decoration.
 
 References: [editor bars](../architecture/editor-and-languages.md#editor-bars),
 [key routing](../architecture/commands.md#editor-bars), and

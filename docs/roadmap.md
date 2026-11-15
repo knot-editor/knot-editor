@@ -28,24 +28,22 @@ point.
 
 ## Next up
 
-1. D001 — Replace, regular-expression Find, and find in selection: its plan is
-   underway.
-2. D045 — General terminal settings: small.
-3. D193 — Chrome refinements: two open choices of the current look.
-4. D119 — Tab, editor, and extension menu items.
-5. D117 — Non-modal notifications and progress: D041 and D181 build on it.
-6. D022 — Editor autocompletion.
-7. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-8. D183 — Deterministic indentation after Enter and closing tokens.
-9. D175 — Type-ahead after a held Enter.
-10. D182 — Interleave extension roots at awaits: before D067.
-11. D156 — Fewer host round trips per key.
-12. D129 — Refactor builtin language extensions.
-13. D138 — Extension startup report as an untitled document.
-14. D054 — Dedicated read-only generated text surface.
-15. D085 — Cross-file search.
-16. D197 — Diff view: D126 and D174 build on it.
-17. D126 — Git status and changes per root.
+1. D045 — General terminal settings: small.
+2. D193 — Chrome refinements: two open choices of the current look.
+3. D119 — Tab, editor, and extension menu items.
+4. D117 — Non-modal notifications and progress: D041 and D181 build on it.
+5. D022 — Editor autocompletion.
+6. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+7. D183 — Deterministic indentation after Enter and closing tokens.
+8. D175 — Type-ahead after a held Enter.
+9. D182 — Interleave extension roots at awaits: before D067.
+10. D156 — Fewer host round trips per key.
+11. D129 — Refactor builtin language extensions.
+12. D138 — Extension startup report as an untitled document.
+13. D054 — Dedicated read-only generated text surface.
+14. D085 — Cross-file search.
+15. D197 — Diff view: D126 and D174 build on it.
+16. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -511,13 +509,6 @@ hold the analyses that support some items.
     consistent with the final-newline insertion on save, which uses
     `line_ending()`.
 
-- **D001 — Replace, regular-expression Find, and find in selection** 🚧
-  - Depends on: none
-  - Description: Current-file Find matches literal text, with case and
-    whole-word toggles. Replace, regular expressions, and find in selection are
-    missing: add them to the `@knot/find` bar and the buffer API, as the
-    [plan](plans/d001-replace-and-regex-find.md) describes.
-
 - **D142 — Multiple and rectangular selections**
   - Depends on: none
   - Description: The editor handle and views hold one selection. Vim's
@@ -580,7 +571,7 @@ Kakoune mode could use them too. The
     `:g` and `:v` come with D150's pattern matching.
 
 - **D150 — Vim search and substitution**
-  - Depends on: D001
+  - Depends on: none
   - Description: The first Vim mode ships without search, so that Vim search
     reuses current-file Find's match layer instead of a second engine, and
     without substitution, a whole-buffer edit. Missing: `/`, `?`, `n`, `N`, `*`,

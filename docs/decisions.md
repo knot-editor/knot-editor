@@ -86,8 +86,8 @@ touches.
   pulled rather than pushed updates; whole-value completion items with menu accept; one native matcher
   with user-ordered styles; recency owned by extensions.
 - [Editor bars](decisions/semantic-ui.md#editor-bars): non-modal data-described
-  strips rather than the modal input; native literal matching, Find in a
-  bundled package.
+  strips rather than the modal input; native matching and replacement, Find in
+  a bundled package, Replace as a second bar.
 - [Status bar](decisions/semantic-ui.md#status-bar): native bar, extension
   items with per-window values.
 - [Generated text surfaces](decisions/semantic-ui.md#generated-text-surfaces):
