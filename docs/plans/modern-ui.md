@@ -43,7 +43,7 @@ larger type size than the rest of the UI.
   decision: the dropped prototype toolbar duplicated commands, menus, and
   keys, while this one holds only a few navigation widgets supplied by packages.
 - **Dock headers.** Every dock pane has a header. Its tabs are plain text, the
-  active one bright with an accent underline; a pane with one tool shows just
+  active one bright with an accent underline; a pane with one tool tab shows just
   its title. Tool tabs have no close button; a hide (`–`) button sits at the
   header's right. Terminal tabs keep a close button. A
   tree tool's frame actions (the Explorer's New File and New Folder) render at

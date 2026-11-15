@@ -31,7 +31,7 @@ pub(crate) mod chrome {
     pub(crate) const WINDOW_BUTTONS_WIDTH: f32 = 80.;
     pub(crate) const TOOLBAR_HEIGHT: f32 = 40.;
     /// The space between a text surface's left edge and its text, where no gutter sits.
-    pub(crate) const TEXT_INSET: f32 = 8.;
+    pub(crate) const TEXT_INSET: f32 = 4.;
 }
 
 /// Lists, trees, and pickers.

@@ -270,7 +270,9 @@ impl KnotWindow {
         let documents = Self::documents(cx);
         let in_dock = matches!(area, Area::Dock(_));
         let terminal_active = matches!(pane.active_tab().surface_id(), TabSurfaceId::Terminal(_));
-        let titled_alone = in_dock && pane.tabs().len() == 1;
+        // A lone tool shows just its title; terminals come in numbers, so
+        // theirs always show which is active.
+        let titled_alone = in_dock && pane.tabs().len() == 1 && !terminal_active;
         let accent = theme(cx).paint_color(color::TAB_ACCENT);
         let card_background = theme(cx).paint_color(color::CARD_BACKGROUND);
         let tabs = pane
