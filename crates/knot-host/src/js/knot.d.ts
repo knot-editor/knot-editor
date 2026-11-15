@@ -1024,7 +1024,8 @@ declare module "knot" {
      * Entries the `files.hidden` setting names are never reported; ignored
      * entries are. Watching sees every change on disk, including Knot's own
      * saves, and independently of open documents. Listeners run serially with
-     * other listeners and stop with their lifecycle or `dispose()`.
+     * other listeners and stop with their lifecycle or `dispose()`. Resolves
+     * once the watch runs, so a read after it misses no later change.
      * @throws HostError with InvalidUri, ResourceNotFound when `uri` does not
      * exist, or ProviderFailure when the provider cannot watch. */
     watch(

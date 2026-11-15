@@ -182,6 +182,12 @@ watches roots, because it keeps a tree to update (see
 [workspace file index](#workspace-file-index)); a root watch would otherwise
 cost OS watches and wake-ups nobody reads.
 
+Watches start off the foreground, and a consumer reads the current state once
+its watch is live. The index waits for the watch before its first scan rather
+than scanning at once and again when the watch runs: covering the gap with a
+second scan doubles the I/O of every new root to save about 100 ms before the
+first query on macOS.
+
 Change detection compares the provider version, then the content, instead of
 ignoring events for a time window after Knot's own save: a window drops a real
 external write that lands inside it, while an equal version identifies Knot's

@@ -191,7 +191,8 @@ touches.
   bounded native search with tiered ranking instead of a full file list; no
   disk fallback, lazy ignored directories, or saved snapshots.
 - [File watching](decisions/documents-and-persistence.md#file-watching):
-  watches requested by documents and extensions, plus the file index's root watch; version comparison
+  watches requested by documents and extensions, plus the file index's root watch; one scan once the
+  watch is live; version comparison
   rather than a save window; a line-diff reload; a prompt on focus.
 - [Unsaved-document recovery store](decisions/documents-and-persistence.md#unsaved-document-recovery-store):
   an application-owned database independent of extension health.

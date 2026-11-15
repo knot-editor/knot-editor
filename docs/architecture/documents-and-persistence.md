@@ -128,6 +128,16 @@ provider watches and reuses one that covers a request: a recursive watch of an
 ancestor or the same URI watched alike. It routes each event only to the
 subscriptions whose scope contains it, and coalesces over about 100 ms into
 batches that name each URI once. A rescan batch names the watched URI itself.
+
+A provider watch may start after it is requested, and reports `Started` once
+it runs. The local provider starts and stops `notify` watchers on threads of
+their own, since on macOS starting an FSEvents stream waits on `fseventsd` for
+about 100 ms and stopping one joins its thread; a start that fails is logged
+and the watch stays silent. A subscription becomes live when its provider
+watch runs, at once when it shares a running one, and nothing before then is
+reported. Each consumer reads the current state once live: the
+[file index](#workspace-file-index) scans, a document
+[rechecks](#detecting-external-changes), and `files.watch` resolves.
 The foreground drops entries `files.hidden` names before a batch reaches its
 listener.
 
@@ -149,7 +159,8 @@ returns them. An application global holds one index per root URI, shared by ever
 window that shows the root. Each window leases its roots whenever they change, and the last lease to drop releases the index and its recursive watch.
 A root whose provider cannot be watched is left unindexed.
 
-The index scans in the background, and queries wait for that first scan. It
+The index scans in the background once its watch is live, and queries wait
+for that first scan. It
 records the `IgnorePolicy` it was built with; a query with another policy
 scans again, so a settings change needs no hook. Watch batches are applied in
 order after the scan: the indexed parents of changed URIs are listed again and
@@ -228,7 +239,7 @@ reload below.
 While `files.watchDocuments` is on, every persisted document holds a
 [watch](#watching) on its parent directory, moved when Save As or a rename
 Knot performed changes its resource and released when the setting turns off. An event naming the document's
-file or directory, and the application becoming active, read the file and
+file or directory, the watch becoming live, and the application becoming active, read the file and
 compare its provider version with the recorded one. Equal versions are Knot's
 own save or no change; a new version with the saved content only records the
 version. Otherwise a clean document reloads: a line diff

@@ -1,6 +1,6 @@
 # D187: File watches start off the foreground
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 in progress. Roadmap item [D187](../roadmap.md).
+Status: 🚧 checkpoint 2 implemented, awaiting manual review. Roadmap item [D187](../roadmap.md).
 References: [watching](../architecture/documents-and-persistence.md#watching),
 [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index),
 [detecting external changes](../architecture/documents-and-persistence.md#detecting-external-changes),
@@ -70,14 +70,14 @@ subscription `WatchSubscription::live` and reports nothing before it. The
 memory provider can hold starts (`defer_watch_starts`, `start_watches`) for
 tests. Covered by the tests in `crates/knot-model/src/watch.rs`.
 
-### 2. Watch users wait for live
+### 2. Watch users wait for live 🔍
 
 Deliverables:
 
-- The file index lease awaits live before its single scan.
-- Document watches recheck once when live.
-- `files.watch` resolves once live.
-- Docs: [watching](../architecture/documents-and-persistence.md#watching) and
+- ✅ The file index lease awaits live before its single scan.
+- ✅ Document watches recheck once when live.
+- ✅ `files.watch` resolves once live.
+- ✅ Docs: [watching](../architecture/documents-and-persistence.md#watching) and
   [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index)
   describe the asynchronous start, the live signal, and scan-after-live;
   `knot.d.ts` and [extension guide](../extension-api.md) state that the
@@ -85,18 +85,19 @@ Deliverables:
   [file watching](../decisions/documents-and-persistence.md#file-watching)
   entry records why the index waits rather than scanning twice; the roadmap
   item is removed when the plan completes.
-- A `try.*` post-init command set for a manual check: switching to a project
+- ✅ A `try.*` post-init command set for a manual check: switching to a project
   with several roots and opening documents from several directories, with no
   visible stall.
 
 Tests:
 
-- File index: a lease's queries resolve after the first scan, which starts
+- ✅ File index: a lease's queries resolve after the first scan, which starts
   only once live (memory provider: immediate); a change made between lease and
   live is indexed.
-- Document watch: a document changed on disk between opening and the watch
+- ✅ Document watch: a document changed on disk between opening and the watch
   going live is reloaded.
-- `files.watch`: the existing product test still passes; the fake host in
+- ✅ `files.watch`: the existing product test also checks that the command
+  waits for a held watch to start; the fake host in
   `scripts/extensions/testing` keeps resolving immediately.
 
 Implementation context:

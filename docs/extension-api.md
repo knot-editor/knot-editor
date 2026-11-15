@@ -1092,8 +1092,9 @@ changed URIs, gathered over about 100 ms and naming each URI once. A batch does
 not say whether an entry was created, changed, or removed, so stat or list what
 you need. A directory reports itself and its direct children unless `recursive`;
 entries `files.hidden` names are never reported. When the platform drops
-events the batch names the watched URI itself, so rescan it. The returned
-`Disposable` and the lifecycle end the watch. The fake host calls the listener
+events the batch names the watched URI itself, so rescan it. The promise
+resolves once the watch runs, so read the current state after awaiting it. The
+returned `Disposable` and the lifecycle end the watch. The fake host calls the listener
 as soon as `seedFile` or `removeFile` from `knot/testing` changes a file under
 the watch, without coalescing.
 
