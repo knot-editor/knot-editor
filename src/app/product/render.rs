@@ -341,7 +341,7 @@ impl KnotWindow {
                     // one underlined with the accent.
                     .when(in_dock, |element| {
                         element
-                            .font_weight(FontWeight::BOLD)
+                            .font_weight(FontWeight::SEMIBOLD)
                             .border_b_2()
                             .border_color(if tab_id == active_tab && !titled_alone {
                                 accent
