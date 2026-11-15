@@ -1,6 +1,6 @@
 # Modern UI
 
-Status: 🚧 in progress (checkpoints 1–4 done).
+Status: 🚧 in progress (checkpoints 1–5 done).
 
 ## Goal
 
@@ -127,20 +127,13 @@ restyled and a stripe without buttons is not painted
 `tool.builtin.projects`. The dark Islands window background is `#1e1f22` for
 contrast with the cards.
 
-### 5. Editor tabs 🚧
+### 5. Editor tabs ✅
 
-Deliverables: center tabs on the card background with an accent underline,
-close on active or hover, dirty dot, icon for pinned tabs, consistent height
-and padding.
-
-Validation ✅: product tests for close by pointer, dirty indicator, and pinned
-indicator selectors.
-
-Review gate: tabs with clean, dirty, pinned, and preview documents.
-
-**Implementation context**: the tab element in `src/app/product/render.rs`;
-document dirty state from `src/app/documents.rs`; icons through
-`src/app/icons.rs`.
+Done and approved. Center tabs sit on the tab background with an accent line
+under the active one; the close button is a small square that shows on the
+active or hovered tab, a dirty dot takes its place until the pointer is on the
+button, and pinned tabs show a pin icon
+([workbench](../architecture/workbench-and-lifecycle.md#windows)).
 
 ### 6. Trees and pickers
 
