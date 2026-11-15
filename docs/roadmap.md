@@ -90,17 +90,6 @@ hold the analyses that support some items.
     piece locators, and keep the piece semantics, edit log, and `TextBuffer`
     API unchanged.
 
-- **D187 — File watches start off the foreground** 🚧
-  - Depends on: none
-  - Description: Starting an operating system file watch blocks for about
-    100 ms on macOS (`FSEventStreamStart` waits on `fseventsd`), and the
-    workspace file index starts one per root on the foreground thread, so
-    switching to a project with several roots freezes the window for that
-    long per root. Start the stream on a background thread and cover the gap
-    until it runs, for example with a rescan of the watched tree, so no change
-    is missed. Found while profiling the workbench tests. The
-    [plan](plans/d187-file-watches-off-foreground.md) holds the design.
-
 - **D156 — Fewer host round trips per key**
   - Depends on: none
   - Description: Found by the headless package tests. A key bound to an
