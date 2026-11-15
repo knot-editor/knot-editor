@@ -340,13 +340,14 @@ impl KnotWindow {
                     // A dock header's tabs are text on the card, the active
                     // one underlined with the accent.
                     .when(in_dock, |element| {
-                        element.border_b_2().border_color(
-                            if tab_id == active_tab && !titled_alone {
+                        element
+                            .font_weight(FontWeight::BOLD)
+                            .border_b_2()
+                            .border_color(if tab_id == active_tab && !titled_alone {
                                 accent
                             } else {
                                 card_background
-                            },
-                        )
+                            })
                     })
                     .flex()
                     .flex_row()
