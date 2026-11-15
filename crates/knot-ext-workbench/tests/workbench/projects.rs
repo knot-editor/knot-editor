@@ -137,7 +137,7 @@ pub(super) fn create_project(
             opened.run_command("window.close", cx),
             CommandOutcome::Completed
         );
-        tree.activate_row(&id, cx);
+        switch_to_project(window, name, cx);
         wait_until(cx, |cx| {
             product.has_active_window(cx) && product.active_window(cx).roots(cx) == [uri.clone()]
         });
@@ -148,6 +148,17 @@ pub(super) fn create_project(
     } else {
         product.active_window(cx)
     }
+}
+
+/// Start switching `window` to the project `name` with Switch Project.
+pub(super) fn switch_to_project(window: &TestWindow, name: &str, cx: &mut TestAppContext) {
+    let command = window.start_command("projects.switch", cx);
+    wait_until(cx, |cx| window.transient_open(cx));
+    window.type_input(name, cx);
+    window.press("enter", cx);
+    // The switch runs on; callers wait for its effects, and it may replace the
+    // window the command ran in.
+    drop(command);
 }
 
 fn shows(labels: Vec<String>, label: &str) -> bool {

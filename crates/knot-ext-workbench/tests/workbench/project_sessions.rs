@@ -4,7 +4,8 @@ use gpui::TestAppContext;
 use serde_json::Value;
 
 use super::projects::{
-    Projects, TREE, create_project, file_uri, list_projects, project_id, wait_for_prompt,
+    Projects, TREE, create_project, file_uri, list_projects, project_id, switch_to_project,
+    wait_for_prompt,
 };
 use knot::test_support::{CommandOutcome, wait_until};
 
@@ -66,11 +67,16 @@ impl Projects {
         self.follow(cx);
     }
 
-    /// Select the project `id` in the focused window's registry.
-    fn select(&self, id: &str, cx: &mut TestAppContext) {
-        let tree = self.window.tree(TREE, cx);
-        wait_until(cx, |cx| tree.has_row(id, cx));
-        tree.activate_row(id, cx);
+    /// Switch the focused window to the project `id` with Switch Project.
+    fn switch_to(&self, id: &str, cx: &mut TestAppContext) {
+        let name = self.list(cx)["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|project| project["id"] == id)
+            .and_then(|project| project["name"].as_str().map(str::to_owned))
+            .expect("named project");
+        switch_to_project(&self.window, &name, cx);
     }
 
     fn session_windows(&self, id: &str, cx: &mut TestAppContext) -> usize {
@@ -129,7 +135,7 @@ fn switching_suspends_and_restores_unsaved_documents_across_windows(cx: &mut Tes
     assert_eq!(listed["sessions"][&b_id]["state"], "active");
 
     // Back to A: both windows return with their documents and dirty text.
-    projects.select(&a_id, cx);
+    projects.switch_to(&a_id, cx);
     projects.follow_roots(&[&file_uri(a.path())], cx);
     assert_eq!(
         projects.window.document_texts(cx),
@@ -167,7 +173,7 @@ fn a_switch_racing_an_edit_retries_with_fresh_captures(cx: &mut TestAppContext) 
 
     // Hold the destination's file read so an edit lands between retain and commit.
     let held = projects.product.hold_file_reads(cx);
-    projects.select(&a_id, cx);
+    projects.switch_to(&a_id, cx);
     wait_until(cx, |cx| {
         projects
             .product
@@ -308,7 +314,7 @@ fn a_partial_restore_commits_and_reports_what_was_skipped(cx: &mut TestAppContex
     let a_id = projects.id("A", cx);
     std::fs::remove_file(a.path().join("gone.txt")).unwrap();
 
-    projects.select(&a_id, cx);
+    projects.switch_to(&a_id, cx);
     wait_for_prompt(cx);
     let (_, message) = cx.pending_prompt().unwrap();
     assert_eq!(message, "Opened A. gone.txt no longer exists.");
@@ -398,13 +404,13 @@ fn a_multi_root_project_restores_every_root_across_switches_and_restarts(cx: &mu
     let a_id = projects.id("A", cx);
 
     projects.create(b.path(), "B", cx);
-    projects.select(&a_id, cx);
+    projects.switch_to(&a_id, cx);
     projects.follow_roots(&[&a_uri, &c_uri], cx);
     assert_eq!(projects.window.document_texts(cx), ["see dirty"]);
 
     // Suspended with its text, A survives a restart and restores both roots.
     let b_id = projects.id("B", cx);
-    projects.select(&b_id, cx);
+    projects.switch_to(&b_id, cx);
     projects.follow_roots(&[&file_uri(b.path())], cx);
     // Listing runs after the switch finishes recording, so the restart cannot
     // interrupt it.
@@ -414,7 +420,7 @@ fn a_multi_root_project_restores_every_root_across_switches_and_restarts(cx: &mu
     assert_eq!(listed["sessions"][&a_id]["state"], "suspended");
     assert_eq!(captures(&listed["sessions"][&a_id]).len(), 1);
     assert_eq!(projects.product.retained(OWNER, cx).len(), 1);
-    projects.select(&a_id, cx);
+    projects.switch_to(&a_id, cx);
     projects.follow_roots(&[&a_uri, &c_uri], cx);
     assert_eq!(projects.window.document_texts(cx), ["see dirty"]);
     assert!(!cx.has_pending_prompt());
@@ -496,7 +502,7 @@ fn a_multi_root_layout_with_shared_views_survives_repeated_switches(cx: &mut Tes
     // return reproduces that arrangement exactly.
     let mut before = None;
     for round in 0..2 {
-        projects.select(&a_id, cx);
+        projects.switch_to(&a_id, cx);
         projects.follow_roots(&[&a_uri, &c_uri], cx);
         let current = arrangement(projects.window.layout(cx));
         assert_eq!(current["center"]["kind"], "split");
@@ -513,7 +519,7 @@ fn a_multi_root_layout_with_shared_views_survives_repeated_switches(cx: &mut Tes
         assert_eq!(split_from.buffer, split.buffer);
         assert_eq!((split.anchor, split.caret, split.top), (10, 25, 20));
         assert!(split.text.ends_with("dirty"));
-        projects.select(&b_id, cx);
+        projects.switch_to(&b_id, cx);
         projects.follow_roots(&[&file_uri(b.path())], cx);
         // Switching never duplicates windows or documents.
         assert_eq!(projects.product.windows(cx).len(), 1);
@@ -538,7 +544,7 @@ fn schema_one_records_switch_without_a_layout(cx: &mut TestAppContext) {
         }),
     );
     projects.product.reload_packages(cx);
-    projects.select(&a_id, cx);
+    projects.switch_to(&a_id, cx);
     projects.follow_roots(&[&file_uri(a.path())], cx);
     assert_eq!(projects.window.document_texts(cx), ["one"]);
     // The record is upgraded when it is next written.

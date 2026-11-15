@@ -93,10 +93,10 @@ test("a dismissed confirmation removes nothing", async () => {
   assert.equal(registry().projects.length, 1);
 });
 
-test("selecting from the picker or a tree row switches to the project", async () => {
+test("selecting from the picker or a tree row opens the project and leaves this window as it is", async () => {
   seedProject("a", "Alpha", [ALPHA]);
   seedProject("b", "Beta", [BETA]);
-  host.openWindow();
+  const origin = host.openWindow();
   await startLaunched();
 
   host.answer("showPicker", { kind: "dismissed" });
@@ -104,15 +104,24 @@ test("selecting from the picker or a tree row switches to the project", async ()
   assert.equal(host.replaced().length, 0);
 
   host.answer("showPicker", { kind: "selected", id: "b" });
-  await host.run("projects.select");
-  assert.deepEqual(host.rootsOf(host.windowTargets()[0]!), [BETA]);
+  await host.run("projects.select", { window: origin });
+  assert.equal(host.replaced().length, 1);
+  assert.deepEqual(host.rootsOf(origin), []);
+  assert.deepEqual(host.windowTargets().map(host.rootsOf).filter((roots) => roots.length > 0), [[BETA]]);
 
   host.setSelectedTreeItem("a");
-  await host.run("projects.select", { view: VIEW_ID, arguments: { gesture: "rightClick", arguments: null } });
+  await host.run("projects.select", { window: origin, view: VIEW_ID, arguments: { gesture: "rightClick", arguments: null } });
   assert.equal(host.replaced().length, 1);
-  await host.run("projects.select", { view: VIEW_ID, arguments: { gesture: "click", arguments: null } });
+  await host.run("projects.select", { window: origin, view: VIEW_ID, arguments: { gesture: "click", arguments: null } });
   assert.equal(host.replaced().length, 2);
-  assert.deepEqual(host.windowTargets().map(host.rootsOf), [[ALPHA]]);
+  assert.deepEqual(host.rootsOf(origin), []);
+  assert.equal(host.windowTargets().length, 3);
+
+  // A project that is already open is focused, not opened again.
+  host.answer("showPicker", { kind: "selected", id: "b" });
+  await host.run("projects.select", { window: origin });
+  assert.equal(host.replaced().length, 2);
+  assert.equal(host.windowTargets().length, 3);
 });
 
 test("a new project window opens with the project's roots", async () => {

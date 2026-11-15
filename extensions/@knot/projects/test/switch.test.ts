@@ -22,7 +22,7 @@ async function alphaWithDraft() {
 
 async function selectBeta(window: WindowTarget) {
   host.answer("showPicker", { kind: "selected", id: "b" });
-  await host.run("projects.select", { window });
+  await host.run("projects.switch", { window });
 }
 
 test("switching suspends the source with its unsaved text and opens the destination", async () => {
@@ -52,7 +52,7 @@ test("switching back restores the retained text", async () => {
   const { window } = await alphaWithDraft();
   await selectBeta(window);
   host.answer("showPicker", { kind: "selected", id: "a" });
-  await host.run("projects.select", { window: host.windowTargets()[0]! });
+  await host.run("projects.switch", { window: host.windowTargets()[0]! });
   const [alpha] = host.windowTargets();
   const texts = host.documentsIn(alpha!).map((id) => host.document(id).text);
   assert.deepEqual(texts, ["", "unsaved"]);
@@ -99,7 +99,7 @@ test("a project already open in a window is focused instead of switched", async 
   const other = host.openWindow();
   await startLaunched();
   host.answer("showPicker", { kind: "selected", id: "a" });
-  await host.run("projects.select", { window: other });
+  await host.run("projects.switch", { window: other });
   assert.equal(host.replaced().length, 0);
   assert.equal(host.focusedWindow(), window);
 });
@@ -112,7 +112,7 @@ test("an unreadable or rootless project is reported and never switched to", asyn
   await startLaunched();
   for (const id of ["a", "e"]) {
     host.answer("showPicker", { kind: "selected", id });
-    await host.run("projects.select");
+    await host.run("projects.switch");
   }
   assert.equal(host.replaced().length, 0);
   assert.deepEqual(host.messages(), [

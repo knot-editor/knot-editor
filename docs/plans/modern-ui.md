@@ -37,7 +37,7 @@ larger type size than the rest of the UI.
   bar's item model and registry: an item gains a placement (status bar or
   toolbar), with the same per-window values, icon, tooltip, and click command.
   `@knot/projects` contributes the project widget (the window's project name;
-  a click runs Switch Project), and `@knot/go-to-file` a search button (Go to
+  a click runs Open Project, which focuses the project's window or opens one and never replaces the current window), and `@knot/go-to-file` a search button (Go to
   File). Nothing else is added for now. This revises the
   [product window chrome](../decisions/platform.md#product-window-chrome-and-failure-notices)
   decision: the dropped prototype toolbar duplicated commands, menus, and

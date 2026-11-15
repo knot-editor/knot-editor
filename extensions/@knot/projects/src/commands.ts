@@ -20,7 +20,7 @@ import {
 import { describe, report } from "./report.js";
 import { capturesOf, sessionKey } from "./session.js";
 import { commit, refreshTree, release, reload, type ProjectsState } from "./state.js";
-import { switchTo } from "./switch.js";
+import { switchTo, type SwitchOptions } from "./switch.js";
 import { VIEW_ID } from "./tree.js";
 
 function idArgument(value: JsonValue): string | null {
@@ -46,34 +46,51 @@ export async function registerCommands(state: ProjectsState) {
     if (state.view !== null) await state.view.hide();
   }, { title: "Hide Projects", description: "Hide the Projects tool." });
 
-  await commands.register("projects.select", async ({ target }) => {
-    await reload(state);
-    if (state.registry.projects.length === 0) {
-      await report("no projects yet; create one first");
-      return;
-    }
-    const picked = await workbench.showPicker({
-      title: "Select project",
-      items: state.registry.projects.map((project) => ({
-        id: project.id,
-        label: displayName(project),
-        detail: rootsPath(project),
-      })),
-    });
-    if (picked.kind === "dismissed") return;
-    const project = projectById(state.registry, picked.id);
-    if (project !== null) await switchTo(state, project, target.windowTarget);
-  }, { title: "Switch Project…", description: "Replace this window's session with another project." });
+  // Both pickers list the projects; Open leaves the window as it is, while
+  // Switch replaces its session.
+  const pickProject = (options: SwitchOptions, title: string, description: string, name: string, label: string) =>
+    commands.register(name, async ({ target }) => {
+      await reload(state);
+      if (state.registry.projects.length === 0) {
+        await report("no projects yet; create one first");
+        return;
+      }
+      const picked = await workbench.showPicker({
+        title,
+        items: state.registry.projects.map((project) => ({
+          id: project.id,
+          label: displayName(project),
+          detail: rootsPath(project),
+        })),
+      });
+      if (picked.kind === "dismissed") return;
+      const project = projectById(state.registry, picked.id);
+      if (project !== null) await switchTo(state, project, target.windowTarget, options);
+    }, { title: label, description });
+  await pickProject(
+    { origin: "keep" },
+    "Open project",
+    "Focus the window of another project, or open it in a new window; this window stays as it is.",
+    "projects.select",
+    "Open Project…",
+  );
+  await pickProject(
+    {},
+    "Switch project",
+    "Replace this window's session with another project.",
+    "projects.switch",
+    "Switch Project…",
+  );
 
   // Row activation routes through the focused tree instance. A click or Enter
-  // switches to the selected row's project; other gestures do nothing.
+  // opens the selected row's project like Open Project; other gestures do nothing.
   await commands.registerForView(VIEW_ID, "projects.select", async ({ target, arguments: args }) => {
     const gesture = object(args)?.gesture;
     if (gesture !== "click" && gesture !== "enter") return;
     await reload(state);
     const id = await workbench.selectedTreeItem();
     const project = id === null ? null : projectById(state.registry, id);
-    if (project !== null) await switchTo(state, project, target.windowTarget);
+    if (project !== null) await switchTo(state, project, target.windowTarget, { origin: "keep" });
   });
 
   // A window opened with the project's roots binds to it like any other window

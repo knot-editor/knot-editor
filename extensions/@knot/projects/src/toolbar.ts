@@ -1,5 +1,5 @@
 // The toolbar's project widget: the name of the project a window is bound to,
-// as that window's own value. A click runs Switch Project. A window bound to
+// as that window's own value. A click runs Open Project. A window bound to
 // no project shows nothing.
 import { icons, windows, workbench } from "knot";
 import type { StatusItemOptions } from "knot";
@@ -16,7 +16,7 @@ const HIDDEN: StatusItemOptions = { text: "", placement: "toolbar" };
 const SHOWN: StatusItemOptions = {
   text: "",
   icon: PROJECT_ICON,
-  tooltip: "Switch Project",
+  tooltip: "Open Project",
   command: { name: SWITCH_COMMAND },
   placement: "toolbar",
 };

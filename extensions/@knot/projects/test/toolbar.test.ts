@@ -9,7 +9,7 @@ beforeEach(() => host.reset());
 const widget = (window: ReturnType<typeof host.openWindow>) =>
   host.toolbarItems(window).map((item) => [item.text, item.command?.name]);
 
-test("each window's widget shows its project's name and follows renames and switches", async () => {
+test("each window's widget shows its project's name and follows renames and opened projects", async () => {
   seedProject("a", "Alpha", [ALPHA]);
   seedProject("b", "Beta", [BETA]);
   seedSession("a", "active");
@@ -27,6 +27,7 @@ test("each window's widget shows its project's name and follows renames and swit
 
   host.answer("showPicker", { kind: "selected", id: "b" });
   await host.run(SWITCH_COMMAND, { window: bound });
+  // The window stays as it is and the project opens in a window of its own.
   const shown = host.windowTargets().flatMap((window) => host.toolbarItems(window).map((item) => item.text));
-  assert.deepEqual(shown.filter((text) => text !== ""), ["Beta"]);
+  assert.deepEqual(shown.filter((text) => text !== "").sort(), ["Beta", "Renamed"]);
 });
