@@ -93,7 +93,7 @@ None material. Bindings and icons follow VS Code and may be adjusted at review.
 ### 1. Regex matching in `buffer.find` ✅
 
 Complete and approved. Behavior: [text search](../architecture/core-and-buffers.md#text-search);
-API: `knot.d.ts` and the [extension guide](../extension-api.md#editor-bars).
+API: `knot.d.ts` and the [extension guide](../extension-api.md#show-an-editor-bar).
 Matching uses `regex-automata`'s meta regex for span-aware anchors. A compiled
 pattern cache was measured unnecessary (compile and search of a small buffer
 took 0.03–0.8 ms). The fake testing host approximates regex with JavaScript
