@@ -1,6 +1,6 @@
 # Modern UI
 
-Status: 🚧 in progress (checkpoints 1–6 done).
+Status: 🚧 in progress (checkpoints 1–7 done).
 
 ## Goal
 
@@ -143,20 +143,15 @@ panels have a search icon and an interface-font query field whose placeholder
 is the picker's title, 28px inset rounded rows, and the folder of a file row at
 the row's end ([semantic UI](../architecture/semantic-ui.md#extension-transient-interactions)).
 
-### 7. Polish
+### 7. Polish ✅
 
-Deliverables: left padding in editors and terminals, thin overlay
-scrollbars that fade in while scrolling, and the status bar restyled to the
-token scale.
-
-Validation: editor layout tests for the text origin; terminal mouse tests
-for the padded cell grid.
-
-Review gate: a full session like the original screenshot, compared with it.
-
-**Implementation context**: scrollbars in `src/app/editor/paint.rs` and
-`src/app/editor/layout.rs`; terminal geometry in `src/app/terminal/`;
-`src/app/components.rs` for gpui-component scrollbars elsewhere.
+Done and approved. Editors without a gutter and terminals leave a 4px inset
+before the text, editors and terminals share a thin overlay scrollbar that shows
+while the content moves and fades out, and the status bar uses the token scale
+with rounded item chips
+([editor views](../architecture/editor-and-languages.md#editor-views)). A lone
+terminal tab keeps its accent underline, since terminals come in numbers
+([workbench](../architecture/workbench-and-lifecycle.md#windows)).
 
 ### 8. Themable chrome
 
