@@ -4,7 +4,7 @@ use super::*;
 use crate::app::convert::ThemePaint as _;
 use crate::app::documents::{DocumentDirty, ExternalChange};
 use crate::app::status_bar::{BarItem, StatusItem};
-use crate::app::theme::{Theme, color, theme};
+use crate::app::theme::{Chrome, Theme, chrome, color, theme};
 use crate::app::tokens;
 use crate::app::workbench::BottomDockLayout;
 use crate::app::zoom;
@@ -23,12 +23,16 @@ impl KnotWindow {
     /// places the bottom dock; a maximized pane fills it alone.
     pub(super) fn render_workbench(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let card_background = theme(cx).paint_color(color::CARD_BACKGROUND);
+        let border = theme(cx).paint_color(color::BORDER);
+        let chrome = chrome(cx);
         // Cards clip their content to a rectangle, so a child's own background
         // matches the card's wherever it reaches a rounded corner.
         let card = |element: Div| {
             element
                 .overflow_hidden()
-                .rounded(zoom::rems(tokens::radius::MD))
+                .rounded(zoom::rems(chrome.card_radius))
+                .border(zoom::rems(chrome.card_border))
+                .border_color(border)
                 .bg(card_background)
         };
         if let Some(pane) = self.maximized_pane(cx) {
@@ -72,7 +76,7 @@ impl KnotWindow {
                     DockLocation::Left | DockLocation::Right => element.w(px(size)).h_full(),
                 })
                 .child(self.render_layout(&layout, cx));
-            let divider = self.render_divider(dock.axis(), Divider::Dock(dock), cx);
+            let divider = self.render_divider(dock.axis(), Divider::Dock(dock), chrome, cx);
             docks[dock.index()] = Some((element, divider));
         }
         let [left, right, bottom] = docks;
@@ -140,7 +144,7 @@ impl KnotWindow {
                     .relative()
                     .child(self.split_drag_geometry(boundary))
                     .child(child(*ratio).child(self.render_layout(first, cx)))
-                    .child(self.render_divider(direction, Divider::Split(boundary), cx))
+                    .child(self.render_divider(direction, Divider::Split(boundary), chrome(cx), cx))
                     .child(child(1. - *ratio).child(self.render_layout(second, cx)))
                     .into_any_element()
             }
@@ -154,9 +158,14 @@ impl KnotWindow {
         &self,
         direction: SplitDirection,
         divider: Divider,
+        chrome: Chrome,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let horizontal = direction == SplitDirection::Horizontal;
+        // The handle is at least `MIN_RESIZE_HANDLE` wide; what exceeds the
+        // gap overlaps the area before it, which the handle paints over.
+        let handle = chrome.card_gap.max(tokens::chrome::MIN_RESIZE_HANDLE);
+        let overlap = handle - chrome.card_gap;
         let element = match divider {
             Divider::Dock(dock) => div()
                 .id(("dock-divider", dock.index()))
@@ -171,7 +180,9 @@ impl KnotWindow {
             .when(horizontal, |element| {
                 element
                     .flex_row()
-                    .w(zoom::rems(tokens::chrome::RESIZE_HANDLE))
+                    .w(zoom::rems(handle))
+                    .ml(zoom::rems(-overlap))
+                    .pl(zoom::rems(overlap))
                     .h_full()
                     .justify_center()
                     .cursor(CursorStyle::ResizeLeftRight)
@@ -179,7 +190,9 @@ impl KnotWindow {
             .when(!horizontal, |element| {
                 element
                     .flex_col()
-                    .h(zoom::rems(tokens::chrome::RESIZE_HANDLE))
+                    .h(zoom::rems(handle))
+                    .mt(zoom::rems(-overlap))
+                    .pt(zoom::rems(overlap))
                     .w_full()
                     .items_center()
                     .cursor(CursorStyle::ResizeUpDown)
@@ -273,6 +286,7 @@ impl KnotWindow {
         // A lone tool shows just its title; terminals come in numbers, so
         // theirs always show which is active.
         let titled_alone = in_dock && pane.tabs().len() == 1 && !terminal_active;
+        let chrome = chrome(cx);
         let accent = theme(cx).paint_color(color::TAB_ACCENT);
         let card_background = theme(cx).paint_color(color::CARD_BACKGROUND);
         let tabs = pane
@@ -348,7 +362,7 @@ impl KnotWindow {
                         });
                         element
                             .bg(background)
-                            .border_b_2()
+                            .border_b(px(chrome.accent_width))
                             .border_color(if tab_id == active_tab {
                                 accent
                             } else {
@@ -359,9 +373,9 @@ impl KnotWindow {
                     // one underlined with the accent.
                     .when(in_dock, |element| {
                         element
-                            .font_weight(FontWeight::SEMIBOLD)
+                            .font_weight(FontWeight(chrome.header_weight))
                             .text_size(zoom::rems(13.))
-                            .border_b_2()
+                            .border_b(px(chrome.accent_width))
                             .border_color(if tab_id == active_tab && !titled_alone {
                                 accent
                             } else {
@@ -503,7 +517,7 @@ impl KnotWindow {
                     .flex()
                     .flex_row()
                     .flex_none()
-                    .h(zoom::rems(tokens::chrome::TAB_BAR_HEIGHT))
+                    .h(zoom::rems(chrome.tab_bar_height))
                     .relative()
                     .debug_selector(move || format!("tab-bar-{}", pane_id.value()))
                     .child(self.tab_bar_drag_geometry(pane_id))
@@ -841,7 +855,7 @@ impl Render for KnotWindow {
                             .flex_1()
                             .min_w_0()
                             .min_h_0()
-                            .p(zoom::rems(tokens::chrome::WINDOW_INSET))
+                            .p(zoom::rems(chrome(cx).card_inset))
                             .child(
                                 div()
                                     .size_full()

@@ -1,6 +1,7 @@
 // Catppuccin Mocha and Latte, from the published Catppuccin palette and its
 // style guide.
 import type { ThemeDefinition } from "knot";
+import { ISLANDS_CHROME } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const mocha = {
@@ -28,6 +29,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
   return {
     name,
     appearance,
+    chrome: ISLANDS_CHROME,
     colors: {
       "background": p.mantle,
       "card.background": p.base,
@@ -75,6 +77,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "statusBar.border": dark ? p.crust : p.surface0,
       "statusBar.foreground": p.overlay1,
       "statusBar.item.hover.background": p.surface0,
+      "stripe.selected.background": `${p.blue}4d`,
       "success": p.green,
       "tab.active.background": p.base,
       "tab.active.foreground": p.text,

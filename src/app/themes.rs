@@ -41,8 +41,12 @@ fn selection(cx: &App) -> Selection {
 /// theme is registered, and it starts following the selection settings.
 pub(crate) fn apply_at_startup(cx: &mut App) {
     apply(cx, true);
-    cx.observe_global::<ApplicationSettings>(|cx| apply(cx, false))
-        .detach();
+    cx.observe_global::<ApplicationSettings>(|cx| {
+        apply(cx, false);
+        // `chrome.*` settings reshape every window without a new theme.
+        cx.refresh_windows();
+    })
+    .detach();
 }
 
 /// Install the selected theme again if the selection changed, such as after

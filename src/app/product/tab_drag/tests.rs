@@ -436,7 +436,7 @@ fn the_dock_divider_is_the_gap_between_the_cards(cx: &mut TestAppContext) {
     let divider = visual.debug_bounds("dock-divider-0").unwrap();
     assert_eq!(
         divider.size.width,
-        px(crate::app::tokens::chrome::RESIZE_HANDLE)
+        px(crate::app::theme::Chrome::default().card_gap)
     );
     assert_eq!(divider.left(), dock.right());
     assert_eq!(dock.top(), divider.top());

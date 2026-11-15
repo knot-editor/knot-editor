@@ -17,6 +17,20 @@ pub(crate) fn theme(cx: &App) -> &Theme {
         .map_or(&DEFAULTS, |theme| &theme.0)
 }
 
+/// The chrome's shape and weight: the theme's values, except where a
+/// `chrome.*` setting overrides one.
+pub(crate) fn chrome(cx: &App) -> Chrome {
+    let mut chrome = theme(cx).chrome;
+    for known in CHROME_KEYS {
+        let setting = format!("{}{}", crate::app::settings::CHROME_PREFIX, known.key);
+        if let Some(value) = crate::app::settings::number(&setting, cx).filter(|value| *value >= 0.)
+        {
+            chrome.set(known.key, value);
+        }
+    }
+    chrome
+}
+
 /// Replace the application theme, paint gpui-component with it, and repaint
 /// every window.
 pub(crate) fn set_theme(theme: Theme, cx: &mut App) {

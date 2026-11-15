@@ -19,6 +19,7 @@ fn definition(name: &str, appearance: Appearance, background: &str) -> ThemeDefi
         appearance,
         colors: std::collections::BTreeMap::from([(color::BACKGROUND.into(), background.into())]),
         syntax: Default::default(),
+        chrome: Default::default(),
     }
 }
 

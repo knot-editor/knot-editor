@@ -2,7 +2,8 @@
 //!
 //! Every length is in pixels at 100% zoom; surfaces convert one with
 //! [`zoom::rems`] (style lengths) or [`zoom::scaled`] (painted lengths), so
-//! the chrome zooms as one. Colors come from the theme's color keys.
+//! the chrome zooms as one. Colors come from the theme's color keys, and the
+//! chrome's shape and weight from its [`Chrome`](crate::app::theme::Chrome).
 
 /// The corner radii.
 pub(crate) mod radius {
@@ -13,19 +14,14 @@ pub(crate) mod radius {
 
 /// Heights and widths of the workbench chrome.
 pub(crate) mod chrome {
-    pub(crate) const TAB_BAR_HEIGHT: f32 = 30.;
     pub(crate) const STATUS_BAR_HEIGHT: f32 = 24.;
     /// A status or toolbar item, centered in its bar.
     pub(crate) const STATUS_ITEM_HEIGHT: f32 = 20.;
     pub(crate) const STATUS_TEXT_SIZE: f32 = 12.;
-    pub(crate) const STRIPE_WIDTH: f32 = 36.;
     pub(crate) const STRIPE_BUTTON: f32 = 30.;
     pub(crate) const STRIPE_GROUP_MIN_HEIGHT: f32 = 60.;
-    /// The grab area of a dock or split resize handle.
-    /// The gap between cards and the hit width of a split divider.
-    pub(crate) const RESIZE_HANDLE: f32 = 8.;
-    /// The margin around the cards at the window edges.
-    pub(crate) const WINDOW_INSET: f32 = 4.;
+    /// The narrowest grab area of a dock or split resize handle.
+    pub(crate) const MIN_RESIZE_HANDLE: f32 = 6.;
     /// The toolbar row's height; unscaled on macOS, where it matches the native window buttons.
     /// The width the native window buttons take at the toolbar row's start.
     pub(crate) const WINDOW_BUTTONS_WIDTH: f32 = 80.;

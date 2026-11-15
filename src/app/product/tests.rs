@@ -1,5 +1,6 @@
 //! Product window integration tests and their shared fixtures.
 
+mod chrome;
 mod closure;
 mod commands;
 mod dock_header;

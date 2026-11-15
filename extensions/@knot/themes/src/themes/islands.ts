@@ -1,5 +1,6 @@
 // Knot Islands Dark and Light, after IntelliJ's new UI palette.
 import type { ThemeDefinition } from "knot";
+import { ISLANDS_CHROME } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const accent = "#3574f0";
@@ -45,6 +46,7 @@ const lightAnsi = {
 export const ISLANDS_DARK: ThemeDefinition = {
   name: "Knot Islands Dark",
   appearance: "dark",
+  chrome: ISLANDS_CHROME,
   colors: {
     ...darkAnsi,
     "background": "#2b2d30",
@@ -90,6 +92,7 @@ export const ISLANDS_DARK: ThemeDefinition = {
     "statusBar.border": "#1e1f22",
     "statusBar.foreground": "#868a91",
     "statusBar.item.hover.background": "#393b40",
+    "stripe.selected.background": "#3574f04d",
     "success": "#5fb865",
     "tab.accent": accent,
     "tab.active.background": "#2b2d30",
@@ -124,6 +127,7 @@ export const ISLANDS_DARK: ThemeDefinition = {
 export const ISLANDS_LIGHT: ThemeDefinition = {
   name: "Knot Islands Light",
   appearance: "light",
+  chrome: ISLANDS_CHROME,
   colors: {
     ...lightAnsi,
     "background": "#ffffff",
@@ -169,6 +173,7 @@ export const ISLANDS_LIGHT: ThemeDefinition = {
     "statusBar.border": "#dfe1e5",
     "statusBar.foreground": "#6c707e",
     "statusBar.item.hover.background": "#d0d3da",
+    "stripe.selected.background": "#3574f04d",
     "success": "#369650",
     "tab.accent": accent,
     "tab.active.background": "#ffffff",

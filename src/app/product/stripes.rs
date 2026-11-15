@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::app::convert::ThemePaint as _;
-use crate::app::theme::{color, theme};
+use crate::app::theme::{chrome, color, theme};
 use crate::app::tokens;
 use crate::app::workbench::{StripeButton, Stripes};
 use crate::app::zoom;
@@ -66,6 +66,7 @@ impl KnotWindow {
             return (None, None);
         }
         let stripes = self.workbench.read(cx).stripes();
+        let stripe_width = chrome(cx).stripe_width;
         let stripe = |id: &'static str| {
             div()
                 .id(id)
@@ -74,7 +75,7 @@ impl KnotWindow {
                 .flex()
                 .flex_col()
                 .h_full()
-                .w(zoom::rems(tokens::chrome::STRIPE_WIDTH))
+                .w(zoom::rems(stripe_width))
                 .py_1()
                 .gap_1()
                 .items_center()
@@ -150,7 +151,7 @@ impl KnotWindow {
         };
         let visible = workbench.stripe_button_visible(button);
         let hover = theme(cx).paint_color(color::LIST_HOVER_BACKGROUND);
-        let selected = theme(cx).paint_color(color::TAB_ACCENT).opacity(0.3);
+        let selected = theme(cx).paint_color(color::STRIPE_SELECTED_BACKGROUND);
         let selected_text = theme(cx).paint_color(color::TEXT);
         let title = SharedString::from(title);
         let drag = StripeDrag {

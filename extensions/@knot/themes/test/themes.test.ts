@@ -52,3 +52,18 @@ test("the Islands themes are the native default pair and keep the window darker 
   assert.equal(dark?.colors?.["tab.accent"], "#3574f0");
   assert.equal(light?.colors?.["tab.accent"], "#3574f0");
 });
+
+test("every theme defines a complete chrome of known values", () => {
+  const keys = ["accentWidth", "cardBorder", "cardGap", "cardInset", "cardRadius", "headerWeight", "stripeWidth", "tabBarHeight"];
+  for (const theme of THEMES) {
+    assert.deepEqual(Object.keys(theme.chrome ?? {}).sort(), keys, theme.name);
+  }
+});
+
+test("Islands themes float rounded cards and flat themes meet at borders", () => {
+  const byName = new Map(THEMES.map((theme) => [theme.name, theme]));
+  assert.equal(byName.get("Knot Islands Dark")?.chrome?.cardRadius, 6);
+  assert.equal(byName.get("Knot Islands Dark")?.chrome?.cardBorder, 0);
+  assert.equal(byName.get("One Dark")?.chrome?.cardGap, 0);
+  assert.equal(byName.get("One Dark")?.chrome?.cardBorder, 1);
+});

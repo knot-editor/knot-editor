@@ -1,5 +1,6 @@
 // One Light, from Atom's one-light-syntax and one-light-ui.
 import type { ThemeDefinition } from "knot";
+import { FLAT_CHROME } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const bg = "#fafafa";
@@ -17,6 +18,7 @@ const accent = "#526fff";
 export const ONE_LIGHT: ThemeDefinition = {
   name: "One Light",
   appearance: "light",
+  chrome: FLAT_CHROME,
   colors: {
     "background": panel,
     "card.background": bg,
@@ -64,6 +66,7 @@ export const ONE_LIGHT: ThemeDefinition = {
     "statusBar.border": "#dbdbdc",
     "statusBar.foreground": "#696c77",
     "statusBar.item.hover.background": "#dbdbdc",
+    "stripe.selected.background": `${accent}4d`,
     "success": green,
     "tab.active.background": bg,
     "tab.active.foreground": "#232324",

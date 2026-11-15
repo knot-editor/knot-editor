@@ -1,10 +1,12 @@
 // Tokyo Night and Tokyo Night Light, from enkia's Tokyo Night editor themes.
 import type { ThemeDefinition } from "knot";
+import { ISLANDS_CHROME } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 export const TOKYO_NIGHT: ThemeDefinition = {
   name: "Tokyo Night",
   appearance: "dark",
+  chrome: ISLANDS_CHROME,
   colors: {
     "background": "#16161e",
     "card.background": "#1a1b26",
@@ -52,6 +54,7 @@ export const TOKYO_NIGHT: ThemeDefinition = {
     "statusBar.border": "#101014",
     "statusBar.foreground": "#787c99",
     "statusBar.item.hover.background": "#292e42",
+    "stripe.selected.background": "#7aa2f74d",
     "success": "#9ece6a",
     "tab.active.background": "#1a1b26",
     "tab.active.foreground": "#a9b1d6",
@@ -99,6 +102,7 @@ export const TOKYO_NIGHT: ThemeDefinition = {
 export const TOKYO_NIGHT_LIGHT: ThemeDefinition = {
   name: "Tokyo Night Light",
   appearance: "light",
+  chrome: ISLANDS_CHROME,
   colors: {
     "background": "#cbccd1",
     "card.background": "#d5d6db",
@@ -146,6 +150,7 @@ export const TOKYO_NIGHT_LIGHT: ThemeDefinition = {
     "statusBar.border": "#b9bac0",
     "statusBar.foreground": "#6c6e75",
     "statusBar.item.hover.background": "#c0c2c9",
+    "stripe.selected.background": "#34548a4d",
     "success": "#485e30",
     "tab.active.background": "#d5d6db",
     "tab.active.foreground": "#343b58",

@@ -216,6 +216,11 @@ pub(crate) fn boolean(key: &str, cx: &App) -> bool {
     resolve(key, &SettingsScope::default(), cx, Value::as_bool).expect("a native boolean setting")
 }
 
+/// The value of a native number setting, unscoped.
+pub(crate) fn number(key: &str, cx: &App) -> Option<f32> {
+    resolve(key, &SettingsScope::default(), cx, Value::as_f64).map(|value| value as f32)
+}
+
 /// The value of a native text setting, unscoped.
 pub(crate) fn text(key: &str, cx: &App) -> String {
     resolve(key, &SettingsScope::default(), cx, |value| {

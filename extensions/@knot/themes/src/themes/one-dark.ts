@@ -1,5 +1,6 @@
 // One Dark, from Atom's one-dark-syntax and one-dark-ui.
 import type { ThemeDefinition } from "knot";
+import { FLAT_CHROME } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const bg = "#282c34";
@@ -17,6 +18,7 @@ const accent = "#528bff";
 export const ONE_DARK: ThemeDefinition = {
   name: "One Dark",
   appearance: "dark",
+  chrome: FLAT_CHROME,
   colors: {
     "background": panel,
     "card.background": bg,
@@ -64,6 +66,7 @@ export const ONE_DARK: ThemeDefinition = {
     "statusBar.border": "#181a1f",
     "statusBar.foreground": "#6b717d",
     "statusBar.item.hover.background": "#2c313a",
+    "stripe.selected.background": `${accent}4d`,
     "success": green,
     "tab.active.background": bg,
     "tab.active.foreground": "#d7dae0",
