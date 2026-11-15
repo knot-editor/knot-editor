@@ -494,3 +494,19 @@ fn every_preset_binds_zoom_and_pc_terminals_leave_it_to_the_shell() {
         }
     }
 }
+
+#[test]
+fn the_macos_preset_binds_the_standard_application_and_window_keys() {
+    let registry = preset_registry(Platform::MacOs);
+    for (key, command_name) in [
+        ("cmd-h", HIDE_COMMAND),
+        ("alt-cmd-h", HIDE_OTHERS_COMMAND),
+        ("cmd-m", MINIMIZE_WINDOW_COMMAND),
+    ] {
+        assert_eq!(
+            resolved(&registry, key, Some("editor")).as_deref(),
+            Some(command_name),
+            "{key}"
+        );
+    }
+}

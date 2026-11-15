@@ -772,6 +772,62 @@ pub(crate) async fn quit(
     close_target(&context, ProtectedCloseKind::Quit).await
 }
 
+#[command("application.hide", title = "Hide Knot", description = "Hide Knot and its windows.", id = HIDE_COMMAND, participant = Application)]
+pub(crate) async fn hide(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .foreground(|_, cx| {
+            cx.hide();
+            Ok(())
+        })
+        .await
+}
+
+#[command("application.hide-others", title = "Hide Other Applications", description = "Hide every application but Knot.", id = HIDE_OTHERS_COMMAND, participant = Application)]
+pub(crate) async fn hide_others(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .foreground(|_, cx| {
+            cx.hide_other_apps();
+            Ok(())
+        })
+        .await
+}
+
+#[command("application.show-all", title = "Show All Applications", description = "Show the applications that Hide Other Applications hid.", id = SHOW_ALL_COMMAND, participant = Application)]
+pub(crate) async fn show_all(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .foreground(|_, cx| {
+            cx.unhide_other_apps();
+            Ok(())
+        })
+        .await
+}
+
+#[command("window.minimize", title = "Minimize Window", description = "Minimize the window to the Dock.", id = MINIMIZE_WINDOW_COMMAND, participant = Application)]
+pub(crate) async fn minimize_window(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    native_window_operation(&context, |window| window.minimize_window()).await
+}
+
+#[command("window.zoom", title = "Zoom Window", description = "Zoom the window to fill the screen, or restore its size.", id = ZOOM_WINDOW_COMMAND, participant = Application)]
+pub(crate) async fn zoom_window(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    native_window_operation(&context, |window| window.zoom_window()).await
+}
+
+async fn native_window_operation(
+    context: &CommandContext,
+    operation: impl FnOnce(&mut Window) + 'static,
+) -> Result<(), CommandOutcome> {
+    context
+        .foreground(move |target, cx| {
+            let handle = target
+                .native_window(cx)
+                .ok_or(CommandOutcome::InvalidTarget)?;
+            handle
+                .update(cx, |_, native, _| operation(native))
+                .map_err(|_| CommandOutcome::InvalidTarget)
+        })
+        .await
+}
+
 async fn split(
     context: &CommandContext,
     direction: SplitDirection,

@@ -45,8 +45,15 @@ impl ApplicationCommandSource {
 }
 
 /// The commands that run from the menu with no window open.
-pub(crate) const WINDOWLESS_COMMANDS: [&str; 4] =
-    [QUIT_COMMAND, NEW_COMMAND, NEW_WINDOW_COMMAND, OPEN_COMMAND];
+pub(crate) const WINDOWLESS_COMMANDS: [&str; 7] = [
+    QUIT_COMMAND,
+    HIDE_COMMAND,
+    HIDE_OTHERS_COMMAND,
+    SHOW_ALL_COMMAND,
+    NEW_COMMAND,
+    NEW_WINDOW_COMMAND,
+    OPEN_COMMAND,
+];
 
 /// The action a menu item for `name` runs, and its key equivalent labels.
 pub(crate) fn menu_action(name: &str) -> Box<dyn Action> {

@@ -707,7 +707,16 @@ fn product_menus() -> Vec<Menu> {
         disabled: false,
     };
     vec![
-        menu("Knot", vec![item("Quit Knot", QUIT_COMMAND)]),
+        menu(
+            "Knot",
+            vec![
+                item("Hide Knot", HIDE_COMMAND),
+                item("Hide Others", HIDE_OTHERS_COMMAND),
+                item("Show All", SHOW_ALL_COMMAND),
+                MenuItem::separator(),
+                item("Quit Knot", QUIT_COMMAND),
+            ],
+        ),
         menu(
             "File",
             vec![
@@ -745,6 +754,14 @@ fn product_menus() -> Vec<Menu> {
                 item("Reset Zoom", RESET_ZOOM_COMMAND),
             ],
         ),
+        // AppKit adds the list of open windows to the menu named "Window".
+        menu(
+            "Window",
+            vec![
+                item("Minimize", MINIMIZE_WINDOW_COMMAND),
+                item("Zoom", ZOOM_WINDOW_COMMAND),
+            ],
+        ),
     ]
 }
 
@@ -755,6 +772,12 @@ fn run_without_window(source: &ApplicationCommandSource, cx: &mut App) {
     if name == QUIT_COMMAND {
         crate::app::extensions::host::quit_after_storage(cx);
         return;
+    }
+    match name {
+        HIDE_COMMAND => return cx.hide(),
+        HIDE_OTHERS_COMMAND => return cx.hide_other_apps(),
+        SHOW_ALL_COMMAND => return cx.unhide_other_apps(),
+        _ => {}
     }
     let ready = cx
         .global::<ApplicationLaunchGate>()

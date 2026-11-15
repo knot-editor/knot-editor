@@ -260,6 +260,9 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
 /// macOS word, line, and document movement, the Emacs-style keys that every
 /// Cocoa text view accepts, and tab navigation.
 const MACOS_BINDINGS: &[PresetEntry] = &[
+    ("cmd-h", HIDE_COMMAND, None),
+    ("alt-cmd-h", HIDE_OTHERS_COMMAND, None),
+    ("cmd-m", MINIMIZE_WINDOW_COMMAND, None),
     ("cmd-g", FIND_NEXT_COMMAND, Some("editor")),
     ("cmd-g", FIND_NEXT_COMMAND, Some("bar")),
     ("shift-cmd-g", FIND_PREVIOUS_COMMAND, Some("editor")),
