@@ -1,6 +1,6 @@
 # D092: Piece tree text buffer
 
-Status: 🚧 approved, not started. Roadmap item [D092](../roadmap.md). Follows
+Status: 🚧 approved, checkpoint 1 awaiting review. Roadmap item [D092](../roadmap.md). Follows
 the [text buffer analysis](../reports/text-buffer-structure.md) (option B);
 current behavior is owned by
 [core and buffers](../architecture/core-and-buffers.md) and
@@ -78,9 +78,56 @@ reindent, and foreground parse, so painting pays today's O(pieces) copy too.
 - Whether a locator is a fixed small array or a growable inline sequence,
   decided in checkpoint 3 from how deep keys grow under the randomized test.
 
+## Baseline
+
+Current `Vec`-based buffer, recorded by
+`cargo run --release -p knot-core --example buffer_bench` (release profile,
+no extra flags) on an Apple M1 Pro with 32 GiB, macOS 27.0.1, rustc 1.99.0.
+Two full runs agreed within about 10%; the table is one of them. The
+1M-line fixture is 27.8 MiB; the piece-count workloads use a 100,000-line
+fixture (about 2.9 MiB) so that building 100k pieces stays practical. Piece
+counts are approximate: each workload inserts one character at distinct line
+starts, adding about two pieces per insert, and the edit log is drained as
+it grows. The differential test and the benchmark's fixtures are
+deterministic.
+
+| Workload | Baseline |
+| --- | --- |
+| Typing bursts, 1M lines (4,000 keystrokes at 200 random places) | p50 145 µs, p99 307 µs, max 1.9 ms |
+| Replace-all, 1,000 matches, 1M lines | 0.32 s (321 µs per match) |
+| Replace-all, 10,000 matches, 1M lines | 3.43 s (343 µs per match) |
+| 50 cursors × 100 characters, 1M lines | 0.83 s total; per keystroke round (50 edits) p50 8.2 ms, p99 11.3 ms |
+| Snapshot, 10k pieces / 100k pieces | 21 µs / 141 µs |
+| Build 10k / 100k pieces (one insert each) | 0.10 s / 2.6 s |
+| Add 10,000 anchored ranges, 10k / 100k pieces | 54 ms / 449 ms |
+| Resolve 10,000 anchored ranges, 10k / 100k pieces | 38 ms (3.8 µs each) / 330 ms (33 µs each) |
+| Stabilize after 50 edits near the start, 10k / 100k pieces | 0.03 ms / 0.02 ms |
+| Stabilize after deleting a quarter of the text (2,574 ranges consumed), 10k / 100k pieces | 18 ms / 137 ms |
+| Read the last 50 lines, 100k pieces | 389 µs |
+| `line_of_offset` near the end, 100k pieces | 0.02 µs |
+| `utf16_of_offset` near the end, 100k pieces | 363 µs |
+| `offset_of_utf16` near the end, 100k pieces | 339 µs |
+| `position_at` near the end, 100k pieces | 47 µs |
+| Heap per piece over an unedited buffer | about 44 bytes (88 bytes and 1.8 allocations per insert, about two pieces each), including spare `Vec` capacity |
+
+Observations that shape the acceptance targets:
+
+- A per-edit cost near 150–340 µs is the O(lines) line-index shift and the
+  O(pieces) `Vec` splice at 1M lines; it is the dominant cost of every bulk
+  edit, so bulk edits scale as m × document size.
+- Replace-all of 10,000 matches takes 3.4 s today. The final target, tens of
+  milliseconds, needs about 3–5 µs per replace (two primitive edits), well
+  within reach of O(log n) edits.
+- Snapshot, resolve, `position_at`, the last-screen read, and the UTF-16
+  conversions grow linearly with piece count (the last two pay for a chunk
+  walk from the line start plus the piece scan). `line_of_offset` is already
+  logarithmic because the document-wide index exists.
+- Typing p50 of 145 µs at 1M lines is the bar for "not slower"; it is
+  dominated by the line-index shift that the tree removes.
+
 ## Checkpoints
 
-### 1. Benchmark harness, baseline, and differential test
+### 1. Benchmark harness, baseline, and differential test ✅ (awaiting review)
 
 Add a release-mode benchmark example and a randomized differential test, both
 against the current `Vec`-based buffer, and record the baseline. No change to
@@ -110,9 +157,9 @@ the buffer.
   `position_at` and checks that `resolve` follows them across later edits,
   using the edit log's `Split` records exactly as `AnchoredRangeStore` does.
   Several fixed seeds run in the normal test suite.
-- **Deliverable:** record the baseline table in this plan, under a
+- **Deliverable:** ✅ record the baseline table in this plan, under a
   "Baseline" heading, with machine, OS, and build profile.
-- **Validation:** the differential test passes on the current buffer;
+- **Validation:** ✅ the differential test passes on the current buffer;
   `just check`.
 - **Review gate:** review the workloads and baseline numbers, and confirm
   the projected bulk-edit costs (or correct the acceptance targets) before
