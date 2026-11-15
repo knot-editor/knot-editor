@@ -106,7 +106,7 @@ API: `knot.d.ts` and the [extension guide](../extension-api.md#show-an-editor-ba
 `ifRevision` is optional and defaults to the current revision. The fake testing
 host expands replacements with JavaScript `RegExp`, an approximation.
 
-### 3. Regex toggle and Replace bar
+### 3. Regex toggle and Replace bar ✅ (awaiting review)
 
 Deliverables: the Regex toggle with its error message in the bar,
 `editor.replace`, the Replace bar, Replace and Replace All commands and
@@ -121,6 +121,14 @@ Implementation context:
   routing (Enter, `cmd-enter`, Tab across bars) needs it.
 - Icons via `icons.define` (Lucide `regex`, `replace`, `replace-all`).
 - Update [editor bars](../architecture/editor-and-languages.md#editor-bars).
+
+Done: the toggle (`find.regex` icon, `cmd-alt-r`), `editor.replace` (native
+presets `cmd-alt-f` on macOS, `ctrl-h` elsewhere), the `replace` bar, Enter and
+`cmd-enter` / `ctrl-enter` in its field, "Replaced N" in its message line,
+extension tests and workbench tests through the real editor, and the
+[editor bars](../architecture/editor-and-languages.md#editor-bars) update.
+The personal `post-init.js` has `Try: Fill with Replace sample text` and
+`Try: Replace help`.
 
 Review gate: manual review of Replace in the app.
 

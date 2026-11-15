@@ -242,6 +242,11 @@ command through the window with the bar's editor captured, deferred
 until the click has finished with its views; an extension flips a toggle by
 opening the bar again. [Commands](commands.md#editor-bars) covers key routing
 while a field has focus. The bundled `@knot/find` package is the first user.
+It stacks a `replace` bar beneath its `find` bar when `editor.replace` opens
+both; Enter there replaces the selected match, when the selection is one, and
+selects the next, and Replace All commits every match as one undo step with
+the native `replace`. Escape in either closes both. An invalid pattern shows the
+parser's message in the find bar.
 Its highlights are the editor's own decorations
 ([semantic UI](semantic-ui.md#semantic-extension-ui)) in `editor.findMatch` and
 `editor.findMatchCurrent`, capped at 1,000 matches, and it finds matches with
