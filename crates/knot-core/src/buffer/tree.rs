@@ -18,6 +18,7 @@ use std::slice;
 use std::sync::Arc;
 
 use super::Piece;
+use super::locator::Locator;
 
 /// Greatest number of pieces in a leaf.
 const LEAF_MAX: usize = 32;
@@ -89,7 +90,7 @@ pub(super) enum Bias {
 }
 
 /// A piece found by a search, with the totals of everything before it.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct Located {
     pub piece: Piece,
     pub before: Summary,
@@ -104,7 +105,17 @@ enum Node {
 #[derive(Clone)]
 struct Child {
     summary: Summary,
+    /// The greatest locator in the subtree.
+    last: Option<Locator>,
     node: Arc<Node>,
+}
+
+impl Child {
+    /// Recompute the cached values after the subtree changed.
+    fn refresh(&mut self) {
+        self.summary = self.node.summary();
+        self.last = self.node.last_locator();
+    }
 }
 
 impl Node {
@@ -133,9 +144,17 @@ impl Node {
         }
     }
 
+    fn last_locator(&self) -> Option<Locator> {
+        match self {
+            Node::Leaf(pieces) => pieces.last().map(|p| p.locator.clone()),
+            Node::Internal(children) => children.last().and_then(|c| c.last.clone()),
+        }
+    }
+
     fn child(node: Node) -> Child {
         Child {
             summary: node.summary(),
+            last: node.last_locator(),
             node: Arc::new(node),
         }
     }
@@ -181,8 +200,8 @@ impl Tree {
 
     pub fn from_piece(piece: Piece) -> Self {
         Tree {
-            root: Arc::new(Node::Leaf(vec![piece])),
             summary: piece.summary(),
+            root: Arc::new(Node::Leaf(vec![piece])),
         }
     }
 
@@ -207,7 +226,7 @@ impl Tree {
                         let end = before + piece.summary();
                         if reached(&end) {
                             return Some(Located {
-                                piece: *piece,
+                                piece: piece.clone(),
                                 before,
                             });
                         }
@@ -281,41 +300,46 @@ impl Tree {
         }
     }
 
-    /// The piece with `id` and its start offset, by walking every piece.
-    pub fn find(&self, id: u64) -> Option<(usize, Piece)> {
-        fn go(node: &Node, id: u64) -> Result<(usize, Piece), usize> {
+    /// The piece with `locator` and its start offset.
+    pub fn find(&self, locator: &Locator) -> Option<(usize, Piece)> {
+        let mut node = &*self.root;
+        let mut offset = 0;
+        loop {
             match node {
-                Node::Leaf(pieces) => match pieces.iter().position(|p| p.id == id) {
-                    Some(index) => {
-                        let start = pieces[..index].iter().map(|p| p.len).sum();
-                        Ok((start, pieces[index]))
-                    }
-                    None => Err(pieces.iter().map(|p| p.len).sum()),
-                },
-                Node::Internal(children) => {
-                    let mut offset = 0;
-                    for child in children {
-                        match go(&child.node, id) {
-                            Ok((start, piece)) => return Ok((offset + start, piece)),
-                            Err(_) => offset += child.summary.bytes,
+                Node::Leaf(pieces) => {
+                    for piece in pieces {
+                        if piece.locator == *locator {
+                            return Some((offset, piece.clone()));
                         }
+                        offset += piece.len;
                     }
-                    Err(offset)
+                    return None;
+                }
+                Node::Internal(children) => {
+                    let mut next = None;
+                    for child in children {
+                        if child.last.as_ref().is_some_and(|last| last >= locator) {
+                            next = Some(&*child.node);
+                            break;
+                        }
+                        offset += child.summary.bytes;
+                    }
+                    node = next?;
                 }
             }
         }
-        go(&self.root, id).ok()
     }
 
     /// Insert `piece` after the piece that ends at byte `at`, or first when
     /// `at` is 0.
     pub fn insert(&mut self, at: usize, piece: Piece) {
+        let summary = piece.summary();
         let root = Arc::make_mut(&mut self.root);
         if let Some(sibling) = Self::insert_into(root, at, piece) {
             let left = Node::child(std::mem::replace(root, Node::Leaf(Vec::new())));
             *root = Node::Internal(vec![left, sibling]);
         }
-        self.summary += piece.summary();
+        self.summary += summary;
     }
 
     fn insert_into(node: &mut Node, at: usize, piece: Piece) -> Option<Child> {
@@ -336,7 +360,7 @@ impl Tree {
                 let (index, local) = Self::child_at(children, at);
                 let child = &mut children[index];
                 let sibling = Self::insert_into(Arc::make_mut(&mut child.node), local, piece);
-                child.summary = child.node.summary();
+                child.refresh();
                 if let Some(sibling) = sibling {
                     children.insert(index + 1, sibling);
                 }
@@ -384,7 +408,7 @@ impl Tree {
                     let child_start = at - local;
                     let child = &mut children[index];
                     let result = go(Arc::make_mut(&mut child.node), at, child_start, edit);
-                    child.summary = child.node.summary();
+                    child.refresh();
                     result
                 }
             }
@@ -424,7 +448,7 @@ impl Tree {
                     offset += piece.len;
                     let inside = piece_start >= start && piece_start < end;
                     if inside {
-                        removed.push(*piece);
+                        removed.push(piece.clone());
                     }
                     !inside
                 });
@@ -450,7 +474,7 @@ impl Tree {
                         end.min(child_end) - child_start,
                         removed,
                     );
-                    child.summary = child.node.summary();
+                    child.refresh();
                     gone[index] = child.node.entries() == 0;
                 }
                 let mut index = 0;
@@ -482,6 +506,7 @@ impl Tree {
                 _ => unreachable!("siblings have the same depth"),
             }
             left.summary += right.summary;
+            left.last = right.last;
         }
     }
 
@@ -516,6 +541,7 @@ impl Tree {
                         .iter()
                         .map(|child| {
                             assert_eq!(child.summary, child.node.summary(), "stale summary");
+                            assert_eq!(child.last, child.node.last_locator(), "stale locator");
                             go(&child.node, false)
                         })
                         .collect();
@@ -526,6 +552,11 @@ impl Tree {
         }
         go(&self.root, true);
         assert_eq!(self.summary, self.root.summary(), "stale tree summary");
+        let pieces: Vec<Piece> = self.pieces_from(0).map(|(_, piece)| piece).collect();
+        assert!(
+            pieces.windows(2).all(|w| w[0].locator < w[1].locator),
+            "locators out of order"
+        );
     }
 }
 
@@ -544,7 +575,7 @@ impl Iterator for Pieces<'_> {
             if let Some(piece) = self.leaf.next() {
                 let start = self.offset;
                 self.offset += piece.len;
-                return Some((start, *piece));
+                return Some((start, piece.clone()));
             }
             let child = loop {
                 match self.stack.last_mut()?.next() {

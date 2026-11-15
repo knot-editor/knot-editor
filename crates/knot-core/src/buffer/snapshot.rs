@@ -60,7 +60,7 @@ impl TextSnapshot {
         let Some(found) = self.tree.seek(Dimension::Bytes, offset, Bias::Right) else {
             return "";
         };
-        &self.slice(found.piece)[offset - found.before.bytes..]
+        &self.slice(&found.piece)[offset - found.before.bytes..]
     }
 
     /// The text in `range` as borrowed slices, in order.
@@ -77,7 +77,7 @@ impl TextSnapshot {
                     return None;
                 }
                 let end = start + piece.len;
-                Some(&self.slice(piece)[range.start.max(start) - start..range.end.min(end) - start])
+                Some(&self.slice(&piece)[range.start.max(start) - start..range.end.min(end) - start])
             })
     }
 
@@ -91,7 +91,7 @@ impl TextSnapshot {
         out
     }
 
-    fn slice(&self, p: Piece) -> &str {
+    fn slice(&self, p: &Piece) -> &str {
         let buf = match p.backing {
             Backing::Original => &self.original,
             Backing::Add(chunk) => self

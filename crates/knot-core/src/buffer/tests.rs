@@ -223,7 +223,7 @@ fn left_half_retains_id_on_split() {
     // First piece is the left half: same id, shortened to len 2.
     assert_eq!(b.pieces()[0].id, orig_id);
     assert_eq!(b.pieces()[0].len, 2);
-    assert_eq!(b.backings.slice(b.pieces()[0]), "he");
+    assert_eq!(b.backings.slice(&b.pieces()[0]), "he");
 }
 
 #[test]

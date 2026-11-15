@@ -10,6 +10,7 @@
 use std::mem;
 use std::sync::Arc;
 
+use super::locator::Locator;
 use super::{ADD_CHUNK_SIZE, Backing, Piece};
 
 /// Start of one line within a backing, as UTF-8 byte and UTF-16 code-unit
@@ -62,7 +63,7 @@ impl Backings {
     }
 
     /// The text a piece references.
-    pub fn slice(&self, piece: Piece) -> &str {
+    pub fn slice(&self, piece: &Piece) -> &str {
         &self.text(piece.backing)[piece.start..piece.start + piece.len]
     }
 
@@ -105,12 +106,20 @@ impl Backings {
         self.lines.push(Vec::new());
     }
 
-    /// A piece over `[start, start + len)` of `backing`, with its summary read
-    /// from the line index.
-    pub fn piece(&self, id: u64, backing: Backing, start: usize, len: usize) -> Piece {
+    /// A piece with the given id and locator over `[start, start + len)` of
+    /// `backing`, with its summary read from the line index.
+    pub fn piece(
+        &self,
+        id: u64,
+        locator: Locator,
+        backing: Backing,
+        start: usize,
+        len: usize,
+    ) -> Piece {
         let (breaks, utf16) = self.measure(backing, start, len);
         Piece {
             id,
+            locator,
             backing,
             start,
             len,

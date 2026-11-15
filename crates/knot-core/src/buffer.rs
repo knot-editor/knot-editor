@@ -101,6 +101,7 @@
 //! boundaries. Grapheme-aware caret movement and deletion remain presentation
 //! policy above the byte-native core.
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -108,6 +109,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub use snapshot::TextSnapshot;
 
 use backing::Backings;
+use locator::Locator;
 use tree::{Bias, Dimension, Tree};
 
 mod backing;
@@ -305,9 +307,11 @@ enum Backing {
 /// `(backing, start)` is fixed at creation. Only `len` changes, with the
 /// summary fields that follow it: the split rule shortens the left half, and
 /// coalescing extends a trailing `Add` piece.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct Piece {
     id: PieceId,
+    /// Orders this piece among all others; see `locator`.
+    locator: Locator,
     backing: Backing,
     start: usize,
     len: usize,
@@ -329,6 +333,9 @@ pub struct TextBuffer {
     /// The pieces in text order. Operations change it in place; snapshots
     /// clone its root.
     tree: Tree,
+    /// The locator of every piece in the tree, for `resolve`. Snapshots do not
+    /// carry it.
+    locators: HashMap<PieceId, Locator>,
     /// Global monotonic piece-id counter. Never reused.
     next_id: PieceId,
     /// Retained edit log. Each `insert` / `delete` pushes one `BufferEdit`.
@@ -352,12 +359,17 @@ impl TextBuffer {
             instance_id: NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed),
             backings,
             tree: Tree::new(),
+            locators: HashMap::new(),
             next_id: 1,
             edits: Vec::new(),
             discarded_edits: 0,
         };
         if len > 0 {
-            let piece = buf.backings.piece(buf.next_id, Backing::Original, 0, len);
+            let locator = Locator::between(None, None);
+            let piece = buf
+                .backings
+                .piece(buf.next_id, locator.clone(), Backing::Original, 0, len);
+            buf.locators.insert(piece.id, locator);
             buf.next_id += 1;
             buf.tree = Tree::from_piece(piece);
         }
@@ -415,7 +427,7 @@ impl TextBuffer {
                 }
                 let end = start + piece.len;
                 Some(
-                    &self.backings.slice(piece)
+                    &self.backings.slice(&piece)
                         [range.start.max(start) - start..range.end.min(end) - start],
                 )
             })
@@ -450,7 +462,7 @@ impl TextBuffer {
         // splits list in that case, so this is dormant but kept
         // consistent.
         let left = self.piece_ending_at(at);
-        let left_piece = left.map(|p| (p.id, p.len));
+        let left_piece = left.as_ref().map(|p| (p.id, p.len));
 
         // Append the span to the add tail and record its placement.
         let tail_chunk = self.backings.tail_chunk();
@@ -472,8 +484,14 @@ impl TextBuffer {
         } else {
             let id = self.next_id;
             self.next_id += 1;
+            let locator = Locator::between(
+                left.as_ref().map(|p| &p.locator),
+                self.piece_starting_at(at).as_ref().map(|p| &p.locator),
+            );
+            self.locators.insert(id, locator.clone());
             let piece = Piece {
                 id,
+                locator,
                 backing: Backing::Add(tail_chunk),
                 start: add_start,
                 len: text.len(),
@@ -533,6 +551,9 @@ impl TextBuffer {
         // start at `s`. `None` iff the delete reaches the buffer's start or
         // end respectively (no left/right edge survives).
         let removed = self.tree.remove(range.start, range.end);
+        for piece in &removed {
+            self.locators.remove(&piece.id);
+        }
         let deleted_piece_lens: Vec<(PieceId, usize)> =
             removed.iter().map(|p| (p.id, p.len)).collect();
         let deleted_pieces: Vec<PieceId> = deleted_piece_lens.iter().map(|(id, _)| *id).collect();
@@ -694,7 +715,7 @@ impl TextBuffer {
     ///   `Split` from the edit log and remaps to
     ///   `(Split::new_piece, offset - Split::split_offset)`.
     pub fn resolve(&self, p: Position) -> Option<usize> {
-        let (start, piece) = self.tree.find(p.piece)?;
+        let (start, piece) = self.tree.find(self.locators.get(&p.piece)?)?;
         let off = p.offset as usize;
         (off <= piece.len).then_some(start + off)
     }
@@ -760,6 +781,12 @@ impl TextBuffer {
             .map(|found| found.piece)
     }
 
+    /// The piece starting at byte `at`, which must be a piece boundary; `None`
+    /// at the end of the text.
+    fn piece_starting_at(&self, at: usize) -> Option<Piece> {
+        self.tree.pieces_from(at).next().map(|(_, piece)| piece)
+    }
+
     /// Whether `offset` is a UTF-8 scalar boundary in the logical text.
     ///
     /// This is crate-visible so the editor host can validate untrusted byte
@@ -775,7 +802,7 @@ impl TextBuffer {
             .seek(Dimension::Bytes, offset, Bias::Right)
             .is_some_and(|found| {
                 let within = offset - found.before.bytes;
-                within == 0 || self.backings.slice(found.piece).is_char_boundary(within)
+                within == 0 || self.backings.slice(&found.piece).is_char_boundary(within)
             })
     }
 
@@ -806,13 +833,24 @@ impl TextBuffer {
             return;
         }
 
-        let left = self
-            .backings
-            .piece(piece.id, piece.backing, piece.start, left_len);
+        let left = self.backings.piece(
+            piece.id,
+            piece.locator.clone(),
+            piece.backing,
+            piece.start,
+            left_len,
+        );
         let right_id = self.next_id;
         self.next_id += 1;
+        let successor = self.piece_starting_at(at + piece.len - left_len);
+        let right_locator = Locator::between(
+            Some(&piece.locator),
+            successor.as_ref().map(|p| &p.locator),
+        );
+        self.locators.insert(right_id, right_locator.clone());
         let right = Piece {
             id: right_id,
+            locator: right_locator,
             backing: piece.backing,
             start: piece.start + left_len,
             len: piece.len - left_len,
@@ -843,10 +881,12 @@ impl TextBuffer {
         let mut ids = std::collections::HashSet::new();
         for piece in self.pieces() {
             assert!(ids.insert(piece.id), "duplicate piece id {}", piece.id);
-            let text = self.backings.slice(piece);
+            assert_eq!(self.locators.get(&piece.id), Some(&piece.locator));
+            let text = self.backings.slice(&piece);
             assert_eq!(piece.breaks, text.matches('\n').count());
             assert_eq!(piece.utf16, backing::utf16_len(text));
         }
+        assert_eq!(self.locators.len(), ids.len(), "map holds deleted pieces");
     }
 }
 
