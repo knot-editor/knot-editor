@@ -49,6 +49,18 @@ pub struct Replacements {
     pub more: bool,
 }
 
+/// What a replacement did.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReplaceOutcome {
+    /// The matches replaced.
+    pub count: usize,
+    /// Whether more matches followed the last replaced.
+    pub more: bool,
+    /// Whether the text, and so the revision, changed: not when every
+    /// replacement equals its match.
+    pub changed: bool,
+}
+
 /// The matches of a search in order, and whether more followed the last.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FindMatches {
@@ -254,6 +266,32 @@ impl BufferModel {
             ));
         }
         Ok(replaced)
+    }
+
+    /// Replace the matches [`Self::replace_matches`] finds as one commit that
+    /// the revision check `if_revision` (the current one when absent) guards;
+    /// the buffer is untouched when nothing matches.
+    pub fn find_and_replace(
+        &mut self,
+        query: &str,
+        replacement: &str,
+        options: FindOptions,
+        range: Option<ByteRange>,
+        limit: usize,
+        if_revision: Option<u64>,
+    ) -> Result<ReplaceOutcome, FindError> {
+        let if_revision = if_revision.unwrap_or(self.revision());
+        if if_revision != self.revision() {
+            return Err(BufferAccessError::RevisionConflict.into());
+        }
+        let replaced = self.replace_matches(query, replacement, options, range, limit)?;
+        let count = replaced.edits.len();
+        let changed = self.apply_edits(&replaced.edits, if_revision)?;
+        Ok(ReplaceOutcome {
+            count,
+            more: replaced.more,
+            changed,
+        })
     }
 
     fn char_before(&self, offset: usize) -> Option<char> {

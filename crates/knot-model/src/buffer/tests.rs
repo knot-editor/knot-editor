@@ -1698,3 +1698,55 @@ fn replace_reports_invalid_patterns_and_ranges() {
         Err(FindError::Access(_))
     ));
 }
+
+#[test]
+fn find_and_replace_commits_one_undoable_batch() {
+    let mut model = BufferModel::from_text("a a a");
+    let revision = model.revision();
+    let outcome = model
+        .find_and_replace("a", "bb", FindOptions::default(), None, 2, Some(revision))
+        .unwrap();
+    assert_eq!(
+        outcome,
+        ReplaceOutcome {
+            count: 2,
+            more: true,
+            changed: true
+        }
+    );
+    assert_eq!(model.text(), "bb bb a");
+    assert_eq!(model.revision(), revision + 1);
+    model.undo().unwrap();
+    assert_eq!(model.text(), "a a a");
+}
+
+#[test]
+fn find_and_replace_without_a_change_keeps_the_revision() {
+    let mut model = BufferModel::from_text("a a");
+    let revision = model.revision();
+    let none = model
+        .find_and_replace("x", "y", FindOptions::default(), None, 9, None)
+        .unwrap();
+    assert_eq!((none.count, none.changed), (0, false));
+    let same = model
+        .find_and_replace("a", "a", FindOptions::default(), None, 9, None)
+        .unwrap();
+    assert_eq!((same.count, same.changed), (2, false));
+    assert_eq!(model.revision(), revision);
+}
+
+#[test]
+fn find_and_replace_rejects_stale_revisions_and_read_only_buffers() {
+    let mut model = BufferModel::from_text("a");
+    let stale = model.revision() + 1;
+    assert_eq!(
+        model.find_and_replace("a", "b", FindOptions::default(), None, 9, Some(stale)),
+        Err(FindError::Access(BufferAccessError::RevisionConflict))
+    );
+    let mut generated = BufferModel::from_read_only_text("a");
+    assert_eq!(
+        generated.find_and_replace("a", "b", FindOptions::default(), None, 9, None),
+        Err(FindError::Access(BufferAccessError::ReadOnly))
+    );
+    assert_eq!(generated.text(), "a");
+}
