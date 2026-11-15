@@ -123,7 +123,7 @@ Done and approved. Dock panes have a header with semibold text tabs, frame
 actions, a new-terminal button on terminal panes, and a hide button; stripes are
 restyled and a stripe without buttons is not painted
 ([workbench](../architecture/workbench-and-lifecycle.md#windows),
-[tree actions](../architecture/semantic-ui.md#trees)). The Projects tool defines
+[tree actions](../architecture/semantic-ui.md#extension-trees)). The Projects tool defines
 `tool.builtin.projects`. The dark Islands window background is `#16171a` for
 contrast with the cards.
 
