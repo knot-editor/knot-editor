@@ -1,8 +1,7 @@
 # Website: screenshots and documentation
 
 Status: 🚧 approved, not started. Roadmap item
-[D168](../roadmap.md). Seeded from `docs/notes/website.md`
-(removed with this plan). Extends the landing page in [`website/`](../../website/),
+[D168](../roadmap.md). Extends the landing page in [`website/`](../../website/),
 deployed to <https://knot-editor.com> by
 [`pages.yml`](../../.github/workflows/pages.yml).
 

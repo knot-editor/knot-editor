@@ -4,7 +4,7 @@ October 2026. Compares Knot's `TextBuffer` with the buffer structures of
 other editors and recommends a replacement representation, tracked as D092 in
 the [roadmap](../roadmap.md). Current behavior is owned by
 [core and buffers](../architecture/core-and-buffers.md) and
-`src/core/buffer.rs`; the rationale for the original choice is in
+`crates/knot-core/src/buffer.rs`; the rationale for the original choice is in
 [decisions](../decisions/core-and-buffers.md#text-buffer-and-stable-positions).
 
 ## Summary
@@ -31,7 +31,7 @@ D001, or multi-cursor), after a benchmark confirms the projected costs.
 
 ## Current implementation
 
-`TextBuffer` (`src/core/buffer.rs`) holds:
+`TextBuffer` (`crates/knot-core/src/buffer.rs`) holds:
 
 | Field | Content |
 | --- | --- |
