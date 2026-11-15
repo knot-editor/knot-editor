@@ -1345,8 +1345,9 @@ impl Render for TreeView {
                             .debug_selector(move || format!("extension-tree-row-{index}"))
                             .w_full()
                             .overflow_hidden()
+                            .rounded(crate::app::zoom::rems(tokens::radius::SM))
                             .pl(crate::app::zoom::rems(
-                                tokens::list::TREE_INSET
+                                tokens::list::TREE_INSET - tokens::list::ROW_INSET
                                     + *depth as f32 * tokens::list::TREE_INDENT,
                             ))
                             .pr_2()
@@ -1481,43 +1482,53 @@ impl Render for TreeView {
                                     }),
                             );
                         }
-                        row.on_click({
-                            let entity = entity.clone();
-                            let id = id.clone();
-                            move |event, window, cx| {
-                                let gesture = if event.click_count() >= 2 {
-                                    TreeGesture::DoubleClick
-                                } else {
-                                    TreeGesture::Click
-                                };
-                                entity.update(cx, |tree, cx| {
-                                    tree.focus_handle(cx).focus(window, cx);
-                                    tree.activate(&id, gesture, cx);
-                                });
-                            }
-                        })
-                        .on_mouse_down(MouseButton::Middle, {
-                            let entity = entity.clone();
-                            let id = id.clone();
-                            move |_, window, cx| {
-                                entity.update(cx, |tree, cx| {
-                                    tree.focus_handle(cx).focus(window, cx);
-                                    tree.activate(&id, TreeGesture::MiddleClick, cx);
-                                });
-                                cx.stop_propagation();
-                            }
-                        })
-                        .on_mouse_down(MouseButton::Right, {
-                            let entity = entity.clone();
-                            move |event, window, cx| {
-                                entity.update(cx, |tree, cx| {
-                                    tree.focus_handle(cx).focus(window, cx);
-                                    tree.right_click(&id, event.position, window, cx);
-                                });
-                                cx.stop_propagation();
-                            }
-                        })
-                        .into_any_element()
+                        // The row is inset from the list's edges, so its rounded
+                        // selection and hover float inside the card.
+                        div()
+                            .w_full()
+                            .px(crate::app::zoom::rems(tokens::list::ROW_INSET))
+                            .child(
+                                row.on_click({
+                                    let entity = entity.clone();
+                                    let id = id.clone();
+                                    move |event, window, cx| {
+                                        let gesture = if event.click_count() >= 2 {
+                                            TreeGesture::DoubleClick
+                                        } else {
+                                            TreeGesture::Click
+                                        };
+                                        entity.update(cx, |tree, cx| {
+                                            tree.focus_handle(cx).focus(window, cx);
+                                            tree.activate(&id, gesture, cx);
+                                        });
+                                    }
+                                })
+                                .on_mouse_down(MouseButton::Middle, {
+                                    let entity = entity.clone();
+                                    let id = id.clone();
+                                    move |_, window, cx| {
+                                        entity.update(cx, |tree, cx| {
+                                            tree.focus_handle(cx).focus(window, cx);
+                                            tree.activate(&id, TreeGesture::MiddleClick, cx);
+                                        });
+                                        cx.stop_propagation();
+                                    }
+                                })
+                                .on_mouse_down(
+                                    MouseButton::Right,
+                                    {
+                                        let entity = entity.clone();
+                                        move |event, window, cx| {
+                                            entity.update(cx, |tree, cx| {
+                                                tree.focus_handle(cx).focus(window, cx);
+                                                tree.right_click(&id, event.position, window, cx);
+                                            });
+                                            cx.stop_propagation();
+                                        }
+                                    },
+                                ),
+                            )
+                            .into_any_element()
                     }
                     VisibleRow::Draft { icon, depth } => div()
                         .id(("extension-tree-draft", index))
@@ -1586,6 +1597,7 @@ impl Render for TreeView {
             .size_full()
             .flex()
             .flex_col()
+            .pt(crate::app::zoom::rems(tokens::list::ROW_INSET))
             .child(list)
             .when_some(search_bar, |container, (query, matches, current)| {
                 let theme = theme(cx);

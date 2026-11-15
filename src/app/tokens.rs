@@ -34,9 +34,11 @@ pub(crate) mod list {
     pub(crate) const ROW_HEIGHT: f32 = 26.;
     /// A tree row with a second line.
     pub(crate) const TWO_LINE_ROW_HEIGHT: f32 = 44.;
-    /// A tree row's left inset and the indent per depth level.
-    pub(crate) const TREE_INSET: f32 = 8.;
-    pub(crate) const TREE_INDENT: f32 = 14.;
+    /// The gap between a list's edge and its rounded selection.
+    pub(crate) const ROW_INSET: f32 = 4.;
+    /// A tree row's content inset from the list's edge and the indent per depth level.
+    pub(crate) const TREE_INSET: f32 = 10.;
+    pub(crate) const TREE_INDENT: f32 = 12.;
     /// A tree row's badge dot.
     pub(crate) const BADGE_SIZE: f32 = 6.;
     /// A picker or transient panel.

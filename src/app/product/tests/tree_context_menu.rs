@@ -321,3 +321,19 @@ await workbench.registerView({
     let status = visual.debug_bounds("extension-tree-status-1").unwrap();
     assert_eq!(status.size.height, row.size.height);
 }
+
+#[gpui::test]
+fn tree_rows_are_inset_from_their_pane(cx: &mut TestAppContext) {
+    let fixture = Fixture::start(cx);
+    cx.run_until_parked();
+    cx.refresh().unwrap();
+    let mut visual = VisualTestContext::from_window(fixture.native_window, cx);
+    let row = visual.debug_bounds("extension-tree-row-0").unwrap();
+    let pane = (0..32)
+        .filter_map(|id| visual.debug_bounds(format!("pane-{id}").leak()))
+        .filter(|pane| pane.contains(&row.center()))
+        .min_by_key(|pane| pane.size.width)
+        .expect("the pane holding the row is laid out");
+    assert!(row.left() > pane.left(), "{row:?} within {pane:?}");
+    assert!(row.right() < pane.right(), "{row:?} within {pane:?}");
+}
