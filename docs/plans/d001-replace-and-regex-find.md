@@ -92,31 +92,12 @@ None material. Bindings and icons follow VS Code and may be adjusted at review.
 
 ### 1. Regex matching in `buffer.find` ✅
 
-Status: implemented, awaiting review. ✅ Model matcher and `FindError`,
-✅ host operation and `InvalidQuery` (code shared with language queries, parser
-message in `details.message`), ✅ `knot.d.ts`, guide and architecture, ✅ model
-and extension-API tests, ✅ the fake testing host approximates regex with
-JavaScript `RegExp`.
-
-Deliverables: `regex` option and `InvalidQuery` across model, protocol, host
-operation, `knot.d.ts`, and the extension guide; model tests for multi-line
-anchors, case folding, whole word, range context, empty matches, the limit,
-and invalid patterns; an extension-API test of the option and error.
-
-Implementation context:
-- `crates/knot-model/src/buffer/find.rs` (matcher; add `regex` to
-  `crates/knot-model/Cargo.toml`), tests in `crates/knot-model/src/buffer/tests.rs`
-  or a `find` test module beside it.
-- `src/app/extensions/host/handlers.rs` — `FindArguments` reader and the
-  `find` operation (map the new model error); `BufferError` and `FindResult`
-  in `crates/knot-protocol/src/lib.rs`.
-- `crates/knot-host/src/js/bootstrap.js` (`Buffer.find` binding),
-  `crates/knot-host/src/js/knot.d.ts` (`FindOptions`, error codes),
-  `docs/schemas/knot.schema.json` if error codes are listed there,
-  `docs/extension-api.md` near the editor-bar example.
-- Update [text search](../architecture/core-and-buffers.md#text-search).
-
-Review gate: API shape and regex semantics.
+Complete and approved. Behavior: [text search](../architecture/core-and-buffers.md#text-search);
+API: `knot.d.ts` and the [extension guide](../extension-api.md#editor-bars).
+Matching uses `regex-automata`'s meta regex for span-aware anchors. A compiled
+pattern cache was measured unnecessary (compile and search of a small buffer
+took 0.03–0.8 ms). The fake testing host approximates regex with JavaScript
+`RegExp`.
 
 ### 2. `buffer.replace`
 
