@@ -14,8 +14,8 @@ pub(crate) mod radius {
 pub(crate) mod chrome {
     pub(crate) const TAB_BAR_HEIGHT: f32 = 30.;
     pub(crate) const STATUS_BAR_HEIGHT: f32 = 22.;
-    pub(crate) const STRIPE_WIDTH: f32 = 30.;
-    pub(crate) const STRIPE_BUTTON: f32 = 26.;
+    pub(crate) const STRIPE_WIDTH: f32 = 36.;
+    pub(crate) const STRIPE_BUTTON: f32 = 30.;
     pub(crate) const STRIPE_GROUP_MIN_HEIGHT: f32 = 60.;
     /// The grab area of a dock or split resize handle.
     /// The gap between cards and the hit width of a split divider.

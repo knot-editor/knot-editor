@@ -25,6 +25,7 @@ struct StripeDrag {
     icon: Option<IconDefinition>,
 }
 
+/// The dragged button's label, which ends the window's stripe drag when it is released.
 struct StripeDragLabel(StripeDrag);
 
 impl Render for StripeDragLabel {
@@ -39,7 +40,7 @@ impl Render for StripeDragLabel {
 
 /// A button's icon, or the initial of `title` when it has none.
 fn stripe_face(icon: Option<IconDefinition>, title: &str) -> Div {
-    let face = div().flex().items_center().justify_center().text_sm();
+    let face = div().flex().items_center().justify_center().text_base();
     match icon {
         Some(icon) => face.child(crate::app::icons::AppIcon::new(icon)),
         None => face.child(
@@ -53,15 +54,16 @@ fn stripe_face(icon: Option<IconDefinition>, title: &str) -> Div {
 }
 
 impl KnotWindow {
-    /// Both stripes, as the left and right elements; none when
-    /// `workbench.toolStripes` is off.
+    /// The left and right stripes; none when `workbench.toolStripes` is off,
+    /// and a stripe without buttons is absent, except while a drag could
+    /// drop a button on it.
     pub(super) fn render_stripes(
         &self,
         cx: &mut Context<Self>,
-    ) -> Option<(Stateful<Div>, Stateful<Div>)> {
+    ) -> (Option<Stateful<Div>>, Option<Stateful<Div>>) {
         use crate::app::settings;
         if !settings::boolean(settings::WORKBENCH_TOOL_STRIPES, cx) {
-            return None;
+            return (None, None);
         }
         let stripes = self.workbench.read(cx).stripes();
         let stripe = |id: &'static str| {
@@ -77,17 +79,25 @@ impl KnotWindow {
                 .gap_1()
                 .items_center()
         };
-        let left = stripe("stripe-left")
-            .child(
-                self.render_stripe_group(DockLocation::Left, &stripes, cx)
+        let dragging = self.stripe_dragging.get();
+        let populated = |docks: &[DockLocation]| {
+            dragging || docks.iter().any(|dock| !stripes.group(*dock).is_empty())
+        };
+        let left = populated(&[DockLocation::Left, DockLocation::Bottom]).then(|| {
+            stripe("stripe-left")
+                .child(
+                    self.render_stripe_group(DockLocation::Left, &stripes, cx)
+                        .flex_1(),
+                )
+                .child(self.render_stripe_group(DockLocation::Bottom, &stripes, cx))
+        });
+        let right = populated(&[DockLocation::Right]).then(|| {
+            stripe("stripe-right").child(
+                self.render_stripe_group(DockLocation::Right, &stripes, cx)
                     .flex_1(),
             )
-            .child(self.render_stripe_group(DockLocation::Bottom, &stripes, cx));
-        let right = stripe("stripe-right").child(
-            self.render_stripe_group(DockLocation::Right, &stripes, cx)
-                .flex_1(),
-        );
-        Some((left, right))
+        });
+        (left, right)
     }
 
     /// The buttons whose home is `dock`, which also takes a dragged button
@@ -140,8 +150,8 @@ impl KnotWindow {
         };
         let visible = workbench.stripe_button_visible(button);
         let hover = theme(cx).paint_color(color::LIST_HOVER_BACKGROUND);
-        let selected = theme(cx).paint_color(color::LIST_SELECTED_BACKGROUND);
-        let selected_text = theme(cx).paint_color(color::LIST_SELECTED_FOREGROUND);
+        let selected = theme(cx).paint_color(color::TAB_ACCENT).opacity(0.3);
+        let selected_text = theme(cx).paint_color(color::TEXT);
         let title = SharedString::from(title);
         let drag = StripeDrag {
             button,
@@ -167,8 +177,16 @@ impl KnotWindow {
                     .text_xs()
                     .build(window, cx)
             })
-            .on_drag(drag, |drag, _, _, cx| {
-                cx.new(|_| StripeDragLabel(drag.clone()))
+            .on_drag(drag, {
+                let dragging = self.stripe_dragging.clone();
+                move |drag, _, _, cx| {
+                    dragging.set(true);
+                    let dragging = dragging.clone();
+                    cx.new(|cx| {
+                        cx.on_release(move |_, _| dragging.set(false)).detach();
+                        StripeDragLabel(drag.clone())
+                    })
+                }
             })
             .on_mouse_down(
                 MouseButton::Right,

@@ -970,6 +970,62 @@ impl TreeView {
         }
     }
 
+    /// The frame's action buttons for the header of the pane showing this
+    /// tree; none when the tree has no frame actions. Keyboard focus stays in
+    /// the tree, which highlights the button action mode has reached.
+    pub(crate) fn frame_actions_bar(entity: &Entity<Self>, cx: &App) -> Option<Stateful<Div>> {
+        let tree = entity.read(cx);
+        if tree.frame_actions.is_empty() {
+            return None;
+        }
+        let theme = theme(cx);
+        let text = theme.paint_color(color::TEXT);
+        let focused_background = theme.paint_color(color::LIST_SELECTED_BACKGROUND);
+        let hover = theme.paint_color(color::BUTTON_HOVER_BACKGROUND);
+        let focused_index = tree
+            .action_focus
+            .as_ref()
+            .filter(|focus| focus.row.is_none())
+            .map(|focus| focus.index);
+        let mut bar = div()
+            .id("extension-tree-frame-actions")
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_1();
+        for (action_index, action) in tree.frame_actions.iter().enumerate() {
+            let target = action.clone();
+            let entity = entity.clone();
+            bar = bar.child(
+                div()
+                    .id(("extension-tree-frame-action", action_index))
+                    .debug_selector(move || format!("extension-tree-frame-action-{action_index}"))
+                    .px_1p5()
+                    .py_0p5()
+                    .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
+                    .text_xs()
+                    .text_color(text)
+                    .cursor_pointer()
+                    .when(focused_index == Some(action_index), |button| {
+                        button.bg(focused_background)
+                    })
+                    .hover(|style| style.bg(hover))
+                    .child(action_content(action, cx))
+                    .when_some(action_tooltip(action), |button, tooltip| {
+                        button.tooltip(tooltip)
+                    })
+                    .on_click(move |_, window, cx| {
+                        entity.update(cx, |tree, cx| {
+                            tree.focus_handle(cx).focus(window, cx);
+                            tree.invoke_action(target.clone(), cx);
+                        });
+                        cx.stop_propagation();
+                    }),
+            );
+        }
+        Some(bar)
+    }
+
     pub(crate) fn invoke_action(&mut self, action: TreeAction, cx: &mut Context<Self>) {
         let Some(provider) = self.provider else {
             return;
@@ -1236,7 +1292,6 @@ impl Render for TreeView {
         let selected = self.selected.clone();
         let expanded = self.expanded.clone();
         let action_focus = self.action_focus.clone();
-        let frame_actions = self.frame_actions.clone();
         let selected_bounds = self.selected_bounds.clone();
         let search_ranges = self
             .search
@@ -1256,62 +1311,9 @@ impl Render for TreeView {
             .map(|open| (open.menu.clone(), open.position));
         let entity = cx.entity();
         let border = theme(cx).paint_color(color::BORDER);
-        let button_text = theme(cx).paint_color(color::TEXT);
-        let button_focused = theme(cx).paint_color(color::LIST_SELECTED_BACKGROUND);
-        let button = theme(cx).paint_color(color::BUTTON_BACKGROUND);
-        let button_hover = theme(cx).paint_color(color::BUTTON_HOVER_BACKGROUND);
         let mut key_context = KeyContext::default();
         key_context.add(TREE_KEY_CONTEXT);
         key_context.add(super::commands::keymaps::view_context(&self.view_id));
-
-        let toolbar = if frame_actions.is_empty() {
-            None
-        } else {
-            let frame_focused = action_focus
-                .as_ref()
-                .is_some_and(|focus| focus.row.is_none());
-            let mut bar = div()
-                .id("extension-tree-frame-actions")
-                .w_full()
-                .px_2()
-                .py_1()
-                .flex()
-                .flex_row()
-                .gap_2()
-                .border_b_1()
-                .border_color(border);
-            for (action_index, action) in frame_actions.into_iter().enumerate() {
-                let focused = frame_focused
-                    && action_focus
-                        .as_ref()
-                        .is_some_and(|focus| focus.index == action_index);
-                let target = action.clone();
-                let entity = entity.clone();
-                bar = bar.child(
-                    div()
-                        .id(("extension-tree-frame-action", action_index))
-                        .px_2()
-                        .py_0p5()
-                        .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
-                        .text_xs()
-                        .text_color(button_text)
-                        .bg(if focused { button_focused } else { button })
-                        .hover(|style| style.bg(button_hover))
-                        .child(action_content(&action, cx))
-                        .when_some(action_tooltip(&action), |button, tooltip| {
-                            button.tooltip(tooltip)
-                        })
-                        .on_click(move |_, window, cx| {
-                            entity.update(cx, |tree, cx| {
-                                tree.focus_handle(cx).focus(window, cx);
-                                tree.invoke_action(target.clone(), cx);
-                            });
-                            cx.stop_propagation();
-                        }),
-                );
-            }
-            Some(bar)
-        };
 
         // Rows share one height, so a view where any row has a second line
         // shows all of them at two-line height.
@@ -1584,7 +1586,6 @@ impl Render for TreeView {
             .size_full()
             .flex()
             .flex_col()
-            .when_some(toolbar, |container, toolbar| container.child(toolbar))
             .child(list)
             .when_some(search_bar, |container, (query, matches, current)| {
                 let theme = theme(cx);

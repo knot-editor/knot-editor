@@ -50,6 +50,7 @@ export async function registerTree(state: ProjectsState) {
   await Promise.all(
     Object.entries(ACTION_ICONS).map(([name, lucide]) => icons.define(name, { lucide })),
   );
+  await icons.define(`tool.${VIEW_ID}`, { lucide: "folders" });
   state.view = await workbench.registerView({
     id: VIEW_ID,
     title: "Projects",

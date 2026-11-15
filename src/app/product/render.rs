@@ -261,7 +261,17 @@ impl KnotWindow {
                 }
             })
         });
+        let active_tool_view = match pane.active_tab().surface_id() {
+            TabSurfaceId::Tool(tool) => workbench.tool_content(tool).map(|content| match content {
+                ToolContent::Extension(view) => view.clone(),
+            }),
+            _ => None,
+        };
         let documents = Self::documents(cx);
+        let in_dock = matches!(area, Area::Dock(_));
+        let titled_alone = in_dock && pane.tabs().len() == 1;
+        let accent = theme(cx).paint_color(color::TAB_ACCENT);
+        let card_background = theme(cx).paint_color(color::CARD_BACKGROUND);
         let tabs = pane
             .tabs()
             .iter()
@@ -310,6 +320,7 @@ impl KnotWindow {
                     .relative()
                     .on_drag(source, drag_label)
                     .child(self.tab_drag_geometry(pane_id, capture))
+                    .group(SharedString::from(format!("tab-group-{}", tab_id.value())))
                     .px_3()
                     .py_1()
                     .cursor_pointer()
@@ -319,11 +330,24 @@ impl KnotWindow {
                     } else {
                         color::TAB_INACTIVE_FOREGROUND
                     }))
-                    .bg(theme(cx).paint_color(if tab_id == active_tab {
-                        color::TAB_ACTIVE_BACKGROUND
-                    } else {
-                        color::TAB_INACTIVE_BACKGROUND
-                    }))
+                    .when(!in_dock, |element| {
+                        element.bg(theme(cx).paint_color(if tab_id == active_tab {
+                            color::TAB_ACTIVE_BACKGROUND
+                        } else {
+                            color::TAB_INACTIVE_BACKGROUND
+                        }))
+                    })
+                    // A dock header's tabs are text on the card, the active
+                    // one underlined with the accent.
+                    .when(in_dock, |element| {
+                        element.border_b_2().border_color(
+                            if tab_id == active_tab && !titled_alone {
+                                accent
+                            } else {
+                                card_background
+                            },
+                        )
+                    })
                     .flex()
                     .flex_row()
                     .items_center()
@@ -343,23 +367,41 @@ impl KnotWindow {
                                 .child("📌"),
                         )
                     })
-                    .child(
-                        div()
-                            .id(("close-tab", tab_id.value()))
-                            .debug_selector(move || format!("close-tab-{}", tab_id.value()))
-                            .px_1()
-                            .rounded_sm()
-                            .hover(|style| {
-                                style.bg(theme(cx).paint_color(color::BUTTON_HOVER_BACKGROUND))
-                            })
-                            .child("×")
-                            // Keep the press from starting a tab drag or
-                            // activating the tab it closes.
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.close_tab_from_pointer(pane_id, tab_id, cx);
-                            })),
+                    .when(
+                        !matches!(tab.surface_id(), TabSurfaceId::Tool(_)) || !in_dock,
+                        |element| {
+                            element.child(
+                                div()
+                                    .id(("close-tab", tab_id.value()))
+                                    .debug_selector(move || format!("close-tab-{}", tab_id.value()))
+                                    .px_1()
+                                    .rounded_sm()
+                                    .when(in_dock, |close| {
+                                        close.invisible().group_hover(
+                                            SharedString::from(format!(
+                                                "tab-group-{}",
+                                                tab_id.value()
+                                            )),
+                                            |style| style.visible(),
+                                        )
+                                    })
+                                    .hover(|style| {
+                                        style
+                                            .bg(theme(cx)
+                                                .paint_color(color::BUTTON_HOVER_BACKGROUND))
+                                    })
+                                    .child("×")
+                                    // Keep the press from starting a tab drag or
+                                    // activating the tab it closes.
+                                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                        cx.stop_propagation()
+                                    })
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.close_tab_from_pointer(pane_id, tab_id, cx);
+                                    })),
+                            )
+                        },
                     )
                     .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                         if event.click_count() > 1 {
@@ -378,6 +420,12 @@ impl KnotWindow {
             })
             .collect::<Vec<_>>();
 
+        let frame_actions = match active_tool_view {
+            Some(crate::app::workbench::ExtensionView::Tree(tree)) if in_dock => {
+                crate::app::tree_view::TreeView::frame_actions_bar(&tree, cx)
+            }
+            _ => None,
+        };
         div()
             .id(("pane", pane_id.value()))
             .debug_selector(move || format!("pane-{}", pane_id.value()))
@@ -399,8 +447,17 @@ impl KnotWindow {
                     .debug_selector(move || format!("tab-bar-{}", pane_id.value()))
                     .child(self.tab_bar_drag_geometry(pane_id))
                     .overflow_hidden()
-                    .bg(theme(cx).paint_color(color::TAB_BAR_BACKGROUND))
-                    .children(tabs),
+                    .bg(theme(cx).paint_color(if in_dock {
+                        color::CARD_BACKGROUND
+                    } else {
+                        color::TAB_BAR_BACKGROUND
+                    }))
+                    .children(tabs)
+                    .when(in_dock, |bar| {
+                        bar.child(div().flex_1())
+                            .children(frame_actions)
+                            .child(self.render_hide_button(pane_id, cx))
+                    }),
             )
             .child(
                 div()
@@ -410,6 +467,42 @@ impl KnotWindow {
                     .when_some(active_view, |element, view| element.child(view)),
             )
             .into_any_element()
+    }
+}
+
+impl KnotWindow {
+    /// The button at a dock header's right that hides the pane's active tool,
+    /// or the dock's terminals when a terminal is active.
+    fn render_hide_button(&self, pane_id: PaneId, cx: &mut Context<Self>) -> Stateful<Div> {
+        let hover = theme(cx).paint_color(color::BUTTON_HOVER_BACKGROUND);
+        div()
+            .id(("hide-pane", pane_id.value()))
+            .debug_selector(move || format!("hide-pane-{}", pane_id.value()))
+            .px_1p5()
+            .mx_1()
+            .rounded(zoom::rems(tokens::radius::SM))
+            .cursor_pointer()
+            .text_color(theme(cx).paint_color(color::TAB_INACTIVE_FOREGROUND))
+            .hover(move |style| style.bg(hover))
+            .child("–")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.hide_pane_from_header(pane_id, cx);
+            }))
+    }
+
+    fn hide_pane_from_header(&mut self, pane_id: PaneId, cx: &mut Context<Self>) {
+        let surface = self
+            .workbench
+            .read(cx)
+            .pane(pane_id)
+            .map(|pane| pane.active_tab().surface_id());
+        match surface {
+            Some(TabSurfaceId::Tool(id)) => self.hide_tool_from_pointer(id, cx),
+            Some(TabSurfaceId::Terminal(_)) => {
+                self.toggle_terminal(cx).ok();
+            }
+            _ => {}
+        }
     }
 }
 
@@ -601,10 +694,7 @@ impl Render for KnotWindow {
         tab_drag::coordinator(cx);
         self.tab_drag.borrow_mut().begin_frame();
         let workbench = self.render_workbench(cx);
-        let (left_stripe, right_stripe) = match self.render_stripes(cx) {
-            Some((left, right)) => (Some(left), Some(right)),
-            None => (None, None),
-        };
+        let (left_stripe, right_stripe) = self.render_stripes(cx);
         let stripe_menu = self
             .stripe_menu
             .as_ref()

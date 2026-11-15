@@ -2,6 +2,7 @@
 
 mod closure;
 mod commands;
+mod dock_header;
 mod document_watch;
 mod editing;
 mod editor_api;

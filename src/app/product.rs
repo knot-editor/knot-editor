@@ -599,6 +599,8 @@ pub(crate) struct KnotWindow {
     dock_resize: Option<DockResizeDrag>,
     /// The open right-click menu of a tool stripe button.
     stripe_menu: Option<stripes::StripeMenu>,
+    /// Whether a stripe button is being dragged, which shows empty stripes.
+    stripe_dragging: std::rc::Rc<std::cell::Cell<bool>>,
     split_resize: Option<SplitResizeDrag>,
     recent_walk: Option<knot_model::workbench::RecentWalk>,
     /// The pane rendered over the whole workbench, while it stays focused.
@@ -748,6 +750,7 @@ impl KnotWindow {
             tab_drag: Default::default(),
             dock_resize: None,
             stripe_menu: None,
+            stripe_dragging: Default::default(),
             split_resize: None,
             recent_walk: None,
             maximized: None,

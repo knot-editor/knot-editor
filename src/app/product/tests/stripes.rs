@@ -65,13 +65,15 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     // rehomes it.
     let mut visual = VisualTestContext::from_window(native_window, cx);
     let from = visual.debug_bounds(EXPLORER_BUTTON).unwrap().center();
-    let to = visual.debug_bounds("stripe-group-1").unwrap().center();
+    assert!(visual.debug_bounds("stripe-right").is_none());
     visual.simulate_mouse_down(from, MouseButton::Left, Modifiers::default());
     visual.simulate_mouse_move(
         from + point(px(12.), px(0.)),
         MouseButton::Left,
         Modifiers::default(),
     );
+    // The empty right stripe appears while a button is dragged.
+    let to = visual.debug_bounds("stripe-group-1").unwrap().center();
     visual.simulate_mouse_move(to, MouseButton::Left, Modifiers::default());
     visual.simulate_mouse_up(to, MouseButton::Left, Modifiers::default());
     visual.run_until_parked();
