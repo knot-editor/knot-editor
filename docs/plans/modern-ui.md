@@ -1,6 +1,6 @@
 # Modern UI
 
-Status: 🚧 in progress (checkpoints 1–7 done).
+Status: ✅ done (checkpoints 1–8).
 
 ## Goal
 
@@ -153,21 +153,11 @@ with rounded item chips
 terminal tab keeps its accent underline, since terminals come in numbers
 ([workbench](../architecture/workbench-and-lifecycle.md#windows)).
 
-### 8. Themable chrome
+### 8. Themable chrome ✅
 
-Deliverables: the chrome's shape and weight become settings and theme values,
-so a theme can switch from islands (cards with gaps and rounded corners) to a
-flat layout (no gaps, 1px borders, square corners) and back. Candidates: card
-radius, gap between cards, window inset, card border, dock header and stripe
-sizes, tab title weight, accent underline, stripe selected tint, and colors for
-each remaining hard-coded value. A theme sets them through the extension theme
-API like colors; settings override a theme. Every bundled theme defines them.
-
-Validation: product tests that a flat configuration paints borders and no gaps,
-and that an island configuration paints the cards.
-
-Review gate: switch between island and flat themes in the real app.
-
-**Implementation context**: `src/app/tokens.rs` and `src/app/product/render.rs`;
-the theme model in `crates/knot-model/src/theme.rs`; settings in
-`crates/knot-model/src/settings*`.
+Done and approved. A theme's `chrome` values and the `chrome.*` settings set
+the cards' radius, gap, window margin and border, the tab bar height, stripe
+width, header title weight, and accent thickness, so a theme is Islands or flat
+([themes](../architecture/semantic-ui.md#themes-and-color-keys),
+[settings](../settings.md#appearance)). Knot Islands, Catppuccin, and Tokyo
+Night are Islands; One Dark, One Light, and Solarized are flat.
