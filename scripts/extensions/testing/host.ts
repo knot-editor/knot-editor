@@ -155,6 +155,14 @@ function emptyState() {
       ["theme.mode", { key: "theme.mode", type: "string", default: "dark", description: "Which theme applies" }],
       ["theme.dark", { key: "theme.dark", type: "string", default: "Knot Islands Dark", description: "The theme used in dark mode" }],
       ["theme.light", { key: "theme.light", type: "string", default: "Knot Islands Light", description: "The theme used in light mode" }],
+      ["chrome.cardRadius", { key: "chrome.cardRadius", type: "number", default: -1, description: "Corner radius of the center and dock cards. From 0 to 24; -1 follows the theme" }],
+      ["chrome.cardGap", { key: "chrome.cardGap", type: "number", default: -1, description: "Gap between cards, which is also their resize handle. From 0 to 24; -1 follows the theme" }],
+      ["chrome.cardInset", { key: "chrome.cardInset", type: "number", default: -1, description: "Margin around the cards at the window edges. From 0 to 24; -1 follows the theme" }],
+      ["chrome.cardBorder", { key: "chrome.cardBorder", type: "number", default: -1, description: "Width of the card border, painted in the `border` color. From 0 to 4; -1 follows the theme" }],
+      ["chrome.tabBarHeight", { key: "chrome.tabBarHeight", type: "number", default: -1, description: "Height of tab bars and dock headers. From 20 to 48; -1 follows the theme" }],
+      ["chrome.stripeWidth", { key: "chrome.stripeWidth", type: "number", default: -1, description: "Width of the tool stripes. From 24 to 64; -1 follows the theme" }],
+      ["chrome.headerWeight", { key: "chrome.headerWeight", type: "number", default: -1, description: "Font weight of a dock header's tab titles. From 100 to 900; -1 follows the theme" }],
+      ["chrome.accentWidth", { key: "chrome.accentWidth", type: "number", default: -1, description: "Thickness of the accent line under the active tab. From 0 to 6; -1 follows the theme" }],
       ["icons.pack", { key: "icons.pack", type: "string", default: "", description: "The icon pack that restyles icons" }],
       ["keymap.preset", { key: "keymap.preset", type: "string", default: "knot", description: "The keymap preset that supplies default key bindings" }],
       ["statusBar.visible", { key: "statusBar.visible", type: "boolean", default: true, description: "Show the status bar below the workbench" }],
@@ -1625,7 +1633,7 @@ export const NATIVE_COLOR_KEYS: readonly string[] = [
   "editor.markedText", "editor.selection", "editor.selectionHighlight", "editor.wordHighlight", "error", "icon", "info", "input.background", "input.border", "input.focused.border", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",
   "popover.background", "popover.border", "scrim", "scrollbar.thumb",
-  "statusBar.background", "statusBar.border", "statusBar.foreground", "statusBar.item.hover.background", "success",
+  "statusBar.background", "statusBar.border", "statusBar.foreground", "statusBar.item.hover.background", "stripe.selected.background", "success",
   "tab.accent", "tab.active.background", "tab.active.foreground", "tab.bar.background",
   "tab.inactive.background", "tab.inactive.foreground", "terminal.ansi.black",
   "terminal.ansi.blue", "terminal.ansi.brightBlack", "terminal.ansi.brightBlue",
@@ -1899,7 +1907,12 @@ export const api: KnotApi = {
       const definition = [...state.themes].reverse().find((candidate) => candidate.name === name);
       return definition === undefined
         ? null
-        : { ...definition, colors: definition.colors ?? {}, syntax: definition.syntax ?? {} };
+        : {
+            ...definition,
+            colors: definition.colors ?? {},
+            syntax: definition.syntax ?? {},
+            chrome: definition.chrome ?? {},
+          };
     },
     list: async () => {
       const byName = new Map(state.themes.map((definition) => [definition.name, definition.appearance]));

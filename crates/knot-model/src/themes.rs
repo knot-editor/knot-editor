@@ -20,7 +20,7 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 use crate::{
     style::{Color, FontStyle, HighlightStyle, Underline},
     theme::{
-        Appearance, ColorDefault, ColorDefinition, Highlight, Theme, markup_styles,
+        Appearance, CHROME_KEYS, ColorDefault, ColorDefinition, Highlight, Theme, markup_styles,
         native_color_definitions,
     },
 };
@@ -77,11 +77,20 @@ pub struct ThemeDefinition {
     pub colors: BTreeMap<String, String>,
     #[serde(default)]
     pub syntax: BTreeMap<String, SyntaxStyle>,
+    /// Chrome values by `CHROME_KEYS` name; the rest keep their defaults.
+    #[serde(default)]
+    pub chrome: BTreeMap<String, f32>,
 }
 
 impl ThemeDefinition {
-    /// Why a color or font weight is invalid, if one is.
+    /// Why a color, font weight, or chrome value is invalid, if one is.
     pub fn invalid_value(&self) -> Option<&'static str> {
+        for (key, value) in &self.chrome {
+            let known = CHROME_KEYS.iter().find(|known| known.key == key);
+            if !known.is_some_and(|known| (known.min..=known.max).contains(value)) {
+                return Some("theme chrome values must be known keys within their range");
+            }
+        }
         let colors = self.colors.values().map(String::as_str).chain(
             self.syntax
                 .values()
@@ -120,7 +129,11 @@ impl ThemeDefinition {
             .map(|(capture, style)| (capture.as_str(), style.highlight()))
             .chain(markup_styles())
             .collect::<Vec<_>>();
-        Theme::new(self.appearance, &values, definitions, &syntax)
+        let mut theme = Theme::new(self.appearance, &values, definitions, &syntax);
+        for (key, value) in &self.chrome {
+            theme.chrome.set(key, *value);
+        }
+        theme
     }
 }
 

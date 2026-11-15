@@ -261,6 +261,7 @@ native_colors! {
     STATUS_BAR_BORDER = "statusBar.border", "The line above the status bar.", Key(WINDOW_BACKGROUND), Key(WINDOW_BACKGROUND);
     STATUS_BAR_FOREGROUND = "statusBar.foreground", "Status bar items that choose no color.", Key(TEXT_MUTED), Key(TEXT_MUTED);
     STATUS_BAR_ITEM_HOVER_BACKGROUND = "statusBar.item.hover.background", "A status bar item that runs a command, under the pointer.", Key(LIST_HOVER_BACKGROUND), Key(LIST_HOVER_BACKGROUND);
+    STRIPE_SELECTED_BACKGROUND = "stripe.selected.background", "The selected tool button in a stripe.", Rgba(0x3574f04d), Rgba(0x3574f04d);
     SUCCESS = "success", "Success markers.", Rgb(0x5fb865), Rgb(0x369650);
     TAB_ACTIVE_BACKGROUND = "tab.active.background", "The active tab.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);
     TAB_ACTIVE_FOREGROUND = "tab.active.foreground", "Title of the active tab.", Rgb(0xdfe1e5), Key(TEXT);
@@ -297,6 +298,68 @@ native_colors! {
     WARNING = "warning", "Warnings.", Rgb(0xf2c55c), Rgb(0xa46a00);
 }
 
+macro_rules! chrome_values {
+    ($($field:ident = $key:literal, $default:expr, $min:expr, $max:expr, $description:literal;)*) => {
+        /// The shape and weight of the workbench chrome, in pixels at 100%
+        /// zoom except the weight. A theme sets some of them; the rest keep
+        /// the Islands values.
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub struct Chrome {
+            $(pub $field: f32,)*
+        }
+
+        impl Default for Chrome {
+            fn default() -> Self {
+                Self { $($field: $default,)* }
+            }
+        }
+
+        /// A chrome value's key, default, and range.
+        pub struct ChromeKey {
+            pub key: &'static str,
+            pub default: f32,
+            pub min: f32,
+            pub max: f32,
+            pub description: &'static str,
+        }
+
+        /// Every chrome value, named as a theme's `chrome` field and, behind
+        /// a `chrome.` prefix, as the setting that overrides it.
+        pub const CHROME_KEYS: &[ChromeKey] = &[
+            $(ChromeKey {
+                key: $key,
+                default: $default,
+                min: $min,
+                max: $max,
+                description: $description,
+            },)*
+        ];
+
+        impl Chrome {
+            /// Set the value named `key`, clamped to its range; false for an
+            /// unknown key.
+            pub fn set(&mut self, key: &str, value: f32) -> bool {
+                match key {
+                    $($key => self.$field = value.clamp($min, $max),)*
+                    _ => return false,
+                }
+                true
+            }
+        }
+    };
+}
+
+chrome_values! {
+    card_radius = "cardRadius", 6., 0., 24., "Corner radius of the center and dock cards.";
+    card_gap = "cardGap", 8., 0., 24., "Gap between cards, which is also their resize handle.";
+    card_inset = "cardInset", 4., 0., 24., "Margin around the cards at the window edges.";
+    card_border = "cardBorder", 0., 0., 4., "Width of the card border, painted in the `border` color.";
+    tab_bar_height = "tabBarHeight", 30., 20., 48., "Height of tab bars and dock headers.";
+    stripe_width = "stripeWidth", 36., 24., 64., "Width of the tool stripes.";
+    header_weight = "headerWeight", 600., 100., 900., "Font weight of a dock header's tab titles.";
+    accent_width = "accentWidth", 2., 0., 6., "Thickness of the accent line under the active tab.";
+}
+
 /// The definitions of every native color key.
 pub fn native_color_definitions() -> Vec<ColorDefinition> {
     native_color_table()
@@ -320,6 +383,7 @@ pub enum Appearance {
 /// Resolved colors by key and a resolved style for every capture name.
 pub struct Theme {
     pub appearance: Appearance,
+    pub chrome: Chrome,
     colors: HashMap<String, Color>,
     /// Indexed by `Highlight`.
     highlights: Vec<HighlightStyle>,
@@ -429,6 +493,7 @@ impl Theme {
             .collect();
         Self {
             appearance,
+            chrome: Chrome::default(),
             colors,
             highlights,
         }

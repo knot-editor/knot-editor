@@ -404,6 +404,22 @@ declare module "knot" {
     "theme.dark": string;
     /** The theme name used in light mode. Native default "Knot Islands Light". */
     "theme.light": string;
+    /** Corner radius of the center and dock cards. From 0 to 24; native default -1 follows the theme. */
+    "chrome.cardRadius": number;
+    /** Gap between cards, which is also their resize handle. From 0 to 24; native default -1 follows the theme. */
+    "chrome.cardGap": number;
+    /** Margin around the cards at the window edges. From 0 to 24; native default -1 follows the theme. */
+    "chrome.cardInset": number;
+    /** Width of the card border, painted in the `border` color. From 0 to 4; native default -1 follows the theme. */
+    "chrome.cardBorder": number;
+    /** Height of tab bars and dock headers. From 20 to 48; native default -1 follows the theme. */
+    "chrome.tabBarHeight": number;
+    /** Width of the tool stripes. From 24 to 64; native default -1 follows the theme. */
+    "chrome.stripeWidth": number;
+    /** Font weight of a dock header's tab titles. From 100 to 900; native default -1 follows the theme. */
+    "chrome.headerWeight": number;
+    /** Thickness of the accent line under the active tab. From 0 to 6; native default -1 follows the theme. */
+    "chrome.accentWidth": number;
     /** The icon pack that restyles icons; empty uses the default icons.
      * Native default "". */
     "icons.pack": string;
@@ -615,6 +631,8 @@ declare module "knot" {
     readonly "statusBar.foreground"?: string;
     /** A status bar item that runs a command, under the pointer. */
     readonly "statusBar.item.hover.background"?: string;
+    /** The selected tool button in a stripe. */
+    readonly "stripe.selected.background"?: string;
     /** Success markers. */
     readonly "success"?: string;
     /** The line under the active tab. */
@@ -691,10 +709,34 @@ declare module "knot" {
     readonly underline?: boolean;
     readonly strikethrough?: boolean;
   }
+  /**
+   * The shape and weight of the workbench chrome, in pixels at 100% zoom
+   * except the weight. A value a theme leaves out keeps its Islands default,
+   * and a `chrome.*` setting overrides the theme's value.
+   */
+  export interface ThemeChrome {
+    /** Corner radius of the center and dock cards, 0 to 24. */
+    readonly cardRadius?: number;
+    /** Gap between cards, which is also their resize handle, 0 to 24. */
+    readonly cardGap?: number;
+    /** Margin around the cards at the window edges, 0 to 24. */
+    readonly cardInset?: number;
+    /** Width of the card border in the `border` color, 0 to 4. */
+    readonly cardBorder?: number;
+    /** Height of tab bars and dock headers, 20 to 48. */
+    readonly tabBarHeight?: number;
+    /** Width of the tool stripes, 24 to 64. */
+    readonly stripeWidth?: number;
+    /** Font weight of a dock header's tab titles, 100 to 900. */
+    readonly headerWeight?: number;
+    /** Thickness of the accent line under the active tab, 0 to 6. */
+    readonly accentWidth?: number;
+  }
   export interface ThemeDefinition {
     readonly name: string;
     readonly appearance: ThemeAppearance;
     readonly colors?: ThemeColors;
+    readonly chrome?: ThemeChrome;
     /** Styles by capture name (nvim-treesitter's) or a dotted prefix of
      * one, such as "markup"; a capture takes its longest styled prefix. */
     readonly syntax?: Readonly<Record<string, ThemeSyntaxStyle>>;

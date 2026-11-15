@@ -1,5 +1,5 @@
 use super::*;
-use crate::theme::color;
+use crate::theme::{Chrome, color};
 
 fn owner(lifecycle: u64) -> ThemeOwner {
     ThemeOwner {
@@ -21,6 +21,7 @@ fn definition(name: &str, appearance: Appearance, background: &str) -> ThemeDefi
                 ..Default::default()
             },
         )]),
+        chrome: BTreeMap::new(),
     }
 }
 
@@ -163,4 +164,28 @@ fn validation_rejects_bad_colors_captures_and_weights_but_keeps_open_keys() {
     assert_eq!(invalid.unknown_capture(), Some("keywords"));
     assert_eq!(color_default(""), None);
     assert_eq!(color_default("#12"), None);
+}
+
+#[test]
+fn a_theme_sets_chrome_values_and_the_rest_keep_the_islands_defaults() {
+    let mut flat = definition("Flat", Appearance::Dark, "#101010");
+    flat.chrome = BTreeMap::from([("cardRadius".into(), 0.), ("cardBorder".into(), 1.)]);
+    assert_eq!(flat.invalid_value(), None);
+    let theme = flat.theme(&native_color_definitions());
+    assert_eq!(theme.chrome.card_radius, 0.);
+    assert_eq!(theme.chrome.card_border, 1.);
+    assert_eq!(theme.chrome.card_gap, Chrome::default().card_gap);
+}
+
+#[test]
+fn chrome_values_must_be_known_and_within_their_range() {
+    for (key, value) in [
+        ("cardRadius", 100.),
+        ("cardRadius", -1.),
+        ("cornerRadius", 1.),
+    ] {
+        let mut theme = definition("Bad", Appearance::Dark, "#101010");
+        theme.chrome = BTreeMap::from([(key.into(), value)]);
+        assert!(theme.invalid_value().is_some(), "{key} {value}");
+    }
 }
