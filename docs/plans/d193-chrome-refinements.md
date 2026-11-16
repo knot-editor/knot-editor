@@ -1,6 +1,6 @@
 # D193: Chrome refinements
 
-Status: 🚧 checkpoint 2 done; checkpoint 3 next. Roadmap item [D193](../roadmap.md).
+Status: 🚧 checkpoint 3 awaiting review. Roadmap item [D193](../roadmap.md).
 Builds on the Islands look ([decision](../decisions/platform.md#product-window-chrome-and-failure-notices),
 [workbench](../architecture/workbench-and-lifecycle.md), [themes](../architecture/semantic-ui.md#themes-and-color-keys))
 and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
@@ -75,7 +75,14 @@ to `onQuery` (see [semantic UI](../architecture/semantic-ui.md) and the
 `picker.next-tab` / `picker.previous-tab` in a native `picker` view kind, so
 they are rebindable ([commands](../architecture/commands.md#picker-tabs)).
 
-### 3. Search Everywhere
+### 3. Search Everywhere ✅ implemented, awaiting review
+
+Done: `workspace.search-everywhere` ("Search Everywhere…") in
+`extensions/@knot/go-to-file` over All, Files, and Actions tabs. Files reuse
+Go to File's rows (`fileRows.ts`); actions come from the new
+`commands.list()` primitive (palette commands by title) and run with
+`commands.invoke`. An empty All tab lists recent files only, and the All tab
+caps actions at 8. No key binding yet.
 
 - Deliverable: the command and its bundled package changes, All/Files/Actions
   rows with the right ordering and icons, tests.
