@@ -1,6 +1,6 @@
 # Application log
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 awaiting review. No roadmap item; the D117 consumer is
+Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 is deferred to D117. No roadmap item; the D117 consumer is
 recorded on [D117](../roadmap.md).
 
 ## Goal
@@ -72,21 +72,15 @@ behavior is documented in [development](../development.md#application-log).
 The Dock-launch and rotation-by-size paths were not exercised by hand beyond
 the `try.log` records reaching the file.
 
-### 2. Font diagnostic ✅ (awaiting review)
+### 2. Font diagnostic ✅
 
-Implemented in `report_missing_family` (`src/app/typography.rs`), called where
-the editor resolves its metrics (`EditorView::update_metrics`) and the
-terminal prepaints, so it covers startup and every settings change without a
-separate subscription. A family is checked once per `(scope, family)`: the
-platform's resolved font (`TextSystem::get_font_for_id`) is compared with the
-requested family case-insensitively, and a mismatch logs
-`warn!(target: "knot::config", scope, family, fallback, …)`. The test platform
-resolves every font, so the test covers the once-per-scope and installed-family
-logic (`warn_when_replaced`) rather than the platform lookup.
-
-- **Review gate:** run **Try: Missing Editor Font** and **Try: Missing
-  Terminal Font** (with a terminal open), then **Knot: Open Log**: one WARN per
-  scope. Repeating a command adds nothing; **Try: Restore Fonts** is silent.
+Approved. `report_missing_family` in `src/app/typography.rs` logs one
+`warn!(target: "knot::config", …)` per scope (`editor`, `terminal`) and family
+that the platform replaces with its fallback; behavior is documented in
+[development](../development.md#application-log). The test platform resolves
+every font, so the automated test covers the once-per-scope logic, and the
+platform lookup was verified by hand. Failed extension callbacks also log
+their package, position, and stack (`knot-host` `engine/capsule.rs`).
 
 ### 3. D117 hook-up (deferred, not part of this plan)
 
