@@ -250,6 +250,12 @@ fn current_directory_prefers_the_directory_the_shell_reports(cx: &mut TestAppCon
     report(uri, 3, cx);
     assert_eq!(current(cx), reported);
     session.update(cx, |session, cx| session.restart(cx));
+    // The restart carries the old screen, so the new shell is up once
+    // "started" appears a second time; before that its process may not have
+    // entered the start directory yet.
+    wait_for(cx, &session, |session| {
+        output(session).matches("started").count() >= 2
+    });
     assert_eq!(canonical(&current(cx)), canonical(temp.path()));
     session.update(cx, |session, cx| session.close(cx));
 }
