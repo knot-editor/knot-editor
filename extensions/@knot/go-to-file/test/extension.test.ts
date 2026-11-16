@@ -196,12 +196,14 @@ test("All lists buffers, then files, once each", async () => {
   assert.deepEqual(all, ["main.ts", "README.md", "button.ts"]);
 });
 
-test("a bare :N adds a line row, and text:N matches on the text", async () => {
+test("a bare :N lists only the line row, and text:N matches on the text", async () => {
   await activate(`${ROOT}/src/main.ts`, "a\nb\nc\n");
-  const [empty, bare, withText] = await search("files", ":2", "butt:3");
+  const [empty, colon, bare, withText, noLine] = await search("files", ":", ":2", "butt:3", "butt:");
   assert.deepEqual(empty?.includes("Go to line 2"), false);
-  assert.equal(bare?.[0], "Go to line 2");
+  assert.deepEqual(colon, ["Go to line…"]);
+  assert.deepEqual(bare, ["Go to line 2"]);
   assert.deepEqual(withText, ["button.ts"]);
+  assert.deepEqual(noLine, ["button.ts"]);
 });
 
 test("choosing the line row goes to that line of the current editor", async () => {

@@ -66,7 +66,8 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
   document's `resourceUri` are dropped. With an empty query, All shows buffers
   and recent files and no actions.
 - **Line jump**, the one query syntax, is a parameter, not a mode:
-  - A bare `:N` adds a "Go to line N" row for the current editor, in every tab.
+  - A query of only `:` or `:N` lists just a "Go to line" row for the current
+    editor (no other rows), in every tab.
   - `text:N` matches on `text`, and opening any buffer or file row then goes
     to line N.
 
@@ -105,7 +106,8 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 
 ## Deferred decisions
 
-- Default Search Everywhere key binding (decided at checkpoint 4 review).
+- Default Search Everywhere key binding: none for now, since the palette and
+  Go to File bindings are taken; revisit if daily use asks for one.
 
 ## Checkpoints
 
@@ -130,8 +132,8 @@ Done: `workspace.search-everywhere` ("Search Everywhere…") in
 Go to File's rows (`fileRows.ts`); actions come from the `commands.list()`
 primitive (see the [extension guide](../extension-api.md)) and run with
 `commands.invoke`. Actions have no icon, as in the palette. An empty All tab
-lists recent files only, and All caps actions at 8. The key binding is chosen
-at checkpoint 4.
+lists recent files only, and All caps actions at 8. It has no default key
+binding.
 
 ### 4. One picker: entries, Buffers, line jump 🚧 awaiting review
 
@@ -143,8 +145,8 @@ at checkpoint 4.
 - ✅ Validation: extension tests for each tab, both entries, the buffer order
   (current last, untitled included), the All de-duplication, and both
   line-jump forms; a native test for `initialTab`; `just check`.
-- **Review gate:** the user uses the pickers daily and picks Search
-  Everywhere's key binding.
+- **Review gate:** the user uses the pickers daily. Search Everywhere gets no
+  default key binding.
 
 ### 5. Palette on the single picker
 

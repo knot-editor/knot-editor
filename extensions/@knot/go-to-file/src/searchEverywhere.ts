@@ -29,11 +29,14 @@ function parseRowId(id: string): { kind: Kind; line: number | null; target: stri
   return { kind: kind as Kind, line: line === "" ? null : Number(line), target: target! };
 }
 
-/** A query split into the text to match and the line after its last `:`. */
-export function parseQuery(query: string): { text: string; line: number | null } {
-  const found = /^([^]*):(\d+)$/.exec(query);
-  if (found === null) return { text: query, line: null };
-  return { text: found[1]!, line: Number(found[2]) };
+/**
+ * A query split into the text to match and the line after its last `:`. A
+ * query of only `:` and digits is a jump: it lists nothing but its line row.
+ */
+export function parseQuery(query: string): { text: string; line: number | null; jump: boolean } {
+  const found = /^([^]*):(\d*)$/.exec(query);
+  if (found === null) return { text: query, line: null, jump: false };
+  return { text: found[1]!, line: found[2] === "" ? null : Number(found[2]), jump: found[1] === "" };
 }
 
 /** The actions whose title or name contains `query`, with the title ranges. */
@@ -103,12 +106,13 @@ export async function searchEverywhere({ target, arguments: argument }: CommandC
   const current = shown === null ? null : await documentOf(shown);
 
   const rows = async (query: string, tab: string | null): Promise<PickerRow[]> => {
-    const { text, line } = parseQuery(query);
+    const { text, line, jump } = parseQuery(query);
     const scope = tab ?? "all";
-    const jump =
-      line !== null && text === "" && editorTab !== undefined
-        ? [{ id: rowId("line", line, ""), label: `Go to line ${line}`, labelMatches: [] }]
-        : [];
+    if (jump) {
+      if (editorTab === undefined) return [];
+      const label = line === null ? "Go to line…" : `Go to line ${line}`;
+      return [{ id: rowId("line", line, ""), label, labelMatches: [] }];
+    }
     const buffers = scope === "all" || scope === "buffers" ? await bufferRows(text, current, line) : [];
     let files: PickerRow[] = [];
     if (scope === "all" || scope === "files") {
@@ -126,7 +130,7 @@ export async function searchEverywhere({ target, arguments: argument }: CommandC
       actions = actionRows(available, text);
       if (scope === "all") actions = text.trim() === "" ? [] : actions.slice(0, ALL_TAB_ACTIONS);
     }
-    return [...jump, ...buffers, ...files, ...actions];
+    return [...buffers, ...files, ...actions];
   };
 
   const initialTab = requestedTab(argument);
