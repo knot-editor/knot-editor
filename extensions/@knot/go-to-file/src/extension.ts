@@ -7,7 +7,7 @@ import { commands, documents, icons, workbench, workspaces } from "knot";
 import type { CommandContext } from "knot";
 import { recordActive } from "./recent.js";
 import { fileRows } from "./fileRows.js";
-import { ACTION_ICON, searchEverywhere } from "./searchEverywhere.js";
+import { searchEverywhere } from "./searchEverywhere.js";
 import { clearRecent, recentRows } from "./openRecent.js";
 
 export const COMMAND = "workspace.go-to-file";
@@ -51,7 +51,6 @@ export async function start() {
     title: "Clear Recent Files",
     description: "Forget the recently active files.",
   });
-  await icons.define(ACTION_ICON, { lucide: "terminal" });
   await icons.define(SEARCH_ICON, { lucide: "search" });
   await workbench.registerStatusItem("go-to-file", {
     text: "",

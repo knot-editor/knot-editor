@@ -81,7 +81,7 @@ Done: `workspace.search-everywhere` ("Search Everywhere…") in
 `extensions/@knot/go-to-file` over All, Files, and Actions tabs. Files reuse
 Go to File's rows (`fileRows.ts`); actions come from the new
 `commands.list()` primitive (palette commands by title) and run with
-`commands.invoke`. An empty All tab lists recent files only, and the All tab
+`commands.invoke`. Actions have no icon, as in the palette. An empty All tab lists recent files only, and the All tab
 caps actions at 8. No key binding yet.
 
 - Deliverable: the command and its bundled package changes, All/Files/Actions

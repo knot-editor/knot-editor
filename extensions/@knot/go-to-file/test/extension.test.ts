@@ -3,7 +3,6 @@ import { beforeEach, test } from "node:test";
 import { commands } from "knot";
 import * as host from "knot/testing";
 import { COMMAND, SEARCH_EVERYWHERE_COMMAND, SEARCH_ICON, start } from "../src/extension.js";
-import { ACTION_ICON } from "../src/searchEverywhere.js";
 
 const ROOT = "file:///work/app";
 
@@ -109,7 +108,7 @@ test("typing lists matching files, then actions, in the All tab", async () => {
   const typed = host.pickerRows()[1];
   assert.deepEqual(typed?.map((row) => row.label), ["main.ts", "Main Action"]);
   assert.deepEqual(typed?.[1]?.labelMatches, [[0, 4]]);
-  assert.equal(typed?.[1]?.icon, ACTION_ICON);
+  assert.equal(typed?.[1]?.icon, undefined);
 });
 
 test("choosing an action runs it and choosing a file opens it", async () => {

@@ -5,7 +5,6 @@ import { commands, documents, workbench, workspaces } from "knot";
 import type { CommandContext, CommandInfo, PickerRow } from "knot";
 import { fileRows } from "./fileRows.js";
 
-export const ACTION_ICON = "search-everywhere.action";
 const ACTION_PREFIX = "command:";
 /** Actions the All tab shows, so files stay visible beside them. */
 const ALL_TAB_ACTIONS = 8;
@@ -27,7 +26,6 @@ export function actionRows(all: readonly CommandInfo[], query: string): PickerRo
       id: ACTION_PREFIX + command.name,
       label: command.title,
       description: command.description,
-      icon: ACTION_ICON,
       labelMatches: needle !== "" && at >= 0 ? [[at, at + needle.length]] : [],
     });
   }
