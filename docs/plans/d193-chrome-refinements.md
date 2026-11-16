@@ -1,6 +1,6 @@
 # D193: Chrome refinements
 
-Status: 🚧 checkpoints 1–4 approved; 5 built and awaiting review; 6 remains. Roadmap item [D193](../roadmap.md).
+Status: 🚧 checkpoints 1–5 approved; 6 remains. Roadmap item [D193](../roadmap.md).
 Builds on the Islands look ([decision](../decisions/platform.md#product-window-chrome-and-failure-notices),
 [workbench](../architecture/workbench-and-lifecycle.md), [themes](../architecture/semantic-ui.md#themes-and-color-keys))
 and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
@@ -145,24 +145,14 @@ open documents. A query of only `:` or `:N` lists just a "Go to line" row, and
 `text:N` matches on `text` and opens the row at line N. Search Everywhere has
 no default key binding.
 
-### 5. Palette on the single picker ✅ built, awaiting review
+### 5. Palette on the single picker ✅ approved
 
-Done: `commands.list(view?)` reports `key`; Actions ✅ matches titles and names, orders by `history` and shows bindings on rows, leaving out the three picker commands; `workbench.show-command-palette` runs Search Everywhere on Actions ✅ and falls back to a titles-only native palette; `CommandHistory` and `RecentCommands` ✅ are deleted. Go to Buffer (`workspace.go-to-buffer`, cmd-alt-p) opens it on Buffers. Remaining: the review gate (run `Try: Command Palette on Actions`, or cmd-shift-p).
-
-- `commands.list(view?)` reports each command's displayed `key`.
-- Actions: `completion.match` over titles and names, `history` recents, key
-  bindings on rows, and the picker's own commands left out.
-- `workbench.show-command-palette` runs Search Everywhere on Actions when it is
-  registered, else the minimal native fallback. Delete `CommandHistory` and its
-  state-database record, and strip the native palette to the fallback (titles
-  only: no recents, binding hints, or descriptions).
-- Validation: extension tests for recents ordering and tie-breaking, name-only
-  matches, the key binding shown for the opening view, and running a command
-  against the captured target. Native tests for the fallback when the package
-  is absent, and the existing palette key binding tests still pass; `just check`.
-- Check that opening and typing feel as fast as the native palette (it now
-  waits on host round trips) before the gate.
-- **Review gate:** the user confirms the palette feels the same or better.
+Done: `commands.list(view?)` reports each command's displayed `key`. The Actions
+tab matches titles and names, orders by `history`, and leaves out the picker's
+own commands. `workbench.show-command-palette` runs Search Everywhere on Actions
+and falls back to a titles-only native palette when the package is absent (see
+[commands](../architecture/commands.md)). Go to Buffer
+(`workspace.go-to-buffer`, cmd-alt-p) opens the picker on Buffers.
 
 ### 6. Wrap-up
 
