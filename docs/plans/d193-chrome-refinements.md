@@ -88,9 +88,11 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 - **Palette command and fallback.** `workbench.show-command-palette` stays
   native and keeps its key binding. When `workspace.search-everywhere` is
   registered, it runs that command with `{ tab: "actions" }`. Otherwise
-  (extensions failed to load or the package is disabled) it opens the native
-  palette, now only a fallback: commands by title, with their bindings, and no
-  recents.
+  (extensions failed to load or the package is disabled) it opens a minimal
+  native fallback, enough to diagnose a JavaScript failure and reach commands
+  such as the extension report or Close: the registered commands by title in
+  the shared `Picker`, matched natively, with no key bindings, descriptions,
+  or recents. The native palette shrinks to that.
 
 ## Exclusions
 
@@ -150,8 +152,9 @@ at checkpoint 4.
 - Actions: `completion.match` over titles and names, `history` recents, key
   bindings on rows, and the picker's own commands left out.
 - `workbench.show-command-palette` runs Search Everywhere on Actions when it is
-  registered, else the native fallback palette. Delete `CommandHistory`, its
-  state-database record, and the fallback's recents.
+  registered, else the minimal native fallback. Delete `CommandHistory` and its
+  state-database record, and strip the native palette to the fallback (titles
+  only: no recents, binding hints, or descriptions).
 - Validation: extension tests for recents ordering and tie-breaking, name-only
   matches, the key binding shown for the opening view, and running a command
   against the captured target. Native tests for the fallback when the package
