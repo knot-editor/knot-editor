@@ -3,7 +3,7 @@
 // pane the command ran from. Open Recent lists every recently active file. A
 // search button at the toolbar's right runs Go to File. Go to File and Search
 // Everywhere are one picker over buffers, files, and commands, started on its
-// Files and All tabs.
+// Files and All tabs, and Go to Buffer (cmd-alt-p) on Buffers.
 import { commands, documents, icons, workbench, workspaces } from "knot";
 import type { CommandContext } from "knot";
 import { recordActive } from "./recent.js";
@@ -11,6 +11,7 @@ import { searchEverywhere } from "./searchEverywhere.js";
 import { clearRecent, recentRows } from "./openRecent.js";
 
 export const COMMAND = "workspace.go-to-file";
+export const GO_TO_BUFFER_COMMAND = "workspace.go-to-buffer";
 export const OPEN_RECENT_COMMAND = "workspace.open-recent";
 export const SEARCH_EVERYWHERE_COMMAND = "workspace.search-everywhere";
 export const CLEAR_RECENT_COMMAND = "workspace.clear-recent-files";
@@ -18,6 +19,10 @@ export const SEARCH_ICON = "toolbar.search";
 
 function goToFile(context: CommandContext) {
   return searchEverywhere({ ...context, arguments: { tab: "files" } });
+}
+
+function goToBuffer(context: CommandContext) {
+  return searchEverywhere({ ...context, arguments: { tab: "buffers" } });
 }
 
 async function openRecent({ target }: CommandContext) {
@@ -36,6 +41,10 @@ export async function start() {
   await commands.register(SEARCH_EVERYWHERE_COMMAND, searchEverywhere, {
     title: "Search Everywhere…",
     description: "Find a file or a command by typing part of its name.",
+  });
+  await commands.register(GO_TO_BUFFER_COMMAND, goToBuffer, {
+    title: "Go to Buffer…",
+    description: "Switch to an open document by typing part of its title.",
   });
   await commands.register(OPEN_RECENT_COMMAND, openRecent, {
     title: "Open Recent…",

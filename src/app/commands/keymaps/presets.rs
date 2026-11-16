@@ -18,6 +18,7 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 /// reports it unavailable while its package is not running.
 pub(crate) const GO_TO_LINE_COMMAND: &str = "editor.go-to-line";
 pub(crate) const GO_TO_FILE_COMMAND: &str = "workspace.go-to-file";
+pub(crate) const GO_TO_BUFFER_COMMAND: &str = "workspace.go-to-buffer";
 pub(crate) const OPEN_RECENT_COMMAND: &str = "workspace.open-recent";
 pub(crate) const FIND_COMMAND: &str = "editor.find";
 pub(crate) const REPLACE_COMMAND: &str = "editor.replace";
@@ -27,6 +28,7 @@ pub(crate) const FIND_PREVIOUS_COMMAND: &str = "editor.find-previous";
 pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] = &[
     GO_TO_LINE_COMMAND,
     GO_TO_FILE_COMMAND,
+    GO_TO_BUFFER_COMMAND,
     OPEN_RECENT_COMMAND,
     FIND_COMMAND,
     REPLACE_COMMAND,
@@ -213,6 +215,7 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("secondary-shift-n", NEW_WINDOW_COMMAND, None),
     ("secondary-o", OPEN_COMMAND, None),
     ("secondary-p", GO_TO_FILE_COMMAND, None),
+    ("secondary-alt-p", GO_TO_BUFFER_COMMAND, None),
     ("secondary-e", OPEN_RECENT_COMMAND, None),
     ("secondary-s", SAVE_COMMAND, None),
     ("secondary-shift-s", SAVE_AS_COMMAND, None),

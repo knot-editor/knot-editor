@@ -147,7 +147,7 @@ no default key binding.
 
 ### 5. Palette on the single picker ✅ built, awaiting review
 
-Done: `commands.list(view?)` reports `key`; Actions ✅ matches titles and names, orders by `history` and shows bindings on rows, leaving out the three picker commands; `workbench.show-command-palette` runs Search Everywhere on Actions ✅ and falls back to a titles-only native palette; `CommandHistory` and `RecentCommands` ✅ are deleted. Remaining: the review gate (run `Try: Command Palette on Actions`, or cmd-shift-p).
+Done: `commands.list(view?)` reports `key`; Actions ✅ matches titles and names, orders by `history` and shows bindings on rows, leaving out the three picker commands; `workbench.show-command-palette` runs Search Everywhere on Actions ✅ and falls back to a titles-only native palette; `CommandHistory` and `RecentCommands` ✅ are deleted. Go to Buffer (`workspace.go-to-buffer`, cmd-alt-p) opens it on Buffers. Remaining: the review gate (run `Try: Command Palette on Actions`, or cmd-shift-p).
 
 - `commands.list(view?)` reports each command's displayed `key`.
 - Actions: `completion.match` over titles and names, `history` recents, key

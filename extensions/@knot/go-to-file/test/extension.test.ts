@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { commands, windows } from "knot";
 import * as host from "knot/testing";
-import { COMMAND, SEARCH_EVERYWHERE_COMMAND, SEARCH_ICON, start } from "../src/extension.js";
+import { COMMAND, GO_TO_BUFFER_COMMAND, SEARCH_EVERYWHERE_COMMAND, SEARCH_ICON, start } from "../src/extension.js";
 
 const ROOT = "file:///work/app";
 
@@ -185,6 +185,13 @@ async function search(tab: string | undefined, ...queries: string[]) {
   await host.run(SEARCH_EVERYWHERE_COMMAND, { arguments: tab === undefined ? null : { tab } });
   return host.pickerRows().map((rows) => rows.map((row) => row.label));
 }
+
+test("Go to Buffer opens Search Everywhere on Buffers", async () => {
+  host.answer("showPicker", { kind: "dismissed" });
+  await host.run(GO_TO_BUFFER_COMMAND);
+  const [shown] = host.prompts();
+  assert.equal((shown?.options as { initialTab: string }).initialTab, "buffers");
+});
 
 test("Go to File and Search Everywhere start on their own tabs", async () => {
   host.answer("showPicker", { kind: "dismissed" });
