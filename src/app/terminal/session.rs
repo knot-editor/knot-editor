@@ -12,6 +12,7 @@ use knot_terminal::{
 };
 
 use super::colors::TerminalPalette;
+use crate::app::settings::terminal_mouse_reporting;
 use crate::app::theme::theme;
 
 /// Rows of history the primary screen keeps.
@@ -137,7 +138,7 @@ impl TerminalSession {
             attachment: Arc::new(AtomicU64::new(0)),
             next_attachment: 0,
             focused: false,
-            mouse_reporting_enabled: true,
+            mouse_reporting_enabled: terminal_mouse_reporting(cx),
         };
         this.start(None, cx);
         this

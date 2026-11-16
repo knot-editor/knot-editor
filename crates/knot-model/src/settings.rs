@@ -86,6 +86,11 @@ pub const WORKBENCH_TOOL_STRIPES: &str = "workbench.toolStripes";
 pub const STATUS_BAR_VISIBLE: &str = "statusBar.visible";
 /// IDs of status items the bar skips.
 pub const STATUS_BAR_HIDDEN_ITEMS: &str = "statusBar.hiddenItems";
+/// Whether new terminals report mouse input to the running program.
+pub const TERMINAL_MOUSE_REPORTING_ENABLED: &str = "terminal.mouseReportingEnabled";
+/// The cursor shape new terminals start with: `block`, `bar`, `underline`, or
+/// `hollow`.
+pub const TERMINAL_CURSOR_STYLE: &str = "terminal.cursorStyle";
 
 /// The prefix of the settings that override a theme's chrome values; the rest
 /// of a key is a `theme::CHROME_KEYS` name.
@@ -435,6 +440,17 @@ fn native_definitions() -> Vec<SettingDefinition> {
             default: Value::Array(Vec::new()),
             description: "IDs of status bar items the bar skips; hidden items keep running".into(),
         },
+        SettingDefinition {
+            key: TERMINAL_MOUSE_REPORTING_ENABLED.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Report mouse input to the program in new terminals; the toggle still flips it per session".into(),
+        },
+        text(
+            TERMINAL_CURSOR_STYLE,
+            "block",
+            "The cursor shape new terminals start with: \"block\", \"bar\", \"underline\", or \"hollow\"; a program's own shape still wins",
+        ),
     ]
     .into_iter()
     .chain(crate::theme::CHROME_KEYS.iter().map(|chrome| SettingDefinition {

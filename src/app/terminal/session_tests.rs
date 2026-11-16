@@ -811,3 +811,27 @@ fn less_fixture_pages_to_end_and_restores_the_primary_screen(cx: &mut TestAppCon
     }));
     session.update(cx, |session, cx| session.close(cx));
 }
+
+#[gpui::test]
+fn mouse_reporting_default_off_starts_quiet_but_toggle_still_flips(cx: &mut TestAppContext) {
+    use crate::app::settings::{
+        ApplicationSettings, SettingsScope, TERMINAL_MOUSE_REPORTING_ENABLED,
+    };
+
+    cx.update(|cx| {
+        cx.set_global(ApplicationSettings::default());
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .set(
+                TERMINAL_MOUSE_REPORTING_ENABLED,
+                false.into(),
+                SettingsScope::default(),
+            )
+            .unwrap();
+    });
+    let session = cx.new(|cx| TerminalSession::new_with_options(shell("sleep 30"), cx));
+    assert!(!session.read_with(cx, |session, _| session.mouse_reporting_enabled()));
+    session.update(cx, |session, cx| session.toggle_mouse_reporting(cx));
+    assert!(session.read_with(cx, |session, _| session.mouse_reporting_enabled()));
+    session.update(cx, |session, cx| session.close(cx));
+}

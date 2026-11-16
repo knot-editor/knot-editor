@@ -51,6 +51,19 @@ fn native_definitions_resolve_their_default() {
 }
 
 #[test]
+fn terminal_settings_resolve_their_defaults() {
+    let store = SettingsStore::default();
+    assert_eq!(
+        store.get(TERMINAL_MOUSE_REPORTING_ENABLED, &SettingsScope::default()),
+        Some(&json!(true))
+    );
+    assert_eq!(
+        store.get(TERMINAL_CURSOR_STYLE, &SettingsScope::default()),
+        Some(&json!("block"))
+    );
+}
+
+#[test]
 fn text_lists_accept_only_strings() {
     let mut store = SettingsStore::default();
     assert_eq!(

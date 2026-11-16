@@ -234,6 +234,17 @@ pub(crate) fn bottom_dock_layout(cx: &App) -> knot_model::workbench::BottomDockL
     knot_model::workbench::BottomDockLayout::parse(&text(WORKBENCH_BOTTOM_DOCK_LAYOUT, cx))
 }
 
+/// Whether new terminals report mouse input to the running program.
+pub(crate) fn terminal_mouse_reporting(cx: &App) -> bool {
+    resolve(
+        TERMINAL_MOUSE_REPORTING_ENABLED,
+        &SettingsScope::default(),
+        cx,
+        Value::as_bool,
+    )
+    .expect("terminal.mouseReportingEnabled is a native boolean setting")
+}
+
 /// Write a native boolean setting for every context.
 pub(crate) fn set_boolean(key: &str, value: bool, cx: &mut App) {
     cx.default_global::<ApplicationSettings>()

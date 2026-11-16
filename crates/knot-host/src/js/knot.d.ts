@@ -441,6 +441,12 @@ declare module "knot" {
     /** IDs of status items the bar skips. Hidden items keep running, so a
      * package that registered one is unaffected. Native default empty. */
     "statusBar.hiddenItems": readonly string[];
+    /** Whether new terminals report mouse input to the running program.
+     * Native default true. */
+    "terminal.mouseReportingEnabled": boolean;
+    /** The cursor shape new terminals start with. Native default "block";
+     * a program's own shape still wins. */
+    "terminal.cursorStyle": "block" | "bar" | "underline" | "hollow";
     /** Gitignore-style patterns of entries that `files.list` never returns.
      * Native default `.git`, `.hg`, `.svn`, `.jj`, `CVS`,
      * `.DS_Store`, and `Thumbs.db`. */
