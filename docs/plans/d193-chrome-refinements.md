@@ -52,29 +52,58 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 ### One picker
 
 - `PickerOptions.initialTab?: string` picks the starting tab (default: the
-  first). Go to File opens Search Everywhere on Files and the palette opens it
-  on Actions, so there is a single implementation.
-- Tabs are the only way to choose a scope; there are no `>` or `@` prefixes.
-  The one query syntax is `:N` (and `file:N`), which adds a "Go to line N" row
-  in any tab that lists files; it is a parameter, not a mode.
-- A Buffers tab lists open documents, most recently used first. In All, an open
-  document is listed once, in the buffers position, not again as a file.
-- The palette's own features move into the extension picker's rows: recently
-  used commands first, the key binding on each row, and enabled state. The
-  native palette is then deleted.
+  first). `workspace.search-everywhere` takes an optional `{ tab }` argument.
+  Go to File calls the same function on Files.
+- Tabs: All, Buffers, Files, Actions. Tabs are the only way to choose a scope;
+  there are no `>` or `@` prefixes.
+- **Buffers** lists open documents (untitled ones included), most recently
+  active first, with the current buffer last. The package keeps a second
+  `history` list of document IDs, recorded in `recordActive` beside recent
+  files, and orders `documents.list()` by it. Rows match on the title and open
+  with `documents.present(id)`.
+- **All** shows buffers, then files, then actions (capped at 8). An open
+  document is listed once, as a buffer: file rows whose URI matches an open
+  document's `resourceUri` are dropped. With an empty query, All shows buffers
+  and recent files and no actions.
+- **Line jump**, the one query syntax, is a parameter, not a mode:
+  - A bare `:N` adds a "Go to line N" row for the current editor, in every tab.
+  - `text:N` matches on `text`, and opening any buffer or file row then goes
+    to line N.
+
+  Going to a line is `documents.open`/`present`, then `presentations.editor`,
+  `lineRange`, and `setSelection` with a centered `reveal`; no new primitive.
+- **Actions** take over the palette's behavior:
+  - Matching: `completion.match` over titles and over names, merged with the
+    best score kept, so the matching setting applies and a name matches though
+    it is not shown.
+  - Recents: commands chosen here are recorded with `history.record`, and
+    `history.order` puts them first, so recency also breaks equal scores.
+    Native `CommandHistory` and its state-database record are deleted.
+  - Key bindings: `commands.list(view?)` gains `key: string | null`, the
+    binding shown for that view's kind, already formatted for display (the
+    native `display_key`). Search Everywhere passes the view it opened from.
+  - The commands that open this picker (Search Everywhere, Go to File, Show
+    Command Palette) are left out of Actions: `commands.invoke` refuses to run
+    an ancestor again.
+- **Palette command and fallback.** `workbench.show-command-palette` stays
+  native and keeps its key binding. When `workspace.search-everywhere` is
+  registered, it runs that command with `{ tab: "actions" }`. Otherwise
+  (extensions failed to load or the package is disabled) it opens the native
+  palette, now only a fallback: commands by title, with their bindings, and no
+  recents.
 
 ## Exclusions
 
-- A symbol index or a Symbols tab.
+- A symbol index, a Symbols tab, and any query prefix other than `:N`.
 - Per-tab remembered state across invocations.
 - Dimming unfocused cards.
-- A Symbols tab and any query prefix other than `:N`.
+- Folding Open Recent into the picker: it also lists recent files outside the
+  window's roots, which Files does not.
+- A disabled (greyed out) state for commands: the palette never had one.
 
 ## Deferred decisions
 
-- Default Search Everywhere key binding (decided at checkpoint 3 review).
-- How an extension lists actions for the Actions tab if no API exists yet; if
-  one is needed, add a small primitive rather than native code.
+- Default Search Everywhere key binding (decided at checkpoint 4 review).
 
 ## Checkpoints
 
@@ -104,27 +133,37 @@ at checkpoint 4.
 
 ### 4. One picker: entries, Buffers, line jump
 
-- `initialTab` (native picker and API); Go to File becomes a Search Everywhere
-  entry on Files.
-- Buffers tab (open documents once, most recent first; add a small primitive if
-  `documents` cannot list them), and `:N` / `file:N` line rows (check whether
-  an open-at-line API exists).
-- Validation: extension tests for each tab and entry, `just check`.
-- **Review gate:** the user uses the pickers daily and picks Search Everywhere's
-  key binding.
+- `initialTab` (native picker and API) and Search Everywhere's `{ tab }`
+  argument; Go to File opens it on Files (its binding and toolbar button stay).
+- Buffers tab and its document-ID history; All lists buffers first and drops
+  file rows of open documents.
+- `:N` and `text:N` line jumps.
+- Validation: extension tests through the real editor for each tab, both
+  entries, the buffer order (current last, untitled included), the All
+  de-duplication, and both line-jump forms; `just check`.
+- **Review gate:** the user uses the pickers daily and picks Search
+  Everywhere's key binding.
 
-### 5. Replace the native palette
+### 5. Palette on the single picker
 
-- Read the native palette first and size what only it provides (recents, key
-  binding display, enabled state); move each into the extension picker rows.
-- The palette command opens Search Everywhere on Actions; delete the native
-  palette code.
-- Validation: tests covering recents ordering, key binding display, and running
-  a command; `just check`.
+- `commands.list(view?)` reports each command's displayed `key`.
+- Actions: `completion.match` over titles and names, `history` recents, key
+  bindings on rows, and the picker's own commands left out.
+- `workbench.show-command-palette` runs Search Everywhere on Actions when it is
+  registered, else the native fallback palette. Delete `CommandHistory`, its
+  state-database record, and the fallback's recents.
+- Validation: extension tests for recents ordering and tie-breaking, name-only
+  matches, the key binding shown for the opening view, and running a command
+  against the captured target. Native tests for the fallback when the package
+  is absent, and the existing palette key binding tests still pass; `just check`.
+- Check that opening and typing feel as fast as the native palette (it now
+  waits on host round trips) before the gate.
 - **Review gate:** the user confirms the palette feels the same or better.
 
 ### 6. Wrap-up
 
-Fold durable behavior into the architecture docs, record the validated
-choices in `docs/decisions/` and the index, remove the D193 roadmap entry and
-its Next up line, and delete this plan.
+Fold durable behavior into the architecture docs (including the
+`docs/architecture.md` state-database line that names the palette's recent
+commands), record the validated choices in `docs/decisions/` and the index
+(including the native fallback palette), remove the D193 roadmap entry and its
+Next up line, and delete this plan.
