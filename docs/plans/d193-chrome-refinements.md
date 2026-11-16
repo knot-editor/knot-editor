@@ -1,6 +1,6 @@
 # D193: Chrome refinements
 
-Status: 🚧 checkpoint 2 awaiting review; checkpoint 3 next. Roadmap item [D193](../roadmap.md).
+Status: 🚧 checkpoint 2 done; checkpoint 3 next. Roadmap item [D193](../roadmap.md).
 Builds on the Islands look ([decision](../decisions/platform.md#product-window-chrome-and-failure-notices),
 [workbench](../architecture/workbench-and-lifecycle.md), [themes](../architecture/semantic-ui.md#themes-and-color-keys))
 and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
@@ -67,29 +67,13 @@ Done: `card.focusedBorder` outlines the focused pane (see
 [themes](../architecture/semantic-ui.md#themes-and-color-keys)), and
 `chrome.cardBorder` defaults to 1 so every card has a thin border.
 
-### 2. Picker tabs (native and API) ✅ awaiting review
+### 2. Picker tabs (native and API) ✅ approved
 
-Done: tab strip, filtering, `onQuery(query, tab)`, and rebindable
-`picker.next-tab` / `picker.previous-tab` in a new native `picker` view kind.
-Keys typed in a picker with tabs now go through the router, where only
-bindings scoped to `picker` apply (decided with the user, over native-only
-Tab handling). The fake test host gained `selectTab`. Docs: [semantic
-UI](../architecture/semantic-ui.md), [commands](../architecture/commands.md#picker-tabs),
-[extension guide](../extension-api.md).
-
-- Deliverable: tab state, strip rendering, filtering, key commands, protocol
-  and `knot.d.ts` changes, `onQuery` tab argument, extension guide.
-- **Implementation context:** `src/app/picker.rs` (`Picker`, `PickerEntry`,
-  `PickerEvent::Queried`, `render`), `src/app/product/` picker driver and
-  `key_routing.rs`, the picker key context and keymap in
-  `src/app/commands/`, `crates/knot-protocol/src/` (`PickerOptions` and the
-  `beginPicker`/`nextPickerEvent` types), `crates/knot-host/src/js/knot.d.ts`,
-  `docs/schemas/knot.schema.json`, `src/app/extensions/` picker handlers,
-  and `docs/architecture/semantic-ui.md` (picker section).
-- Validation: picker unit tests (filter by tab, cycling wraps, tab change
-  re-queries, stale answers dropped); a JS extension test through the real
-  editor with a tabbed picker; `just check`.
-- **Review gate:** a `try.*` command opening a picker with tabs.
+Done: a picker shows scope tabs, filters local rows by tab, and passes the tab
+to `onQuery` (see [semantic UI](../architecture/semantic-ui.md) and the
+[extension guide](../extension-api.md)). Tab and Shift+Tab run
+`picker.next-tab` / `picker.previous-tab` in a native `picker` view kind, so
+they are rebindable ([commands](../architecture/commands.md#picker-tabs)).
 
 ### 3. Search Everywhere
 
