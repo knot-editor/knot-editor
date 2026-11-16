@@ -1,6 +1,6 @@
 # Application log
 
-Status: 📝 approved design, not started. No roadmap item; the D117 consumer is
+Status: 🚧 checkpoint 1 implemented, awaiting its review gate. No roadmap item; the D117 consumer is
 recorded on [D117](../roadmap.md).
 
 ## Goal
@@ -18,13 +18,13 @@ shows it in the editor.
   today. It becomes a direct dependency of `knot`, `knot-host`, and
   `knot-model`, none of which gain a gpui dependency. Records from the `log`
   crate, which gpui and other dependencies use, reach the same subscriber
-  through `tracing-log`, so a failure gpui reports (for example `failed to load
+  through `tracing-subscriber`'s `tracing-log` feature, so a failure gpui reports (for example `failed to load
   font …`) lands in the file with no Knot code.
 - **Targets name the subsystem.** `knot::<area>` (`knot::terminal`,
   `knot::fonts`, `knot::extensions`). Extension `console.*` becomes
-  `knot::extension::<package>` at the matching level (`debug`, `info`, `warn`,
-  `error`; `log` is `info`), keeping its package name and the personal-config
-  label.
+  `knot::extension` at the matching level (`debug`, `info`, `warn`, `error`;
+  `log` is `info`) with the package name, or the personal-config label, as a
+  `package` field: a record's target is static, so it cannot carry the package.
 - **`knot::config` marks user-fixable configuration problems.** A `warn!` whose
   cause is something the user can fix in settings or the install (a font
   family that is not installed) uses the target `knot::config`. D117 raises a
@@ -63,7 +63,12 @@ shows it in the editor.
 
 ## Checkpoints
 
-### 1. Backend, file sink, and Open Log
+### 1. Backend, file sink, and Open Log 🚧
+
+✅ Implemented: backend and rotation (`src/app/logging.rs`), the `eprintln!`
+migration, the `knot::extension` console routing, **Knot: Open Log** and
+**Knot: Reveal Log Folder**, tests, and documentation in
+[development](../development.md#application-log). Remaining: the review gate.
 
 - A `knot::logging` module installs the subscriber (file with rotation, stderr
   when attached to a terminal, `KNOT_LOG` filter, `tracing-log` bridge), and

@@ -55,6 +55,23 @@ The workflow has read-only repository permissions and pins external actions to
 commits. [Dependabot](../.github/dependabot.yml) checks for action updates
 weekly.
 
+## Application log
+
+Knot records `tracing` events, and `log` records from its dependencies, in
+`knot.log` in the platform log directory (`~/Library/Logs/Knot` on macOS, the
+user state directory elsewhere), and on standard error when that is a terminal.
+Run **Knot: Open Log** to open the file in the editor and **Knot: Reveal Log
+Folder** to show the directory. At startup a `knot.log` of at least 5 MB becomes
+`knot.1.log`, older files shift up, and `knot.9.log` is deleted, so the log
+holds at most 10 files.
+
+The level is `info`; `KNOT_LOG` takes an
+[`EnvFilter` directive](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html),
+such as `KNOT_LOG=knot::extension=debug,info`. Targets are `knot::<area>`. A
+warning about something the user can fix in their settings or install uses the
+target `knot::config`. The writer runs off the foreground and is flushed when
+Knot quits.
+
 ## Nightly releases
 
 The [nightly workflow](../.github/workflows/nightly.yml) publishes an Apple

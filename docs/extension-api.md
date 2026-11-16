@@ -48,10 +48,12 @@ ES2022 and the `knot` declarations. Import sibling modules by their emitted
 name, such as `./model.js`. `npm --prefix scripts/extensions run build <dir>`
 emits one package's `dist/`; Cargo builds bundled packages itself.
 
-`console.debug`, `log`, `info`, `warn`, and `error` write to the standard error
-of the process running Knot, as `[knot] <package> console.<level>: ...` (`personal-config` for your
-config); start Knot from a
-terminal to read them. Use them to inspect events while writing a package.
+`console.debug`, `log`, `info`, `warn`, and `error` write to the
+[application log](development.md#application-log) at the matching level (`log`
+is `info`), with the target `knot::extension` and the package name as a
+`package` field (`personal-config` for your config). Run Knot's **Open Log**
+command to read them, or start Knot from a terminal to see them on standard
+error. Use them to inspect events while writing a package.
 
 Node's timer globals work as in Node: `setTimeout`, `setInterval`,
 `setImmediate`, their `clear*` counterparts, and `Timeout.refresh()`, which
