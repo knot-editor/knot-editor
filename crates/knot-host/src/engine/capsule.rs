@@ -297,6 +297,19 @@ impl RuntimeCapsule {
         )
     }
 
+    /// Record an uncaught failure of a callback no caller awaits, with the
+    /// package, the script position, and the JavaScript stack that locate it.
+    fn report_failure(&self, label: &str, error: &RuntimeError) {
+        tracing::error!(
+            target: "knot::extensions",
+            package = self.local_state.name.as_deref().unwrap_or("unknown"),
+            source = error.source().unwrap_or("unknown"),
+            line = error.line(),
+            stack = %error.stack().unwrap_or("none"),
+            "{label} failed: {error}",
+        );
+    }
+
     fn start_package_turn(
         &self,
         root: RootId,
@@ -401,7 +414,7 @@ impl RuntimeCapsule {
             let error = self.execution_error(try_catch, source);
             *self.local_state.current_root.lock().unwrap() = None;
             if !error.is_fatal() {
-                tracing::error!(target: "knot::extensions", "{label} failed: {error}");
+                self.report_failure(label, &error);
                 try_catch.reset();
                 self.reject_pending_for_root(try_catch, root);
             }
@@ -1150,7 +1163,7 @@ impl RuntimeCapsule {
                     }
                     ActiveCompletion::Detached(label) => {
                         if let Some(error) = rejection {
-                            tracing::error!(target: "knot::extensions", "{label} failed: {error}");
+                            self.report_failure(label, &error);
                         }
                     }
                 }
@@ -1172,7 +1185,7 @@ impl RuntimeCapsule {
                         .get_line_number(scope)
                         .and_then(|line| u32::try_from(line).ok()),
                     column: one_based_coordinate(message.get_start_column()),
-                    stack: None,
+                    stack: rejection_stack(scope, value),
                 };
                 let execution = active.take().expect("active execution was inspected");
                 match execution.completion {
@@ -1217,7 +1230,7 @@ impl RuntimeCapsule {
                         }));
                     }
                     ActiveCompletion::Detached(label) => {
-                        tracing::error!(target: "knot::extensions", "{label} failed: {error}");
+                        self.report_failure(label, &error);
                     }
                 }
                 drop(active);
@@ -1845,6 +1858,19 @@ pub(super) fn runtime_error_from_try_catch(
         column,
         stack: stack.map(Into::into),
     }
+}
+
+/// The `stack` text of a rejection reason that is an error object.
+fn rejection_stack(
+    scope: &mut v8::PinnedRef<'_, v8::HandleScope>,
+    value: v8::Local<v8::Value>,
+) -> Option<Arc<str>> {
+    let object = v8::Local::<v8::Object>::try_from(value).ok()?;
+    let key = v8::String::new(scope, "stack")?;
+    let stack = object.get(scope, key.into())?;
+    stack
+        .is_string()
+        .then(|| stack.to_rust_string_lossy(scope).into())
 }
 
 pub(super) fn one_based_coordinate(value: usize) -> Option<u32> {

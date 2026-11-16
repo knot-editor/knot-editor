@@ -1475,3 +1475,50 @@ fn unloading_cancels_every_timer() {
     timers.advance(Duration::from_millis(10));
     pool.shutdown();
 }
+
+#[test]
+fn a_failing_callback_is_logged_with_package_position_and_stack() {
+    #[derive(Clone, Default)]
+    struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+    impl std::io::Write for Captured {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let captured = Captured::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer({
+            let captured = captured.clone();
+            move || captured.clone()
+        })
+        .with_ansi(false)
+        .finish();
+    // Pool workers run on their own threads, so the subscriber is global; no
+    // other test installs one.
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+    {
+        let timers = crate::timers::ManualTimers::new();
+        let pool = RuntimePool::new(PoolConfig::new(NonZeroUsize::MIN, Arc::new(timers.clone())));
+        let runtime = key(301);
+        pool.load(runtime, IsolateConfig::named("@scope/failing"))
+            .unwrap();
+        run(
+            &pool,
+            runtime,
+            "setTimeout(async function explode() { throw new Error('timer boom'); }, 1);",
+        );
+        timers.advance(Duration::from_millis(1));
+        // A later root queues behind the failed callback.
+        run(&pool, runtime, "0");
+        pool.shutdown();
+    }
+    let text = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+    assert!(text.contains("ERROR knot::extensions"), "{text}");
+    assert!(text.contains("timer boom"), "{text}");
+    assert!(text.contains(r#"package="@scope/failing""#), "{text}");
+    assert!(text.contains(".explode (file:///timers/run.js"), "{text}");
+}
