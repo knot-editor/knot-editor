@@ -291,6 +291,20 @@ fn cursor_position_shape_and_visibility() {
 }
 
 #[test]
+fn default_cursor_style_applies_until_the_program_sets_its_own() {
+    let terminal = terminal(10, 3);
+    terminal
+        .lock()
+        .unwrap()
+        .set_default_cursor_style(CursorStyle::Bar);
+    assert_eq!(frame(&terminal).cursor().style, CursorStyle::Bar);
+
+    // A program escape still wins over the configured default.
+    write(&terminal, b"\x1b[4 q");
+    assert_eq!(frame(&terminal).cursor().style, CursorStyle::Underline);
+}
+
+#[test]
 fn dirty_tracking_follows_changes_until_cleaned() {
     let terminal = terminal(10, 4);
     let mut state = frame(&terminal);

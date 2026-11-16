@@ -5,6 +5,7 @@ use std::{mem, ptr};
 use crate::{
     events::{self, Callbacks, TerminalEvent},
     ffi,
+    render::CursorStyle,
 };
 
 /// An sRGB color.
@@ -214,6 +215,22 @@ impl Terminal {
                 )
             },
             "ghostty_terminal_resize",
+        );
+    }
+
+    /// Sets the cursor shape new output starts with, until a program escape
+    /// sequence sets its own (DECSCUSR still wins).
+    pub fn set_default_cursor_style(&mut self, style: CursorStyle) {
+        let style = match style {
+            CursorStyle::Bar => ffi::GHOSTTY_CURSOR_STYLE_BAR,
+            CursorStyle::Block => ffi::GHOSTTY_CURSOR_STYLE_BLOCK,
+            CursorStyle::Underline => ffi::GHOSTTY_CURSOR_STYLE_UNDERLINE,
+            CursorStyle::BlockHollow => ffi::GHOSTTY_CURSOR_STYLE_BLOCK_HOLLOW,
+        };
+        self.set(
+            ffi::GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_STYLE,
+            &style,
+            "setting the default cursor style",
         );
     }
 
