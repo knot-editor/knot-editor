@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 directories = { workspace = true }
+tracing = { workspace = true }
 knot-protocol = { path = "../knot-protocol" }
 libc = { workspace = true }
 serde = { workspace = true }

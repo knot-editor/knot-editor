@@ -26,6 +26,7 @@ mod icons;
 mod languages;
 mod launch_socket;
 mod launcher;
+pub(crate) mod logging;
 pub mod model;
 mod personal_config;
 mod personal_config_error;
@@ -152,6 +153,8 @@ pub fn run(
         &std::env::current_dir().expect("Knot requires a current working directory"),
     )
     .unwrap_or_else(|error| {
+        // Logging starts once the arguments are valid; the error goes to the
+        // terminal that ran the command.
         eprintln!("[knot] {error}");
         std::process::exit(2);
     });
@@ -166,11 +169,14 @@ pub fn run(
         }
         entry::LaunchCommand::Open(batch) => batch,
     };
+    logging::install();
     if launch_socket::forward(&batch) || launcher::start_bundle(&batch) {
         return;
     }
     let listener = launch_socket::bind()
-        .map_err(|error| eprintln!("[knot] launch socket unavailable: {error}"))
+        .map_err(
+            |error| tracing::warn!(target: "knot::launch", "launch socket unavailable: {error}"),
+        )
         .ok();
     product::run(create_application(), batch, listener, packages);
 }

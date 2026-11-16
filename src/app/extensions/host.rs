@@ -276,6 +276,7 @@ pub(crate) fn completion_provider_count(cx: &App) -> usize {
 
 pub(crate) fn quit_after_storage(cx: &mut App) {
     let Some(host) = entity(cx) else {
+        crate::app::logging::flush();
         cx.quit();
         return;
     };
@@ -309,6 +310,7 @@ pub(crate) fn quit_after_storage(cx: &mut App) {
         if let Some(flush) = state_flush {
             let _ = flush.await;
         }
+        crate::app::logging::flush();
         cx.update(|cx| cx.quit());
     })
     .detach();

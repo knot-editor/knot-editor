@@ -38,6 +38,9 @@ percent-encoding = "2"
 portable-pty = "0.9"
 pollster = "1"
 proc-macro2 = "1"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "std", "ansi", "tracing-log"] }
 quote = "1"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 futures = "0.3"
@@ -108,6 +111,9 @@ tempfile = { workspace = true }
 unicode-segmentation = { workspace = true }
 unicode-width = { workspace = true }
 url = { workspace = true }
+tracing = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 v8 = { workspace = true }
 rusqlite = { workspace = true }
