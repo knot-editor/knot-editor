@@ -1,21 +1,18 @@
-//! The command palette: the catalog's commands presented in the shared
-//! [`Picker`] and confirmed against the target captured when it opened.
+//! The fallback command palette: the catalog's commands by title in the
+//! shared [`Picker`], confirmed against the target captured when it opened.
 //!
-//! Each row shows a command's title, description, and the binding shown for
-//! the view the palette opened from. The command name is matched but not
-//! displayed, and commands that opt out of the palette are left out. Recently
-//! used commands come first in recency order and the rest follow by title, so
-//! with a query recency breaks equal scores.
-
-use std::collections::HashMap;
+//! Search Everywhere's Actions tab is the real palette. This one is the way
+//! to reach commands such as the extension report when that package failed
+//! to load, so it shows titles only: no descriptions, key bindings, or recent
+//! commands, and commands that opt out of the palette are left out.
 
 use gpui::{App, AppContext as _, Entity};
 
-use knot_protocol::{Command, CommandArgumentValue, CommandName};
+use knot_protocol::{Command, CommandArgumentValue};
 
 use super::{
     PALETTE_KEY_CONTEXT,
-    commands::{catalog::CommandDefinition, keymaps::display_key},
+    commands::catalog::CommandDefinition,
     picker::{Picker, PickerEntry},
 };
 
@@ -26,12 +23,8 @@ pub(crate) struct CommandPalette<Origin> {
 }
 
 impl<Origin: Clone> CommandPalette<Origin> {
-    /// `bindings` maps command names to the canonical key sequence to show;
-    /// `recent` lists command names, most recent first.
     pub(crate) fn new(
         definitions: impl IntoIterator<Item = CommandDefinition>,
-        bindings: &HashMap<CommandName, String>,
-        recent: &[String],
         origin: Origin,
         cx: &mut App,
     ) -> Self {
@@ -39,25 +32,10 @@ impl<Origin: Clone> CommandPalette<Origin> {
             .into_iter()
             .filter(|definition| definition.palette)
             .collect::<Vec<_>>();
-        let recency = |definition: &CommandDefinition| {
-            recent
-                .iter()
-                .position(|name| name.as_str() == definition.name.as_ref())
-                .unwrap_or(usize::MAX)
-        };
-        definitions.sort_by(|left, right| {
-            recency(left)
-                .cmp(&recency(right))
-                .then_with(|| left.title.cmp(&right.title))
-        });
+        definitions.sort_by(|left, right| left.title.cmp(&right.title));
         let entries = definitions
             .iter()
-            .map(|definition| PickerEntry {
-                description: definition.description.clone(),
-                hint: bindings.get(&definition.name).map(|key| display_key(key)),
-                match_text: Some(definition.name.to_string()),
-                ..PickerEntry::new(definition.title.clone())
-            })
+            .map(|definition| PickerEntry::new(definition.title.clone()))
             .collect();
         let commands = definitions
             .into_iter()
@@ -97,8 +75,6 @@ impl<Origin: Clone> CommandPalette<Origin> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use gpui::TestAppContext;
 
     use super::CommandPalette;
@@ -108,28 +84,25 @@ mod tests {
         CommandDefinition {
             name: name.into(),
             title: title.into(),
-            description: None,
+            description: Some("Described.".into()),
             palette: true,
             owner: CommandOwner::Native,
         }
     }
 
     #[gpui::test]
-    fn lists_visible_commands_by_title_with_descriptions_and_bindings(cx: &mut TestAppContext) {
+    fn lists_visible_commands_by_title_only(cx: &mut TestAppContext) {
         let hidden = CommandDefinition {
             palette: false,
             ..definition("editor.move-left", "Move Left")
         };
-        let described = CommandDefinition {
-            description: Some("Close the focused window.".into()),
-            ..definition("workspace.close", "Close Window")
-        };
-        let bindings = HashMap::from([("copy".into(), "cmd-c".to_owned())]);
         let palette = cx.update(|cx| {
             CommandPalette::new(
-                [hidden, described, definition("copy", "Copy Selection")],
-                &bindings,
-                &[],
+                [
+                    hidden,
+                    definition("workspace.close", "Close Window"),
+                    definition("copy", "Copy Selection"),
+                ],
                 (),
                 cx,
             )
@@ -144,60 +117,20 @@ mod tests {
                     (row.label.clone(), row.description.clone(), row.hint.clone())
                 })
                 .collect::<Vec<_>>();
-            let copy_hint = super::display_key("cmd-c");
             assert_eq!(
                 rows,
                 [
-                    (
-                        "Close Window".into(),
-                        Some("Close the focused window.".into()),
-                        None
-                    ),
-                    ("Copy Selection".into(), None, Some(copy_hint)),
+                    ("Close Window".into(), None, None),
+                    ("Copy Selection".into(), None, None),
                 ]
             );
             picker.set_query("move", cx);
             assert!(picker.visible_entries().is_empty());
             picker.set_query("workspace.cl", cx);
-            assert_eq!(picker.visible_entries(), [0]);
+            assert!(picker.visible_entries().is_empty());
             picker.set_query("selection", cx);
             let entry = picker.selected_entry().unwrap();
             assert_eq!(palette.command(entry).name.as_ref(), "copy");
-        });
-    }
-
-    #[gpui::test]
-    fn recent_commands_come_first_and_break_equal_scores(cx: &mut TestAppContext) {
-        let recent = ["window.close".to_owned(), "file.save".to_owned()];
-        let palette = cx.update(|cx| {
-            CommandPalette::new(
-                [
-                    definition("file.open", "Open"),
-                    definition("file.save", "Save"),
-                    definition("window.close", "Close"),
-                    definition("file.save-copy", "Save"),
-                ],
-                &HashMap::new(),
-                &recent,
-                (),
-                cx,
-            )
-        });
-        let picker = palette.picker().clone();
-        picker.update(cx, |picker, cx| {
-            let names = |picker: &crate::app::picker::Picker| {
-                picker
-                    .visible_entries()
-                    .into_iter()
-                    .map(|entry| palette.command(entry).name.to_string())
-                    .collect::<Vec<_>>()
-            };
-            assert_eq!(
-                names(picker),
-                ["window.close", "file.save", "file.open", "file.save-copy"]
-            );
-            picker.set_query("save", cx);
-            assert_eq!(names(picker), ["file.save", "file.save-copy"]);
         });
     }
 }

@@ -8,7 +8,6 @@ use gpui::*;
 
 mod application_observation;
 mod build_info;
-mod command_history;
 mod command_palette;
 mod commands;
 mod completion;

@@ -267,7 +267,7 @@ async fn palette_discovers_commands_and_keeps_its_opening_target(cx: &mut TestAp
     .unwrap();
     cx.refresh().unwrap();
 
-    cx.simulate_keystrokes(window_handle, "f i l e . n e w enter");
+    cx.simulate_keystrokes(window_handle, "n e w space d o c u m e n t enter");
 
     cx.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
@@ -332,9 +332,7 @@ async fn native_participants_reject_arguments_before_mutation(cx: &mut TestAppCo
 }
 
 #[gpui::test]
-fn palette_shows_titles_descriptions_and_bindings_and_hides_opted_out_commands(
-    cx: &mut TestAppContext,
-) {
+fn the_fallback_palette_lists_visible_commands_by_title_only(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
     use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
@@ -367,11 +365,6 @@ keymaps.bind("ctrl-alt-f", "fixture.described");
             .borrow()
             .resolve("fixture.plain")
             .is_ok()
-            && cx
-                .global::<crate::app::commands::keymaps::ApplicationKeymaps>()
-                .0
-                .shown_bindings(None)
-                .contains_key("fixture.described")
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
@@ -397,61 +390,60 @@ keymaps.bind("ctrl-alt-f", "fixture.described");
             .into_iter()
             .map(|entry| picker.entry(entry).clone())
             .collect::<Vec<_>>();
-        let described = rows.iter().find(|row| row.label == "Run Fixture").unwrap();
-        assert_eq!(described.description.as_deref(), Some("Runs the fixture."));
-        assert_eq!(
-            described.hint,
-            Some(crate::app::commands::keymaps::display_key("ctrl-alt-f"))
-        );
+        let titled = rows.iter().find(|row| row.label == "Run Fixture").unwrap();
+        assert_eq!((&titled.description, &titled.hint), (&None, &None));
         assert!(rows.iter().any(|row| row.label == "fixture.plain"));
         assert!(!rows.iter().any(|row| row.label == "fixture.hidden"));
         assert!(!rows.iter().any(|row| row.label == "Move left"));
-        let save = rows.iter().find(|row| row.label == "Save").unwrap();
-        assert!(save.hint.is_some());
+        assert!(rows.iter().any(|row| row.label == "Save"));
     });
 }
 
 #[gpui::test]
-fn confirming_a_palette_command_ranks_it_first_next_time(cx: &mut TestAppContext) {
+fn show_command_palette_runs_search_everywhere_on_actions_when_it_is_registered(
+    cx: &mut TestAppContext,
+) {
+    use knot_protocol::ExtensionKey;
+    use knot_protocol::{ExtensionId, ExtensionLifecycleId};
+
+    const SOURCE: &str = r#"
+import { commands } from "knot";
+await commands.register("workspace.search-everywhere", async ({ arguments: args }) => {
+  if (args?.tab === "actions") await commands.invoke("workbench.split-horizontal");
+}, { title: "Search Everywhere…" });
+"#;
     let documents = install_globals(cx);
-    let state_dir = tempfile::tempdir().unwrap();
-    let database = crate::app::record_store::StateDatabase::open(
-        state_dir.path().join("state.sqlite3"),
-        cx.background_executor.clone(),
-    );
-    cx.update(|cx| {
-        cx.set_global(crate::app::command_history::ApplicationCommandHistory(
-            crate::app::command_history::CommandHistory::open(&database),
-        ))
+    cx.update(super::super::bind_product_keys);
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(713), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("workspace.search-everywhere")
+            .is_ok()
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let window = headless_window(document, model, cx);
-    let native_window = Headless;
-    let first_command = |cx: &mut TestAppContext| {
-        native_window.run(cx, |cx| {
-            window.update(cx, |window, cx| {
-                window.focus_active_surface(cx);
-                window.open_command_palette(cx);
-                let palette = window.command_palette.as_ref().unwrap();
-                let entry = palette.picker().read(cx).selected_entry().unwrap();
-                palette.command(entry).name.to_string()
-            })
-        })
-    };
-    assert_ne!(first_command(cx), "workbench.split-horizontal");
-    press_keys(&window, "s p l i t r i g h t enter", cx);
-    cx.run_until_parked();
-    cx.read(|cx| assert!(window.read(cx).command_palette.is_none()));
-    assert_eq!(first_command(cx), "workbench.split-horizontal");
-    cx.read(|cx| {
-        assert_eq!(
-            cx.global::<crate::app::command_history::ApplicationCommandHistory>()
-                .0
-                .recent(),
-            ["workbench.split-horizontal"]
-        );
+    let (window, native_window) = product_window(document, model, cx);
+    let panes =
+        |cx: &TestAppContext| cx.read(|cx| window.read(cx).workbench.read(cx).panes().len());
+    assert_eq!(panes(cx), 1);
+
+    cx.simulate_keystrokes(native_window, "secondary-shift-p");
+    wait_for_api_condition(cx, |cx| {
+        window.read(cx).workbench.read(cx).panes().len() == 2
     });
+    cx.read(|cx| assert!(window.read(cx).command_palette.is_none()));
 }
 
 #[gpui::test]
@@ -592,7 +584,7 @@ async fn open_runs_in_a_new_blank_window_without_a_focused_tab(cx: &mut TestAppC
 
     cx.simulate_keystrokes(first, "secondary-shift-p");
     cx.run_until_parked();
-    cx.simulate_keystrokes(first, "w i n d o w . n e w enter");
+    cx.simulate_keystrokes(first, "b l a n k enter");
     cx.run_until_parked();
     let second = cx
         .windows()

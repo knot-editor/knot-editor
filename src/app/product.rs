@@ -60,7 +60,6 @@ pub(crate) use launch::{open_product_window, run};
 
 use super::{
     CommandCompletion, CommandPalette,
-    command_history::ApplicationCommandHistory,
     commands::dispatch::{
         ApplicationCommandSource, ApplicationProductCommands, CLOSE_TAB_COMMAND,
         CLOSE_WINDOW_COMMAND, COPY_COMMAND, CUT_COMMAND, HIDE_COMMAND, HIDE_OTHERS_COMMAND,
@@ -592,6 +591,9 @@ fn target_document(target: &ProductCommandTarget) -> Option<DocumentId> {
         TabSurfaceId::Terminal(_) | TabSurfaceId::Tool(_) => None,
     }
 }
+
+/// The extension command that is the command palette's Actions tab.
+const SEARCH_EVERYWHERE_COMMAND: &str = "workspace.search-everywhere";
 
 pub(crate) struct KnotWindow {
     workbench: Entity<Workbench>,
@@ -1412,17 +1414,6 @@ impl KnotWindow {
         self.open_command_palette_from(origin, cx);
     }
 
-    fn record_palette_command(name: &str, cx: &App) {
-        let Some(history) = cx.try_global::<ApplicationCommandHistory>() else {
-            return;
-        };
-        let catalog = Self::command_dispatcher(cx).read(cx).catalog();
-        let catalog = catalog.borrow();
-        history
-            .0
-            .record(name, |recent| catalog.resolve(recent).is_ok());
-    }
-
     /// The keymap view kind of a captured target's focused tab; contributed
     /// frames and native tools share this path instead of a window-level
     /// special case.
@@ -1447,24 +1438,42 @@ impl KnotWindow {
         }
     }
 
+    /// Runs Search Everywhere on its Actions tab when that command is
+    /// registered, else opens the fallback palette.
+    pub(crate) fn show_command_palette_from(
+        &mut self,
+        origin: ProductCommandTarget,
+        cx: &mut Context<Self>,
+    ) {
+        let search = Self::command_dispatcher(cx)
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve(SEARCH_EVERYWHERE_COMMAND)
+            .is_ok();
+        if !search {
+            self.open_command_palette_from(origin, cx);
+            return;
+        }
+        let command = knot_protocol::Command {
+            name: SEARCH_EVERYWHERE_COMMAND.into(),
+            arguments: knot_protocol::CommandArgumentValue::Object(
+                [(
+                    "tab".to_owned(),
+                    knot_protocol::CommandArgumentValue::String("actions".to_owned()),
+                )]
+                .into(),
+            ),
+        };
+        self.dispatch_command(command, origin, cx);
+    }
+
     fn open_command_palette_from(&mut self, origin: ProductCommandTarget, cx: &mut Context<Self>) {
         let definitions = Self::command_dispatcher(cx)
             .read(cx)
             .definitions()
             .collect::<Vec<_>>();
-        let bindings = cx
-            .try_global::<ApplicationKeymaps>()
-            .map(|keymaps| {
-                keymaps
-                    .0
-                    .shown_bindings(Self::target_view_kind(&origin, cx).as_deref())
-            })
-            .unwrap_or_default();
-        let recent = cx
-            .try_global::<ApplicationCommandHistory>()
-            .map(|history| history.0.recent())
-            .unwrap_or_default();
-        let palette = CommandPalette::new(definitions, &bindings, &recent, origin, cx);
+        let palette = CommandPalette::new(definitions, origin, cx);
         let picker = palette.picker().clone();
         let subscription = cx.subscribe(&picker, |this, _picker, event: &PickerEvent, cx| {
             if matches!(event, PickerEvent::Highlighted(_)) {
@@ -1479,7 +1488,6 @@ impl KnotWindow {
             this.restore_palette_origin_focus(&palette.origin(), cx);
             if let PickerEvent::Confirmed(entry) = event {
                 let command = palette.command(*entry);
-                Self::record_palette_command(command.name.as_ref(), cx);
                 this.dispatch_command(command, palette.origin(), cx);
             }
             this.refocus_active_transient(cx);

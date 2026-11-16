@@ -617,9 +617,6 @@ pub(crate) fn run(
             crate::app::tool_layout::ToolLayoutStore::open(&state),
         ));
         crate::app::window_record::install(&state, cx);
-        cx.set_global(crate::app::command_history::ApplicationCommandHistory(
-            crate::app::command_history::CommandHistory::open(&state),
-        ));
         cx.set_global(crate::app::zoom::ApplicationZoom::open(&state));
         cx.set_global(crate::app::record_store::ApplicationState(state));
         cx.set_global(ApplicationLaunchGate(RefCell::new(LaunchGate::Pending(

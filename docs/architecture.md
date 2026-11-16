@@ -89,8 +89,7 @@ attachments, including dock placement and hide/reopen state. The application
 owns one SQLite state database of UI-state records: a versioned tool-only
 layout snapshot, which fresh windows inherit while already-open windows stay
 independent; one record of every window's roots and layout that
-startup restores before extensions see `launched`; the palette's recently
-used commands; and the zoom level. It also owns a separate recovery database that protects dirty
+startup restores before extensions see `launched`; and the zoom level. It also owns a separate recovery database that protects dirty
 document text independently of extension health. Views own presentation and interaction; terminal sessions own
 PTYs, processes, and emulator state independently of their sole attached view.
 The workbench owns layout transitions; windows coordinate tab transfers,

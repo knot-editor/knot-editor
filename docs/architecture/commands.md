@@ -11,13 +11,16 @@ and structured outcomes. The palette captures its origin before taking focus.
 
 Each definition carries a title, an optional description, and whether the
 palette lists it; native input commands such as cursor movement opt out, and
-extensions pass the same metadata to `commands.register`. The palette shows
-each command's title, description, and the binding shown for the origin's view
-kind: the argument-less binding with the fewest keystrokes, then the shortest
-text, then the latest write. It matches the command name without showing it.
-Commands confirmed in the palette form a most-recently-used list of 50 names in
-the application state database; recent commands list first with an empty query
-and break equal scores otherwise.
+extensions pass the same metadata to `commands.register`. The palette is Search
+Everywhere's Actions tab (a bundled extension): `workbench.show-command-palette`
+runs `workspace.search-everywhere` with `{ tab: "actions" }` when it is
+registered. The tab shows each command's title, description, and the binding
+shown for the origin's view kind (`commands.list` reports it: the argument-less
+binding with the fewest keystrokes, then the shortest text, then the latest
+write), matches titles and names, and orders commands chosen there first through
+`history`. When the command is not registered, because extensions failed to
+load or the package is disabled, a minimal native palette lists the commands by
+title only, matched natively, so a failure remains diagnosable.
 
 Annotated native handlers declare metadata and typed async signatures; linked
 adapters assemble catalog entries and generated name constants. Distinct routing

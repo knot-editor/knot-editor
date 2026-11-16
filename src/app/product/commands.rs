@@ -682,7 +682,7 @@ pub(crate) async fn show_command_palette(
         .await?;
     context
         .window(move |window, target, cx| {
-            window.open_command_palette_from(target.clone(), cx);
+            window.show_command_palette_from(target.clone(), cx);
             Ok(())
         })
         .await

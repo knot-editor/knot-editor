@@ -251,7 +251,7 @@ fn config_remaps_product_keys_without_changing_menu_or_palette_dispatch(cx: &mut
     })
     .unwrap();
     cx.refresh().unwrap();
-    cx.simulate_keystrokes(native_window, "f i l e . n e w enter");
+    cx.simulate_keystrokes(native_window, "n e w space d o c u m e n t enter");
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots().len(), 3));
 }
