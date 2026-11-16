@@ -611,12 +611,13 @@ Kakoune mode could use them too. The
 
 ### Terminal
 
-- **D045 — General terminal settings**
+- **D045 — General terminal settings** 🚧
   - Depends on: none
   - Description: Apart from `font.*` keys scoped `{ view: "terminal" }`, the
     session-local mouse toggle is the only terminal preference; no `terminal.*`
     keys are defined in the settings store. Define settings for the default
-    mouse mode, cursor style, and scrollback length.
+    mouse mode, cursor style, and scrollback length; the
+    [plan](plans/d045-terminal-settings.md) holds the design.
 
 - **D041 — Terminal titles, bells, and notifications**
   - Depends on: D117
