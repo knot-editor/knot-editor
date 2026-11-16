@@ -968,6 +968,37 @@ the bar, and `statusBar.hiddenItems` lists IDs the bar skips. A hidden item
 keeps its registration and its package keeps running. To follow the editor the
 bar describes, observe `statusTarget` on each window.
 
+## Add menu items
+
+`menus.add(location, item)` puts a command in a menu and returns a handle;
+disposing it, or unloading the package, removes the item. The command may be
+native or a package's own, and one command can appear in several places with
+different arguments.
+
+```js
+await menus.add("tab", {
+  command: "my.copy-title",
+  title: "Copy Title", // defaults to the command's title
+  group: "3_copy", // groups sort alphabetically, with a separator between them
+  order: 0, // within a group; then by title
+  view: "editor", // optional: only on editor tabs
+});
+```
+
+The `location` is `"tab"` (the right-click menu of a tab header, in the center
+or a dock), `"content"`, or a menu bar menu (`"menubar.file"`,
+`"menubar.edit"`, `"menubar.view"`, `"menubar.go"`); any other name is a
+`TypeError`. `view` (`"editor"`, `"terminal"`, or a contributed view ID) and
+`context` (an editor key context, with `view`) show an item only on matching
+surfaces, as for keybindings; menu bar locations reject both. Ungrouped items
+come last, and registration order never affects a menu.
+
+A menu runs its command on the surface that was clicked, without focusing it
+or changing the active tab, so a command reads `context.editor` and
+`context.buffer` rather than the window's active file. A command that does not
+apply returns `commands.unavailable()` and the click does nothing; menus have
+no disabled state. Bundled `@knot/chrome` fills the tab menu this way.
+
 ## Compose commands
 
 `await commands.invoke(name, arguments)` routes a child through the originating

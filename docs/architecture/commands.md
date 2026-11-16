@@ -190,6 +190,19 @@ unhandled, so a key that some view unbinds shows no menu key. Show Keybindings
 lists every slot with its owner and the owner that overrides it, using the same
 winner rule as resolution.
 
+### Context menus
+
+Packages fill context menus through `menus.add`; the registry in
+`knot_model::menus` and the application global in `src/app/menus.rs` hold
+items per lifecycle, and teardown removes them. Items sort by group, order,
+then title, and an item scoped to a view kind or key context shows only where
+the surface has it, by the keymap's scope rule. A menu opens through the shared
+helper in `src/app/context_menu.rs` and runs its commands against a target
+captured for the clicked tab (`capture_tab_target`), not the focused one, so
+focus and the active tab stay. While a menu is open the window's focus is
+`Focus::Popup`: only global bindings match, and other keys reach the menu's own
+actions.
+
 ## Extension execution
 
 The foreground bridge owns one serial invocation tree, admitted presentation

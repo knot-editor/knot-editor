@@ -113,7 +113,7 @@ Done and approved. The bundled package `extensions/@knot/chrome/` holds the
 status-bar items and takes the menu contents of later checkpoints. See the
 [status bar](../architecture/workbench-and-lifecycle.md#status-bar).
 
-### 3. Menu registry, `menus.add`, and the tab context menu ✳️ not started
+### 3. Menu registry, `menus.add`, and the tab context menu ✅ awaiting review
 
 Add the registry and the extension API, the clicked-tab command target,
 `workbench.close-tabs-to-right`, the tab context menu, and the tab items in
@@ -155,9 +155,14 @@ Add the registry and the extension API, the clicked-tab command target,
   - End-to-end test in `crates/knot-ext-workbench/tests/workbench/chrome.rs`
     through the real editor.
 - **Review gate:** the user checks tab menus through `Try:` commands in
-  `post-init.js` that add items from personal config. Document `menus.add`
-  in `docs/extension-api.md`, and record the menu ownership in
+  `post-init.js` (Try: Add Tab Menu Items, Try: Remove Tab Menu Items) that add
+  items from personal config. ✅ `menus.add` is documented in
+  `docs/extension-api.md`, and the menu ownership in
   `docs/architecture/commands.md` and `workbench-and-lifecycle.md`.
+- **Notes:** an open menu now matches only global keys (`key_scope` returns no
+  view under `Focus::Popup`); before, editor-scoped keys such as Down and
+  Enter reached the editor behind the menu. Close All is
+  `workbench.close-pane` titled in the menu.
 
 ### 4. Editor and terminal content menus ✳️ not started
 

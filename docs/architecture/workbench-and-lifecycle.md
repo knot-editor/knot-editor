@@ -128,7 +128,12 @@ values, and click commands; hidden IDs skip both. The row shows on macOS
 always and elsewhere only with toolbar items. The editor a bar describes is `WindowInfo.statusTarget`
 ([extension host](extension-host.md#application-metadata-queries)).
 
-The bundled `@knot/chrome` package registers the built-in items on the right:
+Right-clicking a tab header opens the tab context menu from the `tab` items of
+the menu registry ([context menus](commands.md#context-menus)). The bundled
+`@knot/chrome` package adds Close, Close Other Tabs, Close Tabs to the Right,
+Close All, Split Right, and Split Down.
+
+The same package registers the built-in status items on the right:
 the cursor position with the selection size, counted in characters up to
 1 MiB and in kilobytes beyond, the document's indentation, and its language. It follows each window's `statusTarget` with an editor handle and
 sets the three items as that window's own values, so two windows show their own
@@ -234,7 +239,7 @@ closure. The window collects its open views and the documents' state
 and runs the prompts, saves, and closes; which views a close covers, which
 dirty documents need a prompt, and whether a plan still holds at commit are
 decided by `knot_model::workbench::closure`. A close covers a tab; Close Other
-Tabs a pane's unpinned tabs but the origin; Close Pane every tab of the pane, hiding tools in a dock, and Close Other
+Tabs a pane's unpinned tabs but the origin; Close Tabs to the Right its unpinned tabs after the origin; Close Pane every tab of the pane, hiding tools in a dock, and Close Other
 Panes every tab of the window's other panes in the origin's area. Window and
 quit closes need no origin tab. The
 coordinator captures exact window, workbench, tab, surface, and presentation identities,
