@@ -1,4 +1,4 @@
-//! The bundled status bar package, following the editor a window describes.
+//! The bundled chrome package, following the editor a window describes.
 use gpui::TestAppContext;
 
 use super::bundled::only;
@@ -6,7 +6,7 @@ use knot::test_support::{TestProduct, wait_until};
 
 #[gpui::test]
 fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut TestAppContext) {
-    let product = TestProduct::start(only(&["@knot/status-bar"]), cx);
+    let product = TestProduct::start(only(&["@knot/chrome"]), cx);
     let editor = product.windowed_editor("one\ntwo\nthree é\n", cx);
     let right = |cx: &mut TestAppContext| editor.status(cx).1;
     wait_until(cx, |cx| right(cx).len() == 3);

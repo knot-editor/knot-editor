@@ -1,7 +1,7 @@
 fn main() {
     knot_bundled::build::compile_packages(&[
         "projects",
-        "status-bar",
+        "chrome",
         "go-to-line",
         "find",
         "word-highlight",

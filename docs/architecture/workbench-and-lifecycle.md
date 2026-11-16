@@ -128,7 +128,7 @@ values, and click commands; hidden IDs skip both. The row shows on macOS
 always and elsewhere only with toolbar items. The editor a bar describes is `WindowInfo.statusTarget`
 ([extension host](extension-host.md#application-metadata-queries)).
 
-The bundled `@knot/status-bar` package registers the built-in items on the right:
+The bundled `@knot/chrome` package registers the built-in items on the right:
 the cursor position with the selection size, counted in characters up to
 1 MiB and in kilobytes beyond, the document's indentation, and its language. It follows each window's `statusTarget` with an editor handle and
 sets the three items as that window's own values, so two windows show their own

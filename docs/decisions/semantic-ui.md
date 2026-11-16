@@ -270,7 +270,7 @@ References: [editor bars](../architecture/editor-and-languages.md#editor-bars),
 ## Status bar
 
 The bar is native and its items are extension registrations, so the window owns
-layout and painting while packages, including the bundled `@knot/status-bar`,
+layout and painting while packages, including the bundled `@knot/chrome`,
 decide what it says, and personal config replaces a bundled item by registering
 its ID again. Values can be per window because the position and indentation an
 item shows describe one window's editor. `update` replaces the whole value,

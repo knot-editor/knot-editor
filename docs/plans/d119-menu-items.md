@@ -107,7 +107,7 @@ Done and approved. The tree row and stripe button menus open through
 `Focus::Popup` layer. See [keymaps](../architecture/commands.md#keymaps) and
 the [tree context menu](../architecture/semantic-ui.md).
 
-### 2. `@knot/chrome` from `@knot/status-bar` ✳️ not started
+### 2. `@knot/chrome` from `@knot/status-bar` ✅ implemented, awaiting review
 
 Rename the status-bar package to `@knot/chrome`, which later checkpoints fill
 with menu contents. Behavior doesn't change.
