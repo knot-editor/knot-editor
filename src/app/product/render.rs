@@ -497,6 +497,13 @@ impl KnotWindow {
                         }
                         this.activate_tab(pane_id, tab_id, cx);
                     }))
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                            this.open_tab_menu(pane_id, tab_id, event.position, window, cx);
+                            cx.stop_propagation();
+                        }),
+                    )
                     .on_mouse_up(
                         MouseButton::Middle,
                         cx.listener(move |this, _, _, cx| {
@@ -815,6 +822,7 @@ impl Render for KnotWindow {
         let workbench = self.render_workbench(cx);
         let (left_stripe, right_stripe) = self.render_stripes(cx);
         let stripe_menu = self.stripe_menu.as_ref().map(|open| open.element());
+        let tab_menu = self.tab_menu.as_ref().map(|open| open.element());
         let entity = cx.entity();
         let command_palette = self
             .command_palette
@@ -883,6 +891,7 @@ impl Render for KnotWindow {
             .children(status_bar)
             .child(self.drag_listener(cx))
             .when_some(stripe_menu, |root, menu| root.child(menu))
+            .when_some(tab_menu, |root, menu| root.child(menu))
             .when_some(transient, |root, transient| {
                 root.child(
                     div()

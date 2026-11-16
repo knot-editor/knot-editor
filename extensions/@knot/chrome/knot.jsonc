@@ -1,11 +1,11 @@
 {
-  // Bundled window chrome: status bar items.
+  // Bundled window chrome: status bar items and context menu contents.
   "name": "@knot/chrome",
   "apiVersion": 1,
   "version": "0.1.0",
   "main": "dist/main.js",
   "displayName": "Chrome",
-  "description": "Fills the window chrome: the status bar items for the editor's cursor position, indentation, and language.",
+  "description": "Fills the window chrome: the context menu items and the status bar items for the editor's cursor position, indentation, and language.",
   "author": "Knot",
   "license": "GPL-3.0-or-later",
 }

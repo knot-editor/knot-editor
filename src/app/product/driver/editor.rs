@@ -529,6 +529,67 @@ impl TestEditor {
         self.settle(cx);
     }
 
+    /// The labels of the tab menu of the focused pane's tab at `index`, by
+    /// group.
+    pub fn tab_menu(&self, index: usize, cx: &mut TestAppContext) -> Vec<Vec<String>> {
+        self.window.update(cx, |window, cx| {
+            let pane = window.workbench.read(cx).focused_pane().unwrap();
+            let (pane, tab) = (pane.id(), pane.tabs()[index].id());
+            let target = window.capture_tab_target(pane, tab, cx).unwrap();
+            KnotWindow::menu_groups(crate::app::menus::MenuLocation::Tab, &target, cx)
+                .into_iter()
+                .map(|group| group.into_iter().map(|entry| entry.title).collect())
+                .collect()
+        })
+    }
+
+    /// Right-click the focused pane's tab at `index`, and settle.
+    pub fn right_click_tab(&self, index: usize, cx: &mut TestAppContext) {
+        let (native_window, _) = self.native_window.as_ref().expect("a native window");
+        let native_window = *native_window;
+        let id = cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            workbench.focused_pane().unwrap().tabs()[index].id().value()
+        });
+        let selector: &'static str = Box::leak(format!("tab-{id}").into_boxed_str());
+        // Focus events reach the window only when it is active.
+        cx.update_window(native_window, |_, window, _| window.activate_window())
+            .unwrap();
+        cx.refresh().unwrap();
+        let mut window_cx = VisualTestContext::from_window(native_window, cx);
+        let center = window_cx
+            .debug_bounds(selector)
+            .expect("the tab is laid out")
+            .center();
+        window_cx.simulate_mouse_down(center, MouseButton::Right, Modifiers::default());
+        window_cx.simulate_mouse_up(center, MouseButton::Right, Modifiers::default());
+        self.settle(cx);
+    }
+
+    /// Press `keys` through the native window's own dispatch, as an open
+    /// menu takes them, and settle.
+    pub fn press_in_menu(&self, keys: &str, cx: &mut TestAppContext) {
+        let (native_window, _) = self.native_window.as_ref().expect("a native window");
+        cx.refresh().unwrap();
+        cx.simulate_keystrokes(*native_window, keys);
+        self.settle(cx);
+    }
+
+    /// The titles of the focused pane's document tabs.
+    pub fn tab_titles(&self, cx: &mut TestAppContext) -> Vec<String> {
+        cx.read(|cx| {
+            let documents = cx.global::<ApplicationDocuments>().0.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
+            workbench
+                .focused_pane()
+                .unwrap()
+                .tabs()
+                .iter()
+                .filter_map(|tab| Some(documents.get(tab.document_id()?)?.title().to_owned()))
+                .collect()
+        })
+    }
+
     /// Whether the window's active tab shows this document's editor.
     pub fn is_active(&self, cx: &mut TestAppContext) -> bool {
         active_editor(&self.window, cx) == self.editor

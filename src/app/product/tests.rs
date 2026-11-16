@@ -3,6 +3,7 @@
 mod chrome;
 mod closure;
 mod commands;
+mod context_menus;
 mod dock_header;
 mod document_watch;
 mod editing;

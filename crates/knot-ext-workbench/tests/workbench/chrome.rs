@@ -21,3 +21,31 @@ fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut
     editor.set_setting("editor.insertSpaces", false.into(), cx);
     wait_until(cx, |cx| right(cx)[1] == "Tab Size: 4");
 }
+
+#[gpui::test]
+fn the_tab_menu_closes_and_splits_the_clicked_tab(cx: &mut TestAppContext) {
+    let product = TestProduct::start(only(&["@knot/chrome"]), cx);
+    let editor = product.windowed_editor("one", cx);
+    wait_until(cx, |cx| !editor.tab_menu(0, cx).is_empty());
+    assert_eq!(
+        editor.tab_menu(0, cx),
+        [
+            vec![
+                "Close Tab",
+                "Close Other Tabs",
+                "Close Tabs to the Right",
+                "Close All"
+            ],
+            vec!["Split Right", "Split Down"],
+        ]
+    );
+
+    // Closing to the right of the first tab leaves it, though the last tab
+    // had focus.
+    editor.new_tab(cx);
+    editor.new_tab(cx);
+    assert_eq!(editor.tab_titles(cx).len(), 3);
+    editor.right_click_tab(0, cx);
+    editor.press_in_menu("down down down enter", cx);
+    wait_until(cx, |cx| editor.tab_titles(cx).len() == 1);
+}
