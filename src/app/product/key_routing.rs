@@ -295,6 +295,10 @@ impl KnotWindow {
         if self.tabbed_picker(cx).is_some() {
             return (Some(PICKER_VIEW.to_owned()), Vec::new());
         }
+        // An open menu has the keys, so only global bindings match.
+        if self.focus == Focus::Popup {
+            return (None, Vec::new());
+        }
         let target = self.capture_command_target(cx);
         let contexts = Self::target_editor(&target, cx)
             .map(|editor| {
