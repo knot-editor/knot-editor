@@ -2280,6 +2280,9 @@ declare module "knot" {
     readonly name: string;
     readonly title: string;
     readonly description: string | null;
+    /** The key binding shown for the view given to `commands.list`, formatted
+     * for display; null when it has none. */
+    readonly key: string | null;
   }
   /** Register handlers and compose child invocations with captured context. */
   export const commands: Readonly<{
@@ -2310,8 +2313,10 @@ declare module "knot" {
      */
     invoke(name: string, arguments_?: JsonValue): Promise<CommandOutcome>;
     /** The commands the palette lists, by title: the ones that did not opt out
-     * of the palette. Any of them can be run with `invoke`. */
-    list(): Promise<readonly CommandInfo[]>;
+     * of the palette. Any of them can be run with `invoke`. `key` is the
+     * binding shown for `view`'s kind of view, or the global one without it.
+     * @throws HostError with InvalidTarget when `view` is not live. */
+    list(view?: ViewTarget): Promise<readonly CommandInfo[]>;
     /** Throw an author diagnostic converted by the handler to invalidArgument. */
     invalidArguments(message: string): never;
     /** Throw to end the handler with the unavailable outcome, as a command

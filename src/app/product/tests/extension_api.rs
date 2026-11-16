@@ -967,6 +967,7 @@ fn extension_command_with_editor_prefix_keeps_its_arguments(cx: &mut TestAppCont
     use knot_protocol::ExtensionKey;
 
     let documents = install_globals(cx);
+    cx.update(crate::app::commands::keymaps::install);
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
@@ -1027,6 +1028,7 @@ fn command_list_reports_palette_commands_by_title(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
 
     let documents = install_globals(cx);
+    cx.update(crate::app::commands::keymaps::install);
     let host = cx.update(super::super::super::extensions::host::install);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
@@ -1039,11 +1041,17 @@ fn command_list_reports_palette_commands_by_title(cx: &mut TestAppContext) {
                 key,
                 r#"
 import * as knot from "knot"; const { commands } = knot;
-await commands.register("editor.custom", async () => {
+await knot.keymaps.bind("ctrl-shift-k", "editor.custom");
+await commands.register("editor.custom", async (context) => {
+  const info = await knot.windows.get(context.target.windowTarget);
+  const shown = await commands.list(info.statusTarget ?? info.currentTarget);
+  if (shown.find((command) => command.name === "editor.custom")?.key === null) throw new Error("view binding missing");
   const listed = await commands.list();
   const custom = listed.find((command) => command.name === "editor.custom");
   if (custom?.title !== "Custom Title" || custom.description !== "About it") throw new Error("not listed");
   if (listed.some((command) => command.name === "picker.next-tab")) throw new Error("hidden command listed");
+  if (typeof custom.key !== "string") throw new Error("global binding missing");
+  if (listed.find((command) => command.name === "keymaps.show").key !== null) throw new Error("unbound command has a key");
   if (!listed.some((command) => command.name === "keymaps.show")) throw new Error("native missing");
   const titles = listed.map((command) => command.title);
   if (titles.join() !== [...titles].sort().join()) throw new Error("unsorted");

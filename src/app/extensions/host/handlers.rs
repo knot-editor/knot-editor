@@ -2817,12 +2817,34 @@ pub(crate) async fn complete_inline_command(
             .complete_inline(&request, arguments.invocation, arguments.outcome)
     })?
 }
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ListCommandsArguments {
+    view: Option<knot_protocol::PresentationTarget>,
+}
+impl HostArguments for ListCommandsArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        match reader.destination(2)? {
+            None => Ok(Self { view: None }),
+            Some(knot_protocol::DocumentDestination::View(view)) => Ok(Self { view: Some(view) }),
+            Some(_) => Err(DecodeError::Type("commands.list requires a view target")),
+        }
+    }
+}
+
 #[host_operation("listCommands")]
 async fn list_commands(
     context: HostContext,
-    _: (),
+    arguments: ListCommandsArguments,
 ) -> Result<Vec<knot_protocol::CommandInfo>, AccessError> {
     context.foreground(|_, cx| {
+        let kind = match &arguments.view {
+            Some(view) => Some(product::operations::view_kind(view, cx)?),
+            None => None,
+        };
+        let bindings = cx
+            .try_global::<crate::app::commands::keymaps::ApplicationKeymaps>()
+            .map(|keymaps| keymaps.0.shown_bindings(kind.as_deref()))
+            .unwrap_or_default();
         let dispatcher = cx.global::<crate::app::commands::dispatch::ApplicationProductCommands>();
         let mut commands = dispatcher
             .0
@@ -2830,14 +2852,17 @@ async fn list_commands(
             .definitions()
             .filter(|definition| definition.palette)
             .map(|definition| knot_protocol::CommandInfo {
+                key: bindings
+                    .get(&definition.name)
+                    .map(|key| crate::app::commands::keymaps::display_key(key)),
                 name: definition.name.to_string(),
                 title: definition.title,
                 description: definition.description,
             })
             .collect::<Vec<_>>();
         commands.sort_by(|left, right| left.title.cmp(&right.title));
-        commands
-    })
+        Ok(commands)
+    })?
 }
 #[host_operation("invokeCommand")]
 pub(crate) async fn invoke_command(

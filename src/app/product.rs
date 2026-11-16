@@ -1427,19 +1427,24 @@ impl KnotWindow {
     /// frames and native tools share this path instead of a window-level
     /// special case.
     fn target_view_kind(target: &ProductCommandTarget, cx: &App) -> Option<String> {
-        target.command_view(cx).and_then(|view| {
-            target.focused.then(|| match view {
-                super::workbench::CommandView::Editor(view) => {
-                    if view.read(cx).editor().read(cx).bars().focused().is_some() {
-                        "bar".to_owned()
-                    } else {
-                        "editor".to_owned()
-                    }
+        target
+            .command_view(cx)
+            .filter(|_| target.focused)
+            .map(|view| Self::command_view_kind(&view, cx))
+    }
+
+    fn command_view_kind(view: &super::workbench::CommandView, cx: &App) -> String {
+        match view {
+            super::workbench::CommandView::Editor(view) => {
+                if view.read(cx).editor().read(cx).bars().focused().is_some() {
+                    "bar".to_owned()
+                } else {
+                    "editor".to_owned()
                 }
-                super::workbench::CommandView::Terminal(_) => "terminal".to_owned(),
-                super::workbench::CommandView::Extension(view) => view.kind(cx),
-            })
-        })
+            }
+            super::workbench::CommandView::Terminal(_) => "terminal".to_owned(),
+            super::workbench::CommandView::Extension(view) => view.kind(cx),
+        }
     }
 
     fn open_command_palette_from(&mut self, origin: ProductCommandTarget, cx: &mut Context<Self>) {

@@ -319,6 +319,19 @@ pub(crate) fn capture_editor_tab(
     Ok(tab)
 }
 
+/// The keymap view kind of the tab a presentation target names.
+pub(crate) fn view_kind(target: &PresentationTarget, cx: &mut App) -> Result<String, AccessError> {
+    let (window, open) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
+    let state = window.read(cx);
+    let workbench = state.workbench.read(cx);
+    let tab = open.tab.expect("a view destination names its tab");
+    let view = workbench
+        .tab(tab.pane, tab.tab)
+        .and_then(|tab| workbench.command_view(tab))
+        .ok_or(AccessError::InvalidTarget)?;
+    Ok(KnotWindow::command_view_kind(&view, cx))
+}
+
 pub(crate) fn validate_presentation(
     target: &PresentationTarget,
     cx: &mut App,

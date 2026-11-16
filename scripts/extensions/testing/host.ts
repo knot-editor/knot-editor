@@ -116,6 +116,8 @@ function emptyState() {
     views: new Map<string, FakeView>(),
     commands: new Map<string, Handler>(),
     commandOptions: new Map<string, Knot.CommandOptions>(),
+    /** The key shown for a command by `commands.list`, keyed `view:name` for a listing of a view and `:name` otherwise. */
+    commandKeys: new Map<string, string>(),
     viewCommands: new Map<string, Handler>(),
     listeners: [] as ((event: Knot.ApplicationEvent) => void | Promise<void>)[],
     sequence: 0,
@@ -1063,6 +1065,11 @@ function barItems(
 export function seedFile(uri: string, text: string) {
   state.files.set(uri, text);
   notifyFileWatchers(uri);
+}
+
+/** Makes `commands.list` report `key` for `command`, as listed for a view when `forView` is true. */
+export function bindKey(command: string, key: string, forView = true) {
+  state.commandKeys.set(`${forView ? "view" : ""}:${command}`, key);
 }
 
 /** The URIs with a live file watch. */
@@ -2490,12 +2497,17 @@ export const api: KnotApi = {
         },
       };
     },
-    list: async () =>
+    list: async (view) =>
       [...state.commands.keys()]
         .filter((name) => state.commandOptions.get(name)?.palette !== false)
         .map((name) => {
           const options = state.commandOptions.get(name);
-          return { name, title: options?.title ?? name, description: options?.description ?? null };
+          return {
+            name,
+            title: options?.title ?? name,
+            description: options?.description ?? null,
+            key: state.commandKeys.get(`${view === undefined ? "" : "view"}:${name}`) ?? null,
+          };
         })
         .sort((left, right) => left.title.localeCompare(right.title)),
     invoke: async (name, args = null) => {

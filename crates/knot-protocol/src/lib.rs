@@ -763,6 +763,8 @@ pub struct CommandInfo {
     pub name: String,
     pub title: String,
     pub description: Option<String>,
+    /// The key binding to show, formatted for display.
+    pub key: Option<String>,
 }
 
 /// A registered language as extensions see it.

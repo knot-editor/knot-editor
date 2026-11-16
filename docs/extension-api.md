@@ -975,9 +975,10 @@ do not become semantic results. A participant can decline, and a valid invocatio
 can return `unavailable` for a command unsupported by its captured surface. Calling
 from activation or unrelated callbacks rejects `ContextUnavailable`.
 
-`await commands.list()` returns the commands the palette lists as `{ name,
-title, description }`, sorted by title, so a package can offer them in its own
-picker and run the chosen one with `invoke`.
+`await commands.list(view?)` returns the commands the palette lists as `{ name,
+title, description, key }`, sorted by title, so a package can offer them in its
+own picker and run the chosen one with `invoke`. `key` is the binding shown for
+`view`'s kind of view, formatted for display, or null.
 
 The checked [activation example](../scripts/extensions/examples/activation.js)
 includes `guide.compose`, which awaits another JavaScript command, and

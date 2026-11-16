@@ -1068,8 +1068,9 @@ export async function registerStatusItem(id, options) {
   });
 }
 
-export async function listCommands() {
-  return Object.freeze((await request("listCommands")).map((command) => Object.freeze(command)));
+export async function listCommands(view) {
+  const target = view === undefined ? undefined : { target: view };
+  return Object.freeze((await request("listCommands", destinationAuthority(target))).map((command) => Object.freeze(command)));
 }
 export async function invokeCommand(name, commandArguments) {
   if (typeof name !== "string") {
