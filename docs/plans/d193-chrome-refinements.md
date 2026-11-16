@@ -133,16 +133,16 @@ primitive (see the [extension guide](../extension-api.md)) and run with
 lists recent files only, and All caps actions at 8. The key binding is chosen
 at checkpoint 4.
 
-### 4. One picker: entries, Buffers, line jump
+### 4. One picker: entries, Buffers, line jump 🚧 awaiting review
 
-- `initialTab` (native picker and API) and Search Everywhere's `{ tab }`
+- ✅ `initialTab` (native picker and API) and Search Everywhere's `{ tab }`
   argument; Go to File opens it on Files (its binding and toolbar button stay).
-- Buffers tab and its document-ID history; All lists buffers first and drops
+- ✅ Buffers tab and its document-ID history; All lists buffers first and drops
   file rows of open documents.
-- `:N` and `text:N` line jumps.
-- Validation: extension tests through the real editor for each tab, both
-  entries, the buffer order (current last, untitled included), the All
-  de-duplication, and both line-jump forms; `just check`.
+- ✅ `:N` and `text:N` line jumps.
+- ✅ Validation: extension tests for each tab, both entries, the buffer order
+  (current last, untitled included), the All de-duplication, and both
+  line-jump forms; a native test for `initialTab`; `just check`.
 - **Review gate:** the user uses the pickers daily and picks Search
   Everywhere's key binding.
 

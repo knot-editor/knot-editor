@@ -1,19 +1,40 @@
-// Search Everywhere: one picker over the window's files and the palette's
-// commands, with All, Files, and Actions tabs. Choosing a file opens it and
-// choosing an action runs it in the window the picker opened from.
-import { commands, documents, workbench, workspaces } from "knot";
-import type { CommandContext, CommandInfo, PickerRow } from "knot";
+// The one picker: files, open buffers, and the palette's commands under All,
+// Buffers, Files, and Actions tabs. Go to File opens it on Files. Choosing a
+// buffer or file shows it, choosing an action runs it in the window the
+// picker opened from, and `:N` (alone, or after the text) goes to line N.
+import { commands, completion, documents, history, windows, workbench, workspaces } from "knot";
+import type { Buffer, CommandContext, CommandInfo, DocumentInfo, PickerRow, ViewTarget } from "knot";
 import { fileRows } from "./fileRows.js";
+import { BUFFER_HISTORY, documentOf } from "./recent.js";
 
-const ACTION_PREFIX = "command:";
-/** Actions the All tab shows, so files stay visible beside them. */
+/** Actions the All tab shows, so buffers and files stay visible beside them. */
 const ALL_TAB_ACTIONS = 8;
 
 const TABS = [
   { id: "all", label: "All" },
+  { id: "buffers", label: "Buffers" },
   { id: "files", label: "Files" },
   { id: "actions", label: "Actions" },
 ];
+
+type Kind = "buffer" | "file" | "line" | "command";
+
+/** A row ID: what the row is, the line to go to after opening it, and its target. */
+function rowId(kind: Kind, line: number | null, target: string): string {
+  return `${kind}:${line ?? ""}:${target}`;
+}
+
+function parseRowId(id: string): { kind: Kind; line: number | null; target: string } {
+  const [, kind, line, target] = /^(\w+):(\d*):([^]*)$/.exec(id)!;
+  return { kind: kind as Kind, line: line === "" ? null : Number(line), target: target! };
+}
+
+/** A query split into the text to match and the line after its last `:`. */
+export function parseQuery(query: string): { text: string; line: number | null } {
+  const found = /^([^]*):(\d+)$/.exec(query);
+  if (found === null) return { text: query, line: null };
+  return { text: found[1]!, line: Number(found[2]) };
+}
 
 /** The actions whose title or name contains `query`, with the title ranges. */
 export function actionRows(all: readonly CommandInfo[], query: string): PickerRow[] {
@@ -23,7 +44,7 @@ export function actionRows(all: readonly CommandInfo[], query: string): PickerRo
     const at = command.title.toLowerCase().indexOf(needle);
     if (needle !== "" && at < 0 && !command.name.toLowerCase().includes(needle)) continue;
     rows.push({
-      id: ACTION_PREFIX + command.name,
+      id: rowId("command", null, command.name),
       label: command.title,
       description: command.description,
       labelMatches: needle !== "" && at >= 0 ? [[at, at + needle.length]] : [],
@@ -32,22 +53,98 @@ export function actionRows(all: readonly CommandInfo[], query: string): PickerRo
   return rows;
 }
 
-export async function searchEverywhere({ target }: CommandContext) {
+/**
+ * The open documents matching `text` on their title, most recently active
+ * first and the one the window shows last.
+ */
+async function bufferRows(text: string, current: DocumentInfo | null, line: number | null): Promise<PickerRow[]> {
+  const others = (await documents.list()).filter((document) => document.id !== current?.id);
+  const ordered = await history.order(BUFFER_HISTORY, others, (document) => document.id);
+  const all = current === null ? ordered : [...ordered, current];
+  const matches =
+    text.trim() === ""
+      ? all.map((document) => ({ document, ranges: [] as readonly (readonly [number, number])[] }))
+      : (await completion.match(text, all.map((document) => document.title))).map((match) => ({
+          document: all[match.index]!,
+          ranges: match.ranges,
+        }));
+  return matches.map(({ document, ranges }) => ({
+    id: rowId("buffer", line, document.id),
+    label: document.title,
+    icon: { file: document.title },
+    description: document.resourceUri,
+    labelMatches: ranges,
+  }));
+}
+
+/** Puts the caret at the start of the 1-based `line`, clamped to the text. */
+async function goToLine(target: ViewTarget, buffer: Buffer | null, line: number) {
+  if (buffer === null) return;
+  const index = Math.min(Math.max(line, 1), await buffer.lineCount()) - 1;
+  const { startByteOffset } = await buffer.lineRange(index);
+  const editor = await workbench.editor(target);
+  await editor.setSelection({ anchor: startByteOffset, caret: startByteOffset }, { reveal: "center" });
+}
+
+/** The tab ID `argument` names, if it names one. */
+function requestedTab(argument: CommandContext["arguments"]): string | undefined {
+  const tab = (argument as { readonly tab?: unknown } | null)?.tab;
+  return TABS.find((candidate) => candidate.id === tab)?.id;
+}
+
+export async function searchEverywhere({ target, arguments: argument }: CommandContext) {
   const workspace = await workspaces.get(target.windowTarget);
   const roots = workspace?.roots ?? [];
   const uris = roots.map((root) => root.uri);
   const available = await commands.list();
+  const info = await windows.get(target.windowTarget);
+  const shown = info?.statusTarget ?? null;
+  const editorTab = info?.panes.flatMap((pane) => pane.tabs).find((tab) => tab.target === shown);
+  const current = shown === null ? null : await documentOf(shown);
 
   const rows = async (query: string, tab: string | null): Promise<PickerRow[]> => {
-    const found = tab === "actions" ? [] : await fileRows(target.windowTarget, uris, roots.length > 1, query);
-    const actions = tab === "files" ? [] : actionRows(available, query);
-    // An empty All tab lists recent files; actions join once something is typed.
-    if (tab === "all") return [...found, ...(query.trim() === "" ? [] : actions.slice(0, ALL_TAB_ACTIONS))];
-    return [...found, ...actions];
+    const { text, line } = parseQuery(query);
+    const scope = tab ?? "all";
+    const jump =
+      line !== null && text === "" && editorTab !== undefined
+        ? [{ id: rowId("line", line, ""), label: `Go to line ${line}`, labelMatches: [] }]
+        : [];
+    const buffers = scope === "all" || scope === "buffers" ? await bufferRows(text, current, line) : [];
+    let files: PickerRow[] = [];
+    if (scope === "all" || scope === "files") {
+      files = await fileRows(target.windowTarget, uris, roots.length > 1, text);
+      if (scope === "all") {
+        const open = new Set((await documents.list()).map((document) => document.resourceUri));
+        files = files.filter((row) => !open.has(row.id));
+      }
+      files = files.map((row) => ({ ...row, id: rowId("file", line, row.id) }));
+    }
+    let actions: PickerRow[] = [];
+    // An empty All tab lists buffers and recent files; actions join once
+    // something is typed, and a line has no use for them.
+    if ((scope === "all" || scope === "actions") && line === null) {
+      actions = actionRows(available, text);
+      if (scope === "all") actions = text.trim() === "" ? [] : actions.slice(0, ALL_TAB_ACTIONS);
+    }
+    return [...jump, ...buffers, ...files, ...actions];
   };
 
-  const result = await workbench.showPicker({ title: "Search Everywhere", tabs: TABS, onQuery: rows });
+  const initialTab = requestedTab(argument);
+  const result = await workbench.showPicker({
+    title: "Search Everywhere",
+    tabs: TABS,
+    ...(initialTab === undefined ? {} : { initialTab }),
+    onQuery: rows,
+  });
   if (result.kind !== "selected") return;
-  if (result.id.startsWith(ACTION_PREFIX)) await commands.invoke(result.id.slice(ACTION_PREFIX.length));
-  else await documents.open(result.id);
+  const { kind, line, target: chosen } = parseRowId(result.id);
+  if (kind === "command") {
+    await commands.invoke(chosen);
+  } else if (kind === "line") {
+    if (shown !== null && line !== null) await goToLine(shown, editorTab?.buffer ?? null, line);
+  } else {
+    const opened =
+      kind === "buffer" ? await documents.present(chosen as DocumentInfo["id"]) : await documents.open(chosen);
+    if (line !== null) await goToLine(opened.presentation.target, opened.presentation.buffer, line);
+  }
 }

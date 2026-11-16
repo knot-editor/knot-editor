@@ -22,7 +22,7 @@ async function labels(...queries: string[]) {
   host.query(...queries);
   host.answer("showPicker", { kind: "dismissed" });
   await host.run(COMMAND);
-  return host.pickerRows().map((rows) => rows.map((row) => row.id.replace(`${ROOT}/`, "")));
+  return host.pickerRows().map((rows) => rows.map((row) => row.id.replace(`file::${ROOT}/`, "")));
 }
 
 beforeEach(async () => {

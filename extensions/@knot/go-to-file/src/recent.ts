@@ -1,23 +1,31 @@
-// Recently active files: recorded when an editor tab becomes active, whatever
-// opened it, and ordered for the picker.
+// Recently active files and documents: recorded when an editor tab becomes
+// active, whatever opened it, and ordered for the picker.
 import { completion, documents, history, windows } from "knot";
-import type { ApplicationEvent, ViewTarget, WindowTarget } from "knot";
+import type { ApplicationEvent, DocumentInfo, ViewTarget, WindowTarget } from "knot";
 
 export const HISTORY = "recent-files";
+export const BUFFER_HISTORY = "recent-buffers";
 
-/** The URI of the file a tab presents, or null for anything else. */
-async function fileOf(target: ViewTarget): Promise<string | null> {
+/** The document a tab presents, or null for anything else. */
+export async function documentOf(target: ViewTarget): Promise<DocumentInfo | null> {
   const window = await windows.get(target.window);
   const tab = window?.panes.flatMap((pane) => pane.tabs).find((tab) => tab.target === target);
   if (tab === undefined || tab.document === null) return null;
-  return (await documents.get(tab.document))?.resourceUri ?? null;
+  return documents.get(tab.document);
 }
 
-/** Records the file of a newly active tab. */
+/** The URI of the file a tab presents, or null for anything else. */
+async function fileOf(target: ViewTarget): Promise<string | null> {
+  return (await documentOf(target))?.resourceUri ?? null;
+}
+
+/** Records the document and file of a newly active tab. */
 export async function recordActive(event: ApplicationEvent) {
   if (event.type !== "activeTargetChanged" || event.activeTarget === null) return;
-  const uri = await fileOf(event.activeTarget);
-  if (uri !== null) await history.record(HISTORY, uri);
+  const document = await documentOf(event.activeTarget);
+  if (document === null) return;
+  await history.record(BUFFER_HISTORY, document.id);
+  if (document.resourceUri !== null) await history.record(HISTORY, document.resourceUri);
 }
 
 /** A recent file under one of the roots, with its path below that root. */
