@@ -234,11 +234,11 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
         ("ctrl-`", TOGGLE_TERMINAL_COMMAND),
         ("ctrl-shift-`", NEW_TERMINAL_COMMAND),
         ("ctrl-~", NEW_TERMINAL_COMMAND),
-        ("cmd-t", NEW_COMMAND),
         ("cmd-b", TOGGLE_LEFT_DOCK_COMMAND),
         ("cmd-alt-b", TOGGLE_RIGHT_DOCK_COMMAND),
         ("cmd-j", TOGGLE_BOTTOM_DOCK_COMMAND),
         ("cmd-shift-t", REOPEN_CLOSED_TAB_COMMAND),
+        ("cmd-t", NEW_TERMINAL_COMMAND),
     ] {
         assert_eq!(
             resolved(&registry, key, Some("terminal")).as_deref(),
@@ -249,6 +249,7 @@ fn macos_preset_binds_cocoa_editing_keys_in_the_editor_only() {
     for key in ["ctrl-a", "ctrl-c", "ctrl-k", "ctrl-y"] {
         assert_eq!(resolved(&registry, key, Some("terminal")), None, "{key}");
     }
+    assert_eq!(resolved(&registry, "cmd-t", Some("editor")), None);
 }
 
 #[test]

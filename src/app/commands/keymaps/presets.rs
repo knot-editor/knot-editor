@@ -206,7 +206,6 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("shift-tab", PICKER_PREVIOUS_TAB_COMMAND, Some("picker")),
     ("shift-f10", SHOW_TREE_CONTEXT_MENU_COMMAND, None),
     ("secondary-n", NEW_COMMAND, None),
-    ("secondary-t", NEW_COMMAND, None),
     ("ctrl-`", TOGGLE_TERMINAL_COMMAND, None),
     ("ctrl-shift-`", NEW_TERMINAL_COMMAND, None),
     // Keyboards report the shifted backtick as `~`.
@@ -273,6 +272,9 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
 /// Cocoa text view accepts, and tab navigation.
 const MACOS_BINDINGS: &[PresetEntry] = &[
     ("cmd-h", HIDE_COMMAND, None),
+    // Terminal emulators open a new tab with cmd-t. Other platforms keep
+    // ctrl-t for the shell.
+    ("cmd-t", NEW_TERMINAL_COMMAND, Some("terminal")),
     ("alt-cmd-h", HIDE_OTHERS_COMMAND, None),
     ("cmd-m", MINIMIZE_WINDOW_COMMAND, None),
     ("alt-cmd-f", REPLACE_COMMAND, Some("editor")),
