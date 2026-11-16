@@ -1,6 +1,6 @@
 # D193: Chrome refinements
 
-Status: 🚧 checkpoint 3 awaiting review. Roadmap item [D193](../roadmap.md).
+Status: 🚧 checkpoints 1–3 approved; 4–5 added to build one tabbed picker. Roadmap item [D193](../roadmap.md).
 Builds on the Islands look ([decision](../decisions/platform.md#product-window-chrome-and-failure-notices),
 [workbench](../architecture/workbench-and-lifecycle.md), [themes](../architecture/semantic-ui.md#themes-and-color-keys))
 and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
@@ -92,26 +92,15 @@ to `onQuery` (see [semantic UI](../architecture/semantic-ui.md) and the
 `picker.next-tab` / `picker.previous-tab` in a native `picker` view kind, so
 they are rebindable ([commands](../architecture/commands.md#picker-tabs)).
 
-### 3. Search Everywhere ✅ implemented, awaiting review
+### 3. Search Everywhere ✅ approved
 
 Done: `workspace.search-everywhere` ("Search Everywhere…") in
 `extensions/@knot/go-to-file` over All, Files, and Actions tabs. Files reuse
-Go to File's rows (`fileRows.ts`); actions come from the new
-`commands.list()` primitive (palette commands by title) and run with
-`commands.invoke`. Actions have no icon, as in the palette. An empty All tab lists recent files only, and the All tab
-caps actions at 8. No key binding yet.
-
-- Deliverable: the command and its bundled package changes, All/Files/Actions
-  rows with the right ordering and icons, tests.
-- **Implementation context:** `extensions/@knot/go-to-file/src/` (reuse
-  `files.search` and `rowFor` from `rows.ts`), the command catalog access for
-  actions (check the extension API for listing commands; add a primitive if
-  missing), `extensions/@knot/go-to-file/test/` for the end-to-end test style,
-  the extension guide.
-- Validation: extension tests through the real editor for each tab, running
-  an action and opening a file; `just check`.
-- **Review gate:** the user tries Search Everywhere in daily use and picks
-  its key binding.
+Go to File's rows (`fileRows.ts`); actions come from the `commands.list()`
+primitive (see the [extension guide](../extension-api.md)) and run with
+`commands.invoke`. Actions have no icon, as in the palette. An empty All tab
+lists recent files only, and All caps actions at 8. The key binding is chosen
+at checkpoint 4.
 
 ### 4. One picker: entries, Buffers, line jump
 
