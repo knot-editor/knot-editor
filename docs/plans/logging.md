@@ -1,6 +1,6 @@
 # Application log
 
-Status: 🚧 checkpoint 1 implemented, awaiting its review gate. No roadmap item; the D117 consumer is
+Status: 🚧 checkpoint 1 done; checkpoint 2 not started. No roadmap item; the D117 consumer is
 recorded on [D117](../roadmap.md).
 
 ## Goal
@@ -63,48 +63,14 @@ shows it in the editor.
 
 ## Checkpoints
 
-### 1. Backend, file sink, and Open Log 🚧
+### 1. Backend, file sink, and Open Log ✅
 
-✅ Implemented: backend and rotation (`src/app/logging.rs`), the `eprintln!`
-migration, the `knot::extension` console routing, **Knot: Open Log** and
-**Knot: Reveal Log Folder**, tests, and documentation in
-[development](../development.md#application-log). Remaining: the review gate.
-
-- A `knot::logging` module installs the subscriber (file with rotation, stderr
-  when attached to a terminal, `KNOT_LOG` filter, `tracing-log` bridge), and
-  returns the flush guard. Rotation is a pure function over a directory so it
-  tests without the subscriber.
-- Every `eprintln!("[knot] …")` in `src` and `crates` becomes a `tracing`
-  macro at an appropriate level and target, except the user-facing
-  command-line output of `--help` and `--version` (stdout) and the argument
-  error before logging starts. Extension `console.*` is routed as designed.
-- **Open Log** and **Reveal Log Folder** commands.
-- Documentation: a logging section in the relevant architecture reference
-  (startup and ownership), `docs/settings.md` or `docs/development.md` for
-  `KNOT_LOG` and the file location, and the extension guide's `console`
-  paragraph.
-- Validation: rotation (shift, cap on count, missing numbers, an unreadable
-  directory), `KNOT_LOG` parsing, a file written through the real subscriber
-  in a temp directory, extension `console.warn` landing in the file with its
-  package target, Open Log opening a document whose text is the file.
-- **Implementation context.** Add `crates/knot-…`-independent logging to
-  `src/app/logging.rs` (declared in `src/app/mod.rs`); install it at the top
-  of `run` in `src/app/mod.rs` (the first lines hold the `eprintln!` at
-  `mod.rs:155`). The directory comes from `directories::ProjectDirs` as in
-  `StateDatabase::user_path` (`src/app/record_store.rs:25`); the log
-  directory is `ProjectDirs::state_dir()` falling back to
-  `data_local_dir()/logs`, with macOS using `~/Library/Logs/Knot`. Flush the
-  guard from `extensions::host::quit_after_storage`. The `eprintln!` sites are
-  in `src/app/{mod,recovery,launch_socket}.rs`,
-  `src/app/product/launch.rs`, `src/app/extensions/host.rs`, and
-  `crates/knot-host/src/engine/{capsule,marshal}.rs`; extension `console` is in
-  `crates/knot-host/src/js/` and its native handler. Mirror
-  `src/app/product/show_keybindings.rs` and its `commands.rs` entry
-  (`commands.rs:639`) for declaring native commands, and the Open path in
-  `src/app/product/open.rs` for opening the file.
-- **Review gate:** run the app launched from the Dock, trigger a warning, run
-  Open Log, confirm the file, the rotation, and that stderr still shows
-  output under `cargo run`.
+Approved. The subscriber, rotation, `eprintln!` migration, `knot::extension`
+console routing, and the **Knot: Open Log** and **Knot: Reveal Log Folder**
+commands are in `src/app/logging.rs` and `src/app/product/application_log.rs`;
+behavior is documented in [development](../development.md#application-log).
+The Dock-launch and rotation-by-size paths were not exercised by hand beyond
+the `try.log` records reaching the file.
 
 ### 2. Font diagnostic
 
