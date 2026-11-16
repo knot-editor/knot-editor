@@ -104,6 +104,20 @@ pub(crate) async fn close_other_tabs(
     close_target(&context, ProtectedCloseKind::OtherTabs).await
 }
 
+#[command("workbench.close-tabs-to-right", title = "Close Tabs to the Right", description = "Close every unpinned tab after the focused one in its pane.", id = CLOSE_TABS_TO_RIGHT_COMMAND, participant = Workbench)]
+pub(crate) async fn close_tabs_to_right(
+    context: CommandContext,
+    (): (),
+) -> Result<CommandOutcome, CommandOutcome> {
+    context
+        .foreground(move |target, cx| {
+            super::super::commands::dispatch::break_captured_history_group(target, cx);
+            Ok(())
+        })
+        .await?;
+    close_target(&context, ProtectedCloseKind::TabsToRight).await
+}
+
 #[command("workbench.close-pane", title = "Close Pane", description = "Close every tab of the focused pane.", id = CLOSE_PANE_COMMAND, participant = Workbench)]
 pub(crate) async fn close_pane(
     context: CommandContext,

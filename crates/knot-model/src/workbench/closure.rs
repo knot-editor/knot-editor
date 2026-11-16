@@ -15,6 +15,9 @@ pub enum CloseKind {
     Tab,
     /// Every unpinned tab of the origin's pane except the origin.
     OtherTabs,
+    /// Every unpinned tab after the origin in its pane. The views passed to
+    /// [`scope`] list a pane's tabs in tab order.
+    TabsToRight,
     /// Every tab of the origin's pane.
     Pane,
     /// Every tab of the window's other panes in the origin's area.
@@ -117,6 +120,16 @@ pub fn scope(kind: CloseKind, origin: &CloseOrigin, views: &[ClosureView]) -> Ve
                     && candidate.key.tab != view.tab
                     && !candidate.pinned
             }
+            (CloseKind::TabsToRight, Some(view)) => {
+                same_workbench(candidate)
+                    && candidate.key.pane == view.pane
+                    && !candidate.pinned
+                    && views
+                        .iter()
+                        .skip_while(|other| other.key != view)
+                        .skip(1)
+                        .any(|after| after.key == candidate.key)
+            }
             (CloseKind::Pane, Some(view)) => {
                 same_workbench(candidate) && candidate.key.pane == view.pane
             }
@@ -128,7 +141,11 @@ pub fn scope(kind: CloseKind, origin: &CloseOrigin, views: &[ClosureView]) -> Ve
             (CloseKind::Window, _) => candidate.key.window == origin.window,
             (CloseKind::Quit, _) => true,
             (
-                CloseKind::Tab | CloseKind::OtherTabs | CloseKind::Pane | CloseKind::OtherPanes,
+                CloseKind::Tab
+                | CloseKind::OtherTabs
+                | CloseKind::TabsToRight
+                | CloseKind::Pane
+                | CloseKind::OtherPanes,
                 None,
             ) => false,
         })
@@ -396,6 +413,8 @@ mod tests {
         ];
         let keys = |kind| scope(kind, &origin.into(), &views);
         assert_eq!(keys(CloseKind::OtherTabs), vec![sibling.key]);
+        assert_eq!(keys(CloseKind::TabsToRight), vec![sibling.key]);
+        assert!(scope(CloseKind::TabsToRight, &sibling.key.into(), &views).is_empty());
         assert_eq!(keys(CloseKind::Pane), vec![origin, pinned.key, sibling.key]);
         assert_eq!(keys(CloseKind::OtherPanes), vec![other_pane.key]);
         assert_eq!(keys(CloseKind::Window).len(), 5);

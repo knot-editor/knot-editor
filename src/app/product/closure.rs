@@ -554,6 +554,7 @@ impl KnotWindow {
                 self.close_tab_after_approval(tab.pane, tab.tab, tab.surface, cx)
             }
             ProtectedCloseKind::OtherTabs
+            | ProtectedCloseKind::TabsToRight
             | ProtectedCloseKind::Pane
             | ProtectedCloseKind::OtherPanes => {
                 for key in &current_scope {
