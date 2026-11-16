@@ -1022,3 +1022,30 @@ fn text_binding_batches_validate_scope_and_command() {
     );
     assert!(registry.resolve_text("editor", &[]).is_some());
 }
+
+#[test]
+fn scoped_matching_ignores_global_bindings() {
+    let mut registry = BindingRegistry::new();
+    assert_eq!(
+        registry.declare_extension_kind("picker"),
+        Err(BindingError::View)
+    );
+    let preset = BindingOwner::Preset;
+    registry
+        .set(preset, "tab", Some("picker"), Some(command("next-tab")))
+        .unwrap();
+    registry
+        .set(preset, "cmd-n", None, Some(command("new")))
+        .unwrap();
+    let scoped = |keys: &str, view: &str| {
+        let result = registry.match_typed_scoped(&typed(keys), view, &[]);
+        result.exact.map(|command| command.name.to_string())
+    };
+    assert_eq!(scoped("tab", "picker").as_deref(), Some("next-tab"));
+    assert_eq!(scoped("tab", "editor"), None);
+    assert_eq!(scoped("cmd-n", "picker"), None);
+    assert_eq!(
+        matched(&registry, "cmd-n", Some("picker"), &[]),
+        (Some("new".into()), false)
+    );
+}

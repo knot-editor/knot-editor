@@ -101,8 +101,17 @@ struct EffectiveKey {
     contexts: HashMap<(String, String), (u64, BindingResolution)>,
 }
 
+/// The view kinds native surfaces own.
+const NATIVE_KINDS: [&str; 4] = ["editor", "terminal", "bar", "picker"];
+
 impl EffectiveKey {
     fn resolve(&self, view: Option<&str>, contexts: &[&str]) -> Option<&BindingResolution> {
+        self.resolve_scoped(view, contexts).or(self.global.as_ref())
+    }
+
+    /// The resolution a binding scoped to `view` or one of its `contexts`
+    /// gives, ignoring global bindings.
+    fn resolve_scoped(&self, view: Option<&str>, contexts: &[&str]) -> Option<&BindingResolution> {
         view.and_then(|view| {
             contexts
                 .iter()
@@ -111,7 +120,6 @@ impl EffectiveKey {
                 .map(|(_, resolution)| resolution)
         })
         .or_else(|| view.and_then(|view| self.views.get(view)))
-        .or(self.global.as_ref())
     }
 
     fn is_empty(&self) -> bool {
@@ -142,14 +150,12 @@ impl BindingRegistry {
     pub fn new() -> Self {
         let mut this = Self::default();
         this.kinds
-            .extend(["editor", "terminal", "bar"].into_iter().map(str::to_owned));
+            .extend(NATIVE_KINDS.iter().map(|kind| (*kind).to_owned()));
         this
     }
 
     pub fn declare_extension_kind(&mut self, kind: &str) -> Result<(), BindingError> {
-        if kind.is_empty()
-            || matches!(kind, "editor" | "terminal" | "bar")
-            || kind.chars().any(char::is_whitespace)
+        if kind.is_empty() || NATIVE_KINDS.contains(&kind) || kind.chars().any(char::is_whitespace)
         {
             return Err(BindingError::View);
         }
@@ -159,7 +165,7 @@ impl BindingRegistry {
 
     /// Remove a contributed view kind together with its scoped bindings.
     pub fn remove_extension_kind(&mut self, kind: &str) -> bool {
-        if matches!(kind, "editor" | "terminal" | "bar") || !self.kinds.remove(kind) {
+        if NATIVE_KINDS.contains(&kind) || !self.kinds.remove(kind) {
             return false;
         }
         let keys = self
@@ -498,6 +504,27 @@ impl BindingRegistry {
         view: Option<&str>,
         contexts: &[&str],
     ) -> TypedMatch {
+        self.match_typed_with(typed, view, contexts, false)
+    }
+
+    /// As [`Self::match_typed`], but only bindings scoped to `view` or its
+    /// contexts apply; global bindings do not.
+    pub fn match_typed_scoped(
+        &self,
+        typed: &[Keystroke],
+        view: &str,
+        contexts: &[&str],
+    ) -> TypedMatch {
+        self.match_typed_with(typed, Some(view), contexts, true)
+    }
+
+    fn match_typed_with(
+        &self,
+        typed: &[Keystroke],
+        view: Option<&str>,
+        contexts: &[&str],
+        scoped_only: bool,
+    ) -> TypedMatch {
         let mut result = TypedMatch::default();
         let mut direct = false;
         for (key, effective) in &self.active {
@@ -510,8 +537,12 @@ impl BindingRegistry {
             {
                 continue;
             }
-            let Some(BindingResolution::Command(command)) = effective.resolve(view, contexts)
-            else {
+            let resolution = if scoped_only {
+                effective.resolve_scoped(view, contexts)
+            } else {
+                effective.resolve(view, contexts)
+            };
+            let Some(BindingResolution::Command(command)) = resolution else {
                 continue;
             };
             if strokes.len() > typed.len() {
