@@ -666,3 +666,17 @@ fn each_line_keeps_its_most_severe_marker() {
         ]
     );
 }
+
+#[test]
+fn a_context_menu_click_keeps_a_selection_it_lands_in_and_replaces_one_it_misses() {
+    let mut f = Fixture::new("one two\nthree");
+    f.place((0, 0), (0, 3));
+    f.editor.place_for_context_menu((0, 2), &mut f.buffer);
+    assert_eq!(f.selection(), ((0, 0), (0, 3)));
+    f.editor.place_for_context_menu((0, 3), &mut f.buffer);
+    assert_eq!(f.selection(), ((0, 0), (0, 3)));
+
+    f.editor.place_for_context_menu((1, 2), &mut f.buffer);
+    assert_eq!(f.selection(), ((1, 2), (1, 2)));
+    assert!(!f.editor.has_selection());
+}

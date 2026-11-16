@@ -733,6 +733,18 @@ impl EditorState {
         self.finish_position_change(buffer);
     }
 
+    /// Prepare for a context menu opened at `at`: a point outside the
+    /// selection moves the caret there, and one inside it keeps the selection
+    /// (a selection's end counts as inside).
+    pub fn place_for_context_menu(&mut self, at: (usize, usize), buffer: &mut BufferModel) {
+        let inside = self
+            .selection_range()
+            .is_some_and(|(start, end)| start <= at && at <= end);
+        if !inside {
+            self.select_from(at, at, buffer);
+        }
+    }
+
     /// The first row wholly inside the viewport and how many rows are, from
     /// the last layout; always at least one row.
     pub fn viewport(&self) -> (usize, usize) {
