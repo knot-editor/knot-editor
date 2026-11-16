@@ -12,7 +12,7 @@ use knot_terminal::{
 };
 
 use super::colors::TerminalPalette;
-use crate::app::settings::terminal_mouse_reporting;
+use crate::app::settings::{terminal_cursor_style, terminal_mouse_reporting};
 use crate::app::theme::theme;
 
 /// Rows of history the primary screen keeps.
@@ -151,6 +151,7 @@ impl TerminalSession {
         self.reported_directory = None;
         let generation = self.generation;
         let mut terminal = Terminal::new(self.size, SCROLLBACK_LINES);
+        terminal.set_default_cursor_style(terminal_cursor_style(cx));
         self.palette.apply(&mut terminal);
         if let Some(text) = carried {
             replay(&mut terminal, &text);

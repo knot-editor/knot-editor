@@ -835,3 +835,55 @@ fn mouse_reporting_default_off_starts_quiet_but_toggle_still_flips(cx: &mut Test
     assert!(session.read_with(cx, |session, _| session.mouse_reporting_enabled()));
     session.update(cx, |session, cx| session.close(cx));
 }
+
+#[gpui::test]
+fn cursor_style_setting_shapes_new_sessions_but_the_program_still_wins(cx: &mut TestAppContext) {
+    use crate::app::settings::{
+        ApplicationSettings, SettingsScope, TERMINAL_CURSOR_STYLE, terminal_cursor_style,
+    };
+    use knot_terminal::{CursorStyle, RenderState};
+
+    cx.update(|cx| {
+        cx.set_global(ApplicationSettings::default());
+        assert_eq!(terminal_cursor_style(cx), CursorStyle::Block);
+        // Unknown text falls back to the block default.
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .set(
+                TERMINAL_CURSOR_STYLE,
+                "sideways".into(),
+                SettingsScope::default(),
+            )
+            .unwrap();
+        assert_eq!(terminal_cursor_style(cx), CursorStyle::Block);
+        cx.global_mut::<ApplicationSettings>()
+            .0
+            .set(
+                TERMINAL_CURSOR_STYLE,
+                "bar".into(),
+                SettingsScope::default(),
+            )
+            .unwrap();
+        assert_eq!(terminal_cursor_style(cx), CursorStyle::Bar);
+    });
+    let session = cx.new(|cx| TerminalSession::new_with_options(shell("sleep 30"), cx));
+    let cursor_style = |session: &Entity<TerminalSession>, cx: &TestAppContext| {
+        session.read_with(cx, |session, _| {
+            let terminal = session
+                .terminal()
+                .expect("a running session has a terminal")
+                .clone();
+            let mut state = RenderState::new();
+            state.update(&terminal);
+            state.cursor().style
+        })
+    };
+    assert_eq!(cursor_style(&session, cx), CursorStyle::Bar);
+    session.update(cx, |session, _| {
+        session
+            .with_terminal(|terminal| terminal.write(b"\x1b[4 q"))
+            .expect("a running session has a terminal");
+    });
+    assert_eq!(cursor_style(&session, cx), CursorStyle::Underline);
+    session.update(cx, |session, cx| session.close(cx));
+}

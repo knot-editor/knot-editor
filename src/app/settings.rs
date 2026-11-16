@@ -234,6 +234,24 @@ pub(crate) fn bottom_dock_layout(cx: &App) -> knot_model::workbench::BottomDockL
     knot_model::workbench::BottomDockLayout::parse(&text(WORKBENCH_BOTTOM_DOCK_LAYOUT, cx))
 }
 
+/// The cursor shape a new terminal starts with; unknown text means `block`.
+pub(crate) fn terminal_cursor_style(cx: &App) -> knot_terminal::CursorStyle {
+    use knot_terminal::CursorStyle;
+    match resolve(
+        TERMINAL_CURSOR_STYLE,
+        &SettingsScope::default(),
+        cx,
+        |value| value.as_str().map(str::to_owned),
+    )
+    .as_deref()
+    {
+        Some("bar") => CursorStyle::Bar,
+        Some("underline") => CursorStyle::Underline,
+        Some("hollow") => CursorStyle::BlockHollow,
+        _ => CursorStyle::Block,
+    }
+}
+
 /// Whether new terminals report mouse input to the running program.
 pub(crate) fn terminal_mouse_reporting(cx: &App) -> bool {
     resolve(
