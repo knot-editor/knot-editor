@@ -28,22 +28,21 @@ point.
 
 ## Next up
 
-1. D045 — General terminal settings: small.
-2. D193 — Chrome refinements: two open choices of the current look.
-3. D119 — Tab, editor, and extension menu items.
-4. D117 — Non-modal notifications and progress: D041 and D181 build on it.
-5. D022 — Editor autocompletion.
-6. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-7. D183 — Deterministic indentation after Enter and closing tokens.
-8. D175 — Type-ahead after a held Enter.
-9. D182 — Interleave extension roots at awaits: before D067.
-10. D156 — Fewer host round trips per key.
-11. D129 — Refactor builtin language extensions.
-12. D138 — Extension startup report as an untitled document.
-13. D054 — Dedicated read-only generated text surface.
-14. D085 — Cross-file search.
-15. D197 — Diff view: D126 and D174 build on it.
-16. D126 — Git status and changes per root.
+1. D193 — Chrome refinements: two open choices of the current look.
+2. D119 — Tab, editor, and extension menu items.
+3. D117 — Non-modal notifications and progress: D041 and D181 build on it.
+4. D022 — Editor autocompletion.
+5. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+6. D183 — Deterministic indentation after Enter and closing tokens.
+7. D175 — Type-ahead after a held Enter.
+8. D182 — Interleave extension roots at awaits: before D067.
+9. D156 — Fewer host round trips per key.
+10. D129 — Refactor builtin language extensions.
+11. D138 — Extension startup report as an untitled document.
+12. D054 — Dedicated read-only generated text surface.
+13. D085 — Cross-file search.
+14. D197 — Diff view: D126 and D174 build on it.
+15. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -610,14 +609,6 @@ Kakoune mode could use them too. The
     file's end, as view state does.
 
 ### Terminal
-
-- **D045 — General terminal settings** 🚧
-  - Depends on: none
-  - Description: Apart from `font.*` keys scoped `{ view: "terminal" }`, the
-    session-local mouse toggle is the only terminal preference; no `terminal.*`
-    keys are defined in the settings store. Define settings for the default
-    mouse mode, cursor style, and scrollback length; the
-    [plan](plans/d045-terminal-settings.md) holds the design.
 
 - **D041 — Terminal titles, bells, and notifications**
   - Depends on: D117

@@ -133,6 +133,22 @@ another host is ignored, since a local terminal cannot start there. A deleted
 directory falls back to the default rule rather than its nearest existing
 parent, a rare case where the root is a fine landing place.
 
+Terminal user preferences are global new-session defaults. `terminal.mouseReportingEnabled`
+is a boolean mirroring the session flag, and the toggle command keeps working
+as a per-session override, because a mode enum would add states no program
+protocol needs. `terminal.cursorStyle` sets the engine default while a program
+escape still wins, because a forced override would fight programs that set
+their own shape, such as a bar in insert mode. Neither key takes a view scope,
+since no per-terminal use case needs one.
+
+`terminal.scrollbackLines` stays undefined until a libghostty-vt build enforces
+it: probes showed the pinned 1.0.1 accepts `SCROLLBACK_MAX_LINES`/`MAX_BYTES`
+and reports them back yet keeps all 100 written lines with a limit of 5, 0, or
+50, before and after resize, and exposes no trim API, so the setting would be a
+silent no-op. Ship it then as a clamped global for new sessions and restarts:
+the key, the reader, the `Terminal::new` argument, the settings-table row, and
+a session test bounding a small history.
+
 Reference: [terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
 ## Window layouts and restoration by position
