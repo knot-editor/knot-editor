@@ -1,18 +1,22 @@
 # D045 — General terminal settings
 
-Status: 🚧 approved, not started. Implements [D045](../roadmap.md) (Next up #1).
+Status: 🚧 in progress, checkpoint 1. Implements [D045](../roadmap.md) (Next up #1).
 
 ## Goal
 
-Give terminals three user-visible defaults under new `terminal.*` keys, so the
+Give terminals user-visible defaults under new `terminal.*` keys, so the
 session-local mouse toggle is no longer the only terminal preference:
 
 - `terminal.mouseReportingEnabled` (boolean, default `true`): whether new
   sessions report mouse input to the running program.
 - `terminal.cursorStyle` (string, default `"block"`): the cursor shape a new
   session starts with. Values `"block"`, `"bar"`, `"underline"`, `"hollow"`.
-- `terminal.scrollbackLines` (integer, default `10000`): how many rows of
-  history a new session keeps.
+
+`terminal.scrollbackLines` is deferred: the pinned `libghostty-vt` 1.0.1
+accepts `SCROLLBACK_MAX_LINES`/`MAX_BYTES` and reports them back, but enforces
+neither on write nor on resize (100 written lines are all kept with a limit
+of 5, 0, or 50), and it offers no trim API. A scrollback setting would be a
+silent no-op, so it waits for engine support (see Blocked follow-up).
 
 ## Chosen design (agreed)
 
@@ -24,10 +28,7 @@ session-local mouse toggle is no longer the only terminal preference:
   changes the shape still takes effect (standard terminal behavior). A forced
   override that ignores programs was rejected: it would surprise anyone whose
   program sets its own cursor (e.g. bar for insert mode).
-- **Scrollback applies to new sessions and restarts only.** Existing sessions
-  keep their buffer; there is no live trim/grow. `0` keeps no history. The
-  value is clamped to a sane range at the read site.
-- **All three keys are global** (no view scope). Unlike `font.*`, there is no
+- **All keys are global** (no view scope). Unlike `font.*`, there is no
   per-view use case; readers take the terminal scope only where the existing
   plumbing already does.
 - Unknown `terminal.cursorStyle` strings fall back to the default, mirroring
@@ -58,38 +59,45 @@ session-local mouse toggle is no longer the only terminal preference:
   open implementation question (engine default-style seam vs paint-site
   fallback) is answered by inspection in checkpoint 2.
 
-## Checkpoint 1 — Keys, mouse default, scrollback
+## Checkpoint 1 — Mouse default ✅
 
-Deliverables:
+Delivered:
 
-- The three key constants and `native_definitions` entries with descriptions;
-  typed readers in `src/app/settings.rs` (`terminal_mouse_reporting`,
-  `terminal_scrollback_lines` with clamping, cursor reader in checkpoint 2 or
-  here).
-- `TerminalSession::new_with_options` reads the mouse default and the
-  scrollback length at construction instead of `true` and `SCROLLBACK_LINES`.
-  Restart picks up the current scrollback value through the same path.
-- Rows in `docs/settings.md` for the three keys (type, default, scope,
-  one-line behavior each).
+- The `terminal.mouseReportingEnabled` and `terminal.cursorStyle` key
+  constants and `native_definitions` entries with descriptions (the cursor
+  reader and paint land in checkpoint 2).
+- A typed `terminal_mouse_reporting` reader in `src/app/settings.rs`.
+- `TerminalSession::new_with_options` reads the mouse default at construction
+  instead of `true`; the toggle still flips it per session.
+- A `docs/settings.md` Terminal section with the mouse row, and both keys
+  declared in `knot.d.ts` (required by
+  `every_native_key_is_declared_for_extensions`).
 
 Implementation context: seams are `crates/knot-model/src/settings.rs`
-(constants + `native_definitions`, mirroring `EDITOR_TAB_SIZE` /
-`EDITOR_LINE_NUMBERS`), `src/app/settings.rs` (readers mirroring
-`editor_tab_size` / `editor_line_numbers`, including the unknown-string
-fallback), `src/app/terminal/session.rs` (`mouse_reporting_enabled` init and
-the `Terminal::new(self.size, SCROLLBACK_LINES)` call in `start`), and
-`docs/settings.md` (table rows mirroring the `font.*` entries). Session
-creation needs an `App` to resolve settings; follow how `font_size` in
-`src/app/terminal/view.rs` reads through `terminal_scope()`.
+(constants + `native_definitions`, mirroring `EDITOR_TAB_SIZE`),
+`src/app/settings.rs` (reader mirroring `editor_tab_size`),
+`src/app/terminal/session.rs` (`mouse_reporting_enabled` init), and
+`docs/settings.md` (table row mirroring the `font.*` entries). Session
+creation needs an `App` to resolve settings; `&mut Context<_>` coerces to
+`&App` (as in `src/app/editor.rs`).
 
-Validation: model tests for defaults, clamping, and unknown-string fallback;
-session tests that a `false` mouse default starts a session with reporting
-off while the toggle still flips it per session, and that a small scrollback
-value bounds a new session's history. `just check`, `cargo fmt`.
+Validation: model test for the new defaults; session test that a `false`
+mouse default starts a session with reporting off while the toggle still
+flips it per session. `just check`, `cargo fmt`.
 
 Review gate: keys, defaults, and toggle interplay in the real app (open a
 terminal, flip the toggle, open a second terminal to see the default hold).
-Later work (cursor paint) builds on the readers without changing them.
+
+## Blocked follow-up — Scrollback length
+
+`terminal.scrollbackLines` (integer, default `10000`, clamped, new sessions
+and restarts only) is designed but not shipped: probes showed the pinned
+engine accepts the limit and reports it back yet keeps all 100 written lines
+with a limit of 5, 0, or 50, before and after resize, for both the lines and
+bytes options, and it exposes no trim API. Ship it when a `libghostty-vt`
+build enforces the limit: re-add the key, the clamped reader, the
+`Terminal::new` argument, the settings-table row, and a session test that a
+small value bounds a new session's history.
 
 ## Checkpoint 2 — Cursor-style default
 
@@ -98,7 +106,12 @@ Deliverables:
 - The program's shape still wins; when it has not set one, the view paints
   the `terminal.cursorStyle` shape. Mapping covers all four engine styles
   (`Block`, `Bar`, `Underline`, `BlockHollow` from
-  `crates/knot-terminal/src/render.rs`).
+  `crates/knot-terminal/src/render.rs`). The engine also exposes
+  `GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_STYLE`, so prefer passing the default
+  at construction if the program's escape still overrides it.
+- The cursor row in `docs/settings.md`, and the typed reader in
+  `src/app/settings.rs` (mirroring `editor_line_numbers`: unknown strings
+  fall back to `"block"`).
 - The `terminal.toggle-mouse-reporting` palette entry and docs stay as they
   are; no command changes in this slice.
 

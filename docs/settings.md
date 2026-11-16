@@ -70,6 +70,12 @@ values take effect.
 The `themes` package writes the three `theme.*` keys when the user picks a theme,
 and `icons.pack` when the user runs Select Icon Pack.
 
+## Terminal
+
+| Key | Type | Default | Scope | Owner | Description |
+| --- | --- | --- | --- | --- | --- |
+| `terminal.mouseReportingEnabled` | boolean | `true` | Global | native | Report mouse input to the program in new terminals; Toggle Terminal Mouse Reporting still flips it per session. |
+
 ## Workbench
 
 | Key | Type | Default | Scope | Owner | Description |
