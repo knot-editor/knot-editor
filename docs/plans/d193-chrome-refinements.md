@@ -1,6 +1,6 @@
 # D193: Chrome refinements
 
-Status: 🚧 checkpoints 1–3 approved; 4–5 added to build one tabbed picker. Roadmap item [D193](../roadmap.md).
+Status: 🚧 checkpoints 1–4 approved; 5 remains to build one tabbed picker. Roadmap item [D193](../roadmap.md).
 Builds on the Islands look ([decision](../decisions/platform.md#product-window-chrome-and-failure-notices),
 [workbench](../architecture/workbench-and-lifecycle.md), [themes](../architecture/semantic-ui.md#themes-and-color-keys))
 and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
@@ -135,18 +135,15 @@ primitive (see the [extension guide](../extension-api.md)) and run with
 lists recent files only, and All caps actions at 8. It has no default key
 binding.
 
-### 4. One picker: entries, Buffers, line jump 🚧 awaiting review
+### 4. One picker: entries, Buffers, line jump ✅ approved
 
-- ✅ `initialTab` (native picker and API) and Search Everywhere's `{ tab }`
-  argument; Go to File opens it on Files (its binding and toolbar button stay).
-- ✅ Buffers tab and its document-ID history; All lists buffers first and drops
-  file rows of open documents.
-- ✅ `:N` and `text:N` line jumps.
-- ✅ Validation: extension tests for each tab, both entries, the buffer order
-  (current last, untitled included), the All de-duplication, and both
-  line-jump forms; a native test for `initialTab`; `just check`.
-- **Review gate:** the user uses the pickers daily. Search Everywhere gets no
-  default key binding.
+Done: `workspace.search-everywhere` takes `{ tab }` and the picker takes
+`initialTab` (see the [extension guide](../extension-api.md)); Go to File opens
+it on Files. Buffers lists open documents, current last, from a document-ID
+history beside recent files; All lists buffers first and drops file rows of
+open documents. A query of only `:` or `:N` lists just a "Go to line" row, and
+`text:N` matches on `text` and opens the row at line N. Search Everywhere has
+no default key binding.
 
 ### 5. Palette on the single picker
 
