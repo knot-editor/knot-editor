@@ -208,11 +208,16 @@ impl Picker {
         self.input.read(cx).focus_handle()
     }
 
-    /// Show scope tabs, the first active. Rows are filtered by the active tab
-    /// from here on.
-    pub(crate) fn set_tabs(&mut self, tabs: Vec<PickerTab>, cx: &mut Context<Self>) {
+    /// Show scope tabs with the one at `initial` active (the first when out
+    /// of range). Rows are filtered by the active tab from here on.
+    pub(crate) fn set_tabs(
+        &mut self,
+        tabs: Vec<PickerTab>,
+        initial: usize,
+        cx: &mut Context<Self>,
+    ) {
+        self.active_tab = if initial < tabs.len() { initial } else { 0 };
         self.tabs = tabs;
-        self.active_tab = 0;
         let query = self.query(cx);
         self.refilter(&query, cx);
         self.highlighted = self.selected_entry();
@@ -1099,7 +1104,7 @@ mod tests {
             // A picker without tabs shows every row.
             assert!(!picker.cycle_tab(1, cx));
             assert_eq!(picker.visible_entries(), [0, 1, 2, 3]);
-            picker.set_tabs(tabs(), cx);
+            picker.set_tabs(tabs(), 0, cx);
             assert_eq!(picker.active_tab_id().as_deref(), Some("all"));
             // Untagged rows show in every tab.
             assert_eq!(picker.visible_entries(), [0, 1, 3]);
@@ -1115,6 +1120,11 @@ mod tests {
             assert!(picker.cycle_tab(-1, cx));
             assert_eq!(picker.active_tab_id().as_deref(), Some("actions"));
             assert_eq!(picker.visible_entries(), [1, 2]);
+            // The initial tab starts active; one out of range falls back to the first.
+            picker.set_tabs(tabs(), 1, cx);
+            assert_eq!(picker.active_tab_id().as_deref(), Some("files"));
+            picker.set_tabs(tabs(), 9, cx);
+            assert_eq!(picker.active_tab_id().as_deref(), Some("all"));
         });
     }
 
@@ -1133,7 +1143,7 @@ mod tests {
             ..PickerEntry::new(label)
         };
         picker.update(cx, |picker, cx| {
-            picker.set_tabs(tabs(), cx);
+            picker.set_tabs(tabs(), 0, cx);
             picker.supply("", Some("all"), vec![row("everything")], cx);
             assert!(picker.cycle_tab(1, cx));
             // The old rows stay until the new tab is answered.

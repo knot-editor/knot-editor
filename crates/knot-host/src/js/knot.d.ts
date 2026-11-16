@@ -2132,6 +2132,9 @@ declare module "knot" {
      * row shows in the tabs its `tabs` names before matching.
      */
     readonly tabs?: readonly PickerTab[];
+    /** The ID of the tab that starts active; the first by default.
+     * @throws TypeError when it names none of `tabs`. */
+    readonly initialTab?: string;
     /**
      * Called with the highlighted item's ID, or null when nothing matches,
      * first for the initial highlight and then whenever it changes. Calls are

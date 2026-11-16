@@ -709,6 +709,15 @@ await commands.register("transient.tabbed-query", async () => {
   });
   await workbench.writeClipboardText(`|${JSON.stringify(result)}`);
 });
+await commands.register("transient.tabbed-initial", async () => {
+  const result = await workbench.showPicker({
+    title: "Tabs",
+    tabs: TABS,
+    initialTab: "files",
+    onQuery: (query, tab) => [{ id: `${tab}:${query}`, label: `${tab}:${query}` }],
+  });
+  await workbench.writeClipboardText(`|${JSON.stringify(result)}`);
+});
 await commands.register("transient.tabbed-items", async () => {
   const result = await workbench.showPicker({
     title: "Tabs",
@@ -1208,6 +1217,21 @@ fn tab_keys_switch_the_tab_a_queried_picker_asks_for(cx: &mut TestAppContext) {
     assert_eq!(
         clipboard(cx).as_deref(),
         Some(r#"|{"kind":"selected","id":"actions:x"}"#)
+    );
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn a_queried_picker_starts_on_its_initial_tab(cx: &mut TestAppContext) {
+    let (_host, _key, window, native_window, completion) =
+        start_live_input("transient.tabbed-initial", cx);
+    let picker = transient_picker(&window, cx);
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["files:"]);
+    cx.simulate_keystrokes(native_window, "enter");
+    wait_for_api_condition(cx, clipboard_has_outcome);
+    assert_eq!(
+        clipboard(cx).as_deref(),
+        Some(r#"|{"kind":"selected","id":"files:"}"#)
     );
     assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
 }

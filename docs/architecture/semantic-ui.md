@@ -367,7 +367,8 @@ are dropped. Enter on
 rows that do not answer the field waits for the rows that do, freezing the
 field meanwhile, and then confirms the highlighted row.
 
-A picker may show scope tabs in a strip under its field, the first active.
+A picker may show scope tabs in a strip under its field, the first active
+unless `initialTab` names another.
 Local rows tagged with tab IDs show only in those tabs, untagged rows in
 every tab, and the active tab filters rows before matching. With `onQuery` the
 active tab's ID travels with each query, and a tab change asks again like a

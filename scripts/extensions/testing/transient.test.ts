@@ -65,3 +65,21 @@ test("a picker with tabs asks again with the active tab when the tab or query ch
   });
   assert.deepEqual(asked, [["", "all"], ["a", "all"], ["a", "files"]]);
 });
+
+test("a picker with tabs starts on its initial tab", async () => {
+  const window = host.openWindow();
+  host.selectTab("all");
+  host.answer("showPicker", { kind: "dismissed" });
+  const asked: (string | null)[] = [];
+  await workbench.showPicker({
+    title: "Everywhere",
+    target: window,
+    tabs: [{ id: "all", label: "All" }, { id: "files", label: "Files" }],
+    initialTab: "files",
+    onQuery: (_, tab) => {
+      asked.push(tab);
+      return [];
+    },
+  });
+  assert.deepEqual(asked, ["files", "all"]);
+});

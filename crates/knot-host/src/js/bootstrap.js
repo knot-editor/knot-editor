@@ -931,6 +931,11 @@ export async function showPicker(options) {
   if (new Set(tabs.map((tab) => tab.id)).size !== tabs.length) {
     throw new TypeError("picker tab IDs must be unique");
   }
+  let initialTab = 0;
+  if (options.initialTab != null) {
+    initialTab = tabs.findIndex((tab) => tab.id === options.initialTab);
+    if (initialTab < 0) throw new TypeError("picker initialTab must name one of its tabs");
+  }
   const onHighlight = options.onHighlight;
   if (onHighlight == null && onQuery == null && tabs.length === 0) {
     return request("showPicker", title, items, target);
@@ -944,7 +949,7 @@ export async function showPicker(options) {
   // never stays open unowned. The rows answering a query travel back with
   // the next pull.
   let failure = null;
-  let update = await request("beginPicker", title, items, target, onQuery == null ? 0 : 1, tabs);
+  let update = await request("beginPicker", title, items, target, onQuery == null ? 0 : 1, tabs, initialTab);
   while (update.kind === "highlighted" || update.kind === "queried") {
     let rows = null;
     if (failure === null) {

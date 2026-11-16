@@ -2410,7 +2410,7 @@ export const api: KnotApi = {
       state.pickerQueries = [];
       if (options.onQuery !== undefined) {
         let text = "";
-        let tab = options.tabs?.[0]?.id ?? null;
+        let tab = options.initialTab ?? options.tabs?.[0]?.id ?? null;
         state.pickerRows.push(await options.onQuery(text, tab));
         for (const ask of asks) {
           if ("query" in ask) text = ask.query;

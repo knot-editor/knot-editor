@@ -1567,11 +1567,18 @@ impl KnotWindow {
         owner: TransientOwner,
         title: String,
         items: Vec<knot_protocol::PickerItem>,
-        tabs: Vec<knot_protocol::PickerTab>,
+        (tabs, initial_tab): (Vec<knot_protocol::PickerTab>, usize),
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
-        self.present_entries(Some(owner), title, items, tabs, highlights, cx)
+        self.present_entries(
+            Some(owner),
+            title,
+            items,
+            (tabs, initial_tab),
+            highlights,
+            cx,
+        )
     }
 
     /// Present a picker in the transient slot. With `highlights`, the ID of
@@ -1585,7 +1592,7 @@ impl KnotWindow {
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
-        self.present_entries(owner, title, items, Vec::new(), highlights, cx)
+        self.present_entries(owner, title, items, (Vec::new(), 0), highlights, cx)
     }
 
     fn present_entries(
@@ -1593,7 +1600,7 @@ impl KnotWindow {
         owner: Option<TransientOwner>,
         title: String,
         items: Vec<knot_protocol::PickerItem>,
-        tabs: Vec<knot_protocol::PickerTab>,
+        tabs: (Vec<knot_protocol::PickerTab>, usize),
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
@@ -1621,7 +1628,7 @@ impl KnotWindow {
         &mut self,
         owner: TransientOwner,
         title: String,
-        tabs: Vec<knot_protocol::PickerTab>,
+        tabs: (Vec<knot_protocol::PickerTab>, usize),
         highlights: tokio::sync::watch::Sender<Option<String>>,
         queries: tokio::sync::watch::Sender<Option<PickerAsk>>,
         cx: &mut Context<Self>,
@@ -1648,7 +1655,10 @@ impl KnotWindow {
         &mut self,
         owner: Option<TransientOwner>,
         title: String,
-        (entries, tabs): (Option<Vec<PickerEntry>>, Vec<knot_protocol::PickerTab>),
+        (entries, (tabs, initial_tab)): (
+            Option<Vec<PickerEntry>>,
+            (Vec<knot_protocol::PickerTab>, usize),
+        ),
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
         queries: Option<tokio::sync::watch::Sender<Option<PickerAsk>>>,
         cx: &mut Context<Self>,
@@ -1674,6 +1684,7 @@ impl KnotWindow {
                             label: tab.label,
                         })
                         .collect(),
+                    initial_tab,
                     cx,
                 )
             });

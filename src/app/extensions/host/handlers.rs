@@ -1503,6 +1503,8 @@ pub(crate) struct BeginPickerArguments {
     /// Whether the caller supplies the rows for each query.
     queried: bool,
     tabs: Vec<PickerTab>,
+    /// The index of the tab that starts active.
+    initial_tab: usize,
 }
 impl HostArguments for BeginPickerArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
@@ -1513,6 +1515,7 @@ impl HostArguments for BeginPickerArguments {
                 .ok()
                 .and_then(|value| serde_json::from_value::<Vec<PickerTab>>(value).ok())
                 .ok_or(DecodeError::Type("invalid picker tabs"))?,
+            initial_tab: reader.integer(7)? as usize,
         })
     }
 }
@@ -1535,6 +1538,7 @@ pub(crate) async fn begin_picker(
             },
         queried,
         tabs,
+        initial_tab,
     } = arguments;
     let (sender, changes) = tokio::sync::watch::channel(None);
     let (query_sender, queries) = tokio::sync::watch::channel(None);
@@ -1547,7 +1551,7 @@ pub(crate) async fn begin_picker(
                     let (completion, picker) = window.begin_queried_picker(
                         owner,
                         title,
-                        tabs,
+                        (tabs, initial_tab),
                         sender,
                         query_sender,
                         cx,
@@ -1561,8 +1565,14 @@ pub(crate) async fn begin_picker(
                         }),
                     ))
                 } else {
-                    let completion =
-                        window.begin_tabbed_picker(owner, title, items, tabs, Some(sender), cx)?;
+                    let completion = window.begin_tabbed_picker(
+                        owner,
+                        title,
+                        items,
+                        (tabs, initial_tab),
+                        Some(sender),
+                        cx,
+                    )?;
                     Ok((completion, None))
                 }
             },

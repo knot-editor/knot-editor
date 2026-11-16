@@ -799,7 +799,8 @@ Pass `tabs: [{ id, label }]` for scope tabs under the field, the first active
 tabs and an untagged row shows in all of them. With `onQuery`, the callback
 is called as `onQuery(query, tab)` with the active tab's ID, and switching tabs
 asks again; the rows it returns apply only while the field and the tab still
-hold what they answer. Tab and Shift+Tab switch tabs, as the commands
+hold what they answer. `initialTab` names the tab that starts active, the first
+by default. Tab and Shift+Tab switch tabs, as the commands
 `picker.next-tab` and `picker.previous-tab` bound in the `picker` view, so
 `keymaps.bind(key, command, { view: "picker" })` rebinds them; clicking a tab
 works too:
