@@ -1,6 +1,6 @@
 # Application log
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 not started. No roadmap item; the D117 consumer is
+Status: 🚧 checkpoint 1 done; checkpoint 2 awaiting review. No roadmap item; the D117 consumer is
 recorded on [D117](../roadmap.md).
 
 ## Goal
@@ -72,29 +72,21 @@ behavior is documented in [development](../development.md#application-log).
 The Dock-launch and rotation-by-size paths were not exercised by hand beyond
 the `try.log` records reaching the file.
 
-### 2. Font diagnostic
+### 2. Font diagnostic ✅ (awaiting review)
 
-- When `font.family` resolves for a scope (startup and each change in the
-  settings store), check whether the platform loaded the primary family. When
-  it did not, log
-  `warn!(target: "knot::config", …)` that names the setting, the scope, the
-  family, and the fallback used. The check runs on the foreground once per
-  distinct family, not per frame.
-- Validation: a test with an uninstalled family produces exactly one record
-  with the setting, family, and scope; changing to an installed family logs
-  nothing; the terminal scope is checked independently of the editor.
-- **Implementation context.** gpui's `TextSystem::resolve_font` returns a
-  fallback id silently and calls `log::warn!("failed to load font …")` itself;
-  the check uses `window.text_system()` or the application's text system from
-  the existing view code in `src/app/typography.rs` and
-  `src/app/terminal/layout.rs`, and `knot_model::typography::FontSettings` for
-  the resolved settings. Read `FontSettings::resolve`
-  (`crates/knot-model/src/typography.rs`) for the scopes; the terminal scope
-  helper is `terminal_scope()` in `src/app/terminal/view.rs`. Subscribe to
-  setting changes the way `TerminalView`'s `_settings_subscription` does.
-- **Review gate:** configure a nonexistent family in `pre-init.js`, confirm the
-  warning in Open Log, then a real one and confirm silence. Use a `Try:`
-  command from `post-init.js` per the repository rule.
+Implemented in `report_missing_family` (`src/app/typography.rs`), called where
+the editor resolves its metrics (`EditorView::update_metrics`) and the
+terminal prepaints, so it covers startup and every settings change without a
+separate subscription. A family is checked once per `(scope, family)`: the
+platform's resolved font (`TextSystem::get_font_for_id`) is compared with the
+requested family case-insensitively, and a mismatch logs
+`warn!(target: "knot::config", scope, family, fallback, …)`. The test platform
+resolves every font, so the test covers the once-per-scope and installed-family
+logic (`warn_when_replaced`) rather than the platform lookup.
+
+- **Review gate:** run **Try: Missing Editor Font** and **Try: Missing
+  Terminal Font** (with a terminal open), then **Knot: Open Log**: one WARN per
+  scope. Repeating a command adds nothing; **Try: Restore Fonts** is silent.
 
 ### 3. D117 hook-up (deferred, not part of this plan)
 

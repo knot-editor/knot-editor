@@ -41,6 +41,7 @@ impl EditorView {
         let font = crate::app::typography::font(&font_settings);
         let font_size = settings::font_size(&scope, cx) * crate::app::zoom::factor(cx);
         let text = cx.text_system();
+        crate::app::typography::report_missing_family("editor", &font_settings, text);
         let font_id = text.resolve_font(&font);
         let size = px(font_size);
         let metrics = EditorMetrics {

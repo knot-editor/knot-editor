@@ -69,7 +69,9 @@ The level is `info`; `KNOT_LOG` takes an
 [`EnvFilter` directive](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html),
 such as `KNOT_LOG=knot::extension=debug,info`. Targets are `knot::<area>`. A
 warning about something the user can fix in their settings or install uses the
-target `knot::config`. The writer runs off the foreground and is flushed when
+target `knot::config`; a `font.family` that is not installed logs one such
+warning per scope (`editor`, `terminal`) and family, naming the fallback drawn.
+The writer runs off the foreground and is flushed when
 Knot quits.
 
 ## Nightly releases

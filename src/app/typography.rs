@@ -1,6 +1,8 @@
 //! Application text defaults shared by native editor and terminal surfaces.
 
-use gpui::{Font, FontFallbacks, FontFeatures, FontWeight, Pixels, px};
+use std::{collections::HashSet, sync::Mutex};
+
+use gpui::{Font, FontFallbacks, FontFeatures, FontWeight, Pixels, TextSystem, px};
 use knot_model::typography::FontSettings;
 
 /// The reference text size, which chrome and text inputs scale from.
@@ -15,6 +17,51 @@ pub(crate) fn font(settings: &FontSettings) -> Font {
     font.fallbacks = Some(FontFallbacks::from_fonts(settings.fallbacks.clone()));
     font.features = FontFeatures(settings.features.clone().into());
     font
+}
+
+/// Distinct `(scope, family)` pairs already reported, so a view that lays out
+/// every frame logs each missing family once.
+static REPORTED_FAMILIES: Mutex<Option<HashSet<(&'static str, String)>>> = Mutex::new(None);
+
+/// Log once per scope and family when the platform has no `font.family` font
+/// and draws with its fallback stack instead. `scope` names the surface
+/// (`editor` or `terminal`), which resolves its own settings.
+pub(crate) fn report_missing_family(
+    scope: &'static str,
+    settings: &FontSettings,
+    text: &TextSystem,
+) {
+    warn_when_replaced(scope, &settings.family, || {
+        let font = font(settings);
+        text.get_font_for_id(text.resolve_font(&font))
+            .map(|resolved| resolved.family.to_string())
+    });
+}
+
+/// Warn when `resolve`, which names the family the platform drew with, differs
+/// from `family`; it runs only for the first check of a scope and family.
+fn warn_when_replaced(scope: &'static str, family: &str, resolve: impl FnOnce() -> Option<String>) {
+    let first_report = REPORTED_FAMILIES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get_or_insert_default()
+        .insert((scope, family.to_owned()));
+    if !first_report {
+        return;
+    }
+    let resolved = resolve();
+    if resolved
+        .as_deref()
+        .is_none_or(|resolved| !resolved.eq_ignore_ascii_case(family))
+    {
+        tracing::warn!(
+            target: "knot::config",
+            scope,
+            family,
+            fallback = resolved.as_deref().unwrap_or("unknown"),
+            "font.family is not installed; using the fallback font",
+        );
+    }
 }
 
 pub(crate) fn bold(font: &Font) -> Font {
@@ -35,4 +82,53 @@ pub(crate) fn line_height(
 ) -> Pixels {
     let height = f32::from(ascent) + f32::from(descent).abs();
     px((height * factor * scale_factor).ceil().max(1.) / scale_factor)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Default)]
+    struct Captured(std::sync::Arc<Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Captured {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_replaced_family_is_logged_once_per_scope() {
+        let captured = Captured::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer({
+                let captured = captured.clone();
+                move || captured.clone()
+            })
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            for _ in 0..3 {
+                warn_when_replaced("editor", "Missing Test Family", || Some("Menlo".into()));
+            }
+            warn_when_replaced("terminal", "Missing Test Family", || Some("Menlo".into()));
+            warn_when_replaced("editor", "Installed Test Family", || {
+                Some("installed test family".into())
+            });
+        });
+        let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+        let lines: Vec<_> = log.lines().collect();
+        assert_eq!(lines.len(), 2, "{log}");
+        for (line, scope) in lines.iter().zip(["editor", "terminal"]) {
+            assert!(line.contains("WARN knot::config"), "{line}");
+            assert!(line.contains(&format!("scope=\"{scope}\"")), "{line}");
+            assert!(line.contains(r#"family="Missing Test Family""#), "{line}");
+            assert!(line.contains(r#"fallback="Menlo""#), "{line}");
+        }
+    }
 }
