@@ -183,3 +183,22 @@ was rejected. Builds are Apple Silicon only; Intel and universal builds wait
 for a machine that needs them.
 
 Reference: [development](../development.md#nightly-releases).
+
+## Application log
+
+`tracing` is the one logging API; gpui's `log` records reach it through
+`tracing-subscriber`'s `tracing-log` feature, so a platform failure such as a
+font that fails to load lands in the file with no Knot code. A rotating file in
+the platform log directory is the sink, because stderr is lost when Knot starts
+from the Dock. An in-memory ring buffer with a viewer was rejected: Open Log
+shows the file as an ordinary document, so a viewer needs no new surface.
+Rotation runs at startup only, which avoids a rotating writer and accepts that
+a long `debug` session grows one file past its cap.
+
+A record's target is static, so extension `console` output uses one target,
+`knot::extension`, with the package as a field. Warnings the user can fix in
+their settings or install use the target `knot::config`, so the notification
+work (D117) can raise a notice at each site found by searching for it; the log
+does not build that bridge.
+
+Reference: [development](../development.md#application-log).

@@ -28,6 +28,9 @@ touches.
 - [Command-line launcher](decisions/platform.md#command-line-launcher): the
   editor owns one socket for every build; macOS cold start through `open -a`,
   not a fork; paths open in their project's window.
+- [Application log](decisions/platform.md#application-log): `tracing` with a
+  rotating file instead of an in-memory viewer; `knot::config` marks warnings
+  the user can fix, for D117.
 - [Nightly distribution](decisions/platform.md#nightly-distribution):
   unsigned prereleases through a versioned cask in a separate tap; one build
   identity; Apple Silicon only.
