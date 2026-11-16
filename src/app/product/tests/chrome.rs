@@ -4,8 +4,8 @@ use super::operations::empty_product_window;
 use super::*;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
 use crate::app::theme::Chrome;
-use gpui::{Pixels, VisualTestContext, px};
-use knot_model::workbench::{Area, DockLocation};
+use gpui::{Pixels, VisualTestContext, point, px};
+use knot_model::workbench::{Area, DockLocation, PaneId};
 
 fn set_chrome(key: &str, value: f64, cx: &mut TestAppContext) {
     cx.update(|cx| {
@@ -76,32 +76,49 @@ fn settings_override_the_theme_and_a_negative_value_follows_it(cx: &mut TestAppC
 }
 
 #[gpui::test]
-fn the_focused_card_follows_the_focused_pane(cx: &mut TestAppContext) {
+fn only_the_focused_pane_draws_the_focus_ring(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
-    let (window, _) = empty_product_window(&documents, cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
     toggle_test_tool(&window, cx);
 
-    let (center, dock) = window.update(cx, |window, cx| {
-        let workbench = window.workbench.read(cx);
-        let pane = |area| {
-            workbench
+    let pane = |area, cx: &mut TestAppContext| {
+        window.update(cx, |window, cx| {
+            window
+                .workbench
+                .read(cx)
                 .panes()
                 .iter()
                 .find(|pane| pane.area() == area)
                 .map(|pane| pane.id())
-        };
-        (pane(Area::Center), pane(Area::Dock(DockLocation::Left)))
-    });
-    let (center, dock) = (center.unwrap(), dock.unwrap());
-    let focused = |pane, cx: &mut TestAppContext| {
+                .unwrap()
+        })
+    };
+    let center = pane(Area::Center, cx);
+    let dock = pane(Area::Dock(DockLocation::Left), cx);
+    for (focused, other) in [(center, dock), (dock, center)] {
         window.update(cx, |window, cx| {
             window
                 .workbench
-                .update(cx, |workbench, _| workbench.focus_pane(pane));
-            window.focused_card_area(cx)
-        })
-    };
-    assert_eq!(focused(center, cx), Some(Area::Center));
-    assert_eq!(focused(dock, cx), Some(Area::Dock(DockLocation::Left)));
+                .update(cx, |workbench, _| workbench.focus_pane(focused));
+            cx.notify();
+        });
+        cx.run_until_parked();
+        cx.update_window(native_window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        let mut visual = VisualTestContext::from_window(native_window, cx);
+        let ring = visual.debug_bounds("focus-ring").unwrap();
+        let bounds = |pane: PaneId, visual: &mut VisualTestContext| {
+            visual
+                .debug_bounds(Box::leak(format!("pane-{}", pane.value()).into_boxed_str()))
+                .unwrap()
+        };
+        let border = px(Chrome::default().card_border);
+        let focused = bounds(focused, &mut visual);
+        assert_eq!(ring.origin, focused.origin - point(border, border));
+        assert_ne!(
+            ring.origin,
+            bounds(other, &mut visual).origin - point(border, border)
+        );
+    }
 }

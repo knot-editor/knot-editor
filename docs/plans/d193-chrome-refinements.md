@@ -16,16 +16,17 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 ### Focused card
 
 - A new theme color key `card.focusedBorder` (in `crates/knot-model/src/theme.rs`
-  beside `CARD_BACKGROUND`) is painted as the border color of the card that
-  contains the focused pane; other cards keep `border`. Defaults come from the
-  accent for both Islands themes, and a theme may set it equal to `border` to
+  beside `CARD_BACKGROUND`) is painted as an outline over the focused pane,
+  extending over the card's border, so a card with split panes shows which
+  one has focus; cards keep `border`. Defaults come from the
+  accent, at about 44% alpha for both Islands themes, and a theme may set it equal to `border` to
   disable the emphasis.
 - Emphasis needs a border to paint, but `chrome.cardBorder` defaults to `0`.
   The Islands defaults therefore change to a thin border (1 px) on every card,
   so a focus change recolors a border instead of shifting layout.
-- "Focused card" derives from the workbench's focused pane (center or dock).
-  While a transient surface (palette, picker) has focus, the card of the pane
-  that would receive focus keeps the emphasis.
+- The focused pane is the workbench's (center or dock). While a transient
+  surface (palette, picker) has focus, the pane that would receive focus
+  keeps the outline.
 
 ### Picker tabs
 
@@ -74,7 +75,7 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 - Validation: model test for key resolution and defaults; a window test that
   the border color follows focus between center and a dock; `just check`.
 - Built: `card.focusedBorder` (default `text.accent`, set by every bundled
-  theme), `chrome.cardBorder` defaulting to 1, `focused_card_area` in
+  theme), `chrome.cardBorder` defaulting to 1, `focus_ring` in
   `render.rs`. Dock and pane geometry tests now account for the border.
 - **Review gate:** `Try: Card focus …` commands in personal `post-init.js`;
   the user judges the look in both themes.

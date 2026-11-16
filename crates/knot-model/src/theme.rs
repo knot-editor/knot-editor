@@ -293,7 +293,7 @@ native_colors! {
     TEXT_ACCENT = "text.accent", "Interface text that acts, such as buttons and links.", Rgb(0x548af7), Rgb(0x3574f0);
     TEXT_MUTED = "text.muted", "Secondary interface text.", Rgb(0x868a91), Rgb(0x6c707e);
     CARD_BACKGROUND = "card.background", "The cards of the center and the docks.", Key(BACKGROUND), Key(BACKGROUND);
-    CARD_FOCUSED_BORDER = "card.focusedBorder", "The border of the card that holds the focused pane.", Key(TEXT_ACCENT), Key(TEXT_ACCENT);
+    CARD_FOCUSED_BORDER = "card.focusedBorder", "The outline of the focused pane.", Key(TEXT_ACCENT), Key(TEXT_ACCENT);
     TAB_ACCENT = "tab.accent", "The line under the active tab.", Key(BORDER_HOVER), Key(BORDER_HOVER);
     TOOLBAR_BACKGROUND = "toolbar.background", "The main toolbar above the workbench.", Key(WINDOW_BACKGROUND), Key(WINDOW_BACKGROUND);
     WINDOW_BACKGROUND = "window.background", "The window behind the cards, the toolbar, and the status bar.", Rgb(0x1e1f22), Rgb(0xdfe1e5);
@@ -355,7 +355,7 @@ chrome_values! {
     card_radius = "cardRadius", 6., 0., 24., "Corner radius of the center and dock cards.";
     card_gap = "cardGap", 8., 0., 24., "Gap between cards, which is also their resize handle.";
     card_inset = "cardInset", 4., 0., 24., "Margin around the cards at the window edges.";
-    card_border = "cardBorder", 1., 0., 4., "Width of the card border, painted in the `border` color, or `card.focusedBorder` on the focused pane's card.";
+    card_border = "cardBorder", 1., 0., 4., "Width of the card border, painted in the `border` color.";
     tab_bar_height = "tabBarHeight", 30., 20., 48., "Height of tab bars and dock headers.";
     stripe_width = "stripeWidth", 36., 24., 64., "Width of the tool stripes.";
     header_weight = "headerWeight", 600., 100., 900., "Font weight of a dock header's tab titles.";
