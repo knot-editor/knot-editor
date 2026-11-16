@@ -1,11 +1,13 @@
 import { commands, editor, workbench, keymaps, platform } from "knot";
-import type { Buffer, CommandTarget, Disposable, HostError, HostErrorCode } from "knot";
+import type { Buffer, CommandInfo, CommandTarget, Disposable, HostError, HostErrorCode } from "knot";
 
 void commands.register("described", async () => {}, {
   title: "Described Command",
   description: "Shown beside the title.",
   palette: false,
 });
+const listed: Promise<readonly CommandInfo[]> = commands.list();
+void listed;
 // @ts-expect-error palette is a boolean
 void commands.register("bad", async () => {}, { palette: "no" });
 const registration: Promise<Disposable> = commands.register("check", async (context) => {

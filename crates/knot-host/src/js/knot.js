@@ -14,6 +14,7 @@ import {
   registerKeymapPreset, getKeymapPreset, listKeymapPresets,
   platform,
   invokeCommand,
+  listCommands,
   registerCommand,
   registerViewCommand,
   selectedViewText,
@@ -59,6 +60,7 @@ export const editor = Object.freeze({
 export const commands = Object.freeze({
   invalidArguments: invalidCommandArguments,
   invoke: invokeCommand,
+  list: listCommands,
   register: registerCommand,
   registerForView: registerViewCommand,
   unavailable: unavailableCommand,

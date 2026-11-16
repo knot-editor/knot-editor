@@ -2490,6 +2490,14 @@ export const api: KnotApi = {
         },
       };
     },
+    list: async () =>
+      [...state.commands.keys()]
+        .filter((name) => state.commandOptions.get(name)?.palette !== false)
+        .map((name) => {
+          const options = state.commandOptions.get(name);
+          return { name, title: options?.title ?? name, description: options?.description ?? null };
+        })
+        .sort((left, right) => left.title.localeCompare(right.title)),
     invoke: async (name, args = null) => {
       const handler = state.commands.get(name);
       const window = state.windows[0]?.target;

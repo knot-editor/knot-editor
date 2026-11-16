@@ -2807,6 +2807,28 @@ pub(crate) async fn complete_inline_command(
             .complete_inline(&request, arguments.invocation, arguments.outcome)
     })?
 }
+#[host_operation("listCommands")]
+async fn list_commands(
+    context: HostContext,
+    _: (),
+) -> Result<Vec<knot_protocol::CommandInfo>, AccessError> {
+    context.foreground(|_, cx| {
+        let dispatcher = cx.global::<crate::app::commands::dispatch::ApplicationProductCommands>();
+        let mut commands = dispatcher
+            .0
+            .read(cx)
+            .definitions()
+            .filter(|definition| definition.palette)
+            .map(|definition| knot_protocol::CommandInfo {
+                name: definition.name.to_string(),
+                title: definition.title,
+                description: definition.description,
+            })
+            .collect::<Vec<_>>();
+        commands.sort_by(|left, right| left.title.cmp(&right.title));
+        commands
+    })
+}
 #[host_operation("invokeCommand")]
 pub(crate) async fn invoke_command(
     context: HostContext,

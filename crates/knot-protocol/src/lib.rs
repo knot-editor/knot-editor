@@ -756,6 +756,15 @@ pub struct IndentationInfo {
     pub size: usize,
 }
 
+/// A palette-visible command as extensions list it.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandInfo {
+    pub name: String,
+    pub title: String,
+    pub description: Option<String>,
+}
+
 /// A registered language as extensions see it.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

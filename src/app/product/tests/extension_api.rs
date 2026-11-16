@@ -1023,6 +1023,69 @@ await commands.register("editor.custom", async ({ arguments: args }) => {
 }
 
 #[gpui::test]
+fn command_list_reports_palette_commands_by_title(cx: &mut TestAppContext) {
+    use knot_protocol::ExtensionKey;
+
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
+    let key = ExtensionKey::new(ExtensionId::new(91), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host
+            .load_test_source(
+                key,
+                r#"
+import * as knot from "knot"; const { commands } = knot;
+await commands.register("editor.custom", async () => {
+  const listed = await commands.list();
+  const custom = listed.find((command) => command.name === "editor.custom");
+  if (custom?.title !== "Custom Title" || custom.description !== "About it") throw new Error("not listed");
+  if (listed.some((command) => command.name === "picker.next-tab")) throw new Error("hidden command listed");
+  if (!listed.some((command) => command.name === "keymaps.show")) throw new Error("native missing");
+  const titles = listed.map((command) => command.title);
+  if (titles.join() !== [...titles].sort().join()) throw new Error("unsorted");
+}, { title: "Custom Title", description: "About it" });
+"#,
+            )
+            .unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
+            cx.global::<ApplicationProductCommands>()
+                .0
+                .read(cx)
+                .catalog()
+                .borrow()
+                .resolve("editor.custom")
+                .is_ok()
+        })
+    });
+    let target = native_window.run(cx, |cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
+        window.update(cx, |window, cx| window.capture_command_target(cx))
+    });
+    let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
+    let execution = dispatcher.update(cx, |dispatcher, cx| {
+        dispatcher.dispatch(
+            Command {
+                name: "editor.custom".into(),
+                arguments: CommandArgumentValue::Null,
+            },
+            target,
+            cx,
+        )
+    });
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
 fn nested_script_waits_for_a_pending_native_command(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
 

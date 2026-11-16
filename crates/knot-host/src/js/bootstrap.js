@@ -1063,6 +1063,9 @@ export async function registerStatusItem(id, options) {
   });
 }
 
+export async function listCommands() {
+  return Object.freeze((await request("listCommands")).map((command) => Object.freeze(command)));
+}
 export async function invokeCommand(name, commandArguments) {
   if (typeof name !== "string") {
     throw new TypeError("commands.invoke requires a command name");
