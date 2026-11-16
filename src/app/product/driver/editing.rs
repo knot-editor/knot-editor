@@ -60,6 +60,9 @@ pub fn run(
     });
     cx.update(|cx| crate::app::documents::detect_indentation(&model, cx));
     cx.update(|cx| crate::app::languages::set_language(&model, language.into(), cx));
+    // The first parse that overruns the foreground budget finishes in the
+    // background; the action needs its tree.
+    cx.run_until_parked();
     let editor = cx.new(|cx| Editor::new(model.clone(), crate::app::EDITOR_KEY_CONTEXT, cx));
     let (anchor, caret) = selection.unwrap_or((0, text.len()));
     editor.update(cx, |editor, cx| {
