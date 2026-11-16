@@ -246,21 +246,17 @@ impl KnotWindow {
             .into_any_element()
     }
 
-    /// The focused pane's outline, drawn over the card's border so a card
-    /// holding several panes shows which one has focus. It takes no layout
-    /// space.
+    /// The focused pane's outline, inside the pane's edge so the card's
+    /// clipping keeps it whole. It takes no layout space and no input.
     fn focus_ring(&self, cx: &App) -> Div {
-        let chrome = chrome(cx);
-        let width = chrome.card_border;
         div()
             .absolute()
-            .top(zoom::rems(-width))
-            .left(zoom::rems(-width))
-            .right(zoom::rems(-width))
-            .bottom(zoom::rems(-width))
+            .top_0()
+            .left_0()
+            .size_full()
             .debug_selector(|| "focus-ring".to_owned())
-            .rounded(zoom::rems(chrome.card_radius))
-            .border(zoom::rems(width))
+            .rounded(zoom::rems(chrome(cx).card_radius))
+            .border(zoom::rems(chrome(cx).card_border))
             .border_color(theme(cx).paint_color(color::CARD_FOCUSED_BORDER))
     }
 
@@ -521,7 +517,6 @@ impl KnotWindow {
             .debug_selector(move || format!("pane-{}", pane_id.value()))
             .relative()
             .child(self.pane_drag_geometry(pane_id, area))
-            .when(focused, |pane| pane.child(self.focus_ring(cx)))
             .flex()
             .flex_col()
             .size_full()
@@ -564,6 +559,8 @@ impl KnotWindow {
                     .overflow_hidden()
                     .when_some(active_view, |element, view| element.child(view)),
             )
+            // Last, so it paints over the tab bar and the content.
+            .when(focused, |pane| pane.child(self.focus_ring(cx)))
             .into_any_element()
     }
 }

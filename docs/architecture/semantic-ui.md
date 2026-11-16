@@ -95,7 +95,7 @@ setting overrides the theme's value while it is not negative. Setting writes
 repaint every window, so a flat layout needs no new theme. Every card has
 a `border`-colored border; the focused pane, which stays the last focused
 pane while the palette or a picker has focus, draws a `card.focusedBorder`
-outline over it, so a card with split panes shows which one has focus, and a
+outline inside its edge, so a card with split panes shows which one has focus, and a
 theme sets the key equal to `border` to drop the emphasis.
 
 gpui-component's widgets take their colors from the same resolution: each

@@ -4,7 +4,7 @@ use super::operations::empty_product_window;
 use super::*;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
 use crate::app::theme::Chrome;
-use gpui::{Pixels, VisualTestContext, point, px};
+use gpui::{Pixels, VisualTestContext, px};
 use knot_model::workbench::{Area, DockLocation, PaneId};
 
 fn set_chrome(key: &str, value: f64, cx: &mut TestAppContext) {
@@ -113,12 +113,8 @@ fn only_the_focused_pane_draws_the_focus_ring(cx: &mut TestAppContext) {
                 .debug_bounds(Box::leak(format!("pane-{}", pane.value()).into_boxed_str()))
                 .unwrap()
         };
-        let border = px(Chrome::default().card_border);
         let focused = bounds(focused, &mut visual);
-        assert_eq!(ring.origin, focused.origin - point(border, border));
-        assert_ne!(
-            ring.origin,
-            bounds(other, &mut visual).origin - point(border, border)
-        );
+        assert_eq!(ring, focused);
+        assert_ne!(ring.origin, bounds(other, &mut visual).origin);
     }
 }

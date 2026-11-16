@@ -17,7 +17,7 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 
 - A new theme color key `card.focusedBorder` (in `crates/knot-model/src/theme.rs`
   beside `CARD_BACKGROUND`) is painted as an outline over the focused pane,
-  extending over the card's border, so a card with split panes shows which
+  so a card with split panes shows which
   one has focus; cards keep `border`. Defaults come from the
   accent, at about 44% alpha for both Islands themes, and a theme may set it equal to `border` to
   disable the emphasis.
