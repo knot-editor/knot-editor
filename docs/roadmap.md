@@ -302,7 +302,7 @@ hold the analyses that support some items.
     operation failures (D181). Deliver cancellation through the progress handle
     to the root that holds it, so it works with serial roots and needs no D182.
 
-- **D119 — Tab, editor, and extension menu items**
+- **D119 — Tab, editor, and extension menu items** 🚧
   - Depends on: none
   - Description: Trees and tool stripes have context menus, but tabs and the
     editor have none, and extension commands reach the palette and keymaps but
@@ -311,7 +311,8 @@ hold the analyses that support some items.
     editor one (cut, copy, paste), and let a registration place a command in a
     named menu location, reusing the tree context menus. If more popups then
     take gpui focus, give "a native popup is open" its own Knot-side focus
-    identity instead of extending the key path's popup exception.
+    identity instead of extending the key path's popup exception. Plan:
+    [d119-menu-items.md](plans/d119-menu-items.md).
 
 - **D181 — Native operation failures in the status bar**
   - Depends on: D117
