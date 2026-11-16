@@ -455,6 +455,9 @@ pub struct PickerItem {
     pub hint: Option<String>,
     #[serde(default)]
     pub icon: Option<IconRef>,
+    /// The picker opens with this row highlighted.
+    #[serde(default)]
+    pub selected: bool,
 }
 
 /// One row a query-driven picker is given for a query: an item with the

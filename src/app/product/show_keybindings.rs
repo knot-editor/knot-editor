@@ -82,6 +82,7 @@ fn keybinding_item(
     }
     PickerItem {
         icon: None,
+        selected: false,
         id: index.to_string(),
         label,
         description: Some(description),

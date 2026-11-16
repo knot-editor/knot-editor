@@ -35,6 +35,7 @@ impl KnotWindow {
             detail: None,
             hint: None,
             icon: None,
+            selected: false,
             id: "0".into(),
             label: "Auto Detect".into(),
             description: Some(
@@ -56,6 +57,7 @@ impl KnotWindow {
                 detail: None,
                 hint: None,
                 icon: None,
+                selected: false,
                 id: choices.len().to_string(),
                 label: language.name,
                 description: Some(description),

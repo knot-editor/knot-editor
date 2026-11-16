@@ -21,6 +21,7 @@ impl KnotWindow {
                 detail: None,
                 hint: None,
                 icon: None,
+                selected: false,
                 id,
                 label: title,
                 description: None,

@@ -1580,6 +1580,7 @@ impl KnotWindow {
                 detail: item.detail,
                 hint: item.hint,
                 icon: item.icon,
+                selected: item.selected,
                 ..PickerEntry::new(item.label)
             })
             .collect();

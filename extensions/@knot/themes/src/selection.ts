@@ -76,6 +76,7 @@ export async function select(stored: Selection): Promise<Selection> {
       id: theme.name,
       label: theme.name,
       description: current[theme.appearance] === theme.name ? `${theme.appearance}, selected` : theme.appearance,
+      selected: theme.name === current[mode === "light" ? "light" : "dark"],
     })),
     onHighlight: async (id) => {
       const theme = byName(id);

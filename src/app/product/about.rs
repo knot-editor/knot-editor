@@ -11,6 +11,7 @@ impl KnotWindow {
     pub(crate) fn start_about(&mut self, cx: &mut Context<Self>) {
         let row = |id: &str, label: &str, description: &str| PickerItem {
             icon: None,
+            selected: false,
             id: id.into(),
             label: label.into(),
             description: Some(description.into()),

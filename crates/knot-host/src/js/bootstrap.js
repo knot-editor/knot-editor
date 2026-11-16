@@ -863,6 +863,7 @@ function pickerItem(value) {
     detail: optionalText(value.detail),
     hint: optionalText(value.hint),
     icon: iconRef(value.icon),
+    selected: value.selected === true,
   };
 }
 

@@ -2069,6 +2069,8 @@ declare module "knot" {
     readonly hint?: string | null;
     /** Painted before the label. */
     readonly icon?: IconRef | null;
+    /** The picker opens with this row highlighted; the first such row wins. */
+    readonly selected?: boolean;
   }
   /** Selection or explicit dismissal; dismissal is not an operational failure. */
   export type PickerResult = Readonly<

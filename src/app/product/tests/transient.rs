@@ -23,6 +23,7 @@ fn picker_items() -> Vec<PickerItem> {
             icon: Some(knot_protocol::IconRef::File {
                 file: "alpha.rs".into(),
             }),
+            selected: false,
             label: "Alpha".into(),
             description: Some("first".into()),
         },
@@ -30,6 +31,7 @@ fn picker_items() -> Vec<PickerItem> {
             detail: None,
             hint: None,
             icon: None,
+            selected: false,
             id: "beta".into(),
             label: "Beta".into(),
             description: Some("second".into()),

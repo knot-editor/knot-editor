@@ -28,6 +28,7 @@ impl KnotWindow {
                     detail: None,
                     hint: None,
                     icon: None,
+                    selected: false,
                     id: name.clone(),
                     label: name,
                     description: Some(match &entry.result {

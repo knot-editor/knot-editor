@@ -48,6 +48,8 @@ pub(crate) struct PickerEntry {
     pub(crate) match_text: Option<String>,
     /// Names the row to an owner that supplies the rows.
     pub(crate) id: Option<String>,
+    /// The picker opens with this row highlighted.
+    pub(crate) selected: bool,
     /// Byte ranges of the label and description a supplied row highlights.
     pub(crate) label_matches: Vec<Range<usize>>,
     pub(crate) description_matches: Vec<Range<usize>>,
@@ -165,6 +167,14 @@ impl Picker {
                 .update(cx, |input, cx| input.set_placeholder(title, cx));
         }
         this.refilter("", cx);
+        if let Some(row) = this
+            .matches
+            .iter()
+            .position(|found| this.entries[found.entry].selected)
+        {
+            this.selected = row;
+            this.scroll.scroll_to_item(row, ScrollStrategy::Center);
+        }
         this.highlighted = this.selected_entry();
         this
     }
@@ -828,6 +838,18 @@ mod tests {
 
     fn labels_of(picker: &Entity<Picker>, cx: &mut TestAppContext) -> Vec<String> {
         picker.read_with(cx, |picker, _| picker.visible_labels())
+    }
+
+    #[gpui::test]
+    fn opens_on_the_entry_marked_selected(cx: &mut TestAppContext) {
+        let marked = PickerEntry {
+            selected: true,
+            ..entry("Beta", None)
+        };
+        let picker = picker(vec![entry("Alpha", None), marked, entry("Gamma", None)], cx);
+        picker.read_with(cx, |picker, _| {
+            assert_eq!(picker.selected_entry(), Some(1));
+        });
     }
 
     #[gpui::test]

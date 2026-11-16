@@ -55,6 +55,7 @@ impl KnotWindow {
                     detail: None,
                     hint: None,
                     icon: None,
+                    selected: false,
                     id: index.to_string(),
                     label: snapshot.title.clone(),
                     description: Some(describe_snapshot(snapshot, now)),

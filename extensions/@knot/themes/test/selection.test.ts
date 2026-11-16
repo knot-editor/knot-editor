@@ -38,9 +38,9 @@ test("selecting a theme sets its appearance's theme and the mode", async () => {
   assert.deepEqual(
     items.filter((item) => item.label.startsWith("Knot ") || item.label === "Solarized Dark"),
     [
-      { id: "Knot Islands Dark", label: "Knot Islands Dark", description: "dark, selected" },
-      { id: "Knot Islands Light", label: "Knot Islands Light", description: "light, selected" },
-      { id: "Solarized Dark", label: "Solarized Dark", description: "dark" },
+      { id: "Knot Islands Dark", label: "Knot Islands Dark", description: "dark, selected", selected: true },
+      { id: "Knot Islands Light", label: "Knot Islands Light", description: "light, selected", selected: false },
+      { id: "Solarized Dark", label: "Solarized Dark", description: "dark", selected: false },
     ],
   );
 });
