@@ -126,6 +126,46 @@ test("choosing an action runs it and choosing a file opens it", async () => {
   );
 });
 
+test("actions are ordered by title, recently run ones first, and recency breaks ties", async () => {
+  for (const [name, title] of [["demo.a", "Alpha"], ["demo.b", "Save"], ["demo.c", "Gamma"], ["demo.d", "Save"]] as const) {
+    await commands.register(name, async () => {}, { title });
+  }
+  host.answer("showPicker", { kind: "selected", id: "command::demo.d" });
+  await host.run(SEARCH_EVERYWHERE_COMMAND);
+
+  const [empty, typed] = (await search("actions", "save")).slice(-2);
+  const demo = new Set(["Alpha", "Save", "Gamma"]);
+  assert.deepEqual(empty?.filter((label) => demo.has(label)), ["Save", "Alpha", "Gamma", "Save"]);
+  assert.deepEqual(typed?.filter((label) => demo.has(label)), ["Save", "Save"]);
+  assert.deepEqual(
+    host.pickerRows().slice(-1)[0]?.filter((row) => row.label === "Save").map((row) => row.id),
+    ["command::demo.d", "command::demo.b"],
+  );
+});
+
+test("an action matches on its name though the name is not shown", async () => {
+  await commands.register("demo.frobnicate", async () => {}, { title: "Tidy Up" });
+  const [, matched] = await search("actions", "frobn");
+  assert.deepEqual(matched, ["Tidy Up"]);
+});
+
+test("an action shows the binding of the view the picker opened from, and none for the pickers", async () => {
+  await commands.register("demo.copy", async () => {}, { title: "Copy It" });
+  await commands.register("workbench.show-command-palette", async () => {}, { title: "Show Command Palette" });
+  await activate(`${ROOT}/src/main.ts`);
+  host.bindKey("demo.copy", "⌘C");
+  host.selectTab("actions");
+  host.answer("showPicker", { kind: "dismissed" });
+  await host.run(SEARCH_EVERYWHERE_COMMAND);
+
+  const actions = host.pickerRows()[1];
+  assert.equal(actions?.find((row) => row.label === "Copy It")?.hint, "⌘C");
+  assert.deepEqual(
+    actions?.filter((row) => /Search Everywhere|Go to File|Command Palette/.test(row.label)),
+    [],
+  );
+});
+
 /** Opens the file in a tab and reports it as the active one. */
 async function activate(uri: string | null, text = "") {
   const [window] = host.windowTargets();

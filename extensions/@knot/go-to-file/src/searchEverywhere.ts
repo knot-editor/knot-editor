@@ -5,7 +5,10 @@
 import { commands, completion, documents, history, windows, workbench, workspaces } from "knot";
 import type { Buffer, CommandContext, CommandInfo, DocumentInfo, PickerRow, ViewTarget } from "knot";
 import { fileRows } from "./fileRows.js";
-import { BUFFER_HISTORY, documentOf } from "./recent.js";
+import { ACTION_HISTORY, BUFFER_HISTORY, documentOf } from "./recent.js";
+
+/** The commands that open this picker; running one from inside it would nest it. */
+const PICKER_COMMANDS = new Set(["workspace.search-everywhere", "workspace.go-to-file", "workbench.show-command-palette"]);
 
 /** Actions the All tab shows, so buffers and files stay visible beside them. */
 const ALL_TAB_ACTIONS = 8;
@@ -39,18 +42,31 @@ export function parseQuery(query: string): { text: string; line: number | null; 
   return { text: found[1]!, line: found[2] === "" ? null : Number(found[2]), jump: found[1] === "" };
 }
 
-/** The actions whose title or name contains `query`, with the title ranges. */
-export function actionRows(all: readonly CommandInfo[], query: string): PickerRow[] {
-  const needle = query.trim().toLowerCase();
+/**
+ * The actions matching `query` on their title or name, best first, recently
+ * run ones first among equals. Only a title match has ranges to highlight.
+ */
+export async function actionRows(all: readonly CommandInfo[], query: string): Promise<PickerRow[]> {
+  const ordered = await history.order(ACTION_HISTORY, all, (command) => command.name);
+  // Titles, then names, as one candidate list: the first hit of a command is
+  // its best, and the shared matcher ranks both the way it ranks everything.
+  const found = await completion.match(query, [
+    ...ordered.map((command) => command.title),
+    ...ordered.map((command) => command.name),
+  ]);
   const rows: PickerRow[] = [];
-  for (const command of all) {
-    const at = command.title.toLowerCase().indexOf(needle);
-    if (needle !== "" && at < 0 && !command.name.toLowerCase().includes(needle)) continue;
+  const seen = new Set<number>();
+  for (const { index, ranges } of found) {
+    const at = index % ordered.length;
+    if (seen.has(at)) continue;
+    seen.add(at);
+    const command = ordered[at]!;
     rows.push({
       id: rowId("command", null, command.name),
       label: command.title,
       description: command.description,
-      labelMatches: needle !== "" && at >= 0 ? [[at, at + needle.length]] : [],
+      hint: command.key,
+      labelMatches: index < ordered.length ? ranges : [],
     });
   }
   return rows;
@@ -99,11 +115,11 @@ export async function searchEverywhere({ target, arguments: argument }: CommandC
   const workspace = await workspaces.get(target.windowTarget);
   const roots = workspace?.roots ?? [];
   const uris = roots.map((root) => root.uri);
-  const available = await commands.list();
   const info = await windows.get(target.windowTarget);
   const shown = info?.statusTarget ?? null;
   const editorTab = info?.panes.flatMap((pane) => pane.tabs).find((tab) => tab.target === shown);
   const current = shown === null ? null : await documentOf(shown);
+  const available = (await commands.list(info?.currentTarget ?? shown ?? undefined)).filter((command) => !PICKER_COMMANDS.has(command.name));
 
   const rows = async (query: string, tab: string | null): Promise<PickerRow[]> => {
     const { text, line, jump } = parseQuery(query);
@@ -127,7 +143,7 @@ export async function searchEverywhere({ target, arguments: argument }: CommandC
     // An empty All tab lists buffers and recent files; actions join once
     // something is typed, and a line has no use for them.
     if ((scope === "all" || scope === "actions") && line === null) {
-      actions = actionRows(available, text);
+      actions = await actionRows(available, text);
       if (scope === "all") actions = text.trim() === "" ? [] : actions.slice(0, ALL_TAB_ACTIONS);
     }
     return [...buffers, ...files, ...actions];
@@ -143,6 +159,7 @@ export async function searchEverywhere({ target, arguments: argument }: CommandC
   if (result.kind !== "selected") return;
   const { kind, line, target: chosen } = parseRowId(result.id);
   if (kind === "command") {
+    await history.record(ACTION_HISTORY, chosen);
     await commands.invoke(chosen);
   } else if (kind === "line") {
     if (shown !== null && line !== null) await goToLine(shown, editorTab?.buffer ?? null, line);

@@ -5,6 +5,7 @@ import type { ApplicationEvent, DocumentInfo, ViewTarget, WindowTarget } from "k
 
 export const HISTORY = "recent-files";
 export const BUFFER_HISTORY = "recent-buffers";
+export const ACTION_HISTORY = "recent-actions";
 
 /** The document a tab presents, or null for anything else. */
 export async function documentOf(target: ViewTarget): Promise<DocumentInfo | null> {
