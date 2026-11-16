@@ -301,6 +301,10 @@ hold the analyses that support some items.
     consumers are extensions, terminal notifications (D041), and native
     operation failures (D181). Deliver cancellation through the progress handle
     to the root that holds it, so it works with serial roots and needs no D182.
+    A further consumer is configuration errors the user can fix, such as a
+    missing `font.family`: the [application log](plans/logging.md) records them
+    as `warn!` records with the target `knot::config`, and this item must raise a
+    notice at every such site, which a search for that target finds.
 
 - **D119 — Tab, editor, and extension menu items** 🚧
   - Depends on: none
