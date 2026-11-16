@@ -263,7 +263,7 @@ so selection and navigation stay usable during a refresh.
 
 A row's actions also form its context menu, a [native context
 menu](commands.md#keymaps) that the tree owns. Right-clicking a row selects it and opens the menu there;
-`tree.show-context-menu` (Shift+F10) opens it below the selected row, needs a
+`workbench.show-context-menu` (Shift+F10) opens it below the selected row, needs a
 window, and is unavailable outside a focused extension tree or for a row
 without actions. Items emit the same captured-window command event as the
 row's controls. The menu takes focus, tells the window, which gives it the `Popup` focus layer,

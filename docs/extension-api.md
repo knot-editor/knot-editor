@@ -986,7 +986,8 @@ await menus.add("tab", {
 ```
 
 The `location` is `"tab"` (the right-click menu of a tab header, in the center
-or a dock), `"content"`, or a menu bar menu (`"menubar.file"`,
+or a dock), `"content"` (the right-click and Shift+F10 menu inside an editor or terminal),
+or a menu bar menu (`"menubar.file"`,
 `"menubar.edit"`, `"menubar.view"`, `"menubar.go"`); any other name is a
 `TypeError`. `view` (`"editor"`, `"terminal"`, or a contributed view ID) and
 `context` (an editor key context, with `view`) show an item only on matching
@@ -997,7 +998,7 @@ A menu runs its command on the surface that was clicked, without focusing it
 or changing the active tab, so a command reads `context.editor` and
 `context.buffer` rather than the window's active file. A command that does not
 apply returns `commands.unavailable()` and the click does nothing; menus have
-no disabled state. Bundled `@knot/chrome` fills the tab menu this way.
+no disabled state. Bundled `@knot/chrome` fills the tab and content menus this way.
 
 ## Compose commands
 

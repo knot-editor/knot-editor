@@ -131,7 +131,8 @@ always and elsewhere only with toolbar items. The editor a bar describes is `Win
 Right-clicking a tab header opens the tab context menu from the `tab` items of
 the menu registry ([context menus](commands.md#context-menus)). The bundled
 `@knot/chrome` package adds Close, Close Other Tabs, Close Tabs to the Right,
-Close All, Split Right, and Split Down.
+Close All, Split Right, and Split Down, and the `content` items: Cut, Copy,
+and Paste for editors, and Copy and Paste for terminals.
 
 The same package registers the built-in status items on the right:
 the cursor position with the selection size, counted in characters up to
@@ -563,7 +564,8 @@ sanitizing bracketed paste. OSC 52, title, and bell events do not access product
 features or the clipboard; additional protocols remain deferred in the roadmap.
 
 A mouse press chooses application reporting or local selection through release,
-even if modifiers change. Shift forces local interaction. Wheels choose their
+even if modifiers change. Shift forces local interaction. A right press that is not reported opens the
+terminal's `content` menu. Wheels choose their
 current route independently. The session-local reporting toggle survives restart
 and handoff without changing application-requested modes. Disabling it balances
 active reports before local selection takes over. Focus, geometry, detach, restart,

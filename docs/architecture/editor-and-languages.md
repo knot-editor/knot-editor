@@ -26,6 +26,11 @@ handles, and completion reach the `Editor`. Multiple editors share a model
 while retaining independent presentation state. Completion ownership is
 detailed in [semantic UI](semantic-ui.md#completion-ownership-and-aggregation).
 
+A right-click in the editor moves the caret to the click unless it lands in
+the selection (`EditorState::place_for_context_menu`), and the window then
+opens the `content` menu ([context menus](commands.md#context-menus)); the
+gutter has none.
+
 A view keeps no copy of the text. It reads the lines it paints, measures, or
 edits from the model, and converts positions, including the platform's
 document-wide UTF-16 offsets, through the buffer's line lookups, so editing cost

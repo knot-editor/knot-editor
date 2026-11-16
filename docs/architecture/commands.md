@@ -73,9 +73,9 @@ receives readline and job-control keys, and terminals copy and paste with
 ctrl-shift-c and ctrl-shift-v. Named keys such as tab and pageup, and ctrl-`,
 stay global because shells do not read them, so tab navigation and Toggle
 Terminal work from a terminal. Go to File keeps ctrl-p in terminals, as in
-VS Code, so the file finder opens from every surface. On every platform Shift+F10, which shows a
-tree's context menu, is unbound in terminals, whose programs read function
-keys.
+VS Code, so the file finder opens from every surface. On every platform Shift+F10, which opens the
+focused tree row's or editor's context menu, is unbound in terminals, whose
+programs read function keys.
 Extensions register further presets by name, lifecycle-owned like themes. The
 `keymap.preset` setting selects one when startup completes and whenever the
 setting changes; an unregistered name selects Knot, and installing a preset
@@ -95,8 +95,8 @@ terminal's bytes, and a key that surface ignores becomes typed text, as if
 unbound. While a context menu is open the window's focus layer is `Popup`:
 the router still matches first, so global and extension bindings win, and a
 key it leaves goes on to gpui's dispatch, where the menu's own bindings
-run. Every native context menu (the tree's row menu and the stripe button
-menu) goes through one helper, `src/app/context_menu.rs`, which builds the
+run. Every native context menu (the tree's row menu, the stripe button
+menu, and the tab and content menus) goes through one helper, `src/app/context_menu.rs`, which builds the
 gpui-component menu, takes focus, and reports dismissal or blur; the window
 ends the layer then and refocuses the active surface. A sequence that stops matching runs its longest bound prefix, or
 delivers its first key natively, and routes the rest again, and a pending
@@ -199,7 +199,12 @@ then title, and an item scoped to a view kind or key context shows only where
 the surface has it, by the keymap's scope rule. A menu opens through the shared
 helper in `src/app/context_menu.rs` and runs its commands against a target
 captured for the clicked tab (`capture_tab_target`), not the focused one, so
-focus and the active tab stay. While a menu is open the window's focus is
+focus and the active tab stay. The `tab` location opens on a tab header and
+`content` inside an editor or terminal, from the pane's content area;
+`workbench.show-context-menu` (Shift+F10) opens the focused tree row's menu or
+the editor's `content` menu below the caret. A terminal opens its `content`
+menu on a right-click its program does not take, so mouse reporting, short of
+Shift, keeps it from opening. While a menu is open the window's focus is
 `Focus::Popup`: only global bindings match, and other keys reach the menu's own
 actions.
 

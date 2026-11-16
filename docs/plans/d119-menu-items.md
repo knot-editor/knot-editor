@@ -122,7 +122,7 @@ keys. See [context menus](../architecture/commands.md#context-menus), the
 [status bar and tab menu](../architecture/workbench-and-lifecycle.md#status-bar),
 and the [extension guide](../extension-api.md#add-menu-items).
 
-### 4. Editor and terminal content menus ✳️ not started
+### 4. Editor and terminal content menus 🚧 awaiting review
 
 Right-click and Shift+F10 menus for editors, right-click menus for terminals,
 with `@knot/chrome` adding Cut, Copy, Paste, and the terminal's Copy and Paste.
@@ -147,6 +147,9 @@ with `@knot/chrome` adding Cut, Copy, Paste, and the terminal's Copy and Paste.
 - **Review gate:** manual check through `Try:` commands. Update the editor
   views section of `docs/architecture/editor-and-languages.md` and the
   terminal notes in `workbench-and-lifecycle.md`.
+- **Status:** ✅ implemented, tested, and documented. The terminal's root
+  element no longer occludes the mouse, so the pane's content area sees a
+  right-click it leaves unconsumed. Awaiting the manual check.
 
 ### 5. Explorer items in the tab menu ✳️ not started
 
