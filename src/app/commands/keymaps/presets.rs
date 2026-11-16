@@ -157,7 +157,9 @@ fn reaches_the_shell(key: &str) -> bool {
         .is_some_and(|stroke| {
             let mut characters = stroke.key.chars();
             stroke.modifiers == Modifiers::control()
-                && characters.next().is_some_and(|key| key != '`')
+                && characters
+                    .next()
+                    .is_some_and(|key| key != '`' && key != '~')
                 && characters.next().is_none()
         })
 }
@@ -204,8 +206,11 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("shift-tab", PICKER_PREVIOUS_TAB_COMMAND, Some("picker")),
     ("shift-f10", SHOW_TREE_CONTEXT_MENU_COMMAND, None),
     ("secondary-n", NEW_COMMAND, None),
+    ("secondary-t", NEW_COMMAND, None),
     ("ctrl-`", TOGGLE_TERMINAL_COMMAND, None),
     ("ctrl-shift-`", NEW_TERMINAL_COMMAND, None),
+    // Keyboards report the shifted backtick as `~`.
+    ("ctrl-~", NEW_TERMINAL_COMMAND, None),
     ("secondary-b", TOGGLE_LEFT_DOCK_COMMAND, None),
     ("secondary-alt-b", TOGGLE_RIGHT_DOCK_COMMAND, None),
     ("secondary-j", TOGGLE_BOTTOM_DOCK_COMMAND, None),
