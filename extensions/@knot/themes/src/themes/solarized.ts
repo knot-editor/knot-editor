@@ -42,6 +42,7 @@ const ansi = {
 
 const accents = {
   "border.hover": blue,
+  "card.focusedBorder": blue,
   "error": red,
   "info": blue,
   "stripe.selected.background": `${blue}4d`,

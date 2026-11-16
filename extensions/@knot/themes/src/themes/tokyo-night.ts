@@ -10,6 +10,7 @@ export const TOKYO_NIGHT: ThemeDefinition = {
   colors: {
     "background": "#16161e",
     "card.background": "#1a1b26",
+    "card.focusedBorder": "#7aa2f7",
     "tab.accent": "#7aa2f7",
     "toolbar.background": "#16161e",
     "window.background": "#16161e",
@@ -107,6 +108,7 @@ export const TOKYO_NIGHT_LIGHT: ThemeDefinition = {
   colors: {
     "background": "#cbccd1",
     "card.background": "#d5d6db",
+    "card.focusedBorder": "#34548a",
     "tab.accent": "#34548a",
     "toolbar.background": "#cbccd1",
     "window.background": "#cbccd1",

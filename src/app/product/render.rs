@@ -19,24 +19,40 @@ pub(super) enum Divider {
 }
 
 impl KnotWindow {
+    /// The area whose card holds the focused pane. A transient surface such as
+    /// the palette leaves the workbench's focused pane unchanged.
+    pub(super) fn focused_card_area(&self, cx: &App) -> Option<Area> {
+        let workbench = self.workbench.read(cx);
+        workbench
+            .focused_pane_id()
+            .and_then(|pane| workbench.pane_area(pane))
+    }
+
     /// The workbench's areas, arranged as `workbench.bottomDockLayout`
     /// places the bottom dock; a maximized pane fills it alone.
     pub(super) fn render_workbench(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let card_background = theme(cx).paint_color(color::CARD_BACKGROUND);
         let border = theme(cx).paint_color(color::BORDER);
+        let focused_border = theme(cx).paint_color(color::CARD_FOCUSED_BORDER);
         let chrome = chrome(cx);
+        let focused_area = self.focused_card_area(cx);
         // Cards clip their content to a rectangle, so a child's own background
-        // matches the card's wherever it reaches a rounded corner.
-        let card = |element: Div| {
+        // matches the card's wherever it reaches a rounded corner. The card
+        // of the focused pane takes the emphasized border.
+        let card = |element: Div, area: Option<Area>| {
             element
                 .overflow_hidden()
                 .rounded(zoom::rems(chrome.card_radius))
                 .border(zoom::rems(chrome.card_border))
-                .border_color(border)
+                .border_color(if area.is_some() && area == focused_area {
+                    focused_border
+                } else {
+                    border
+                })
                 .bg(card_background)
         };
         if let Some(pane) = self.maximized_pane(cx) {
-            return card(div().size_full())
+            return card(div().size_full(), None)
                 .child(self.render_pane(pane, cx))
                 .into_any_element();
         }
@@ -66,7 +82,7 @@ impl KnotWindow {
             let Some((layout, size)) = shown else {
                 continue;
             };
-            let element = card(div())
+            let element = card(div(), Some(Area::Dock(dock)))
                 .flex_none()
                 .min_w_0()
                 .min_h_0()
@@ -80,7 +96,11 @@ impl KnotWindow {
             docks[dock.index()] = Some((element, divider));
         }
         let [left, right, bottom] = docks;
-        let center = card(div()).flex_1().min_w_0().min_h_0().child(center);
+        let center = card(div(), Some(Area::Center))
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .child(center);
         let column = |element: Div| element.flex().flex_col().min_w_0().min_h_0();
         let row = |element: Div| element.flex().flex_row().min_w_0().min_h_0();
         let sides = |element: Div, middle: Div| {

@@ -498,7 +498,9 @@ fn dock_divider_drag_resizes_and_escape_reverts(cx: &mut TestAppContext) {
         );
     });
     let explorer = visual.debug_bounds("pane-2").unwrap();
-    assert_eq!(explorer.size.width, px(300.));
+    // The dock's size includes its card border on both sides.
+    let border = crate::app::theme::Chrome::default().card_border;
+    assert_eq!(explorer.size.width, px(300. - 2. * border));
 
     // Escape reverts an in-progress resize.
     let divider = visual.debug_bounds("dock-divider-0").unwrap().center();

@@ -563,6 +563,8 @@ declare module "knot" {
     readonly "button.hover.background"?: string;
     /** The cards of the center and the docks. */
     readonly "card.background"?: string;
+    /** The border of the card that holds the focused pane. */
+    readonly "card.focusedBorder"?: string;
     /** Where a dragged tab would land. */
     readonly "dropTarget.background"?: string;
     /** Text editor background. */

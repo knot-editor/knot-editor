@@ -63,7 +63,7 @@ test("every theme defines a complete chrome of known values", () => {
 test("Islands themes float rounded cards and flat themes meet at borders", () => {
   const byName = new Map(THEMES.map((theme) => [theme.name, theme]));
   assert.equal(byName.get("Knot Islands Dark")?.chrome?.cardRadius, 6);
-  assert.equal(byName.get("Knot Islands Dark")?.chrome?.cardBorder, 0);
+  assert.equal(byName.get("Knot Islands Dark")?.chrome?.cardBorder, 1);
   assert.equal(byName.get("One Dark")?.chrome?.cardGap, 0);
   assert.equal(byName.get("One Dark")?.chrome?.cardBorder, 1);
 });

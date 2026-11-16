@@ -263,13 +263,19 @@ fn docked_tools_have_visible_geometry(cx: &mut TestAppContext) {
         let mut visual = VisualTestContext::from_window(native_window, cx);
         let explorer = visual.debug_bounds("pane-3").unwrap();
         let editor = visual.debug_bounds("pane-1").unwrap();
+        // A dock's size includes its card border on both sides.
+        let border = 2. * crate::app::theme::Chrome::default().card_border;
         match dock {
             DockLocation::Left | DockLocation::Right => {
-                assert_eq!(explorer.size.width, px(240.), "{dock:?}: {explorer:?}");
+                assert_eq!(
+                    explorer.size.width,
+                    px(240. - border),
+                    "{dock:?}: {explorer:?}"
+                );
                 assert!(explorer.size.height > px(100.));
             }
             DockLocation::Bottom => {
-                assert_eq!(explorer.size.height, px(220.), "{explorer:?}");
+                assert_eq!(explorer.size.height, px(220. - border), "{explorer:?}");
                 assert!(explorer.size.width > px(100.));
             }
         }

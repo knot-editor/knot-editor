@@ -1,6 +1,6 @@
 # D193: Chrome refinements
 
-Status: 🚧 approved, not started. Roadmap item [D193](../roadmap.md).
+Status: 🚧 checkpoint 1 built, awaiting review. Roadmap item [D193](../roadmap.md).
 Builds on the Islands look ([decision](../decisions/platform.md#product-window-chrome-and-failure-notices),
 [workbench](../architecture/workbench-and-lifecycle.md), [themes](../architecture/semantic-ui.md#themes-and-color-keys))
 and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
@@ -60,7 +60,7 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 
 ## Checkpoints
 
-### 1. Focused card emphasis
+### 1. Focused card emphasis ✅ built, at its review gate
 
 - Deliverable: the color key, the Islands border default, painting, docs
   (themes reference, settings reference if any, decision note), bundled
@@ -73,8 +73,11 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
   (focused pane / area lookup). Mirror how `TAB_ACTIVE_*` keys are resolved.
 - Validation: model test for key resolution and defaults; a window test that
   the border color follows focus between center and a dock; `just check`.
-- **Review gate:** a `try.*` command in personal `post-init.js` that moves
-  focus among cards; the user judges the look in both themes.
+- Built: `card.focusedBorder` (default `text.accent`, set by every bundled
+  theme), `chrome.cardBorder` defaulting to 1, `focused_card_area` in
+  `render.rs`. Dock and pane geometry tests now account for the border.
+- **Review gate:** `Try: Card focus …` commands in personal `post-init.js`;
+  the user judges the look in both themes.
 
 ### 2. Picker tabs (native and API)
 

@@ -92,7 +92,11 @@ A theme also sets the chrome's shape and weight: `Chrome` (`CHROME_KEYS` in
 tab bar height, stripe width, header title weight, and accent line thickness.
 Values a theme leaves out keep the Islands defaults, and each `chrome.*`
 setting overrides the theme's value while it is not negative. Setting writes
-repaint every window, so a flat layout needs no new theme.
+repaint every window, so a flat layout needs no new theme. Every card has
+a `border`-colored border; the card of the focused pane, which stays the
+last focused pane while the palette or a picker has focus, paints
+`card.focusedBorder` instead, and a theme sets it equal to `border` to drop
+the emphasis.
 
 gpui-component's widgets take their colors from the same resolution: each
 theme application switches gpui-component to the theme's appearance, which

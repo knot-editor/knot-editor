@@ -5,7 +5,7 @@ export const ISLANDS_CHROME: ThemeChrome = {
   cardRadius: 6,
   cardGap: 8,
   cardInset: 4,
-  cardBorder: 0,
+  cardBorder: 1,
   tabBarHeight: 30,
   stripeWidth: 36,
   headerWeight: 600,

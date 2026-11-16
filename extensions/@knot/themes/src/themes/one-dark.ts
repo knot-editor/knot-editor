@@ -22,6 +22,7 @@ export const ONE_DARK: ThemeDefinition = {
   colors: {
     "background": panel,
     "card.background": bg,
+    "card.focusedBorder": blue,
     "tab.accent": accent,
     "toolbar.background": panel,
     "window.background": panel,

@@ -5,6 +5,7 @@ use super::*;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
 use crate::app::theme::Chrome;
 use gpui::{Pixels, VisualTestContext, px};
+use knot_model::workbench::{Area, DockLocation};
 
 fn set_chrome(key: &str, value: f64, cx: &mut TestAppContext) {
     cx.update(|cx| {
@@ -45,7 +46,10 @@ fn islands_leave_a_gap_between_cards_and_flat_cards_meet_at_borders(cx: &mut Tes
 
     let islands = Chrome::default();
     let (dock_right, center_left, handle) = measure(native_window, cx);
-    assert_eq!(center_left - dock_right, px(islands.card_gap));
+    assert_eq!(
+        center_left - dock_right,
+        px(islands.card_gap + islands.card_border)
+    );
     assert_eq!(handle, px(islands.card_gap));
 
     set_chrome("cardGap", 0., cx);
@@ -69,4 +73,35 @@ fn settings_override_the_theme_and_a_negative_value_follows_it(cx: &mut TestAppC
     cx.update(|cx| assert_eq!(crate::app::theme::chrome(cx).card_radius, 12.));
     set_chrome("cardRadius", -1., cx);
     cx.update(|cx| assert_eq!(crate::app::theme::chrome(cx), Chrome::default()));
+}
+
+#[gpui::test]
+fn the_focused_card_follows_the_focused_pane(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    cx.set_global(ApplicationFileSystems(memory_filesystems()));
+    let (window, _) = empty_product_window(&documents, cx);
+    toggle_test_tool(&window, cx);
+
+    let (center, dock) = window.update(cx, |window, cx| {
+        let workbench = window.workbench.read(cx);
+        let pane = |area| {
+            workbench
+                .panes()
+                .iter()
+                .find(|pane| pane.area() == area)
+                .map(|pane| pane.id())
+        };
+        (pane(Area::Center), pane(Area::Dock(DockLocation::Left)))
+    });
+    let (center, dock) = (center.unwrap(), dock.unwrap());
+    let focused = |pane, cx: &mut TestAppContext| {
+        window.update(cx, |window, cx| {
+            window
+                .workbench
+                .update(cx, |workbench, _| workbench.focus_pane(pane));
+            window.focused_card_area(cx)
+        })
+    };
+    assert_eq!(focused(center, cx), Some(Area::Center));
+    assert_eq!(focused(dock, cx), Some(Area::Dock(DockLocation::Left)));
 }
