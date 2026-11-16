@@ -49,8 +49,11 @@ uses.
 - **An unavailable command does nothing.** There are no disabled states and no
   `when` language. A command such as Copy Path on an untitled document returns
   `unavailable`.
-- **Menu contents live in JS.** A new bundled `@knot/menus` package in the
-  workbench group adds the tab items (Close, Close Others, Close to the Right,
+- **Menu contents live in JS, in `@knot/chrome`.** One bundled package in the
+  workbench group holds the window chrome that packages fill in: the
+  status-bar items (today's `@knot/status-bar`, renamed and extended), the
+  context-menu contents, and later any toolbar widgets that move to JS. A
+  package per surface was rejected as too fine-grained. `@knot/chrome` adds the tab items (Close, Close Others, Close to the Right,
   Close All, Split Right, Split Down), the editor items (Cut, Copy, Paste), and
   the terminal items (Copy, Paste). The explorer adds Copy Path, Copy Relative
   Path, Reveal in Explorer, and Reveal in Finder to editor tabs. Native code
@@ -91,9 +94,9 @@ uses.
 ## Deferred decisions
 
 - Whether context menus show each command's key binding. Include it only if
-  gpui-component's `PopupMenu` supports it cheaply (checked in checkpoint 2).
+  gpui-component's `PopupMenu` supports it cheaply (checked in checkpoint 3).
 - Whether an `editor`-scoped explorer item set belongs in `content` too (Copy
-  Path in the editor's own menu). Revisit at checkpoint 4's review.
+  Path in the editor's own menu). Revisit at checkpoint 5's review.
 
 ## Checkpoints
 
@@ -122,11 +125,27 @@ removing the key path's popup exception. Behavior doesn't change for users.
   Update the keymaps section of `docs/architecture/commands.md` and the tree
   context menu paragraph of `docs/architecture/semantic-ui.md`.
 
-### 2. Menu registry, `menus.add`, and the tab context menu ✳️ not started
+### 2. `@knot/chrome` from `@knot/status-bar` ✳️ not started
+
+Rename the status-bar package to `@knot/chrome`, which later checkpoints fill
+with menu contents. Behavior doesn't change.
+
+- **Implementation context:** move `extensions/@knot/status-bar/` to
+  `extensions/@knot/chrome/`, and update its `knot.jsonc` name, display name,
+  and description. Update the package list in
+  `crates/knot-ext-workbench/build.rs`. Rename
+  `crates/knot-ext-workbench/tests/workbench/status_bar_package.rs` to
+  `chrome.rs` (module in `main.rs`, `only(&["@knot/chrome"])`). Update the
+  mentions in `docs/settings.md`, `docs/decisions/semantic-ui.md` (status
+  bar), and `docs/architecture/workbench-and-lifecycle.md` (status bar).
+- **Validation:** the renamed package test passes, and `just check` passes.
+- **Review gate:** a quick review of the rename.
+
+### 3. Menu registry, `menus.add`, and the tab context menu ✳️ not started
 
 Add the registry and the extension API, the clicked-tab command target,
-`workbench.close-tabs-to-right`, the tab context menu, and the `@knot/menus`
-package with the tab items.
+`workbench.close-tabs-to-right`, the tab context menu, and the tab items in
+`@knot/chrome`.
 
 - **Implementation context:**
   - Model: `crates/knot-model/src/menus.rs` (declared in `lib.rs`), modeled on
@@ -152,8 +171,8 @@ package with the tab items.
   - Command: `workbench.close-tabs-to-right` in `src/app/product/commands.rs`,
     with a new `ProtectedCloseKind` resolved in
     `crates/knot-model/src/workbench/closure.rs`.
-  - Package: add `extensions/@knot/menus/` to
-    `crates/knot-ext-workbench/build.rs`.
+  - Package: the tab items go in a `menus.ts` module of
+    `extensions/@knot/chrome/src/`, registered from its `extension.ts`.
 - **Validation:**
   - Model tests: ordering, separators, scope matching, lifecycle removal,
     unknown-location and menu-bar-scope rejection.
@@ -161,17 +180,17 @@ package with the tab items.
     right-clicking an unfocused tab runs Close Others or Split for that tab
     while focus stays put; terminal and tool tabs get only the items scoped
     to them; protected closure prompts for Close to the Right.
-  - End-to-end package test in `crates/knot-ext-workbench/tests/workbench/`
+  - End-to-end test in `crates/knot-ext-workbench/tests/workbench/chrome.rs`
     through the real editor.
 - **Review gate:** the user checks tab menus through `Try:` commands in
   `post-init.js` that add items from personal config. Document `menus.add`
   in `docs/extension-api.md`, and record the menu ownership in
   `docs/architecture/commands.md` and `workbench-and-lifecycle.md`.
 
-### 3. Editor and terminal content menus ✳️ not started
+### 4. Editor and terminal content menus ✳️ not started
 
 Right-click and Shift+F10 menus for editors, right-click menus for terminals,
-with `@knot/menus` adding Cut, Copy, Paste, and the terminal's Copy and Paste.
+with `@knot/chrome` adding Cut, Copy, Paste, and the terminal's Copy and Paste.
 
 - **Implementation context:**
   - Editor: right-click handling in `src/app/editor/input.rs`
@@ -194,7 +213,7 @@ with `@knot/menus` adding Cut, Copy, Paste, and the terminal's Copy and Paste.
   views section of `docs/architecture/editor-and-languages.md` and the
   terminal notes in `workbench-and-lifecycle.md`.
 
-### 4. Explorer items in the tab menu ✳️ not started
+### 5. Explorer items in the tab menu ✳️ not started
 
 The explorer adds Copy Path, Copy Relative Path, Reveal in Explorer, and
 Reveal in Finder to editor tabs, acting on the captured tab's document.
@@ -210,7 +229,7 @@ Reveal in Finder to editor tabs, acting on the captured tab's document.
   an unfocused tab's menu, and an untitled document returns unavailable.
 - **Review gate:** manual check, and decide the deferred `content` question.
 
-### 5. Menu-bar contributions ✳️ not started
+### 6. Menu-bar contributions ✳️ not started
 
 Contributed items join the native menu bar under `menubar.*`.
 
