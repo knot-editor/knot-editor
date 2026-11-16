@@ -1,6 +1,6 @@
 # D045 — General terminal settings
 
-Status: 🚧 in progress, checkpoint 1. Implements [D045](../roadmap.md) (Next up #1).
+Status: 🚧 in progress, checkpoint 2 at its review gate (checkpoint 1 ✅). Implements [D045](../roadmap.md) (Next up #1).
 
 ## Goal
 
@@ -136,3 +136,17 @@ runs a program which sets its own cursor, e.g. vim insert mode), confirming
 the default shows and the program still overrides it. Remove the plan and the
 roadmap 🚧 once the durable behavior is covered here and the settings table
 owns the keys.
+
+Landed ✅ (awaiting the gate pass):
+
+- `Terminal::set_default_cursor_style` in `crates/knot-terminal/src/terminal.rs`
+  passes the setting through `GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_STYLE` at
+  construction; the program's escape still overrides it.
+- `terminal_cursor_style` reader in `src/app/settings.rs` (unknown text means
+  `"block"`, mirroring `editor_line_numbers`); `TerminalSession::start` applies
+  it, so new sessions and restarts pick it up.
+- The `terminal.cursorStyle` row in `docs/settings.md`; `knot.d.ts` already
+  declared the key in checkpoint 1.
+- Engine test (default renders, `\x1b[4 q` wins) and session test (setting
+  flows into a new session, program wins, unknown falls back). `just check`
+  passes; `Try:` commands are registered in the personal `post-init.js`.
