@@ -1,6 +1,6 @@
 # D193: Chrome refinements
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 next. Roadmap item [D193](../roadmap.md).
+Status: 🚧 checkpoint 2 awaiting review; checkpoint 3 next. Roadmap item [D193](../roadmap.md).
 Builds on the Islands look ([decision](../decisions/platform.md#product-window-chrome-and-failure-notices),
 [workbench](../architecture/workbench-and-lifecycle.md), [themes](../architecture/semantic-ui.md#themes-and-color-keys))
 and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
@@ -67,7 +67,15 @@ Done: `card.focusedBorder` outlines the focused pane (see
 [themes](../architecture/semantic-ui.md#themes-and-color-keys)), and
 `chrome.cardBorder` defaults to 1 so every card has a thin border.
 
-### 2. Picker tabs (native and API)
+### 2. Picker tabs (native and API) ✅ awaiting review
+
+Done: tab strip, filtering, `onQuery(query, tab)`, and rebindable
+`picker.next-tab` / `picker.previous-tab` in a new native `picker` view kind.
+Keys typed in a picker with tabs now go through the router, where only
+bindings scoped to `picker` apply (decided with the user, over native-only
+Tab handling). The fake test host gained `selectTab`. Docs: [semantic
+UI](../architecture/semantic-ui.md), [commands](../architecture/commands.md#picker-tabs),
+[extension guide](../extension-api.md).
 
 - Deliverable: tab state, strip rendering, filtering, key commands, protocol
   and `knot.d.ts` changes, `onQuery` tab argument, extension guide.
