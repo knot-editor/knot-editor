@@ -527,7 +527,7 @@ impl FileSystemProvider for LocalFileSystemProvider {
                 let watcher = match started {
                     Ok(watcher) => Some(watcher),
                     Err(error) => {
-                        eprintln!("knot: cannot watch {uri}: {error}");
+                        tracing::warn!(target: "knot::files", "cannot watch {uri}: {error}");
                         None
                     }
                 };

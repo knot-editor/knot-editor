@@ -347,7 +347,7 @@ impl RuntimeCapsule {
         if subscription > MAX_JS_INTEGER
             || matches!(&notification, ListenerNotification::Buffer(change) if change.buffer.value() > MAX_JS_INTEGER)
         {
-            eprintln!("[knot] listener identity cannot be represented exactly");
+            tracing::warn!(target: "knot::extensions", "listener identity cannot be represented exactly");
             return TurnOutcome::Completed;
         }
         if self.status.load(Ordering::Acquire) != ACTIVE {
@@ -401,7 +401,7 @@ impl RuntimeCapsule {
             let error = self.execution_error(try_catch, source);
             *self.local_state.current_root.lock().unwrap() = None;
             if !error.is_fatal() {
-                eprintln!("[knot] {label} failed: {error}");
+                tracing::error!(target: "knot::extensions", "{label} failed: {error}");
                 try_catch.reset();
                 self.reject_pending_for_root(try_catch, root);
             }
@@ -1150,7 +1150,7 @@ impl RuntimeCapsule {
                     }
                     ActiveCompletion::Detached(label) => {
                         if let Some(error) = rejection {
-                            eprintln!("[knot] {label} failed: {error}");
+                            tracing::error!(target: "knot::extensions", "{label} failed: {error}");
                         }
                     }
                 }
@@ -1217,7 +1217,7 @@ impl RuntimeCapsule {
                         }));
                     }
                     ActiveCompletion::Detached(label) => {
-                        eprintln!("[knot] {label} failed: {error}");
+                        tracing::error!(target: "knot::extensions", "{label} failed: {error}");
                     }
                 }
                 drop(active);

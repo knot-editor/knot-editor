@@ -151,7 +151,20 @@ pub fn host_request_callback<'s, 'i>(
     result.set(resolver.get_promise(scope).into());
 }
 
-/// Writes `console` output to the process's standard error.
+/// Record one `console` call at the level that matches its method; `log` is
+/// `info`. The target is fixed because a record's target is static, so the
+/// package travels as a field.
+fn console(package: &str, method: &str, message: &str) {
+    let text = format!("console.{method}: {message}");
+    match method {
+        "debug" => tracing::debug!(target: "knot::extension", package, "{text}"),
+        "warn" => tracing::warn!(target: "knot::extension", package, "{text}"),
+        "error" => tracing::error!(target: "knot::extension", package, "{text}"),
+        _ => tracing::info!(target: "knot::extension", package, "{text}"),
+    }
+}
+
+/// Writes `console` output to the application log.
 pub(super) fn log_callback<'s, 'i>(
     scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
     arguments: v8::FunctionCallbackArguments<'s>,
@@ -161,11 +174,10 @@ pub(super) fn log_callback<'s, 'i>(
         let name = scope
             .get_slot::<Arc<RuntimeLocalState>>()
             .and_then(|state| state.name.clone());
-        eprintln!(
-            "[knot] {} console.{}: {}",
+        console(
             name.as_deref().unwrap_or("extension"),
-            arguments.get(0).to_rust_string_lossy(scope),
-            arguments.get(1).to_rust_string_lossy(scope)
+            &arguments.get(0).to_rust_string_lossy(scope),
+            &arguments.get(1).to_rust_string_lossy(scope),
         );
     }
 }
@@ -176,8 +188,9 @@ pub(super) fn cancellation_listener_failure_callback<'s, 'i>(
     _result: v8::ReturnValue,
 ) {
     if arguments.get(0).is_string() {
-        eprintln!(
-            "[knot] cancellation listener failed: {}",
+        tracing::error!(
+            target: "knot::extensions",
+            "cancellation listener failed: {}",
             arguments.get(0).to_rust_string_lossy(scope)
         );
     }

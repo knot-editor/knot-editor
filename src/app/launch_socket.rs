@@ -71,7 +71,7 @@ fn decode(message: &str) -> LaunchBatch {
             .filter_map(|line| match OpenRequest::from_url(line) {
                 Ok(request) => Some(request),
                 Err(error) => {
-                    eprintln!("[knot] cannot open {line}: {error}");
+                    tracing::warn!(target: "knot::launch", "cannot open {line}: {error}");
                     None
                 }
             })
@@ -94,7 +94,9 @@ pub(crate) fn serve(listener: Listener, deliver: impl Fn(LaunchBatch) + Send + '
         for connection in listener.incoming().filter_map(Result::ok) {
             match receive(connection) {
                 Ok(batch) => deliver(batch),
-                Err(error) => eprintln!("[knot] launch connection failed: {error}"),
+                Err(error) => {
+                    tracing::warn!(target: "knot::launch", "launch connection failed: {error}")
+                }
             }
         }
     });

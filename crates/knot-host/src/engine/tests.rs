@@ -507,6 +507,52 @@ fn console_methods_accept_any_value_without_failing() {
 }
 
 #[test]
+fn console_methods_are_logged_with_level_target_and_package() {
+    #[derive(Clone, Default)]
+    struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+    impl std::io::Write for Captured {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let captured = Captured::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer({
+            let captured = captured.clone();
+            move || captured.clone()
+        })
+        .with_ansi(false)
+        .with_max_level(tracing::Level::DEBUG)
+        .finish();
+    tracing::subscriber::with_default(subscriber, || {
+        let capsule = RuntimeCapsule::new(key(202), IsolateConfig::named("@scope/pkg")).unwrap();
+        capsule
+            .execute(
+                "levels.js",
+                r#"console.warn("careful"); console.log("fine"); console.error("bad");"#,
+            )
+            .unwrap();
+    });
+    let text = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+    assert!(
+        text.contains(r#"WARN knot::extension: console.warn: careful package="@scope/pkg""#),
+        "{text}"
+    );
+    assert!(
+        text.contains("INFO knot::extension: console.log: fine"),
+        "{text}"
+    );
+    assert!(
+        text.contains("ERROR knot::extension: console.error: bad"),
+        "{text}"
+    );
+}
+
+#[test]
 fn native_dispatch_callbacks_are_not_available_to_extension_code() {
     let capsule = RuntimeCapsule::new(key(201), IsolateConfig::default()).unwrap();
     let report = capsule

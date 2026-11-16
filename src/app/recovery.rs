@@ -1185,7 +1185,7 @@ pub(crate) fn restore_at_startup(
                     recovery.restored.push(document);
                 }
                 Err(error) => {
-                    eprintln!("[knot] recovery: {error}");
+                    tracing::error!(target: "knot::recovery", "restore failed: {error}");
                     recovery.remaining += 1;
                 }
             }

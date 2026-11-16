@@ -99,7 +99,8 @@ where
         .with_target(true)
 }
 
-/// A subscriber that writes to `writer`, for tests and for `install`.
+/// A subscriber that writes to `writer`.
+#[cfg(test)]
 fn subscriber<W>(writer: W, directive: Option<&str>) -> impl Subscriber
 where
     W: for<'writer> MakeWriter<'writer> + 'static,

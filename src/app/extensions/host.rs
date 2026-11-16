@@ -890,9 +890,10 @@ impl ProductExtensionHost {
                     |entry| {
                         let name = entry.name.as_deref().unwrap_or("<invalid package>");
                         match &entry.result {
-                            LoadResult::Loaded => eprintln!("[knot] extension loaded: {name}"),
-                            LoadResult::Failed(cause) => eprintln!(
-                                "[knot] extension failed: {name} ({}): {cause}",
+                            LoadResult::Loaded => tracing::info!(target: "knot::extensions", "extension loaded: {name}"),
+                            LoadResult::Failed(cause) => tracing::error!(
+                                target: "knot::extensions",
+                                "extension failed: {name} ({}): {cause}",
                                 entry.directory.display()
                             ),
                         }
@@ -1029,13 +1030,15 @@ impl ProductExtensionHost {
             };
             match &entry.result {
                 LoadResult::Loaded => {
-                    eprintln!(
-                        "[knot] extension restarted: {}",
+                    tracing::info!(
+                        target: "knot::extensions",
+                        "extension restarted: {}",
                         entry.name.as_deref().unwrap_or_default()
                     )
                 }
-                LoadResult::Failed(cause) => eprintln!(
-                    "[knot] extension restart failed: {}: {cause}",
+                LoadResult::Failed(cause) => tracing::error!(
+                    target: "knot::extensions",
+                    "extension restart failed: {}: {cause}",
                     entry.name.as_deref().unwrap_or_default()
                 ),
             }
@@ -1068,7 +1071,7 @@ impl ProductExtensionHost {
                 }],
             },
         });
-        eprintln!("[knot] cannot locate installed extensions: {cause}");
+        tracing::error!(target: "knot::extensions", "cannot locate installed extensions: {cause}");
         cx.notify();
     }
 
@@ -1337,13 +1340,13 @@ impl ProductExtensionHost {
                         if let Err(error) = execution.await {
                             let _ = pool.unload(key);
                             let _ = this.update(cx, |host, cx| host.remove_lifecycle(key, cx));
-                            eprintln!("[knot] fixture {name:?} extension {index} failed: {error}");
+                            tracing::error!(target: "knot::extensions", "fixture {name:?} extension {index} failed: {error}");
                         }
                     })
                     .detach();
                 }
                 Err(error) => {
-                    eprintln!("[knot] cannot start fixture {name:?} extension {index}: {error}");
+                    tracing::error!(target: "knot::extensions", "cannot start fixture {name:?} extension {index}: {error}");
                 }
             }
         }
@@ -2595,7 +2598,7 @@ impl ProductExtensionHost {
     }
 
     pub(crate) fn report_setting_warning(&mut self, warning: String, cx: &mut Context<Self>) {
-        eprintln!("[knot] {warning}");
+        tracing::warn!(target: "knot::config", "{warning}");
         self.setting_warnings.push(warning);
         cx.notify();
     }

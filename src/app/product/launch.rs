@@ -450,7 +450,11 @@ pub(in crate::app) fn finish_product_startup(
         }
         Err(diagnostic) => {
             cx.global::<ApplicationLaunchGate>().0.borrow_mut().fail();
-            eprintln!("[knot] {}", diagnostic.clipboard_text().replace('\n', ": "));
+            tracing::error!(
+                target: "knot::config",
+                "{}",
+                diagnostic.clipboard_text().replace('\n', ": ")
+            );
             crate::app::personal_config_error::open(diagnostic, cx);
         }
     }
@@ -570,7 +574,7 @@ pub(crate) fn run(
             .filter_map(|url| match OpenRequest::from_url(url) {
                 Ok(request) => Some(request),
                 Err(error) => {
-                    eprintln!("[knot] cannot open {url}: {error}");
+                    tracing::warn!(target: "knot::launch", "cannot open {url}: {error}");
                     None
                 }
             })
