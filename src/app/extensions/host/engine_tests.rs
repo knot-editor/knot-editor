@@ -4176,7 +4176,7 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (typeof globalThis.__knotNativeBindings !== "undefined") {
                 throw new Error("private native bindings are exposed");
             }
-            if (Object.keys(knot).sort().join(",") !== "commands,completion,documents,editor,files,history,homeUri,icons,keymaps,languages,platform,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
+            if (Object.keys(knot).sort().join(",") !== "commands,completion,documents,editor,files,history,homeUri,icons,keymaps,languages,menus,platform,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
                 throw new Error("unexpected public exports");
             }
             if (!Object.isFrozen(knot.editor) || !Object.isFrozen(knot.commands) || !Object.isFrozen(knot.workbench) || !Object.isFrozen(knot.storage)) {
@@ -4199,6 +4199,9 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             }
             if (!Object.isFrozen(knot.icons) || Object.keys(knot.icons).sort().join(",") !== "associate,define,listPacks,override,registerPack") {
                 throw new Error("icons facade is incomplete");
+            }
+            if (!Object.isFrozen(knot.menus) || Object.keys(knot.menus).join(",") !== "add") {
+                throw new Error("menus facade is incomplete");
             }
             if (!Object.isFrozen(knot.keymaps) || Object.keys(knot.keymaps).sort().join(",") !== "bind,bindText,getPreset,listPresets,registerPreset,unbind,unbindText") {
                 throw new Error("keymaps facade is incomplete");
