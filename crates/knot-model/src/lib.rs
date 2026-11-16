@@ -28,6 +28,7 @@ pub mod keys;
 pub mod languages;
 pub mod launch;
 pub mod matching;
+pub mod menus;
 pub mod observation;
 pub mod open;
 pub mod reload;

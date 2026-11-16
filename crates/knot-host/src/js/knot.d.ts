@@ -1232,7 +1232,7 @@ declare module "knot" {
     | "DuplicateSetting" | "SettingTypeMismatch"
     | "UnknownCapture" | "DuplicateColor" | "ThemeRegistrationNotFound"
     | "DuplicateIcon" | "IconRegistrationNotFound"
-    | "StatusItemRegistrationNotFound"
+    | "StatusItemRegistrationNotFound" | "MenuItemRegistrationNotFound"
     | "BarNotFound"
     | "KeymapPresetRegistrationNotFound";
   /**
@@ -2233,6 +2233,41 @@ declare module "knot" {
     update(options: StatusItemOptions): Promise<void>;
     update(options: StatusItemOptions | null, scope: { readonly window: WindowTarget }): Promise<void>;
   }
+  /** Where `menus.add` places an item. `tab` is the right-click menu of a tab
+   * header and `content` the one inside an editor or terminal; the `menubar`
+   * locations are the application menu bar's menus. */
+  export type MenuLocation =
+    | "tab" | "content"
+    | "menubar.file" | "menubar.edit" | "menubar.view" | "menubar.go";
+  /** One command in a menu. */
+  export interface MenuItemOptions {
+    /** The command to run, with its menu's target: the clicked tab or
+     * surface, not the focused one. An unavailable command does nothing. */
+    readonly command: string;
+    /** The label. Defaults to the command's title. */
+    readonly title?: string;
+    readonly arguments?: JsonValue;
+    /** Items of a group sit together, groups in alphabetical order, with a
+     * separator between them (`"1_close"`, `"2_split"`). Ungrouped items come
+     * last. */
+    readonly group?: string;
+    /** Within a group, lower values come first, then titles. Defaults to 0. */
+    readonly order?: number;
+    /** Show the item only on surfaces of this view kind: `"editor"`,
+     * `"terminal"`, or a contributed view ID. Not for menu bar locations. */
+    readonly view?: string;
+    /** Show the item only where the surface has this editor key context;
+     * needs `view`. Not for menu bar locations. */
+    readonly context?: string;
+  }
+  export const menus: Readonly<{
+    /** Adds a command to a menu until the returned handle or the owning
+     * lifecycle is disposed.
+     * @throws TypeError for an unknown location, a bad item, or a view or
+     * context on a menu bar location. */
+    add(location: MenuLocation, item: MenuItemOptions): Promise<Disposable>;
+  }>;
+
   /** Native completion request; use its explicit buffer without borrowing focus. */
   export interface CompletionContext {
     readonly buffer: Buffer;

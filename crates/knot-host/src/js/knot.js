@@ -26,6 +26,7 @@ import {
   showConfirmation,
   showMessage,
   registerStatusItem,
+  addMenuItem,
   matchCandidates,
   registerCompletionProvider,
   registerView,
@@ -84,6 +85,7 @@ export const workbench = Object.freeze({
   registerStatusItem,
 });
 
+export const menus = Object.freeze({ add: addMenuItem });
 export const completion = Object.freeze({ match: matchCandidates });
 export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, setLanguage: setDocumentLanguage });
 export const languages = Object.freeze({ register: registerLanguage, associate: associateLanguage, get: getLanguage, list: listLanguages, grammars: listGrammars });

@@ -1068,6 +1068,33 @@ export async function registerStatusItem(id, options) {
   });
 }
 
+const MENU_LOCATIONS = ["tab", "content", "menubar.file", "menubar.edit", "menubar.view", "menubar.go"];
+export async function addMenuItem(location, item) {
+  if (!MENU_LOCATIONS.includes(location)) throw new TypeError(`unknown menu location: ${String(location)}`);
+  const value = record(item, "menu item must be an object");
+  const command = string(value.command, "menu item command must be text");
+  if (command.length === 0) throw new TypeError("menu item command must be nonempty");
+  const order = value.order ?? 0;
+  if (!Number.isSafeInteger(order)) throw new TypeError("menu item order must be an integer");
+  const view = optionalText(value.view);
+  const context = optionalText(value.context);
+  if (location.startsWith("menubar.") && (view != null || context != null)) {
+    throw new TypeError("menu bar items take no view or context");
+  }
+  if (context != null && view == null) throw new TypeError("a menu item context needs a view");
+  const registration = await request("addMenuItem", location, {
+    command,
+    title: optionalText(value.title),
+    arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
+    group: optionalText(value.group),
+    order,
+    view,
+    context,
+  });
+  const owned = ownership(() => {}, () => request("removeMenuItem", registration));
+  return Object.freeze({ dispose: () => owned.dispose() });
+}
+
 export async function listCommands(view) {
   const target = view === undefined ? undefined : { target: view };
   return Object.freeze((await request("listCommands", destinationAuthority(target))).map((command) => Object.freeze(command)));

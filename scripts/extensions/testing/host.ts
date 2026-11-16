@@ -185,8 +185,11 @@ function emptyState() {
     bindings: [] as FakeBinding[],
     colors: new Map<string, Knot.ColorDefinition>(),
     statusItems: [] as FakeStatusItem[],
+    menuItems: [] as FakeMenuItem[],
   };
 }
+
+type FakeMenuItem = { location: Knot.MenuLocation; item: Knot.MenuItemOptions };
 
 type FakeStatusItem = {
   id: string;
@@ -1034,6 +1037,11 @@ export function messages(): string[] {
  */
 export function statusItems(target: Knot.WindowTarget): (Knot.StatusItemOptions & { id: string })[] {
   return barItems(target, "statusBar");
+}
+
+/** The items added to a menu location, in registration order. */
+export function menuItems(location: Knot.MenuLocation): Knot.MenuItemOptions[] {
+  return state.menuItems.filter((entry) => entry.location === location).map((entry) => entry.item);
 }
 
 /** The items a window's toolbar shows, chosen like `statusItems`. */
@@ -2275,6 +2283,26 @@ export const api: KnotApi = {
   },
   terminals: {
     open: notFaked("terminals.open"),
+  },
+  menus: {
+    add: async (location, item) => {
+      if (!["tab", "content", "menubar.file", "menubar.edit", "menubar.view", "menubar.go"].includes(location)) {
+        throw new TypeError(`unknown menu location: ${String(location)}`);
+      }
+      if (location.startsWith("menubar.") && (item.view !== undefined || item.context !== undefined)) {
+        throw new TypeError("menu bar items take no view or context");
+      }
+      if (item.context !== undefined && item.view === undefined) {
+        throw new TypeError("a menu item context needs a view");
+      }
+      const entry: FakeMenuItem = { location, item: { ...item } };
+      state.menuItems.push(entry);
+      return {
+        dispose: async () => {
+          state.menuItems = state.menuItems.filter((candidate) => candidate !== entry);
+        },
+      };
+    },
   },
   storage: {
     read: async (key) => {

@@ -16,6 +16,7 @@ export const {
   icons,
   keymaps,
   languages,
+  menus,
   platform,
   recovery,
   settings,

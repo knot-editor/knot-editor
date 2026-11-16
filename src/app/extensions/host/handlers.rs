@@ -5584,6 +5584,93 @@ async fn unregister_status_item(
     })?
 }
 
+use crate::app::menus::{ApplicationMenus, MenuItem, MenuLocation, MenuOwner};
+
+/// Failures of a menu item operation.
+#[derive(Debug, HostError)]
+pub(crate) enum MenuItemError {
+    #[error(transparent)]
+    Access(AccessError),
+    #[error(
+        code = "MenuItemRegistrationNotFound",
+        message = "MenuItemRegistrationNotFound"
+    )]
+    RegistrationNotFound,
+}
+
+impl From<AccessError> for MenuItemError {
+    fn from(error: AccessError) -> Self {
+        Self::Access(error)
+    }
+}
+
+fn menu_owner(context: &HostContext) -> MenuOwner {
+    MenuOwner {
+        extension: context.request.extension,
+        lifecycle: context.request.lifecycle,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MenuItemRegistration {
+    location: MenuLocation,
+    item: MenuItem,
+}
+
+impl HostArguments for MenuItemRegistration {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let location = MenuLocation::parse(&reader.text(2, "menu location must be text")?)
+            .ok_or(DecodeError::Type("unknown menu location"))?;
+        let item: MenuItem = serde_json::from_value(setting_value(reader.command_arguments(3)?))
+            .map_err(|_| DecodeError::Type("invalid menu item"))?;
+        item.validate(location)
+            .map_err(|_| DecodeError::Type("invalid menu item"))?;
+        Ok(Self { location, item })
+    }
+}
+
+#[host_operation("addMenuItem")]
+async fn add_menu_item(
+    context: HostContext,
+    arguments: MenuItemRegistration,
+) -> Result<u64, MenuItemError> {
+    let owner = menu_owner(&context);
+    Ok(context.foreground(|_, cx| {
+        cx.default_global::<ApplicationMenus>()
+            .0
+            .add(owner, arguments.location, arguments.item)
+            .expect("the arguments were validated when decoded")
+    })?)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MenuItemRegistrationId(u64);
+
+impl HostArguments for MenuItemRegistrationId {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self(reader.integer(2)?))
+    }
+}
+
+#[host_operation("removeMenuItem")]
+async fn remove_menu_item(
+    context: HostContext,
+    arguments: MenuItemRegistrationId,
+) -> Result<(), MenuItemError> {
+    let owner = menu_owner(&context);
+    context.foreground(|_, cx| {
+        if cx
+            .default_global::<ApplicationMenus>()
+            .0
+            .remove(owner, arguments.0)
+        {
+            Ok(())
+        } else {
+            Err(MenuItemError::RegistrationNotFound)
+        }
+    })?
+}
+
 #[host_operation("listThemes")]
 async fn list_themes(context: HostContext, _: ()) -> Result<Vec<ThemeInfo>, AccessError> {
     context.foreground(|_, cx| {
