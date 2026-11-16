@@ -113,56 +113,14 @@ Done and approved. The bundled package `extensions/@knot/chrome/` holds the
 status-bar items and takes the menu contents of later checkpoints. See the
 [status bar](../architecture/workbench-and-lifecycle.md#status-bar).
 
-### 3. Menu registry, `menus.add`, and the tab context menu ✅ awaiting review
+### 3. Menu registry, `menus.add`, and the tab context menu ✅
 
-Add the registry and the extension API, the clicked-tab command target,
-`workbench.close-tabs-to-right`, the tab context menu, and the tab items in
-`@knot/chrome`.
-
-- **Implementation context:**
-  - Model: `crates/knot-model/src/menus.rs` (declared in `lib.rs`), modeled on
-    `status_bar.rs`. It holds locations, items with lifecycle owners, scope
-    matching through the key router's scope rule
-    (`crates/knot-model/src/commands/key_router.rs`), and ordering into
-    groups.
-  - Application: an `ApplicationMenus` global in `src/app/menus.rs`.
-    Lifecycle teardown removes an owner's items alongside the other
-    registries (see how `src/app/status_bar.rs` is cleaned).
-  - Host: a `menus.add` handler annotated in
-    `src/app/extensions/host/handlers.rs`, the bootstrap wrapper in
-    `crates/knot-host/src/js/bootstrap.js`, types in
-    `crates/knot-host/src/js/knot.d.ts`, and `docs/schemas/knot.schema.json`
-    if it covers the API.
-  - Target: a `capture_tab_target(pane, tab)` beside
-    `capture_command_target` in `src/app/product.rs`, dispatched through
-    `dispatch_command`.
-  - Tab menu: a right-click handler on the tab header in
-    `src/app/product/render.rs`, next to the middle-click close, opening the
-    shared helper with the registry's `tab` items for the tab's view kind
-    (`target_view_kind`).
-  - Command: `workbench.close-tabs-to-right` in `src/app/product/commands.rs`,
-    with a new `ProtectedCloseKind` resolved in
-    `crates/knot-model/src/workbench/closure.rs`.
-  - Package: the tab items go in a `menus.ts` module of
-    `extensions/@knot/chrome/src/`, registered from its `extension.ts`.
-- **Validation:**
-  - Model tests: ordering, separators, scope matching, lifecycle removal,
-    unknown-location and menu-bar-scope rejection.
-  - Product tests in a new `src/app/product/tests/context_menus.rs`:
-    right-clicking an unfocused tab runs Close Others or Split for that tab
-    while focus stays put; terminal and tool tabs get only the items scoped
-    to them; protected closure prompts for Close to the Right.
-  - End-to-end test in `crates/knot-ext-workbench/tests/workbench/chrome.rs`
-    through the real editor.
-- **Review gate:** the user checks tab menus through `Try:` commands in
-  `post-init.js` (Try: Add Tab Menu Items, Try: Remove Tab Menu Items) that add
-  items from personal config. ✅ `menus.add` is documented in
-  `docs/extension-api.md`, and the menu ownership in
-  `docs/architecture/commands.md` and `workbench-and-lifecycle.md`.
-- **Notes:** an open menu now matches only global keys (`key_scope` returns no
-  view under `Focus::Popup`); before, editor-scoped keys such as Down and
-  Enter reached the editor behind the menu. Close All is
-  `workbench.close-pane` titled in the menu.
+Done and approved. Items live in `knot_model::menus` and the
+`ApplicationMenus` global; `workbench.close-tabs-to-right` and the tab menu
+use a target captured for the clicked tab. An open menu matches only global
+keys. See [context menus](../architecture/commands.md#context-menus), the
+[status bar and tab menu](../architecture/workbench-and-lifecycle.md#status-bar),
+and the [extension guide](../extension-api.md#add-menu-items).
 
 ### 4. Editor and terminal content menus ✳️ not started
 
