@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
+import { commands } from "knot";
 import * as host from "knot/testing";
-import { COMMAND, SEARCH_ICON, start } from "../src/extension.js";
+import { COMMAND, SEARCH_EVERYWHERE_COMMAND, SEARCH_ICON, start } from "../src/extension.js";
+import { ACTION_ICON } from "../src/searchEverywhere.js";
 
 const ROOT = "file:///work/app";
 
@@ -76,5 +78,51 @@ test("a toolbar search button runs Go to File", async () => {
   assert.deepEqual(
     host.toolbarItems(window!).map((item) => [item.id, item.text, item.icon, item.side, item.command?.name]),
     [["go-to-file", "", SEARCH_ICON, "right", COMMAND]],
+  );
+});
+
+test("Search Everywhere asks for each tab and lists files and actions", async () => {
+  await commands.register("demo.save", async () => {}, {
+    title: "Save Everything",
+    description: "Save all",
+  });
+  host.selectTab("files", "actions");
+  host.answer("showPicker", { kind: "dismissed" });
+  await host.run(SEARCH_EVERYWHERE_COMMAND);
+
+  const [shown] = host.prompts();
+  const options = shown?.options as { title: string; tabs: { id: string }[] };
+  assert.deepEqual(options.tabs.map((tab) => tab.id), ["all", "files", "actions"]);
+  const [all, files, actions] = host.pickerRows();
+  assert.equal(all?.length, 3, "an empty All tab lists files only");
+  assert.deepEqual(files?.map((row) => row.label), all?.map((row) => row.label));
+  assert.ok(actions?.some((row) => row.id === "command:demo.save" && row.label === "Save Everything"));
+  assert.ok(actions?.every((row) => row.id.startsWith("command:")));
+});
+
+test("typing lists matching files, then actions, in the All tab", async () => {
+  await commands.register("demo.main", async () => {}, { title: "Main Action" });
+  host.query("main");
+  host.answer("showPicker", { kind: "dismissed" });
+  await host.run(SEARCH_EVERYWHERE_COMMAND);
+
+  const typed = host.pickerRows()[1];
+  assert.deepEqual(typed?.map((row) => row.label), ["main.ts", "Main Action"]);
+  assert.deepEqual(typed?.[1]?.labelMatches, [[0, 4]]);
+  assert.equal(typed?.[1]?.icon, ACTION_ICON);
+});
+
+test("choosing an action runs it and choosing a file opens it", async () => {
+  let ran = 0;
+  await commands.register("demo.run", async () => { ran += 1; }, { title: "Run Me" });
+  host.answer("showPicker", { kind: "selected", id: "command:demo.run" });
+  await host.run(SEARCH_EVERYWHERE_COMMAND);
+  assert.equal(ran, 1);
+
+  host.answer("showPicker", { kind: "selected", id: `${ROOT}/README.md` });
+  await host.run(SEARCH_EVERYWHERE_COMMAND);
+  assert.deepEqual(
+    host.documentIds().map((id) => host.document(id).resourceUri),
+    [`${ROOT}/README.md`],
   );
 });
