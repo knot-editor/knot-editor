@@ -143,9 +143,8 @@ fn a_menu_item_acts_on_the_clicked_tab_and_leaves_focus_and_the_active_tab(
     let (window, native_window, [_, b, _, d]) = fixture(cx);
     add("workbench.toggle-pin-tab", "1_pin", None, cx);
     right_click_tab(&window, native_window, 1, cx);
-    assert_eq!(
+    assert!(
         cx.read(|cx| window.read(cx).focus == Focus::Popup),
-        true,
         "an open menu has the popup focus layer"
     );
     press(&window, native_window, "down enter", cx);
