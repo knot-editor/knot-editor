@@ -581,6 +581,33 @@ pub(crate) async fn about(context: CommandContext, (): ()) -> Result<(), Command
         .await
 }
 
+#[command("app.open-log", title = "Knot: Open Log", description = "Open the application log file.", id = OPEN_LOG_COMMAND, participant = Workbench)]
+pub(crate) async fn open_log(
+    context: CommandContext,
+    (): (),
+) -> Result<CommandOutcome, CommandOutcome> {
+    context
+        .pending(super::application_log::dispatch_open_log)
+        .await
+}
+
+#[command("app.reveal-log-folder", title = "Knot: Reveal Log Folder", description = "Show the application log folder in the file manager.", id = REVEAL_LOG_FOLDER_COMMAND, participant = Workbench)]
+pub(crate) async fn reveal_log_folder(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    let directory =
+        crate::app::logging::log_directory().ok_or_else(|| CommandOutcome::HandlerFailure {
+            message: "cannot determine the log directory".into(),
+        })?;
+    context
+        .foreground(move |_, cx| {
+            cx.reveal_path(&directory);
+            Ok(())
+        })
+        .await
+}
+
 #[command("shell.install-command", title = "Shell Command: Install 'knot' command in PATH", description = "Put the knot command on the shell PATH.", id = INSTALL_SHELL_COMMAND, participant = Workbench)]
 pub(crate) async fn install_shell_command(
     context: CommandContext,

@@ -29,8 +29,16 @@ const FILE_COUNT: usize = 10;
 /// Keeps the file writer's thread alive until it is flushed.
 static GUARD: Mutex<Option<WorkerGuard>> = Mutex::new(None);
 
+/// Makes `log_directory` answer a test directory.
+#[cfg(test)]
+pub(crate) static TEST_DIRECTORY: Mutex<Option<PathBuf>> = Mutex::new(None);
+
 /// The directory that holds the log files.
 pub(crate) fn log_directory() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(directory) = TEST_DIRECTORY.lock().unwrap().clone() {
+        return Some(directory);
+    }
     #[cfg(target_os = "macos")]
     {
         directories::BaseDirs::new().map(|dirs| dirs.home_dir().join("Library/Logs/Knot"))

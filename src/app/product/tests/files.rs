@@ -623,3 +623,46 @@ await commands.register("files.delete", async () => {
     }
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }
+
+#[gpui::test]
+fn open_log_opens_the_log_file_as_a_document(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(
+        crate::app::logging::log_file(directory.path()),
+        "WARN knot::config: font missing\n",
+    )
+    .unwrap();
+    *crate::app::logging::TEST_DIRECTORY.lock().unwrap() = Some(directory.path().to_path_buf());
+    let mut filesystems = FileSystemProviderRegistry::default();
+    filesystems
+        .register(
+            "file",
+            Arc::new(
+                knot_model::filesystem::LocalFileSystemProvider::unrestricted_with_scratch_trash(),
+            ),
+        )
+        .unwrap();
+    cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
+    let (window, native_window) = super::operations::empty_product_window(&documents, cx);
+    let execution = dispatch_product_command(
+        &window,
+        native_window,
+        super::super::commands::OPEN_LOG_COMMAND,
+        cx,
+    );
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    *crate::app::logging::TEST_DIRECTORY.lock().unwrap() = None;
+    cx.run_until_parked();
+    let texts = cx.read(|cx| {
+        documents
+            .read(cx)
+            .documents()
+            .map(|document| document.model().read(cx).text())
+            .collect::<Vec<_>>()
+    });
+    assert!(
+        texts.contains(&"WARN knot::config: font missing\n".to_string()),
+        "{texts:?}"
+    );
+}

@@ -18,6 +18,7 @@ use std::{
 use gpui::{prelude::FluentBuilder, *};
 
 mod about;
+mod application_log;
 mod closure;
 pub(super) mod commands;
 mod document_watch;
