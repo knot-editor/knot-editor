@@ -1,6 +1,6 @@
 # D193: Chrome refinements
 
-Status: 🚧 checkpoint 1 built, awaiting review. Roadmap item [D193](../roadmap.md).
+Status: 🚧 checkpoint 1 done; checkpoint 2 next. Roadmap item [D193](../roadmap.md).
 Builds on the Islands look ([decision](../decisions/platform.md#product-window-chrome-and-failure-notices),
 [workbench](../architecture/workbench-and-lifecycle.md), [themes](../architecture/semantic-ui.md#themes-and-color-keys))
 and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
@@ -61,24 +61,11 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 
 ## Checkpoints
 
-### 1. Focused card emphasis ✅ built, at its review gate
+### 1. Focused card emphasis ✅ approved
 
-- Deliverable: the color key, the Islands border default, painting, docs
-  (themes reference, settings reference if any, decision note), bundled
-  themes updated.
-- **Implementation context:** `crates/knot-model/src/theme.rs` (color key
-  table near line 295, `card_border` default near 357), `src/app/theme.rs`
-  and `src/app/product/render.rs` (`render_workbench`'s `card` closure picks
-  the border; docks and center are rendered there; maximized pane path too),
-  `extensions/@knot/themes/` (both Islands themes), `src/app/workbench.rs`
-  (focused pane / area lookup). Mirror how `TAB_ACTIVE_*` keys are resolved.
-- Validation: model test for key resolution and defaults; a window test that
-  the border color follows focus between center and a dock; `just check`.
-- Built: `card.focusedBorder` (default `text.accent`, set by every bundled
-  theme), `chrome.cardBorder` defaulting to 1, `focus_ring` in
-  `render.rs`. Dock and pane geometry tests now account for the border.
-- **Review gate:** `Try: Card focus …` commands in personal `post-init.js`;
-  the user judges the look in both themes.
+Done: `card.focusedBorder` outlines the focused pane (see
+[themes](../architecture/semantic-ui.md#themes-and-color-keys)), and
+`chrome.cardBorder` defaults to 1 so every card has a thin border.
 
 ### 2. Picker tabs (native and API)
 
