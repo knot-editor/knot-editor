@@ -532,15 +532,58 @@ impl TestEditor {
     /// The labels of the tab menu of the focused pane's tab at `index`, by
     /// group.
     pub fn tab_menu(&self, index: usize, cx: &mut TestAppContext) -> Vec<Vec<String>> {
+        self.menu_titles(crate::app::menus::MenuLocation::Tab, Some(index), cx)
+    }
+
+    /// The labels of the content menu of the focused pane's active tab, by
+    /// group.
+    pub fn content_menu(&self, cx: &mut TestAppContext) -> Vec<Vec<String>> {
+        self.menu_titles(crate::app::menus::MenuLocation::Content, None, cx)
+    }
+
+    fn menu_titles(
+        &self,
+        location: crate::app::menus::MenuLocation,
+        index: Option<usize>,
+        cx: &mut TestAppContext,
+    ) -> Vec<Vec<String>> {
         self.window.update(cx, |window, cx| {
             let pane = window.workbench.read(cx).focused_pane().unwrap();
-            let (pane, tab) = (pane.id(), pane.tabs()[index].id());
+            let tab = index.map_or(pane.active_tab_id(), |index| pane.tabs()[index].id());
+            let (pane, tab) = (pane.id(), tab);
             let target = window.capture_tab_target(pane, tab, cx).unwrap();
-            KnotWindow::menu_groups(crate::app::menus::MenuLocation::Tab, &target, cx)
+            KnotWindow::menu_groups(location, &target, cx)
                 .into_iter()
                 .map(|group| group.into_iter().map(|entry| entry.title).collect())
                 .collect()
         })
+    }
+
+    /// Right-click in the focused pane's editor, below its text, and settle.
+    pub fn right_click_content(&self, cx: &mut TestAppContext) {
+        let (native_window, _) = self.native_window.as_ref().expect("a native window");
+        let native_window = *native_window;
+        let id = cx.read(|cx| {
+            self.window
+                .read(cx)
+                .workbench
+                .read(cx)
+                .focused_pane_id()
+                .unwrap()
+                .value()
+        });
+        let selector: &'static str = Box::leak(format!("pane-{id}").into_boxed_str());
+        cx.update_window(native_window, |_, window, _| window.activate_window())
+            .unwrap();
+        cx.refresh().unwrap();
+        let mut window_cx = VisualTestContext::from_window(native_window, cx);
+        let bounds = window_cx
+            .debug_bounds(selector)
+            .expect("the pane is laid out");
+        let at = gpui::point(bounds.center().x, bounds.bottom() - gpui::px(10.));
+        window_cx.simulate_mouse_down(at, MouseButton::Right, Modifiers::default());
+        window_cx.simulate_mouse_up(at, MouseButton::Right, Modifiers::default());
+        self.settle(cx);
     }
 
     /// Right-click the focused pane's tab at `index`, and settle.

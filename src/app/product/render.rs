@@ -298,6 +298,7 @@ impl KnotWindow {
         let documents = Self::documents(cx);
         let in_dock = matches!(area, Area::Dock(_));
         let terminal_active = matches!(pane.active_tab().surface_id(), TabSurfaceId::Terminal(_));
+        let content_menu = !matches!(pane.active_tab().surface_id(), TabSurfaceId::Tool(_));
         // A lone tool shows just its title; terminals come in numbers, so
         // theirs always show which is active.
         let titled_alone = in_dock && pane.tabs().len() == 1 && !terminal_active;
@@ -564,6 +565,17 @@ impl KnotWindow {
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
+                    .when(content_menu, |element| {
+                        // The editor or terminal below leaves the click
+                        // unconsumed when it has a menu to show.
+                        element.on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                                this.open_content_menu(pane_id, event.position, window, cx);
+                                cx.stop_propagation();
+                            }),
+                        )
+                    })
                     .when_some(active_view, |element, view| element.child(view)),
             )
             // Last, so it paints over the tab bar and the content.
@@ -822,7 +834,7 @@ impl Render for KnotWindow {
         let workbench = self.render_workbench(cx);
         let (left_stripe, right_stripe) = self.render_stripes(cx);
         let stripe_menu = self.stripe_menu.as_ref().map(|open| open.element());
-        let tab_menu = self.tab_menu.as_ref().map(|open| open.element());
+        let surface_menu = self.surface_menu.as_ref().map(|open| open.element());
         let entity = cx.entity();
         let command_palette = self
             .command_palette
@@ -891,7 +903,7 @@ impl Render for KnotWindow {
             .children(status_bar)
             .child(self.drag_listener(cx))
             .when_some(stripe_menu, |root, menu| root.child(menu))
-            .when_some(tab_menu, |root, menu| root.child(menu))
+            .when_some(surface_menu, |root, menu| root.child(menu))
             .when_some(transient, |root, transient| {
                 root.child(
                     div()

@@ -1,5 +1,7 @@
-//! The right-click menu of a tab header: the `tab` menu items, run against
-//! the clicked tab rather than the focused one.
+//! The right-click menus of a tab header (`tab` items) and of a surface's
+//! content (`content` items), whose commands run against the clicked tab
+//! rather than the focused one, and the command that opens the focused
+//! surface's menu from the keyboard.
 
 use super::*;
 use crate::app::context_menu::ContextMenu;
@@ -109,10 +111,48 @@ impl KnotWindow {
         native_window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.open_surface_menu(MenuLocation::Tab, pane, tab, position, native_window, cx);
+    }
+
+    /// Open the content menu of the active tab of `pane` at `position`, when
+    /// it shows an editor or a terminal.
+    pub(super) fn open_content_menu(
+        &mut self,
+        pane: PaneId,
+        position: Point<Pixels>,
+        native_window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let tab = self
+            .workbench
+            .read(cx)
+            .pane(pane)
+            .map(|pane| pane.active_tab_id());
+        if let Some(tab) = tab {
+            self.open_surface_menu(
+                MenuLocation::Content,
+                pane,
+                tab,
+                position,
+                native_window,
+                cx,
+            );
+        }
+    }
+
+    fn open_surface_menu(
+        &mut self,
+        location: MenuLocation,
+        pane: PaneId,
+        tab: TabId,
+        position: Point<Pixels>,
+        native_window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(target) = self.capture_tab_target(pane, tab, cx) else {
             return;
         };
-        let groups = Self::menu_groups(MenuLocation::Tab, &target, cx);
+        let groups = Self::menu_groups(location, &target, cx);
         if groups.is_empty() {
             return;
         }
@@ -146,17 +186,60 @@ impl KnotWindow {
                 }
                 menu
             },
-            Self::close_tab_menu,
+            Self::close_surface_menu,
         );
-        self.tab_menu = Some(menu);
+        self.surface_menu = Some(menu);
         self.set_focus(Focus::Popup, cx);
         cx.notify();
     }
 
-    fn close_tab_menu(&mut self, cx: &mut Context<Self>) {
-        if self.tab_menu.take().is_some() {
+    fn close_surface_menu(&mut self, cx: &mut Context<Self>) {
+        if self.surface_menu.take().is_some() {
             self.close_popup_focus(cx);
             cx.notify();
         }
     }
+}
+
+/// `workbench.show-context-menu`: open the menu of the focused surface: a
+/// tree's selected row, or an editor's content menu at the caret.
+#[crate::app::commands::declarations::command("workbench.show-context-menu", title = "Show Context Menu", description = "Show the context menu of the focused tree row or editor.", id = SHOW_CONTEXT_MENU_COMMAND, participant = Workbench)]
+pub(crate) async fn show_context_menu(
+    context: crate::app::commands::declarations::CommandContext,
+    (): (),
+) -> Result<(), knot_protocol::CommandOutcome> {
+    use crate::app::workbench::ExtensionView;
+    use knot_protocol::CommandOutcome;
+    context
+        .foreground(|target, cx| {
+            let tab = target
+                .tab
+                .filter(|_| target.focused)
+                .ok_or(CommandOutcome::Unavailable)?;
+            let window = target
+                .native_window(cx)
+                .ok_or(CommandOutcome::Unavailable)?;
+            let product = target.window.clone();
+            let opened = match target.command_view(cx) {
+                Some(CommandView::Extension(ExtensionView::Tree(tree))) => window
+                    .update(cx, |_, window, cx| {
+                        tree.update(cx, |tree, cx| tree.open_selected_context_menu(window, cx))
+                    })
+                    .map_err(|_| CommandOutcome::InvalidTarget)?,
+                Some(CommandView::Editor(view)) => window
+                    .update(cx, |_, window, cx| {
+                        let position = view.read(cx).caret_menu_position(window, cx);
+                        product
+                            .update(cx, |product, cx| {
+                                product.open_content_menu(tab.pane, position, window, cx);
+                                product.surface_menu.is_some()
+                            })
+                            .unwrap_or(false)
+                    })
+                    .map_err(|_| CommandOutcome::InvalidTarget)?,
+                _ => false,
+            };
+            opened.then_some(()).ok_or(CommandOutcome::Unavailable)
+        })
+        .await
 }

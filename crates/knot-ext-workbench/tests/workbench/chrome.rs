@@ -49,3 +49,30 @@ fn the_tab_menu_closes_and_splits_the_clicked_tab(cx: &mut TestAppContext) {
     editor.press_in_menu("down down down enter", cx);
     wait_until(cx, |cx| editor.tab_titles(cx).len() == 1);
 }
+
+#[gpui::test]
+fn the_editor_menu_offers_the_clipboard_at_the_pointer_and_at_the_caret(cx: &mut TestAppContext) {
+    let product = TestProduct::start(only(&["@knot/chrome"]), cx);
+    let editor = product.windowed_editor("one two", cx);
+    wait_until(cx, |cx| !editor.content_menu(cx).is_empty());
+    assert_eq!(editor.content_menu(cx), [vec!["Cut", "Copy", "Paste"]]);
+
+    // A right-click outside the selection moves the caret to the click, then
+    // Paste (the third item) acts on that editor.
+    editor.select(0, 3, cx);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("!".into()));
+    editor.right_click_content(cx);
+    assert_eq!(editor.caret(cx), 7);
+    editor.press_in_menu("down down down enter", cx);
+    assert_eq!(editor.active_text(cx), "one two!");
+
+    // Shift+F10 opens the menu at the caret, and Cut removes the selection.
+    editor.select(0, 3, cx);
+    editor.press("<s-f10>", cx);
+    editor.press_in_menu("down enter", cx);
+    assert_eq!(editor.active_text(cx), " two!");
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|item| item.text()),
+        Some("one".to_owned())
+    );
+}

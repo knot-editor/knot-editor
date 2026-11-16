@@ -1618,32 +1618,5 @@ impl Render for TreeView {
     }
 }
 
-#[crate::app::commands::declarations::command("tree.show-context-menu", title = "Show Context Menu", description = "Show the actions of the selected tree row.", id = SHOW_TREE_CONTEXT_MENU_COMMAND, participant = Workbench)]
-pub(crate) async fn show_context_menu(
-    context: crate::app::commands::declarations::CommandContext,
-    (): (),
-) -> Result<(), knot_protocol::CommandOutcome> {
-    use crate::app::workbench::{CommandView, ExtensionView};
-    use knot_protocol::CommandOutcome;
-    context
-        .foreground(|target, cx| {
-            let Some(CommandView::Extension(ExtensionView::Tree(tree))) =
-                target.command_view(cx).filter(|_| target.focused)
-            else {
-                return Err(CommandOutcome::Unavailable);
-            };
-            let window = target
-                .native_window(cx)
-                .ok_or(CommandOutcome::Unavailable)?;
-            let opened = window
-                .update(cx, |_, window, cx| {
-                    tree.update(cx, |tree, cx| tree.open_selected_context_menu(window, cx))
-                })
-                .map_err(|_| CommandOutcome::InvalidTarget)?;
-            opened.then_some(()).ok_or(CommandOutcome::Unavailable)
-        })
-        .await
-}
-
 #[cfg(test)]
 mod tests;

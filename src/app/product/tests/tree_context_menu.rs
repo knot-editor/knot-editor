@@ -2,7 +2,8 @@
 //! and by command, and the keys that reach it.
 use super::*;
 use crate::app::product::Focus;
-use crate::app::tree_view::{SHOW_TREE_CONTEXT_MENU_COMMAND, TreeView};
+use crate::app::product::surface_menu::SHOW_CONTEXT_MENU_COMMAND;
+use crate::app::tree_view::TreeView;
 use knot_protocol::ExtensionKey;
 
 const SOURCE: &str = r#"
@@ -173,7 +174,7 @@ fn right_click_opens_a_row_menu_whose_actions_run_and_return_focus(cx: &mut Test
     let execution = dispatch_tree_command(
         &fixture.window,
         fixture.native_window,
-        SHOW_TREE_CONTEXT_MENU_COMMAND,
+        SHOW_CONTEXT_MENU_COMMAND,
         cx,
     );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Unavailable);
@@ -226,7 +227,7 @@ fn shift_f10_opens_the_selected_row_menu_and_bindings_still_win(cx: &mut TestApp
     let execution = dispatch_tree_command(
         &fixture.window,
         fixture.native_window,
-        SHOW_TREE_CONTEXT_MENU_COMMAND,
+        SHOW_CONTEXT_MENU_COMMAND,
         cx,
     );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
@@ -292,7 +293,7 @@ fn a_window_without_a_native_window_opens_no_menu(cx: &mut TestAppContext) {
     let execution = dispatcher.update(cx, |dispatcher, cx| {
         dispatcher.dispatch(
             Command {
-                name: SHOW_TREE_CONTEXT_MENU_COMMAND.into(),
+                name: SHOW_CONTEXT_MENU_COMMAND.into(),
                 arguments: CommandArgumentValue::Null,
             },
             target,

@@ -376,6 +376,14 @@ impl Editor {
         });
     }
 
+    /// Place the caret for a context menu opened at `at`; see
+    /// [`EditorState::place_for_context_menu`].
+    pub(super) fn place_for_context_menu(&mut self, at: (usize, usize), cx: &mut Context<Self>) {
+        self.update_state(cx, |editor, buffer| {
+            editor.place_for_context_menu(at, buffer)
+        });
+    }
+
     /// The buffer line the document row `row` belongs to and the byte column
     /// where the row starts in it; a row past the last is the last.
     pub(crate) fn row_start(&self, row: usize, cx: &App) -> (usize, usize) {

@@ -41,6 +41,7 @@ impl Render for EditorView {
             .on_action(cx.listener(Self::completion_accept))
             .on_action(cx.listener(Self::completion_dismiss))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .on_mouse_down(MouseButton::Right, cx.listener(Self::on_right_mouse_down))
             // Mouse-move extends the selection while the left button is held
             // (drag-select). `MouseMoveEvent::dragging()` is true when the
             // platform reports the left button as currently pressed, so the

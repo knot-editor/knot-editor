@@ -220,6 +220,11 @@ impl TerminalView {
         cx.notify();
     }
 
+    #[cfg(test)]
+    pub(crate) fn session(&self) -> &Entity<TerminalSession> {
+        &self.session
+    }
+
     pub(crate) fn is_attached_to(&self, session: &Entity<TerminalSession>) -> bool {
         self.attachment.is_some() && &self.session == session
     }
@@ -786,7 +791,6 @@ impl Render for TerminalView {
             .size_full()
             .relative()
             .bg(theme(cx).paint_color(color::TERMINAL_BACKGROUND))
-            .occlude()
             .child(
                 div()
                     .size_full()

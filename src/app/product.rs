@@ -39,8 +39,8 @@ mod save;
 pub(super) mod sessions;
 mod show_keybindings;
 mod stripes;
+pub(crate) mod surface_menu;
 mod tab_drag;
-mod tab_menu;
 mod tool_picker;
 mod tools;
 mod view_state;
@@ -605,7 +605,7 @@ pub(crate) struct KnotWindow {
     /// The open right-click menu of a tool stripe button.
     stripe_menu: Option<crate::app::context_menu::ContextMenu>,
     /// The open right-click menu of a tab header.
-    tab_menu: Option<crate::app::context_menu::ContextMenu>,
+    surface_menu: Option<crate::app::context_menu::ContextMenu>,
     /// Whether a stripe button is being dragged, which shows empty stripes.
     stripe_dragging: std::rc::Rc<std::cell::Cell<bool>>,
     split_resize: Option<SplitResizeDrag>,
@@ -760,7 +760,7 @@ impl KnotWindow {
             tab_drag: Default::default(),
             dock_resize: None,
             stripe_menu: None,
-            tab_menu: None,
+            surface_menu: None,
             stripe_dragging: Default::default(),
             split_resize: None,
             recent_walk: None,

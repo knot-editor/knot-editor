@@ -225,3 +225,82 @@ fn closing_the_tabs_to_the_right_prompts_for_the_dirty_ones(cx: &mut TestAppCont
     crate::test_support::wait_until(cx, |cx| tab_documents(&window, cx).len() == 2);
     assert_eq!(tab_documents(&window, cx), [a, b]);
 }
+
+fn add_content(command: &str, view: &str, cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        cx.default_global::<ApplicationMenus>()
+            .0
+            .add(
+                owner(),
+                MenuLocation::Content,
+                MenuItem {
+                    command: command.into(),
+                    title: None,
+                    arguments: CommandArgumentValue::Null,
+                    group: Some("1_clipboard".into()),
+                    order: 0,
+                    view: Some(view.into()),
+                    context: None,
+                },
+            )
+            .unwrap();
+    });
+}
+
+/// Right-click the middle of the focused pane's terminal and whether a menu
+/// opened.
+fn right_click_terminal(
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
+    cx: &mut TestAppContext,
+) -> bool {
+    let pane = cx.read(|cx| {
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_pane_id()
+            .unwrap()
+    });
+    cx.refresh().unwrap();
+    let selector: &'static str = Box::leak(format!("pane-{}", pane.value()).into_boxed_str());
+    let mut window_cx = VisualTestContext::from_window(native_window, cx);
+    let center = window_cx
+        .debug_bounds(selector)
+        .expect("the pane is laid out")
+        .center();
+    window_cx.simulate_mouse_down(center, MouseButton::Right, Modifiers::default());
+    window_cx.simulate_mouse_up(center, MouseButton::Right, Modifiers::default());
+    cx.run_until_parked();
+    cx.read(|cx| window.read(cx).focus == Focus::Popup)
+}
+
+#[gpui::test]
+fn a_terminal_menu_opens_unless_the_program_owns_the_mouse(cx: &mut TestAppContext) {
+    let (window, native_window, _) = fixture(cx);
+    add_content("copy", "terminal", cx);
+    let directory = tempfile::tempdir().unwrap();
+    let view = window.update(cx, |window, cx| {
+        let (id, view) = window.create_terminal_in(Some(directory.path().to_owned()), cx);
+        window.workbench.update(cx, |workbench, _| {
+            let pane = workbench.focused_pane_id().unwrap();
+            workbench.open_terminal_tab(pane, id, view.clone());
+        });
+        view
+    });
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| view.read(cx).session().read(cx).terminal().is_some())
+    });
+
+    assert!(right_click_terminal(&window, native_window, cx));
+    press(&window, native_window, "escape", cx);
+    assert_eq!(cx.read(|cx| window.read(cx).focus), Focus::Workbench);
+
+    // Mouse tracking hands the click to the program.
+    cx.read(|cx| {
+        let session = view.read(cx).session().read(cx);
+        crate::app::terminal::session::lock(session.terminal().unwrap()).write(b"\x1b[?1000h");
+    });
+    cx.run_until_parked();
+    assert!(!right_click_terminal(&window, native_window, cx));
+}

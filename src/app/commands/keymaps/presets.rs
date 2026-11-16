@@ -10,8 +10,8 @@ use crate::app::keys::{Keystroke, Modifiers};
 
 use super::{ApplicationKeymaps, Platform, PresetBinding, PresetOwner, PresetRegistry, rebuild};
 use crate::app::commands::dispatch::*;
+use crate::app::product::surface_menu::SHOW_CONTEXT_MENU_COMMAND;
 use crate::app::settings::{self, ApplicationSettings, KEYMAP_PRESET};
-use crate::app::tree_view::SHOW_TREE_CONTEXT_MENU_COMMAND;
 use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 
 /// Commands of bundled packages that the Knot preset binds. A key bound to one
@@ -204,7 +204,7 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("secondary-f", FIND_COMMAND, Some("bar")),
     ("tab", PICKER_NEXT_TAB_COMMAND, Some("picker")),
     ("shift-tab", PICKER_PREVIOUS_TAB_COMMAND, Some("picker")),
-    ("shift-f10", SHOW_TREE_CONTEXT_MENU_COMMAND, None),
+    ("shift-f10", SHOW_CONTEXT_MENU_COMMAND, None),
     ("secondary-n", NEW_COMMAND, None),
     ("ctrl-`", TOGGLE_TERMINAL_COMMAND, None),
     ("ctrl-shift-`", NEW_TERMINAL_COMMAND, None),

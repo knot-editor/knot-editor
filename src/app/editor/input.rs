@@ -109,6 +109,36 @@ impl EditorView {
             .update(cx, |editor, cx| editor.select_from(anchor, (line, col), cx));
     }
 
+    /// A right-click prepares the editor's context menu, which the window
+    /// opens: the caret moves to the click unless it is inside the
+    /// selection. The gutter has no menu.
+    pub(super) fn on_right_mouse_down(
+        &mut self,
+        ev: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.gutter_lane_at(ev.position).is_some() {
+            cx.stop_propagation();
+            return;
+        }
+        self.editor.update(cx, |editor, cx| editor.focus_text(cx));
+        let at = self.hit_test(self.editor.read(cx), ev.position, window, cx);
+        self.editor
+            .update(cx, |editor, cx| editor.place_for_context_menu(at, cx));
+    }
+
+    /// Where a menu opened from the keyboard appears: below the caret.
+    pub(crate) fn caret_menu_position(&self, window: &Window, cx: &App) -> Point<Pixels> {
+        let editor = self.editor.read(cx);
+        let row = editor.row(self.model.read(cx), editor.caret_row());
+        point(
+            self.text_bounds().origin.x + self.x_in_row(editor, &row, editor.caret().1, window, cx),
+            self.bounds.origin.y
+                + px((row.index as f32 + 1. - editor.scroll_top()) * self.metrics.line_height),
+        )
+    }
+
     /// Mouse-move while the left button is held extends the selection from
     /// the anchor (the position, word, or line where the drag began) to the
     /// position, word, or line under the pointer. Window-level pointer
