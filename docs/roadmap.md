@@ -666,12 +666,12 @@ Kakoune mode could use them too. The
 
 ### Platforms, accessibility, and website
 
-- **D193 — Chrome refinements**
+- **D193 — Chrome refinements** 🚧
   - Depends on: none
   - Description: Two choices of the Islands look stayed open. The focused card
     has no visible emphasis, and pickers have no scope tabs (All, Files,
     Symbols, Actions) like Search Everywhere. Decide each, and build the ones
-    worth having.
+    worth having. Plan: [d193-chrome-refinements.md](plans/d193-chrome-refinements.md).
 
 - **D035 — macOS distribution**
   - Depends on: none
