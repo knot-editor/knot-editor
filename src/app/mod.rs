@@ -12,6 +12,7 @@ mod command_palette;
 mod commands;
 mod completion;
 mod components;
+mod context_menu;
 mod convert;
 mod documents;
 mod editor;

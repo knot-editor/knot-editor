@@ -92,10 +92,13 @@ there waits for the rest of its sequence; a completed binding enters command
 dispatch. Any other key goes to the surface with Knot-side focus, whose state
 handles its own keys, such as a tree's arrows, the palette's Enter, or a
 terminal's bytes, and a key that surface ignores becomes typed text, as if
-unbound. While a gpui-component popup that registered its focus handle
-holds focus, such as a tree's context menu, a key the keymap leaves goes on
-to gpui's dispatch instead, where the popup's own bindings run, so global and
-extension bindings still win over it. A sequence that stops matching runs its longest bound prefix, or
+unbound. While a context menu is open the window's focus layer is `Popup`:
+the router still matches first, so global and extension bindings win, and a
+key it leaves goes on to gpui's dispatch, where the menu's own bindings
+run. Every native context menu (the tree's row menu and the stripe button
+menu) goes through one helper, `src/app/context_menu.rs`, which builds the
+gpui-component menu, takes focus, and reports dismissal or blur; the window
+ends the layer then and refocuses the active surface. A sequence that stops matching runs its longest bound prefix, or
 delivers its first key natively, and routes the rest again, and a pending
 sequence flushes the same way after one second or ends when focus moves. Keys
 typed in the palette or a transient interaction skip the router and go to

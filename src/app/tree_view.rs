@@ -7,10 +7,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpui::{prelude::FluentBuilder, *};
-use gpui_component::{
-    ElementExt as _,
-    menu::{PopupMenu, PopupMenuItem},
-};
+use gpui_component::{ElementExt as _, menu::PopupMenuItem};
 
 use super::keys::Keystroke;
 use super::picker::highlighted;
@@ -105,6 +102,10 @@ pub(crate) enum TreeViewEvent {
         /// The tree, which must still have focus there.
         view: ViewId,
     },
+    /// The row context menu opened and took focus.
+    ContextMenuOpened,
+    /// The row context menu closed.
+    ContextMenuClosed,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -179,13 +180,6 @@ fn typed_character(keystroke: &Keystroke) -> Option<char> {
 /// A row's ID and its bounds when last painted.
 type RowBounds = Option<(String, Bounds<Pixels>)>;
 
-/// The open context menu of a row's actions.
-struct ContextMenu {
-    menu: Entity<PopupMenu>,
-    position: Point<Pixels>,
-    _subscriptions: [Subscription; 2],
-}
-
 /// Foreground-owned cache and presentation state for one native tree surface.
 pub(crate) struct TreeView {
     view_id: String,
@@ -201,7 +195,7 @@ pub(crate) struct TreeView {
     search: Option<SpeedSearch>,
     edit: Option<TreeEdit>,
     action_focus: Option<ActionFocus>,
-    context_menu: Option<ContextMenu>,
+    context_menu: Option<crate::app::context_menu::ContextMenu>,
     /// The selected row and its bounds when last painted.
     selected_bounds: Rc<RefCell<RowBounds>>,
     focus: FocusHandle,
@@ -1072,10 +1066,13 @@ impl TreeView {
         self.action_focus = None;
         let tree = cx.entity().downgrade();
         let focus = self.focus.clone();
-        let menu = PopupMenu::build(window, cx, move |menu, _, _| {
-            actions
-                .into_iter()
-                .fold(menu.action_context(focus), |menu, action| {
+        let menu = crate::app::context_menu::ContextMenu::open(
+            window,
+            cx,
+            position,
+            Some(focus),
+            move |menu| {
+                actions.into_iter().fold(menu, |menu, action| {
                     let tree = tree.clone();
                     menu.item(
                         PopupMenuItem::new(action.label.clone()).on_click(move |_, _, cx| {
@@ -1084,23 +1081,11 @@ impl TreeView {
                         }),
                     )
                 })
-        });
-        let menu_focus = menu.focus_handle(cx);
-        let subscriptions = [
-            cx.subscribe_in(&menu, window, |tree, _, _: &DismissEvent, _, cx| {
-                tree.close_context_menu(cx)
-            }),
-            cx.on_blur(&menu_focus, window, |tree, _, cx| {
-                tree.close_context_menu(cx)
-            }),
-        ];
-        menu_focus.focus(window, cx);
-        crate::app::components::track_popup(&menu_focus, cx);
-        self.context_menu = Some(ContextMenu {
-            menu,
-            position,
-            _subscriptions: subscriptions,
-        });
+            },
+            Self::close_context_menu,
+        );
+        self.context_menu = Some(menu);
+        cx.emit(TreeViewEvent::ContextMenuOpened);
         cx.notify();
         true
     }
@@ -1126,6 +1111,7 @@ impl TreeView {
 
     fn close_context_menu(&mut self, cx: &mut Context<Self>) {
         if self.context_menu.take().is_some() {
+            cx.emit(TreeViewEvent::ContextMenuClosed);
             cx.notify();
         }
     }
@@ -1305,10 +1291,7 @@ impl Render for TreeView {
                 search.current + 1,
             )
         });
-        let context_menu = self
-            .context_menu
-            .as_ref()
-            .map(|open| (open.menu.clone(), open.position));
+        let context_menu = self.context_menu.as_ref().map(|open| open.element());
         let entity = cx.entity();
         let border = theme(cx).paint_color(color::BORDER);
         let mut key_context = KeyContext::default();
@@ -1631,17 +1614,7 @@ impl Render for TreeView {
                         ),
                 )
             })
-            .when_some(context_menu, |container, (menu, position)| {
-                container.child(
-                    deferred(
-                        anchored()
-                            .position(position)
-                            .snap_to_window_with_margin(px(8.))
-                            .child(menu),
-                    )
-                    .with_priority(1),
-                )
-            })
+            .when_some(context_menu, |container, menu| container.child(menu))
     }
 }
 

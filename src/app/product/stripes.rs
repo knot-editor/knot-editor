@@ -2,20 +2,14 @@
 //! and one for the dock terminals, grouped by home dock.
 
 use super::*;
+use crate::app::context_menu::ContextMenu;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{chrome, color, theme};
 use crate::app::tokens;
 use crate::app::workbench::{StripeButton, Stripes};
 use crate::app::zoom;
-use gpui_component::menu::{PopupMenu, PopupMenuItem};
+use gpui_component::menu::PopupMenuItem;
 use knot_model::icons::IconDefinition;
-
-/// An open stripe button menu, which closes when dismissed or blurred.
-pub(super) struct StripeMenu {
-    pub(super) menu: Entity<PopupMenu>,
-    pub(super) position: Point<Pixels>,
-    _subscriptions: [Subscription; 2],
-}
 
 /// A stripe button being dragged to another stripe.
 #[derive(Clone)]
@@ -259,61 +253,54 @@ impl KnotWindow {
             StripeButton::Terminal => (None, false, Some(workbench.terminal_home())),
         };
         let window = cx.entity().downgrade();
-        let menu = PopupMenu::build(native_window, cx, move |menu, _, _| {
-            let mut items = Vec::new();
-            if let Some(stable_id) = stable_id {
-                let window = window.clone();
-                let label = if visible { "Hide" } else { "Show Beside" };
-                items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
-                    let _ = window.update(cx, |this, cx| {
-                        if visible {
-                            this.hide_tool_by_stripe(&stable_id, cx);
-                        } else {
-                            this.show_tool_beside(&stable_id, cx);
-                        }
-                    });
-                }));
-            }
-            for dock in DockLocation::ALL
-                .into_iter()
-                .filter(|dock| Some(*dock) != home)
-            {
-                let window = window.clone();
-                let label = match (button, dock) {
-                    (StripeButton::Tool(_), _) => format!("Move to {} Dock", dock_name(dock)),
-                    (StripeButton::Terminal, _) => {
-                        format!("Open Terminals in {} Dock", dock_name(dock))
-                    }
-                };
-                items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
-                    let _ =
-                        window.update(cx, |this, cx| this.rehome_stripe_button(button, dock, cx));
-                }));
-            }
-            items.into_iter().fold(menu, |menu, item| menu.item(item))
-        });
-        let menu_focus = menu.focus_handle(cx);
-        let subscriptions = [
-            cx.subscribe_in(&menu, native_window, |this, _, _: &DismissEvent, _, cx| {
-                this.close_stripe_menu(cx)
-            }),
-            cx.on_blur(&menu_focus, native_window, |this, _, cx| {
-                this.close_stripe_menu(cx)
-            }),
-        ];
-        menu_focus.focus(native_window, cx);
-        crate::app::components::track_popup(&menu_focus, cx);
-        self.stripe_menu = Some(StripeMenu {
-            menu,
+        let menu = ContextMenu::open(
+            native_window,
+            cx,
             position,
-            _subscriptions: subscriptions,
-        });
+            None,
+            move |menu| {
+                let mut items = Vec::new();
+                if let Some(stable_id) = stable_id {
+                    let window = window.clone();
+                    let label = if visible { "Hide" } else { "Show Beside" };
+                    items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
+                        let _ = window.update(cx, |this, cx| {
+                            if visible {
+                                this.hide_tool_by_stripe(&stable_id, cx);
+                            } else {
+                                this.show_tool_beside(&stable_id, cx);
+                            }
+                        });
+                    }));
+                }
+                for dock in DockLocation::ALL
+                    .into_iter()
+                    .filter(|dock| Some(*dock) != home)
+                {
+                    let window = window.clone();
+                    let label = match (button, dock) {
+                        (StripeButton::Tool(_), _) => format!("Move to {} Dock", dock_name(dock)),
+                        (StripeButton::Terminal, _) => {
+                            format!("Open Terminals in {} Dock", dock_name(dock))
+                        }
+                    };
+                    items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
+                        let _ = window
+                            .update(cx, |this, cx| this.rehome_stripe_button(button, dock, cx));
+                    }));
+                }
+                items.into_iter().fold(menu, |menu, item| menu.item(item))
+            },
+            Self::close_stripe_menu,
+        );
+        self.stripe_menu = Some(menu);
+        self.set_focus(Focus::Popup, cx);
         cx.notify();
     }
 
     fn close_stripe_menu(&mut self, cx: &mut Context<Self>) {
         if self.stripe_menu.take().is_some() {
-            self.focus_active_surface(cx);
+            self.close_popup_focus(cx);
             cx.notify();
         }
     }

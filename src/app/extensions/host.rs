@@ -2091,6 +2091,8 @@ impl ProductExtensionHost {
                     );
                 });
             }
+            // The window owning the tree handles its menu's focus.
+            TreeViewEvent::ContextMenuOpened | TreeViewEvent::ContextMenuClosed => {}
         }
     }
 

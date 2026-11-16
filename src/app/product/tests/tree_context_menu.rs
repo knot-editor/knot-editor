@@ -1,6 +1,7 @@
 //! The context menu of an extension tree's row actions, opened by pointer
 //! and by command, and the keys that reach it.
 use super::*;
+use crate::app::product::Focus;
 use crate::app::tree_view::{SHOW_TREE_CONTEXT_MENU_COMMAND, TreeView};
 use knot_protocol::ExtensionKey;
 
@@ -232,6 +233,37 @@ fn shift_f10_opens_the_selected_row_menu_and_bindings_still_win(cx: &mut TestApp
     assert!(fixture.menu_open(cx));
     fixture.press("down enter", cx);
     fixture.wait_for_clipboard("copied one", cx);
+}
+
+#[gpui::test]
+fn an_open_menu_has_its_own_focus_layer_that_dismissal_and_blur_release(cx: &mut TestAppContext) {
+    let fixture = Fixture::start(cx);
+    // Focus events reach the window only in an active native window.
+    cx.update_window(fixture.native_window, |_, native_window, _| {
+        native_window.activate_window()
+    })
+    .unwrap();
+    let layer = |cx: &TestAppContext| cx.read(|cx| fixture.window.read(cx).focus);
+    assert_eq!(layer(cx), Focus::Workbench);
+
+    fixture.right_click(0, cx);
+    assert!(fixture.menu_open(cx));
+    assert_eq!(layer(cx), Focus::Popup);
+    // A key the keymap and the menu leave does not reach the tree.
+    fixture.press("x", cx);
+    assert_eq!(fixture.selected(cx).as_deref(), Some("With actions"));
+    fixture.press("escape", cx);
+    assert!(!fixture.menu_open(cx));
+    assert_eq!(layer(cx), Focus::Workbench);
+    assert!(fixture.tree_focused(cx));
+
+    // Losing focus to another surface closes the menu and ends the layer.
+    fixture.right_click(0, cx);
+    assert_eq!(layer(cx), Focus::Popup);
+    let editor = fixture.editor.clone();
+    fixture.focus(&editor, cx);
+    assert!(!fixture.menu_open(cx));
+    assert_eq!(layer(cx), Focus::Workbench);
 }
 
 #[gpui::test]

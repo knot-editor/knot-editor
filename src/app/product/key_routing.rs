@@ -90,22 +90,19 @@ impl KnotWindow {
     fn key_down(
         &mut self,
         keystroke: Keystroke,
-        mut native_window: Option<&mut Window>,
+        native_window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) -> bool {
         if self.hold_key(&keystroke, cx) {
             return true;
         }
         if !std::mem::take(&mut self.keys.native)
-            && self.route_key(keystroke.clone(), native_window.as_deref_mut(), cx)
+            && self.route_key(keystroke.clone(), native_window, cx)
         {
             return true;
         }
-        // A focused gpui-component popup takes the key through gpui's dispatch.
-        if native_window
-            .as_deref()
-            .is_some_and(|window| crate::app::components::popup_focused(window, cx))
-        {
+        // An open context menu takes the key through gpui's dispatch.
+        if self.focus == Focus::Popup {
             return false;
         }
         self.deliver_key(&keystroke, cx)
@@ -147,6 +144,7 @@ impl KnotWindow {
                     picker.update(cx, |picker, cx| picker.insert_text(text, cx));
                 }
             }
+            Focus::Popup => {}
             Focus::Transient => match self
                 .transient
                 .as_ref()
@@ -207,6 +205,7 @@ impl KnotWindow {
                 };
                 picker.update(cx, |picker, cx| picker.key_down(keystroke, cx))
             }
+            Focus::Popup => false,
             Focus::Transient => match self
                 .transient
                 .as_ref()
@@ -255,7 +254,9 @@ impl KnotWindow {
         native_window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.focus != Focus::Workbench && self.tabbed_picker(cx).is_none() {
+        if !matches!(self.focus, Focus::Workbench | Focus::Popup)
+            && self.tabbed_picker(cx).is_none()
+        {
             return false;
         }
         let focus = Some(self.focus_target(cx));

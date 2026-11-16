@@ -1,6 +1,7 @@
 //! The tool stripes: buttons by home, toggling by click, and rehoming by drag.
 use super::operations::empty_product_window;
 use super::*;
+use crate::app::product::Focus;
 use crate::app::workbench::DockLocation;
 use gpui::{Modifiers, MouseButton, VisualTestContext, point, px};
 
@@ -201,7 +202,10 @@ await workbench.registerView({
         .center();
     visual.simulate_mouse_down(at, MouseButton::Right, Modifiers::default());
     visual.run_until_parked();
-    window.read_with(&visual, |window, _| assert!(window.stripe_menu.is_some()));
+    window.read_with(&visual, |window, _| {
+        assert!(window.stripe_menu.is_some());
+        assert_eq!(window.focus, Focus::Popup);
+    });
     drop(visual);
     window.update(cx, |window, cx| {
         window.show_tool_beside("example.notes", cx);

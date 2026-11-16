@@ -261,16 +261,17 @@ error row is present. A root invalidation keeps stale rows visible while the
 refetch is pending and reloads group children when the refreshed result arrives,
 so selection and navigation stay usable during a refresh.
 
-A row's actions also form its context menu, a gpui-component popup menu that
-the tree owns. Right-clicking a row selects it and opens the menu there;
+A row's actions also form its context menu, a [native context
+menu](commands.md#keymaps) that the tree owns. Right-clicking a row selects it and opens the menu there;
 `tree.show-context-menu` (Shift+F10) opens it below the selected row, needs a
 window, and is unavailable outside a focused extension tree or for a row
 without actions. Items emit the same captured-window command event as the
-row's controls. The menu takes focus, receives the keys the keymap leaves
-([keymaps](commands.md#keymaps)), closes when dismissed or when it loses
-focus, and returns focus to the tree on dismissal. The menu and an edit field
+row's controls. The menu takes focus, tells the window, which gives it the `Popup` focus layer,
+receives the keys the keymap leaves, closes when dismissed or when it loses
+focus, and focus returns to the tree on dismissal. The menu and an edit field
 render inside the tree's focus subtree, and the window follows focus entering
-a view, so an action runs when another view held focus before the right click.
+a view without leaving the `Popup` layer, so an action runs when another view
+held focus before the right click.
 An action marked `menuOnly` appears in the menu and not as a row button.
 
 A row's command receives how it was activated (`click`, `doubleClick`,

@@ -601,7 +601,7 @@ pub(crate) struct KnotWindow {
     tab_drag: std::rc::Rc<RefCell<tab_drag::TabDragState>>,
     dock_resize: Option<DockResizeDrag>,
     /// The open right-click menu of a tool stripe button.
-    stripe_menu: Option<stripes::StripeMenu>,
+    stripe_menu: Option<crate::app::context_menu::ContextMenu>,
     /// Whether a stripe button is being dragged, which shows empty stripes.
     stripe_dragging: std::rc::Rc<std::cell::Cell<bool>>,
     split_resize: Option<SplitResizeDrag>,
@@ -663,13 +663,16 @@ struct FocusTarget {
 }
 
 /// The layer of a window that has focus: the focused pane's active
-/// surface, the command palette, or the transient interaction.
+/// surface, the command palette, the transient interaction, or an open
+/// context menu.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum Focus {
     #[default]
     Workbench,
     Palette,
     Transient,
+    /// An open context menu, which takes the keys the keymap leaves.
+    Popup,
 }
 
 /// One live transient interaction owned by this window. Native interactions
@@ -1041,7 +1044,10 @@ impl KnotWindow {
         }) else {
             return;
         };
-        self.focus = Focus::Workbench;
+        // A menu inside the view holds focus there, so the layer stays.
+        if self.focus != Focus::Popup {
+            self.focus = Focus::Workbench;
+        }
         self.workbench.update(cx, |workbench, _| {
             workbench.focus_pane(pane);
         });
@@ -1267,6 +1273,14 @@ impl KnotWindow {
         self.release_keys_for_focus(cx);
     }
 
+    /// Return focus to the focused pane's active surface when a context menu
+    /// closes, unless focus has moved on to another layer.
+    pub(super) fn close_popup_focus(&mut self, cx: &mut Context<Self>) {
+        if self.focus == Focus::Popup {
+            self.focus_active_surface(cx);
+        }
+    }
+
     /// Focus the focused pane's active surface.
     pub(super) fn focus_active_surface(&mut self, cx: &mut Context<Self>) {
         self.set_focus(Focus::Workbench, cx);
@@ -1311,6 +1325,8 @@ impl KnotWindow {
                 .transient
                 .as_ref()
                 .and_then(|active| active.focus.clone()),
+            // The menu holds native focus itself.
+            Focus::Popup => None,
         }
     }
 
@@ -1361,7 +1377,7 @@ impl KnotWindow {
         cx: &mut Context<Self>,
     ) -> ProductCommandTarget {
         let workbench = self.workbench.read(cx);
-        let focused = self.focus == Focus::Workbench;
+        let focused = matches!(self.focus, Focus::Workbench | Focus::Popup);
         let pane = workbench.focused_pane();
         let view = pane
             .and_then(|pane| workbench.command_view(pane.active_tab()))

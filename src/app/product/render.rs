@@ -814,10 +814,7 @@ impl Render for KnotWindow {
         self.tab_drag.borrow_mut().begin_frame();
         let workbench = self.render_workbench(cx);
         let (left_stripe, right_stripe) = self.render_stripes(cx);
-        let stripe_menu = self
-            .stripe_menu
-            .as_ref()
-            .map(|open| (open.menu.clone(), open.position));
+        let stripe_menu = self.stripe_menu.as_ref().map(|open| open.element());
         let entity = cx.entity();
         let command_palette = self
             .command_palette
@@ -885,17 +882,7 @@ impl Render for KnotWindow {
             )
             .children(status_bar)
             .child(self.drag_listener(cx))
-            .when_some(stripe_menu, |root, (menu, position)| {
-                root.child(
-                    deferred(
-                        anchored()
-                            .position(position)
-                            .snap_to_window_with_margin(px(8.))
-                            .child(menu),
-                    )
-                    .with_priority(1),
-                )
-            })
+            .when_some(stripe_menu, |root, menu| root.child(menu))
             .when_some(transient, |root, transient| {
                 root.child(
                     div()

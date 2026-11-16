@@ -44,7 +44,18 @@ impl KnotWindow {
                 let view = cx.new(|cx| {
                     crate::app::tree_view::TreeView::new(definition.id.clone(), window.clone(), cx)
                 });
-                let event = cx.subscribe(&view, |_, _, event, cx| {
+                let event = cx.subscribe(&view, |this, _, event, cx| {
+                    match event {
+                        crate::app::tree_view::TreeViewEvent::ContextMenuOpened => {
+                            this.set_focus(Focus::Popup, cx);
+                            return;
+                        }
+                        crate::app::tree_view::TreeViewEvent::ContextMenuClosed => {
+                            this.close_popup_focus(cx);
+                            return;
+                        }
+                        _ => {}
+                    }
                     let event = event.clone();
                     cx.defer(move |cx| crate::app::extensions::host::route_tree_event(&event, cx));
                     cx.notify();

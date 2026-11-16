@@ -100,7 +100,7 @@ uses.
 
 ## Checkpoints
 
-### 1. One native context menu and popup focus ✳️ not started
+### 1. One native context menu and popup focus ✅ implemented, awaiting review
 
 Extract the shared context-menu helper. Move the tree row menu and the stripe
 button menu onto it, and give an open menu its own Knot-side `Focus::Popup`,
