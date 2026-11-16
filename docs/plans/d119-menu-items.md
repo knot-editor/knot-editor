@@ -107,21 +107,11 @@ Done and approved. The tree row and stripe button menus open through
 `Focus::Popup` layer. See [keymaps](../architecture/commands.md#keymaps) and
 the [tree context menu](../architecture/semantic-ui.md).
 
-### 2. `@knot/chrome` from `@knot/status-bar` ✅ implemented, awaiting review
+### 2. `@knot/chrome` from `@knot/status-bar` ✅
 
-Rename the status-bar package to `@knot/chrome`, which later checkpoints fill
-with menu contents. Behavior doesn't change.
-
-- **Implementation context:** move `extensions/@knot/status-bar/` to
-  `extensions/@knot/chrome/`, and update its `knot.jsonc` name, display name,
-  and description. Update the package list in
-  `crates/knot-ext-workbench/build.rs`. Rename
-  `crates/knot-ext-workbench/tests/workbench/status_bar_package.rs` to
-  `chrome.rs` (module in `main.rs`, `only(&["@knot/chrome"])`). Update the
-  mentions in `docs/settings.md`, `docs/decisions/semantic-ui.md` (status
-  bar), and `docs/architecture/workbench-and-lifecycle.md` (status bar).
-- **Validation:** the renamed package test passes, and `just check` passes.
-- **Review gate:** a quick review of the rename.
+Done and approved. The bundled package `extensions/@knot/chrome/` holds the
+status-bar items and takes the menu contents of later checkpoints. See the
+[status bar](../architecture/workbench-and-lifecycle.md#status-bar).
 
 ### 3. Menu registry, `menus.add`, and the tab context menu ✳️ not started
 
