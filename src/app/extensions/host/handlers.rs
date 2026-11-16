@@ -68,6 +68,9 @@ pub(crate) enum AccessError {
     InvalidTarget,
     #[error(code = "ContextUnavailable", message = "ContextUnavailable")]
     ContextUnavailable,
+    /// Raised by the JavaScript ownership objects themselves; native handlers
+    /// never construct it, but it is part of the declared public codes.
+    #[allow(dead_code)]
     #[error(code = "OwnershipDisposed", message = "OwnershipDisposed")]
     OwnershipDisposed,
 }
@@ -426,14 +429,10 @@ pub(crate) async fn unobserve_workbench(
 ) -> Result<(), AccessError> {
     let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
     context.foreground(|host, _| {
-        if host
-            .application_observation
-            .unsubscribe(arguments.subscription, key)
-        {
-            Ok(())
-        } else {
-            Err(AccessError::OwnershipDisposed)
-        }
+        // A subscription the host already released is as good as disposed.
+        host.application_observation
+            .unsubscribe(arguments.subscription, key);
+        Ok(())
     })?
 }
 
@@ -2402,11 +2401,9 @@ async fn unwatch_files(
 ) -> Result<(), AccessError> {
     let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
     context.foreground(|host, _| {
-        if host.unwatch_files(arguments.subscription, key) {
-            Ok(())
-        } else {
-            Err(AccessError::OwnershipDisposed)
-        }
+        // A subscription the host already released is as good as disposed.
+        host.unwatch_files(arguments.subscription, key);
+        Ok(())
     })?
 }
 
@@ -4933,11 +4930,9 @@ async fn unobserve_setting(
 ) -> Result<(), AccessError> {
     let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
     context.foreground(|host, _| {
-        if host.unobserve_setting(arguments.subscription, key) {
-            Ok(())
-        } else {
-            Err(AccessError::OwnershipDisposed)
-        }
+        // A subscription the host already released is as good as disposed.
+        host.unobserve_setting(arguments.subscription, key);
+        Ok(())
     })?
 }
 

@@ -1266,7 +1266,8 @@ declare module "knot" {
      *
      * @throws HostError for cancellation or stale native ownership. Command,
      * tree, completion and language registrations use their resource-specific
-     * not-found codes; stale subscriptions use OwnershipDisposed. Contribution cleanup
+     * not-found codes; disposing a subscription the host already released
+     * succeeds. Contribution cleanup
      * can fail with BufferClosed; an absent contribution set is already released.
      */
     dispose(): Promise<void>;

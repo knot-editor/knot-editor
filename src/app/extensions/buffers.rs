@@ -302,15 +302,13 @@ impl ExtensionBufferBridge {
         _: &mut App,
     ) -> Result<(), BufferError> {
         self.validate(request, &mut cancelled)?;
-        if self.subscriptions.unsubscribe(
+        // A subscription the host already released is as good as disposed.
+        self.subscriptions.unsubscribe(
             arguments.subscription,
             request.extension,
             request.lifecycle,
-        ) {
-            Ok(())
-        } else {
-            Err(AccessError::OwnershipDisposed.into())
-        }
+        );
+        Ok(())
     }
 
     pub(crate) fn replace_editor_contributions(
@@ -670,7 +668,8 @@ mod tests {
             );
             assert_eq!(
                 result,
-                Err(BufferError::Access(AccessError::OwnershipDisposed))
+                Ok(()),
+                "an unknown subscription is already disposed"
             );
             assert_eq!(model.read(cx).text(), "generated");
         });
