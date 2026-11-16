@@ -10,6 +10,9 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
 1. The card that holds the focused pane is visibly emphasized.
 2. A picker can show scope tabs, switched from the keyboard, and a new
    Search Everywhere command uses them over files and actions.
+3. One picker implementation: Go to File, the command palette, and Search
+   Everywhere are the same tabbed picker, differing only in the tab they start
+   on. Tabs gain Buffers, and `:N` jumps to a line.
 
 ## Design
 
@@ -46,12 +49,26 @@ and the native `Picker` ([semantic UI](../architecture/semantic-ui.md)).
   `go-to-file`) with tabs All, Files, Actions, using `onQuery` because files
   are asynchronous. Symbols is not offered until a symbol source exists.
 
+### One picker
+
+- `PickerOptions.initialTab?: string` picks the starting tab (default: the
+  first). Go to File opens Search Everywhere on Files and the palette opens it
+  on Actions, so there is a single implementation.
+- Tabs are the only way to choose a scope; there are no `>` or `@` prefixes.
+  The one query syntax is `:N` (and `file:N`), which adds a "Go to line N" row
+  in any tab that lists files; it is a parameter, not a mode.
+- A Buffers tab lists open documents, most recently used first. In All, an open
+  document is listed once, in the buffers position, not again as a file.
+- The palette's own features move into the extension picker's rows: recently
+  used commands first, the key binding on each row, and enabled state. The
+  native palette is then deleted.
+
 ## Exclusions
 
 - A symbol index or a Symbols tab.
 - Per-tab remembered state across invocations.
 - Dimming unfocused cards.
-- Changing the command palette or Go to File to use tabs.
+- A Symbols tab and any query prefix other than `:N`.
 
 ## Deferred decisions
 
@@ -96,7 +113,28 @@ caps actions at 8. No key binding yet.
 - **Review gate:** the user tries Search Everywhere in daily use and picks
   its key binding.
 
-### 4. Wrap-up
+### 4. One picker: entries, Buffers, line jump
+
+- `initialTab` (native picker and API); Go to File becomes a Search Everywhere
+  entry on Files.
+- Buffers tab (open documents once, most recent first; add a small primitive if
+  `documents` cannot list them), and `:N` / `file:N` line rows (check whether
+  an open-at-line API exists).
+- Validation: extension tests for each tab and entry, `just check`.
+- **Review gate:** the user uses the pickers daily and picks Search Everywhere's
+  key binding.
+
+### 5. Replace the native palette
+
+- Read the native palette first and size what only it provides (recents, key
+  binding display, enabled state); move each into the extension picker rows.
+- The palette command opens Search Everywhere on Actions; delete the native
+  palette code.
+- Validation: tests covering recents ordering, key binding display, and running
+  a command; `just check`.
+- **Review gate:** the user confirms the palette feels the same or better.
+
+### 6. Wrap-up
 
 Fold durable behavior into the architecture docs, record the validated
 choices in `docs/decisions/` and the index, remove the D193 roadmap entry and
